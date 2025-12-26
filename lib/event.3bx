@@ -1,0 +1,98 @@
+# event.3bx - Event system for 3BX
+# Enables reactive programming and decoupled communication
+
+# Listening to events
+effect on eventName: handlerBody:
+    when triggered:
+        @intrinsic("register_handler", eventName, handlerBody)
+
+effect when eventName: handlerBody:
+    when triggered:
+        @intrinsic("register_handler", eventName, handlerBody)
+
+effect listen for eventName: handlerBody:
+    when triggered:
+        @intrinsic("register_handler", eventName, handlerBody)
+
+# Firing events
+effect fire eventName:
+    when triggered:
+        @intrinsic("fire_event", eventName)
+
+effect trigger eventName:
+    when triggered:
+        @intrinsic("fire_event", eventName)
+
+effect emit eventName:
+    when triggered:
+        @intrinsic("fire_event", eventName)
+
+# Firing with data
+effect fire eventName with eventData:
+    when triggered:
+        @intrinsic("fire_event_with_data", eventName, eventData)
+
+effect trigger eventName with eventData:
+    when triggered:
+        @intrinsic("fire_event_with_data", eventName, eventData)
+
+# Cancelling events
+effect cancel the event:
+    when triggered:
+        @intrinsic("cancel_current_event")
+
+expression event is cancelled:
+    get:
+        @intrinsic("is_event_cancelled")
+
+# One-time handlers
+effect once eventName: handlerBody:
+    when triggered:
+        @intrinsic("register_once_handler", eventName, handlerBody)
+
+# Removing handlers
+effect stop listening for eventName:
+    when triggered:
+        @intrinsic("remove_handler", eventName)
+
+effect remove all handlers for eventName:
+    when triggered:
+        @intrinsic("remove_all_handlers", eventName)
+
+# Accessing event data in handlers
+expression the event:
+    get:
+        @intrinsic("get_current_event")
+
+expression event data:
+    get:
+        @intrinsic("get_event_data")
+
+expression fieldName of the event:
+    get:
+        @intrinsic("get_event_field", fieldName)
+
+# Common built-in events
+event:
+    pattern:
+        tick
+    data:
+        delta time
+
+event:
+    pattern:
+        startup
+    data:
+        none
+
+event:
+    pattern:
+        shutdown
+    data:
+        none
+
+event:
+    pattern:
+        error occurred
+    data:
+        message, source

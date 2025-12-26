@@ -1,0 +1,426 @@
+# calculator_gui.3bx - GUI Calculator using OpenGL
+# A proof-of-concept demonstrating what 3BX GUI programming would look like
+#
+# MISSING FEATURES SUMMARY:
+# - Window creation and management
+# - OpenGL rendering primitives
+# - Text rendering
+# - Mouse input handling
+# - Event loop / main loop
+# - String manipulation
+# - Arrays/lists for button storage
+
+# ============================================================
+# MISSING: Import system for GUI libraries
+# ============================================================
+# import gui.3bx
+# import opengl.3bx
+
+# ============================================================
+# MISSING: Window Creation Intrinsics
+# ============================================================
+# Needed: @intrinsic("create_window", width, height, title) -> window handle
+# Needed: @intrinsic("window_is_open", window) -> boolean
+# Needed: @intrinsic("close_window", window)
+# Needed: @intrinsic("swap_buffers", window)
+
+pattern:
+    syntax: create a window with width w and height h titled title
+    when triggered:
+        # MISSING: @intrinsic("create_window", w, h, title)
+        @intrinsic("print", "STUB: Creating window")
+
+pattern:
+    syntax: window is open
+    when triggered:
+        # MISSING: @intrinsic("window_is_open", window)
+        @intrinsic("print", "STUB: Checking if window is open")
+
+pattern:
+    syntax: close the window
+    when triggered:
+        # MISSING: @intrinsic("close_window", window)
+        @intrinsic("print", "STUB: Closing window")
+
+pattern:
+    syntax: refresh the display
+    when triggered:
+        # MISSING: @intrinsic("swap_buffers", window)
+        @intrinsic("print", "STUB: Refreshing display")
+
+# ============================================================
+# MISSING: OpenGL Drawing Intrinsics
+# ============================================================
+# Needed: @intrinsic("gl_clear", r, g, b)
+# Needed: @intrinsic("gl_rect", x, y, width, height)
+# Needed: @intrinsic("gl_set_color", r, g, b)
+# Needed: @intrinsic("gl_text", x, y, text, fontSize)
+
+pattern:
+    syntax: clear screen with color r g b
+    when triggered:
+        # MISSING: @intrinsic("gl_clear", r, g, b)
+        @intrinsic("print", "STUB: Clearing screen")
+
+pattern:
+    syntax: set draw color to r g b
+    when triggered:
+        # MISSING: @intrinsic("gl_set_color", r, g, b)
+        @intrinsic("print", "STUB: Setting draw color")
+
+pattern:
+    syntax: draw rectangle at x y with width w and height h
+    when triggered:
+        # MISSING: @intrinsic("gl_rect", x, y, w, h)
+        @intrinsic("print", "STUB: Drawing rectangle")
+
+pattern:
+    syntax: draw text txt at x y with size s
+    when triggered:
+        # MISSING: @intrinsic("gl_text", x, y, txt, s)
+        @intrinsic("print", "STUB: Drawing text")
+
+# ============================================================
+# MISSING: Input Handling Intrinsics
+# ============================================================
+# Needed: @intrinsic("poll_events")
+# Needed: @intrinsic("mouse_clicked") -> boolean
+# Needed: @intrinsic("get_mouse_x") -> number
+# Needed: @intrinsic("get_mouse_y") -> number
+
+pattern:
+    syntax: poll input events
+    when triggered:
+        # MISSING: @intrinsic("poll_events")
+        @intrinsic("print", "STUB: Polling events")
+
+pattern:
+    syntax: mouse was clicked
+    when triggered:
+        # MISSING: @intrinsic("mouse_clicked")
+        @intrinsic("print", "STUB: Checking mouse click")
+
+pattern:
+    syntax: the mouse x position
+    when triggered:
+        # MISSING: @intrinsic("get_mouse_x")
+        @intrinsic("print", "STUB: Getting mouse X")
+
+pattern:
+    syntax: the mouse y position
+    when triggered:
+        # MISSING: @intrinsic("get_mouse_y")
+        @intrinsic("print", "STUB: Getting mouse Y")
+
+# ============================================================
+# MISSING: String Manipulation Intrinsics
+# ============================================================
+# Needed: @intrinsic("string_concat", a, b) -> string
+# Needed: @intrinsic("number_to_string", n) -> string
+# Needed: @intrinsic("string_to_number", s) -> number
+
+pattern:
+    syntax: append str to text
+    when triggered:
+        # MISSING: @intrinsic("string_concat", text, str)
+        @intrinsic("print", "STUB: Appending string")
+
+pattern:
+    syntax: number n as text
+    when triggered:
+        # MISSING: @intrinsic("number_to_string", n)
+        @intrinsic("print", "STUB: Converting number to text")
+
+pattern:
+    syntax: text t as number
+    when triggered:
+        # MISSING: @intrinsic("string_to_number", t)
+        @intrinsic("print", "STUB: Converting text to number")
+
+# ============================================================
+# MISSING: Control Flow - While Loop
+# ============================================================
+# Needed: @intrinsic("while_loop", condition, body)
+
+pattern:
+    syntax: while condition do: body
+    when triggered:
+        # MISSING: @intrinsic("while_loop", condition, body)
+        @intrinsic("print", "STUB: While loop")
+
+# ============================================================
+# Button Class Definition
+# ============================================================
+# MISSING: Full class support with methods
+
+class:
+    pattern:
+        button
+    members:
+        x, y, width, height, label, value
+
+pattern:
+    syntax: create button with label lbl and value val at posX posY
+    when triggered:
+        set btn to a new button
+        set x of btn to posX
+        set y of btn to posY
+        set width of btn to 70
+        set height of btn to 70
+        set label of btn to lbl
+        set value of btn to val
+
+pattern:
+    syntax: point px py is inside button btn
+    when triggered:
+        # MISSING: Proper boolean logic and comparison chaining
+        # Would check: px >= btn.x and px <= btn.x + btn.width
+        #          and py >= btn.y and py <= btn.y + btn.height
+        @intrinsic("print", "STUB: Checking point inside button")
+
+pattern:
+    syntax: draw button btn
+    when triggered:
+        # Draw button background
+        set draw color to 0.3 0.3 0.3
+        draw rectangle at x of btn y of btn with width width of btn and height height of btn
+        # Draw button border
+        set draw color to 0.5 0.5 0.5
+        # MISSING: draw_rect_outline intrinsic
+        # Draw button label
+        set draw color to 1.0 1.0 1.0
+        draw text label of btn at x of btn y of btn with size 24
+
+# ============================================================
+# Calculator State
+# ============================================================
+
+set displayText to "0"
+set currentNumber to 0
+set storedNumber to 0
+set currentOperator to 0
+set hasOperator to 0
+
+# ============================================================
+# Calculator Logic Patterns
+# ============================================================
+
+pattern:
+    syntax: press digit d
+    when triggered:
+        # MISSING: String operations to append digit to display
+        @intrinsic("print", d)
+
+pattern:
+    syntax: press operator op
+    when triggered:
+        set storedNumber to currentNumber
+        set currentOperator to op
+        set hasOperator to 1
+        set displayText to "0"
+        set currentNumber to 0
+
+pattern:
+    syntax: calculate result
+    when triggered:
+        # Operator codes: 1=add, 2=sub, 3=mul, 4=div
+        # MISSING: if/else control flow
+        # if currentOperator is equal to 1 then:
+        #     set currentNumber to storedNumber + currentNumber
+        # if currentOperator is equal to 2 then:
+        #     set currentNumber to storedNumber - currentNumber
+        # if currentOperator is equal to 3 then:
+        #     set currentNumber to storedNumber * currentNumber
+        # if currentOperator is equal to 4 then:
+        #     set currentNumber to storedNumber / currentNumber
+        @intrinsic("print", "STUB: Calculating result")
+
+pattern:
+    syntax: clear calculator
+    when triggered:
+        set displayText to "0"
+        set currentNumber to 0
+        set storedNumber to 0
+        set currentOperator to 0
+        set hasOperator to 0
+
+# ============================================================
+# Window Layout Constants
+# ============================================================
+
+set windowWidth to 320
+set windowHeight to 480
+set buttonSize to 70
+set buttonSpacing to 10
+set displayHeight to 80
+set startX to 15
+set startY to 100
+
+# ============================================================
+# Main Program
+# ============================================================
+
+# Create the calculator window
+# MISSING: Actual window creation
+set mainWindow to create a window with width windowWidth and height windowHeight titled "3BX Calculator"
+
+# Create calculator buttons
+# Row 1: 7 8 9 /
+set btn7 to create button with label "7" and value 7 at startX startY
+set btn8 to create button with label "8" and value 8 at startX + 80 startY
+set btn9 to create button with label "9" and value 9 at startX + 160 startY
+set btnDiv to create button with label "/" and value 14 at startX + 240 startY
+
+# Row 2: 4 5 6 *
+set row2Y to startY + 80
+set btn4 to create button with label "4" and value 4 at startX row2Y
+set btn5 to create button with label "5" and value 5 at startX + 80 row2Y
+set btn6 to create button with label "6" and value 6 at startX + 160 row2Y
+set btnMul to create button with label "*" and value 13 at startX + 240 row2Y
+
+# Row 3: 1 2 3 -
+set row3Y to startY + 160
+set btn1 to create button with label "1" and value 1 at startX row3Y
+set btn2 to create button with label "2" and value 2 at startX + 80 row3Y
+set btn3 to create button with label "3" and value 3 at startX + 160 row3Y
+set btnSub to create button with label "-" and value 12 at startX + 240 row3Y
+
+# Row 4: C 0 = +
+set row4Y to startY + 240
+set btnClear to create button with label "C" and value 100 at startX row4Y
+set btn0 to create button with label "0" and value 0 at startX + 80 row4Y
+set btnEquals to create button with label "=" and value 99 at startX + 160 row4Y
+set btnAdd to create button with label "+" and value 11 at startX + 240 row4Y
+
+# ============================================================
+# Main Loop
+# ============================================================
+# MISSING: while loop support with boolean conditions
+
+# while window is open do:
+#     poll input events
+#
+#     # Clear screen with dark background
+#     clear screen with color 0.1 0.1 0.15
+#
+#     # Draw display area
+#     set draw color to 0.2 0.2 0.25
+#     draw rectangle at 10 10 with width 300 and height 70
+#
+#     # Draw display text (right-aligned would be ideal)
+#     set draw color to 0.0 1.0 0.5
+#     draw text displayText at 20 30 with size 36
+#
+#     # Draw all buttons
+#     draw button btn0
+#     draw button btn1
+#     draw button btn2
+#     draw button btn3
+#     draw button btn4
+#     draw button btn5
+#     draw button btn6
+#     draw button btn7
+#     draw button btn8
+#     draw button btn9
+#     draw button btnAdd
+#     draw button btnSub
+#     draw button btnMul
+#     draw button btnDiv
+#     draw button btnEquals
+#     draw button btnClear
+#
+#     # Handle mouse clicks
+#     if mouse was clicked then:
+#         set clickX to the mouse x position
+#         set clickY to the mouse y position
+#
+#         # Check digit buttons
+#         if point clickX clickY is inside button btn0 then:
+#             press digit 0
+#         if point clickX clickY is inside button btn1 then:
+#             press digit 1
+#         if point clickX clickY is inside button btn2 then:
+#             press digit 2
+#         if point clickX clickY is inside button btn3 then:
+#             press digit 3
+#         if point clickX clickY is inside button btn4 then:
+#             press digit 4
+#         if point clickX clickY is inside button btn5 then:
+#             press digit 5
+#         if point clickX clickY is inside button btn6 then:
+#             press digit 6
+#         if point clickX clickY is inside button btn7 then:
+#             press digit 7
+#         if point clickX clickY is inside button btn8 then:
+#             press digit 8
+#         if point clickX clickY is inside button btn9 then:
+#             press digit 9
+#
+#         # Check operator buttons
+#         if point clickX clickY is inside button btnAdd then:
+#             press operator 1
+#         if point clickX clickY is inside button btnSub then:
+#             press operator 2
+#         if point clickX clickY is inside button btnMul then:
+#             press operator 3
+#         if point clickX clickY is inside button btnDiv then:
+#             press operator 4
+#
+#         # Check equals button
+#         if point clickX clickY is inside button btnEquals then:
+#             calculate result
+#
+#         # Check clear button
+#         if point clickX clickY is inside button btnClear then:
+#             clear calculator
+#
+#     refresh the display
+
+# Print message since we cannot actually run the GUI
+print "Calculator GUI example - demonstrates 3BX GUI patterns"
+print "See comments for required intrinsics and missing features"
+
+# ============================================================
+# SUMMARY OF MISSING INTRINSICS NEEDED FOR GUI SUPPORT
+# ============================================================
+#
+# Window Management:
+#   @intrinsic("create_window", width, height, title) -> window
+#   @intrinsic("window_is_open", window) -> bool
+#   @intrinsic("close_window", window)
+#   @intrinsic("swap_buffers", window)
+#
+# OpenGL Drawing:
+#   @intrinsic("gl_clear", r, g, b)
+#   @intrinsic("gl_set_color", r, g, b)
+#   @intrinsic("gl_rect", x, y, width, height)
+#   @intrinsic("gl_rect_outline", x, y, width, height)
+#   @intrinsic("gl_text", x, y, text, fontSize)
+#
+# Input Handling:
+#   @intrinsic("poll_events")
+#   @intrinsic("mouse_clicked") -> bool
+#   @intrinsic("get_mouse_x") -> number
+#   @intrinsic("get_mouse_y") -> number
+#   @intrinsic("key_pressed", keyCode) -> bool
+#
+# String Operations:
+#   @intrinsic("string_concat", a, b) -> string
+#   @intrinsic("number_to_string", n) -> string
+#   @intrinsic("string_to_number", s) -> number
+#   @intrinsic("string_length", s) -> number
+#
+# Control Flow:
+#   @intrinsic("while_loop", condition, body)
+#   @intrinsic("for_loop", init, condition, increment, body)
+#
+# Boolean Logic:
+#   @intrinsic("and", a, b) -> bool
+#   @intrinsic("or", a, b) -> bool
+#   @intrinsic("not", a) -> bool
+#
+# Suggested Libraries (could be implemented in 3BX with above intrinsics):
+#   - gui.3bx: Window and widget abstractions
+#   - opengl.3bx: OpenGL rendering patterns
+#   - input.3bx: Keyboard and mouse handling
+#   - math.3bx: Extended math functions (sqrt, sin, cos, etc.)

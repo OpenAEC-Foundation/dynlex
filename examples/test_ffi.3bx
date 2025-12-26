@@ -1,0 +1,15 @@
+# test_ffi.3bx - Test FFI (Foreign Function Interface) functionality
+
+# Import external C functions
+import function puts(str) from "stdio.h"
+import function sqrt(x) from "math.h"
+
+# Create a pattern that wraps the external function call
+effect say message:
+    when triggered:
+        @intrinsic("call", "puts", message)
+
+# Test: call the pattern
+say "Hello from FFI!"
+
+print "FFI test complete"

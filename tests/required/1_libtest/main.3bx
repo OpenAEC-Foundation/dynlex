@@ -1,0 +1,11 @@
+#this file tests the standard libraries.
+
+import vector.3bx
+import print.3bx
+
+set testVector to a new vector with x 0, y 1 and z 2
+add 3 to testVector
+multiply testVector by 4.5
+
+#classes should have a print function, which prints their name (first syntax) and members. classes can override it with a print: section
+print testVector

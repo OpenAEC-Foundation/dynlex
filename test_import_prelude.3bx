@@ -1,0 +1,4 @@
+# Test import of prelude
+import prelude.3bx
+
+set x to 42

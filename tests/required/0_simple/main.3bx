@@ -1,0 +1,4 @@
+# Simple test. prelude.3bx is imported automatically.
+set x to 42
+set y to 10
+set result to x + y

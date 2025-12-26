@@ -1,0 +1,120 @@
+# vector.3bx - Vector class for 3D mathematics
+# A fundamental data structure for games, physics, and graphics
+
+import class.3bx
+
+class:
+    pattern:
+        vector
+    members:
+        x, y, z
+    when created:
+        set each member to 0
+
+# Vector creation with values
+expression a vector with x as xVal and y as yVal and z as zVal:
+    get:
+        set result to a new vector
+        set x of result to xVal
+        set y of result to yVal
+        set z of result to zVal
+
+expression vector xVal yVal zVal:
+    get:
+        set result to a new vector
+        set x of result to xVal
+        set y of result to yVal
+        set z of result to zVal
+
+# Vector operations using each member
+expression add vecA to vecB:
+    get:
+        set result to a new vector
+        add vecA to each member of result
+        add vecB to each member of result
+
+expression subtract vecB from vecA:
+    get:
+        set result to a new vector
+        add vecA to each member of result
+        subtract vecB from each member of result
+
+expression multiply vec by scalar:
+    get:
+        set result to a new vector
+        add vec to each member of result
+        multiply each member of result by scalar
+
+expression divide vec by scalar:
+    get:
+        set result to a new vector
+        add vec to each member of result
+        divide each member of result by scalar
+
+# Dot product (needs explicit member access)
+expression dot product of vecA and vecB:
+    get:
+        set sum to x of vecA * x of vecB
+        set sum to sum + y of vecA * y of vecB
+        set result to sum + z of vecA * z of vecB
+
+expression vecA dot vecB:
+    get:
+        dot product of vecA and vecB
+
+# Cross product (needs explicit member access due to cross terms)
+expression cross product of vecA and vecB:
+    get:
+        set result to a new vector
+        set x of result to y of vecA * z of vecB - z of vecA * y of vecB
+        set y of result to z of vecA * x of vecB - x of vecA * z of vecB
+        set z of result to x of vecA * y of vecB - y of vecA * x of vecB
+
+expression vecA cross vecB:
+    get:
+        cross product of vecA and vecB
+
+# Magnitude
+expression magnitude of vec:
+    get:
+        set squared to x of vec * x of vec + y of vec * y of vec + z of vec * z of vec
+        @intrinsic("sqrt", squared)
+
+expression length of vec:
+    get:
+        magnitude of vec
+
+# Normalize
+effect normalize vec:
+    when triggered:
+        set mag to magnitude of vec
+        divide each member of vec by mag
+
+expression normalized vec:
+    get:
+        set result to a new vector
+        add vec to each member of result
+        normalize result
+
+# Distance
+expression distance between vecA and vecB:
+    get:
+        set diff to subtract vecB from vecA
+        magnitude of diff
+
+# Common vectors
+expression zero vector:
+    get:
+        a new vector
+
+expression unit x vector:
+    get:
+        vector 1 0 0
+
+expression unit y vector:
+    get:
+        vector 0 1 0
+
+expression unit z vector:
+    get:
+        vector 0 0 1

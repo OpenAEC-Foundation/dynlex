@@ -1,0 +1,24 @@
+# this effect has a single pattern, defined right at the effect definition line instead of in a pattern section.
+expression var's next power of two:
+	get:
+		set result to 1
+		while result < var:
+			multiply result by 2
+
+effect say message:
+	when triggered:
+		print message
+
+class:
+	patterns:
+		byte
+		unsigned char
+		uint_8
+
+
+
+say "Hello, World!"
+		
+# should print 8
+print 5.5's next power of two
+

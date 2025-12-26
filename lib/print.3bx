@@ -1,0 +1,16 @@
+# print.3bx - Output operations for 3BX
+
+# Basic print pattern
+effect print value:
+    when triggered:
+        @intrinsic("print", value)
+
+# Print with message
+effect print msg to the console:
+    when triggered:
+        @intrinsic("print", msg)
+
+# Print with label
+effect print label value:
+    when triggered:
+        @intrinsic("print_labeled", label, value)

@@ -1,0 +1,115 @@
+{
+  "name": "3bx",
+  "displayName": "3BX Language Support",
+  "description": "Language support for the 3BX programming language - syntax highlighting, LSP integration, and more",
+  "version": "0.1.0",
+  "publisher": "3bx-lang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnheikens/3BX"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "3bx",
+    "programming language",
+    "natural language",
+    "pattern matching"
+  ],
+  "activationEvents": [
+    "onLanguage:3bx"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "3bx",
+        "aliases": [
+          "3BX",
+          "3bx"
+        ],
+        "extensions": [
+          ".3bx"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/3bx-light.png",
+          "dark": "./icons/3bx-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "3bx",
+        "scopeName": "source.3bx",
+        "path": "./syntaxes/3bx.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "3bx",
+        "path": "./snippets/3bx.json"
+      }
+    ],
+    "configuration": {
+      "title": "3BX",
+      "properties": {
+        "3bx.compiler.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the 3BX compiler executable. If empty, uses 'threebx' from PATH."
+        },
+        "3bx.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Language Server Protocol features (requires compiler with --lsp support)"
+        },
+        "3bx.lsp.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the 3BX language server"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "3bx.restartServer",
+        "title": "3BX: Restart Language Server"
+      },
+      {
+        "command": "3bx.compileFile",
+        "title": "3BX: Compile Current File"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}

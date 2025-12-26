@@ -1,0 +1,58 @@
+# 3BX Standard Prelude
+# Core language patterns defined in 3BX itself
+
+# === Variables ===
+
+effect set var to val:
+    when triggered:
+        @intrinsic("store", var, val)
+
+# === Output ===
+
+effect write msg to the console:
+    when triggered:
+        @intrinsic("print", msg)
+
+# === Arithmetic ===
+
+expression left + right:
+    get:
+        @intrinsic("add", left, right)
+
+expression left - right:
+    get:
+        @intrinsic("sub", left, right)
+
+expression left * right:
+    get:
+        @intrinsic("mul", left, right)
+
+expression left / right:
+    get:
+        @intrinsic("div", left, right)
+
+# === Comparison ===
+
+expression val1 is equal to val2:
+    get:
+        @intrinsic("cmp_eq", val1, val2)
+
+expression val1 is less than val2:
+    get:
+        @intrinsic("cmp_lt", val1, val2)
+
+expression val1 is greater than val2:
+    get:
+        @intrinsic("cmp_gt", val1, val2)
+
+# === Control Flow ===
+
+condition if cond then:
+    when triggered:
+        @intrinsic("branch", cond)
+
+# === Return ===
+
+effect return val:
+    when triggered:
+        @intrinsic("return", val)

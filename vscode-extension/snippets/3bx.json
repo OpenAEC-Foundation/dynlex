@@ -1,0 +1,128 @@
+{
+  "Pattern Definition": {
+    "prefix": "pattern",
+    "body": [
+      "pattern:",
+      "\tsyntax: ${1:pattern_syntax}",
+      "\twhen triggered:",
+      "\t\t${2:@intrinsic(\"print\", \"Hello\")}"
+    ],
+    "description": "Define a new pattern with syntax and trigger behavior"
+  },
+  "Pattern with Priority": {
+    "prefix": "patternp",
+    "body": [
+      "pattern:",
+      "\tsyntax: ${1:pattern_syntax}",
+      "\tpriority: ${2:1}",
+      "\twhen triggered:",
+      "\t\t${3:@intrinsic(\"print\", \"Hello\")}"
+    ],
+    "description": "Define a new pattern with explicit priority"
+  },
+  "Pattern with Parsed": {
+    "prefix": "patternc",
+    "body": [
+      "pattern:",
+      "\tsyntax: ${1:pattern_syntax}",
+      "\twhen parsed:",
+      "\t\t${2:# compile-time behavior}",
+      "\twhen triggered:",
+      "\t\t${3:@intrinsic(\"print\", \"Hello\")}"
+    ],
+    "description": "Define a pattern with compile-time and runtime behavior"
+  },
+  "Set Variable": {
+    "prefix": "set",
+    "body": "set ${1:variable} to ${2:value}",
+    "description": "Set a variable to a value"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} then",
+      "\t${2:body}"
+    ],
+    "description": "If-then statement"
+  },
+  "If-Else Statement": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} then",
+      "\t${2:then_body}",
+      "else",
+      "\t${3:else_body}"
+    ],
+    "description": "If-then-else statement"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} loop",
+      "\t${2:body}"
+    ],
+    "description": "While loop"
+  },
+  "Function Definition": {
+    "prefix": "function",
+    "body": [
+      "function ${1:name}:",
+      "\t${2:body}",
+      "\treturn ${3:value}"
+    ],
+    "description": "Define a function"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": "import ${1:module}",
+    "description": "Import a module"
+  },
+  "Intrinsic Print": {
+    "prefix": "@print",
+    "body": "@intrinsic(\"print\", ${1:value})",
+    "description": "Print a value to console"
+  },
+  "Intrinsic Store": {
+    "prefix": "@store",
+    "body": "@intrinsic(\"store\", ${1:variable}, ${2:value})",
+    "description": "Store a value in a variable"
+  },
+  "Intrinsic Load": {
+    "prefix": "@load",
+    "body": "@intrinsic(\"load\", ${1:variable})",
+    "description": "Load a value from a variable"
+  },
+  "Intrinsic Add": {
+    "prefix": "@add",
+    "body": "@intrinsic(\"add\", ${1:a}, ${2:b})",
+    "description": "Add two values"
+  },
+  "Intrinsic Subtract": {
+    "prefix": "@sub",
+    "body": "@intrinsic(\"sub\", ${1:a}, ${2:b})",
+    "description": "Subtract two values"
+  },
+  "Intrinsic Multiply": {
+    "prefix": "@mul",
+    "body": "@intrinsic(\"mul\", ${1:a}, ${2:b})",
+    "description": "Multiply two values"
+  },
+  "Intrinsic Divide": {
+    "prefix": "@div",
+    "body": "@intrinsic(\"div\", ${1:a}, ${2:b})",
+    "description": "Divide two values"
+  },
+  "Comment": {
+    "prefix": "#",
+    "body": "# ${1:comment}",
+    "description": "Single line comment"
+  },
+  "Section Header": {
+    "prefix": "section",
+    "body": [
+      "${1:section_name}:",
+      "\t${2:content}"
+    ],
+    "description": "Create a section with a header"
+  }
+}

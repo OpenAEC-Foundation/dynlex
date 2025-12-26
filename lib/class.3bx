@@ -1,0 +1,63 @@
+# class.3bx - Defines the class construct in 3BX
+# Classes are user-defined types with members and methods
+
+# Creating instances
+expression a new className:
+    get:
+        @intrinsic("create_instance", className)
+
+expression create a className:
+    get:
+        @intrinsic("create_instance", className)
+
+# Accessing members
+expression memberName of object:
+    get:
+        @intrinsic("get_member", object, memberName)
+
+expression the memberName of object:
+    get:
+        @intrinsic("get_member", object, memberName)
+
+# Setting members
+effect set memberName of object to value:
+    when triggered:
+        @intrinsic("set_member", object, memberName, value)
+
+# Calling methods
+effect methodName object:
+    when triggered:
+        @intrinsic("call_method", object, methodName)
+
+effect methodName object with arg:
+    when triggered:
+        @intrinsic("call_method_with_arg", object, methodName, arg)
+
+# Expression for operating on all members of a class
+expression each member:
+    used inside:
+        class
+    set:
+        @intrinsic("set_each_member", val)
+    add:
+        @intrinsic("add_each_member", val)
+    subtract:
+        @intrinsic("sub_each_member", val)
+    multiply:
+        @intrinsic("mul_each_member", val)
+    divide:
+        @intrinsic("div_each_member", val)
+
+expression all members:
+    used inside:
+        class
+    set:
+        @intrinsic("set_each_member", val)
+    add:
+        @intrinsic("add_each_member", val)
+    subtract:
+        @intrinsic("sub_each_member", val)
+    multiply:
+        @intrinsic("mul_each_member", val)
+    divide:
+        @intrinsic("div_each_member", val)

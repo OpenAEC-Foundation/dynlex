@@ -1,0 +1,194 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "3BX",
+  "scopeName": "source.3bx",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#intrinsics" },
+    { "include": "#pattern-definition" },
+    { "include": "#section-headers" },
+    { "include": "#keywords" },
+    { "include": "#operators" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.number-sign.3bx",
+      "match": "#.*$"
+    },
+    "strings": {
+      "name": "string.quoted.double.3bx",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.3bx",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.3bx",
+          "match": "\\b-?\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.3bx",
+          "match": "\\b-?\\d+\\b"
+        }
+      ]
+    },
+    "intrinsics": {
+      "name": "meta.intrinsic.3bx",
+      "begin": "(@intrinsic)\\s*(\\()",
+      "beginCaptures": {
+        "1": { "name": "support.function.builtin.3bx" },
+        "2": { "name": "punctuation.definition.arguments.begin.3bx" }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.arguments.end.3bx" }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.intrinsic-name.3bx",
+          "match": "\"(store|load|add|sub|mul|div|print|eq|ne|lt|le|gt|ge|mod|neg|call|return|branch|phi|alloca|gep|cast|and|or|xor|shl|shr)\"",
+          "captures": {
+            "0": { "name": "support.constant.intrinsic-type.3bx" }
+          }
+        },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#identifiers" },
+        {
+          "name": "punctuation.separator.comma.3bx",
+          "match": ","
+        }
+      ]
+    },
+    "pattern-definition": {
+      "patterns": [
+        {
+          "name": "meta.pattern.3bx",
+          "match": "^(pattern)\\s*(:)\\s*$",
+          "captures": {
+            "1": { "name": "keyword.declaration.pattern.3bx" },
+            "2": { "name": "punctuation.definition.section.3bx" }
+          }
+        },
+        {
+          "name": "meta.pattern.syntax.3bx",
+          "begin": "^(\\s+)(syntax)\\s*(:)\\s*",
+          "beginCaptures": {
+            "2": { "name": "keyword.declaration.syntax.3bx" },
+            "3": { "name": "punctuation.definition.section.3bx" }
+          },
+          "end": "$",
+          "patterns": [
+            {
+              "name": "keyword.control.3bx",
+              "match": "\\b(set|to|if|then|else|while|loop|function|return|is|the|a|an|and|or|not|pattern|syntax|when|parsed|triggered|priority|import)\\b"
+            },
+            {
+              "name": "variable.parameter.pattern.3bx",
+              "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+            }
+          ]
+        },
+        {
+          "name": "meta.pattern.when.3bx",
+          "match": "^(\\s+)(when)\\s+(triggered|parsed)\\s*(:)\\s*$",
+          "captures": {
+            "2": { "name": "keyword.control.when.3bx" },
+            "3": { "name": "keyword.control.trigger-type.3bx" },
+            "4": { "name": "punctuation.definition.section.3bx" }
+          }
+        },
+        {
+          "name": "meta.pattern.priority.3bx",
+          "match": "^(\\s+)(priority)\\s*(:)\\s*(\\d+)\\s*$",
+          "captures": {
+            "2": { "name": "keyword.other.priority.3bx" },
+            "3": { "name": "punctuation.definition.section.3bx" },
+            "4": { "name": "constant.numeric.priority.3bx" }
+          }
+        }
+      ]
+    },
+    "section-headers": {
+      "patterns": [
+        {
+          "name": "meta.section.3bx",
+          "match": "^([a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)\\s*$",
+          "captures": {
+            "1": { "name": "entity.name.section.3bx" },
+            "2": { "name": "punctuation.definition.section.3bx" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.3bx",
+          "match": "\\b(set|to|if|then|else|while|loop|return)\\b"
+        },
+        {
+          "name": "keyword.declaration.3bx",
+          "match": "\\b(function|pattern|syntax)\\b"
+        },
+        {
+          "name": "keyword.other.3bx",
+          "match": "\\b(when|parsed|triggered|priority|import)\\b"
+        },
+        {
+          "name": "keyword.operator.word.3bx",
+          "match": "\\b(is|and|or|not)\\b"
+        },
+        {
+          "name": "keyword.other.article.3bx",
+          "match": "\\b(the|a|an)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.3bx",
+          "match": "[+\\-*/]"
+        },
+        {
+          "name": "keyword.operator.comparison.3bx",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "punctuation.definition.section.3bx",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.separator.comma.3bx",
+          "match": ","
+        },
+        {
+          "name": "punctuation.bracket.round.3bx",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.bracket.square.3bx",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.bracket.curly.3bx",
+          "match": "[{}]"
+        }
+      ]
+    },
+    "identifiers": {
+      "name": "variable.other.3bx",
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+    }
+  }
+}

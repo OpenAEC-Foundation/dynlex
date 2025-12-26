@@ -1,0 +1,9 @@
+# Test pattern definition
+
+pattern:
+    syntax: greet name
+    when triggered:
+        @intrinsic("print", name)
+
+# This should eventually use the pattern
+set x to 42

@@ -1,0 +1,91 @@
+# calculator.3bx - A simple calculator demonstrating 3BX patterns
+# This example shows how to define arithmetic patterns and use them
+
+# === Arithmetic Patterns ===
+
+# Addition pattern - natural language style
+pattern:
+    syntax: add a and b
+    when triggered:
+        @intrinsic("add", a, b)
+
+# Subtraction pattern
+pattern:
+    syntax: subtract b from a
+    when triggered:
+        @intrinsic("sub", a, b)
+
+# Multiplication pattern
+pattern:
+    syntax: multiply a by b
+    when triggered:
+        @intrinsic("mul", a, b)
+
+# Division pattern
+pattern:
+    syntax: divide a by b
+    when triggered:
+        @intrinsic("div", a, b)
+
+# === Alternative Natural Language Patterns ===
+
+# "the sum of" pattern
+pattern:
+    syntax: the sum of a and b
+    when triggered:
+        @intrinsic("add", a, b)
+
+# "the difference between" pattern
+pattern:
+    syntax: the difference between a and b
+    when triggered:
+        @intrinsic("sub", a, b)
+
+# "the product of" pattern
+pattern:
+    syntax: the product of a and b
+    when triggered:
+        @intrinsic("mul", a, b)
+
+# "the quotient of" pattern
+pattern:
+    syntax: the quotient of a and b
+    when triggered:
+        @intrinsic("div", a, b)
+
+# === Example Usage ===
+
+# Basic calculations using our patterns
+set x to 10
+set y to 5
+
+# Using the add pattern
+set sum to add x and y
+print sum
+
+# Using the subtract pattern
+set difference to subtract y from x
+print difference
+
+# Using the multiply pattern
+set product to multiply x by y
+print product
+
+# Using the divide pattern
+set quotient to divide x by y
+print quotient
+
+# Using alternative natural language patterns
+set result1 to the sum of 20 and 30
+print result1
+
+set result2 to the product of 7 and 8
+print result2
+
+# Chained calculation example
+set a to 100
+set b to 25
+set c to 4
+set step1 to divide a by b
+set final to multiply step1 by c
+print final
