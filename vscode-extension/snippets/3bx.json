@@ -42,7 +42,7 @@
     "body": [
       "condition ${1:pattern syntax}:",
       "\texecute:",
-      "\t\t${2:@intrinsic(\"branch\", cond)}"
+      "\t\t${2:@intrinsic(\"if\", cond)}"
     ],
     "description": "Define a condition pattern"
   },

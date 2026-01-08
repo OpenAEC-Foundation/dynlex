@@ -5,13 +5,16 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR="$SCRIPT_DIR/.."
+
 # 1. Build the C++ Compiler (LSP/DAP Server)
 echo "Building 3BX compiler..."
-./build.sh
+"$SCRIPT_DIR/build.sh"
 
 # 2. Build and Package the VS Code Extension
 echo "Compiling and packaging VS Code extension..."
-cd vscode-extension
+cd "$WORKSPACE_DIR/vscode-extension"
 
 # Ensure dependencies are installed
 if [ ! -d "node_modules" ]; then

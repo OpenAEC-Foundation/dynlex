@@ -105,6 +105,18 @@ Resolve patterns and variables iteratively using a pattern tree. Each section an
 
 > **See [PATTERN_MATCHING.md](PATTERN_MATCHING.md)** for detailed documentation on the pattern tree structure, expression substitution, and alternative handling.
 
+### Important: No LLVM Interaction
+
+Pattern resolution operates **entirely on strings and text**. There is no interaction with LLVM during this phase. The output of pattern resolution is:
+- Resolved patterns with their string-based arguments
+- Pattern matches that map code lines to their matched patterns
+- String values for all captured variables
+
+This separation is intentional:
+- Pattern resolution is a **syntactic** operation (matching text against patterns)
+- Code generation is a **semantic** operation (producing executable code)
+- Keeping them separate allows for alternative backends and easier testing
+
 ### Algorithm
 
 ```
@@ -184,33 +196,21 @@ Infer types for all variables based on intrinsic usage and literal values.
    - `load`: type of the variable
 3. **Variables**: Inferred from first assignment or usage
 
-### Input (Resolved Pattern)
-```
-expression "$left + $right":
-    body: return @intrinsic("add", left, right)
-
-Call: "5 + 3" with {left: 5, right: 3}
-```
-
-### Output (Typed)
-```
-expression "$left + $right":
-    left: i64
-    right: i64
-    returns: i64
-    body: return @intrinsic("add", left, right)
-
-Call: "5 + 3"
-    left: i64 = 5
-    right: i64 = 3
-    result: i64
-```
-
 ---
 
 ## Step 5: Code Generation (LLVM IR)
 
 Generate LLVM Intermediate Representation from resolved and typed patterns.
+
+### 5.1: Context Resolution (Frames and Sections)
+
+During code generation, the compiler resolves relative references like `@intrinsic("frame", index)` and `@intrinsic("section", frame, index)`.
+
+- **Frame Context:** The code generator maintains the call stack. It resolves `frame back` by looking up the frame at the specified depth.
+- **Section Context:** Sections are resolved relative to a frame. `frame's child section` (or `-1 sections up`) refers to the first indented code block following the code line that created the frame.
+- **Section Variables:** Variables can be set on sections (e.g., `@intrinsic("store_section", section, name, value)`). These variables are scoped to the section's lifecycle.
+
+### 5.2: LLVM IR Generation
 
 ### Input
 ```

@@ -49,6 +49,7 @@ Now `say hello to Alex` is valid syntax.
 | [Getting Started](Getting-Started.md) | Install 3BX and run your first program |
 | [Writing Your First Program](Writing-Your-First-Program.md) | Learn the basics step by step |
 | [Patterns](Patterns.md) | Create your own custom commands |
+| [Intrinsics](INTRINSICS.md) | Primitive operations reference |
 | [Examples](Examples.md) | See what you can build |
 
 ## Why 3BX?

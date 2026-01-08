@@ -28,6 +28,8 @@ set(LEXER_SOURCES
 
 set(LSP_SOURCES
     src/lsp/lspServer.cpp
+    src/lsp/lspServerHandlers.cpp
+    src/lsp/lspServerFeatures.cpp
 )
 
 set(DAP_SOURCES
@@ -38,9 +40,17 @@ set(COMPILER_SOURCES
     src/compiler/importResolver.cpp
     src/compiler/sectionAnalyzer.cpp
     src/compiler/patternResolver.cpp
+    src/compiler/patternResolverExtract.cpp
+    src/compiler/patternResolverTree.cpp
+    src/compiler/resolvedPattern.cpp
+    src/compiler/patternMatch.cpp
     src/compiler/patternTree.cpp
     src/compiler/typeInference.cpp
     src/compiler/codeGenerator.cpp
+    src/compiler/codeGeneratorTypes.cpp
+    src/compiler/codeGeneratorPatterns.cpp
+    src/compiler/codeGeneratorIntrinsics.cpp
+    src/compiler/codeGeneratorExpressions.cpp
     src/compiler/optimizer.cpp
 )
 

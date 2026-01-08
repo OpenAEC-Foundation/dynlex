@@ -96,15 +96,9 @@ effect divide var by val:
     execute:
         set var to var / val
 
-# === Control Flow ===
-
-condition if cond [|then]:
-    execute:
-        @intrinsic("branch", cond)
-
-section while {condition}:
-    execute:
-        @intrinsic("loop_while", condition, the calling section)
+expression evaluate expression:
+	get:
+		return @intrinsic("evaluate", expression)
 
 expression true:
 	get:

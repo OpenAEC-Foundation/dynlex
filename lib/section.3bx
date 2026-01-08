@@ -1,38 +1,59 @@
 # 1 section up = the calling section
 # lines with a colon belong to the section below them.
+import loop.3bx
+
 expression framecount frame[s|] back:
 	get:
+		# We add 1 because the call to this 'frame back' pattern itself creates a frame.
 		return @intrinsic("frame", framecount + 1)
 
 expression the current frame:
 	get:
 		return 1 frame back
 
-expression the calling frame:
+expression the [calling frame|caller]:
 	get:
 		return 2 frames back
 
 expression sectioncount section[s|] up [|from frame]:
 	get:
 		if frame isn't set:
-			set frame to the calling frame
-		return @intrinsic("section", the calling frame, sectioncount)
+			set frame to the caller
+		return @intrinsic("section", the caller, sectioncount)
 
-#the section in which 'the current section' is referenced, so the calling section of this expression section (1 up).
-expression [the current|this|] [section|loop|statement]:
-	get:
-		return 1 section up
-
-#the section that called the section in which this pattern is referenced, so the calling section of the calling section (2 up)
 expression:
 	patterns:
-		[the|] [calling|outer|parent] [section|loop|statement]
+		frame's section
+		section of frame
 	get:
-		return 2 sections up
+		return 0 sections up from frame
 
-expression [the|] [following|next] section of testsection:
+#the section in which 'the current section' is referenced, so the caller's child section of this expression section (1 up).
+expression [the current|this|] [section|loop|statement]:
 	get:
-		return @intrinsic("next_section", testsection)
+		return 0 sections up from the caller
+
+#the section that called the section in which this pattern is referenced, so the caller's child section of the caller's child section (2 up)
+expression:
+	patterns:
+		[the|] [outer|parent] [section|loop|statement]
+	get:
+		return 1 sections up from the caller
+
+# returns the first indented code block after the frame's execution line
+# example:
+# if a is less than b:
+# 	print "a is less than b"
+# frame is at 'if a is less than b:'
+# returns the section with 'print "a is less than b"'
+expression:
+	patterns:
+		[the|] [inner|child] section [|of frame]
+		frame's child section
+	get:
+		if frame isn't set:
+			set frame to the caller
+		return -1 sections up from the caller
 
 #execute a section
 effect execute section:
@@ -49,60 +70,60 @@ effect:
 
 effect start chain name:
 	execute:
-		@intrinsic("chain_start", name, the calling section)
+		@intrinsic("chain_start", name, the caller's child section)
 
 effect continue chain name:
 	execute:
-		@intrinsic("chain_continue", name, the calling section)
+		@intrinsic("chain_continue", name, the caller's child section)
 
 effect exit chain:
 	execute:
-		@intrinsic("chain_exit", the calling section)
+		@intrinsic("chain_exit", the caller's child section)
 
 private section execute if condition:
 	execute:
-		@intrinsic("if", condition, the calling section)
+		@intrinsic("if", condition, the caller's child section)
 
 #if
 section [if|when] condition:
 	execute:
 		start chain "if"
 		execute if condition:
-			execute the calling section
+			execute the caller's child section
 			exit chain
 
 section else [if|when] condition:
 	execute:
 		continue chain "if"
 		execute if condition:
-			execute the calling section
+			execute the caller's child section
 			exit chain
 
 section else:
 	execute:
 		continue chain "if"
-		execute the calling section
+		execute the caller's child section
 		exit chain
 
 #switch
 
 section [switch|match] based on value:
 	execute:
-		set the calling section's switchvalue to value
+		set the caller's child section's switchvalue to value
 
 section case value:
 	execute:
-		if the calling section's parent's switchvalue == value:
-			execute the calling section
-			exit the calling section's parent
+		if the caller's child section's parent's switchvalue == value:
+			execute the caller's child section
+			exit the caller's child section's parent
 
 section case default:
 	execute:
-		execute the calling section
-		exit the calling section's parent
+		execute the caller's child section
+		exit the caller's child section's parent
 
 #ternary
-expression {truevalue} if condition else {falsevalue}:
+expression {expression:truevalue} if condition else {expression:falsevalue}:
 	get:
 		if condition:
 			return evaluate truevalue
@@ -112,7 +133,7 @@ expression {truevalue} if condition else {falsevalue}:
 #async
 section run in background:
 	execute:
-		@intrinsic("run_in_background", the calling section)
+		@intrinsic("run_in_background", the caller's child section)
 
 expression [the] amount of items in list:
 	get:
@@ -134,12 +155,12 @@ expression for each loopitem in list:
 		set itemindex to 0
 		loop while itemindex < itemcount:
 			set loopitem to item at index itemindex
-			execute the calling section
+			execute the caller's child section
 			add 1 to itemindex
 
 section choose randomly:
 	execute:
-		set options to child sections of the calling section
+		set options to child sections of the caller's child section
 		set choice to a random item of options
 		execute choice
 

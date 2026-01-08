@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # Run all required tests
-# Usage: ./run_tests.sh [-v]
+# Usage: ./scripts/run_tests.sh [-v]
 # -v: verbose mode, show output even for passing tests
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TESTS_DIR="$SCRIPT_DIR/tests/required"
-BUILD_DIR="$SCRIPT_DIR/build"
+WORKSPACE_DIR="$SCRIPT_DIR/.."
+TESTS_DIR="$WORKSPACE_DIR/tests/required"
+BUILD_DIR="$WORKSPACE_DIR/build"
 TIMEOUT=20
 VERBOSE=0
 

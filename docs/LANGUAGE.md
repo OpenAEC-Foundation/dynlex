@@ -20,9 +20,11 @@ Indents are done with either tabs or spaces. A source file has either a fixed am
 
 Code should use as few special characters as possible (so custom patterns can use them). Reserved characters:
 
-- `:` indicates a section
+- `:` at the end of a code line indicates a section
 - `#` indicates a comment
 - `"` starts and ends strings
+- `{`, `}` capture syntax inside of pattern definitions {expression:capturedexpression}
+- `[`, `]`, `|` optional syntax inside of pattern definitions [option1|option2|]
 
 ## Sections
 
@@ -37,12 +39,7 @@ These add new syntax to the language:
 - `section <pattern>:` defines a named section (requires `execute:` subsection)
 - `class <pattern>:` defines a class type (has `patterns:` and `members:` subsections)
 
-### Usage Sections
-
-These use existing syntax but do not add new patterns:
-
-- `condition:` when the expression before the `:` evaluates to true, the section will be executed
-- `loop:` the section will be executed multiple times depending on what the loop does
+<pattern> is not actual syntax, but represents a pattern like the example pattern below (`print [a|the] message`)
 
 ## Patterns
 
@@ -114,7 +111,7 @@ Patterns can use typed captures to control how arguments are matched:
 ```
 section while {expression:condition}:
     execute:
-        @intrinsic("loop_while", condition, the calling section)
+        @intrinsic("loop_while", condition, the caller's child section)
 ```
 
 ### Word Captures
@@ -128,6 +125,12 @@ expression {word:member} of obj:
 ```
 
 This matches `x of player` where `member` = "x" (as a string, not a variable reference).
+
+## Intrinsics
+
+Intrinsics are primitive operations that bridge patterns to LLVM. They use the `@intrinsic("name", args...)` syntax.
+
+See [INTRINSICS.md](INTRINSICS.md) for the complete reference.
 
 ## Testing
 

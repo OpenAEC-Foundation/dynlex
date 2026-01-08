@@ -12,13 +12,13 @@ import section.3bx
 # The condition is re-evaluated on each iteration.
 #
 # Usage:
-#   loop while {x < 10}:
+#   loop while x < 10:
 #       print x
 #       set x to x + 1
 #
-section loop while {condition}:
+section [|loop] while {expression:condition}:
     execute:
-        @intrinsic("loop_while", condition, the calling section)
+        @intrinsic("loop_while", condition, the caller's child section)
 
 # =============================================================================
 # Repeat N Times
@@ -33,8 +33,8 @@ section loop while {condition}:
 section loop count times:
     execute:
         set loopindex to 0
-        loop while {loopindex < count}:
-            execute the calling section
+        loop while loopindex < count:
+            execute the caller's child section
             set loopindex to loopindex + 1
 
 # =============================================================================
@@ -44,15 +44,15 @@ section loop count times:
 #
 # Usage:
 #   set x to 0
-#   do then loop while {x < 5}:
+#   do then loop while x < 5:
 #       print x
 #       set x to x + 1
 #
-section do then loop while {condition}:
+section do then loop while {expression:condition}:
     execute:
-        execute the calling section
-		loop while {condition}:
-			execute the calling section
+        execute the caller's child section
+		loop while evaluate condition:
+			execute the caller's child section
 
 # =============================================================================
 # Range Loop (Exclusive)
@@ -69,8 +69,8 @@ section loop from startval to endval [with step stepval|]:
 		if stepval isn't set:
 			set stepval to 1
         set loopindex to startval
-        loop while {loopindex < endval}:
-            execute the calling section
+        loop while loopindex < endval:
+            execute the caller's child section
             set loopindex to loopindex + stepval
 
 # =============================================================================
@@ -87,8 +87,8 @@ section loop from startval through endval:
     execute:
         set loopindex to startval
         set limit to endval
-        loop while {loopindex <= limit}:
-            execute the calling section
+        loop while loopindex <= limit:
+            execute the caller's child section
             set loopindex to loopindex + 1
 
 # =============================================================================
@@ -105,8 +105,8 @@ section loop from startval through endval:
 section countdown from startval:
     execute:
         set loopindex to startval
-        loop while {loopindex > 0}:
-            execute the calling section
+        loop while loopindex > 0:
+            execute the caller's child section
             set loopindex to loopindex - 1
 
 # =============================================================================
@@ -117,20 +117,20 @@ section countdown from startval:
 #
 # Usage:
 #   set x to 0
-#   loop until {x == 5}:
+#   loop until x == 5:
 #       print x
 #       set x to x + 1
 #
-section loop until {condition}:
+section loop until {expression:condition}:
     execute:
-		loop while {condition} isn't true:
-			execute the calling section
+		loop while evaluate condition isn't true:
+			execute the caller's child section
 
 # =============================================================================
 # Forever Loop
 # =============================================================================
 # Infinite loop - use with caution! Must contain a break mechanism.
-# This is primarily for demonstration; use loop while {1} for infinite loops.
+# This is primarily for demonstration; use loop while true for infinite loops.
 #
 # Usage:
 #   set x to 0
@@ -142,4 +142,4 @@ section loop until {condition}:
 section loop forever:
     execute:
         loop while true:
-			execute the calling section
+			execute the caller's child section

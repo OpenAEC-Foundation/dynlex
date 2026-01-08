@@ -157,14 +157,8 @@ pattern:
 **Note:** Patterns are matched by specificity (more literal words = more specific). If two patterns conflict, the compiler will emit an error.
 
 ### Intrinsics
-Intrinsics bridge patterns to LLVM operations:
-- `@intrinsic("store", var, val)` - Store value in variable
-- `@intrinsic("load", var)` - Load value from variable
-- `@intrinsic("add", a, b)` - Addition
-- `@intrinsic("sub", a, b)` - Subtraction
-- `@intrinsic("mul", a, b)` - Multiplication
-- `@intrinsic("div", a, b)` - Division
-- `@intrinsic("print", val)` - Print to console
+
+Intrinsics bridge patterns to LLVM operations. See [docs/INTRINSICS.md](docs/INTRINSICS.md) for the complete reference.
 
 ### Reserved Words (Literal in Patterns)
 `set`, `to`, `if`, `then`, `else`, `while`, `loop`, `function`, `return`,

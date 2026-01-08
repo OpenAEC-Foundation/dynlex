@@ -6,6 +6,42 @@ This document describes how 3BX matches patterns and substitutes expressions int
 
 3BX uses a **pattern tree** (trie-like structure) to efficiently store and match patterns. Each node in the tree represents a pattern element, with child nodes stored in unordered maps keyed by strings.
 
+## Architectural Principle: No LLVM at Resolution Time
+
+**Pattern resolution is entirely text-based.** There is no interaction with LLVM during pattern matching. This is a fundamental design principle:
+
+| Phase | Input | Output | LLVM? |
+|-------|-------|--------|-------|
+| Pattern Resolution | Source text | Matched patterns with string arguments | ❌ No |
+| Code Generation | Resolved patterns | LLVM IR | ✅ Yes |
+
+### Why This Matters
+
+1. **Clean separation**: Pattern matching is syntactic; code generation is semantic
+2. **Arguments are strings**: When `set z to x + y` matches `set $ to $`, the arguments are `["z", "x + y"]` as strings
+3. **Evaluation happens later**: The code generator decides how to interpret these strings (variable name vs expression)
+4. **Testable**: Pattern resolution can be tested without LLVM dependencies
+
+### Example Flow
+
+```
+Source: "set z to x + y"
+
+Pattern Resolution (no LLVM):
+├── Match against effect tree
+├── Found: "set $ to $"
+└── Arguments: {var: "z", val: "x + y"}  ← strings only!
+
+Code Generation (with LLVM):
+├── Process matched pattern
+├── "z" → treat as variable name for store
+├── "x + y" → recursively evaluate as expression
+│   ├── Match "$ + $"
+│   ├── Generate: load x, load y, add
+│   └── Return: LLVM value
+└── Generate: store result to z
+```
+
 ## Parsing Workflow
 
 Parsing happens in phases, with literals and special constructs detected first, then pattern trees used for matching.
@@ -15,18 +51,18 @@ Parsing happens in phases, with literals and special constructs detected first, 
 Before pattern matching, scan the input for:
 
 1. **Number literals**: `42`, `3.14`, `-7`
-2. **String literals**: `"hello"`, `'world'`
-3. **Intrinsic calls**: `@name(args)` - parsed specially, args processed recursively
+2. **String literals**: `"hello"`, `"world"`
+3. **Intrinsic calls**: `@intrinsic("name", arg1, arg...)` - parsed specially, args processed recursively
 4. **Grouping parentheses**: `(a + b)` - defines evaluation hierarchy
 
 ```
-Input: print @add(x, 2 + 3) * 5
+Input: print @intrinsic("add", 2 + 3) * 5
 
 Phase 1 output:
 ├── "print "
 ├── INTRINSIC(@add)
 │   ├── arg[0]: "x"
-│   └── arg[1]: "2 + 3"  → recurse
+│   └── arg[1]: "2 + 3"
 └── " * 5"
 ```
 
@@ -35,9 +71,9 @@ Phase 1 output:
 For each intrinsic call detected, parse its arguments through the **expression tree**:
 
 ```
-@add(x, 2 + 3)
+@intrinsic("add",x, 2 + 3)
      │  └── match against expression tree
-     │      └── "$ + $" matches with {left: 2, right: 3}
+     │      └── "$ + $" matches with {first $: 2, second $: 3}
      └── match against expression tree
          └── variable reference "x"
 ```
@@ -49,11 +85,11 @@ Determine line type by trailing colon:
 - **Without `:`** → use effect tree (statements)
 
 ```
-Input: "print @add(x, 2 + 3) * 5"
+Input: "print @intrinsic("add",x, 2 + 3) * 5"
 
 Effect tree matching:
 ├── "print " matches literal
-└── [$] matches remainder "@add(x, 2 + 3) * 5"
+└── [$] matches remainder "@intrinsic("add",x, 2 + 3) * 5"
     └── recurse to expression tree (Phase 4)
 ```
 
@@ -62,12 +98,12 @@ Effect tree matching:
 When a `$` slot is encountered, match against the **expression tree**:
 
 ```
-"@add(x, 2 + 3) * 5"
+"@intrinsic("add",x, 2 + 3) * 5"
 
 Expression tree:
 └── [$] " * " [$]
     │         └── "5" (literal)
-    └── "@add(x, 2 + 3)" (intrinsic, already parsed)
+    └── "@intrinsic("add",x, 2 + 3)" (intrinsic, already parsed)
 ```
 
 ### Matching Priority: Finish Pattern First
@@ -117,10 +153,10 @@ Note: `condition` patterns are treated as `expression` patterns since conditions
 ### Complete Example
 
 ```
-Input: "set result to @mul(x + 1, 5)"
+Input: "set result to @intrinsic("mul", x + 1, 5)"
 
 Phase 1 - Detect literals:
-├── Intrinsic: @mul(...)
+├── Intrinsic: @intrinsic("mul", ...)
 │   ├── arg[0]: "x + 1"
 │   └── arg[1]: "5"
 
@@ -131,7 +167,7 @@ Phase 2 - Parse intrinsic args (expression tree):
 Phase 3 - Match line (effect tree):
 └── "set $ to $" matches
     ├── $1 = "result" (identifier)
-    └── $2 = @mul(...) (intrinsic expression)
+    └── $2 = @intrinsic("mul", ...) (intrinsic expression)
 
 Result:
 SetEffect {
@@ -157,7 +193,7 @@ Pattern elements are **merged literal sequences** or **variable slots**:
 | `set var to val` | `["set ", $, " to ", $]` |
 
 **Tokenization rules:**
-- Consecutive literals (alphanumeric, whitespace, operators) are merged into a single string
+- Consecutive literals (alphanumeric, whitespace, operators) are merged into single strings
 - Merging stops at variable boundaries (`$` or `{word}`)
 - `$` represents a variable slot (matches any expression)
 - `{word}` represents a lazy/deferred capture
@@ -177,7 +213,7 @@ struct PatternTreeNode {
     // For variable slots ($): child node for expression matching
     std::shared_ptr<PatternTreeNode> expression_child;
 
-    // For lazy captures ({word}): child node for deferred matching
+    // For lazy captures ({expression:lazy}): child node for deferred matching
     std::shared_ptr<PatternTreeNode> lazy_child;
 };
 
@@ -398,7 +434,7 @@ Expression captures are **lazy** - they capture the expression text/AST without 
 ```
 section while {expression:condition}:
     execute:
-        @intrinsic("loop_while", condition, the calling section)
+        @intrinsic("loop_while", condition, the caller's child section)
 ```
 
 This allows control flow patterns where conditions need to be re-evaluated:
@@ -450,14 +486,6 @@ function find_word_end(input, position):
     while end < input.length and is_identifier_char(input[end]):
         end++
     return end
-```
-
-### Legacy Syntax
-
-For backwards compatibility, `{name}` without a type is equivalent to `{expression:name}`:
-
-```
-section while {condition}:  # Same as while {expression:condition}:
 ```
 
 ## Alternatives [a|b] - Branch and Merge
@@ -566,7 +594,7 @@ function merge_nodes(nodes):
 `[word|]` means "word or nothing":
 
 ```
-pattern: [loop |]while {condition}:
+pattern: [loop |]while {expression:condition}:
 
 root
 ├── "loop " ──┐
@@ -580,7 +608,7 @@ The empty string branch `""` is a special case - it immediately merges without c
 Variables are deduced from usage, not declared:
 
 1. **Direct intrinsic usage**: `@intrinsic("print", msg)` → `msg` is a variable
-2. **Braced capture**: `{condition}` → `condition` is always a variable
+2. **Braced capture**: `{expression:captured}` → `captured` is always a variable
 3. **Propagation**: If `set var to val` is called with `set foo to bar`, then `foo` and `bar` are variables in the calling pattern
 
 ## Pattern Resolution Order
@@ -623,3 +651,10 @@ Variables are deduced from usage, not declared:
 | `{expression:name}` | Lazy expression capture (re-evaluated in caller's scope) |
 | `{word:name}` | Single identifier capture (as string literal) |
 | Precedence | Resolves ambiguous expression parses |
+
+### Key Principle
+
+**Pattern resolution outputs strings, not LLVM values.** The code generator is responsible for interpreting these strings:
+- Variable names (lvalues) stay as strings for `@intrinsic("store", varName, ...)`
+- Expressions (rvalues) are recursively evaluated to produce LLVM values
+- This separation keeps pattern matching simple and backend-agnostic

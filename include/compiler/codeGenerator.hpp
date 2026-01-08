@@ -1,9 +1,10 @@
 #pragma once
 
+#include "compiler/codegenPattern.hpp"
+#include "compiler/diagnostic.hpp"
 #include "compiler/patternResolver.hpp"
 #include "compiler/sectionAnalyzer.hpp"
 #include "compiler/typeInference.hpp"
-#include "compiler/diagnostic.hpp"
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -16,17 +17,6 @@
 #include <vector>
 
 namespace tbx {
-
-/**
- * CodegenPattern - Extended pattern information for code generation
- * Contains LLVM-specific data built on top of TypedPattern
- */
-struct CodegenPattern {
-    TypedPattern* typedPattern;              // The typed pattern from Step 4
-    std::string functionName;                // Generated LLVM function name
-    llvm::Function* llvmFunction = nullptr;  // The generated LLVM function
-    std::vector<std::string> parameterNames; // Ordered parameter names
-};
 
 /**
  * SectionCodeGenerator - Step 5 of the 3BX compiler pipeline
@@ -50,217 +40,236 @@ struct CodegenPattern {
  */
 class SectionCodeGenerator {
 public:
-    /**
-     * Construct a SectionCodeGenerator
-     * @param moduleName Name for the generated LLVM module
-     */
-    explicit SectionCodeGenerator(const std::string& moduleName);
+  /**
+   * Construct a SectionCodeGenerator
+   * @param moduleName Name for the generated LLVM module
+   */
+  explicit SectionCodeGenerator(const std::string &moduleName);
 
-    /**
-     * Generate LLVM IR from resolved patterns
-     * @param resolver The pattern resolver containing resolved patterns
-     * @param root The root section from section analysis
-     * @return true if code generation succeeded
-     */
-    bool generate(SectionPatternResolver& resolver, Section* root);
+  /**
+   * Generate LLVM IR from resolved patterns
+   * @param resolver The pattern resolver containing resolved patterns
+   * @param root The root section from section analysis
+   * @return true if code generation succeeded
+   */
+  bool generate(SectionPatternResolver &resolver, Section *root);
 
-    /**
-     * Generate LLVM IR using existing type inference results
-     * @param typeInference The type inference results from Step 4
-     * @param resolver The pattern resolver containing resolved patterns
-     * @param root The root section from section analysis
-     * @return true if code generation succeeded
-     */
-    bool generate(const TypeInference& typeInference, SectionPatternResolver& resolver, Section* root);
+  /**
+   * Generate LLVM IR using existing type inference results
+   * @param typeInference The type inference results from Step 4
+   * @param resolver The pattern resolver containing resolved patterns
+   * @param root The root section from section analysis
+   * @return true if code generation succeeded
+   */
+  bool generate(const TypeInference &typeInference,
+                SectionPatternResolver &resolver, Section *root);
 
-    /**
-     * Get the generated LLVM module
-     */
-    llvm::Module* getModule() { return module_.get(); }
+  /**
+   * Get the generated LLVM module
+   */
+  llvm::Module *getModule() { return module.get(); }
 
-    /**
-     * Take ownership of the module (for JIT execution)
-     */
-    std::unique_ptr<llvm::Module> takeModule() { return std::move(module_); }
+  /**
+   * Take ownership of the module (for JIT execution)
+   */
+  std::unique_ptr<llvm::Module> takeModule() { return std::move(module); }
 
-    /**
-     * Take ownership of the context (for JIT execution)
-     */
-    std::unique_ptr<llvm::LLVMContext> takeContext() { return std::move(context_); }
+  /**
+   * Take ownership of the context (for JIT execution)
+   */
+  std::unique_ptr<llvm::LLVMContext> takeContext() {
+    return std::move(context);
+  }
 
-    /**
-     * Output LLVM IR to file
-     */
-    bool writeIr(const std::string& filename);
+  /**
+   * Output LLVM IR to file
+   */
+  bool writeIr(const std::string &filename);
 
-    /**
-     * Print LLVM IR to stdout
-     */
-    void printIr();
+  /**
+   * Print LLVM IR to stdout
+   */
+  void printIr();
 
-    /**
-     * Get any errors that occurred during generation
-     */
-    const std::vector<Diagnostic>& diagnostics() const { return diagnostics_; }
+  /**
+   * Get any errors that occurred during generation
+   */
+  const std::vector<Diagnostic> &diagnostics() const { return diagnosticsData; }
 
 private:
-    // =========================================================================
-    // Type Handling
-    // =========================================================================
+  // =========================================================================
+  // Type Handling
+  // =========================================================================
 
-    /**
-     * Run type inference internally
-     */
-    void runTypeInference(SectionPatternResolver& resolver);
+  /**
+   * Run type inference internally
+   */
+  void runTypeInference(SectionPatternResolver &resolver);
 
-    /**
-     * Convert InferredType enum to LLVM type
-     */
-    llvm::Type* typeToLlvm(InferredType type);
+  /**
+   * Convert InferredType enum to LLVM type
+   */
+  llvm::Type *typeToLlvm(InferredType type);
 
-    /**
-     * Infer return type from pattern type
-     */
-    InferredType inferReturnTypeFromPattern(const ResolvedPattern* pattern);
+  /**
+   * Infer return type from pattern type
+   */
+  InferredType inferReturnTypeFromPattern(const ResolvedPattern *pattern);
 
-    // =========================================================================
-    // Code Generation
-    // =========================================================================
+  // =========================================================================
+  // Code Generation
+  // =========================================================================
 
-    /**
-     * Generate external declarations (printf, etc.)
-     */
-    void generateExternalDeclarations();
+  /**
+   * Generate external declarations (printf, etc.)
+   */
+  void generateExternalDeclarations();
 
-    /**
-     * Declare LLVM function signature for a pattern (no body)
-     * This must be called for ALL patterns before generating bodies
-     */
-    void declarePatternFunction(CodegenPattern& codegenPattern);
+  /**
+   * Declare LLVM function signature for a pattern (no body)
+   * This must be called for ALL patterns before generating bodies
+   */
+  void declarePatternFunction(CodegenPattern &codegenPattern);
 
-    /**
-     * Generate LLVM function body for a pattern
-     * Requires all pattern functions to be declared first
-     */
-    void generatePatternFunctionBody(CodegenPattern& codegenPattern);
+  /**
+   * Generate LLVM function body for a pattern
+   * Requires all pattern functions to be declared first
+   */
+  void generatePatternFunctionBody(CodegenPattern &codegenPattern);
 
-    /**
-     * Generate main function from top-level pattern references
-     */
-    void generateMain(Section* root, SectionPatternResolver& resolver);
+  /**
+   * Generate main function from top-level pattern references
+   */
+  void generateMain(Section *root, SectionPatternResolver &resolver);
 
-    /**
-     * Generate code for a single code line
-     */
-    llvm::Value* generateCodeLine(CodeLine* line, SectionPatternResolver& resolver);
+  /**
+   * Generate code for a single code line
+   */
+  llvm::Value *generateCodeLine(CodeLine *line,
+                                SectionPatternResolver &resolver);
 
-    /**
-     * Generate code for a line within a pattern body
-     * Handles both intrinsic calls and pattern references
-     * @param text The line text to process
-     * @return The generated LLVM value
-     */
-    llvm::Value* generateBodyLine(const std::string& text);
+  /**
+   * Generate code for a line within a pattern body
+   * Handles both intrinsic calls and pattern references
+   * @param text The line text to process
+   * @return The generated LLVM value
+   */
+  llvm::Value *generateBodyLine(const std::string &text);
 
-    /**
-     * Generate code for a pattern call (reference)
-     */
-    llvm::Value* generatePatternCall(PatternMatch* match);
+  /**
+   * Generate code for a pattern call (reference)
+   */
+  llvm::Value *generatePatternCall(PatternMatch *match);
 
-    /**
-     * Generate code for an intrinsic call
-     * @param text The intrinsic call text (e.g., "@intrinsic(\"add\", left, right)")
-     * @param localVars Map of local variable names to their LLVM values
-     * @return The generated LLVM value
-     */
-    llvm::Value* generateIntrinsic(const std::string& text,
-                                    const std::unordered_map<std::string, llvm::Value*>& localVars);
+  /**
+   * Generate code for an intrinsic call
+   * @param text The intrinsic call text (e.g., "@intrinsic(\"add\", left,
+   * right)")
+   * @param localVars Map of local variable names to their LLVM values
+   * @return The generated LLVM value
+   */
+  llvm::Value *generateIntrinsic(
+      const std::string &text,
+      const std::unordered_map<std::string, llvm::Value *> &localVars);
 
-    /**
-     * Parse intrinsic call text into name and arguments
-     * @param text The intrinsic call text
-     * @param name Output: intrinsic name
-     * @param args Output: argument strings
-     * @return true if parsing succeeded
-     */
-    bool parseIntrinsic(const std::string& text,
-                         std::string& name,
-                         std::vector<std::string>& args);
+  /**
+   * Parse intrinsic call text into name and arguments
+   * @param text The intrinsic call text
+   * @param name Output: intrinsic name
+   * @param args Output: argument strings
+   * @return true if parsing succeeded
+   */
+  bool parseIntrinsic(const std::string &text, std::string &name,
+                      std::vector<std::string> &args);
 
-    /**
-     * Generate code for an expression argument
-     * @param arg The argument string (could be literal, variable, or nested expression)
-     * @param localVars Map of local variable names to their LLVM values
-     * @return The generated LLVM value
-     */
-    llvm::Value* generateExpression(const std::string& arg,
-                                     const std::unordered_map<std::string, llvm::Value*>& localVars);
+  /**
+   * Generate code for an expression argument
+   * @param arg The argument string (could be literal, variable, or nested
+   * expression)
+   * @param localVars Map of local variable names to their LLVM values
+   * @return The generated LLVM value
+   */
+  llvm::Value *generateExpression(
+      const std::string &arg,
+      const std::unordered_map<std::string, llvm::Value *> &localVars);
 
-    /**
-     * Create an alloca instruction in the entry block
-     */
-    llvm::AllocaInst* createEntryAlloca(llvm::Function* function,
-                                          const std::string& name,
-                                          llvm::Type* type);
+  /**
+   * Create an alloca instruction in the entry block
+   */
+  llvm::AllocaInst *createEntryAlloca(llvm::Function *function,
+                                      const std::string &name,
+                                      llvm::Type *type);
 
-    /**
-     * Extract an argument from text starting at pos
-     * Handles @intrinsic(...), quoted strings, and regular words
-     * @param text The full text to extract from
-     * @param pos The position to start at (updated to end position)
-     * @return The extracted argument string
-     */
-    std::string extractArgument(const std::string& text, size_t& pos);
+  /**
+   * Extract an argument from text starting at pos
+   * Handles @intrinsic(...), quoted strings, and regular words
+   * @param text The full text to extract from
+   * @param pos The position to start at (updated to end position)
+   * @return The extracted argument string
+   */
+  std::string extractArgument(const std::string &text, size_t &pos);
 
-    /**
-     * Extract an argument from text until a specific literal word is found
-     * @param text The full text to extract from
-     * @param pos The position to start at (updated to end position)
-     * @param untilWord The literal word to stop before
-     * @return The extracted argument string
-     */
-    std::string extractArgumentUntil(const std::string& text, size_t& pos, const std::string& untilWord);
+  /**
+   * Extract an argument from text until a specific literal word is found
+   * @param text The full text to extract from
+   * @param pos The position to start at (updated to end position)
+   * @param untilWord The literal word to stop before
+   * @return The extracted argument string
+   */
+  std::string extractArgumentUntil(const std::string &text, size_t &pos,
+                                   const std::string &untilWord);
 
-    // =========================================================================
-    // LLVM Infrastructure
-    // =========================================================================
+  // =========================================================================
+  // LLVM Infrastructure
+  // =========================================================================
 
-    std::unique_ptr<llvm::LLVMContext> context_;
-    std::unique_ptr<llvm::Module> module_;
-    std::unique_ptr<llvm::IRBuilder<>> builder_;
+  std::unique_ptr<llvm::LLVMContext> context;
+  std::unique_ptr<llvm::Module> module;
+  std::unique_ptr<llvm::IRBuilder<>> builder;
 
-    // Printf declaration for print intrinsic
-    llvm::FunctionCallee printfFunc_;
+  // Printf declaration for print intrinsic
+  llvm::FunctionCallee printfFunc;
 
-    // Format strings for printf
-    llvm::Value* fmtInt_ = nullptr;     // "%lld\n"
-    llvm::Value* fmtFloat_ = nullptr;   // "%f\n"
-    llvm::Value* fmtStr_ = nullptr;     // "%s\n"
+  // Format strings for printf
+  llvm::Value *fmtInt = nullptr;   // "%lld\n"
+  llvm::Value *fmtFloat = nullptr; // "%f\n"
+  llvm::Value *fmtStr = nullptr;   // "%s\n"
 
-    // =========================================================================
-    // Pattern Management
-    // =========================================================================
+  // =========================================================================
+  // Pattern Management
+  // =========================================================================
 
-    // Type inference instance (when running internally)
-    std::unique_ptr<TypeInference> typeInference_;
+  // Type inference instance (when running internally)
+  std::unique_ptr<TypeInference> typeInference;
 
-    // Codegen pattern data
-    std::vector<std::unique_ptr<CodegenPattern>> codegenPatterns_;
+  // Codegen pattern data
+  std::vector<std::unique_ptr<CodegenPattern>> codegenPatterns;
 
-    // Map from ResolvedPattern to CodegenPattern
-    std::unordered_map<ResolvedPattern*, CodegenPattern*> patternToCodegen_;
+  // Map from ResolvedPattern to CodegenPattern
+  std::unordered_map<ResolvedPattern *, CodegenPattern *> patternToCodegen;
 
-    // Named values (variables) in current scope
-    std::unordered_map<std::string, llvm::AllocaInst*> namedValues_;
+  // Named values (variables) in current scope
+  std::unordered_map<std::string, llvm::AllocaInst *> namedValues;
 
-    // Current function being generated
-    llvm::Function* currentFunction_ = nullptr;
+  // Current function being generated
+  llvm::Function *currentFunction = nullptr;
 
-    // =========================================================================
-    // Error Handling
-    // =========================================================================
+  // Reference to the pattern resolver for expression matching
+  SectionPatternResolver *resolverRef = nullptr;
 
-    std::vector<Diagnostic> diagnostics_;
+  // Call stack for frame/section resolution
+  struct FrameContext {
+    CodegenPattern *pattern = nullptr;
+    CodeLine *callSite = nullptr;
+    std::unordered_map<std::string, llvm::Value *> locals;
+  };
+  std::vector<FrameContext> callStack;
+
+  // =========================================================================
+  // Error Handling
+  // =========================================================================
+
+  std::vector<Diagnostic> diagnosticsData;
 };
 
 } // namespace tbx

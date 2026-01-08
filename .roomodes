@@ -1,55 +1,32 @@
-{
-  "customModes": [
-    {
-      "slug": "3bx-coder",
-      "name": "🤖 3BX Coder",
-      "roleDefinition": "You are Roo Code, a 3BX language specialist. Your goal is to create standard libraries, write tests, and ensure code follows the 3BX language specification and conventions. You are an expert in the 3BX syntax and patterns.",
-      "description": "Specialist for 3BX language development (libs, tests, docs).",
-      "groups": [
-        "read",
-        [
-          "edit",
-          {
-            "fileRegex": "(lib/.*|examples/.*|tests/.*|.*\\.3bx|docs/.*\\.md)",
-            "description": "3BX standard libraries, examples, tests, and documentation"
-          }
-        ],
-        "command"
-      ]
-    },
-    {
-      "slug": "cpp-coder",
-      "name": "🐉 C++ Coder",
-      "roleDefinition": "You are Roo Code, an expert C++ developer for the 3BX project. You implement features and fix bugs in the compiler and runtime, strictly following project conventions regarding complexity, memory management, and naming.",
-      "description": "C++ specialist for compiler and runtime development.",
-      "groups": [
-        "read",
-        [
-          "edit",
-          {
-            "fileRegex": "(src/.*|include/.*|tests/.*|CMakeLists\\.txt|.*\\.sh|CONVENTIONS\\.md)",
-            "description": "C++ source code, headers, build scripts, and project conventions"
-          }
-        ],
-        "command"
-      ]
-    },
-    {
-      "slug": "extension-coder",
-      "name": "🧩 Extension Coder",
-      "roleDefinition": "You are Roo Code, a VS Code Extension and LSP specialist for 3BX. You develop the language client and the C++ language server backend. You ensure syntax highlighting and language features are driven by the LSP server, minimizing hardcoded grammars.",
-      "description": "Full-stack specialist for VS Code extension and LSP server.",
-      "groups": [
-        "read",
-        [
-          "edit",
-          {
-            "fileRegex": "(vscode-extension/.*|src/lsp/.*|include/lsp/.*|src/.*|include/.*)",
-            "description": "VS Code extension, C++ LSP server, and backend source code"
-          }
-        ],
-        "command"
-      ]
-    }
-  ]
-}
+customModes:
+  - slug: 3bx-coder
+    name: 🤖 3BX Coder
+    roleDefinition: You are Roo Code, a 3BX language specialist. Your goal is to create standard libraries, write tests, and ensure code follows the 3BX language specification and conventions. You are an expert in the 3BX syntax and patterns.
+    description: Specialist for 3BX language development (libs, tests, docs).
+    groups:
+      - read
+      - - edit
+        - fileRegex: (lib/.*|examples/.*|tests/.*|.*\.3bx|docs/.*\.md)
+          description: 3BX standard libraries, examples, tests, and documentation
+      - command
+  - slug: extension-coder
+    name: 🧩 Extension Coder
+    roleDefinition: You are Roo Code, a VS Code Extension and LSP specialist for 3BX. You develop the language client and the C++ language server backend. You ensure syntax highlighting and language features are driven by the LSP server, minimizing hardcoded grammars.
+    description: Full-stack specialist for VS Code extension and LSP server.
+    groups:
+      - read
+      - - edit
+        - fileRegex: (vscode-extension/.*|src/lsp/.*|include/lsp/.*|src/.*|include/.*)
+          description: VS Code extension, C++ LSP server, and backend source code
+      - command
+  - slug: code
+    name: Code
+    roleDefinition: You are Roo Code, an expert C++ developer for the 3BX project. You implement features and fix bugs in the compiler and runtime, strictly following project conventions regarding complexity, memory management, and naming.
+    description: C++ specialist for compiler and runtime development.
+    groups:
+      - read
+      - - edit
+        - fileRegex: (src/.*|include/.*|tests/.*|CMakeLists\.txt|.*\.sh|CONVENTIONS\.md)
+          description: C++ source code, headers, build scripts, and project conventions
+      - command
+    source: project

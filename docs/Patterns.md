@@ -39,22 +39,6 @@ expression double of x:
 
 Usage: `set result to double of 5`
 
-### Condition Patterns
-
-Conditions control flow:
-
-```
-condition if cond:
-    execute:
-        @intrinsic("branch", cond)
-```
-
-Usage:
-```
-if x > 5:
-    print "big"
-```
-
 ## Pattern Syntax with Alternatives
 
 Use brackets `[]` with `|` to define alternatives:
@@ -119,20 +103,11 @@ effect set var to val:
 
 The arguments to `@intrinsic` (`var`, `val`) are identified as variables. Everything else in the syntax (`set`, `to`) becomes a literal that must match exactly.
 
-## Intrinsics - The Building Blocks
+## Intrinsics
 
-Intrinsics are primitive operations the compiler understands:
+Intrinsics are primitive operations the compiler understands. They use the `@intrinsic("name", args...)` syntax.
 
-| Intrinsic | What It Does |
-|-----------|--------------|
-| `@intrinsic("print", val)` | Print a value |
-| `@intrinsic("store", var, val)` | Store a value in a variable |
-| `@intrinsic("add", a, b)` | Add two numbers |
-| `@intrinsic("sub", a, b)` | Subtract b from a |
-| `@intrinsic("mul", a, b)` | Multiply two numbers |
-| `@intrinsic("div", a, b)` | Divide a by b |
-| `@intrinsic("return", val)` | Return a value |
-| `@intrinsic("branch", cond)` | Conditional branch |
+See [INTRINSICS.md](INTRINSICS.md) for the complete reference.
 
 ## Priority
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "compiler/optimizationLevel.hpp"
+#include "compiler/outputFormat.hpp"
+
 #include <llvm/IR/Module.h>
 #include <llvm/Target/TargetMachine.h>
 
@@ -8,27 +11,6 @@
 #include <vector>
 
 namespace tbx {
-
-/**
- * Optimization level enumeration
- * Maps to standard compiler optimization flags
- */
-enum class OptimizationLevel {
-    O0,  // No optimization (for debugging)
-    O1,  // Basic optimizations
-    O2,  // Standard optimizations (default)
-    O3   // Aggressive optimizations
-};
-
-/**
- * Output format for the compiler
- */
-enum class OutputFormat {
-    Executable,  // Native binary for the target platform
-    Object,      // .o file for linking
-    LLVM_IR,     // .ll file for inspection
-    Assembly     // .s file for inspection
-};
 
 /**
  * Optimizer - Step 6 of the 3BX compiler pipeline
@@ -43,107 +25,107 @@ enum class OutputFormat {
  */
 class Optimizer {
 public:
-    /**
-     * Construct an Optimizer with the specified optimization level
-     * @param level The optimization level (default: O2)
-     */
-    explicit Optimizer(OptimizationLevel level = OptimizationLevel::O2);
+  /**
+   * Construct an Optimizer with the specified optimization level
+   * @param level The optimization level (default: O2)
+   */
+  explicit Optimizer(OptimizationLevel level = OptimizationLevel::O2);
 
-    ~Optimizer();
+  ~Optimizer();
 
-    /**
-     * Set the optimization level
-     * @param level The optimization level
-     */
-    void setOptimizationLevel(OptimizationLevel level);
+  /**
+   * Set the optimization level
+   * @param level The optimization level
+   */
+  void setOptimizationLevel(OptimizationLevel level);
 
-    /**
-     * Get the current optimization level
-     */
-    OptimizationLevel optimizationLevel() const { return level_; }
+  /**
+   * Get the current optimization level
+   */
+  OptimizationLevel optimizationLevel() const { return level; }
 
-    /**
-     * Apply optimization passes to a module
-     * @param module The LLVM module to optimize
-     * @return true if optimization succeeded, false otherwise
-     */
-    bool optimize(llvm::Module& module);
+  /**
+   * Apply optimization passes to a module
+   * @param module The LLVM module to optimize
+   * @return true if optimization succeeded, false otherwise
+   */
+  bool optimize(llvm::Module &module);
 
-    /**
-     * Emit object file from the module
-     * @param module The LLVM module to compile
-     * @param outputPath Path for the output object file
-     * @return true if emission succeeded, false otherwise
-     */
-    bool emitObjectFile(llvm::Module& module, const std::string& outputPath);
+  /**
+   * Emit object file from the module
+   * @param module The LLVM module to compile
+   * @param outputPath Path for the output object file
+   * @return true if emission succeeded, false otherwise
+   */
+  bool emitObjectFile(llvm::Module &module, const std::string &outputPath);
 
-    /**
-     * Emit native executable from the module
-     * @param module The LLVM module to compile
-     * @param outputPath Path for the output executable
-     * @return true if emission succeeded, false otherwise
-     */
-    bool emitExecutable(llvm::Module& module, const std::string& outputPath);
+  /**
+   * Emit native executable from the module
+   * @param module The LLVM module to compile
+   * @param outputPath Path for the output executable
+   * @return true if emission succeeded, false otherwise
+   */
+  bool emitExecutable(llvm::Module &module, const std::string &outputPath);
 
-    /**
-     * Emit LLVM IR (.ll file) from the module
-     * @param module The LLVM module to output
-     * @param outputPath Path for the output .ll file
-     * @return true if emission succeeded, false otherwise
-     */
-    bool emitLlvmIr(llvm::Module& module, const std::string& outputPath);
+  /**
+   * Emit LLVM IR (.ll file) from the module
+   * @param module The LLVM module to output
+   * @param outputPath Path for the output .ll file
+   * @return true if emission succeeded, false otherwise
+   */
+  bool emitLlvmIr(llvm::Module &module, const std::string &outputPath);
 
-    /**
-     * Emit assembly (.s file) from the module
-     * @param module The LLVM module to compile
-     * @param outputPath Path for the output .s file
-     * @return true if emission succeeded, false otherwise
-     */
-    bool emitAssembly(llvm::Module& module, const std::string& outputPath);
+  /**
+   * Emit assembly (.s file) from the module
+   * @param module The LLVM module to compile
+   * @param outputPath Path for the output .s file
+   * @return true if emission succeeded, false otherwise
+   */
+  bool emitAssembly(llvm::Module &module, const std::string &outputPath);
 
-    /**
-     * Get any errors that occurred during optimization/emission
-     */
-    const std::vector<std::string>& errors() const { return errors_; }
+  /**
+   * Get any errors that occurred during optimization/emission
+   */
+  const std::vector<std::string> &errors() const { return errorsData; }
 
-    /**
-     * Clear accumulated errors
-     */
-    void clearErrors() { errors_.clear(); }
+  /**
+   * Clear accumulated errors
+   */
+  void clearErrors() { errorsData.clear(); }
 
-    /**
-     * Convert optimization level string to enum
-     * @param str String like "0", "1", "2", "3" or "O0", "O1", "O2", "O3"
-     * @return The corresponding OptimizationLevel
-     */
-    static OptimizationLevel parseOptimizationLevel(const std::string& str);
+  /**
+   * Convert optimization level string to enum
+   * @param str String like "0", "1", "2", "3" or "O0", "O1", "O2", "O3"
+   * @return The corresponding OptimizationLevel
+   */
+  static OptimizationLevel parseOptimizationLevel(const std::string &str);
 
 private:
-    /**
-     * Initialize the LLVM target machinery (called once)
-     */
-    static void initializeTargets();
+  /**
+   * Initialize the LLVM target machinery (called once)
+   */
+  static void initializeTargets();
 
-    /**
-     * Get or create the target machine for the current platform
-     */
-    llvm::TargetMachine* getTargetMachine();
+  /**
+   * Get or create the target machine for the current platform
+   */
+  llvm::TargetMachine *getTargetMachine();
 
-    /**
-     * Emit code to a file using the target machine
-     * @param module The module to emit
-     * @param outputPath Output file path
-     * @param fileType LLVM code generation file type
-     * @return true if successful
-     */
-    bool emitToFile(llvm::Module& module, const std::string& outputPath,
-                      llvm::CodeGenFileType fileType);
+  /**
+   * Emit code to a file using the target machine
+   * @param module The module to emit
+   * @param outputPath Output file path
+   * @param fileType LLVM code generation file type
+   * @return true if successful
+   */
+  bool emitToFile(llvm::Module &module, const std::string &outputPath,
+                  llvm::CodeGenFileType fileType);
 
-    OptimizationLevel level_;
-    std::unique_ptr<llvm::TargetMachine> targetMachine_;
-    std::vector<std::string> errors_;
+  OptimizationLevel level;
+  std::unique_ptr<llvm::TargetMachine> targetMachine;
+  std::vector<std::string> errorsData;
 
-    static bool targetsInitialized_;
+  static bool targetsInitialized;
 };
 
 } // namespace tbx

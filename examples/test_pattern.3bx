@@ -1,9 +1,0 @@
-# Test pattern definition
-
-pattern:
-    syntax: greet name
-    execute:
-        @intrinsic("print", name)
-
-# This should eventually use the pattern
-set x to 42

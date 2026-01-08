@@ -17,9 +17,14 @@ class:
 		uint_8
 
 
+expression number%:
+	get:
+		return number * 0.01
 
 say "Hello, World!"
 		
 # should print 8
 print 5.5's next power of two
 
+#should print 0.1
+print 10%

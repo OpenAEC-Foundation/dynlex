@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Compile and run a .3bx file
-# Usage: ./compile_and_run.sh path/to/file.3bx
+# Usage: ./scripts/compile_and_run.sh path/to/file.3bx
 
 set -e
 
@@ -13,7 +13,8 @@ if [ -z "$1" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="$SCRIPT_DIR/build"
+WORKSPACE_DIR="$SCRIPT_DIR/.."
+BUILD_DIR="$WORKSPACE_DIR/build"
 SOURCE_FILE="$1"
 IR_FILE="/tmp/3bx_output.ll"
 

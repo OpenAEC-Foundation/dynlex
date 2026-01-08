@@ -3,236 +3,225 @@
 
 namespace tbx {
 
-Lexer::Lexer(const std::string& source, const std::string& filename)
-    : source_(source), filename_(filename) {}
+Lexer::Lexer(const std::string &src, const std::string &file)
+    : source(src), filename(file) {}
 
 std::vector<Token> Lexer::tokenize() {
-    std::vector<Token> tokens;
-    while (!atEnd()) {
-        tokens.push_back(nextToken());
-        if (tokens.back().type == TokenType::END_OF_FILE) {
-            break;
-        }
+  std::vector<Token> tokens;
+  while (!atEnd()) {
+    tokens.push_back(nextToken());
+    if (tokens.back().type == TokenType::END_OF_FILE) {
+      break;
     }
-    return tokens;
+  }
+  return tokens;
 }
 
 Token Lexer::nextToken() {
-    skipWhitespace();
+  skipWhitespace();
 
-    if (atEnd()) {
-        return makeToken(TokenType::END_OF_FILE, "");
-    }
+  if (atEnd()) {
+    return makeToken(TokenType::END_OF_FILE, "");
+  }
 
-    char c = advance();
+  char currentChar = advance();
 
-    // Numbers
-    if (std::isdigit(c)) {
-        pos_--;
-        column_--;
-        return scanNumber();
-    }
+  // Numbers
+  if (std::isdigit(currentChar)) {
+    pos--;
+    column--;
+    return scanNumber();
+  }
 
-    // Strings
-    if (c == '"') {
-        return scanString();
-    }
+  // Strings
+  if (currentChar == '"') {
+    return scanString();
+  }
 
-    // Identifiers (all words are identifiers - no keyword distinction)
-    if (std::isalpha(c) || c == '_') {
-        pos_--;
-        column_--;
-        return scanIdentifier();
-    }
+  // Identifiers (all words are identifiers - no keyword distinction)
+  if (std::isalpha(currentChar) || currentChar == '_') {
+    pos--;
+    column--;
+    return scanIdentifier();
+  }
 
-    // Single and multi-character tokens
-    switch (c) {
-        case '+': return makeToken(TokenType::PLUS, "+");
-        case '-': return makeToken(TokenType::MINUS, "-");
-        case '*': return makeToken(TokenType::STAR, "*");
-        case '/': return makeToken(TokenType::SLASH, "/");
-        case ':': return makeToken(TokenType::COLON, ":");
-        case '<':
-            if (current() == '=') {
-                advance();
-                return makeToken(TokenType::LESS_EQUAL, "<=");
-            }
-            return makeToken(TokenType::LESS, "<");
-        case '>':
-            if (current() == '=') {
-                advance();
-                return makeToken(TokenType::GREATER_EQUAL, ">=");
-            }
-            return makeToken(TokenType::GREATER, ">");
-        case '@': return makeToken(TokenType::AT, "@");
-        case '(': return makeToken(TokenType::LPAREN, "(");
-        case ')': return makeToken(TokenType::RPAREN, ")");
-        case '[': return makeToken(TokenType::LBRACKET, "[");
-        case ']': return makeToken(TokenType::RBRACKET, "]");
-        case '{': return makeToken(TokenType::LBRACE, "{");
-        case '}': return makeToken(TokenType::RBRACE, "}");
-        case ',': return makeToken(TokenType::COMMA, ",");
-        case '.': return makeToken(TokenType::DOT, ".");
-        case '\'': return makeToken(TokenType::APOSTROPHE, "'");
-        case '\n':
-            line_++;
-            column_ = 1;
-            return makeToken(TokenType::NEWLINE, "\\n");
-        case '=':
-            if (current() == '=') {
-                advance();
-                return makeToken(TokenType::EQUALS, "==");
-            }
-            // Single '=' is valid for pattern matching (e.g., "a = b")
-            return makeToken(TokenType::EQUALS, "=");
-        case '!':
-            if (current() == '=') {
-                advance();
-                return makeToken(TokenType::NOT_EQUALS, "!=");
-            }
-            return makeToken(TokenType::SYMBOL, "!");
-    }
+  // Single and multi-character tokens
+  switch (currentChar) {
+  case ':':
+    return makeToken(TokenType::COLON, ":");
+  case '@':
+    return makeToken(TokenType::AT, "@");
+  case '#':
+    return makeToken(TokenType::HASH, "#");
+  case '[':
+    return makeToken(TokenType::LBRACKET, "[");
+  case ']':
+    return makeToken(TokenType::RBRACKET, "]");
+  case '{':
+    return makeToken(TokenType::LBRACE, "{");
+  case '}':
+    return makeToken(TokenType::RBRACE, "}");
+  case '|':
+    return makeToken(TokenType::PIPE, "|");
+  case '\n':
+    line++;
+    column = 1;
+    return makeToken(TokenType::NEWLINE, "\\n");
+  }
 
-    // Any other character becomes a SYMBOL token
-    return makeToken(TokenType::SYMBOL, std::string(1, c));
+  // Any other character becomes a SYMBOL token
+  return makeToken(TokenType::SYMBOL, std::string(1, currentChar));
 }
 
 Token Lexer::peek() {
-    size_t savedPos = pos_;
-    size_t savedLine = line_;
-    size_t savedColumn = column_;
+  size_t savedPos = pos;
+  size_t savedLine = line;
+  size_t savedColumn = column;
 
-    Token token = nextToken();
+  Token token = nextToken();
 
-    pos_ = savedPos;
-    line_ = savedLine;
-    column_ = savedColumn;
+  pos = savedPos;
+  line = savedLine;
+  column = savedColumn;
 
-    return token;
+  return token;
 }
 
-Token Lexer::peekAhead(size_t n) {
-    size_t savedPos = pos_;
-    size_t savedLine = line_;
-    size_t savedColumn = column_;
+Token Lexer::peekAhead(size_t count) {
+  size_t savedPos = pos;
+  size_t savedLine = line;
+  size_t savedColumn = column;
 
-    Token token;
-    for (size_t i = 0; i <= n; i++) {
-        token = nextToken();
-    }
+  Token token;
+  for (size_t tokenIndex = 0; tokenIndex <= count; tokenIndex++) {
+    token = nextToken();
+  }
 
-    pos_ = savedPos;
-    line_ = savedLine;
-    column_ = savedColumn;
+  pos = savedPos;
+  line = savedLine;
+  column = savedColumn;
 
-    return token;
+  return token;
 }
 
 char Lexer::current() const {
-    if (atEnd()) return '\0';
-    return source_[pos_];
+  if (atEnd())
+    return '\0';
+  return source[pos];
 }
 
 char Lexer::advance() {
-    column_++;
-    return source_[pos_++];
+  column++;
+  return source[pos++];
 }
 
-bool Lexer::atEnd() const {
-    return pos_ >= source_.size();
-}
+bool Lexer::atEnd() const { return pos >= source.size(); }
 
 void Lexer::skipWhitespace() {
-    while (!atEnd()) {
-        char c = current();
-        if (c == ' ' || c == '\t' || c == '\r') {
-            advance();
-        } else if (c == '#') {
-            // Skip comments
-            while (!atEnd() && current() != '\n') {
-                advance();
-            }
-        } else {
-            break;
-        }
+  while (!atEnd()) {
+    char currentChar = current();
+    if (currentChar == ' ' || currentChar == '\t' || currentChar == '\r') {
+      advance();
+    } else if (currentChar == '#') {
+      // Note: nextToken handles # if we want it as a token,
+      // but skipWhitespace is usually called first.
+      // If we want HASH tokens, we should remove this skip.
+      // For now, let's keep skipping comments during normal lexing
+      // unless we're in a mode that needs them (like LSP).
+      while (!atEnd() && current() != '\n') {
+        advance();
+      }
+    } else {
+      break;
     }
+  }
 }
 
-Token Lexer::makeToken(TokenType type, const std::string& lexeme) {
-    Token token;
-    token.type = type;
-    token.lexeme = lexeme;
-    token.location = {line_, column_ - lexeme.size(), filename_};
-    return token;
+Token Lexer::makeToken(TokenType type, const std::string &lexeme) {
+  Token token;
+  token.type = type;
+  token.lexeme = lexeme;
+  token.location = {line, column - lexeme.size(), filename};
+  return token;
 }
 
 Token Lexer::scanString() {
-    std::string stringValue;
-    while (!atEnd() && current() != '"') {
-        if (current() == '\n') {
-            line_++;
-            column_ = 1;
-        }
-        if (current() == '\\' && pos_ + 1 < source_.size()) {
-            advance();
-            switch (current()) {
-                case 'n': stringValue += '\n'; break;
-                case 't': stringValue += '\t'; break;
-                case '"': stringValue += '"'; break;
-                case '\\': stringValue += '\\'; break;
-                default: stringValue += current();
-            }
-        } else {
-            stringValue += current();
-        }
-        advance();
+  std::string stringValue;
+  while (!atEnd() && current() != '"') {
+    if (current() == '\n') {
+      line++;
+      column = 1;
     }
-
-    if (atEnd()) {
-        return makeToken(TokenType::ERROR, "Unterminated string");
+    if (current() == '\\' && pos + 1 < source.size()) {
+      advance();
+      switch (current()) {
+      case 'n':
+        stringValue += '\n';
+        break;
+      case 't':
+        stringValue += '\t';
+        break;
+      case '"':
+        stringValue += '"';
+        break;
+      case '\\':
+        stringValue += '\\';
+        break;
+      default:
+        stringValue += current();
+      }
+    } else {
+      stringValue += current();
     }
+    advance();
+  }
 
-    advance(); // closing "
+  if (atEnd()) {
+    return makeToken(TokenType::ERROR, "Unterminated string");
+  }
 
-    Token token = makeToken(TokenType::STRING, "\"" + stringValue + "\"");
-    token.value = stringValue;
-    return token;
+  advance(); // closing "
+
+  Token token = makeToken(TokenType::STRING, "\"" + stringValue + "\"");
+  token.value = stringValue;
+  return token;
 }
 
 Token Lexer::scanNumber() {
-    std::string num;
-    bool isFloat = false;
+  std::string num;
+  bool isFloat = false;
 
+  while (!atEnd() && std::isdigit(current())) {
+    num += advance();
+  }
+
+  if (current() == '.' && pos + 1 < source.size() &&
+      std::isdigit(source[pos + 1])) {
+    isFloat = true;
+    num += advance(); // .
     while (!atEnd() && std::isdigit(current())) {
-        num += advance();
+      num += advance();
     }
+  }
 
-    if (current() == '.' && pos_ + 1 < source_.size() && std::isdigit(source_[pos_ + 1])) {
-        isFloat = true;
-        num += advance(); // .
-        while (!atEnd() && std::isdigit(current())) {
-            num += advance();
-        }
-    }
-
-    Token token = makeToken(isFloat ? TokenType::FLOAT : TokenType::INTEGER, num);
-    if (isFloat) {
-        token.value = std::stod(num);
-    } else {
-        token.value = std::stoll(num);
-    }
-    return token;
+  Token token = makeToken(isFloat ? TokenType::FLOAT : TokenType::INTEGER, num);
+  if (isFloat) {
+    token.value = std::stod(num);
+  } else {
+    token.value = std::stoll(num);
+  }
+  return token;
 }
 
 Token Lexer::scanIdentifier() {
-    std::string id;
-    while (!atEnd() && (std::isalnum(current()) || current() == '_')) {
-        id += advance();
-    }
+  std::string id;
+  while (!atEnd() && (std::isalnum(current()) || current() == '_')) {
+    id += advance();
+  }
 
-    // All words are identifiers - no keyword distinction
-    // Pattern matching determines if a word is a literal or parameter
-    return makeToken(TokenType::IDENTIFIER, id);
+  // All words are identifiers - no keyword distinction
+  // Pattern matching determines if a word is a literal or parameter
+  return makeToken(TokenType::IDENTIFIER, id);
 }
 
 } // namespace tbx

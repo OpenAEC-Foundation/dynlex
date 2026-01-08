@@ -1,4 +1,6 @@
 # Simple test. prelude.3bx is imported automatically.
 set x to 42
 set y to 10
+#this matches 'set $ to $' and the second '$' matches '$ + $'
 set z to x + y
+print z
