@@ -1,4 +1,4 @@
-expression customadder:
+effect customadder:
 	get:
 		print "custom adder:"
 		set result to @intrinsic("add", 1, 2)
