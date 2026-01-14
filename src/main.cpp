@@ -10,7 +10,7 @@ int main(int argumentCount, char *argumentValues[])
 {
 	if (argumentCount)
 	{
-		ParseContext context;
+		ParseContext context{};
 		compile(argumentValues[1], context);
 		context.reportDiagnostics();
 		

@@ -14,30 +14,3 @@ void PatternTreeNode::addPatternPart(std::vector<PatternElement> &elements, Sect
 	}
 	currentNode->matchingSection = matchingSection;
 }
-
-PatternTreeNode *PatternTreeNode::match(const std::vector<PatternElement> &elements)
-{
-	PatternTreeNode *currentNode = this;
-	for (const PatternElement &element : elements)
-	{
-		if (currentNode->literalChildren.count(element.text))
-		{
-			currentNode = currentNode->literalChildren[element.text];
-		}
-		else
-		{
-			if (element.type == PatternElement::Type::VariableLike)
-			{
-				// maybe it's a variable?
-
-			}
-			return nullptr;
-		}
-	}
-	if (currentNode->matchingSection)
-	{
-		// a pattern ends here
-		return currentNode;
-	}
-	return nullptr;
-}

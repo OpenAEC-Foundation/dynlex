@@ -3,13 +3,13 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/**",
                 "~/.conan2/**/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
-            "cStandard": "gnu17",
-            "cppStandard": "gnu++20",
+            "cStandard": "gnu23",
+            "cppStandard": "gnu++23",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],

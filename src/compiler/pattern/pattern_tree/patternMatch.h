@@ -4,5 +4,5 @@
 struct PatternMatch
 {
 	PatternTreeNode* matchedEndNode;
-	Range range;
+	std::string_view range;
 };
