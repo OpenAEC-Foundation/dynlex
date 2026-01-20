@@ -1,29 +1,24 @@
 #include "parseContext.h"
-#include <iostream>
 #include "matchProgress.h"
+#include <iostream>
 
-void ParseContext::reportDiagnostics()
-{
-	for (Diagnostic d : diagnostics)
-	{
+void ParseContext::reportDiagnostics() {
+	for (Diagnostic d : diagnostics) {
 		// report all diagnostics with cerr
 
 		std::cerr << d.toString() << "\n";
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference)
-{
+PatternMatch *ParseContext::match(PatternReference *reference) {
 	MatchProgress progress = MatchProgress(this, reference);
 	std::vector<MatchProgress> queue = {progress};
-	while (queue.size())
-	{
-		MatchProgress& currentProgress = queue.front();
-		if (currentProgress.result)
-		{
-			return currentProgress.result;
+	while (queue.size()) {
+		MatchProgress &currentProgress = queue.back();
+		std::vector<MatchProgress> nextSteps = currentProgress.step();
+		if (currentProgress.isComplete()) {
+			return new PatternMatch(currentProgress.match);
 		}
-		auto nextSteps = currentProgress.step();
 		queue.pop_back();
 		queue.insert(queue.end(), nextSteps.begin(), nextSteps.end());
 	}

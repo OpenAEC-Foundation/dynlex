@@ -1,17 +1,19 @@
 #pragma once
-#include <string>
 #include "patternElement.h"
+#include <string>
 struct SourceFile;
 struct Section;
-struct CodeLine
-{
+struct CodeLine {
 	CodeLine(std::string_view fullText, SourceFile *sourceFile) : sourceFile(sourceFile), fullText(fullText) {}
 
 	// the source file in which this line resides
 	SourceFile *sourceFile;
 
-	//the line index in the source file
+	// the line index in the source file
 	int sourceFileLineIndex;
+
+	// the line index after all source files are merged
+	int mergedLineIndex;
 
 	// the section in which this line resides
 	Section *section{};

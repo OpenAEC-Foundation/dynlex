@@ -3,10 +3,12 @@
 void PatternTreeNode::addPatternPart(std::vector<PatternElement> &elements, Section *matchingSection, size_t index) {
 	PatternTreeNode *currentNode = this;
 	for (; index < elements.size(); index++) {
-		auto currentElement = elements[index];
+		PatternElement currentElement = elements[index];
 		if (currentElement.type == PatternElement::Type::Variable) {
-			currentNode = currentNode->argumentChild ? currentNode->argumentChild
-													 : new PatternTreeNode(currentElement.type, currentElement.text);
+			if (!currentNode->argumentChild) {
+				currentNode->argumentChild = new PatternTreeNode(currentElement.type, currentElement.text);
+			}
+			currentNode = currentNode->argumentChild;
 
 		} else {
 			if (!currentNode->literalChildren.count(currentElement.text)) {

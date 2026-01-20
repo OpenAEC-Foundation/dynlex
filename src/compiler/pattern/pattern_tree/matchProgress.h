@@ -1,16 +1,17 @@
 #pragma once
 #include "codeLine.h"
+#include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "sectionType.h"
 struct ParseContext;
 struct PatternReference;
-struct PatternMatch;
 // traversing the tree will also output a tree of possibilities
 //  (which way should we search first? should we substitute a literal as variable or not?)
 struct MatchProgress {
 	MatchProgress(ParseContext *context, PatternReference *patternReference);
-	//copy constructor, for cloning matchprogresses
-	MatchProgress(const MatchProgress& other);
+	// copy constructor, for cloning matchprogresses
+	MatchProgress(const MatchProgress &other);
+	MatchProgress &operator=(const MatchProgress &) = default;
 	// the parent match we continue matching when this match is finished (can be promoted to grandparent)
 	// we don't need child nodes, since the youngest node is always the matching once.
 	MatchProgress *parent{};
@@ -19,18 +20,19 @@ struct MatchProgress {
 	PatternTreeNode *rootNode{};
 	// the node this step is at, currently.
 	PatternTreeNode *currentNode{};
-	// the tree node which matched successfully
-	PatternMatch *result{};
+	// the match result being built
+	PatternMatch match{};
 	PatternReference *patternReference{};
 
-	// the nodes this progress passed already
-	std::vector<PatternTreeNode *> nodesPassed{};
-	
 	// the pattern type we're currently matching for
 	SectionType type{};
 
+	bool isComplete() const;
+
 	size_t sourceElementIndex{};
 	size_t sourceCharIndex{};
+	size_t patternStartPos{}; // where this match started in pattern
+	size_t patternPos{};	  // current position in pattern
 	// returns a vector containing alternative steps we could take through the pattern tree, ordered from least important ([0])
 	// to most important ([length() - 1])
 	std::vector<MatchProgress> step();
@@ -38,4 +40,5 @@ struct MatchProgress {
 	bool canSubstitute() const;
 	// wether this progress can be a submatch
 	bool canBeSubstitute() const;
+	void addMatchData(PatternMatch &match);
 };

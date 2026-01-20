@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#include <unordered_map>
+#include <list>
 #include "codeLine.h"
 #include "diagnostic.h"
 #include "section.h"
@@ -17,6 +19,8 @@ struct ParseContext
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count];
+	// variable references that don't correspond to any pattern element
+	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}

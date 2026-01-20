@@ -2,9 +2,10 @@
 #include "range.h"
 #include <string>
 #include <vector>
+struct VariableReference;
 struct Variable {
-	Variable(std::string name) : name(name) {}
+	Variable(std::string name, VariableReference* definition) : name(name), definition(definition) {}
 	std::string name;
-	// all locations which reference this variable
-	std::vector<Range> references;
+	// the first reference to this variable (the definition point)
+	VariableReference* definition;
 };

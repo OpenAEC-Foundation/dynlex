@@ -13,7 +13,7 @@ void Section::collectPatternReferencesAndSections(
 	patternReferences.insert(patternReferences.end(), this->patternReferences.begin(), this->patternReferences.end());
 	if (this->patternDefinitions.size())
 		sections.push_back(this);
-	for (auto child : children) {
+	for (Section *child : children) {
 		child->collectPatternReferencesAndSections(patternReferences, sections);
 	}
 }
@@ -45,7 +45,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
 		detectPatterns(context, Range(line, line->patternText), SectionType::Section);
-		patternReferences.push_back(new PatternReference(Range(line, line->patternText), SectionType::Section));
+		addPatternReference(new PatternReference(Range(line, line->patternText), SectionType::Section));
 	}
 	return newSection;
 }
@@ -275,64 +275,69 @@ bool Section::detectPatternsRecursively(ParseContext &context, Range range, Stri
 
 	if (reference->pattern.text == ""s + argumentChar) {
 		// this pattern has already been deduced.
-	} else
-
+	} else {
 		// add pattern references
-		patternReferences.push_back(reference);
-
+		addPatternReference(reference);
+	}
 	return true;
 }
 
-void Section::updateResolution(ParseContext &context) {
-	// wether all pattern definitions are resolved for this section
-	bool allPatternDefinitionsResolved = patternDefinitions.size();
-	for (auto definition : patternDefinitions) {
-		if (!definition->resolved) {
-			// loop over all pattern elements and 'stripe off' parts with
-			// variables
-			for (auto element : definition->patternElements) {
-				definition->resolved = true;
-				if (element.type == PatternElement::Type::VariableLike) {
-					if (variables.count(element.text)) {
-						element.type = PatternElement::Type::Variable;
-					}
-					// a single pattern element can never become a variable
-					else if (definition->patternElements.size() > 1) {
-						// this element could possibly become a variable
-						// later. we'll have to check again in the next
-						// iteration
-						definition->resolved = false;
-						allPatternDefinitionsResolved = false;
+void Section::addVariableReference(ParseContext &context, VariableReference *reference) {
+	variableReferences[reference->name].push_back(reference);
+	searchParentPatterns(context, reference);
+}
+
+void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
+	bool found = false;
+	// check if this variable name exists in our patterns
+	for (PatternDefinition *definition : patternDefinitions) {
+		for (PatternElement &element : definition->patternElements) {
+			if (element.type != PatternElement::Type::Other && element.text == reference->name) {
+				if (element.type != PatternElement::Type::Variable) {
+					element.type = PatternElement::Type::Variable;
+					if (!found) {
+						// add a variable definition for this pattern element
+						variableDefinitions[element.text] = new VariableReference(
+							Range(
+								definition->range.line, definition->range.start() + element.startPos,
+								definition->range.start() + element.startPos + element.text.length()
+							),
+							element.text
+						);
 					}
 				}
-			}
-			if (definition->resolved) {
-				// we can add this definition already, to help resolve more references
-				context.patternTrees[(size_t)type]->addPatternPart(definition->patternElements, this);
-			}
-		}
-	}
-	// otherwise, we resolved the section before all of the pattern
-	// references inside were resolved!
-	if (!allPatternDefinitionsResolved) {
-		allPatternDefinitionsResolved = true;
-		// the normal way of resolution is by checking if all of it's
-		// lines are resolved and then marking the section as resolved.
-		for (PatternReference *reference : patternReferences) {
-			if (!reference->resolved) {
-				allPatternDefinitionsResolved = false;
+				if (!found)
+					reference->definition = variableDefinitions[element.text];
+				found = true;
 			}
 		}
 	}
-	if (allPatternDefinitionsResolved) {
-		for (auto definition : patternDefinitions) {
-			// add all unresolved definitions to the pattern tree
-			if (!definition->resolved) {
-				definition->resolved = true;
+	if (!found) {
+		// propagate to parent
+		if (parent) {
+			parent->searchParentPatterns(context, reference);
+		} else {
+			// no pattern element found, add to unresolved
+			context.unresolvedVariableReferences[reference->name].push_back(reference);
+		}
+	}
+}
 
-				context.patternTrees[(size_t)type]->addPatternPart(definition->patternElements, this);
-			}
-		}
+void Section::addPatternReference(PatternReference *reference) {
+	patternReferences.push_back(reference);
+	incrementUnresolved();
+}
+
+void Section::incrementUnresolved() {
+	if (unresolvedCount == 0 && parent) {
+		parent->incrementUnresolved();
 	}
-	resolved = allPatternDefinitionsResolved;
+	unresolvedCount++;
+}
+
+void Section::decrementUnresolved() {
+	unresolvedCount--;
+	if (unresolvedCount == 0 && parent) {
+		parent->decrementUnresolved();
+	}
 }

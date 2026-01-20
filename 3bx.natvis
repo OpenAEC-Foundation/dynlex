@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="MatchProgress">
+    <DisplayString Condition="currentNode == nullptr">MatchProgress (no node)</DisplayString>
+    <DisplayString Condition="match.matchedEndNode != nullptr">Complete: {currentNode->text,sb} (elem={sourceElementIndex})</DisplayString>
+    <DisplayString>In progress: {currentNode->text,sb} (elem={sourceElementIndex})</DisplayString>
+    <Expand>
+      <Item Name="sourceElementIndex">sourceElementIndex</Item>
+      <Item Name="sourceCharIndex">sourceCharIndex</Item>
+      <Item Name="patternPos">patternPos</Item>
+      <Item Name="currentNode" Condition="currentNode != nullptr">currentNode</Item>
+      <Item Name="match">match</Item>
+      <Item Name="parent" Condition="parent != nullptr">parent</Item>
+    </Expand>
+  </Type>
+</AutoVisualizer>

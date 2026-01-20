@@ -24,13 +24,13 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 																						: PatternElement::Type::Other;
 		if (newType != currentType) {
 			if (currentStart) {
-				elements.push_back(PatternElement(currentType, std::string(currentStart, it)));
+				elements.push_back(PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin()));
 			}
 			currentStart = it;
 			currentType = newType;
 		}
 	}
-	elements.push_back(PatternElement(currentType, std::string(currentStart, it)));
+	elements.push_back(PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin()));
 
 	// auto addElement = [&elements](PatternElement::Type type, std::string_view str) {
 	//	if (str.length()) {

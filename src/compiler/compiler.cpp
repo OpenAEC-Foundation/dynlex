@@ -54,6 +54,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 			// this line doesn't need any form of pattern matching
 			line->resolved = true;
 		}
+		line->mergedLineIndex = context.codeLines.size();
 		context.codeLines.push_back(line);
 	}
 	return true;
@@ -157,8 +158,7 @@ bool analyzeSections(ParseContext &context) {
 	return true;
 }
 
-// step 3: loop over code, resolve patterns and build up a pattern tree until
-// all patterns are resolved
+// step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
 	std::list<PatternReference *> unResolvedPatternReferences;
 	std::list<Section *> unResolvedSections;
@@ -173,9 +173,9 @@ bool resolvePatterns(ParseContext &context) {
 		unResolvedPatternReference->patternElements = getPatternElements(unResolvedPatternReference->pattern.text);
 	}
 	// add the roots
-	std::fill(
-		std::begin(context.patternTrees), std::end(context.patternTrees), new PatternTreeNode(PatternElement::Type::Other, "")
-	);
+	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), []() {
+		return new PatternTreeNode(PatternElement::Type::Other, "");
+	});
 
 	// solving all patterns and variables is like solving a sudoku. let's get
 	// the 'starting numbers' first: those are the patterns which only consist
@@ -203,24 +203,21 @@ bool resolvePatterns(ParseContext &context) {
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&context](Section *section) {
 			// wether all pattern definitions are resolved for this section
-			bool allPatternDefinitionsResolved = section->patternDefinitions.size();
-			for (auto definition : section->patternDefinitions) {
+			section->patternDefinitionsResolved = section->patternDefinitions.size();
+			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
+					definition->resolved = true;
 					// loop over all pattern elements and 'stripe off' parts with
 					// variables
-					for (auto element : definition->patternElements) {
-						definition->resolved = true;
+					for (PatternElement element : definition->patternElements) {
 						if (element.type == PatternElement::Type::VariableLike) {
-							if (section->variables.count(element.text)) {
-								element.type = PatternElement::Type::Variable;
-							}
 							// a single pattern element can never become a variable
-							else if (definition->patternElements.size() > 1) {
+							if (definition->patternElements.size() > 1) {
 								// this element could possibly become a variable
 								// later. we'll have to check again in the next
 								// iteration
 								definition->resolved = false;
-								allPatternDefinitionsResolved = false;
+								section->patternDefinitionsResolved = false;
 							}
 						}
 					}
@@ -232,18 +229,12 @@ bool resolvePatterns(ParseContext &context) {
 			}
 			// otherwise, we resolved the section before all of the pattern
 			// references inside were resolved!
-			if (!allPatternDefinitionsResolved) {
-				allPatternDefinitionsResolved = true;
-				// the normal way of resolution is by checking if all of it's
-				// lines are resolved and then marking the section as resolved.
-				for (PatternReference *reference : section->patternReferences) {
-					if (!reference->resolved) {
-						allPatternDefinitionsResolved = false;
-					}
-				}
+			if (!section->patternDefinitionsResolved) {
+				// check if all pattern references (including children) are resolved
+				section->patternDefinitionsResolved = section->unresolvedCount == 0;
 			}
-			if (allPatternDefinitionsResolved) {
-				for (auto definition : section->patternDefinitions) {
+			if (section->patternDefinitionsResolved) {
+				for (PatternDefinition *definition : section->patternDefinitions) {
 					// add all unresolved definitions to the pattern tree
 					if (!definition->resolved) {
 						definition->resolved = true;
@@ -252,8 +243,7 @@ bool resolvePatterns(ParseContext &context) {
 					}
 				}
 			}
-			section->resolved = allPatternDefinitionsResolved;
-			return section->resolved;
+			return section->patternDefinitionsResolved;
 		});
 
 		// then, go over all lines referencing patterns
@@ -262,24 +252,21 @@ bool resolvePatterns(ParseContext &context) {
 
 			PatternMatch *match = context.match(reference);
 			if (match) {
-				reference->resolved = true;
+				reference->resolve();
+				for (VariableMatch &varMatch : match->variableMatches) {
+					reference->range.line->section->addVariableReference(
+						context, new VariableReference(
+									 Range(reference->range.line, varMatch.lineStartPos, varMatch.lineEndPos), varMatch.name
+								 )
+					);
+				}
 			} else if (reference->patternElements.size() == 1 &&
 					   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 				// since there's no pattern definition matching this, this has to be a variable.
-				reference->resolved = true;
-				Section *variableContainer = reference->range.line->section;
-				while (variableContainer->type == SectionType::Custom) {
-					variableContainer = variableContainer->parent;
-				}
-				std::string name = reference->patternElements[0].text;
-				Variable *variable;
-				if (variableContainer->variables.count(name)) {
-					variable = variableContainer->variables[name];
-				} else {
-					variable = new Variable(name);
-				}
-				variableContainer->variables[name] = variable;
-				variable->references.push_back(reference->range);
+				reference->resolve();
+				reference->range.line->section->addVariableReference(
+					context, new VariableReference(reference->range, reference->patternElements[0].text)
+				);
 			}
 
 			return reference->resolved;
@@ -287,6 +274,47 @@ bool resolvePatterns(ParseContext &context) {
 		if (unResolvedSections.size() == 0 && unResolvedPatternReferences.size() == 0) {
 			// all patterns have been successfully resolved
 			return true;
+		}
+	}
+	// finally, resolve all unresolved variable references
+	for (auto &[name, references] : context.unresolvedVariableReferences) {
+		// find highest section for each section that has this variable
+		std::unordered_map<Section *, Section *> sectionToHighest;
+		for (VariableReference *ref : references) {
+			Section *sec = ref->range.line->section;
+			if (sectionToHighest.count(sec))
+				continue;
+
+			Section *highest = sec;
+			for (Section *a = sec->parent; a; a = a->parent) {
+				if (a->variableReferences.count(name))
+					highest = a;
+			}
+			sectionToHighest[sec] = highest;
+		}
+
+		// group references by their highest section
+		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
+		for (VariableReference *ref : references) {
+			groups[sectionToHighest[ref->range.line->section]].push_back(ref);
+		}
+
+		// process each group
+		for (auto &[highestSection, groupRefs] : groups) {
+			// find first reference by merged line index (becomes definition)
+			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
+				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
+			});
+
+			// store definition in its section's definitions list
+			definition->range.line->section->variableDefinitions[name] = definition;
+			// create Variable in highest section
+			highestSection->variables[name] = new Variable(name, definition);
+
+			// link all references to the definition
+			for (VariableReference *ref : groupRefs) {
+				ref->definition = definition;
+			}
 		}
 	}
 	// some patterns couldn't be resolved

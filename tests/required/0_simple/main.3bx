@@ -1,3 +1,7 @@
+effect return value:
+	execute:
+		@intrinsic("return", value)
+
 effect set var to val:
     execute:
         @intrinsic("store", var, val)

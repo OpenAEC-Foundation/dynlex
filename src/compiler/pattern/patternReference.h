@@ -10,4 +10,5 @@ struct PatternReference
 	std::vector<PatternElement> patternElements{};
 	bool resolved{};
 	PatternReference(Range range, SectionType patternType);
+	void resolve();
 };

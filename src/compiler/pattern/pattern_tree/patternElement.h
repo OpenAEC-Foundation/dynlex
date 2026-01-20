@@ -18,7 +18,9 @@ struct PatternElement
 	Type type;
 	// for example: 'the'
 	std::string text;
-	PatternElement(Type type, std::string text = {}) : type(type), text(text) {}
+	// position relative to pattern start
+	size_t startPos{};
+	PatternElement(Type type, std::string text = {}, size_t startPos = {}) : type(type), text(text), startPos(startPos) {}
 };
 
 std::vector<PatternElement> getPatternElements(std::string_view patternString);
