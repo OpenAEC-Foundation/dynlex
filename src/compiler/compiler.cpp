@@ -9,6 +9,7 @@
 #include <list>
 #include <ranges>
 #include <regex>
+using namespace std::literals;
 
 // regex for line terminators - matches each line including its terminator
 const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
@@ -47,8 +48,12 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		if (line->rightTrimmedText.starts_with("import ")) {
 			// if so, recursively import the file
 			// extract the file path
-			std::string_view importPath = line->rightTrimmedText.substr(std::string_view("import ").length());
+			std::string_view importPath = line->rightTrimmedText.substr("import "sv.length());
 			if (!importSourceFile((std::string)importPath, context)) {
+				context.diagnostics.push_back(Diagnostic(
+					Diagnostic::Level::Error, "failed to import source file: " + (std::string)importPath,
+					Range(line, "import "sv.length(), line->rightTrimmedText.length())
+				));
 				return false;
 			}
 			// this line doesn't need any form of pattern matching

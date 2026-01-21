@@ -14,7 +14,7 @@ expression left + right:
     get:
         return @intrinsic("add", left, right)
 
-# Simple test. prelude.3bx is imported automatically.
+# Simple test
 set x to 42
 set y to 10
 #this matches 'set $ to $' and the second '$' matches '$ + $'
