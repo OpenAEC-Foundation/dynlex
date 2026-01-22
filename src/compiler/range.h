@@ -1,10 +1,10 @@
 #pragma once
 #include <string_view>
 struct CodeLine;
-struct Range
-{
-	CodeLine *line;
+struct Range {
+	CodeLine *line{};
 	std::string_view subString;
+	Range() = default;
 	Range(CodeLine *line, int start, int end);
 	Range(CodeLine *line, std::string_view subString);
 	std::string toString() const;

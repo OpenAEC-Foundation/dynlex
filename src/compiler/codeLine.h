@@ -1,8 +1,11 @@
 #pragma once
 #include "patternElement.h"
 #include <string>
+
 struct SourceFile;
 struct Section;
+struct Expression;
+
 struct CodeLine {
 	CodeLine(std::string_view fullText, SourceFile *sourceFile) : sourceFile(sourceFile), fullText(fullText) {}
 
@@ -32,6 +35,9 @@ struct CodeLine {
 
 	// the elements of this code lines pattern
 	std::vector<PatternElement> patternElements;
+
+	// the expression tree for this code line (built during analysis)
+	Expression *expression{};
 
 	bool isPatternDefinition() const;
 	bool isPatternReference() const;

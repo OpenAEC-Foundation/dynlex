@@ -1,11 +1,19 @@
 {
+	"version": "2.0.0",
 	"tasks": [
 		{
 			"label": "build",
 			"type": "shell",
-			"command": [
-				"./scripts/build.sh"
-			]
+			"command": "./scripts/build.sh"
 		},
+		{
+			"label": "compile-extension",
+			"type": "shell",
+			"command": "npm run compile",
+			"options": {
+				"cwd": "${workspaceFolder}/vscode-extension"
+			},
+			"problemMatcher": "$tsc"
+		}
 	]
 }

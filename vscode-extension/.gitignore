@@ -1,0 +1,5 @@
+# Build artifacts (keep in .vscodeignore: src/, *.ts, *.map)
+node_modules/
+out/
+*.vsix
+.vscode-test/

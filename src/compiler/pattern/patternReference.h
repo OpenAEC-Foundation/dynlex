@@ -1,14 +1,15 @@
 #pragma once
+#include "patternMatch.h"
 #include "range.h"
-#include "transformedPattern.h"
 #include "sectionType.h"
-struct PatternReference
-{
+#include "transformedPattern.h"
+struct PatternReference {
 	Range range;
 	TransformedPattern pattern;
 	SectionType patternType;
 	std::vector<PatternElement> patternElements{};
+	PatternMatch *match{};
 	bool resolved{};
 	PatternReference(Range range, SectionType patternType);
-	void resolve();
+	void resolve(PatternMatch *matchResult = nullptr);
 };

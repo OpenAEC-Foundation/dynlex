@@ -75,9 +75,6 @@ std::vector<MatchProgress> MatchProgress::step() {
 		if (currentNode->argumentChild) {
 
 			if (canSubstitute()) {
-				if (patternReference->pattern.text.ends_with("x + y")) {
-					this->parent = this->parent;
-				}
 				// substitute the following part of the pattern
 				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
 				MatchProgress subMatch = *this;

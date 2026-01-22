@@ -1,11 +1,13 @@
 #include "compiler.h"
 #include "IndentData.h"
+#include "expression.h"
 #include "fileFunctions.h"
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "sourceFile.h"
 #include "stringFunctions.h"
 #include "variable.h"
+#include <algorithm>
 #include <list>
 #include <ranges>
 #include <regex>
@@ -163,6 +165,48 @@ bool analyzeSections(ParseContext &context) {
 	return true;
 }
 
+void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, const PatternMatch &match) {
+	for (const VariableMatch &varMatch : match.variableMatches) {
+		reference->range.line->section->addVariableReference(
+			context,
+			new VariableReference(Range(reference->range.line, varMatch.lineStartPos, varMatch.lineEndPos), varMatch.name)
+		);
+	}
+	for (const PatternMatch &subMatch : match.subMatches) {
+		addVariableReferencesFromMatch(context, reference, subMatch);
+	}
+}
+
+// Recursively expand pending expressions to their resolved forms
+void expandExpression(Expression *expr, Section *section) {
+	if (!expr)
+		return;
+
+	// Expand children first
+	for (Expression *arg : expr->arguments) {
+		expandExpression(arg, section);
+	}
+
+	// If this is a pending expression, resolve it
+	if (expr->kind == Expression::Kind::Pending && expr->patternReference) {
+		PatternReference *ref = expr->patternReference;
+		if (ref->match) {
+			// Resolved to a pattern call
+			expr->kind = Expression::Kind::PatternCall;
+			expr->patternMatch = ref->match;
+		} else if (ref->patternElements.size() == 1 && ref->patternElements[0].type == PatternElement::Type::VariableLike) {
+			// Resolved to a variable reference
+			expr->kind = Expression::Kind::Variable;
+			// Find the variable reference in the section
+			std::string varName = ref->patternElements[0].text;
+			auto it = section->variableReferences.find(varName);
+			if (it != section->variableReferences.end() && !it->second.empty()) {
+				expr->variable = it->second.front();
+			}
+		}
+	}
+}
+
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
 	std::list<PatternReference *> unResolvedPatternReferences;
@@ -203,7 +247,7 @@ bool resolvePatterns(ParseContext &context) {
 	//				return line->resolved; });
 
 	// now start iterating and resolving.
-	for (int resolutionIteration = 0; resolutionIteration < context.maxResolutionIterations; resolutionIteration++) {
+	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&context](Section *section) {
@@ -257,14 +301,8 @@ bool resolvePatterns(ParseContext &context) {
 
 			PatternMatch *match = context.match(reference);
 			if (match) {
-				reference->resolve();
-				for (VariableMatch &varMatch : match->variableMatches) {
-					reference->range.line->section->addVariableReference(
-						context, new VariableReference(
-									 Range(reference->range.line, varMatch.lineStartPos, varMatch.lineEndPos), varMatch.name
-								 )
-					);
-				}
+				reference->resolve(match);
+				addVariableReferencesFromMatch(context, reference, *match);
 			} else if (reference->patternElements.size() == 1 &&
 					   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 				// since there's no pattern definition matching this, this has to be a variable.
@@ -278,6 +316,12 @@ bool resolvePatterns(ParseContext &context) {
 		});
 		if (unResolvedSections.size() == 0 && unResolvedPatternReferences.size() == 0) {
 			// all patterns have been successfully resolved
+			// Expand all pending expressions to their resolved forms
+			for (CodeLine *line : context.codeLines) {
+				if (line->expression) {
+					expandExpression(line->expression, line->section);
+				}
+			}
 			return true;
 		}
 	}

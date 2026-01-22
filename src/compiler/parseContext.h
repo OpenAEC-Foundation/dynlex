@@ -1,16 +1,35 @@
 #pragma once
-#include <vector>
-#include <unordered_map>
-#include <list>
 #include "codeLine.h"
 #include "diagnostic.h"
-#include "section.h"
-#include "patternTreeNode.h"
 #include "patternMatch.h"
-struct ParseContext
-{
-	// settings
-	int maxResolutionIterations = 0x100;
+#include "patternTreeNode.h"
+#include "section.h"
+#include <list>
+#include <unordered_map>
+#include <vector>
+
+namespace llvm {
+class LLVMContext;
+class Module;
+class IRBuilderBase;
+class AllocaInst;
+class Value;
+} // namespace llvm
+
+struct ParseContext {
+	struct Options {
+		std::string inputPath;
+		std::string outputPath;
+		bool emitLLVM = false;
+		int maxResolutionIterations = 0x100;
+	} options;
+
+	// LLVM codegen state (initialized in codegen.cpp)
+	llvm::LLVMContext *llvmContext{};
+	llvm::Module *llvmModule{};
+	llvm::IRBuilderBase *llvmBuilder{};
+	std::unordered_map<std::string, llvm::AllocaInst *> llvmVariables;
+
 	// all code lines in 'chronological' order: imported code lines get put before the import statement
 	std::vector<CodeLine *> codeLines;
 	std::vector<Diagnostic> diagnostics;

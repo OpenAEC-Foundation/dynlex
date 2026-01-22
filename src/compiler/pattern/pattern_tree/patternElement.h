@@ -1,10 +1,8 @@
 #pragma once
 #include <string>
 #include <vector>
-struct PatternElement
-{
-	enum Type
-	{
+struct PatternElement {
+	enum Type {
 		// anything not in [A-Za-z0-9]+
 		// examples: ' ', '%'
 		Other,

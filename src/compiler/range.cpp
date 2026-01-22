@@ -2,7 +2,7 @@
 #include "codeLine.h"
 #include "sourceFile.h"
 
-Range::Range(CodeLine *line, int start, int end) : line(line), subString(line->fullText.substr(start, end)) {}
+Range::Range(CodeLine *line, int start, int end) : line(line), subString(line->fullText.substr(start, end - start)) {}
 Range::Range(CodeLine *line, std::string_view subString) : line(line), subString(subString) {}
 
 std::string Range::toString() const {

@@ -7,7 +7,7 @@ struct PatternDefinition {
 	Range range;
 	// the elements of this code lines pattern
 	std::vector<PatternElement> patternElements;
-	//when resolved, this pattern has been added to the pattern tree
+	// when resolved, this pattern has been added to the pattern tree
 	bool resolved{};
 	PatternDefinition(Range range);
 };

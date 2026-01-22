@@ -1,5 +1,6 @@
 [requires]
 #fastnoise2/0.10.0-alpha
+nlohmann_json/3.11.3
 
 
 [generators]

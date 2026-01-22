@@ -1,0 +1,75 @@
+{
+  "name": "3bx-language",
+  "displayName": "3BX Language",
+  "description": "Language support for the 3BX programming language",
+  "version": "0.1.0",
+  "publisher": "3bx",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:3bx"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "3bx",
+        "aliases": [
+          "3BX",
+          "3bx"
+        ],
+        "extensions": [
+          ".3bx"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "3BX",
+      "properties": {
+        "3bx.server.port": {
+          "type": "number",
+          "default": 5007,
+          "description": "Port for the 3BX language server"
+        },
+        "3bx.server.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the 3bx executable. Leave empty to use the bundled executable or PATH."
+        },
+        "3bx.server.flags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional flags to pass to the 3bx server"
+        },
+        "3bx.server.useExternal": {
+          "type": "boolean",
+          "default": false,
+          "description": "Connect to an externally launched server instead of spawning one (for C++ debugging)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

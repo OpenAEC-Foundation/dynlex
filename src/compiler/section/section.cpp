@@ -1,5 +1,6 @@
 #include "section.h"
 #include "effectSection.h"
+#include "expression.h"
 #include "expressionSection.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
@@ -19,7 +20,8 @@ void Section::collectPatternReferencesAndSections(
 }
 
 bool Section::processLine(ParseContext &context, CodeLine *line) {
-	return detectPatterns(context, Range(line, line->patternText), SectionType::Effect);
+	line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Effect);
+	return line->expression != nullptr;
 }
 
 Section *Section::createSection(ParseContext &context, CodeLine *line) {
@@ -44,7 +46,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	if (!newSection) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
-		detectPatterns(context, Range(line, line->patternText), SectionType::Section);
+		line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
 		addPatternReference(new PatternReference(Range(line, line->patternText), SectionType::Section));
 	}
 	return newSection;
@@ -164,65 +166,138 @@ StringHierarchy *createHierarchy(ParseContext &context, Range range) {
 	return base;
 }
 
-bool Section::detectPatterns(ParseContext &context, Range range, SectionType patternType) {
+Expression *Section::detectPatterns(ParseContext &context, Range range, SectionType patternType) {
 	StringHierarchy *hierarchy = createHierarchy(context, range);
 	if (!hierarchy)
-		return false;
-	detectPatternsRecursively(context, range, hierarchy, patternType);
+		return nullptr;
+	Expression *expr = detectPatternsRecursively(context, range, hierarchy, patternType);
 	delete hierarchy;
-	return true;
+	return expr;
 }
 
-bool Section::detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType) {
+Expression *
+Section::detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType) {
 	Range relativeRange = Range(range.line, range.subString.substr(node->start, node->end - node->start));
-	// treat as normal code
-	// recognize intrinsic calls, numbers, strings and braces and add pattern references for them
-	PatternReference *reference = new PatternReference(relativeRange, patternType);
 
-	auto delegate = [this, &context, &range](StringHierarchy *childNode) {
-		return detectPatternsRecursively(
+	Expression *expr = new Expression();
+	expr->range = relativeRange;
+
+	// Check if this is a string literal
+	if (relativeRange.subString.starts_with("\"") && relativeRange.subString.ends_with("\"")) {
+		expr->kind = Expression::Kind::Literal;
+		expr->literalValue = std::string(relativeRange.subString.substr(1, relativeRange.subString.size() - 2));
+		return expr;
+	}
+
+	// Check if this is a number literal
+	std::regex numberRegex("^\\d+(?:\\.\\d+)?$");
+	std::string rangeStr(relativeRange.subString);
+	if (std::regex_match(rangeStr, numberRegex)) {
+		expr->kind = Expression::Kind::Literal;
+		if (rangeStr.find('.') != std::string::npos) {
+			expr->literalValue = std::stod(rangeStr);
+		} else {
+			expr->literalValue = static_cast<int64_t>(std::stoll(rangeStr));
+		}
+		return expr;
+	}
+
+	// This is a pending pattern reference (will be resolved later)
+	expr->kind = Expression::Kind::Pending;
+
+	// Create a PatternReference for pattern matching
+	PatternReference *reference = new PatternReference(relativeRange, patternType);
+	expr->patternReference = reference;
+
+	// Process children to find arguments
+	auto delegate = [this, &context, &range, &expr](StringHierarchy *childNode) -> bool {
+		Expression *childExpr = detectPatternsRecursively(
 			context, range.subRange(childNode->start, childNode->end), childNode->cloneWithOffset(-childNode->start),
 			SectionType::Expression
 		);
+		if (!childExpr)
+			return false;
+		expr->arguments.push_back(childExpr);
+		return true;
 	};
 
+	constexpr std::string_view intrinsicKeyword = "@intrinsic"sv;
 	for (StringHierarchy *child : node->children) {
 		if (child->charachter == '(') {
-			// detect subpatterns
-			if (child->children.size() && child->children[0]->charachter == ',') {
-				for (StringHierarchy *subChild : child->children) {
+			size_t parenPos = child->start - 1; // position of '(' in relativeRange
 
-					if (!delegate(subChild))
+			// Check if @intrinsic precedes this parenthesis
+			if (parenPos >= intrinsicKeyword.length() &&
+				relativeRange.subString.substr(parenPos - intrinsicKeyword.length(), intrinsicKeyword.length()) ==
+					intrinsicKeyword) {
+				// This is an @intrinsic(...) call
+				size_t intrinsicStart = parenPos - intrinsicKeyword.length();
+				size_t intrinsicEnd = child->end + 1; // +1 for closing ')'
+
+				Expression *intrinsicExpr = new Expression();
+				intrinsicExpr->range = range.subRange(intrinsicStart, intrinsicEnd);
+				intrinsicExpr->kind = Expression::Kind::IntrinsicCall;
+
+				// Process arguments - first argument is the intrinsic name
+				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
+					Expression *argExpr = detectPatternsRecursively(
+						context, range.subRange(argNode->start, argNode->end), argNode->cloneWithOffset(-argNode->start),
+						SectionType::Expression
+					);
+					if (!argExpr)
 						return false;
+
+					// First string argument becomes the intrinsic name
+					if (intrinsicExpr->intrinsicName.empty() && argExpr->kind == Expression::Kind::Literal) {
+						if (auto *str = std::get_if<std::string>(&argExpr->literalValue)) {
+							intrinsicExpr->intrinsicName = *str;
+							delete argExpr;
+							return true;
+						}
+					}
+					intrinsicExpr->arguments.push_back(argExpr);
+					return true;
+				};
+
+				if (child->children.size() && child->children[0]->charachter == ',') {
+					for (StringHierarchy *subChild : child->children) {
+						if (!processIntrinsicArg(subChild))
+							return nullptr;
+					}
+				} else if (child->children.size()) {
+					if (!processIntrinsicArg(child->children[0]))
+						return nullptr;
 				}
+
+				expr->arguments.push_back(intrinsicExpr);
+				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {
-				if (!delegate(child))
-					return false;
-			}
-			constexpr std::string_view intrinsicPrefix = "@intrinsic("sv;
-			if (child->start >= intrinsicPrefix.length() &&
-				range.subString.substr(child->start - intrinsicPrefix.length(), intrinsicPrefix.length()) == intrinsicPrefix) {
-				reference->pattern.replaceLine(child->start - intrinsicPrefix.length(), child->end + ")"sv.length());
-				// this is an intrinsic call
-			} else {
+				// Regular parentheses - process arguments inside
+				if (child->children.size() && child->children[0]->charachter == ',') {
+					for (StringHierarchy *subChild : child->children) {
+						if (!delegate(subChild))
+							return nullptr;
+					}
+				} else {
+					if (!delegate(child))
+						return nullptr;
+				}
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
 		} else if (child->charachter == '"') {
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
-		// when it's a string, we don't have to do anything for now
 	}
 
-	// search for other replacables
-	// we don't need to capture negative values (-) because they can be captured using a pattern
-	std::regex numberRegex = std::regex("\\d+(?:\\.\\d)?");
-
-	std::cregex_iterator iter(range.subString.begin(), range.subString.end(), numberRegex);
+	// Replace number literals in pattern text
+	std::regex numLiteralRegex("\\d+(?:\\.\\d+)?");
+	std::cregex_iterator iter(range.subString.begin(), range.subString.end(), numLiteralRegex);
 	std::cregex_iterator end;
 	for (; iter != end; ++iter) {
 		reference->pattern.replaceLine(iter->position(), iter->position() + iter->length());
 	}
 
+	// Whitespace handling
 	auto addWhiteSpaceWarning = [&context, &range, &reference](size_t start, size_t end) {
 		context.diagnostics.push_back(Diagnostic(
 			Diagnostic::Level::Warning, "all whitespace in patterns should be a single space",
@@ -232,9 +307,7 @@ bool Section::detectPatternsRecursively(ParseContext &context, Range range, Stri
 
 	std::smatch matches;
 
-	// also, trim the pattern. we can't just use trim(), as that prevents diagnostics and does not update keyframes.
-
-	// left
+	// Trim left
 	std::regex_search(reference->pattern.text, matches, std::regex("^(\\s*)"));
 	std::string leftWhiteSpace = matches[0];
 	if (!leftWhiteSpace.empty()) {
@@ -244,7 +317,7 @@ bool Section::detectPatternsRecursively(ParseContext &context, Range range, Stri
 		reference->pattern.replacePattern(0, leftWhiteSpace.size(), "");
 	}
 
-	// right
+	// Trim right
 	std::regex_search(reference->pattern.text, matches, std::regex("(\\s*)$"));
 	std::string rightWhiteSpace = matches[0];
 	if (!rightWhiteSpace.empty()) {
@@ -254,10 +327,8 @@ bool Section::detectPatternsRecursively(ParseContext &context, Range range, Stri
 		reference->pattern.replacePattern(0, rightWhiteSpace.size(), "");
 	}
 
-	// now, check if there's some extra space.
-	// match any whitespace except for ' '
+	// Normalize whitespace
 	std::regex spaceRegex = std::regex("\\s{2,}|[^\\S ]");
-
 	size_t lastIndex = 0;
 	std::cmatch charMatches;
 	while (std::regex_search(
@@ -266,20 +337,17 @@ bool Section::detectPatternsRecursively(ParseContext &context, Range range, Stri
 	)) {
 		size_t matchPos = lastIndex + charMatches.position();
 		size_t endPos = matchPos + charMatches.length();
-
 		addWhiteSpaceWarning(matchPos, endPos);
-		// temporary fix
 		reference->pattern.replacePattern(matchPos, endPos, " ");
 		lastIndex = matchPos + " "sv.size();
 	}
 
-	if (reference->pattern.text == ""s + argumentChar) {
-		// this pattern has already been deduced.
-	} else {
-		// add pattern references
+	// Only add pattern reference if it's not just an argument placeholder
+	if (reference->pattern.text != ""s + argumentChar) {
 		addPatternReference(reference);
 	}
-	return true;
+
+	return expr;
 }
 
 void Section::addVariableReference(ParseContext &context, VariableReference *reference) {

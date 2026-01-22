@@ -1,43 +1,41 @@
-#include "patternReference.h"
 #include "transformedPattern.h"
+#include "patternReference.h"
 
-TransformedPattern::TransformedPattern(std::string pattern) : text(pattern)
-{
-}
+TransformedPattern::TransformedPattern(std::string pattern) : text(pattern) {}
 
-size_t TransformedPattern::transformPosition(size_t position, keyFrameTransformer keyFrameToInpos, keyFrameTransformer keyFrameToOutPos)
-{
-	for (KeyFrame frame : keyframes | std::views::reverse)
-	{
+size_t TransformedPattern::transformPosition(
+	size_t position, KeyFrameTransformer keyFrameToInpos, KeyFrameTransformer keyFrameToOutPos
+) {
+	for (KeyFrame frame : keyframes | std::views::reverse) {
 		size_t inPos = keyFrameToInpos(frame);
-		if (inPos < position)
-		{
+		if (inPos < position) {
 			return keyFrameToOutPos(frame) + position - inPos;
 		}
 	}
 	return position;
 }
 
-size_t TransformedPattern::getLinePos(size_t patternPos)
-{
-	return transformPosition(patternPos, [](const KeyFrame &frame)
-							 { return frame.patternPos; }, [](const KeyFrame &frame)
-							 { return frame.linePos; });
+size_t TransformedPattern::getLinePos(size_t patternPos) {
+	return transformPosition(patternPos, [](const KeyFrame &frame) {
+		return frame.patternPos;
+	}, [](const KeyFrame &frame) {
+		return frame.linePos;
+	});
 }
 
-size_t TransformedPattern::getPatternPos(size_t linePos)
-{
-	return transformPosition(linePos, [](const KeyFrame &frame)
-							 { return frame.linePos; }, [](const KeyFrame &frame)
-							 { return frame.patternPos; });
+size_t TransformedPattern::getPatternPos(size_t linePos) {
+	return transformPosition(linePos, [](const KeyFrame &frame) {
+		return frame.linePos;
+	}, [](const KeyFrame &frame) {
+		return frame.patternPos;
+	});
 }
 
-void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, std::string replacement)
-{
+void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, std::string replacement) {
 	replaceLocal(getPatternPos(lineStartPos), getPatternPos(lineEndPos), lineEndPos, replacement);
 }
 
-void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos,std::string replacement) {
+void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos, std::string replacement) {
 	replaceLocal(patternStartPos, patternEndPos, getLinePos(patternEndPos), replacement);
 }
 void TransformedPattern::replaceLocal(
@@ -46,19 +44,14 @@ void TransformedPattern::replaceLocal(
 	text = text.substr(0, patternStartPos) + replacement + text.substr(patternEndPos);
 	// insert a new keyframe after the argument char and check for any keyframes which got redundant
 	int shift = (patternEndPos - patternStartPos) + replacement.length();
-	if (shift)
-	{
+	if (shift) {
 		bool added{};
 		const KeyFrame &newKeyFrame{.patternPos = patternEndPos, .linePos = lineEndPos};
-		for (auto it = keyframes.begin(); it != keyframes.end();)
-		{
+		for (auto it = keyframes.begin(); it != keyframes.end();) {
 			KeyFrame &keyFrame = *it;
-			if (keyFrame.patternPos > patternStartPos)
-			{
-				if (keyFrame.patternPos >= patternEndPos)
-				{
-					if (!added)
-					{
+			if (keyFrame.patternPos > patternStartPos) {
+				if (keyFrame.patternPos >= patternEndPos) {
+					if (!added) {
 						added = true;
 						// insert the new keyframe behind this keyframe
 						it = keyframes.insert(it, newKeyFrame);
@@ -67,9 +60,7 @@ void TransformedPattern::replaceLocal(
 					}
 					// shift all keyframes on the right
 					keyFrame.patternPos -= shift;
-				}
-				else
-				{
+				} else {
 					// remove this keyframe, it got replaced
 					it = keyframes.erase(it);
 					continue;
@@ -77,8 +68,7 @@ void TransformedPattern::replaceLocal(
 			}
 			it++;
 		}
-		if (!added)
-		{
+		if (!added) {
 			// at the back
 			keyframes.push_back(newKeyFrame);
 		}

@@ -1,7 +1,6 @@
 #include "sectionType.h"
 
-SectionType sectionTypeFromString(std::string_view str)
-{
+SectionType sectionTypeFromString(std::string_view str) {
 	if (str == "section")
 		return SectionType::Section;
 	if (str == "expression")
@@ -13,10 +12,8 @@ SectionType sectionTypeFromString(std::string_view str)
 	return SectionType::Custom;
 }
 
-std::string sectionTypeToString(SectionType type)
-{
-	switch (type)
-	{
+std::string sectionTypeToString(SectionType type) {
+	switch (type) {
 	case SectionType::Section:
 		return "section";
 	case SectionType::Expression:

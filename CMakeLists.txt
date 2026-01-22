@@ -13,7 +13,18 @@ if(CCACHE_PROGRAM)
     message(STATUS "Using ccache: ${CCACHE_PROGRAM}")
 endif()
 
+#
+# Generate compile_commands.json for clang-tidy
+#
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 #find_package(imgui CONFIG REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
 
 #
 # CMake setup
@@ -22,7 +33,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set (CMAKE_VERBOSE_MAKEFILE 0) # 1 should be used for debugging
 set (CMAKE_SUPPRESS_REGENERATION TRUE) # Suppresses ZERO_CHECK
 set(CMAKE_CXX_STANDARD 23)
-add_compile_options(-fmodules-ts)
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
@@ -92,10 +102,14 @@ add_executable (${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS}
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-#target_link_libraries (${PROJECT_NAME}
-#PRIVATE
-#nlohmann_json::nlohmann_json
-#)
+# Get LLVM libraries for code generation
+llvm_map_components_to_libnames(llvm_libs core support irreader)
+
+target_link_libraries (${PROJECT_NAME}
+PRIVATE
+nlohmann_json::nlohmann_json
+${llvm_libs}
+)
 set_target_properties (${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

@@ -24,7 +24,9 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 																						: PatternElement::Type::Other;
 		if (newType != currentType) {
 			if (currentStart) {
-				elements.push_back(PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin()));
+				elements.push_back(
+					PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin())
+				);
 			}
 			currentStart = it;
 			currentType = newType;

@@ -1,19 +1,19 @@
 #pragma once
-#include "sectionType.h"
 #include "codeLine.h"
 #include "patternDefinition.h"
-#include <vector>
-#include <list>
-#include <string>
 #include "patternReference.h"
+#include "sectionType.h"
 #include "stringHierarchy.h"
 #include "variableReference.h"
+#include <list>
+#include <string>
+#include <vector>
+
 struct ParseContext;
 struct Variable;
-struct Section
-{
-	inline Section(SectionType type, Section *parent = {}) : type(type), parent(parent)
-	{
+struct Expression;
+struct Section {
+	inline Section(SectionType type, Section *parent = {}) : type(type), parent(parent) {
 		if (parent) {
 			parent->children.push_back(this);
 		}
@@ -36,11 +36,11 @@ struct Section
 	void collectPatternReferencesAndSections(std::list<PatternReference *> &patternReferences, std::list<Section *> &sections);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
-	bool detectPatterns(ParseContext &context, Range range, SectionType patternType);
-	bool detectPatternsRecursively(ParseContext& context, Range range, StringHierarchy* node, SectionType patternType);
-	void addVariableReference(ParseContext& context, VariableReference* reference);
-	void searchParentPatterns(ParseContext& context, VariableReference* reference);
-	void addPatternReference(PatternReference* reference);
+	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
+	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
+	void addVariableReference(ParseContext &context, VariableReference *reference);
+	void searchParentPatterns(ParseContext &context, VariableReference *reference);
+	void addPatternReference(PatternReference *reference);
 	void incrementUnresolved();
 	void decrementUnresolved();
 };

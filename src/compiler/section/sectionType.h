@@ -1,15 +1,14 @@
 #pragma once
 #include <string>
 #include <string_view>
-enum class SectionType
-{
+enum class SectionType {
 	Custom,
 	Section,
 	Expression,
 	Effect,
-	//a section defining a class.
+	// a section defining a class.
 	Class,
-	//a section with patterns, always a child section of the main sections.
+	// a section with patterns, always a child section of the main sections.
 	Pattern,
 	Count
 };
