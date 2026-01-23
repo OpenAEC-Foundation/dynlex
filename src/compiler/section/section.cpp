@@ -285,15 +285,32 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
 		} else if (child->charachter == '"') {
+			// Create a literal expression for the string
+			Expression *strExpr = new Expression();
+			strExpr->range = range.subRange(child->start - "\""sv.length(), child->end + "\""sv.length());
+			strExpr->kind = Expression::Kind::Literal;
+			strExpr->literalValue = std::string(range.subString.substr(child->start, child->end - child->start));
+			expr->arguments.push_back(strExpr);
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
 	}
 
-	// Replace number literals in pattern text
+	// Replace number literals in pattern text and create sub-expressions
 	std::regex numLiteralRegex("\\d+(?:\\.\\d+)?");
 	std::cregex_iterator iter(range.subString.begin(), range.subString.end(), numLiteralRegex);
 	std::cregex_iterator end;
 	for (; iter != end; ++iter) {
+		// Create a literal expression for the number
+		Expression *numExpr = new Expression();
+		std::string numStr = iter->str();
+		numExpr->range = range.subRange(iter->position(), iter->position() + iter->length());
+		numExpr->kind = Expression::Kind::Literal;
+		if (numStr.find('.') != std::string::npos) {
+			numExpr->literalValue = std::stod(numStr);
+		} else {
+			numExpr->literalValue = static_cast<int64_t>(std::stoll(numStr));
+		}
+		expr->arguments.push_back(numExpr);
 		reference->pattern.replaceLine(iter->position(), iter->position() + iter->length());
 	}
 

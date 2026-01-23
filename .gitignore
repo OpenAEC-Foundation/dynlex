@@ -5,3 +5,6 @@ build/
 CMakeUserPresets.json
 
 *.ll
+
+node_modules
+.cache

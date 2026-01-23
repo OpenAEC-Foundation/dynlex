@@ -10,6 +10,32 @@ for arg in "$@"; do
     esac
 done
 
+# Check for required dependencies
+MISSING_DEPS=()
+
+command -v clang >/dev/null 2>&1 || MISSING_DEPS+=("clang")
+command -v clang-format >/dev/null 2>&1 || MISSING_DEPS+=("clang-format")
+command -v clang-tidy >/dev/null 2>&1 || MISSING_DEPS+=("clang-tidy")
+command -v cmake >/dev/null 2>&1 || MISSING_DEPS+=("cmake")
+command -v ninja >/dev/null 2>&1 || MISSING_DEPS+=("ninja")
+command -v conan >/dev/null 2>&1 || MISSING_DEPS+=("conan")
+
+if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
+    echo "Error: Missing required dependencies: ${MISSING_DEPS[*]}"
+    echo ""
+    echo "Would you like to install missing dependencies? (y/n)"
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        ./scripts/install.sh
+        echo ""
+        echo "Dependencies installed. Re-running build..."
+        exec "$0" "$@"
+    else
+        echo "Please install missing dependencies manually or run: ./scripts/install.sh"
+        exit 1
+    fi
+fi
+
 # Use clang compiler
 export CC=clang
 export CXX=clang++

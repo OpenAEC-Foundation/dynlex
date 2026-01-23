@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lsp": {
+      "command": "node",
+      "args": ["./lsp_mcp/index.js"],
+      "env": {
+        "PROJECT_ROOT": "."
+      },
+      "cwd": "."
+    }
+  }
+}

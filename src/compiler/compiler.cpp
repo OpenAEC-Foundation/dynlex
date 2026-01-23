@@ -194,6 +194,17 @@ void expandExpression(Expression *expr, Section *section) {
 			// Resolved to a pattern call
 			expr->kind = Expression::Kind::PatternCall;
 			expr->patternMatch = ref->match;
+
+			// Handle submatches - convert them to expression arguments
+			for (const PatternMatch &subMatch : ref->match->subMatches) {
+				Expression *arg = new Expression();
+				arg->kind = Expression::Kind::PatternCall;
+				arg->patternMatch = const_cast<PatternMatch *>(&subMatch);
+				arg->range = Range(ref->range.line, subMatch.lineStartPos, subMatch.lineEndPos);
+				expr->arguments.push_back(arg);
+				// Recursively expand the submatch arguments
+				expandExpression(arg, section);
+			}
 		} else if (ref->patternElements.size() == 1 && ref->patternElements[0].type == PatternElement::Type::VariableLike) {
 			// Resolved to a variable reference
 			expr->kind = Expression::Kind::Variable;
@@ -322,50 +333,51 @@ bool resolvePatterns(ParseContext &context) {
 					expandExpression(line->expression, line->section);
 				}
 			}
+			// finally, resolve all unresolved variable references
+			for (auto &[name, references] : context.unresolvedVariableReferences) {
+				// find highest section for each section that has this variable
+				std::unordered_map<Section *, Section *> sectionToHighest;
+				for (VariableReference *ref : references) {
+					Section *sec = ref->range.line->section;
+					if (sectionToHighest.count(sec))
+						continue;
+
+					Section *highest = sec;
+					for (Section *a = sec->parent; a; a = a->parent) {
+						if (a->variableReferences.count(name))
+							highest = a;
+					}
+					sectionToHighest[sec] = highest;
+				}
+
+				// group references by their highest section
+				std::unordered_map<Section *, std::vector<VariableReference *>> groups;
+				for (VariableReference *ref : references) {
+					groups[sectionToHighest[ref->range.line->section]].push_back(ref);
+				}
+
+				// process each group
+				for (auto &[highestSection, groupRefs] : groups) {
+					// find first reference by merged line index (becomes definition)
+					VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
+						return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
+					});
+
+					// store definition in its section's definitions list
+					definition->range.line->section->variableDefinitions[name] = definition;
+					// create Variable in highest section
+					highestSection->variables[name] = new Variable(name, definition);
+
+					// link all references to the definition
+					for (VariableReference *ref : groupRefs) {
+						ref->definition = definition;
+					}
+				}
+			}
 			return true;
 		}
 	}
-	// finally, resolve all unresolved variable references
-	for (auto &[name, references] : context.unresolvedVariableReferences) {
-		// find highest section for each section that has this variable
-		std::unordered_map<Section *, Section *> sectionToHighest;
-		for (VariableReference *ref : references) {
-			Section *sec = ref->range.line->section;
-			if (sectionToHighest.count(sec))
-				continue;
 
-			Section *highest = sec;
-			for (Section *a = sec->parent; a; a = a->parent) {
-				if (a->variableReferences.count(name))
-					highest = a;
-			}
-			sectionToHighest[sec] = highest;
-		}
-
-		// group references by their highest section
-		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-		for (VariableReference *ref : references) {
-			groups[sectionToHighest[ref->range.line->section]].push_back(ref);
-		}
-
-		// process each group
-		for (auto &[highestSection, groupRefs] : groups) {
-			// find first reference by merged line index (becomes definition)
-			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
-				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
-			});
-
-			// store definition in its section's definitions list
-			definition->range.line->section->variableDefinitions[name] = definition;
-			// create Variable in highest section
-			highestSection->variables[name] = new Variable(name, definition);
-
-			// link all references to the definition
-			for (VariableReference *ref : groupRefs) {
-				ref->definition = definition;
-			}
-		}
-	}
 	// some patterns couldn't be resolved
 	for (PatternReference *reference : unResolvedPatternReferences) {
 		context.diagnostics.push_back(
