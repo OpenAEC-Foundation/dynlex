@@ -137,8 +137,9 @@ static llvm::Function *generatePatternFunction(ParseContext &context, Section *s
 // Recursively generate functions for all pattern definitions in a section tree
 static bool generatePatternFunctions(ParseContext &context, Section *section) {
 	// If this section is an Effect or Expression with pattern definitions, generate a function
+	// Skip macros - they are inlined at call site
 	if ((section->type == SectionType::Effect || section->type == SectionType::Expression) &&
-		!section->patternDefinitions.empty()) {
+		!section->patternDefinitions.empty() && !section->isMacro) {
 		llvm::Function *func = generatePatternFunction(context, section);
 		if (!func) {
 			return false;

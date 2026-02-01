@@ -2,6 +2,7 @@
 #include "effectSection.h"
 #include "expression.h"
 #include "expressionSection.h"
+#include "sectionSection.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
 #include "stringHierarchy.h"
@@ -25,22 +26,39 @@ bool Section::processLine(ParseContext &context, CodeLine *line) {
 }
 
 Section *Section::createSection(ParseContext &context, CodeLine *line) {
-	// determine the section type
-	std::size_t spaceIndex = line->patternText.find(' ');
+	// determine the section type by parsing keywords
+	std::string_view remaining = line->patternText;
 	Section *newSection{};
-	if (spaceIndex != std::string::npos) {
-		std::string sectionTypeString = (std::string)line->patternText.substr(0, spaceIndex);
-		if (sectionTypeString == "effect") {
+	bool isMacro = false;
+
+	// Parse keywords until we hit a section type keyword (effect, expression)
+	while (!remaining.empty()) {
+		std::size_t spaceIndex = remaining.find(' ');
+		std::string_view current = (spaceIndex != std::string::npos) ? remaining.substr(0, spaceIndex) : remaining;
+		remaining = (spaceIndex != std::string::npos) ? remaining.substr(spaceIndex + 1) : std::string_view{};
+
+		if (current == "macro") {
+			isMacro = true;
+		} else if (current == "effect") {
 			newSection = new EffectSection(this);
-		} else if (sectionTypeString == "expression") {
+			break;
+		} else if (current == "expression") {
 			newSection = new ExpressionSection(this);
+			break;
+		} else if (current == "section") {
+			newSection = new SectionSection(this);
+			break;
+		} else {
+			// Unknown keyword - not a section definition
+			break;
 		}
-		if (newSection) {
-			// check if there's a pattern right after the name (f.e. "effect set val to var" <- right after "effect ")
-			std::string_view sectionPatternString = line->patternText.substr(spaceIndex + 1);
-			if (sectionPatternString.length()) {
-				newSection->patternDefinitions.push_back(new PatternDefinition(Range(line, sectionPatternString), newSection));
-			}
+	}
+
+	if (newSection) {
+		newSection->isMacro = isMacro;
+		// Remaining contains the pattern after the section type keyword
+		if (!remaining.empty()) {
+			newSection->patternDefinitions.push_back(new PatternDefinition(Range(line, remaining), newSection));
 		}
 	}
 	if (!newSection) {

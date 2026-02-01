@@ -1,8 +1,8 @@
-#include "effectSection.h"
+#include "sectionSection.h"
 #include "parseContext.h"
 
-Section *EffectSection::createSection(ParseContext &context, CodeLine *line) {
-	// EffectSection uses "execute" for its content
+Section *SectionSection::createSection(ParseContext &context, CodeLine *line) {
+	// SectionSection uses "execute" for its content
 	if (line->patternText == "execute") {
 		return new Section(SectionType::Custom, this);
 	}

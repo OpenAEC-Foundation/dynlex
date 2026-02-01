@@ -33,6 +33,8 @@ struct Section {
 	int unresolvedCount = 0;
 	// whether all pattern definitions in this section are resolved
 	bool patternDefinitionsResolved = false;
+	// whether this is a macro (inlined at call site instead of function call)
+	bool isMacro = false;
 	void collectPatternReferencesAndSections(std::list<PatternReference *> &patternReferences, std::list<Section *> &sections);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);

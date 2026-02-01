@@ -13,6 +13,21 @@
 #include <regex>
 using namespace std::literals;
 
+// Find the position of # that's not inside a string literal
+// Returns npos if no comment found
+size_t findCommentStart(std::string_view line) {
+	bool inString = false;
+	for (size_t i = 0; i < line.size(); i++) {
+		char c = line[i];
+		if (c == '"' && (i == 0 || line[i - 1] != '\\')) {
+			inString = !inString;
+		} else if (c == '#' && !inString) {
+			return i;
+		}
+	}
+	return std::string_view::npos;
+}
+
 // regex for line terminators - matches each line including its terminator
 const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
 
@@ -45,10 +60,14 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		CodeLine *line = new CodeLine(lineString, sourceFile);
 		line->sourceFileLineIndex = sourceFileLineIndex;
 		// first, remove comments and trim whitespace from the right
+		size_t commentPos = findCommentStart(lineString);
+		std::string_view withoutComment =
+			(commentPos != std::string_view::npos) ? lineString.substr(0, commentPos) : lineString;
 
+		// trim trailing whitespace
 		std::cmatch match;
-		std::regex_search(lineString.begin(), lineString.end(), match, std::regex("[\\s]*(?:#[\\S\\s]*)?$"));
-		line->rightTrimmedText = lineString.substr(0, match.position());
+		std::regex_search(withoutComment.begin(), withoutComment.end(), match, std::regex("[\\s]+$"));
+		line->rightTrimmedText = match.empty() ? withoutComment : withoutComment.substr(0, match.position());
 
 		// check if the line is an import statement
 		if (line->rightTrimmedText.starts_with("import ")) {
@@ -80,6 +99,15 @@ bool analyzeSections(ParseContext &context) {
 	// code from imported files. we assume that the indent level of the code of
 	// imported files and the import statements both match.
 	for (CodeLine *line : context.codeLines) {
+		// skip empty lines (blank or comment-only) for indent tracking
+		if (line->rightTrimmedText.empty()) {
+			line->section = currentSection;
+			currentSection->codeLines.push_back(line);
+			line->resolved = true;
+			compiledLineIndex++;
+			continue;
+		}
+
 		int oldIndentLevel = data.indentLevel;
 		// check indent level
 		std::cmatch match;
