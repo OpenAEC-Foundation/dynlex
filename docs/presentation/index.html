@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3BX - Code That Speaks Human</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --gradient-1: #667eea;
+            --gradient-2: #764ba2;
+            --gradient-3: #f093fb;
+            --gradient-4: #f5576c;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.18);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --code-bg: rgba(0, 0, 0, 0.3);
+        }
+
+        @font-face {
+            font-family: 'Inter';
+            src: url('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2') format('woff2');
+            font-weight: 100 900;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #0f0c29);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .bg-orbs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            top: -200px;
+            right: -100px;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(135deg, var(--gradient-3), var(--gradient-4));
+            bottom: -150px;
+            left: -100px;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(20px, 10px) scale(1.02); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .logo {
+            font-size: clamp(4rem, 15vw, 10rem);
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .tagline {
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-weight: 300;
+            color: var(--text-secondary);
+            max-width: 600px;
+            line-height: 1.6;
+            animation: fadeInUp 1s ease-out 0.2s both;
+        }
+
+        .tagline strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        .scroll-indicator::before {
+            content: '';
+            display: block;
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to bottom, transparent, var(--text-secondary));
+            margin: 0 auto 0.5rem;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(10px); }
+        }
+
+        section {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 3rem;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        .code-block code {
+            color: #e2e8f0;
+        }
+
+        .tk { color: #c792ea; }
+        .tv { color: #82aaff; }
+        .ts { color: #c3e88d; }
+        .tn { color: #f78c6c; }
+        .tc { color: #546e7a; font-style: italic; }
+        .ti { color: #ffcb6b; }
+        .tp { color: #89ddff; }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card {
+            padding: 2.5rem;
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.4rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .comparison { grid-template-columns: 1fr; }
+        }
+
+        .comparison-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .language-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .lang-tab {
+            padding: 0.75rem 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .lang-tab:hover, .lang-tab.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .lang-content { display: none; }
+        .lang-content.active { display: block; animation: fadeIn 0.3s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .cta {
+            text-align: center;
+            padding: 8rem 2rem;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 2.5rem;
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            color: white;
+            text-decoration: none;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px -10px rgba(102, 126, 234, 0.5);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 50px -10px rgba(102, 126, 234, 0.6);
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            background: linear-gradient(to bottom, rgba(15, 12, 41, 0.9), transparent);
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .nav-btn.primary {
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            border: none;
+            color: white;
+        }
+
+        .nav-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px -5px rgba(102, 126, 234, 0.5);
+        }
+
+        /* Spoiler */
+        .spoiler {
+            margin-top: 3rem;
+        }
+
+        .spoiler summary {
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            list-style: none;
+            transition: all 0.3s ease;
+        }
+
+        .spoiler summary::-webkit-details-marker { display: none; }
+
+        .spoiler summary:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .spoiler[open] summary {
+            border-radius: 12px 12px 0 0;
+            border-bottom: none;
+        }
+
+        .spoiler-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 1.5rem;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .screenshot-card {
+            text-align: center;
+        }
+
+        .screenshot-card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0.9;
+            transition: opacity 0.3s;
+        }
+
+        .screenshot-card img:hover {
+            opacity: 1;
+        }
+
+        .screenshot-card p {
+            margin-top: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="#comparison" class="nav-btn">Comparison</a>
+        <a href="#patterns" class="nav-btn">Patterns</a>
+        <a href="#languages" class="nav-btn">Languages</a>
+        <a href="details.html" class="nav-btn primary">Learn More</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <div class="content">
+        <header class="hero">
+            <h1 class="logo">3BX</h1>
+            <p class="tagline">
+                A programming language designed for <strong>humans</strong>.<br>
+                Write code that reads like natural language.
+            </p>
+            <div class="scroll-indicator"></div>
+        </header>
+
+        <section id="comparison" class="reveal">
+            <h2 class="section-title">Code That Speaks</h2>
+            <p class="section-subtitle">
+                No cryptic syntax. No memorizing symbols. Just describe what you want.
+            </p>
+
+            <div class="comparison">
+                <div>
+                    <span class="comparison-label">OpenGL</span>
+                    <div class="code-block glass-card">
+                        <pre><code>glClearColor(<span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">1.0f</span>);
+glClear(GL_COLOR_BUFFER_BIT);
+glBegin(GL_QUADS);
+<span class="tk">for</span> (<span class="tk">int</span> i = <span class="tn">0</span>; i &lt; <span class="tn">10</span>; i++) {
+    glVertex2f(i * <span class="tn">50</span>, <span class="tn">100</span>);
+    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">100</span>);
+    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">140</span>);
+    glVertex2f(i * <span class="tn">50</span>, <span class="tn">140</span>);
+}
+glEnd();</code></pre>
+                    </div>
+                </div>
+                <div>
+                    <span class="comparison-label">3BX</span>
+                    <div class="code-block glass-card">
+                        <pre><code><span class="tp">set</span> <span class="tv">the background</span> <span class="tp">to</span> <span class="tv">black</span>
+
+<span class="tp">repeat</span> <span class="tn">10</span> <span class="tp">times with</span> <span class="tv">i</span> <span class="tp">as index:</span>
+    <span class="tp">draw</span> <span class="tv">a square</span> <span class="tp">at</span> <span class="tv">i</span> * <span class="tn">50</span>, <span class="tn">100</span> <span class="tp">with size</span> <span class="tn">40</span></code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="patterns" class="reveal">
+            <h2 class="section-title">Define Your Own Language</h2>
+            <p class="section-subtitle">
+                Create patterns that match how you think. The syntax is yours to shape.
+            </p>
+
+            <div class="glass-card code-block">
+                <pre><code><span class="tp">when</span> <span class="tv">a customer</span> <span class="tp">sends</span> <span class="tv">an email</span><span class="tp">:</span>
+    <span class="tp">respond to</span> <span class="tv">the email</span> <span class="tp">with</span> <span class="ts">"We have received your message."</span>
+
+<span class="tp">when</span> <span class="tv">the order</span> <span class="tp">is ready:</span>
+    <span class="tp">notify</span> <span class="tv">the customer</span>
+    <span class="tp">update</span> <span class="tv">the status</span> <span class="tp">to</span> <span class="ts">"shipped"</span></code></pre>
+            </div>
+        </section>
+
+        <section id="languages" class="reveal">
+            <h2 class="section-title">Your Language, Literally</h2>
+            <p class="section-subtitle">
+                Write code in any spoken language. Define patterns in Dutch, Spanish, or invent your own.
+            </p>
+
+            <div class="language-tabs">
+                <button class="lang-tab active" data-lang="english">English</button>
+                <button class="lang-tab" data-lang="dutch">Nederlands</button>
+                <button class="lang-tab" data-lang="custom">Your Language</button>
+            </div>
+
+            <div class="lang-content active" data-lang="english">
+                <div class="glass-card code-block">
+                    <pre><code><span class="tk">effect</span> <span class="tp">print</span> <span class="tv">message</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">message</span>)
+
+<span class="tp">print</span> <span class="ts">"Hello, world"</span></code></pre>
+                </div>
+            </div>
+
+            <div class="lang-content" data-lang="dutch">
+                <div class="glass-card code-block">
+                    <pre><code><span class="tk">effect</span> <span class="tp">zeg</span> <span class="tv">bericht</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">bericht</span>)
+
+<span class="tp">zeg</span> <span class="ts">"Hallo, wereld"</span></code></pre>
+                </div>
+            </div>
+
+            <div class="lang-content" data-lang="custom">
+                <div class="glass-card code-block">
+                    <pre><code><span class="tc"># Define any syntax you want</span>
+<span class="tk">effect</span> <span class="tp">yell</span> <span class="tv">words</span> <span class="tp">loudly</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">words</span>)
+
+<span class="tp">yell</span> <span class="ts">"3BX is amazing"</span> <span class="tp">loudly</span></code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta reveal">
+            <h2 class="section-title">Start Building</h2>
+            <p class="section-subtitle" style="margin: 1rem auto 2rem;">
+                Clone the repo and write your first 3BX program in seconds.
+            </p>
+            <a href="https://github.com/user/3bx" class="cta-button">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                View on GitHub
+            </a>
+        </section>
+
+        <footer>
+            <p>3BX is open source. Built for humans, by humans.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Language tab switching
+        document.querySelectorAll('.lang-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const lang = tab.dataset.lang;
+                document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.lang-content[data-lang="${lang}"]`).classList.add('active');
+            });
+        });
+
+        // Scroll reveal
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('visible');
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>

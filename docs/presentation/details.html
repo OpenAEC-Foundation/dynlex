@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3BX - Learn More</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --gradient-1: #667eea;
+            --gradient-2: #764ba2;
+            --gradient-3: #f093fb;
+            --gradient-4: #f5576c;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.18);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --code-bg: rgba(0, 0, 0, 0.3);
+        }
+
+        @font-face {
+            font-family: 'Inter';
+            src: url('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2') format('woff2');
+            font-weight: 100 900;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #0f0c29);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .bg-orbs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.5;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            top: -200px;
+            right: -100px;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(135deg, var(--gradient-3), var(--gradient-4));
+            bottom: -150px;
+            left: -100px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(20px, 10px) scale(1.02); }
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            background: linear-gradient(to bottom, rgba(15, 12, 41, 0.9), transparent);
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            padding: 6rem 0 4rem;
+        }
+
+        .header h1 {
+            font-size: clamp(2.5rem, 8vw, 4rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        section {
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .glass-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .glass-card p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            padding: 1.5rem;
+        }
+
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        .highlight-box h3 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            font-size: 1.4rem;
+        }
+
+        .highlight-box p {
+            color: var(--text-secondary);
+            line-height: 1.8;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .tk { color: #c792ea; }
+        .tv { color: #82aaff; }
+        .ts { color: #c3e88d; }
+        .tn { color: #f78c6c; }
+        .tc { color: #546e7a; font-style: italic; }
+        .tp { color: #89ddff; }
+
+        /* Spoiler */
+        .spoiler summary {
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            padding: 1rem 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            list-style: none;
+            transition: all 0.3s ease;
+        }
+
+        .spoiler summary::-webkit-details-marker { display: none; }
+
+        .spoiler summary:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .spoiler[open] summary {
+            border-radius: 12px 12px 0 0;
+            border-bottom: none;
+        }
+
+        .spoiler-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 1.5rem;
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .screenshot-card {
+            text-align: center;
+        }
+
+        .screenshot-card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0.9;
+        }
+
+        .screenshot-card p {
+            margin-top: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="index.html" class="nav-btn">Home</a>
+        <a href="#philosophy" class="nav-btn">Philosophy</a>
+        <a href="#features" class="nav-btn">Features</a>
+        <a href="#how-it-works" class="nav-btn">How It Works</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <div class="content">
+        <header class="header">
+            <h1>Why 3BX</h1>
+            <p>A language built from first principles, not decades of legacy decisions.</p>
+        </header>
+
+        <section id="philosophy">
+            <h2 class="section-title">Philosophy</h2>
+
+            <div class="highlight-box">
+                <h3>No Hardcoded Patterns</h3>
+                <p>
+                    Unlike traditional languages, 3BX has no built-in keywords. There is no hardcoded <code>if</code>, <code>for</code>, or <code>while</code>.
+                    Everything you write is a pattern that you or someone else defined. The compiler focuses entirely on understanding context and deducing meaning from how patterns are used.
+                </p>
+            </div>
+
+            <div class="glass-card">
+                <h3>Context-Driven Compilation</h3>
+                <p>
+                    The 3BX compiler doesn't rely on rigid syntax rules. Instead, it analyzes how patterns relate to each other and deduces types, control flow, and intent from context.
+                    This means the same pattern can adapt to different situations without explicit type annotations or boilerplate.
+                </p>
+            </div>
+
+            <div class="glass-card">
+                <h3>Patterns Define Everything</h3>
+                <p>
+                    Want Python-style syntax? Define it. Prefer something closer to natural English? Define it.
+                    The language is whatever you make it. This isn't a gimmick - it's the core architecture.
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="tc"># You could define Python-like syntax</span>
+<span class="tk">effect</span> <span class="tp">for</span> <span class="tv">item</span> <span class="tp">in</span> <span class="tv">collection</span><span class="tp">:</span>
+    <span class="tc"># implementation</span>
+
+<span class="tc"># Or natural language</span>
+<span class="tk">effect</span> <span class="tp">for each</span> <span class="tv">item</span> <span class="tp">in</span> <span class="tv">collection</span><span class="tp">:</span>
+    <span class="tc"># same implementation, different syntax</span></code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="features">
+            <h2 class="section-title">Features</h2>
+
+            <div class="feature-grid">
+                <div class="glass-card feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                    </div>
+                    <h3>Universal Syntax</h3>
+                    <p>If you can define Python syntax in 3BX, why use Python?</p>
+                </div>
+
+                <div class="glass-card feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </div>
+                    <h3>Supreme Performance</h3>
+                    <p>Compiles to machine code via LLVM. No runtime overhead, no virtual machine. No language is faster.</p>
+                </div>
+
+                <div class="glass-card feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                    </div>
+                    <h3>Human and AI Native</h3>
+                    <p>Designed for both humans and AI agents. Natural language patterns are intuitive to read, write, and generate.</p>
+                </div>
+
+                <div class="glass-card feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M7 8h10M7 12h6M7 16h8"/>
+                        </svg>
+                    </div>
+                    <h3>LSP Support</h3>
+                    <p>Full Language Server Protocol support. Get syntax highlighting, diagnostics, and go-to-definition in any editor.</p>
+                </div>
+
+                <div class="glass-card feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </div>
+                    <h3>Eye for Beauty</h3>
+                    <p>Other languages drown in legacy complexity. 3BX stays minimal, leaving room to focus on elegance and powerful features.</p>
+                </div>
+            </div>
+
+            <details class="spoiler" style="margin-top: 2rem;">
+                <summary>Speaking of beauty...</summary>
+                <div class="spoiler-content">
+                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                        When a language has been around for decades, even the official website starts to show its age.
+                    </p>
+                    <div class="screenshot-grid">
+                        <div class="screenshot-card">
+                            <img src="cpp_site.png" alt="C++ official website">
+                            <p>C++ - Founded 1985</p>
+                        </div>
+                        <div class="screenshot-card">
+                            <img src="python_site.png" alt="Python official website">
+                            <p>Python - Founded 1991</p>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </section>
+
+        <section id="how-it-works">
+            <h2 class="section-title">How It Works</h2>
+
+            <div class="glass-card">
+                <h3>Pattern Matching</h3>
+                <p>
+                    When you write code, the compiler matches your text against all defined patterns.
+                    Variables are identified by position, types are inferred from usage, and the most specific matching pattern wins.
+                </p>
+            </div>
+
+            <div class="glass-card">
+                <h3>Compile-Time Resolution</h3>
+                <p>
+                    All pattern matching happens at compile time. By the time your code runs, it's pure machine code -
+                    no pattern matching overhead, no interpretation, just raw performance.
+                </p>
+            </div>
+
+            <div class="glass-card">
+                <h3>LLVM Backend</h3>
+                <p>
+                    3BX compiles to LLVM IR, giving you access to decades of optimization research.
+                    The same backend that powers Rust, Swift, and Clang now powers your natural language code.
+                </p>
+            </div>
+        </section>
+
+        <footer>
+            <p><a href="index.html">Back to Home</a></p>
+        </footer>
+    </div>
+</body>
+</html>
