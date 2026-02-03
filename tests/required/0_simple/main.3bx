@@ -1,5 +1,5 @@
-effect return value:
-	execute:
+macro effect return value:
+	replacement:
 		@intrinsic("return", value)
 
 effect set var to val:
@@ -8,11 +8,11 @@ effect set var to val:
 
 effect print msg:
     execute:
-        @intrinsic("print", msg)
+        @intrinsic("call", "libc", "printf", "%ld", msg)
 
-expression left + right:
-    get:
-        return @intrinsic("add", left, right)
+macro expression left + right:
+    replacement:
+        @intrinsic("add", left, right)
 
 # Simple test
 set x to 42

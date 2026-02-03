@@ -9,4 +9,6 @@ struct PatternMatch {
 	std::vector<PatternTreeNode *> nodesPassed{};
 	std::vector<VariableMatch> discoveredVariables{};
 	std::vector<PatternMatch> subMatches{};
+	// the arguments
+	std::vector<Expression *> arguments;
 };

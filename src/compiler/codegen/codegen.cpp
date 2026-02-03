@@ -10,18 +10,16 @@
 #include <algorithm>
 #include <unordered_map>
 
-// Map from pattern sections to their generated LLVM functions
-static std::unordered_map<Section *, llvm::Function *> sectionFunctions;
-
-// Current bindings for pattern variables (maps variable name to LLVM value)
-static std::unordered_map<std::string, llvm::Value *> patternBindings;
-
 // Forward declarations
 static bool generatePatternFunctions(ParseContext &context, Section *section);
 static bool generateSectionCode(ParseContext &context, Section *section);
 static llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
 static llvm::Value *
 generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<llvm::Value *> &args);
+static llvm::Value *generateLibraryCall(
+	ParseContext &context, const std::string &library, const std::string &funcName, const std::string &formatStr,
+	const std::vector<llvm::Value *> &args
+);
 
 // Get the LLVM type for values (i64 for now)
 static llvm::Type *getValueType(ParseContext &context) {
@@ -36,13 +34,23 @@ static llvm::Type *getValuePtrType(ParseContext &context) { return llvm::Pointer
 static std::string getPatternFunctionName(Section *section) {
 	// Use section address as unique identifier for now
 	// TODO: Generate readable names from pattern text
-	std::string name = (section->type == SectionType::Effect) ? "effect_" : "expr_";
+
+	// effect patterns have other names than effect patterns so we don't have to add extra info to it
+	std::string name = (std::string)section->patternDefinitions.front()->range.subString;
+	// convert string to alphanumeric
+	for (char &c : name) {
+		if (!isalnum(c) && c != '_') {
+
+			c = (c == ' ') ? '_' : (c % 10 + '0');
+		}
+	}
+	// add section address for now
 	name += std::to_string(reinterpret_cast<uintptr_t>(section));
 	return name;
 }
 
 // Get variable names from a pattern definition (only actual Variable parameters, not literal words)
-static std::vector<std::string> getPatternVariables(Section *section) {
+static std::vector<std::string> getPatternArgumentNames(Section *section) {
 	std::vector<std::string> variables;
 	for (PatternDefinition *def : section->patternDefinitions) {
 		for (const PatternElement &elem : def->patternElements) {
@@ -59,7 +67,7 @@ static llvm::Function *generatePatternFunction(ParseContext &context, Section *s
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	// Get pattern variables - these become function parameters
-	std::vector<std::string> varNames = getPatternVariables(section);
+	std::vector<std::string> varNames = getPatternArgumentNames(section);
 
 	// Build function type: all parameters are i64* (pass by reference)
 	std::vector<llvm::Type *> paramTypes(varNames.size(), getValuePtrType(context));
@@ -74,9 +82,9 @@ static llvm::Function *generatePatternFunction(ParseContext &context, Section *s
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 
 	// Name the parameters
-	size_t idx = 0;
+	size_t argumentIndex = 0;
 	for (auto &arg : func->args()) {
-		arg.setName(varNames[idx++]);
+		arg.setName(varNames[argumentIndex++]);
 	}
 
 	// Create entry block
@@ -90,23 +98,17 @@ static llvm::Function *generatePatternFunction(ParseContext &context, Section *s
 	builder.SetInsertPoint(entry);
 
 	// Set up pattern bindings - map variable names to function parameters
-	patternBindings.clear();
-	idx = 0;
+	context.patternBindings.clear();
+	argumentIndex = 0;
 	for (auto &arg : func->args()) {
-		patternBindings[varNames[idx++]] = &arg;
+		context.patternBindings[varNames[argumentIndex++]] = &arg;
 	}
 
-	// Generate code for the body (execute: or get: child section)
-	llvm::Value *returnValue = nullptr;
 	for (Section *child : section->children) {
 		// Generate code for each line in the child section
 		for (CodeLine *line : child->codeLines) {
 			if (line->expression) {
-				llvm::Value *val = generateExpressionCode(context, line->expression);
-				// For expressions, the last value is the return value
-				if (section->type == SectionType::Expression && val) {
-					returnValue = val;
-				}
+				generateExpressionCode(context, line->expression);
 			}
 		}
 	}
@@ -114,17 +116,10 @@ static llvm::Function *generatePatternFunction(ParseContext &context, Section *s
 	// Add return statement
 	if (section->type == SectionType::Effect) {
 		builder.CreateRetVoid();
-	} else {
-		if (returnValue) {
-			builder.CreateRet(returnValue);
-		} else {
-			// Default return 0 if no value
-			builder.CreateRet(builder.getInt64(0));
-		}
-	}
+	} // if it's an expression, @intrinsic("return") should handle this. todo: add error when not returning a value
 
 	// Clear pattern bindings
-	patternBindings.clear();
+	context.patternBindings.clear();
 
 	// Restore insert point
 	if (savedBlock) {
@@ -144,15 +139,13 @@ static bool generatePatternFunctions(ParseContext &context, Section *section) {
 		if (!func) {
 			return false;
 		}
-		sectionFunctions[section] = func;
+		context.sectionFunctions[section] = func;
 	}
 
-	// Recurse into children (but skip execute/get sections - they're handled by the parent)
+	// Recurse into children
 	for (Section *child : section->children) {
-		if (child->type != SectionType::Custom) {
-			if (!generatePatternFunctions(context, child)) {
-				return false;
-			}
+		if (!generatePatternFunctions(context, child)) {
+			return false;
 		}
 	}
 
@@ -172,22 +165,31 @@ static void allocateSectionVariables(ParseContext &context, Section *section) {
 
 // Get the pointer for a variable expression (for store operations)
 static llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable) {
+	if (!expr) {
 		return nullptr;
 	}
 
-	std::string varName = expr->variable->name;
+	// For variable expressions, check bindings and local variables
+	if (expr->kind == Expression::Kind::Variable && expr->variable) {
+		std::string varName = expr->variable->name;
 
-	// First check pattern bindings (function parameters - already pointers)
-	auto bindingIt = patternBindings.find(varName);
-	if (bindingIt != patternBindings.end()) {
-		return bindingIt->second;
-	}
+		// First check macro expression bindings - substitute and recurse
+		auto macroIt = context.macroExpressionBindings.find(varName);
+		if (macroIt != context.macroExpressionBindings.end()) {
+			return getVariablePointer(context, macroIt->second);
+		}
 
-	// Check local variables
-	auto varIt = context.llvmVariables.find(varName);
-	if (varIt != context.llvmVariables.end()) {
-		return varIt->second;
+		// Check pattern bindings (function parameters - already pointers)
+		auto bindingIt = context.patternBindings.find(varName);
+		if (bindingIt != context.patternBindings.end()) {
+			return bindingIt->second;
+		}
+
+		// Check local variables
+		auto varIt = context.llvmVariables.find(varName);
+		if (varIt != context.llvmVariables.end()) {
+			return varIt->second;
+		}
 	}
 
 	return nullptr;
@@ -223,9 +225,15 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		}
 		std::string varName = expr->variable->name;
 
-		// First check pattern bindings (function parameters)
-		auto bindingIt = patternBindings.find(varName);
-		if (bindingIt != patternBindings.end()) {
+		// First check macro expression bindings - substitute and generate
+		auto macroIt = context.macroExpressionBindings.find(varName);
+		if (macroIt != context.macroExpressionBindings.end()) {
+			return generateExpressionCode(context, macroIt->second);
+		}
+
+		// Check pattern bindings (function parameters)
+		auto bindingIt = context.patternBindings.find(varName);
+		if (bindingIt != context.patternBindings.end()) {
 			// Pattern parameter - it's a pointer, load the value
 			return builder.CreateLoad(getValueType(context), bindingIt->second, varName + "_val");
 		}
@@ -252,9 +260,50 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 			return nullptr;
 		}
 
-		// Find the function for this pattern
-		auto funcIt = sectionFunctions.find(matchedSection);
-		if (funcIt == sectionFunctions.end()) {
+		// Sort arguments by position (they may have been added in different order during parsing/expansion)
+		std::vector<Expression *> sortedArgs = expr->arguments;
+		std::sort(sortedArgs.begin(), sortedArgs.end(), [](Expression *a, Expression *b) {
+			return a->range.start() < b->range.start();
+		});
+
+		// Build mapping from parameter names to argument expressions
+		std::vector<std::pair<std::string, Expression *>> paramBindings;
+		size_t argIndex = 0;
+		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+			auto paramIt = node->parameterNames.find(matchedDef);
+			if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+				paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
+			}
+		}
+
+		if (matchedSection->isMacro) {
+			// Macro: inline the replacement body with expression substitution
+			auto savedMacroBindings = context.macroExpressionBindings;
+
+			// Bind parameter names to argument expressions
+			for (const auto &[paramName, argExpr] : paramBindings) {
+				context.macroExpressionBindings[paramName] = argExpr;
+			}
+
+			// Generate code for the replacement body
+			llvm::Value *result = nullptr;
+			for (Section *child : matchedSection->children) {
+				for (CodeLine *line : child->codeLines) {
+					if (line->expression) {
+						result = generateExpressionCode(context, line->expression);
+					}
+				}
+			}
+
+			// Restore previous bindings
+			context.macroExpressionBindings = savedMacroBindings;
+
+			return result;
+		}
+
+		// Regular pattern: call the generated function
+		auto funcIt = context.sectionFunctions.find(matchedSection);
+		if (funcIt == context.sectionFunctions.end()) {
 			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "No function generated for pattern", expr->range)
 			);
 			return nullptr;
@@ -262,25 +311,20 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 
 		llvm::Function *func = funcIt->second;
 
-		// Sort arguments by position (they may have been added in different order during parsing/expansion)
-		std::vector<Expression *> sortedArgs = expr->arguments;
-		std::sort(sortedArgs.begin(), sortedArgs.end(), [](Expression *a, Expression *b) {
-			return a->range.start() < b->range.start();
-		});
-
-		// Walk through nodesPassed to find argument nodes in order
-		// Each argument node corresponds to the next argument expression (by position order)
+		// Generate argument values and pass by reference
+		// For variables, pass their pointer directly (enables mutation)
+		// For expressions/literals, wrap in a temp alloca
+		// Let LLVM's argpromotion pass convert to pass-by-value where applicable
 		std::vector<llvm::Value *> args;
-		size_t argIndex = 0;
-
-		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-			// Check if this is an argument node (has parameter name for this definition)
-			auto paramIt = node->parameterNames.find(matchedDef);
-			if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-				Expression *argExpr = sortedArgs[argIndex++];
+		for (const auto &[paramName, argExpr] : paramBindings) {
+			llvm::Value *ptr = getVariablePointer(context, argExpr);
+			if (ptr) {
+				// Variable - pass pointer directly
+				args.push_back(ptr);
+			} else {
+				// Expression/literal - evaluate and wrap in temp
 				llvm::Value *argVal = generateExpressionCode(context, argExpr);
 				if (argVal) {
-					// Create a temporary alloca to pass by reference
 					llvm::AllocaInst *tempAlloca = builder.CreateAlloca(getValueType(context), nullptr, "tmp");
 					builder.CreateStore(argVal, tempAlloca);
 					args.push_back(tempAlloca);
@@ -288,7 +332,6 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 			}
 		}
 
-		// Call the pattern function
 		return builder.CreateCall(func, args);
 	}
 
@@ -305,6 +348,32 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 				args.push_back(ptr);
 			if (val)
 				args.push_back(val);
+		} else if (expr->intrinsicName == "call" && expr->arguments.size() >= 4) {
+			// call(library, function, format, ...args)
+			// args[0] is intrinsic name, args[1] is library, args[2] is function name, args[3] is format string
+			// Extract string literals directly from expressions
+			auto getStringLiteral = [](Expression *e) -> std::string {
+				if (e && e->kind == Expression::Kind::Literal) {
+					if (auto *str = std::get_if<std::string>(&e->literalValue)) {
+						return *str;
+					}
+				}
+				return "";
+			};
+
+			std::string library = getStringLiteral(expr->arguments[1]);
+			std::string funcName = getStringLiteral(expr->arguments[2]);
+			std::string formatStr = getStringLiteral(expr->arguments[3]);
+
+			// Generate remaining args as values
+			for (size_t i = 4; i < expr->arguments.size(); ++i) {
+				llvm::Value *argVal = generateExpressionCode(context, expr->arguments[i]);
+				if (argVal) {
+					args.push_back(argVal);
+				}
+			}
+
+			return generateLibraryCall(context, library, funcName, formatStr, args);
 		} else {
 			// Normal handling: generate all args as values
 			for (size_t i = 1; i < expr->arguments.size(); ++i) {
@@ -365,19 +434,54 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		// return(value) - this is handled by the expression pattern return
 		// The value is passed back through the expression
 		if (args.size() >= 1) {
-			return args[0];
+			llvm::Value *returnValue = args[0];
+			builder.CreateRet(returnValue);
 		}
-		return builder.getInt64(0);
-	}
-
-	if (name == "print") {
-		// Skip print for now - will be handled via library function later
 		return nullptr;
 	}
 
 	// Unknown intrinsic
 	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown intrinsic: " + name, Range()));
 	return nullptr;
+}
+
+// Generate a call to an external library function
+static llvm::Value *generateLibraryCall(
+	ParseContext &context, const std::string &library, const std::string &funcName, const std::string &formatStr,
+	const std::vector<llvm::Value *> &args
+) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Module *module = context.llvmModule;
+
+	// Track library for linking (skip libc as it's implicit)
+	if (!library.empty() && library != "libc") {
+		context.requiredLibraries.insert(library);
+	}
+
+	// Get or create the function declaration
+	llvm::Function *func = module->getFunction(funcName);
+	if (!func) {
+		// Create function declaration - assume varargs for printf-like functions
+		llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getInt32Ty(), {builder.getPtrTy()}, true /* varargs */);
+		func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, funcName, module);
+	}
+
+	// Create format string as global constant
+	std::string globalName = ".str." + funcName + "." + std::to_string(context.stringConstants.size());
+	llvm::Constant *formatConstant = llvm::ConstantDataArray::getString(*context.llvmContext, formatStr, true);
+	llvm::GlobalVariable *formatGlobal = new llvm::GlobalVariable(
+		*module, formatConstant->getType(), true, llvm::GlobalValue::PrivateLinkage, formatConstant, globalName
+	);
+	context.stringConstants[formatStr] = formatGlobal;
+
+	// Build call arguments: format string + remaining args
+	std::vector<llvm::Value *> callArgs;
+	callArgs.push_back(formatGlobal);
+	for (llvm::Value *arg : args) {
+		callArgs.push_back(arg);
+	}
+
+	return builder.CreateCall(func, callArgs);
 }
 
 // Generate code for a section (process pattern references)
@@ -389,7 +493,7 @@ static bool generateSectionCode(ParseContext &context, Section *section) {
 	for (PatternReference *reference : section->patternReferences) {
 		if (reference->match) {
 			// Find the corresponding code line to get the expression
-			CodeLine *line = reference->range.line;
+			CodeLine *line = reference->range().line;
 			if (line && line->expression) {
 				generateExpressionCode(context, line->expression);
 			}
@@ -400,10 +504,6 @@ static bool generateSectionCode(ParseContext &context, Section *section) {
 }
 
 bool generateCode(ParseContext &context) {
-	// Clear static state
-	sectionFunctions.clear();
-	patternBindings.clear();
-
 	// Initialize LLVM state
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("3bx_module", *context.llvmContext);

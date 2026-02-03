@@ -31,6 +31,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		// sourceElementIndex stays the same when stepping up, we are already past the last node
 		// (we have compared the last element already, the sourceElementIndex was increased then)
 		stepUp.sourceElementIndex = sourceElementIndex;
+		stepUp.sourceArgumentIndex = sourceArgumentIndex;
 		nextMatches.push_back(stepUp);
 	};
 
@@ -62,6 +63,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 					clone.parent = new MatchProgress(*parent);
 				clone.rootNode = rootNode;
 				clone.currentNode = rootNode;
+				clone.match = {};
 
 				clone.type = SectionType::Expression;
 				stepUp(clone);
@@ -79,10 +81,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
 				MatchProgress subMatch = *this;
 				subMatch.currentNode = context->patternTrees[(int)SectionType::Expression];
-				subMatch.match.nodesPassed = {};
 				subMatch.rootNode = subMatch.currentNode;
 				subMatch.type = SectionType::Expression;
 				subMatch.patternStartPos = patternPos;
+				subMatch.match = {};
 
 				// deleting null doesn't matter
 				delete subMatch.parent;
@@ -105,6 +107,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
+				} else {
+					// argument
+					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+					sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(substituteStep);

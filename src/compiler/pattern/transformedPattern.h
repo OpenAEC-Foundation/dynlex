@@ -33,4 +33,5 @@ struct TransformedPattern {
 	void replaceLine(size_t lineStartPos, size_t lineEndPos, std::string replacement = std::string() + argumentChar);
 	void replacePattern(size_t patternStartPos, size_t patternEndPos, std::string replacement = std::string() + argumentChar);
 	void replaceLocal(size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, std::string replacement);
+	std::string toString() const;
 };

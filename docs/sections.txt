@@ -1,0 +1,55 @@
+modifiers:
+inline, local, global (default)
+
+compiling to code:
+
+new functions should be generated for every call, only if a signature of the specific effect doesn't exist yet.
+
+section: holds variables
+
+stack:
+holds has a section associated with it
+
+all sections get converted to function pointers capturing all used variables.
+
+set a stack variable:
+@intrinsic("set_stack_variable", stack, name, value)
+
+exit some stacks:
+@intrinsic("exit_stack", stackcount)
+
+0 = current stack
+@intrinsic("get_stack", stackindex)
+
+example:
+
+effect return value:
+    @intrinsic("set_stack_variable", @intrinsic("get_stack", 1), "result", 1)
+    #will return
+    @intrinsic("exit_stack", 2)
+
+inline effect return value:
+	execute:
+		@intrinsic("return", value)
+
+
+inline section loop number times:
+	
+	@intrinsic("loop")
+
+expression two:
+    return 2
+
+compiled:
+
+//the compiler knows that this section will need the result value
+void return_value(int64* result, int64* value) {
+	*result = *value;
+}
+
+//the compiler knows that this section has a result variable and therefore adds a return statement for it
+int64 two() {
+	int64 result;
+	return_value(&result, 2);
+	return result;
+}

@@ -12,7 +12,7 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
 	// Macros use "replacement", handled here in base class
 	if (isMacro && line->patternText == "replacement") {
-		return new Section(SectionType::Custom, this);
+		return new Section(SectionType::Replacement, this);
 	}
 
 	// Nothing matched - give error

@@ -2,6 +2,35 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Debug Test",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceFolder}/build/3bx",
+			"args": [
+				"${workspaceFolder}/tests/required/0_simple/main.3bx",
+				"--emit-llvm"
+			],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"environment": [],
+			"externalConsole": false,
+			"MIMode": "gdb",
+			"visualizerFile": "${workspaceFolder}/3bx.natvis",
+			"setupCommands": [
+				{
+					"description": "Enable pretty-printing for gdb",
+					"text": "-enable-pretty-printing",
+					"ignoreFailures": true
+				},
+				{
+					"description": "Skip library files",
+					"text": "-interpreter-exec console \"skip -gfi **/bits/*.h\""
+				}
+			],
+			"preLaunchTask": "build",
+			"miDebuggerPath": "/usr/bin/gdb"
+		},
+		{
 			"name": "Debug 3BX",
 			"type": "cppdbg",
 			"request": "launch",

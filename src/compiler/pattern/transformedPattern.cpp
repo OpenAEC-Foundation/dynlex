@@ -38,6 +38,18 @@ void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, std
 void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos, std::string replacement) {
 	replaceLocal(patternStartPos, patternEndPos, getLinePos(patternEndPos), replacement);
 }
+std::string TransformedPattern::toString() const {
+	std::string result;
+	for (char c : text) {
+		if (c == argumentChar) {
+			result += "$";
+		} else {
+			result += c;
+		}
+	}
+	return result;
+}
+
 void TransformedPattern::replaceLocal(
 	size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, std::string replacement
 ) {

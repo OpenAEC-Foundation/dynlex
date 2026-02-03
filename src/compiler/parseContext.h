@@ -16,6 +16,8 @@ class Module;
 class IRBuilderBase;
 class AllocaInst;
 class Value;
+class Function;
+class GlobalVariable;
 } // namespace llvm
 
 struct ParseContext {
@@ -26,6 +28,8 @@ struct ParseContext {
 		int maxResolutionIterations = 0x100;
 	} options;
 
+	// LLVM
+
 	// File system for reading source files (imports)
 	lsp::FileSystem *fileSystem{};
 
@@ -34,6 +38,21 @@ struct ParseContext {
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
 	std::unordered_map<std::string, llvm::AllocaInst *> llvmVariables;
+
+	// Map from pattern sections to their generated LLVM functions
+	std::unordered_map<Section *, llvm::Function *> sectionFunctions;
+
+	// Current bindings for pattern variables (maps variable name to LLVM value)
+	std::unordered_map<std::string, llvm::Value *> patternBindings;
+
+	// Macro expression bindings (maps variable name to Expression* for code substitution)
+	std::unordered_map<std::string, Expression *> macroExpressionBindings;
+
+	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
+	std::unordered_set<std::string> requiredLibraries;
+
+	// String constants (maps string content to global variable)
+	std::unordered_map<std::string, llvm::GlobalVariable *> stringConstants;
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;

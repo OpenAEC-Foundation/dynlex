@@ -20,3 +20,5 @@ int Range::start() const { return subString.begin() - line->fullText.begin(); }
 int Range::end() const { return subString.end() - line->fullText.begin(); }
 
 Range Range::subRange(int start, int end) { return Range(line, subString.substr(start, end - start)); }
+
+Section *Range::section() const { return line->section; }

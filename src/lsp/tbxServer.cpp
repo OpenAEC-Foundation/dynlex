@@ -178,7 +178,8 @@ TbxServer::PositionInfo TbxServer::findElementAtPosition(const std::string &uri,
 
 			// Search for pattern references at this position
 			for (PatternReference *ref : codeLine->section->patternReferences) {
-				if (ref->range.line == codeLine && ref->range.start() <= pos.character && pos.character <= ref->range.end()) {
+				if (ref->range().line == codeLine && ref->range().start() <= pos.character &&
+					pos.character <= ref->range().end()) {
 					info.patternRef = ref;
 					return info;
 				}

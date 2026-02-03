@@ -2,12 +2,29 @@
 #include "effectSection.h"
 #include "expression.h"
 #include "expressionSection.h"
-#include "sectionSection.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
+#include "sectionSection.h"
 #include "stringHierarchy.h"
 #include <stack>
 using namespace std::literals;
+
+// Process escape sequences in a string literal
+static std::string processEscapeSequences(std::string_view input) {
+	static const std::unordered_map<char, char> escapes = {{'n', '\n'}, {'t', '\t'}, {'r', '\r'},  {'a', '\a'}, {'b', '\b'},
+														   {'f', '\f'}, {'v', '\v'}, {'\\', '\\'}, {'"', '"'},	{'0', '\0'}};
+	std::string result;
+	result.reserve(input.size());
+	for (size_t i = 0; i < input.size(); ++i) {
+		if (input[i] == '\\' && i + 1 < input.size()) {
+			auto it = escapes.find(input[++i]);
+			result += (it != escapes.end()) ? it->second : input[i];
+		} else {
+			result += input[i];
+		}
+	}
+	return result;
+}
 
 void Section::collectPatternReferencesAndSections(
 	std::list<PatternReference *> &patternReferences, std::list<Section *> &sections
@@ -30,6 +47,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	std::string_view remaining = line->patternText;
 	Section *newSection{};
 	bool isMacro = false;
+	bool isLocal = false;
 
 	// Parse keywords until we hit a section type keyword (effect, expression)
 	while (!remaining.empty()) {
@@ -39,6 +57,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 
 		if (current == "macro") {
 			isMacro = true;
+		} else if (current == "local") {
+			isLocal = true;
 		} else if (current == "effect") {
 			newSection = new EffectSection(this);
 			break;
@@ -56,6 +76,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 
 	if (newSection) {
 		newSection->isMacro = isMacro;
+		newSection->isLocal = isLocal;
 		// Remaining contains the pattern after the section type keyword
 		if (!remaining.empty()) {
 			newSection->patternDefinitions.push_back(new PatternDefinition(Range(line, remaining), newSection));
@@ -65,7 +86,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
 		line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
-		addPatternReference(new PatternReference(Range(line, line->patternText), SectionType::Section));
+		addPatternReference(new PatternReference(line->expression, SectionType::Section));
 	}
 	return newSection;
 }
@@ -199,32 +220,11 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 	Expression *expr = new Expression();
 	expr->range = relativeRange;
-
-	// Check if this is a string literal
-	if (relativeRange.subString.starts_with("\"") && relativeRange.subString.ends_with("\"")) {
-		expr->kind = Expression::Kind::Literal;
-		expr->literalValue = std::string(relativeRange.subString.substr(1, relativeRange.subString.size() - 2));
-		return expr;
-	}
-
-	// Check if this is a number literal
-	std::regex numberRegex("^\\d+(?:\\.\\d+)?$");
-	std::string rangeStr(relativeRange.subString);
-	if (std::regex_match(rangeStr, numberRegex)) {
-		expr->kind = Expression::Kind::Literal;
-		if (rangeStr.find('.') != std::string::npos) {
-			expr->literalValue = std::stod(rangeStr);
-		} else {
-			expr->literalValue = static_cast<int64_t>(std::stoll(rangeStr));
-		}
-		return expr;
-	}
-
 	// This is a pending pattern reference (will be resolved later)
 	expr->kind = Expression::Kind::Pending;
 
 	// Create a PatternReference for pattern matching
-	PatternReference *reference = new PatternReference(relativeRange, patternType);
+	PatternReference *reference = new PatternReference(expr, patternType);
 	expr->patternReference = reference;
 
 	// Process children to find arguments
@@ -305,7 +305,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 			Expression *strExpr = new Expression();
 			strExpr->range = range.subRange(child->start - "\""sv.length(), child->end + "\""sv.length());
 			strExpr->kind = Expression::Kind::Literal;
-			strExpr->literalValue = std::string(range.subString.substr(child->start, child->end - child->start));
+			strExpr->literalValue = processEscapeSequences(range.subString.substr(child->start, child->end - child->start));
 			expr->arguments.push_back(strExpr);
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
@@ -313,13 +313,13 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 	// Replace number literals in pattern text and create sub-expressions
 	std::regex numLiteralRegex("\\d+(?:\\.\\d+)?");
-	std::cregex_iterator iter(range.subString.begin(), range.subString.end(), numLiteralRegex);
+	std::cregex_iterator iter(relativeRange.subString.begin(), relativeRange.subString.end(), numLiteralRegex);
 	std::cregex_iterator end;
 	for (; iter != end; ++iter) {
 		// Create a literal expression for the number
 		Expression *numExpr = new Expression();
 		std::string numStr = iter->str();
-		numExpr->range = range.subRange(iter->position(), iter->position() + iter->length());
+		numExpr->range = relativeRange.subRange(iter->position(), iter->position() + iter->length());
 		numExpr->kind = Expression::Kind::Literal;
 		if (numStr.find('.') != std::string::npos) {
 			numExpr->literalValue = std::stod(numStr);
@@ -357,7 +357,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 		if (rightWhiteSpace != " ") {
 			addWhiteSpaceWarning(matches.position(), reference->pattern.text.size());
 		}
-		reference->pattern.replacePattern(0, rightWhiteSpace.size(), "");
+		reference->pattern.replacePattern(matches.position(), reference->pattern.text.size(), "");
 	}
 
 	// Normalize whitespace
@@ -375,11 +375,18 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 		lastIndex = matchPos + " "sv.size();
 	}
 
-	// Only add pattern reference if it's not just an argument placeholder
-	if (reference->pattern.text != ""s + argumentChar) {
-		addPatternReference(reference);
+	// If pattern is just an argument placeholder, return the argument directly
+	// This happens for expressions or for intrinsic calls (which are effects on their own)
+	if (reference->pattern.text == ""s + argumentChar) {
+		Expression *arg = expr->arguments[0];
+		if (patternType == SectionType::Expression || arg->kind == Expression::Kind::IntrinsicCall) {
+			delete expr;
+			delete reference;
+			return arg;
+		}
 	}
 
+	addPatternReference(reference);
 	return expr;
 }
 

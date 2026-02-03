@@ -35,6 +35,8 @@ struct Section {
 	bool patternDefinitionsResolved = false;
 	// whether this is a macro (inlined at call site instead of function call)
 	bool isMacro = false;
+	// whether this sections patterns can be called from other files
+	bool isLocal = false;
 	void collectPatternReferencesAndSections(std::list<PatternReference *> &patternReferences, std::list<Section *> &sections);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
