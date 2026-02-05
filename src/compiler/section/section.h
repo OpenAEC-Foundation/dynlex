@@ -9,6 +9,11 @@
 #include <string>
 #include <vector>
 
+namespace llvm {
+class Function;
+class BasicBlock;
+} // namespace llvm
+
 struct ParseContext;
 struct Variable;
 struct Expression;
@@ -37,6 +42,13 @@ struct Section {
 	bool isMacro = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
+	// generated LLVM function for this pattern (set during codegen)
+	llvm::Function *generatedFunction{};
+	// Control flow blocks for this section body (set by intrinsics like loop_while, if, etc.)
+	// exitBlock: where code continues after this section (always set for control flow)
+	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch
+	llvm::BasicBlock *exitBlock{};
+	llvm::BasicBlock *branchBackBlock{};
 	void collectPatternReferencesAndSections(std::list<PatternReference *> &patternReferences, std::list<Section *> &sections);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);

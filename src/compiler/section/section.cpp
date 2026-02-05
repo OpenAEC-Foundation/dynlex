@@ -85,8 +85,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	if (!newSection) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
+		// detectPatterns already adds the pattern reference via detectPatternsRecursively
 		line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
-		addPatternReference(new PatternReference(line->expression, SectionType::Section));
 	}
 	return newSection;
 }

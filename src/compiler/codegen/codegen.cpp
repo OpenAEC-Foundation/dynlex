@@ -1,12 +1,15 @@
 #include "codegen.h"
 #include "expression.h"
+#include "native.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <unordered_map>
 
@@ -15,7 +18,7 @@ static bool generatePatternFunctions(ParseContext &context, Section *section);
 static bool generateSectionCode(ParseContext &context, Section *section);
 static llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
 static llvm::Value *
-generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<llvm::Value *> &args);
+generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<Expression *> &args);
 static llvm::Value *generateLibraryCall(
 	ParseContext &context, const std::string &library, const std::string &funcName, const std::string &formatStr,
 	const std::vector<llvm::Value *> &args
@@ -29,6 +32,16 @@ static llvm::Type *getValueType(ParseContext &context) {
 
 // Get the LLVM type for value pointers (i64*)
 static llvm::Type *getValuePtrType(ParseContext &context) { return llvm::PointerType::getUnqual(getValueType(context)); }
+
+// Create an alloca at function entry (avoids stack growth in loops)
+static llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Function *func = builder.GetInsertBlock()->getParent();
+	llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+	llvm::AllocaInst *alloca = entryBuilder.CreateAlloca(getValueType(context), nullptr, name);
+	alloca->setAlignment(llvm::Align(8));
+	return alloca;
+}
 
 // Generate a unique function name for a pattern
 static std::string getPatternFunctionName(Section *section) {
@@ -139,7 +152,7 @@ static bool generatePatternFunctions(ParseContext &context, Section *section) {
 		if (!func) {
 			return false;
 		}
-		context.sectionFunctions[section] = func;
+		section->generatedFunction = func;
 	}
 
 	// Recurse into children
@@ -154,12 +167,8 @@ static bool generatePatternFunctions(ParseContext &context, Section *section) {
 
 // Allocate all variables for a section at its start
 static void allocateSectionVariables(ParseContext &context, Section *section) {
-	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-
 	for (auto &[name, varDef] : section->variableDefinitions) {
-		// Allocate stack space for the variable
-		llvm::AllocaInst *alloca = builder.CreateAlloca(getValueType(context), nullptr, name);
-		context.llvmVariables[name] = alloca;
+		varDef->alloca = createEntryAlloca(context, name);
 	}
 }
 
@@ -185,10 +194,11 @@ static llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) 
 			return bindingIt->second;
 		}
 
-		// Check local variables
-		auto varIt = context.llvmVariables.find(varName);
-		if (varIt != context.llvmVariables.end()) {
-			return varIt->second;
+		// Check local variables - get alloca from the variable's definition
+		VariableReference *varRef = expr->variable;
+		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
+		if (definition->alloca) {
+			return definition->alloca;
 		}
 	}
 
@@ -235,13 +245,14 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		auto bindingIt = context.patternBindings.find(varName);
 		if (bindingIt != context.patternBindings.end()) {
 			// Pattern parameter - it's a pointer, load the value
-			return builder.CreateLoad(getValueType(context), bindingIt->second, varName + "_val");
+			return builder.CreateAlignedLoad(getValueType(context), bindingIt->second, llvm::Align(8), varName + "_val");
 		}
 
-		// Check local variables
-		auto varIt = context.llvmVariables.find(varName);
-		if (varIt != context.llvmVariables.end()) {
-			return builder.CreateLoad(getValueType(context), varIt->second, varName + "_val");
+		// Check local variables - get alloca from the variable's definition
+		VariableReference *varRef = expr->variable;
+		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
+		if (definition->alloca) {
+			return builder.CreateAlignedLoad(getValueType(context), definition->alloca, llvm::Align(8), varName + "_val");
 		}
 
 		// Variable not found - error
@@ -279,13 +290,18 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		if (matchedSection->isMacro) {
 			// Macro: inline the replacement body with expression substitution
 			auto savedMacroBindings = context.macroExpressionBindings;
+			Section *savedBodySection = context.currentBodySection;
 
 			// Bind parameter names to argument expressions
 			for (const auto &[paramName, argExpr] : paramBindings) {
 				context.macroExpressionBindings[paramName] = argExpr;
 			}
 
-			// Generate code for the replacement body
+			// Set current body section for intrinsics that need it (loop while, if, etc.)
+			Section *bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
+			context.currentBodySection = bodySection;
+
+			// Generate code for the replacement body (may set up control flow on bodySection)
 			llvm::Value *result = nullptr;
 			for (Section *child : matchedSection->children) {
 				for (CodeLine *line : child->codeLines) {
@@ -295,21 +311,36 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 				}
 			}
 
-			// Restore previous bindings
+			// Generate body section if present (for constructs like while loops, if, etc.)
+			if (bodySection) {
+				generateSectionCode(context, bodySection);
+
+				// Close control flow: branch to appropriate target, then continue at exit block
+				if (bodySection->exitBlock) {
+					if (!builder.GetInsertBlock()->getTerminator()) {
+						// Loops branch back to condition, if/else branches to exit
+						llvm::BasicBlock *target =
+							bodySection->branchBackBlock ? bodySection->branchBackBlock : bodySection->exitBlock;
+						builder.CreateBr(target);
+					}
+					builder.SetInsertPoint(bodySection->exitBlock);
+				}
+			}
+
+			// Restore previous state
 			context.macroExpressionBindings = savedMacroBindings;
+			context.currentBodySection = savedBodySection;
 
 			return result;
 		}
 
 		// Regular pattern: call the generated function
-		auto funcIt = context.sectionFunctions.find(matchedSection);
-		if (funcIt == context.sectionFunctions.end()) {
+		llvm::Function *func = matchedSection->generatedFunction;
+		if (!func) {
 			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "No function generated for pattern", expr->range)
 			);
 			return nullptr;
 		}
-
-		llvm::Function *func = funcIt->second;
 
 		// Generate argument values and pass by reference
 		// For variables, pass their pointer directly (enables mutation)
@@ -325,8 +356,8 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 				// Expression/literal - evaluate and wrap in temp
 				llvm::Value *argVal = generateExpressionCode(context, argExpr);
 				if (argVal) {
-					llvm::AllocaInst *tempAlloca = builder.CreateAlloca(getValueType(context), nullptr, "tmp");
-					builder.CreateStore(argVal, tempAlloca);
+					llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp");
+					builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
 					args.push_back(tempAlloca);
 				}
 			}
@@ -336,54 +367,9 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 	}
 
 	case Expression::Kind::IntrinsicCall: {
-		// Generate code for intrinsic arguments (skip first arg which is the intrinsic name)
-		std::vector<llvm::Value *> args;
-
-		// Special handling for store: first arg is a pointer, second is a value
-		if (expr->intrinsicName == "store" && expr->arguments.size() >= 3) {
-			// args[0] is the intrinsic name, args[1] is var, args[2] is val
-			llvm::Value *ptr = getVariablePointer(context, expr->arguments[1]);
-			llvm::Value *val = generateExpressionCode(context, expr->arguments[2]);
-			if (ptr)
-				args.push_back(ptr);
-			if (val)
-				args.push_back(val);
-		} else if (expr->intrinsicName == "call" && expr->arguments.size() >= 4) {
-			// call(library, function, format, ...args)
-			// args[0] is intrinsic name, args[1] is library, args[2] is function name, args[3] is format string
-			// Extract string literals directly from expressions
-			auto getStringLiteral = [](Expression *e) -> std::string {
-				if (e && e->kind == Expression::Kind::Literal) {
-					if (auto *str = std::get_if<std::string>(&e->literalValue)) {
-						return *str;
-					}
-				}
-				return "";
-			};
-
-			std::string library = getStringLiteral(expr->arguments[1]);
-			std::string funcName = getStringLiteral(expr->arguments[2]);
-			std::string formatStr = getStringLiteral(expr->arguments[3]);
-
-			// Generate remaining args as values
-			for (size_t i = 4; i < expr->arguments.size(); ++i) {
-				llvm::Value *argVal = generateExpressionCode(context, expr->arguments[i]);
-				if (argVal) {
-					args.push_back(argVal);
-				}
-			}
-
-			return generateLibraryCall(context, library, funcName, formatStr, args);
-		} else {
-			// Normal handling: generate all args as values
-			for (size_t i = 1; i < expr->arguments.size(); ++i) {
-				llvm::Value *argVal = generateExpressionCode(context, expr->arguments[i]);
-				if (argVal) {
-					args.push_back(argVal);
-				}
-			}
-		}
-
+		// Pass expressions directly to intrinsic - let it decide when/how to evaluate
+		// Skip first argument (intrinsic name)
+		std::vector<Expression *> args(expr->arguments.begin() + 1, expr->arguments.end());
 		return generateIntrinsicCode(context, expr->intrinsicName, args);
 	}
 
@@ -396,46 +382,218 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 	return nullptr;
 }
 
+// Helper to extract string literal from expression
+static std::string getStringLiteral(Expression *expr) {
+	if (expr && expr->kind == Expression::Kind::Literal) {
+		if (auto *str = std::get_if<std::string>(&expr->literalValue)) {
+			return *str;
+		}
+	}
+	return "";
+}
+
 // Generate code for an intrinsic call
+// Arguments are passed as unevaluated expressions - intrinsic decides when/how to evaluate
 static llvm::Value *
-generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<llvm::Value *> &args) {
+generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
-		// store(var, val) - first arg is the variable (already a pointer from pattern binding),
-		// second is the value
+		// store(var, val) - first arg is variable (get pointer), second is value
 		if (args.size() >= 2) {
-			// In pattern context, first arg should be a pointer (pattern parameter)
-			// We need to store the second arg into the first
-			llvm::Value *ptr = args[0];
-			llvm::Value *val = args[1];
-
-			// Check if ptr is actually a pointer
-			if (ptr->getType()->isPointerTy()) {
-				builder.CreateStore(val, ptr);
-			} else {
-				// If it's a value, we can't store to it - error
-				context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Cannot store to non-pointer value", Range())
-				);
+			llvm::Value *ptr = getVariablePointer(context, args[0]);
+			llvm::Value *val = generateExpressionCode(context, args[1]);
+			if (ptr && val) {
+				builder.CreateAlignedStore(val, ptr, llvm::Align(8));
+			} else if (!ptr) {
+				context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Cannot store to non-variable", Range()));
 			}
 		}
-		return nullptr; // store doesn't return a value
+		return nullptr;
 	}
 
 	if (name == "add") {
-		// add(left, right)
 		if (args.size() >= 2) {
-			return builder.CreateAdd(args[0], args[1], "addtmp");
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			return builder.CreateAdd(left, right, "add");
 		}
 		return builder.getInt64(0);
 	}
 
+	if (name == "subtract") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			return builder.CreateSub(left, right, "sub");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "multiply") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			return builder.CreateMul(left, right, "mul");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "less than") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			llvm::Value *cmp = builder.CreateICmpSLT(left, right, "lt");
+			return builder.CreateZExt(cmp, getValueType(context), "lt_ext");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "greater than") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			llvm::Value *cmp = builder.CreateICmpSGT(left, right, "gt");
+			return builder.CreateZExt(cmp, getValueType(context), "gt_ext");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "equal") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			llvm::Value *cmp = builder.CreateICmpEQ(left, right, "eq");
+			return builder.CreateZExt(cmp, getValueType(context), "eq_ext");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "not equal") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			llvm::Value *cmp = builder.CreateICmpNE(left, right, "ne");
+			return builder.CreateZExt(cmp, getValueType(context), "ne_ext");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "divide") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			return builder.CreateSDiv(left, right, "div");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "modulo") {
+		if (args.size() >= 2) {
+			llvm::Value *left = generateExpressionCode(context, args[0]);
+			llvm::Value *right = generateExpressionCode(context, args[1]);
+			return builder.CreateSRem(left, right, "mod");
+		}
+		return builder.getInt64(0);
+	}
+
+	if (name == "loop while") {
+		// loop while(condition) - creates loop structure, condition re-evaluated each iteration
+		if (args.empty()) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "loop while requires a condition", Range()));
+			return nullptr;
+		}
+
+		Section *bodySection = context.currentBodySection;
+		if (!bodySection) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "loop while requires a body section", Range()));
+			return nullptr;
+		}
+
+		llvm::Function *func = builder.GetInsertBlock()->getParent();
+
+		// Create basic blocks
+		llvm::BasicBlock *condBlock = llvm::BasicBlock::Create(*context.llvmContext, "while_cond", func);
+		llvm::BasicBlock *bodyBlock = llvm::BasicBlock::Create(*context.llvmContext, "while_body", func);
+		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "while_exit", func);
+
+		// Branch to condition block
+		builder.CreateBr(condBlock);
+
+		// Generate condition block
+		builder.SetInsertPoint(condBlock);
+		llvm::Value *condValue = generateExpressionCode(context, args[0]);
+		llvm::Value *condBool = builder.CreateICmpNE(condValue, builder.getInt64(0), "while_cond_bool");
+		builder.CreateCondBr(condBool, bodyBlock, exitBlock);
+
+		// Set insert point to body block - body section will be generated here
+		builder.SetInsertPoint(bodyBlock);
+
+		// Store control flow info on body section for closing after body generation
+		bodySection->exitBlock = exitBlock;
+		bodySection->branchBackBlock = condBlock; // loops branch back to condition
+
+		return nullptr;
+	}
+
+	if (name == "if") {
+		// if(condition) - executes body once if condition is true
+		if (args.empty()) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "if requires a condition", Range()));
+			return nullptr;
+		}
+
+		Section *bodySection = context.currentBodySection;
+		if (!bodySection) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "if requires a body section", Range()));
+			return nullptr;
+		}
+
+		llvm::Function *func = builder.GetInsertBlock()->getParent();
+
+		// Create basic blocks
+		llvm::BasicBlock *thenBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_then", func);
+		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_exit", func);
+
+		// Evaluate condition and branch
+		llvm::Value *condValue = generateExpressionCode(context, args[0]);
+		llvm::Value *condBool = builder.CreateICmpNE(condValue, builder.getInt64(0), "if_cond");
+		builder.CreateCondBr(condBool, thenBlock, exitBlock);
+
+		// Set insert point to then block - body section will be generated here
+		builder.SetInsertPoint(thenBlock);
+
+		// Store exit block on body section (no branch back for if)
+		bodySection->exitBlock = exitBlock;
+		bodySection->branchBackBlock = nullptr;
+
+		return nullptr;
+	}
+
 	if (name == "return") {
-		// return(value) - this is handled by the expression pattern return
-		// The value is passed back through the expression
 		if (args.size() >= 1) {
-			llvm::Value *returnValue = args[0];
+			llvm::Value *returnValue = generateExpressionCode(context, args[0]);
 			builder.CreateRet(returnValue);
+		}
+		return nullptr;
+	}
+
+	if (name == "call") {
+		// call(library, function, format, ...args)
+		if (args.size() >= 3) {
+			std::string library = getStringLiteral(args[0]);
+			std::string funcName = getStringLiteral(args[1]);
+			std::string formatStr = getStringLiteral(args[2]);
+
+			std::vector<llvm::Value *> callArgs;
+			for (size_t i = 3; i < args.size(); ++i) {
+				llvm::Value *argVal = generateExpressionCode(context, args[i]);
+				if (argVal) {
+					callArgs.push_back(argVal);
+				}
+			}
+
+			return generateLibraryCall(context, library, funcName, formatStr, callArgs);
 		}
 		return nullptr;
 	}
@@ -509,6 +667,9 @@ bool generateCode(ParseContext &context) {
 	context.llvmModule = new llvm::Module("3bx_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 
+	// Set target triple for the current platform
+	context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
+
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	// First pass: Generate functions for all pattern definitions
@@ -539,6 +700,41 @@ bool generateCode(ParseContext &context) {
 		return false;
 	}
 
+	// Run LLVM optimization passes if optimization is enabled
+	if (context.options.optimizationLevel > 0) {
+		llvm::LoopAnalysisManager lam;
+		llvm::FunctionAnalysisManager fam;
+		llvm::CGSCCAnalysisManager cgam;
+		llvm::ModuleAnalysisManager mam;
+
+		llvm::PassBuilder pb;
+		pb.registerModuleAnalyses(mam);
+		pb.registerCGSCCAnalyses(cgam);
+		pb.registerFunctionAnalyses(fam);
+		pb.registerLoopAnalyses(lam);
+		pb.crossRegisterProxies(lam, fam, cgam, mam);
+
+		// Select optimization level
+		llvm::OptimizationLevel optLevel;
+		switch (context.options.optimizationLevel) {
+		case 1:
+			optLevel = llvm::OptimizationLevel::O1;
+			break;
+		case 2:
+			optLevel = llvm::OptimizationLevel::O2;
+			break;
+		case 3:
+			optLevel = llvm::OptimizationLevel::O3;
+			break;
+		default:
+			optLevel = llvm::OptimizationLevel::O1;
+			break;
+		}
+
+		llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(optLevel);
+		mpm.run(*context.llvmModule, mam);
+	}
+
 	// Output based on options
 	if (context.options.emitLLVM) {
 		std::string outputPath = context.options.outputPath;
@@ -555,11 +751,10 @@ bool generateCode(ParseContext &context) {
 		}
 		context.llvmModule->print(out, nullptr);
 	} else {
-		// TODO: Compile to executable
-		context.diagnostics.push_back(
-			Diagnostic(Diagnostic::Level::Error, "Compiling to executable not yet implemented", Range())
-		);
-		return false;
+		// Compile to native executable
+		if (!emitNativeExecutable(context)) {
+			return false;
+		}
 	}
 
 	return true;

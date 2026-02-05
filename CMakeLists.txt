@@ -103,8 +103,8 @@ add_executable (${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS}
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-# Get LLVM libraries for code generation
-llvm_map_components_to_libnames(llvm_libs core support irreader)
+# Get LLVM libraries for code generation, optimization, and native compilation
+llvm_map_components_to_libnames(llvm_libs core support irreader passes native)
 
 target_link_libraries (${PROJECT_NAME}
 PRIVATE

@@ -247,62 +247,45 @@
         .tn { color: #f78c6c; }
         .tc { color: #546e7a; font-style: italic; }
         .tp { color: #89ddff; }
+        .ti { color: #ffcb6b; }
 
-        /* Spoiler */
-        .spoiler summary {
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 1rem;
-            padding: 1rem 1.5rem;
+        /* Language tabs */
+        .language-tabs {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .lang-tab {
+            padding: 0.6rem 1.2rem;
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            list-style: none;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
             transition: all 0.3s ease;
         }
 
-        .spoiler summary::-webkit-details-marker { display: none; }
-
-        .spoiler summary:hover {
-            color: var(--text-primary);
+        .lang-tab:hover {
             background: rgba(255, 255, 255, 0.12);
+            color: var(--text-primary);
         }
 
-        .spoiler[open] summary {
-            border-radius: 12px 12px 0 0;
-            border-bottom: none;
+        .lang-tab.active {
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            border-color: transparent;
+            color: white;
         }
 
-        .spoiler-content {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            padding: 1.5rem;
+        .lang-content {
+            display: none;
         }
 
-        .screenshot-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
-
-        .screenshot-card {
-            text-align: center;
-        }
-
-        .screenshot-card img {
-            width: 100%;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            opacity: 0.9;
-        }
-
-        .screenshot-card p {
-            margin-top: 0.75rem;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
+        .lang-content.active {
+            display: block;
         }
 
         footer {
@@ -326,7 +309,8 @@
     <nav class="nav">
         <a href="index.html" class="nav-btn">Home</a>
         <a href="#philosophy" class="nav-btn">Philosophy</a>
-        <a href="#features" class="nav-btn">Features</a>
+        <a href="#languages" class="nav-btn">Languages</a>
+        <a href="#lsp" class="nav-btn">LSP</a>
         <a href="#how-it-works" class="nav-btn">How It Works</a>
     </nav>
 
@@ -378,82 +362,69 @@
             </div>
         </section>
 
-        <section id="features">
-            <h2 class="section-title">Features</h2>
+        <section id="languages">
+            <h2 class="section-title">Your Language, Literally</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; text-align: center;">
+                Write code in any spoken language. Define patterns in Dutch, Spanish, or invent your own.
+            </p>
 
-            <div class="feature-grid">
-                <div class="glass-card feature-card">
-                    <div class="feature-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                        </svg>
-                    </div>
-                    <h3>Universal Syntax</h3>
-                    <p>If you can define Python syntax in 3BX, why use Python?</p>
-                </div>
+            <div class="language-tabs">
+                <button class="lang-tab active" data-lang="english">English</button>
+                <button class="lang-tab" data-lang="dutch">Nederlands</button>
+                <button class="lang-tab" data-lang="custom">Your Language</button>
+            </div>
 
-                <div class="glass-card feature-card">
-                    <div class="feature-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                        </svg>
-                    </div>
-                    <h3>Supreme Performance</h3>
-                    <p>Compiles to machine code via LLVM. No runtime overhead, no virtual machine. No language is faster.</p>
-                </div>
+            <div class="lang-content active" data-lang="english">
+                <div class="code-block">
+                    <pre><code><span class="tk">effect</span> <span class="tp">print</span> <span class="tv">message</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">message</span>)
 
-                <div class="glass-card feature-card">
-                    <div class="feature-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                        </svg>
-                    </div>
-                    <h3>Human and AI Native</h3>
-                    <p>Designed for both humans and AI agents. Natural language patterns are intuitive to read, write, and generate.</p>
-                </div>
-
-                <div class="glass-card feature-card">
-                    <div class="feature-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <path d="M7 8h10M7 12h6M7 16h8"/>
-                        </svg>
-                    </div>
-                    <h3>LSP Support</h3>
-                    <p>Full Language Server Protocol support. Get syntax highlighting, diagnostics, and go-to-definition in any editor.</p>
-                </div>
-
-                <div class="glass-card feature-card">
-                    <div class="feature-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                    </div>
-                    <h3>Eye for Beauty</h3>
-                    <p>Other languages drown in legacy complexity. 3BX stays minimal, leaving room to focus on elegance and powerful features.</p>
+<span class="tp">print</span> <span class="ts">"Hello, world"</span></code></pre>
                 </div>
             </div>
 
-            <details class="spoiler" style="margin-top: 2rem;">
-                <summary>Speaking of beauty...</summary>
-                <div class="spoiler-content">
-                    <p style="margin-bottom: 1rem; color: var(--text-secondary);">
-                        When a language has been around for decades, even the official website starts to show its age.
-                    </p>
-                    <div class="screenshot-grid">
-                        <div class="screenshot-card">
-                            <img src="cpp_site.png" alt="C++ official website">
-                            <p>C++ - Founded 1985</p>
-                        </div>
-                        <div class="screenshot-card">
-                            <img src="python_site.png" alt="Python official website">
-                            <p>Python - Founded 1991</p>
-                        </div>
-                    </div>
+            <div class="lang-content" data-lang="dutch">
+                <div class="code-block">
+                    <pre><code><span class="tk">effect</span> <span class="tp">zeg</span> <span class="tv">bericht</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">bericht</span>)
+
+<span class="tp">zeg</span> <span class="ts">"Hallo, wereld"</span></code></pre>
                 </div>
-            </details>
+            </div>
+
+            <div class="lang-content" data-lang="custom">
+                <div class="code-block">
+                    <pre><code><span class="tc"># Define any syntax you want</span>
+<span class="tk">effect</span> <span class="tp">yell</span> <span class="tv">words</span> <span class="tp">loudly</span>:
+    <span class="tk">execute</span>:
+        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">words</span>)
+
+<span class="tp">yell</span> <span class="ts">"3BX is amazing"</span> <span class="tp">loudly</span></code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="lsp">
+            <h2 class="section-title">LSP Support</h2>
+
+            <div class="glass-card">
+                <h3>Full Editor Integration</h3>
+                <p>
+                    3BX ships with a Language Server Protocol implementation. Get real-time diagnostics,
+                    syntax highlighting, go-to-definition, and hover documentation in VS Code, Neovim,
+                    or any LSP-compatible editor.
+                </p>
+            </div>
+
+            <div class="glass-card">
+                <h3>Pattern-Aware Intelligence</h3>
+                <p>
+                    The LSP understands your custom patterns. Auto-complete suggestions adapt to the patterns
+                    you've defined, and diagnostics catch pattern mismatches before you run the code.
+                </p>
+            </div>
         </section>
 
         <section id="how-it-works">
@@ -488,5 +459,18 @@
             <p><a href="index.html">Back to Home</a></p>
         </footer>
     </div>
+
+    <script>
+        // Language tab switching
+        document.querySelectorAll('.lang-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const lang = tab.dataset.lang;
+                document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.lang-content[data-lang="${lang}"]`).classList.add('active');
+            });
+        });
+    </script>
 </body>
 </html>

@@ -14,9 +14,7 @@ namespace llvm {
 class LLVMContext;
 class Module;
 class IRBuilderBase;
-class AllocaInst;
 class Value;
-class Function;
 class GlobalVariable;
 } // namespace llvm
 
@@ -25,6 +23,7 @@ struct ParseContext {
 		std::string inputPath;
 		std::string outputPath;
 		bool emitLLVM = false;
+		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
 		int maxResolutionIterations = 0x100;
 	} options;
 
@@ -37,16 +36,14 @@ struct ParseContext {
 	llvm::LLVMContext *llvmContext{};
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
-	std::unordered_map<std::string, llvm::AllocaInst *> llvmVariables;
 
-	// Map from pattern sections to their generated LLVM functions
-	std::unordered_map<Section *, llvm::Function *> sectionFunctions;
-
-	// Current bindings for pattern variables (maps variable name to LLVM value)
+	// Temporary codegen bindings (pushed/popped during generation)
+	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
-
-	// Macro expression bindings (maps variable name to Expression* for code substitution)
+	// Macro expression bindings: maps variable name to Expression* (for macro expansion)
 	std::unordered_map<std::string, Expression *> macroExpressionBindings;
+	// Current body section for macro expansion (used by loop intrinsics to store loop info)
+	Section *currentBodySection{};
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;

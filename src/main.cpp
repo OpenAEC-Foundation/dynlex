@@ -37,6 +37,14 @@ int main(int argumentCount, char *argumentValues[]) {
 			useStdio = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
+		} else if (arg == "-O0") {
+			context.options.optimizationLevel = 0;
+		} else if (arg == "-O1") {
+			context.options.optimizationLevel = 1;
+		} else if (arg == "-O2") {
+			context.options.optimizationLevel = 2;
+		} else if (arg == "-O3") {
+			context.options.optimizationLevel = 3;
 		} else if (arg.starts_with("-o")) {
 			if (arg.size() > 2) {
 				context.options.outputPath = arg.substr(2);
@@ -74,7 +82,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		}
 		context.reportDiagnostics();
 	} else {
-		std::cerr << "Usage: 3bx <file.3bx> [--emit-llvm] [-o output]" << std::endl;
+		std::cerr << "Usage: 3bx <file.3bx> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
 	}
 
 	return 0;

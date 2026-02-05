@@ -1,524 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3BX - Code That Speaks Human</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --gradient-1: #667eea;
-            --gradient-2: #764ba2;
-            --gradient-3: #f093fb;
-            --gradient-4: #f5576c;
-            --glass-bg: rgba(255, 255, 255, 0.08);
-            --glass-border: rgba(255, 255, 255, 0.18);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.7);
-            --code-bg: rgba(0, 0, 0, 0.3);
-        }
-
-        @font-face {
-            font-family: 'Inter';
-            src: url('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2') format('woff2');
-            font-weight: 100 900;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #0f0c29);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-            min-height: 100vh;
-            color: var(--text-primary);
-            overflow-x: hidden;
-        }
-
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .bg-orbs {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: 0;
-        }
-
-        .orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            opacity: 0.5;
-            animation: float 20s ease-in-out infinite;
-        }
-
-        .orb-1 {
-            width: 600px;
-            height: 600px;
-            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
-            top: -200px;
-            right: -100px;
-        }
-
-        .orb-2 {
-            width: 500px;
-            height: 500px;
-            background: linear-gradient(135deg, var(--gradient-3), var(--gradient-4));
-            bottom: -150px;
-            left: -100px;
-            animation-delay: -5s;
-        }
-
-        .orb-3 {
-            width: 400px;
-            height: 400px;
-            background: linear-gradient(135deg, #4facfe, #00f2fe);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            animation-delay: -10s;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            25% { transform: translate(30px, -30px) scale(1.05); }
-            50% { transform: translate(-20px, 20px) scale(0.95); }
-            75% { transform: translate(20px, 10px) scale(1.02); }
-        }
-
-        .content {
-            position: relative;
-            z-index: 1;
-        }
-
-        .hero {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .logo {
-            font-size: clamp(4rem, 15vw, 10rem);
-            font-weight: 900;
-            letter-spacing: -0.05em;
-            background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 1rem;
-            animation: fadeInUp 1s ease-out;
-        }
-
-        .tagline {
-            font-size: clamp(1.2rem, 3vw, 2rem);
-            font-weight: 300;
-            color: var(--text-secondary);
-            max-width: 600px;
-            line-height: 1.6;
-            animation: fadeInUp 1s ease-out 0.2s both;
-        }
-
-        .tagline strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .scroll-indicator {
-            position: absolute;
-            bottom: 3rem;
-            left: 50%;
-            transform: translateX(-50%);
-            animation: bounce 2s ease-in-out infinite;
-        }
-
-        .scroll-indicator::before {
-            content: '';
-            display: block;
-            width: 2px;
-            height: 40px;
-            background: linear-gradient(to bottom, transparent, var(--text-secondary));
-            margin: 0 auto 0.5rem;
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateX(-50%) translateY(0); }
-            50% { transform: translateX(-50%) translateY(10px); }
-        }
-
-        section {
-            padding: 6rem 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .section-title {
-            font-size: clamp(2rem, 5vw, 3.5rem);
-            font-weight: 700;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.8));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .section-subtitle {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin-bottom: 3rem;
-        }
-
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            padding: 2rem;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .glass-card:hover {
-            transform: translateY(-5px);
-            border-color: rgba(255, 255, 255, 0.3);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-
-        .code-block {
-            background: var(--code-bg);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 1.5rem;
-            overflow-x: auto;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .code-block pre {
-            margin: 0;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
-            font-size: 0.95rem;
-            line-height: 1.7;
-        }
-
-        .code-block code {
-            color: #e2e8f0;
-        }
-
-        .tk { color: #c792ea; }
-        .tv { color: #82aaff; }
-        .ts { color: #c3e88d; }
-        .tn { color: #f78c6c; }
-        .tc { color: #546e7a; font-style: italic; }
-        .ti { color: #ffcb6b; }
-        .tp { color: #89ddff; }
-
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 2rem;
-            margin-top: 2rem;
-        }
-
-        .feature-card {
-            padding: 2.5rem;
-        }
-
-        .feature-icon {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .feature-card h3 {
-            font-size: 1.4rem;
-            margin-bottom: 0.75rem;
-            font-weight: 600;
-        }
-
-        .feature-card p {
-            color: var(--text-secondary);
-            line-height: 1.7;
-        }
-
-        .comparison {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            margin-top: 2rem;
-        }
-
-        @media (max-width: 768px) {
-            .comparison { grid-template-columns: 1fr; }
-        }
-
-        .comparison-label {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-            display: block;
-        }
-
-        .language-tabs {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .lang-tab {
-            padding: 0.75rem 1.5rem;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .lang-tab:hover, .lang-tab.active {
-            background: rgba(255, 255, 255, 0.15);
-            color: var(--text-primary);
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-
-        .lang-content { display: none; }
-        .lang-content.active { display: block; animation: fadeIn 0.3s ease; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .cta {
-            text-align: center;
-            padding: 8rem 2rem;
-        }
-
-        .cta-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 1rem 2.5rem;
-            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
-            color: white;
-            text-decoration: none;
-            border-radius: 16px;
-            font-weight: 600;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 40px -10px rgba(102, 126, 234, 0.5);
-        }
-
-        .cta-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 20px 50px -10px rgba(102, 126, 234, 0.6);
-        }
-
-        footer {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        .reveal {
-            opacity: 0;
-            transform: translateY(40px);
-            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .reveal.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
-
-        /* Navigation */
-        .nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            background: linear-gradient(to bottom, rgba(15, 12, 41, 0.9), transparent);
-        }
-
-        .nav-btn {
-            padding: 0.5rem 1rem;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-        }
-
-        .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: var(--text-primary);
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-
-        .nav-btn.primary {
-            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
-            border: none;
-            color: white;
-        }
-
-        .nav-btn.primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px -5px rgba(102, 126, 234, 0.5);
-        }
-
-        /* Spoiler */
-        .spoiler {
-            margin-top: 3rem;
-        }
-
-        .spoiler summary {
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 1rem;
-            padding: 1rem 1.5rem;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            list-style: none;
-            transition: all 0.3s ease;
-        }
-
-        .spoiler summary::-webkit-details-marker { display: none; }
-
-        .spoiler summary:hover {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .spoiler[open] summary {
-            border-radius: 12px 12px 0 0;
-            border-bottom: none;
-        }
-
-        .spoiler-content {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            padding: 1.5rem;
-            animation: slideDown 0.3s ease;
-        }
-
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .screenshot-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1rem;
-        }
-
-        .screenshot-card {
-            text-align: center;
-        }
-
-        .screenshot-card img {
-            width: 100%;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            opacity: 0.9;
-            transition: opacity 0.3s;
-        }
-
-        .screenshot-card img:hover {
-            opacity: 1;
-        }
-
-        .screenshot-card p {
-            margin-top: 0.75rem;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-    </style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>3BX - Code That Speaks Human</title>
+	<link rel="stylesheet" href="style.css">
+
+	<!-- Vertex Shader (shared) -->
+	<script id="vertex-shader" type="x-shader/x-vertex">
+		attribute vec2 a_position;
+		varying vec2 v_texCoord;
+
+		void main() {
+			gl_Position = vec4(a_position, 0.0, 1.0);
+			v_texCoord = (a_position + 1.0) / 2.0;
+			v_texCoord.y = 1.0 - v_texCoord.y;
+		}
+	</script>
+
+	<!-- Fish-eye Distortion Shader -->
+	<script id="distortion-shader" type="x-shader/x-fragment">
+		precision mediump float;
+		varying vec2 v_texCoord;
+		uniform sampler2D u_texture;
+		uniform float u_distortion;
+		uniform vec2 u_resolution;
+
+		void main() {
+			vec2 center = vec2(0.5, 0.5);
+			vec2 offset = v_texCoord - center;
+
+			float aspect = u_resolution.x / u_resolution.y;
+			offset.x *= aspect;
+
+			float maxDist = max(aspect, 1.0) * 0.5;
+			vec2 relOffset = offset / maxDist;
+			float rSquared = dot(relOffset, relOffset);
+
+			// Fish-eye distortion: edges zoom faster
+			float multiplier = 1.0 - pow(rSquared, 0.1);
+			float lerpedMult = u_distortion * multiplier + (1.0 - u_distortion);
+
+			vec2 distorted = offset * lerpedMult;
+			distorted.x /= aspect;
+			vec2 sampleCoord = center + distorted;
+
+			if (sampleCoord.x < 0.0 || sampleCoord.x > 1.0 || sampleCoord.y < 0.0 || sampleCoord.y > 1.0) {
+				gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+			} else {
+				gl_FragColor = texture2D(u_texture, sampleCoord);
+			}
+		}
+	</script>
+
+	<!-- Light Streaks Shader -->
+	<script id="streaks-shader" type="x-shader/x-fragment">
+		precision mediump float;
+		varying vec2 v_texCoord;
+		uniform float u_time;
+		uniform float u_intensity;
+		uniform vec2 u_resolution;
+		uniform vec3 u_rayColor;
+		uniform vec3 u_bgColor;
+		uniform float u_solidBg;
+
+		// Random function
+		float random(vec2 st) {
+			return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453);
+		}
+
+		void main() {
+			vec2 center = vec2(0.5, 0.5);
+			vec2 uv = v_texCoord - center;
+
+			float aspect = u_resolution.x / u_resolution.y;
+			uv.x *= aspect;
+
+			// Convert to polar coordinates
+			float angle = atan(uv.y, uv.x);
+			float dist = length(uv);
+
+			// Create radial streaks
+			float numStreaks = 120.0;
+			float streak = random(vec2(floor(angle * numStreaks / 6.28318), 0.0));
+
+			// Animate streaks outward
+			float speed = u_time * 3.0;
+			float streakDist = fract(streak + speed);
+
+			// Only show streaks that are "passing by"
+			float streakWidth = 0.008;
+			float streakLength = 0.3 + streak * 0.4;
+
+			// Distance-based visibility (streaks appear to rush from center)
+			float minDist = streakDist * 0.8;
+			float maxDist = minDist + streakLength;
+
+			float inStreak = step(minDist, dist) * step(dist, maxDist);
+			float brightness = inStreak * (1.0 - smoothstep(0.0, streakLength, dist - minDist));
+
+			// Angular width variation
+			float angleVariation = fract(angle * numStreaks / 6.28318);
+			float angularMask = smoothstep(0.0, streakWidth, angleVariation) *
+			                    smoothstep(streakWidth * 2.0, streakWidth, angleVariation);
+
+			brightness *= angularMask;
+
+			// Fade based on distance from center (brighter at edges)
+			brightness *= smoothstep(0.0, 0.3, dist);
+
+			// Apply intensity
+			brightness *= u_intensity;
+
+			if (u_solidBg > 0.5) {
+				// Solid background mode: mix bg and ray colors
+				vec3 color = mix(u_bgColor, u_rayColor, brightness);
+				gl_FragColor = vec4(color, 1.0);
+			} else {
+				// Transparent mode: rays only with alpha
+				gl_FragColor = vec4(u_rayColor * brightness, brightness);
+			}
+		}
+	</script>
 </head>
+
 <body>
-    <nav class="nav">
-        <a href="#comparison" class="nav-btn">Comparison</a>
-        <a href="#patterns" class="nav-btn">Patterns</a>
-        <a href="#languages" class="nav-btn">Languages</a>
-        <a href="details.html" class="nav-btn primary">Learn More</a>
-    </nav>
+	<!-- Intro Animation -->
+	<div class="intro-overlay" id="intro">
+		<canvas id="introCanvas"></canvas>
+		<canvas id="streaksCanvas"></canvas>
+	</div>
+	<div class="intro-flash" id="flash"></div>
 
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
+	<nav class="nav">
+		<a href="#comparison" class="nav-btn">Comparison</a>
+		<a href="#patterns" class="nav-btn">Patterns</a>
+		<a href="#performance" class="nav-btn">Performance</a>
+		<a href="details.html" class="nav-btn primary">Learn More</a>
+	</nav>
 
-    <div class="content">
-        <header class="hero">
-            <h1 class="logo">3BX</h1>
-            <p class="tagline">
-                A programming language designed for <strong>humans</strong>.<br>
-                Write code that reads like natural language.
-            </p>
-            <div class="scroll-indicator"></div>
-        </header>
+	<div class="bg-orbs">
+		<div class="orb orb-1"></div>
+		<div class="orb orb-2"></div>
+		<div class="orb orb-3"></div>
+	</div>
 
-        <section id="comparison" class="reveal">
-            <h2 class="section-title">Code That Speaks</h2>
-            <p class="section-subtitle">
-                No cryptic syntax. No memorizing symbols. Just describe what you want.
-            </p>
+	<div class="content">
+		<header class="hero">
+			<h1 class="logo">3BX</h1>
+			<p class="tagline">
+				A programming language designed for <strong>humans</strong>.<br>
+				Write code that reads like natural language.
+			</p>
+			<div class="scroll-indicator"></div>
+		</header>
 
-            <div class="comparison">
-                <div>
-                    <span class="comparison-label">OpenGL</span>
-                    <div class="code-block glass-card">
-                        <pre><code>glClearColor(<span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">1.0f</span>);
+		<section id="comparison" class="reveal">
+			<h2 class="section-title">Code That Speaks</h2>
+			<p class="section-subtitle">
+				No cryptic syntax. No memorizing symbols. Just describe what you want.
+			</p>
+
+			<div class="comparison">
+				<div>
+					<span class="comparison-label">OpenGL</span>
+					<div class="code-block glass-card">
+						<pre><code>glClearColor(<span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">1.0f</span>);
 glClear(GL_COLOR_BUFFER_BIT);
 glBegin(GL_QUADS);
 <span class="tk">for</span> (<span class="tk">int</span> i = <span class="tn">0</span>; i &lt; <span class="tn">10</span>; i++) {
@@ -528,118 +176,689 @@ glBegin(GL_QUADS);
     glVertex2f(i * <span class="tn">50</span>, <span class="tn">140</span>);
 }
 glEnd();</code></pre>
-                    </div>
-                </div>
-                <div>
-                    <span class="comparison-label">3BX</span>
-                    <div class="code-block glass-card">
-                        <pre><code><span class="tp">set</span> <span class="tv">the background</span> <span class="tp">to</span> <span class="tv">black</span>
+					</div>
+				</div>
+				<div>
+					<span class="comparison-label">3BX</span>
+					<div class="code-block glass-card">
+						<pre><code><span class="tp">set</span> <span class="tv">the background</span> <span class="tp">to</span> <span class="tv">black</span>
 
 <span class="tp">repeat</span> <span class="tn">10</span> <span class="tp">times with</span> <span class="tv">i</span> <span class="tp">as index:</span>
     <span class="tp">draw</span> <span class="tv">a square</span> <span class="tp">at</span> <span class="tv">i</span> * <span class="tn">50</span>, <span class="tn">100</span> <span class="tp">with size</span> <span class="tn">40</span></code></pre>
-                    </div>
-                </div>
-            </div>
-        </section>
+					</div>
+				</div>
+			</div>
+		</section>
 
-        <section id="patterns" class="reveal">
-            <h2 class="section-title">Define Your Own Language</h2>
-            <p class="section-subtitle">
-                Create patterns that match how you think. The syntax is yours to shape.
-            </p>
+		<section id="patterns" class="reveal">
+			<h2 class="section-title">Define Your Own Language</h2>
+			<p class="section-subtitle">
+				Create patterns that match how you think. The syntax is yours to shape.<br>
+				<em>If you can define Python syntax in 3BX, why use Python?</em>
+			</p>
 
-            <div class="glass-card code-block">
-                <pre><code><span class="tp">when</span> <span class="tv">a customer</span> <span class="tp">sends</span> <span class="tv">an email</span><span class="tp">:</span>
+			<div class="glass-card code-block">
+				<pre><code><span class="tp">when</span> <span class="tv">a customer</span> <span class="tp">sends</span> <span class="tv">an email</span><span class="tp">:</span>
     <span class="tp">respond to</span> <span class="tv">the email</span> <span class="tp">with</span> <span class="ts">"We have received your message."</span>
 
 <span class="tp">when</span> <span class="tv">the order</span> <span class="tp">is ready:</span>
     <span class="tp">notify</span> <span class="tv">the customer</span>
     <span class="tp">update</span> <span class="tv">the status</span> <span class="tp">to</span> <span class="ts">"shipped"</span></code></pre>
-            </div>
-        </section>
+			</div>
+		</section>
 
-        <section id="languages" class="reveal">
-            <h2 class="section-title">Your Language, Literally</h2>
-            <p class="section-subtitle">
-                Write code in any spoken language. Define patterns in Dutch, Spanish, or invent your own.
-            </p>
+		<section id="performance" class="reveal">
+			<h2 class="section-title">Supreme Performance</h2>
+			<p class="section-subtitle">
+				Compiles to machine code via LLVM. No runtime overhead, no virtual machine.<br>
+				No language is faster.
+			</p>
 
-            <div class="language-tabs">
-                <button class="lang-tab active" data-lang="english">English</button>
-                <button class="lang-tab" data-lang="dutch">Nederlands</button>
-                <button class="lang-tab" data-lang="custom">Your Language</button>
-            </div>
+			<div class="benchmark">
+				<div class="benchmark-header">
+					<span class="benchmark-title">Sum 0 to 100 million</span>
+					<span class="benchmark-note">Lower is better</span>
+				</div>
+				<div class="benchmark-bars">
+					<div class="benchmark-row">
+						<span class="benchmark-label">Python</span>
+						<div class="benchmark-bar-container">
+							<div class="benchmark-bar python" style="--width: 100%"></div>
+						</div>
+						<span class="benchmark-time">6.556s</span>
+					</div>
+					<div class="benchmark-row">
+						<span class="benchmark-label">3BX <small>-O0</small></span>
+						<div class="benchmark-bar-container">
+							<div class="benchmark-bar tbx" style="--width: 3%"></div>
+						</div>
+						<span class="benchmark-time">0.196s</span>
+						<span class="benchmark-speedup">33x faster</span>
+					</div>
+					<div class="benchmark-row">
+						<span class="benchmark-label">C++ <small>-O0</small></span>
+						<div class="benchmark-bar-container">
+							<div class="benchmark-bar cpp" style="--width: 2.8%"></div>
+						</div>
+						<span class="benchmark-time">0.186s</span>
+						<span class="benchmark-speedup">35x faster</span>
+					</div>
+					<div class="benchmark-row">
+						<span class="benchmark-label">3BX <small>-O3</small></span>
+						<div class="benchmark-bar-container">
+							<div class="benchmark-bar tbx optimized" style="--width: 0.5%"></div>
+						</div>
+						<span class="benchmark-time">0.001s</span>
+						<span class="benchmark-speedup highlight">6556x faster</span>
+					</div>
+					<div class="benchmark-row">
+						<span class="benchmark-label">C++ <small>-O3</small></span>
+						<div class="benchmark-bar-container">
+							<div class="benchmark-bar cpp optimized" style="--width: 0.5%"></div>
+						</div>
+						<span class="benchmark-time">0.001s</span>
+						<span class="benchmark-speedup">6556x faster</span>
+					</div>
+				</div>
+				<p class="benchmark-footnote">With -O3, both 3BX and C++ compute the result at compile time via LLVM constant folding.</p>
+			</div>
+		</section>
 
-            <div class="lang-content active" data-lang="english">
-                <div class="glass-card code-block">
-                    <pre><code><span class="tk">effect</span> <span class="tp">print</span> <span class="tv">message</span>:
-    <span class="tk">execute</span>:
-        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">message</span>)
+		<section class="reveal">
+			<h2 class="section-title">Human and AI Native</h2>
+			<p class="section-subtitle">
+				Designed for both humans and AI agents.<br>
+				Natural language patterns are intuitive to read, write, and generate.<br>
+				AI output tokens are filtered by a pattern tree, ensuring valid syntax.
+			</p>
 
-<span class="tp">print</span> <span class="ts">"Hello, world"</span></code></pre>
-                </div>
-            </div>
+			<div class="ai-demo">
+				<div class="ai-editor">
+					<div class="ai-editor-header">
+						<div class="ai-editor-dot"></div>
+						<span class="ai-editor-label">AI generating code</span>
+					</div>
+					<div class="ai-code-line">
+						<span id="ai-typed" class="ai-typed"></span><span class="ai-cursor"></span>
+					</div>
+					<div id="ai-dropdown" class="ai-dropdown"></div>
+				</div>
+			</div>
+		</section>
 
-            <div class="lang-content" data-lang="dutch">
-                <div class="glass-card code-block">
-                    <pre><code><span class="tk">effect</span> <span class="tp">zeg</span> <span class="tv">bericht</span>:
-    <span class="tk">execute</span>:
-        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">bericht</span>)
+		<section class="reveal">
+			<h2 class="section-title">Eye for Beauty</h2>
+			<p class="section-subtitle">
+				Other languages spend their time maintaining decades of legacy complexity.<br>
+				3BX stays minimal, leaving room to focus on elegance and powerful features.
+			</p>
 
-<span class="tp">zeg</span> <span class="ts">"Hallo, wereld"</span></code></pre>
-                </div>
-            </div>
+			<details class="spoiler">
+				<summary>Speaking of beauty...</summary>
+				<div class="spoiler-content">
+					<p style="margin-bottom: 1rem; color: var(--text-secondary);">
+						When a language has been around for decades, even the official website starts to show its age.
+					</p>
+					<div class="screenshot-grid">
+						<div class="screenshot-card">
+							<img src="cpp_site.png" alt="C++ official website">
+							<p>C++ - Founded 1985</p>
+						</div>
+						<div class="screenshot-card">
+							<img src="python_site.png" alt="Python official website">
+							<p>Python - Founded 1991</p>
+						</div>
+					</div>
+				</div>
+			</details>
+		</section>
 
-            <div class="lang-content" data-lang="custom">
-                <div class="glass-card code-block">
-                    <pre><code><span class="tc"># Define any syntax you want</span>
-<span class="tk">effect</span> <span class="tp">yell</span> <span class="tv">words</span> <span class="tp">loudly</span>:
-    <span class="tk">execute</span>:
-        <span class="ti">@intrinsic</span>(<span class="ts">"print"</span>, <span class="tv">words</span>)
+		<section class="cta reveal">
+			<h2 class="section-title">Start Building</h2>
+			<p class="section-subtitle" style="margin: 1rem auto 2rem;">
+				Clone the repo and write your first 3BX program in seconds.
+			</p>
+			<a href="https://github.com/user/3bx" class="cta-button">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+					<path
+						d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
+				</svg>
+				View on GitHub
+			</a>
+		</section>
 
-<span class="tp">yell</span> <span class="ts">"3BX is amazing"</span> <span class="tp">loudly</span></code></pre>
-                </div>
-            </div>
-        </section>
+		<footer>
+			<p>3BX is open source. Built for humans, by humans.</p>
+		</footer>
+	</div>
 
-        <section class="cta reveal">
-            <h2 class="section-title">Start Building</h2>
-            <p class="section-subtitle" style="margin: 1rem auto 2rem;">
-                Clone the repo and write your first 3BX program in seconds.
-            </p>
-            <a href="https://github.com/user/3bx" class="cta-button">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-                View on GitHub
-            </a>
-        </section>
+	<script>
+		// WebGL-based intro with fish-eye distortion and light streaks
+		const intro = document.getElementById('intro');
+		const flash = document.getElementById('flash');
+		const canvas = document.getElementById('introCanvas');
+		const streaksCanvas = document.getElementById('streaksCanvas');
+		const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+		const gl2 = streaksCanvas.getContext('webgl') || streaksCanvas.getContext('experimental-webgl');
 
-        <footer>
-            <p>3BX is open source. Built for humans, by humans.</p>
-        </footer>
-    </div>
+		// Code lines with syntax highlighting
+		const codeLines = [
+			[
+				{ text: 'when', color: '#89ddff' },
+				{ text: ' a visitor ', color: '#82aaff' },
+				{ text: 'visits', color: '#89ddff' },
+				{ text: ' the website', color: '#82aaff' },
+				{ text: ':', color: '#89ddff' }
+			],
+			[
+				{ text: '    show', color: '#89ddff' },
+				{ text: ' "3BX"', color: '#c3e88d' },
+				{ text: ' to', color: '#89ddff' },
+				{ text: ' the visitor', color: '#82aaff' }
+			],
+			[
+				{ text: '    reveal', color: '#89ddff' },
+				{ text: ' the main page', color: '#82aaff' }
+			],
+			[
+				{ text: 'executing...', color: '#c792ea' }
+			]
+		];
 
-    <script>
-        // Language tab switching
-        document.querySelectorAll('.lang-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                const lang = tab.dataset.lang;
-                document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.querySelector(`.lang-content[data-lang="${lang}"]`).classList.add('active');
-            });
-        });
+		// Canvas setup
+		const fontSize = 32;
+		const lineHeight = fontSize * 1.4;
+		const padding = 40;
+		let sourceCanvas, sourceCtx, measureCanvas, measureCtx;
+		let animationId;
+		let glProgram, glTexture, streaksProgram;
 
-        // Scroll reveal
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) entry.target.classList.add('visible');
-            });
-        }, { threshold: 0.1 });
+		// Helper to load shader from script tag
+		function getShaderSource(id) {
+			return document.getElementById(id).textContent;
+		}
 
-        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-    </script>
+		// Helper to compile shader
+		function compileShader(glCtx, type, source) {
+			const shader = glCtx.createShader(type);
+			glCtx.shaderSource(shader, source);
+			glCtx.compileShader(shader);
+			return shader;
+		}
+
+		// Helper to create program
+		function createProgram(glCtx, vertexSrc, fragmentSrc) {
+			const program = glCtx.createProgram();
+			glCtx.attachShader(program, compileShader(glCtx, glCtx.VERTEX_SHADER, vertexSrc));
+			glCtx.attachShader(program, compileShader(glCtx, glCtx.FRAGMENT_SHADER, fragmentSrc));
+			glCtx.linkProgram(program);
+			return program;
+		}
+
+		// Helper to setup fullscreen quad
+		function setupQuad(glCtx, program) {
+			const buffer = glCtx.createBuffer();
+			glCtx.bindBuffer(glCtx.ARRAY_BUFFER, buffer);
+			glCtx.bufferData(glCtx.ARRAY_BUFFER, new Float32Array([
+				-1, -1, 1, -1, -1, 1,
+				-1, 1, 1, -1, 1, 1
+			]), glCtx.STATIC_DRAW);
+			const posLoc = glCtx.getAttribLocation(program, 'a_position');
+			glCtx.enableVertexAttribArray(posLoc);
+			glCtx.vertexAttribPointer(posLoc, 2, glCtx.FLOAT, false, 0, 0);
+		}
+
+		function initWebGL() {
+			if (!gl || !gl2) return false;
+
+			const vertexSrc = getShaderSource('vertex-shader');
+
+			// Distortion shader
+			glProgram = createProgram(gl, vertexSrc, getShaderSource('distortion-shader'));
+			gl.useProgram(glProgram);
+			setupQuad(gl, glProgram);
+
+			glTexture = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D, glTexture);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+			// Streaks shader
+			streaksProgram = createProgram(gl2, vertexSrc, getShaderSource('streaks-shader'));
+			gl2.useProgram(streaksProgram);
+			setupQuad(gl2, streaksProgram);
+			gl2.enable(gl2.BLEND);
+
+			return true;
+		}
+
+		function measureText() {
+			if (!measureCtx) {
+				measureCanvas = document.createElement('canvas');
+				measureCtx = measureCanvas.getContext('2d');
+			}
+			measureCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
+			let maxWidth = 0;
+			codeLines.forEach(line => {
+				let lineWidth = 0;
+				line.forEach(part => lineWidth += measureCtx.measureText(part.text).width);
+				maxWidth = Math.max(maxWidth, lineWidth);
+			});
+			return { width: maxWidth + padding * 2, height: codeLines.length * lineHeight + padding * 2 };
+		}
+
+		function renderSourceText(revealProgress) {
+			const screenWidth = window.innerWidth;
+			const screenHeight = window.innerHeight;
+
+			if (!sourceCanvas) {
+				sourceCanvas = document.createElement('canvas');
+				sourceCanvas.width = screenWidth;
+				sourceCanvas.height = screenHeight;
+				sourceCtx = sourceCanvas.getContext('2d');
+			}
+
+			sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+			sourceCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
+			sourceCtx.textBaseline = 'top';
+
+			const textSize = measureText();
+			const startX = (screenWidth - textSize.width) / 2 + padding;
+			const startY = (screenHeight - textSize.height) / 2 + padding;
+
+			let totalChars = 0;
+			codeLines.forEach(line => line.forEach(part => totalChars += part.text.length));
+			const charsToShow = Math.floor(revealProgress * totalChars);
+
+			let charCount = 0;
+			codeLines.forEach((line, lineIdx) => {
+				let x = startX;
+				const y = startY + lineIdx * lineHeight;
+
+				line.forEach(part => {
+					sourceCtx.fillStyle = part.color;
+					for (let i = 0; i < part.text.length; i++) {
+						if (charCount < charsToShow) {
+							sourceCtx.fillText(part.text[i], x, y);
+						}
+						x += sourceCtx.measureText(part.text[i]).width;
+						charCount++;
+					}
+				});
+			});
+
+			if (revealProgress >= 1) {
+				const flashOn = Math.floor(Date.now() / 150) % 2 === 0;
+				if (!flashOn) {
+					const lastLineY = startY + 3 * lineHeight;
+					sourceCtx.clearRect(0, lastLineY, sourceCanvas.width, lineHeight);
+				}
+			}
+		}
+
+		function applyDistortionWebGL(distortionStrength) {
+			if (!sourceCanvas || !gl) return;
+
+			canvas.width = sourceCanvas.width;
+			canvas.height = sourceCanvas.height;
+			gl.viewport(0, 0, canvas.width, canvas.height);
+
+			gl.bindTexture(gl.TEXTURE_2D, glTexture);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+
+			gl.uniform1f(gl.getUniformLocation(glProgram, 'u_distortion'), distortionStrength);
+			gl.uniform2f(gl.getUniformLocation(glProgram, 'u_resolution'), canvas.width, canvas.height);
+
+			gl.drawArrays(gl.TRIANGLES, 0, 6);
+		}
+
+		function renderStreaks(time, intensity, rayColor, bgColor, solidBg) {
+			if (!gl2) return;
+
+			streaksCanvas.width = window.innerWidth;
+			streaksCanvas.height = window.innerHeight;
+			gl2.viewport(0, 0, streaksCanvas.width, streaksCanvas.height);
+
+			// Use additive blending for transparent mode (glowing white rays)
+			// Use standard alpha blending for solid mode (opaque background)
+			if (solidBg) {
+				gl2.blendFunc(gl2.SRC_ALPHA, gl2.ONE_MINUS_SRC_ALPHA);
+			} else {
+				gl2.blendFunc(gl2.SRC_ALPHA, gl2.ONE);
+			}
+
+			gl2.clear(gl2.COLOR_BUFFER_BIT);
+			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_time'), time);
+			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_intensity'), intensity);
+			gl2.uniform2f(gl2.getUniformLocation(streaksProgram, 'u_resolution'), streaksCanvas.width, streaksCanvas.height);
+			gl2.uniform3f(gl2.getUniformLocation(streaksProgram, 'u_rayColor'), rayColor[0], rayColor[1], rayColor[2]);
+			gl2.uniform3f(gl2.getUniformLocation(streaksProgram, 'u_bgColor'), bgColor[0], bgColor[1], bgColor[2]);
+			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_solidBg'), solidBg ? 1.0 : 0.0);
+
+			gl2.drawArrays(gl2.TRIANGLES, 0, 6);
+		}
+
+		function resetIntro() {
+			if (animationId) cancelAnimationFrame(animationId);
+			intro.classList.remove('hidden');
+			intro.style.opacity = 1;
+			flash.classList.remove('active', 'fade-out');
+			flash.style.opacity = 0;
+			canvas.style.opacity = 1;
+			sourceCanvas = null;
+		}
+
+		function playIntro() {
+			resetIntro();
+			initWebGL();
+
+			const startTime = performance.now();
+
+			function animate(currentTime) {
+				const elapsed = (currentTime - startTime) / 1000;
+
+				// Timeline:
+				// 0-3: typewriter
+				// 3-3.5: pause
+				// 3.5-4: executing...
+				// 4-5.5: distortion + white rays ramp up
+				// 5-5.5: fade to white, rays white->black
+				// 5.5-7.5: tunnel (white bg, black rays)
+				// 7.5-8.5: rays fade out
+				// 8.5-10: white fades out to reveal page
+				const distortionStart = 4;
+				const distortionEnd = 5.5;
+				const flashStart = 5;
+				const flashEnd = 5.5;
+				const tunnelEnd = 7.5;
+				const raysFadeEnd = 8.5;
+				const whiteFadeEnd = 10;
+
+				// Typewriter progress
+				const firstThreeLinesRatio = 0.88;
+				let revealProgress;
+				if (elapsed < 3) {
+					revealProgress = elapsed / 3 * firstThreeLinesRatio;
+				} else if (elapsed < 3.5) {
+					revealProgress = firstThreeLinesRatio;
+				} else {
+					revealProgress = 1;
+				}
+
+				// Calculate distortion
+				let distortion = 0;
+				if (elapsed >= distortionStart && elapsed < distortionEnd) {
+					const progress = (elapsed - distortionStart) / (distortionEnd - distortionStart);
+					distortion = progress * progress; // ease in
+				} else if (elapsed >= distortionEnd) {
+					distortion = 1;
+				}
+
+				// Calculate flash/white overlay opacity
+				let flashOpacity = 0;
+				if (elapsed >= flashStart && elapsed < flashEnd) {
+					flashOpacity = (elapsed - flashStart) / (flashEnd - flashStart);
+				} else if (elapsed >= flashEnd && elapsed < raysFadeEnd) {
+					flashOpacity = 1;
+				} else if (elapsed >= raysFadeEnd && elapsed < whiteFadeEnd) {
+					flashOpacity = 1 - (elapsed - raysFadeEnd) / (whiteFadeEnd - raysFadeEnd);
+				}
+
+				// Calculate ray color (white -> black), intensity, and background mode
+				let rayColor = [0.9, 0.95, 1.0]; // white with blue tint
+				let bgColor = [0, 0, 0]; // black background initially
+				let streakIntensity = 0;
+				let solidBg = false;
+
+				if (elapsed >= distortionStart && elapsed < flashStart) {
+					// Ramp up white rays on transparent bg (so text shows through)
+					const progress = (elapsed - distortionStart) / (flashStart - distortionStart);
+					streakIntensity = progress * 1.5;
+					rayColor = [0.9, 0.95, 1.0];
+					solidBg = false;
+				} else if (elapsed >= flashStart && elapsed < flashEnd) {
+					// Transition: rays white->black, bg black->white
+					const progress = (elapsed - flashStart) / (flashEnd - flashStart);
+					streakIntensity = 1.5;
+					rayColor = [0.9 * (1 - progress), 0.95 * (1 - progress), 1.0 * (1 - progress)];
+					bgColor = [progress, progress, progress];
+					solidBg = true;
+				} else if (elapsed >= flashEnd && elapsed < tunnelEnd) {
+					// Tunnel: black rays on white bg
+					streakIntensity = 1.5;
+					rayColor = [0, 0, 0];
+					bgColor = [1, 1, 1];
+					solidBg = true;
+				} else if (elapsed >= tunnelEnd && elapsed < raysFadeEnd) {
+					// Rays fade out
+					const progress = (elapsed - tunnelEnd) / (raysFadeEnd - tunnelEnd);
+					streakIntensity = 1.5 * (1 - progress);
+					rayColor = [0, 0, 0];
+					bgColor = [1, 1, 1];
+					solidBg = true;
+				} else if (elapsed >= raysFadeEnd) {
+					// Just white, no rays
+					streakIntensity = 0;
+					bgColor = [1, 1, 1];
+					solidBg = true;
+				}
+
+				// Render text (only before flash completes)
+				if (elapsed < flashEnd) {
+					renderSourceText(revealProgress);
+					applyDistortionWebGL(distortion);
+					canvas.style.opacity = elapsed >= flashStart ? 1 - (elapsed - flashStart) / (flashEnd - flashStart) : 1;
+				} else {
+					canvas.style.opacity = 0;
+				}
+
+				// Render streaks
+				renderStreaks(elapsed, streakIntensity, rayColor, bgColor, solidBg);
+
+				// Apply flash overlay for the fade-out phase
+				flash.style.opacity = elapsed >= raysFadeEnd ? flashOpacity : 0;
+
+				// Hide intro overlay after white fade starts
+				if (elapsed >= raysFadeEnd) {
+					intro.style.opacity = flashOpacity;
+				}
+
+				if (elapsed >= whiteFadeEnd) {
+					intro.classList.add('hidden');
+					flash.style.opacity = 0;
+					localStorage.setItem('intro_seen', 'true');
+					return;
+				}
+
+				animationId = requestAnimationFrame(animate);
+			}
+
+			document.fonts.ready.then(() => {
+				animationId = requestAnimationFrame(animate);
+			});
+		}
+
+		// Check if already seen, otherwise play
+		if (localStorage.getItem('intro_seen')) {
+			intro.classList.add('hidden');
+		} else {
+			playIntro();
+		}
+
+		// Click logo to replay intro
+		document.querySelector('.logo').addEventListener('click', () => {
+			playIntro();
+		});
+		document.querySelector('.logo').style.cursor = 'pointer';
+
+		// Scroll reveal
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) entry.target.classList.add('visible');
+			});
+		}, { threshold: 0.1 });
+
+		document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+		// AI Autocomplete Animation
+		(function() {
+			const aiTyped = document.getElementById('ai-typed');
+			const aiDropdown = document.getElementById('ai-dropdown');
+
+			// Sequence of tokens with their completion options
+			// Each step: { typed: "text so far", options: [{text, prob, valid}], selected: index }
+			const sequence = [
+				{
+					typed: '',
+					options: [
+						{ text: 'send', prob: 42, valid: true },
+						{ text: 'create', prob: 28, valid: true },
+						{ text: 'delete', prob: 18, valid: true },
+						{ text: 'foreach', prob: 12, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send ',
+					options: [
+						{ text: 'an email', prob: 45, valid: true },
+						{ text: 'a message', prob: 35, valid: true },
+						{ text: 'notification', prob: 15, valid: true },
+						{ text: '()', prob: 5, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send an email ',
+					options: [
+						{ text: 'to', prob: 65, valid: true },
+						{ text: 'from', prob: 20, valid: true },
+						{ text: 'with', prob: 12, valid: true },
+						{ text: ';', prob: 3, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send an email to ',
+					options: [
+						{ text: 'the user', prob: 38, valid: true },
+						{ text: 'the admin', prob: 32, valid: true },
+						{ text: 'support', prob: 22, valid: true },
+						{ text: 'null', prob: 8, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send an email to the user ',
+					options: [
+						{ text: 'with subject', prob: 55, valid: true },
+						{ text: 'containing', prob: 30, valid: true },
+						{ text: 'about', prob: 12, valid: true },
+						{ text: '++', prob: 3, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send an email to the user with subject ',
+					options: [
+						{ text: '"Welcome"', prob: 40, valid: true },
+						{ text: '"Update"', prob: 30, valid: true },
+						{ text: '"Alert"', prob: 25, valid: true },
+						{ text: '0x4F', prob: 5, valid: false }
+					],
+					selected: 0
+				},
+				{
+					typed: 'send an email to the user with subject "Welcome"',
+					options: null,
+					selected: -1
+				}
+			];
+
+			let currentStep = 0;
+			let charIndex = 0;
+			let phase = 'typing'; // 'typing', 'showing', 'selecting', 'pause'
+			let phaseTimer = 0;
+
+			function renderDropdown(step) {
+				if (!step.options) {
+					aiDropdown.classList.remove('visible');
+					return;
+				}
+
+				aiDropdown.innerHTML = step.options.map((opt, i) => `
+					<div class="ai-option ${i === step.selected ? 'selected' : ''} ${!opt.valid ? 'disabled' : ''}">
+						<span class="ai-option-text">${opt.text}</span>
+						<span class="ai-option-prob">${opt.prob}%</span>
+						<div class="ai-option-bar">
+							<div class="ai-option-bar-fill" style="width: ${opt.prob}%"></div>
+						</div>
+					</div>
+				`).join('');
+
+				// Position dropdown at cursor
+				const typedRect = aiTyped.getBoundingClientRect();
+				const editorRect = aiTyped.closest('.ai-editor').getBoundingClientRect();
+				aiDropdown.style.left = (typedRect.right - editorRect.left) + 'px';
+				aiDropdown.style.top = (typedRect.bottom - editorRect.top + 5) + 'px';
+
+				aiDropdown.classList.add('visible');
+			}
+
+			function tick() {
+				const step = sequence[currentStep];
+				const targetText = step.typed;
+
+				if (phase === 'typing') {
+					if (charIndex < targetText.length) {
+						charIndex++;
+						aiTyped.textContent = targetText.slice(0, charIndex);
+					} else {
+						phase = 'showing';
+						phaseTimer = 0;
+					}
+				} else if (phase === 'showing') {
+					renderDropdown(step);
+					phaseTimer++;
+					if (phaseTimer > 15) {
+						phase = 'selecting';
+						phaseTimer = 0;
+					}
+				} else if (phase === 'selecting') {
+					phaseTimer++;
+					if (phaseTimer > 10) {
+						phase = 'pause';
+						phaseTimer = 0;
+						aiDropdown.classList.remove('visible');
+					}
+				} else if (phase === 'pause') {
+					phaseTimer++;
+					if (phaseTimer > 5) {
+						currentStep++;
+						if (currentStep >= sequence.length) {
+							// Reset and loop
+							currentStep = 0;
+							charIndex = 0;
+							aiTyped.textContent = '';
+							phase = 'typing';
+							phaseTimer = 0;
+							setTimeout(tick, 1500); // Pause before restart
+							return;
+						}
+						phase = 'typing';
+						phaseTimer = 0;
+					}
+				}
+
+				setTimeout(tick, phase === 'typing' ? 60 : 50);
+			}
+
+			// Start animation
+			setTimeout(tick, 1000);
+		})();
+	</script>
 </body>
+
 </html>
