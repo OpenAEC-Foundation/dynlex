@@ -696,6 +696,11 @@ bool generateCode(ParseContext &context) {
 	std::string error;
 	llvm::raw_string_ostream errorStream(error);
 	if (llvm::verifyModule(*context.llvmModule, &errorStream)) {
+		// Print the invalid IR for debugging
+		llvm::errs() << "\n=== Invalid LLVM IR (for debugging) ===\n";
+		context.llvmModule->print(llvm::errs(), nullptr);
+		llvm::errs() << "=== End Invalid LLVM IR ===\n\n";
+
 		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "LLVM verification failed: " + error, Range()));
 		return false;
 	}

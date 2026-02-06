@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "lsp": {
-      "command": "/home/johnheikens/go/bin/mcp-language-server",
+      "command": "mcp-language-server",
       "args": [
-        "-workspace", "/home/johnheikens/Documents/Github/3BX",
+        "-workspace", ".",
         "-lsp", "clangd", "--", "--background-index"
       ]
     }

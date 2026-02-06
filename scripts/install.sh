@@ -27,7 +27,8 @@ sudo apt install -y \
     python3 \
     pipx \
     nodejs \
-    npm
+    npm \
+    golang-go
 
 # Ensure pipx path
 pipx ensurepath
@@ -42,54 +43,13 @@ if [ ! -f "$HOME/.conan2/profiles/default" ]; then
     conan profile detect --force
 fi
 
-# Set up lsp_mcp
-echo "Setting up lsp_mcp..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Install MCP language server
+echo "Installing MCP language server..."
+go install github.com/isaacphi/mcp-language-server@latest
 
-cd "$PROJECT_ROOT/lsp_mcp"
-npm install
-
-# Create Claude Code config directory if needed
-mkdir -p "$HOME/.config/claude-code"
-
-# Add MCP server config (append or create)
-CONFIG_FILE="$HOME/.config/claude-code/config.json"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "{}" > "$CONFIG_FILE"
-fi
-
-# Use jq if available, otherwise manual JSON
-if command -v jq &> /dev/null; then
-    TMP_FILE=$(mktemp)
-    jq --arg path "$PROJECT_ROOT/lsp_mcp/index.js" \
-       --arg root "$PROJECT_ROOT" \
-       '.mcpServers.lsp = {
-          command: "node",
-          args: [$path],
-          env: { PROJECT_ROOT: $root }
-       }' "$CONFIG_FILE" > "$TMP_FILE"
-    mv "$TMP_FILE" "$CONFIG_FILE"
-else
-    echo "Note: jq not found. Add this to $CONFIG_FILE manually:"
-    echo ""
-    cat <<EOF
-{
-  "mcpServers": {
-    "lsp": {
-      "command": "node",
-      "args": ["$PROJECT_ROOT/lsp_mcp/index.js"],
-      "env": {
-        "PROJECT_ROOT": "$PROJECT_ROOT"
-      }
-    }
-  }
-}
-EOF
-    echo ""
-fi
-
-cd "$PROJECT_ROOT"
+echo ""
+echo "Note: MCP server is configured in .mcp.json"
+echo "Make sure to run the 3BX LSP server with: ./build/3bx --lsp"
 
 echo ""
 echo "✓ Installation complete!"
@@ -105,5 +65,5 @@ conan --version
 llvm-config --version
 node --version
 npm --version
-echo ""
-echo "✓ lsp_mcp configured"
+go version
+mcp-language-server --version 2>&1 || echo "mcp-language-server installed (no version flag)"
