@@ -16,6 +16,8 @@ class Module;
 class IRBuilderBase;
 class Value;
 class GlobalVariable;
+class SwitchInst;
+class BasicBlock;
 } // namespace llvm
 
 struct ParseContext {
@@ -24,7 +26,10 @@ struct ParseContext {
 		std::string outputPath;
 		bool emitLLVM = false;
 		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
-		int maxResolutionIterations = 0x100;
+		// Maximum iterations for resolving pattern references and sections.
+		// Pattern resolution is iterative: each pass resolves patterns that become unambiguous
+		// when other patterns are resolved. 256 iterations is sufficient for deeply nested patterns.
+		int maxResolutionIterations = 256;
 	} options;
 
 	// LLVM
@@ -40,10 +45,17 @@ struct ParseContext {
 	// Temporary codegen bindings (pushed/popped during generation)
 	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
+	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
+	std::unordered_map<std::string, Type> patternParamTypes;
 	// Macro expression bindings: maps variable name to Expression* (for macro expansion)
 	std::unordered_map<std::string, Expression *> macroExpressionBindings;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
+	// Current instantiation being inferred (set during non-macro function body inference)
+	Instantiation *currentInstantiation{};
+	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
+	llvm::SwitchInst *currentSwitchInst{};
+	llvm::BasicBlock *currentSwitchExitBlock{};
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;
@@ -66,6 +78,6 @@ struct ParseContext {
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}
-	void reportDiagnostics();
+	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
 };

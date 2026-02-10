@@ -1,5 +1,7 @@
 #pragma once
 #include "range.h"
+#include "type.h"
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <variant>
@@ -19,6 +21,7 @@ struct Expression {
 	};
 
 	Kind kind = Kind::Pending;
+	Type type;
 	Range range;
 
 	// For Literal: the actual value
@@ -39,3 +42,12 @@ struct Expression {
 	// Arguments (for PatternCall and IntrinsicCall)
 	std::vector<Expression *> arguments;
 };
+
+// Utility: Sort expression arguments by their source position
+inline std::vector<Expression *> sortArgumentsByPosition(const std::vector<Expression *> &args) {
+	std::vector<Expression *> sortedArgs = args;
+	std::sort(sortedArgs.begin(), sortedArgs.end(), [](Expression *a, Expression *b) {
+		return a->range.start() < b->range.start();
+	});
+	return sortedArgs;
+}

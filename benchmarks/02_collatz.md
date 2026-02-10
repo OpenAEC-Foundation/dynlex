@@ -31,8 +31,8 @@ macro effect return value:
     replacement:
         @intrinsic("return", value)
 
-effect set var to val:
-    execute:
+macro effect set var to val:
+    replacement:
         @intrinsic("store", var, val)
 
 effect print msg as line:

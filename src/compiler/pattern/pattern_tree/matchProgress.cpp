@@ -49,7 +49,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 				//  f.e: '$ + $' in 'set $ to $ + $'
 				stepUp(*parent);
 			}
-			if (canSubstitute()) {
+			if (canSubstitute() && rootNode->argumentChild) {
 				// this might be the first submatch of a higher level match between parent and this match,
 				// making the current parent the grand parent.
 				// f.e: 'the result' in 'the result = 10'
@@ -62,8 +62,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 				if (parent)
 					clone.parent = new MatchProgress(*parent);
 				clone.rootNode = rootNode;
-				clone.currentNode = rootNode;
+				// advance past the argument slot — the completed sub-expression occupies it
+				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};
+				clone.match.nodesPassed.push_back(clone.currentNode);
 
 				clone.type = SectionType::Expression;
 				stepUp(clone);
@@ -110,7 +112,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 				} else {
 					// argument
 					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
-					sourceArgumentIndex++;
+					substituteStep.sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(substituteStep);
@@ -118,7 +120,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		}
 		// most priority: text match
 		if (elementToCompare.type != PatternElement::Type::Variable &&
-			currentNode->literalChildren.count(elementToCompare.text)) {
+			currentNode->literalChildren.contains(elementToCompare.text)) {
 			MatchProgress elemStep = *this;
 			elemStep.currentNode = currentNode->literalChildren[elementToCompare.text];
 			elemStep.match.nodesPassed.push_back(elemStep.currentNode);

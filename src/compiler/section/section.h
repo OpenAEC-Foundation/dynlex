@@ -4,8 +4,10 @@
 #include "patternReference.h"
 #include "sectionType.h"
 #include "stringHierarchy.h"
+#include "type.h"
 #include "variableReference.h"
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,13 @@ class BasicBlock;
 struct ParseContext;
 struct Variable;
 struct Expression;
+// Per-instantiation state for monomorphized functions.
+// Each unique combination of argument types produces a separate instantiation.
+struct Instantiation {
+	Type returnType;
+	llvm::Function *llvmFunction = nullptr;
+};
+
 struct Section {
 	inline Section(SectionType type, Section *parent = {}) : type(type), parent(parent) {
 		if (parent) {
@@ -32,6 +41,8 @@ struct Section {
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
 	std::unordered_map<std::string, Variable *> variables;
+	// Monomorphization: each argument type combination gets its own instantiation
+	std::map<std::vector<Type>, Instantiation> instantiations;
 	// the start and end index of this section in compiled lines.
 	int startLineIndex, endLineIndex;
 	// count of unresolved pattern references + unresolved child sections
@@ -42,8 +53,6 @@ struct Section {
 	bool isMacro = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
-	// generated LLVM function for this pattern (set during codegen)
-	llvm::Function *generatedFunction{};
 	// Control flow blocks for this section body (set by intrinsics like loop_while, if, etc.)
 	// exitBlock: where code continues after this section (always set for control flow)
 	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch
@@ -59,4 +68,7 @@ struct Section {
 	void addPatternReference(PatternReference *reference);
 	void incrementUnresolved();
 	void decrementUnresolved();
+
+	// Find a Variable by name in this section or parent scopes
+	Variable *findVariable(const std::string &name);
 };

@@ -1,6 +1,22 @@
+macro effect set var to val:
+	replacement:
+		@intrinsic("store", var, val)
+
+effect say msg:
+	execute:
+		@intrinsic("call", "libc", "printf", "i32", "%s\n", msg)
+
+macro expression value as [a|an|] bits bit integer:
+	replacement:
+		@intrinsic("cast", value, "integer", bits)
+
+effect print msg:
+	execute:
+		@intrinsic("call", "libc", "printf", "i32", "%ld\n", msg as a 64 bit integer)
+
 effect customadder:
-	get:
-		print "custom adder:"
+	execute:
+		say "custom adder:"
 		set result to @intrinsic("add", 1, 2)
 		print result
 

@@ -30,8 +30,9 @@ struct TransformedPattern {
 	size_t getLinePos(size_t patternPos);
 	size_t getPatternPos(size_t linePos);
 	// replace this part of the pattern with a type element.
-	void replaceLine(size_t lineStartPos, size_t lineEndPos, std::string replacement = std::string() + argumentChar);
-	void replacePattern(size_t patternStartPos, size_t patternEndPos, std::string replacement = std::string() + argumentChar);
-	void replaceLocal(size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, std::string replacement);
+	void replaceLine(size_t lineStartPos, size_t lineEndPos, const std::string &replacement = std::string() + argumentChar);
+	void
+	replacePattern(size_t patternStartPos, size_t patternEndPos, const std::string &replacement = std::string() + argumentChar);
+	void replaceLocal(size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, const std::string &replacement);
 	std::string toString() const;
 };

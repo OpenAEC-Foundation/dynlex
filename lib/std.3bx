@@ -1,0 +1,159 @@
+# 3BX Standard Library
+
+# --- Return ---
+
+macro effect return value:
+    replacement:
+        @intrinsic("return", value)
+
+# --- Variables ---
+
+macro effect set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+# --- Type casts ---
+
+macro expression value as [a|an|] bits bit integer:
+    replacement:
+        @intrinsic("cast", value, "integer", bits)
+
+macro expression value as [an|] integer:
+    replacement:
+        @intrinsic("cast", value, "integer")
+
+macro expression value as [a|] bits bit float:
+    replacement:
+        @intrinsic("cast", value, "float", bits)
+
+macro expression value as [a|] float:
+    replacement:
+        @intrinsic("cast", value, "float")
+
+macro expression value as [a|] byte:
+    replacement:
+        @intrinsic("cast", value, "integer", 8)
+
+macro expression value as [a|] string:
+    replacement:
+        @intrinsic("cast", value, "string")
+
+macro expression value as [a|] pointer:
+    replacement:
+        @intrinsic("cast", value, "pointer")
+
+# --- Pointers ---
+
+macro expression [the|] address of var:
+    replacement:
+        @intrinsic("address of", var)
+
+macro expression [the|] value at ptr:
+    replacement:
+        @intrinsic("dereference", ptr)
+
+# --- Arithmetic ---
+
+macro expression left + right:
+    replacement:
+        @intrinsic("add", left, right)
+
+macro expression left - right:
+    replacement:
+        @intrinsic("subtract", left, right)
+
+macro expression left * right:
+    replacement:
+        @intrinsic("multiply", left, right)
+
+macro expression left / right:
+    replacement:
+        @intrinsic("divide", left, right)
+
+macro expression left mod right:
+    replacement:
+        @intrinsic("modulo", left, right)
+
+macro expression [the|] [negative|opposite] [of|] value:
+    replacement:
+        @intrinsic("negate", value)
+
+# --- Comparison ---
+
+expression left < right:
+    get:
+        return @intrinsic("less than", left, right)
+
+expression left > right:
+    get:
+        return @intrinsic("greater than", left, right)
+
+expression left = right:
+    get:
+        return @intrinsic("equal", left, right)
+
+expression left != right:
+    get:
+        return @intrinsic("not equal", left, right)
+
+expression left <= right:
+    get:
+        return @intrinsic("less than or equal", left, right)
+
+expression left >= right:
+    get:
+        return @intrinsic("greater than or equal", left, right)
+
+# --- Logic ---
+
+macro expression not value:
+    replacement:
+        @intrinsic("not", value)
+
+macro expression left and right:
+    replacement:
+        @intrinsic("and", left, right)
+
+macro expression left or right:
+    replacement:
+        @intrinsic("or", left, right)
+
+# --- Control flow ---
+
+macro section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+macro section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+macro section else if condition:
+    replacement:
+        @intrinsic("else if", condition)
+
+macro section else:
+    replacement:
+        @intrinsic("else")
+
+macro section [match|switch] [based|] [on|] value:
+    replacement:
+        @intrinsic("switch", value)
+
+macro section case value:
+    replacement:
+        @intrinsic("case", value)
+
+# --- Output ---
+
+effect print msg:
+    execute:
+        @intrinsic("call", "libc", "printf", "i32", "%s", msg as a string)
+
+effect print msg [as|on] [a|] [new|] line:
+    execute:
+        @intrinsic("call", "libc", "printf", "i32", "%s\n", msg as a string)
+
+effect print integer msg [as|on] [a|] [new|] line:
+    execute:
+        @intrinsic("call", "libc", "printf", "i32", "%ld\n", msg as a 64 bit integer)

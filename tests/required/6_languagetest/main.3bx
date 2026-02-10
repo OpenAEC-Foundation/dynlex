@@ -1,12 +1,20 @@
+macro expression waarde als bits bit integer:
+	replacement:
+		@intrinsic("cast", waarde, "integer", bits)
+
 effect zeg bericht:
 	execute:
-		@intrinsic("print", bericht)
+		@intrinsic("call", "libc", "printf", "i32", "%s\n", bericht)
 
-effect maak variabele waarde:
+effect toon getal:
 	execute:
+		@intrinsic("call", "libc", "printf", "i32", "%ld\n", getal als 64 bit integer)
+
+macro effect maak variabele waarde:
+	replacement:
 		@intrinsic("store", variabele, waarde)
 
 zeg "hallo"
 maak a 10
 zeg "a is:"
-zeg a
+toon a

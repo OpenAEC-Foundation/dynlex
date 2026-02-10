@@ -214,6 +214,14 @@ Expression *Section::detectPatterns(ParseContext &context, Range range, SectionT
 	return expr;
 }
 
+static Expression *createStringLiteral(Range range, StringHierarchy *strNode) {
+	Expression *strExpr = new Expression();
+	strExpr->range = range.subRange(strNode->start - 1, strNode->end + 1);
+	strExpr->kind = Expression::Kind::Literal;
+	strExpr->literalValue = processEscapeSequences(range.subString.substr(strNode->start, strNode->end - strNode->start));
+	return strExpr;
+}
+
 Expression *
 Section::detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType) {
 	Range relativeRange = Range(range.line, range.subString.substr(node->start, node->end - node->start));
@@ -258,10 +266,15 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 				// Process arguments - first argument is the intrinsic name
 				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
-					Expression *argExpr = detectPatternsRecursively(
-						context, range.subRange(argNode->start, argNode->end), argNode->cloneWithOffset(-argNode->start),
-						SectionType::Expression
-					);
+					Expression *argExpr;
+					if (argNode->charachter == '"') {
+						argExpr = createStringLiteral(range, argNode);
+					} else {
+						argExpr = detectPatternsRecursively(
+							context, range.subRange(argNode->start, argNode->end),
+							argNode->cloneWithOffset(-argNode->start), SectionType::Expression
+						);
+					}
 					if (!argExpr)
 						return false;
 
@@ -301,25 +314,28 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
 		} else if (child->charachter == '"') {
-			// Create a literal expression for the string
-			Expression *strExpr = new Expression();
-			strExpr->range = range.subRange(child->start - "\""sv.length(), child->end + "\""sv.length());
-			strExpr->kind = Expression::Kind::Literal;
-			strExpr->literalValue = processEscapeSequences(range.subString.substr(child->start, child->end - child->start));
-			expr->arguments.push_back(strExpr);
+			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
 	}
 
-	// Replace number literals in pattern text and create sub-expressions
+	// Replace number literals in pattern text and create sub-expressions.
+	// Search the transformed pattern text (where strings/intrinsics are already replaced with \a)
+	// to avoid matching digits inside string literals (e.g. "i64").
 	std::regex numLiteralRegex("\\d+(?:\\.\\d+)?");
-	std::cregex_iterator iter(relativeRange.subString.begin(), relativeRange.subString.end(), numLiteralRegex);
-	std::cregex_iterator end;
-	for (; iter != end; ++iter) {
-		// Create a literal expression for the number
+	std::string patternSnapshot = reference->pattern.text;
+	std::sregex_iterator iter(patternSnapshot.begin(), patternSnapshot.end(), numLiteralRegex);
+	std::sregex_iterator end;
+	// Collect matches, then process in reverse so pattern positions stay valid
+	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
+	for (; iter != end; ++iter)
+		numMatches.emplace_back(iter->position(), iter->position() + iter->length(), iter->str());
+	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
+		auto &[pos, endPos, numStr] = *it;
 		Expression *numExpr = new Expression();
-		std::string numStr = iter->str();
-		numExpr->range = relativeRange.subRange(iter->position(), iter->position() + iter->length());
+		size_t lineStart = reference->pattern.getLinePos(pos);
+		size_t lineEnd = reference->pattern.getLinePos(endPos);
+		numExpr->range = relativeRange.subRange(lineStart, lineEnd);
 		numExpr->kind = Expression::Kind::Literal;
 		if (numStr.find('.') != std::string::npos) {
 			numExpr->literalValue = std::stod(numStr);
@@ -327,7 +343,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 			numExpr->literalValue = static_cast<int64_t>(std::stoll(numStr));
 		}
 		expr->arguments.push_back(numExpr);
-		reference->pattern.replaceLine(iter->position(), iter->position() + iter->length());
+		reference->pattern.replacePattern(pos, endPos);
 	}
 
 	// Whitespace handling
@@ -399,7 +415,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	bool found = false;
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
-		for (PatternElement &element : definition->patternElements) {
+		forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
 			if (element.type != PatternElement::Type::Other && element.text == reference->name) {
 				if (element.type != PatternElement::Type::Variable) {
 					element.type = PatternElement::Type::Variable;
@@ -420,7 +436,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 					reference->definition = variableDefinitions[element.text];
 				found = true;
 			}
-		}
+		});
 	}
 	if (!found) {
 		// propagate to parent
@@ -450,4 +466,15 @@ void Section::decrementUnresolved() {
 	if (unresolvedCount == 0 && parent) {
 		parent->decrementUnresolved();
 	}
+}
+
+Variable *Section::findVariable(const std::string &name) {
+	Section *sec = this;
+	while (sec) {
+		auto it = sec->variables.find(name);
+		if (it != sec->variables.end())
+			return it->second;
+		sec = sec->parent;
+	}
+	return nullptr;
 }

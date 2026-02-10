@@ -1,0 +1,223 @@
+# Snake Game in 3BX
+# A simple snake game with 20x20 grid
+
+import lib/std.3bx
+import lib/graphics.3bx
+
+# Helper patterns for arrays and random numbers
+expression allocate count items:
+	get:
+		return @intrinsic("call", "libc", "calloc", "pointer", count, 8)
+
+effect store value into array at index:
+	execute:
+		@intrinsic("store at", array, index, value)
+
+expression item index of array:
+	get:
+		return @intrinsic("load at", array, index)
+
+expression a random number:
+	get:
+		return @intrinsic("call", "libc", "rand", "i32")
+
+expression current time:
+	get:
+		return @intrinsic("call", "libc", "time", "i64", 0)
+
+effect seed random with value:
+	execute:
+		@intrinsic("call", "libc", "srand", "void", value)
+
+# Game constants
+set grid_size to 20
+set cell_size to 20
+set window_size to grid_size * cell_size
+set max_length to grid_size * grid_size
+
+# Initialize random seed
+seed random with current time
+
+# Create window
+set window to a new window with width window_size and height window_size
+
+# Allocate arrays for snake body (x and y coordinates)
+set snake_x to allocate max_length items
+set snake_y to allocate max_length items
+
+# Initialize snake starting position (center of grid)
+set snake_length to 3
+store 10 into snake_x at 0
+store 10 into snake_y at 0
+store 9 into snake_x at 1
+store 10 into snake_y at 1
+store 8 into snake_x at 2
+store 10 into snake_y at 2
+
+# Initial direction (1=up, 2=right, 3=down, 4=left)
+set direction to 2
+
+# Food position
+set food_x to 15
+set food_y to 10
+
+# Game state
+set game_over to 0
+set score to 0
+
+# Main game loop
+loop while not the window should close:
+	# Poll for key input
+	set key to the pressed key of window
+
+	# Update direction based on input (if key pressed)
+	if key = 1:
+		set direction to 1
+	if key = 2:
+		set direction to 2
+	if key = 3:
+		set direction to 3
+	if key = 4:
+		set direction to 4
+	if key = 5:
+		set game_over to 1
+
+	# Only update game if not game over
+	if not game_over:
+		# Calculate new head position
+		set head_x to item 0 of snake_x
+		set head_y to item 0 of snake_y
+
+		set new_head_x to head_x
+		set new_head_y to head_y
+
+		if direction = 1:
+			set new_head_y to head_y - 1
+		if direction = 2:
+			set new_head_x to head_x + 1
+		if direction = 3:
+			set new_head_y to head_y + 1
+		if direction = 4:
+			set new_head_x to head_x - 1
+
+		# Check wall collision
+		if new_head_x < 0:
+			set game_over to 1
+		if new_head_x >= grid_size:
+			set game_over to 1
+		if new_head_y < 0:
+			set game_over to 1
+		if new_head_y >= grid_size:
+			set game_over to 1
+
+		# Check self collision
+		if not game_over:
+			set i to 0
+			loop while i < snake_length:
+				set body_x to item i of snake_x
+				set body_y to item i of snake_y
+				if new_head_x = body_x:
+					if new_head_y = body_y:
+						set game_over to 1
+				set i to i + 1
+
+		# Move snake if not game over
+		if not game_over:
+			# Check if food eaten
+			set ate_food to 0
+			if new_head_x = food_x:
+				if new_head_y = food_y:
+					set ate_food to 1
+					set score to score + 1
+
+					# Generate new food position
+					set food_x to a random number mod grid_size
+					set food_y to a random number mod grid_size
+
+			# Move body segments (shift backward)
+			if not ate_food:
+				set i to snake_length - 1
+				loop while i > 0:
+					set prev_x to item i - 1 of snake_x
+					set prev_y to item i - 1 of snake_y
+					store prev_x into snake_x at i
+					store prev_y into snake_y at i
+					set i to i - 1
+
+			# If food eaten, grow the snake
+			if ate_food:
+				set i to snake_length
+				loop while i > 0:
+					set prev_x to item i - 1 of snake_x
+					set prev_y to item i - 1 of snake_y
+					store prev_x into snake_x at i
+					store prev_y into snake_y at i
+					set i to i - 1
+				set snake_length to snake_length + 1
+
+			# Move head to new position
+			store new_head_x into snake_x at 0
+			store new_head_y into snake_y at 0
+
+	# Render
+	clear screen
+
+	if not game_over:
+		# Draw background (dark)
+		draw rectangle at 0 0 size window_size window_size with color 30 30 30
+
+		# Draw food (red)
+		set food_pixel_x to food_x * cell_size
+		set food_pixel_y to food_y * cell_size
+		draw rectangle at food_pixel_x food_pixel_y size cell_size cell_size with color 200 0 0
+
+		# Draw snake body (green)
+		set i to 1
+		loop while i < snake_length:
+			set body_x to item i of snake_x
+			set body_y to item i of snake_y
+			set pixel_x to body_x * cell_size
+			set pixel_y to body_y * cell_size
+			draw rectangle at pixel_x pixel_y size cell_size cell_size with color 0 150 0
+			set i to i + 1
+
+		# Draw snake head (brighter green)
+		set head_x to item 0 of snake_x
+		set head_y to item 0 of snake_y
+		set head_pixel_x to head_x * cell_size
+		set head_pixel_y to head_y * cell_size
+		draw rectangle at head_pixel_x head_pixel_y size cell_size cell_size with color 0 200 0
+
+	else:
+		# Game over screen - dark red background
+		draw rectangle at 0 0 size window_size window_size with color 80 20 20
+
+		# Draw a skull-like pattern in the center using rectangles
+		set cx to window_size / 2 - 40
+		set cy to window_size / 2 - 40
+
+		# Skull outline (white)
+		draw rectangle at cx cy size 80 80 with color 200 200 200
+
+		# Eyes (dark)
+		draw rectangle at cx + 12 cy + 20 size 20 20 with color 40 0 0
+		draw rectangle at cx + 48 cy + 20 size 20 20 with color 40 0 0
+
+		# Mouth (dark)
+		draw rectangle at cx + 20 cy + 52 size 40 12 with color 40 0 0
+
+		# Teeth (white gaps in mouth)
+		draw rectangle at cx + 30 cy + 52 size 8 12 with color 200 200 200
+		draw rectangle at cx + 46 cy + 52 size 8 12 with color 200 200 200
+
+	# Display frame
+	display the frame of window
+
+	# Game speed
+	sleep for 150 milliseconds
+
+# Cleanup
+close the window
+
+# Print final score
+print score as line

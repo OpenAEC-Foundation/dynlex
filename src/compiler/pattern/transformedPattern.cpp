@@ -31,11 +31,11 @@ size_t TransformedPattern::getPatternPos(size_t linePos) {
 	});
 }
 
-void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, std::string replacement) {
+void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, const std::string &replacement) {
 	replaceLocal(getPatternPos(lineStartPos), getPatternPos(lineEndPos), lineEndPos, replacement);
 }
 
-void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos, std::string replacement) {
+void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos, const std::string &replacement) {
 	replaceLocal(patternStartPos, patternEndPos, getLinePos(patternEndPos), replacement);
 }
 std::string TransformedPattern::toString() const {
@@ -51,7 +51,7 @@ std::string TransformedPattern::toString() const {
 }
 
 void TransformedPattern::replaceLocal(
-	size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, std::string replacement
+	size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, const std::string &replacement
 ) {
 	text = text.substr(0, patternStartPos) + replacement + text.substr(patternEndPos);
 	// insert a new keyframe after the argument char and check for any keyframes which got redundant

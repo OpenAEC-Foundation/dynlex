@@ -49,8 +49,8 @@ tests/required/           # Test cases with expected outputs
 
 **Example:**
 ```
-effect set var to val:
-    execute:
+macro effect set var to val:
+    replacement:
         @intrinsic("store", var, val)
 
 set x to 42
@@ -86,7 +86,8 @@ Run test: Build compiler → run on test file → execute output → compare wit
 
 - **Compilation target:** Native code via LLVM (outputs .ll or executable based on flags)
 - **Type system:** Static typing with full inference (no annotations)
-- **Memory:** Automatic scope-based destruction (RAII-style)
+- **Memory (3BX language):** Automatic scope-based destruction (RAII-style)
+- **Memory (Compiler internals):** Arena-style allocation - objects allocated with `new` during compilation are not explicitly deleted. They're owned by ParseContext and cleaned up when compilation finishes. This includes: CodeLine, Section, Expression, Variable, PatternDefinition, PatternReference, VariableReference, MatchProgress. No smart pointers needed.
 - **Primitive types:** Sized numerics (i8/i16/i32/i64, f32/f64), bool, string
 - **Classes:** Data-only structs (no member functions), patterns operate on them
 - **Pattern ambiguity:** Compiler error if multiple patterns match

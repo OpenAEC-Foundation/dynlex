@@ -37,9 +37,9 @@ struct MatchProgress {
 	// returns a vector containing alternative steps we could take through the pattern tree, ordered from least important ([0])
 	// to most important ([length() - 1])
 	std::vector<MatchProgress> step();
-	// wether this progress can start a submatch
+	// whether this progress can start a submatch
 	bool canSubstitute() const;
-	// wether this progress can be a submatch
+	// whether this progress can be a submatch
 	bool canBeSubstitute() const;
 	void addMatchData(PatternMatch &match);
 };

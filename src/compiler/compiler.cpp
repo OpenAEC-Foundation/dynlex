@@ -6,6 +6,7 @@
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "stringFunctions.h"
+#include "type.h"
 #include "variable.h"
 #include <algorithm>
 #include <list>
@@ -33,7 +34,7 @@ const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)")
 
 bool compile(const std::string &path, ParseContext &context) {
 	// first, read all source files
-	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context);
+	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) && inferTypes(context);
 }
 
 bool importSourceFile(const std::string &path, ParseContext &context) {
@@ -75,8 +76,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 
 		// check if the line is an import statement
 		if (line->rightTrimmedText.starts_with("import ")) {
-			// if so, recursively import the file
-			// extract the file path
+			// recursively import the file, replacing this line with the imported content
 			std::string_view importPath = line->rightTrimmedText.substr("import "sv.length());
 			if (!importSourceFile((std::string)importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(
@@ -85,8 +85,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 				));
 				return false;
 			}
-			// this line doesn't need any form of pattern matching
-			line->resolved = true;
+			continue;
 		}
 		line->mergedLineIndex = context.codeLines.size();
 		context.codeLines.push_back(line);
@@ -202,9 +201,11 @@ bool analyzeSections(ParseContext &context) {
 }
 
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
+	int offset = reference->range().start();
 	for (VariableMatch &varMatch : match.discoveredVariables) {
-		VariableReference *varRef =
-			new VariableReference(Range(reference->range().line, varMatch.lineStartPos, varMatch.lineEndPos), varMatch.name);
+		VariableReference *varRef = new VariableReference(
+			Range(reference->range().line, offset + varMatch.lineStartPos, offset + varMatch.lineEndPos), varMatch.name
+		);
 		varMatch.variableReference = varRef;
 		reference->range().section()->addVariableReference(context, varRef);
 	}
@@ -214,8 +215,6 @@ void addVariableReferencesFromMatch(ParseContext &context, PatternReference *ref
 }
 
 void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
-	// arguments will be divided over child matches. all arguments will still be present. it's safe to overwrite the main
-	// expressions' arguments, since they're pointers.
 	expr->arguments = match->arguments;
 	// move arguments to the appropriate submatches
 	expr->kind = Expression::Kind::PatternCall;
@@ -285,7 +284,7 @@ bool resolvePatterns(ParseContext &context) {
 	context.mainSection->collectPatternReferencesAndSections(unResolvedPatternReferences, unResolvedSections);
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
-			unresolvedDefinition->patternElements = getPatternElements(unresolvedDefinition->range.subString);
+			unresolvedDefinition->patternElements = parsePatternElements(unresolvedDefinition->range.subString);
 		}
 	}
 	for (PatternReference *unResolvedPatternReference : unResolvedPatternReferences) {
@@ -297,50 +296,26 @@ bool resolvePatterns(ParseContext &context) {
 		return new PatternTreeNode(PatternElement::Type::Other, "");
 	});
 
-	// solving all patterns and variables is like solving a sudoku. let's get
-	// the 'starting numbers' first: those are the patterns which only consist
-	// of one element. std::remove_if(unResolvedSections.begin(),
-	// unResolvedSections.end(), [context](Section *section)
-	//			   {
-	//				section->patternDefinitions
-	//				line->patternElements =
-	// getPatternElements(line->patternText); 				if(line->isPatternDefinition() &&
-	// line->patternElements.size() == 1)
-	//				{
-	//					//this single element can never be a variable, so we can
-	// declare this pattern definition as resolved.
-	//					line->sectionOpening->resolved = true;
-	//					line->resolved = true;
-	//					//add the pattern to its respective pattern tree
-	//					context.patternTrees[(int)line->sectionOpening->type]->addPatternPart(line->patternElements,
-	// line->sectionOpening);
-	//				}
-	//				return line->resolved; });
-
-	// now start iterating and resolving.
+	// Now start iterating and resolving.
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&context](Section *section) {
-			// wether all pattern definitions are resolved for this section
+			// whether all pattern definitions are resolved for this section
 			section->patternDefinitionsResolved = true;
 			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
 					definition->resolved = true;
-					// loop over all pattern elements and 'stripe off' parts with
-					// variables
-					for (PatternElement element : definition->patternElements) {
+					// check all leaf elements (including inside choices) for unresolved variables
+					forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
 						if (element.type == PatternElement::Type::VariableLike) {
 							// a single pattern element can never become a variable
 							if (definition->patternElements.size() > 1) {
-								// this element could possibly become a variable
-								// later. we'll have to check again in the next
-								// iteration
 								definition->resolved = false;
 								section->patternDefinitionsResolved = false;
 							}
 						}
-					}
+					});
 					if (definition->resolved) {
 						// we can add this definition already, to help resolve more references
 						context.patternTrees[(size_t)section->type]->addPatternPart(definition->patternElements, definition);
@@ -401,12 +376,12 @@ bool resolvePatterns(ParseContext &context) {
 				std::unordered_map<Section *, Section *> sectionToHighest;
 				for (VariableReference *ref : references) {
 					Section *sec = ref->range.section();
-					if (sectionToHighest.count(sec))
+					if (sectionToHighest.contains(sec))
 						continue;
 
 					Section *highest = sec;
 					for (Section *a = sec->parent; a; a = a->parent) {
-						if (a->variableReferences.count(name))
+						if (a->variableReferences.contains(name))
 							highest = a;
 					}
 					sectionToHighest[sec] = highest;
@@ -448,4 +423,403 @@ bool resolvePatterns(ParseContext &context) {
 		);
 	}
 	return false;
+}
+
+// Resolve a variable expression through macro bindings to find the actual variable expression.
+// Stops if the binding is self-referential (call-site variable has the same name as the macro parameter).
+static Expression *
+resolveVarThroughMacro(Expression *expr, const std::unordered_map<std::string, Expression *> &macroBindings) {
+	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
+		return expr;
+	auto it = macroBindings.find(expr->variable->name);
+	if (it != macroBindings.end() && it->second != expr)
+		return resolveVarThroughMacro(it->second, macroBindings);
+	return expr;
+}
+
+// Resolve an expression's type through macro bindings
+static Type resolveTypeThroughMacro(Expression *expr, const std::unordered_map<std::string, Expression *> &macroBindings) {
+	Expression *resolved = resolveVarThroughMacro(expr, macroBindings);
+	return resolved ? resolved->type : Type{};
+}
+
+// Infer types through a macro body with given parameter bindings. Returns true if anything changed.
+static bool
+inferMacroBody(Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context);
+
+// Infer the type of an expression bottom-up. Returns true if the type changed.
+static bool inferExpressionType(
+	Expression *expr, ParseContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
+) {
+	if (!expr)
+		return false;
+
+	bool changed = false;
+
+	// Recurse into arguments first (bottom-up)
+	for (Expression *arg : expr->arguments) {
+		changed |= inferExpressionType(arg, context, macroBindings);
+	}
+
+	Type oldType = expr->type;
+
+	switch (expr->kind) {
+	case Expression::Kind::Literal: {
+		if (std::holds_alternative<int64_t>(expr->literalValue)) {
+			expr->type = {Type::Kind::Numeric};
+		} else if (std::holds_alternative<double>(expr->literalValue)) {
+			expr->type = {Type::Kind::Float, 8}; // C++ double = f64
+		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
+			expr->type = {Type::Kind::String};
+		}
+		break;
+	}
+
+	case Expression::Kind::Variable: {
+		if (expr->variable) {
+			std::string varName = expr->variable->name;
+			// Check macro bindings first
+			auto macroIt = macroBindings.find(varName);
+			if (macroIt != macroBindings.end()) {
+				Type boundType = macroIt->second->type;
+				if (boundType.isDeduced()) {
+					expr->type = boundType;
+				}
+				break;
+			}
+			// Look up variable in scope
+			Section *sec = expr->range.line ? expr->range.line->section : nullptr;
+			Variable *var = sec ? sec->findVariable(varName) : nullptr;
+			if (var && var->type.isDeduced()) {
+				expr->type = var->type;
+			}
+		}
+		break;
+	}
+
+	case Expression::Kind::IntrinsicCall: {
+		if (isArithmeticOperator(expr->intrinsicName)) {
+			if (expr->arguments.size() >= 3) {
+				Type leftType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				Type rightType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+				if (leftType.isDeduced() && rightType.isDeduced()) {
+					expr->type = isPointerArithmeticOperator(expr->intrinsicName) ? Type::promoteArithmetic(leftType, rightType)
+																				  : Type::promote(leftType, rightType);
+				}
+			}
+		} else if (isComparisonOperator(expr->intrinsicName)) {
+			expr->type = {Type::Kind::Bool};
+		} else if (expr->intrinsicName == "and" || expr->intrinsicName == "or") {
+			expr->type = {Type::Kind::Bool};
+		} else if (expr->intrinsicName == "not") {
+			expr->type = {Type::Kind::Bool};
+		} else if (expr->intrinsicName == "address of") {
+			if (expr->arguments.size() >= 2) {
+				Type varType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				if (varType.isDeduced())
+					expr->type = varType.pointed();
+			}
+		} else if (expr->intrinsicName == "dereference") {
+			if (expr->arguments.size() >= 2) {
+				Type ptrType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				if (ptrType.isDeduced() && ptrType.isPointer())
+					expr->type = ptrType.dereferenced();
+			}
+		} else if (expr->intrinsicName == "store at") {
+			expr->type = {Type::Kind::Void};
+		} else if (expr->intrinsicName == "load at") {
+			expr->type = {Type::Kind::Integer, 8};
+		} else if (expr->intrinsicName == "store") {
+			if (expr->arguments.size() >= 3) {
+				Expression *varExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
+				Type valType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+				if (varExpr->kind == Expression::Kind::Variable && varExpr->variable && valType.isDeduced()) {
+					Section *sec = varExpr->range.line ? varExpr->range.line->section : nullptr;
+					Variable *var = sec ? sec->findVariable(varExpr->variable->name) : nullptr;
+					if (var && var->type.canRefineTo(valType)) {
+						var->type = valType;
+						changed = true;
+					}
+				}
+			}
+			expr->type = {Type::Kind::Void};
+		} else if (expr->intrinsicName == "return") {
+			if (expr->arguments.size() >= 2) {
+				Type retType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				if (retType.isDeduced()) {
+					expr->type = retType;
+					if (context.currentInstantiation)
+						context.currentInstantiation->returnType = retType;
+				}
+			}
+		} else if (expr->intrinsicName == "call") {
+			// Format: @intrinsic("call", "library", "function", "return type", args...)
+			if (expr->arguments.size() >= 4) {
+				std::string retTypeStr;
+				if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
+					retTypeStr = *str;
+				if (!retTypeStr.empty())
+					expr->type = Type::fromString(retTypeStr);
+			}
+		} else if (expr->intrinsicName == "cast") {
+			// Format: @intrinsic("cast", value, type_string[, bit_size])
+			if (expr->arguments.size() >= 3) {
+				std::string targetStr;
+				if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
+					targetStr = *str;
+				if (targetStr == "integer" || targetStr == "float") {
+					Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
+					int byteSize = 8; // default 64 bit
+					if (expr->arguments.size() >= 4) {
+						if (auto *bits = std::get_if<int64_t>(&expr->arguments[3]->literalValue))
+							byteSize = *bits / 8;
+					}
+					expr->type = {kind, byteSize};
+				} else if (!targetStr.empty()) {
+					expr->type = Type::fromString(targetStr);
+				}
+			}
+		} else if (expr->intrinsicName == "loop while" || expr->intrinsicName == "if" || expr->intrinsicName == "else if" ||
+				   expr->intrinsicName == "else" || expr->intrinsicName == "switch" || expr->intrinsicName == "case") {
+			expr->type = {Type::Kind::Void};
+		}
+		break;
+	}
+
+	case Expression::Kind::PatternCall: {
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode) {
+			PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinition;
+			if (def && def->section) {
+				Section *matchedSection = def->section;
+
+				// Build parameter bindings from call-site arguments
+				std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+
+				std::unordered_map<std::string, Expression *> callBindings;
+				size_t argIndex = 0;
+				for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+					auto paramIt = node->parameterNames.find(def);
+					if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+						// Resolve through current macro bindings if we're inside a macro
+						Expression *actualArg = sortedArgs[argIndex];
+						if (actualArg->kind == Expression::Kind::Variable && actualArg->variable) {
+							auto macroIt = macroBindings.find(actualArg->variable->name);
+							if (macroIt != macroBindings.end()) {
+								actualArg = macroIt->second;
+							}
+						}
+						callBindings[paramIt->second] = actualArg;
+						argIndex++;
+					}
+				}
+
+				if (matchedSection->type == SectionType::Effect) {
+					// Effects: infer body, result type is Void
+					changed |= inferMacroBody(matchedSection, callBindings, context);
+					expr->type = {Type::Kind::Void};
+				} else if (matchedSection->isMacro) {
+					// Code replacement: infer body, type = replacement expression type
+					changed |= inferMacroBody(matchedSection, callBindings, context);
+					for (Section *child : matchedSection->children) {
+						for (CodeLine *line : child->codeLines) {
+							if (line->expression && line->expression->type.isDeduced())
+								expr->type = line->expression->type;
+						}
+					}
+				} else {
+					// Non-macro function: infer body per-instantiation
+					// Build argTypes in nodesPassed order (must match codegen's paramBindings order)
+					std::vector<Type> argTypes;
+					size_t argTypeIndex = 0;
+					for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+						auto paramIt = node->parameterNames.find(def);
+						if (paramIt != node->parameterNames.end() && argTypeIndex < sortedArgs.size()) {
+							Expression *argExpr = callBindings[paramIt->second];
+							argTypes.push_back(resolveTypeThroughMacro(argExpr, macroBindings));
+							argTypeIndex++;
+						}
+					}
+
+					Instantiation &inst = matchedSection->instantiations[argTypes];
+					Instantiation *savedInst = context.currentInstantiation;
+					context.currentInstantiation = &inst;
+					changed |= inferMacroBody(matchedSection, callBindings, context);
+					context.currentInstantiation = savedInst;
+
+					if (inst.returnType.isDeduced())
+						expr->type = inst.returnType;
+				}
+			}
+		}
+		break;
+	}
+
+	case Expression::Kind::Pending:
+		break;
+	}
+
+	return changed || (expr->type != oldType);
+}
+
+static bool
+inferMacroBody(Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
+	bool changed = false;
+	for (Section *child : macroSection->children) {
+		for (CodeLine *line : child->codeLines) {
+			if (line->expression) {
+				changed |= inferExpressionType(line->expression, context, bindings);
+			}
+		}
+	}
+	return changed;
+}
+
+// Default a Numeric expression to a sized Integer type.
+// For literals, check if the value fits in i32; otherwise use i64.
+// For non-literal Numeric expressions, default to i32.
+static void defaultNumericExpressions(Expression *expr) {
+	if (!expr)
+		return;
+	if (expr->type.kind == Type::Kind::Numeric) {
+		int size = 4; // default to i32
+		if (expr->kind == Expression::Kind::Literal) {
+			if (auto *intVal = std::get_if<int64_t>(&expr->literalValue)) {
+				if (*intVal < INT32_MIN || *intVal > INT32_MAX)
+					size = 8;
+			}
+		}
+		expr->type = {Type::Kind::Integer, size};
+	}
+	for (Expression *arg : expr->arguments)
+		defaultNumericExpressions(arg);
+}
+
+static void defaultNumericTypes(Section *section) {
+	for (auto &[name, var] : section->variables) {
+		if (var->type.kind == Type::Kind::Numeric)
+			var->type = {Type::Kind::Integer, 4}; // default to i32
+	}
+	// Default Numeric→Integer(4) in instantiation map keys
+	if (!section->instantiations.empty()) {
+		std::map<std::vector<Type>, Instantiation> updated;
+		for (auto &[argTypes, inst] : section->instantiations) {
+			std::vector<Type> defaultedTypes = argTypes;
+			for (Type &t : defaultedTypes) {
+				if (t.kind == Type::Kind::Numeric)
+					t = {Type::Kind::Integer, 4};
+			}
+			if (inst.returnType.kind == Type::Kind::Numeric)
+				inst.returnType = {Type::Kind::Integer, 4};
+			updated[defaultedTypes] = std::move(inst);
+		}
+		section->instantiations = std::move(updated);
+	}
+	for (Section *child : section->children)
+		defaultNumericTypes(child);
+}
+
+// Validate types after inference — check for type errors
+static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
+	if (!expr)
+		return true;
+
+	bool valid = true;
+	for (Expression *arg : expr->arguments)
+		valid &= validateExpressionTypes(arg, context);
+
+	if (expr->kind == Expression::Kind::IntrinsicCall) {
+		if (isArithmeticOperator(expr->intrinsicName)) {
+			if (expr->arguments.size() >= 3) {
+				Type leftType = expr->arguments[1]->type;
+				Type rightType = expr->arguments[2]->type;
+				if (leftType.isDeduced() && !leftType.isNumeric()) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error,
+						"Cannot use " + leftType.toString() + " in arithmetic (expected a numeric type)",
+						expr->arguments[1]->range
+					));
+					valid = false;
+				}
+				if (rightType.isDeduced() && !rightType.isNumeric()) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error,
+						"Cannot use " + rightType.toString() + " in arithmetic (expected a numeric type)",
+						expr->arguments[2]->range
+					));
+					valid = false;
+				}
+			}
+		} else if (isComparisonOperator(expr->intrinsicName)) {
+			if (expr->arguments.size() >= 3) {
+				Type leftType = expr->arguments[1]->type;
+				Type rightType = expr->arguments[2]->type;
+				if (leftType.isDeduced() && rightType.isDeduced() && !leftType.isNumeric() && !rightType.isNumeric() &&
+					leftType != rightType) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error, "Cannot compare " + leftType.toString() + " with " + rightType.toString(),
+						expr->range
+					));
+					valid = false;
+				}
+			}
+		} else if (expr->intrinsicName == "negate") {
+			if (expr->arguments.size() >= 2) {
+				Type operandType = expr->arguments[1]->type;
+				if (operandType.isDeduced() && !operandType.isNumeric()) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error, "Cannot negate " + operandType.toString() + " (expected a numeric type)",
+						expr->arguments[1]->range
+					));
+					valid = false;
+				}
+			}
+		}
+	}
+
+	return valid;
+}
+
+bool inferTypes(ParseContext &context) {
+	// Type inference uses fixed-point iteration: types flow through expressions
+	// until no more changes occur. 64 iterations handles deeply nested expressions
+	// with complex type dependencies (macros, pattern calls, arithmetic promotion).
+	for (int iteration = 0; iteration < 64; iteration++) {
+		bool changed = false;
+
+		for (CodeLine *line : context.codeLines) {
+			if (line->expression) {
+				changed |= inferExpressionType(line->expression, context);
+			}
+		}
+
+		if (!changed)
+			break;
+	}
+
+	// Default remaining Numeric types to sized Integer
+	for (CodeLine *line : context.codeLines) {
+		if (line->expression)
+			defaultNumericExpressions(line->expression);
+	}
+	defaultNumericTypes(context.mainSection);
+
+	// Validate types
+	bool valid = true;
+	for (CodeLine *line : context.codeLines) {
+		if (line->expression)
+			valid &= validateExpressionTypes(line->expression, context);
+	}
+
+	return valid;
+}
+
+bool isArithmeticOperator(const std::string &name) {
+	return name == "add" || name == "subtract" || name == "multiply" || name == "divide" || name == "modulo";
+}
+
+bool isPointerArithmeticOperator(const std::string &name) { return name == "add" || name == "subtract"; }
+
+bool isComparisonOperator(const std::string &name) {
+	return name == "less than" || name == "greater than" || name == "equal" || name == "not equal" ||
+		   name == "less than or equal" || name == "greater than or equal";
 }

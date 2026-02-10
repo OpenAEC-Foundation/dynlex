@@ -2,10 +2,8 @@
 #include "matchProgress.h"
 #include <iostream>
 
-void ParseContext::reportDiagnostics() {
+void ParseContext::printDiagnostics() {
 	for (Diagnostic d : diagnostics) {
-		// report all diagnostics with cerr
-
 		std::cerr << d.toString() << "\n";
 	}
 }

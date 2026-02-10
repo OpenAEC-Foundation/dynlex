@@ -1,0 +1,70 @@
+# 3BX Graphics Library (GLFW + OpenGL)
+
+import lib/std.3bx
+
+# GL constants
+# GL_COLOR_BUFFER_BIT = 0x4000 = 16384
+# GL_PROJECTION = 0x1701 = 5889
+# GL_MODELVIEW = 0x1700 = 5888
+# GLFW_PRESS = 1
+# GLFW_KEY_ESCAPE = 256
+# GLFW_KEY_RIGHT = 262
+# GLFW_KEY_LEFT = 263
+# GLFW_KEY_DOWN = 264
+# GLFW_KEY_UP = 265
+
+expression a new window with width w and height h:
+	get:
+		@intrinsic("call", "glfw", "glfwInit", "i32")
+		set window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "3BX", 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", window)
+		@intrinsic("call", "GL", "glMatrixMode", "void", 5889)
+		@intrinsic("call", "GL", "glLoadIdentity", "void")
+		set wf to w as a 64 bit float
+		set hf to h as a 64 bit float
+		set neg to 0.0 - 1.0
+		@intrinsic("call", "GL", "glOrtho", "void", 0.0, wf, hf, 0.0, neg, 1.0)
+		@intrinsic("call", "GL", "glMatrixMode", "void", 5888)
+		@intrinsic("call", "GL", "glLoadIdentity", "void")
+		return window
+
+effect clear [the|] screen:
+	execute:
+		@intrinsic("call", "GL", "glClear", "void", 16384)
+
+effect [display|show] [the|] frame [of|in] window:
+	execute:
+		@intrinsic("call", "glfw", "glfwSwapBuffers", "void", window)
+		@intrinsic("call", "glfw", "glfwPollEvents", "void")
+
+effect draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
+	execute:
+		@intrinsic("call", "GL", "glColor3ub", "void", r, g, b)
+		@intrinsic("call", "GL", "glRecti", "void", x, y, x + w, y + h)
+
+expression [the|] [last|] pressed key [of|in] window:
+	get:
+		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 265) = 1:
+			return 1
+		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 262) = 1:
+			return 2
+		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 264) = 1:
+			return 3
+		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 263) = 1:
+			return 4
+		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 256) = 1:
+			return 5
+		return 0
+
+expression [the|] window should close:
+	get:
+		return @intrinsic("call", "glfw", "glfwWindowShouldClose", "i32", window)
+
+effect sleep [for|] ms milliseconds:
+	execute:
+		@intrinsic("call", "libc", "usleep", "void", ms * 1000)
+
+effect close [the|] window:
+	execute:
+		@intrinsic("call", "glfw", "glfwDestroyWindow", "void", window)
+		@intrinsic("call", "glfw", "glfwTerminate", "void")

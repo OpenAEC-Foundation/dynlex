@@ -80,7 +80,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		if (compile(inputFile, context)) {
 			generateCode(context);
 		}
-		context.reportDiagnostics();
+		context.printDiagnostics();
 	} else {
 		std::cerr << "Usage: 3bx <file.3bx> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
 	}
