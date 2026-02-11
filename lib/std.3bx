@@ -42,6 +42,15 @@ macro expression value as [a|] pointer:
     replacement:
         @intrinsic("cast", value, "pointer")
 
+# --- Class properties ---
+
+macro expression:
+    patterns:
+        the {word:propertyname} of ownername
+        ownername's {word:propertyname}
+    replacement:
+        @intrinsic("property", ownername, propertyname)
+
 # --- Pointers ---
 
 macro expression [the|] address of var:

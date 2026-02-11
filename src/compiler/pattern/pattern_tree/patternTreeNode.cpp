@@ -14,6 +14,8 @@ addSharedChild(const std::vector<PatternTreeNode *> &parents, const PatternEleme
 
 		if (elem.type == PatternElement::Type::Variable) {
 			child = parent->argumentChild;
+		} else if (elem.type == PatternElement::Type::Word) {
+			child = parent->wordChild;
 		} else {
 			auto it = parent->literalChildren.find(elem.text);
 			if (it != parent->literalChildren.end())
@@ -22,7 +24,7 @@ addSharedChild(const std::vector<PatternTreeNode *> &parents, const PatternEleme
 
 		if (child) {
 			// parent already has a child for this element — reuse it
-			if (elem.type == PatternElement::Type::Variable)
+			if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
 				child->parameterNames[definition] = elem.text;
 			if (seen.insert(child).second)
 				children.push_back(child);
@@ -32,6 +34,9 @@ addSharedChild(const std::vector<PatternTreeNode *> &parents, const PatternEleme
 				sharedNew = new PatternTreeNode(elem.type, elem.text);
 			if (elem.type == PatternElement::Type::Variable) {
 				parent->argumentChild = sharedNew;
+				sharedNew->parameterNames[definition] = elem.text;
+			} else if (elem.type == PatternElement::Type::Word) {
+				parent->wordChild = sharedNew;
 				sharedNew->parameterNames[definition] = elem.text;
 			} else {
 				parent->literalChildren[elem.text] = sharedNew;

@@ -8,6 +8,7 @@ struct PatternMatch {
 	size_t lineEndPos;
 	std::vector<PatternTreeNode *> nodesPassed{};
 	std::vector<VariableMatch> discoveredVariables{};
+	std::vector<WordMatch> discoveredWords{};
 	std::vector<PatternMatch> subMatches{};
 	// the arguments
 	std::vector<Expression *> arguments;

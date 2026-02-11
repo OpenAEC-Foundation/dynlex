@@ -118,6 +118,18 @@ std::vector<MatchProgress> MatchProgress::step() {
 				nextMatches.push_back(substituteStep);
 			}
 		}
+		// word capture: matches a single VariableLike token as a string literal
+		if (currentNode->wordChild && elementToCompare.type == PatternElement::Type::VariableLike) {
+			MatchProgress wordStep = *this;
+			wordStep.currentNode = currentNode->wordChild;
+			wordStep.match.nodesPassed.push_back(wordStep.currentNode);
+			wordStep.sourceElementIndex++;
+			size_t lineStart = patternReference->pattern.getLinePos(patternPos);
+			size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
+			wordStep.match.discoveredWords.push_back({elementToCompare.text, lineStart, lineEnd});
+			wordStep.patternPos += elementToCompare.text.size();
+			nextMatches.push_back(wordStep);
+		}
 		// most priority: text match
 		if (elementToCompare.type != PatternElement::Type::Variable &&
 			currentNode->literalChildren.contains(elementToCompare.text)) {

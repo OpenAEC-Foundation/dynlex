@@ -10,7 +10,9 @@ struct PatternTreeNode : public PatternElement {
 	std::unordered_map<std::string, PatternTreeNode *> literalChildren{};
 	// this child node accepts a variable or the result of an expression
 	PatternTreeNode *argumentChild{};
-	// for argument nodes: maps pattern definition to parameter name
+	// this child node captures a single word as a string literal ({word:name} syntax)
+	PatternTreeNode *wordChild{};
+	// for argument/word nodes: maps pattern definition to parameter name
 	// (multiple definitions can share the same argument node with different parameter names)
 	std::unordered_map<PatternDefinition *, std::string> parameterNames{};
 	using PatternElement::PatternElement;

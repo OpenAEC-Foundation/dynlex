@@ -1,6 +1,7 @@
 #include "definitionSection.h"
 #include "diagnostic.h"
 #include "parseContext.h"
+#include "patternsSection.h"
 
 bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	context.diagnostics.push_back(
@@ -13,6 +14,10 @@ Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line)
 	// Macros use "replacement", handled here in base class
 	if (isMacro && line->patternText == "replacement") {
 		return new Section(SectionType::Replacement, this);
+	}
+
+	if (line->patternText == "patterns") {
+		return new PatternsSection(this);
 	}
 
 	// Nothing matched - give error

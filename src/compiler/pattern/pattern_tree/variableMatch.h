@@ -9,3 +9,9 @@ struct VariableMatch {
 	// Set when the VariableReference is created from this match
 	VariableReference *variableReference{};
 };
+
+struct WordMatch {
+	std::string text;
+	size_t lineStartPos;
+	size_t lineEndPos;
+};

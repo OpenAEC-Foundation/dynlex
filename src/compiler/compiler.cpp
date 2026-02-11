@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "IndentData.h"
+#include "classSection.h"
 #include "expression.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
@@ -197,6 +198,31 @@ bool analyzeSections(ParseContext &context) {
 		++compiledLineIndex;
 	}
 
+	// Create instantiations for class definitions where all fields have declared types
+	std::function<void(Section *)> createDeclaredInstantiations = [&](Section *section) {
+		if (section->type == SectionType::Class) {
+			auto *classSec = static_cast<ClassSection *>(section);
+			ClassDefinition *classDef = classSec->classDefinition;
+			if (!classDef->fields.empty() && classDef->instantiations.empty()) {
+				bool allDeclared = true;
+				std::vector<Type> fieldTypes;
+				for (const auto &field : classDef->fields) {
+					if (!field.declaredType.isDeduced()) {
+						allDeclared = false;
+						break;
+					}
+					fieldTypes.push_back(field.declaredType);
+				}
+				if (allDeclared) {
+					classDef->instantiations.push_back({fieldTypes});
+				}
+			}
+		}
+		for (Section *child : section->children)
+			createDeclaredInstantiations(child);
+	};
+	createDeclaredInstantiations(context.mainSection);
+
 	return true;
 }
 
@@ -235,6 +261,18 @@ void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *mat
 		arg->kind = Expression::Kind::Variable;
 		arg->variable = varMatch.variableReference;
 		arg->range = varMatch.variableReference->range;
+		expr->arguments.push_back(arg);
+	}
+
+	// Handle discoveredWords - add string Literal expressions
+	for (const WordMatch &wordMatch : match->discoveredWords) {
+		Expression *arg = new Expression();
+		arg->kind = Expression::Kind::Literal;
+		arg->literalValue = wordMatch.text;
+		arg->range = Range(
+			rootExpression->range.line, rootExpression->range.start() + wordMatch.lineStartPos,
+			rootExpression->range.start() + wordMatch.lineEndPos
+		);
 		expr->arguments.push_back(arg);
 	}
 }
@@ -318,7 +356,9 @@ bool resolvePatterns(ParseContext &context) {
 					});
 					if (definition->resolved) {
 						// we can add this definition already, to help resolve more references
-						context.patternTrees[(size_t)section->type]->addPatternPart(definition->patternElements, definition);
+						// Class patterns go into the Expression tree so they're resolvable as sub-expressions
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 					}
 				}
 			}
@@ -334,7 +374,8 @@ bool resolvePatterns(ParseContext &context) {
 					if (!definition->resolved) {
 						definition->resolved = true;
 
-						context.patternTrees[(size_t)section->type]->addPatternPart(definition->patternElements, definition);
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 					}
 					// add argument
 				}
@@ -531,14 +572,35 @@ static bool inferExpressionType(
 			expr->type = {Type::Kind::Integer, 8};
 		} else if (expr->intrinsicName == "store") {
 			if (expr->arguments.size() >= 3) {
-				Expression *varExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
+				Expression *destExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
 				Type valType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
-				if (varExpr->kind == Expression::Kind::Variable && varExpr->variable && valType.isDeduced()) {
-					Section *sec = varExpr->range.line ? varExpr->range.line->section : nullptr;
-					Variable *var = sec ? sec->findVariable(varExpr->variable->name) : nullptr;
+				if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
+					Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
+					Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
 					if (var && var->type.canRefineTo(valType)) {
 						var->type = valType;
 						changed = true;
+					}
+				} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
+						   valType.isDeduced()) {
+					// Storing to a class field: @intrinsic("store", @intrinsic("property", instance, field), value)
+					Type instType = resolveTypeThroughMacro(destExpr->arguments[1], macroBindings);
+					if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+						Expression *propExpr = resolveVarThroughMacro(destExpr->arguments[2], macroBindings);
+						std::string fieldName;
+						if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
+							fieldName = *str;
+						if (!fieldName.empty()) {
+							ClassDefinition *classDef = instType.classDefinition;
+							auto &fieldTypes = classDef->instantiations[instType.classInstIndex].fieldTypes;
+							for (size_t i = 0; i < classDef->fields.size(); i++) {
+								if (classDef->fields[i].name == fieldName && fieldTypes[i].canRefineTo(valType)) {
+									fieldTypes[i] = valType;
+									changed = true;
+									break;
+								}
+							}
+						}
 					}
 				}
 			}
@@ -562,21 +624,70 @@ static bool inferExpressionType(
 					expr->type = Type::fromString(retTypeStr);
 			}
 		} else if (expr->intrinsicName == "cast") {
-			// Format: @intrinsic("cast", value, type_string[, bit_size])
+			// Format: @intrinsic("cast", value, type_pattern_or_string[, bit_size])
 			if (expr->arguments.size() >= 3) {
-				std::string targetStr;
-				if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
-					targetStr = *str;
-				if (targetStr == "integer" || targetStr == "float") {
-					Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
-					int byteSize = 8; // default 64 bit
-					if (expr->arguments.size() >= 4) {
-						if (auto *bits = std::get_if<int64_t>(&expr->arguments[3]->literalValue))
-							byteSize = *bits / 8;
+				// Check if the type argument resolved to a TypeReference (class pattern)
+				Type typeArgType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+				if (typeArgType.kind == Type::Kind::TypeReference && typeArgType.classDefinition) {
+					ClassDefinition *classDef = typeArgType.classDefinition;
+					int instIdx = classDef->instantiations.empty() ? -1 : 0;
+					expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+				} else {
+					std::string targetStr;
+					if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
+						targetStr = *str;
+					if (targetStr == "integer" || targetStr == "float") {
+						Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
+						int byteSize = 8; // default 64 bit
+						if (expr->arguments.size() >= 4) {
+							if (auto *bits = std::get_if<int64_t>(&expr->arguments[3]->literalValue))
+								byteSize = *bits / 8;
+						}
+						expr->type = {kind, byteSize};
+					} else if (!targetStr.empty()) {
+						expr->type = Type::fromString(targetStr);
 					}
-					expr->type = {kind, byteSize};
-				} else if (!targetStr.empty()) {
-					expr->type = Type::fromString(targetStr);
+				}
+			}
+		} else if (expr->intrinsicName == "construct") {
+			// Format: @intrinsic("construct", type_ref, field_values...)
+			if (expr->arguments.size() >= 2) {
+				Type typeRefType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				if (typeRefType.kind == Type::Kind::TypeReference && typeRefType.classDefinition) {
+					ClassDefinition *classDef = typeRefType.classDefinition;
+					std::vector<Type> fieldTypes;
+					bool allDeduced = true;
+					for (size_t i = 2; i < expr->arguments.size(); i++) {
+						Type ft = resolveTypeThroughMacro(expr->arguments[i], macroBindings);
+						if (!ft.isDeduced())
+							allDeduced = false;
+						fieldTypes.push_back(ft);
+					}
+					if (allDeduced) {
+						int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
+						expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+					}
+				}
+			}
+		} else if (expr->intrinsicName == "property") {
+			// Format: @intrinsic("property", instance, fieldname_string)
+			// instance type must be Class, fieldname is a string literal from {word:} capture
+			if (expr->arguments.size() >= 3) {
+				Type instType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+				if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+					Expression *propExpr = resolveVarThroughMacro(expr->arguments[2], macroBindings);
+					std::string fieldName;
+					if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
+						fieldName = *str;
+					if (!fieldName.empty()) {
+						ClassDefinition *classDef = instType.classDefinition;
+						for (size_t i = 0; i < classDef->fields.size(); i++) {
+							if (classDef->fields[i].name == fieldName) {
+								expr->type = classDef->instantiations[instType.classInstIndex].fieldTypes[i];
+								break;
+							}
+						}
+					}
 				}
 			}
 		} else if (expr->intrinsicName == "loop while" || expr->intrinsicName == "if" || expr->intrinsicName == "else if" ||
@@ -613,7 +724,10 @@ static bool inferExpressionType(
 					}
 				}
 
-				if (matchedSection->type == SectionType::Effect) {
+				if (matchedSection->type == SectionType::Class) {
+					auto *classSec = static_cast<ClassSection *>(matchedSection);
+					expr->type = {Type::Kind::TypeReference, 0, 0, classSec->classDefinition};
+				} else if (matchedSection->type == SectionType::Effect) {
 					// Effects: infer body, result type is Void
 					changed |= inferMacroBody(matchedSection, callBindings, context);
 					expr->type = {Type::Kind::Void};
@@ -698,6 +812,16 @@ static void defaultNumericTypes(Section *section) {
 	for (auto &[name, var] : section->variables) {
 		if (var->type.kind == Type::Kind::Numeric)
 			var->type = {Type::Kind::Integer, 4}; // default to i32
+	}
+	// Default Numeric→Integer(4) in class instantiation field types
+	if (section->type == SectionType::Class) {
+		auto *classSec = static_cast<ClassSection *>(section);
+		for (ClassInstantiation &inst : classSec->classDefinition->instantiations) {
+			for (Type &ft : inst.fieldTypes) {
+				if (ft.kind == Type::Kind::Numeric)
+					ft = {Type::Kind::Integer, 4};
+			}
+		}
 	}
 	// Default Numeric→Integer(4) in instantiation map keys
 	if (!section->instantiations.empty()) {
@@ -803,8 +927,24 @@ bool inferTypes(ParseContext &context) {
 	}
 	defaultNumericTypes(context.mainSection);
 
-	// Validate types
+	// Validate variables — all must have deduced types
 	bool valid = true;
+	std::function<void(Section *)> validateVariables = [&](Section *section) {
+		for (auto &[name, var] : section->variables) {
+			if (!var->type.isDeduced()) {
+				context.diagnostics.push_back(Diagnostic(
+					Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
+					var->definition->range
+				));
+				valid = false;
+			}
+		}
+		for (Section *child : section->children)
+			validateVariables(child);
+	};
+	validateVariables(context.mainSection);
+
+	// Validate expression types
 	for (CodeLine *line : context.codeLines) {
 		if (line->expression)
 			valid &= validateExpressionTypes(line->expression, context);

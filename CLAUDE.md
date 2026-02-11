@@ -21,7 +21,7 @@ A natural-language-like programming language designed for humans and AI agents.
 
 ## Current Priority
 
-**LLVM code generation** - Start with `tests/required/0_simple/` test case only.
+**LLVM code generation**
 
 ## Project Structure
 

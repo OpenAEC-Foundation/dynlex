@@ -7,15 +7,20 @@ class Type;
 class LLVMContext;
 } // namespace llvm
 
+struct ClassDefinition;
+
 struct Type {
-	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, String };
+	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, String, Class, TypeReference };
 
 	Kind kind = Kind::Undeduced;
-	int byteSize = 0;	  // Integer: 1/2/4/8, Float: 4/8, others: 0
-	int pointerDepth = 0; // 0=value, 1=ptr, 2=ptr-to-ptr, ...
+	int byteSize = 0;							// Integer: 1/2/4/8, Float: 4/8, others: 0
+	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
+	ClassDefinition *classDefinition = nullptr; // For Kind::Class
+	int classInstIndex = -1;					// Index into classDefinition->instantiations
 
 	bool operator==(const Type &other) const {
-		return kind == other.kind && byteSize == other.byteSize && pointerDepth == other.pointerDepth;
+		return kind == other.kind && byteSize == other.byteSize && pointerDepth == other.pointerDepth &&
+			   classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
 	}
 	bool operator!=(const Type &other) const { return !(*this == other); }
 	bool operator<(const Type &other) const {
@@ -23,7 +28,11 @@ struct Type {
 			return kind < other.kind;
 		if (byteSize != other.byteSize)
 			return byteSize < other.byteSize;
-		return pointerDepth < other.pointerDepth;
+		if (pointerDepth != other.pointerDepth)
+			return pointerDepth < other.pointerDepth;
+		if (classDefinition != other.classDefinition)
+			return classDefinition < other.classDefinition;
+		return classInstIndex < other.classInstIndex;
 	}
 
 	bool isNumeric() const {
@@ -173,6 +182,12 @@ struct Type {
 			break;
 		case Kind::String:
 			base = "string";
+			break;
+		case Kind::Class:
+			base = "class";
+			break;
+		case Kind::TypeReference:
+			base = "type reference";
 			break;
 		default:
 			base = "unknown";

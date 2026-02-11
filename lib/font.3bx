@@ -1,0 +1,249 @@
+# 3BX Font Library - TrueType rendering via FreeType + OpenGL
+
+import lib/std.3bx
+import lib/graphics.3bx
+
+# --- Arrays (local helpers) ---
+
+expression allocate count items:
+    get:
+        return @intrinsic("call", "libc", "calloc", "pointer", count, 8)
+
+effect store value into array at index:
+    execute:
+        @intrinsic("store at", array, index, value)
+
+expression item index of array:
+    get:
+        return @intrinsic("load at", array, index)
+
+# --- FreeType struct definitions ---
+
+# FT_FaceRec — font face metadata
+# Mirrors the C struct field-by-field up to 'glyph'
+class:
+    patterns:
+        ft face
+    members:
+        num_faces as i64
+        face_index as i64
+        face_flags as i64
+        style_flags as i64
+        num_glyphs as i64
+        family_name as pointer
+        style_name as pointer
+        num_fixed_sizes as i32
+        available_sizes as pointer
+        num_charmaps as i32
+        charmaps as pointer
+        generic_data as pointer
+        generic_finalizer as pointer
+        bbox_xmin as i64
+        bbox_ymin as i64
+        bbox_xmax as i64
+        bbox_ymax as i64
+        units_per_em as i16
+        ascender as i16
+        descender as i16
+        height as i16
+        max_advance_width as i16
+        max_advance_height as i16
+        underline_position as i16
+        underline_thickness as i16
+        glyph as pointer
+
+# FT_GlyphSlotRec — rendered glyph data
+# Mirrors the C struct field-by-field up to 'bitmap_top'
+# Uses padding: 8 before bitmap fields because FT_Bitmap is 8-byte aligned in C
+class:
+    patterns:
+        ft glyph slot
+    members:
+        slot_library as pointer
+        slot_face as pointer
+        slot_next as pointer
+        glyph_index as i32
+        slot_generic_data as pointer
+        slot_generic_finalizer as pointer
+        metrics_width as i64
+        metrics_height as i64
+        hori_bearing_x as i64
+        hori_bearing_y as i64
+        hori_advance as i64
+        vert_bearing_x as i64
+        vert_bearing_y as i64
+        vert_advance as i64
+        linear_hori_advance as i64
+        linear_vert_advance as i64
+        advance_x as i64
+        advance_y as i64
+        format as i32
+        padding: 8
+        bitmap_rows as i32
+        bitmap_width as i32
+        bitmap_pitch as i32
+        bitmap_buffer as pointer
+        bitmap_num_grays as i16
+        bitmap_pixel_mode as i8
+        bitmap_palette_mode as i8
+        bitmap_palette as pointer
+        bitmap_left as i32
+        bitmap_top as i32
+
+# --- Font loading ---
+# Returns a font handle (array: [face_ptr, texture_id, glyph_slot_ptr])
+
+expression a loaded font from path at size s:
+    get:
+        # Initialize FreeType
+        set lib_ptr to allocate 1 items
+        @intrinsic("call", "freetype", "FT_Init_FreeType", "i32", lib_ptr)
+        set library to item 0 of lib_ptr
+
+        # Load font face
+        set face_out to allocate 1 items
+        @intrinsic("call", "freetype", "FT_New_Face", "i32", library, path, 0 as a 64 bit integer, face_out)
+        set face_raw to item 0 of face_out
+
+        # Set pixel size
+        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", "i32", face_raw, 0 as a 32 bit integer, s as a 32 bit integer)
+
+        # Set up GL state for texture rendering
+        @intrinsic("call", "GL", "glPixelStorei", "void", 3317, 1)
+
+        # Create GL texture
+        set tex_out to allocate 1 items
+        @intrinsic("call", "GL", "glGenTextures", "void", 1, tex_out)
+        set tex_id to item 0 of tex_out
+        @intrinsic("call", "GL", "glBindTexture", "void", 3553, tex_id as a 32 bit integer)
+        @intrinsic("call", "GL", "glTexParameteri", "void", 3553, 10241, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", "void", 3553, 10240, 9729)
+
+        # Extract glyph slot pointer (stays the same across FT_Load_Char calls)
+        set face_class to @intrinsic("cast", face_raw, ft face)
+        set glyph_raw to the glyph of face_class
+
+        # Return font handle: [face, tex_id, glyph_slot]
+        set font to allocate 3 items
+        store face_raw into font at 0
+        store tex_id into font at 1
+        store glyph_raw into font at 2
+        return font
+
+# --- Character rendering ---
+# Renders one character and returns the new x position (cursor advance)
+
+expression render char code at px py using font and color r g b:
+    get:
+        set face_raw to item 0 of font
+        set tex_id to item 1 of font
+        set glyph_raw to item 2 of font
+
+        # Load and render the glyph
+        @intrinsic("call", "freetype", "FT_Load_Char", "i32", face_raw, code as a 64 bit integer, 4)
+
+        # Cast glyph slot pointer to access bitmap data
+        set glyph to @intrinsic("cast", glyph_raw, ft glyph slot)
+
+        set bw to the bitmap_width of glyph
+        set bh to the bitmap_rows of glyph
+        set buf to the bitmap_buffer of glyph
+        set left to the bitmap_left of glyph
+        set top to the bitmap_top of glyph
+        set adv to the advance_x of glyph
+
+        # Upload bitmap to GL texture
+        @intrinsic("call", "GL", "glBindTexture", "void", 3553, tex_id as a 32 bit integer)
+        @intrinsic("call", "GL", "glTexImage2D", "void", 3553, 0, 6406, bw, bh, 0, 6406, 5121, buf)
+
+        # Set text color
+        @intrinsic("call", "GL", "glColor3ub", "void", r, g, b)
+
+        # Calculate quad corners
+        set x1 to px + left
+        set y1 to py - top
+        set x2 to x1 + bw
+        set y2 to y1 + bh
+
+        # Draw textured quad
+        @intrinsic("call", "GL", "glBegin", "void", 7)
+        @intrinsic("call", "GL", "glTexCoord2d", "void", 0.0, 0.0)
+        @intrinsic("call", "GL", "glVertex2i", "void", x1, y1)
+        @intrinsic("call", "GL", "glTexCoord2d", "void", 1.0, 0.0)
+        @intrinsic("call", "GL", "glVertex2i", "void", x2, y1)
+        @intrinsic("call", "GL", "glTexCoord2d", "void", 1.0, 1.0)
+        @intrinsic("call", "GL", "glVertex2i", "void", x2, y2)
+        @intrinsic("call", "GL", "glTexCoord2d", "void", 0.0, 1.0)
+        @intrinsic("call", "GL", "glVertex2i", "void", x1, y2)
+        @intrinsic("call", "GL", "glEnd", "void")
+
+        # Return new cursor x (advance is in 26.6 fixed point, divide by 64)
+        return px + adv / 64
+
+# --- Text rendering helpers ---
+
+# Enable GL texture state before drawing text
+effect enable text rendering:
+    execute:
+        @intrinsic("call", "GL", "glEnable", "void", 3553)
+        @intrinsic("call", "GL", "glEnable", "void", 3042)
+        @intrinsic("call", "GL", "glBlendFunc", "void", 770, 771)
+
+# Disable GL texture state after drawing text
+effect disable text rendering:
+    execute:
+        @intrinsic("call", "GL", "glDisable", "void", 3553)
+
+# Set font pixel size (call before rendering at a new size)
+effect set font pixel size to sz:
+    execute:
+        set face_raw to item 0 of font
+        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", "i32", face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
+
+# --- Number rendering ---
+
+effect draw number n at x y using font and color r g b:
+    execute:
+        enable text rendering
+        set cx to x
+        if n < 10:
+            set cx to render char n + 48 at cx y using font and color r g b
+        else if n < 100:
+            set cx to render char n / 10 + 48 at cx y using font and color r g b
+            set cx to render char n mod 10 + 48 at cx y using font and color r g b
+        else:
+            set cx to render char n / 100 + 48 at cx y using font and color r g b
+            set remaining to n mod 100
+            set cx to render char remaining / 10 + 48 at cx y using font and color r g b
+            set cx to render char remaining mod 10 + 48 at cx y using font and color r g b
+        disable text rendering
+
+# --- Text rendering ---
+
+# Draws "SCORE" at x y
+effect draw score label at x y using font and color r g b:
+    execute:
+        enable text rendering
+        set cx to x
+        set cx to render char 83 at cx y using font and color r g b
+        set cx to render char 67 at cx y using font and color r g b
+        set cx to render char 79 at cx y using font and color r g b
+        set cx to render char 82 at cx y using font and color r g b
+        set cx to render char 69 at cx y using font and color r g b
+        disable text rendering
+
+# Draws "GAME OVER" at x y
+effect draw game over text at x y using font and color r g b:
+    execute:
+        enable text rendering
+        set cx to x
+        set cx to render char 71 at cx y using font and color r g b
+        set cx to render char 65 at cx y using font and color r g b
+        set cx to render char 77 at cx y using font and color r g b
+        set cx to render char 69 at cx y using font and color r g b
+        set cx to render char 32 at cx y using font and color r g b
+        set cx to render char 79 at cx y using font and color r g b
+        set cx to render char 86 at cx y using font and color r g b
+        set cx to render char 69 at cx y using font and color r g b
+        set cx to render char 82 at cx y using font and color r g b
+        disable text rendering

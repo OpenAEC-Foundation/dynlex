@@ -1,4 +1,6 @@
 #include "codegen.h"
+#include "classDefinition.h"
+#include "classSection.h"
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "expression.h"
@@ -126,7 +128,12 @@ static Type getEffectiveType(ParseContext &context, Expression *expr) {
 			}
 			return {Type::Kind::Integer, 4};
 		}
+		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
+			return expr->type; // Type fully determined during inference
 		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
+			// Class cast: type was fully determined during inference
+			if (expr->type.kind == Type::Kind::Class)
+				return expr->type;
 			// Format: @intrinsic("cast", value, type_string[, bit_size])
 			std::string target;
 			if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
@@ -265,6 +272,8 @@ static void allocateSectionVariables(ParseContext &context, Section *section) {
 		Variable *var = section->findVariable(name);
 		if (var)
 			varType = var->type;
+		if (!varType.isDeduced())
+			continue;
 		varDef->alloca = createEntryAlloca(context, name, varType);
 	}
 }
@@ -387,6 +396,18 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 
 		// Determine this variable's type for loading
 		Type varType = getEffectiveType(context, expr);
+
+		// Class types: return the pointer directly (structs are passed by pointer)
+		if (varType.kind == Type::Kind::Class) {
+			auto bindingIt = context.patternBindings.find(varName);
+			if (bindingIt != context.patternBindings.end())
+				return bindingIt->second;
+			VariableReference *varRef = expr->variable;
+			VariableReference *definition = varRef->definition ? varRef->definition : varRef;
+			if (definition->alloca)
+				return definition->alloca;
+		}
+
 		llvm::Type *loadType = getLLVMType(context, varType);
 
 		// Pattern parameter: load from function argument pointer
@@ -411,6 +432,10 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		PatternDefinition *matchedDef = expr->patternMatch->matchedEndNode->matchingDefinition;
 		Section *matchedSection = matchedDef->section;
 		if (!matchedSection)
+			return nullptr;
+
+		// Class type references are compile-time only — no runtime code
+		if (matchedSection->type == SectionType::Class)
 			return nullptr;
 
 		// Sort arguments by source position
@@ -533,16 +558,46 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
-		if (args.size() >= 2) {
+		Expression *destExpr = resolveMacroBinding(context, args[0]);
+		Type valType = getEffectiveType(context, args[1]);
+
+		if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property") {
+			// Storing to a class field: generate GEP + store
+			Expression *instExpr = resolveMacroBinding(context, destExpr->arguments[1]);
+			Type instType = getEffectiveType(context, instExpr);
+			ClassDefinition *classDef = instType.classDefinition;
+			Expression *propExpr = resolveMacroBinding(context, destExpr->arguments[2]);
+			std::string fieldName = getStringLiteral(propExpr);
+
+			int fieldIdx = -1;
+			for (size_t i = 0; i < classDef->fields.size(); i++) {
+				if (classDef->fields[i].name == fieldName) {
+					fieldIdx = i;
+					break;
+				}
+			}
+
+			llvm::Value *instPtr = getVariablePointer(context, instExpr);
+			llvm::Type *structType = getLLVMType(context, instType);
+			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
+			llvm::Value *val = generateExpressionCode(context, args[1]);
+			Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
+			val = ensureType(context, val, valType, fieldType);
+			builder.CreateStore(val, fieldPtr);
+		} else {
 			llvm::Value *ptr = getVariablePointer(context, args[0]);
 			llvm::Value *val = generateExpressionCode(context, args[1]);
 			if (ptr && val) {
-				Type varType = getEffectiveType(context, args[0]);
-				Type valType = getEffectiveType(context, args[1]);
-				val = ensureType(context, val, valType, varType);
-				builder.CreateAlignedStore(val, ptr, llvm::Align(8));
-			} else if (!ptr) {
-				context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Cannot store to non-variable", Range()));
+				Type destType = getEffectiveType(context, args[0]);
+				if (destType.kind == Type::Kind::Class) {
+					// Copy entire struct (value semantics)
+					llvm::Type *structType = getLLVMType(context, destType);
+					llvm::Value *srcVal = builder.CreateAlignedLoad(structType, val, llvm::Align(8), "struct_load");
+					builder.CreateAlignedStore(srcVal, ptr, llvm::Align(8));
+				} else {
+					val = ensureType(context, val, valType, destType);
+					builder.CreateAlignedStore(val, ptr, llvm::Align(8));
+				}
 			}
 		}
 		return nullptr;
@@ -861,9 +916,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
 		if (switchType.kind != Type::Kind::Integer && switchType.kind != Type::Kind::Bool) {
-			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "switch requires an integer value", Range())
-			);
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "switch requires an integer value", Range()));
 			return nullptr;
 		}
 
@@ -977,8 +1030,12 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	}
 
 	if (name == "cast") {
-		// Format: args[0]=value, args[1]=type_string[, args[2]=bit_size]
+		// Format: args[0]=value, args[1]=type_string_or_type_ref[, args[2]=bit_size]
 		if (args.size() >= 2) {
+			// Class cast: no-op pass-through (just reinterprets the pointer)
+			if (resultType.kind == Type::Kind::Class)
+				return generateExpressionCode(context, args[0]);
+
 			std::string targetStr = getStringLiteral(args[1]);
 			llvm::Value *val = generateExpressionCode(context, args[0]);
 			Type fromType = getEffectiveType(context, args[0]);
@@ -1029,6 +1086,54 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			return ensureType(context, val, fromType, toType);
 		}
 		return nullptr;
+	}
+
+	if (name == "construct") {
+		// Format: args[0]=type_pattern, args[1+]=field values
+		ClassDefinition *classDef = resultType.classDefinition;
+		ClassInstantiation &inst = classDef->instantiations[resultType.classInstIndex];
+		llvm::Type *structType = getLLVMType(context, resultType);
+
+		// Allocate struct on stack
+		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", resultType);
+
+		// Store each field value
+		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
+			llvm::Value *fieldVal = generateExpressionCode(context, args[i + 1]);
+			Type fieldFromType = getEffectiveType(context, args[i + 1]);
+			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
+			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, i, "field_ptr");
+			builder.CreateStore(fieldVal, fieldPtr);
+		}
+
+		return alloca;
+	}
+
+	if (name == "property") {
+		// Format: args[0]=instance, args[1]=fieldname (string literal from {word:} capture)
+		Expression *instExpr = resolveMacroBinding(context, args[0]);
+		Type instType = getEffectiveType(context, instExpr);
+		ClassDefinition *classDef = instType.classDefinition;
+
+		// Get field name from string literal
+		Expression *propExpr = resolveMacroBinding(context, args[1]);
+		std::string fieldName = getStringLiteral(propExpr);
+
+		// Find field index
+		int fieldIdx = -1;
+		for (size_t i = 0; i < classDef->fields.size(); i++) {
+			if (classDef->fields[i].name == fieldName) {
+				fieldIdx = i;
+				break;
+			}
+		}
+
+		// Get instance pointer
+		llvm::Value *instPtr = getVariablePointer(context, instExpr);
+		llvm::Type *structType = getLLVMType(context, instType);
+		llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
+		Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
+		return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
 	}
 
 	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown intrinsic: " + name, Range()));

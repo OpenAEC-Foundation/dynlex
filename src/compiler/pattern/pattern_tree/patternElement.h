@@ -11,6 +11,8 @@ struct PatternElement {
 		VariableLike,
 		// a variable
 		Variable,
+		// {word:name} — matches a single word, captured as a string literal (not a variable)
+		Word,
 		// [alternative1|alternative2|...] — each alternative is a sequence of elements
 		Choice,
 		Count

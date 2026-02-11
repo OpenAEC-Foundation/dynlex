@@ -1,4 +1,5 @@
 #include "section.h"
+#include "classSection.h"
 #include "effectSection.h"
 #include "expression.h"
 #include "expressionSection.h"
@@ -67,6 +68,9 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 			break;
 		} else if (current == "section") {
 			newSection = new SectionSection(this);
+			break;
+		} else if (current == "class") {
+			newSection = new ClassSection(this);
 			break;
 		} else {
 			// Unknown keyword - not a section definition
@@ -271,8 +275,8 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 						argExpr = createStringLiteral(range, argNode);
 					} else {
 						argExpr = detectPatternsRecursively(
-							context, range.subRange(argNode->start, argNode->end),
-							argNode->cloneWithOffset(-argNode->start), SectionType::Expression
+							context, range.subRange(argNode->start, argNode->end), argNode->cloneWithOffset(-argNode->start),
+							SectionType::Expression
 						);
 					}
 					if (!argExpr)
@@ -416,25 +420,31 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
 		forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
-			if (element.type != PatternElement::Type::Other && element.text == reference->name) {
-				if (element.type != PatternElement::Type::Variable) {
-					element.type = PatternElement::Type::Variable;
-					if (!found) {
-						// add a variable definition for this pattern element
-						VariableReference *varRef = new VariableReference(
-							Range(
-								definition->range.line, definition->range.start() + element.startPos,
-								definition->range.start() + element.startPos + element.text.length()
-							),
-							element.text
-						);
-						variableDefinitions[element.text] = varRef;
-						variableReferences[element.text].push_back(varRef);
-					}
+			if (element.text != reference->name)
+				return;
+			auto markFound = [&] {
+				if (!found) {
+					VariableReference *varRef = new VariableReference(
+						Range(
+							definition->range.line, definition->range.start() + element.startPos,
+							definition->range.start() + element.startPos + element.text.length()
+						),
+						element.text
+					);
+					variableDefinitions[element.text] = varRef;
+					variableReferences[element.text].push_back(varRef);
+					reference->definition = varRef;
 				}
-				if (!found)
-					reference->definition = variableDefinitions[element.text];
 				found = true;
+			};
+			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
+				if (element.type != PatternElement::Type::Variable)
+					element.type = PatternElement::Type::Variable;
+				markFound();
+			} else if (element.type == PatternElement::Type::Word) {
+				// Word captures match by name but stay as Word — the parameter
+				// is bound to a string literal at call time via parameterNames on the tree node
+				markFound();
 			}
 		});
 	}
