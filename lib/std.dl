@@ -65,19 +65,6 @@ macro expression element index of ptr:
     replacement:
         @intrinsic("dereference", ptr + index)
 
-macro expression character index of str:
-    replacement:
-        @intrinsic("dereference", str + index)
-
-expression the length of str:
-    get:
-        set len to 0
-        set ch to character len of str
-        loop while ch is not 0:
-            set len to len + 1
-            set ch to character len of str
-        return len
-
 # --- Arithmetic ---
 
 macro expression left + right:

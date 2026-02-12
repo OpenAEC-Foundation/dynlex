@@ -1,33 +1,8 @@
 # Snake Game in DynLex
 # A simple snake game with 20x20 grid
 
-import lib/std.dl
-import lib/graphics.dl
-
-# Helper patterns for arrays and random numbers
-expression allocate count items:
-	get:
-		return @intrinsic("call", "libc", "calloc", "pointer", count, 8)
-
-effect store value into array at index:
-	execute:
-		@intrinsic("store at", array, index, value)
-
-expression item index of array:
-	get:
-		return @intrinsic("load at", array, index)
-
-expression a random number:
-	get:
-		return @intrinsic("call", "libc", "rand", "i32")
-
-expression current time:
-	get:
-		return @intrinsic("call", "libc", "time", "i64", 0)
-
-effect seed random with value:
-	execute:
-		@intrinsic("call", "libc", "srand", "void", value)
+import lib/font.dl
+import lib/random.dl
 
 # Game constants
 set grid_size to 20
@@ -40,6 +15,9 @@ seed random with current time
 
 # Create window
 set window to a new window with width window_size and height window_size
+
+# Load font
+set font to a loaded font from "games/fonts/LiberationMono-Regular.ttf" at size 24
 
 # Allocate arrays for snake body (x and y coordinates)
 set snake_x to allocate max_length items
@@ -188,27 +166,18 @@ loop while not the window should close:
 		set head_pixel_y to head_y * cell_size
 		draw rectangle at head_pixel_x head_pixel_y size cell_size cell_size with color 0 200 0
 
+		# Draw score
+		draw text "SCORE" at 4 20 using font and color 200 200 200
+		draw number score at 100 20 using font and color 255 255 100
+
 	else:
 		# Game over screen - dark red background
 		draw rectangle at 0 0 size window_size window_size with color 80 20 20
 
-		# Draw a skull-like pattern in the center using rectangles
-		set cx to window_size / 2 - 40
-		set cy to window_size / 2 - 40
-
-		# Skull outline (white)
-		draw rectangle at cx cy size 80 80 with color 200 200 200
-
-		# Eyes (dark)
-		draw rectangle at cx + 12 cy + 20 size 20 20 with color 40 0 0
-		draw rectangle at cx + 48 cy + 20 size 20 20 with color 40 0 0
-
-		# Mouth (dark)
-		draw rectangle at cx + 20 cy + 52 size 40 12 with color 40 0 0
-
-		# Teeth (white gaps in mouth)
-		draw rectangle at cx + 30 cy + 52 size 8 12 with color 200 200 200
-		draw rectangle at cx + 46 cy + 52 size 8 12 with color 200 200 200
+		# Draw game over text and score
+		draw text "GAME OVER" at 60 180 using font and color 255 255 255
+		draw text "SCORE" at 120 220 using font and color 200 200 200
+		draw number score at 196 220 using font and color 255 255 100
 
 	# Display frame
 	display the frame of window

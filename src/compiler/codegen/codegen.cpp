@@ -1032,9 +1032,14 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (name == "cast") {
 		// Format: args[0]=value, args[1]=type_string_or_type_ref[, args[2]=bit_size]
 		if (args.size() >= 2) {
-			// Class cast: no-op pass-through (just reinterprets the pointer)
-			if (resultType.kind == Type::Kind::Class)
-				return generateExpressionCode(context, args[0]);
+			// Class cast: reinterpret as pointer to the class struct
+			if (resultType.kind == Type::Kind::Class) {
+				llvm::Value *val = generateExpressionCode(context, args[0]);
+				Type fromType = getEffectiveType(context, args[0]);
+				if (val && !fromType.isPointer() && fromType.kind == Type::Kind::Integer)
+					val = builder.CreateIntToPtr(val, llvm::PointerType::getUnqual(*context.llvmContext), "itop_class");
+				return val;
+			}
 
 			std::string targetStr = getStringLiteral(args[1]);
 			llvm::Value *val = generateExpressionCode(context, args[0]);
@@ -1119,6 +1124,13 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		Expression *propExpr = resolveMacroBinding(context, args[1]);
 		std::string fieldName = getStringLiteral(propExpr);
 
+		if (!classDef) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, instType.toString() + " is not a class and has no properties", args[0]->range
+			));
+			return nullptr;
+		}
+
 		// Find field index
 		int fieldIdx = -1;
 		for (size_t i = 0; i < classDef->fields.size(); i++) {
@@ -1126,6 +1138,13 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 				fieldIdx = i;
 				break;
 			}
+		}
+
+		if (fieldIdx == -1) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, instType.toString() + " doesn't have property \"" + fieldName + "\"", args[0]->range
+			));
+			return nullptr;
 		}
 
 		// Get instance pointer

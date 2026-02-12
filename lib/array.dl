@@ -1,0 +1,15 @@
+# DynLex Array Library
+
+import lib/std.dl
+
+expression allocate count items:
+    get:
+        return @intrinsic("call", "libc", "calloc", "pointer", count, 8)
+
+effect store value into array at index:
+    execute:
+        @intrinsic("store at", array, index, value)
+
+expression item index of array:
+    get:
+        return @intrinsic("load at", array, index)

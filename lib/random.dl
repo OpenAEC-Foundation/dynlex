@@ -1,0 +1,15 @@
+# DynLex Random Library
+
+import lib/std.dl
+
+expression a random number:
+    get:
+        return @intrinsic("call", "libc", "rand", "i32")
+
+expression current time:
+    get:
+        return @intrinsic("call", "libc", "time", "i64", 0)
+
+effect seed random with value:
+    execute:
+        @intrinsic("call", "libc", "srand", "void", value)

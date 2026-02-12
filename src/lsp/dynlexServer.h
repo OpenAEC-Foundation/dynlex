@@ -9,11 +9,11 @@ namespace lsp {
 
 // DynLex-specific language server
 // Handles compilation, diagnostics, go-to-definition, and semantic tokens
-class TbxServer : public LanguageServer {
+class DynLexServer : public LanguageServer {
   public:
-	explicit TbxServer(int port = 5007);
-	explicit TbxServer(std::unique_ptr<Transport> transport);
-	~TbxServer() override;
+	explicit DynLexServer(int port = 5007);
+	explicit DynLexServer(std::unique_ptr<Transport> transport);
+	~DynLexServer() override;
 
   protected:
 	InitializeResult onInitialize(const InitializeParams &params) override;

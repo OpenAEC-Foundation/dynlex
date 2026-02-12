@@ -28,13 +28,16 @@ static std::string processEscapeSequences(std::string_view input) {
 }
 
 void Section::collectPatternReferencesAndSections(
-	std::list<PatternReference *> &patternReferences, std::list<Section *> &sections
+	std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
+	std::list<Section *> &sections, bool insideDefinition
 ) {
-	patternReferences.insert(patternReferences.end(), this->patternReferences.begin(), this->patternReferences.end());
-	if (this->patternDefinitions.size())
+	auto &targetList = insideDefinition ? bodyReferences : globalReferences;
+	targetList.insert(targetList.end(), patternReferences.begin(), patternReferences.end());
+	if (!patternDefinitions.empty())
 		sections.push_back(this);
+	bool childInsideDefinition = insideDefinition || !patternDefinitions.empty();
 	for (Section *child : children) {
-		child->collectPatternReferencesAndSections(patternReferences, sections);
+		child->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections, childInsideDefinition);
 	}
 }
 

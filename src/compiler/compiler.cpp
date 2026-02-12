@@ -13,6 +13,7 @@
 #include <list>
 #include <ranges>
 #include <regex>
+#include <unordered_set>
 using namespace std::literals;
 
 // Find the position of # that's not inside a string literal
@@ -315,154 +316,213 @@ void expandExpression(Expression *expr, Section *section) {
 	}
 }
 
+// Collect all body references from a definition section's descendants (including through nested definitions,
+// since nested code can access parent parameters).
+static void collectBodyReferences(Section *section, std::vector<PatternReference *> &refs) {
+	for (Section *child : section->children) {
+		refs.insert(refs.end(), child->patternReferences.begin(), child->patternReferences.end());
+		collectBodyReferences(child, refs);
+	}
+}
+
+// Compute initial variableLikeCounts for each definition section.
+static void computeVariableLikeCounts(std::list<Section *> &sections) {
+	for (Section *section : sections) {
+		std::vector<PatternReference *> bodyRefs;
+		collectBodyReferences(section, bodyRefs);
+
+		// Collect all VL texts from all definitions in this section
+		std::unordered_set<std::string> vlTexts;
+		for (PatternDefinition *def : section->patternDefinitions) {
+			forEachLeafElement(def->patternElements, [&](PatternElement &elem) {
+				if (elem.type == PatternElement::Type::VariableLike)
+					vlTexts.insert(elem.text);
+			});
+		}
+
+		// Count body references that contain each VL text
+		for (const std::string &vlText : vlTexts) {
+			int count = 0;
+			for (PatternReference *ref : bodyRefs) {
+				for (const PatternElement &refElem : ref->patternElements) {
+					if (refElem.type == PatternElement::Type::VariableLike && refElem.text == vlText) {
+						count++;
+						break;
+					}
+				}
+			}
+			section->variableLikeCounts[vlText] = count;
+		}
+	}
+}
+
+// After a body reference resolves, decrement VL counts on all ancestor definition sections
+// (nested code can access parent parameters).
+static void decrementVariableLikeCounts(PatternReference *reference) {
+	Section *sec = reference->range().section();
+	while (sec) {
+		if (!sec->patternDefinitions.empty()) {
+			for (const PatternElement &refElem : reference->patternElements) {
+				if (refElem.type == PatternElement::Type::VariableLike) {
+					auto it = sec->variableLikeCounts.find(refElem.text);
+					if (it != sec->variableLikeCounts.end() && it->second > 0)
+						it->second--;
+				}
+			}
+		}
+		sec = sec->parent;
+	}
+}
+
+// Resolve a list of pattern references against the tree. Returns true if all resolved.
+static bool resolveReferences(ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts) {
+	return std::erase_if(references, [&context, decrementCounts](PatternReference *reference) {
+		PatternMatch *match = context.match(reference);
+		if (match) {
+			reference->resolve(match);
+			addVariableReferencesFromMatch(context, reference, *match);
+			if (decrementCounts)
+				decrementVariableLikeCounts(reference);
+		} else if (reference->patternElements.size() == 1 &&
+				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
+			reference->patternElements[0].type = PatternElement::Type::Variable;
+			reference->resolve();
+			reference->range().section()->addVariableReference(
+				context, new VariableReference(reference->range(), reference->patternElements[0].text)
+			);
+			if (decrementCounts)
+				decrementVariableLikeCounts(reference);
+		}
+		return reference->resolved;
+	}) > 0;
+}
+
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
-	std::list<PatternReference *> unResolvedPatternReferences;
+	std::list<PatternReference *> bodyReferences;
+	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
-	context.mainSection->collectPatternReferencesAndSections(unResolvedPatternReferences, unResolvedSections);
+	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
 			unresolvedDefinition->patternElements = parsePatternElements(unresolvedDefinition->range.subString);
 		}
 	}
-	for (PatternReference *unResolvedPatternReference : unResolvedPatternReferences) {
+	for (PatternReference *ref : bodyReferences)
+		ref->patternElements = getPatternElements(ref->pattern.text);
+	for (PatternReference *ref : globalReferences)
+		ref->patternElements = getPatternElements(ref->pattern.text);
 
-		unResolvedPatternReference->patternElements = getPatternElements(unResolvedPatternReference->pattern.text);
-	}
+	// Compute initial VL counts before resolution
+	computeVariableLikeCounts(unResolvedSections);
+
 	// add the roots
 	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), []() {
 		return new PatternTreeNode(PatternElement::Type::Other, "");
 	});
 
-	// Now start iterating and resolving.
+	// Phase 1: resolve body references and definitions
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&context](Section *section) {
-			// whether all pattern definitions are resolved for this section
 			section->patternDefinitionsResolved = true;
 			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
 					definition->resolved = true;
-					// check all leaf elements (including inside choices) for unresolved variables
 					forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
 						if (element.type == PatternElement::Type::VariableLike) {
-							// a single pattern element can never become a variable
 							if (definition->patternElements.size() > 1) {
-								definition->resolved = false;
-								section->patternDefinitionsResolved = false;
+								if (section->variableLikeCounts[element.text] == 0) {
+									// No body references use this as a variable — classify as text
+									element.type = PatternElement::Type::Other;
+								} else {
+									definition->resolved = false;
+									section->patternDefinitionsResolved = false;
+								}
 							}
 						}
 					});
 					if (definition->resolved) {
-						// we can add this definition already, to help resolve more references
-						// Class patterns go into the Expression tree so they're resolvable as sub-expressions
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
 						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 					}
 				}
 			}
-			// otherwise, we resolved the section before all of the pattern
-			// references inside were resolved!
 			if (!section->patternDefinitionsResolved) {
-				// check if all pattern references (including children) are resolved
 				section->patternDefinitionsResolved = section->unresolvedCount == 0;
 			}
 			if (section->patternDefinitionsResolved) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
-					// add all unresolved definitions to the pattern tree
 					if (!definition->resolved) {
 						definition->resolved = true;
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
 						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 					}
-					// add argument
 				}
 			}
 			return section->patternDefinitionsResolved;
 		});
 
-		// then, go over all lines referencing patterns
-		std::erase_if(unResolvedPatternReferences, [&context](PatternReference *reference) {
-			// search the pattern tree for this line's pattern
+		resolveReferences(context, bodyReferences, true);
 
-			PatternMatch *match = context.match(reference);
-			if (match) {
-				reference->resolve(match);
-				addVariableReferencesFromMatch(context, reference, *match);
-			} else if (reference->patternElements.size() == 1 &&
-					   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
-				// since there's no pattern definition matching this, this has to be a variable.
-				reference->patternElements[0].type = PatternElement::Type::Variable;
-				reference->resolve();
-				reference->range().section()->addVariableReference(
-					context, new VariableReference(reference->range(), reference->patternElements[0].text)
-				);
+		if (unResolvedSections.empty() && bodyReferences.empty())
+			break;
+	}
+
+	// Phase 2: resolve global references (all definitions are now in the tree)
+	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
+		resolveReferences(context, globalReferences, false);
+		if (globalReferences.empty())
+			break;
+	}
+
+	if (!unResolvedSections.empty() || !bodyReferences.empty() || !globalReferences.empty()) {
+		for (PatternReference *reference : bodyReferences)
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
+			);
+		for (PatternReference *reference : globalReferences)
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
+			);
+		return false;
+	}
+
+	// All patterns resolved — expand expressions and resolve variable references
+	for (CodeLine *line : context.codeLines) {
+		if (line->expression)
+			expandExpression(line->expression, line->section);
+	}
+	for (auto &[name, references] : context.unresolvedVariableReferences) {
+		std::unordered_map<Section *, Section *> sectionToHighest;
+		for (VariableReference *ref : references) {
+			Section *sec = ref->range.section();
+			if (sectionToHighest.contains(sec))
+				continue;
+			Section *highest = sec;
+			for (Section *a = sec->parent; a; a = a->parent) {
+				if (a->variableReferences.contains(name))
+					highest = a;
 			}
-
-			return reference->resolved;
-		});
-		if (unResolvedSections.size() == 0 && unResolvedPatternReferences.size() == 0) {
-			// all patterns have been successfully resolved
-			// Expand all pending expressions to their resolved forms
-			for (CodeLine *line : context.codeLines) {
-				if (line->expression) {
-					expandExpression(line->expression, line->section);
-				}
+			sectionToHighest[sec] = highest;
+		}
+		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
+		for (VariableReference *ref : references)
+			groups[sectionToHighest[ref->range.section()]].push_back(ref);
+		for (auto &[highestSection, groupRefs] : groups) {
+			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
+				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
+			});
+			definition->range.section()->variableDefinitions[name] = definition;
+			highestSection->variables[name] = new Variable(name, definition);
+			for (VariableReference *ref : groupRefs) {
+				if (ref != definition)
+					ref->definition = definition;
 			}
-			// finally, resolve all unresolved variable references
-			for (auto &[name, references] : context.unresolvedVariableReferences) {
-				// find highest section for each section that has this variable
-				std::unordered_map<Section *, Section *> sectionToHighest;
-				for (VariableReference *ref : references) {
-					Section *sec = ref->range.section();
-					if (sectionToHighest.contains(sec))
-						continue;
-
-					Section *highest = sec;
-					for (Section *a = sec->parent; a; a = a->parent) {
-						if (a->variableReferences.contains(name))
-							highest = a;
-					}
-					sectionToHighest[sec] = highest;
-				}
-
-				// group references by their highest section
-				std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-				for (VariableReference *ref : references) {
-					groups[sectionToHighest[ref->range.section()]].push_back(ref);
-				}
-
-				// process each group
-				for (auto &[highestSection, groupRefs] : groups) {
-					// find first reference by merged line index (becomes definition)
-					VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
-						return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
-					});
-
-					// store definition in its section's definitions list
-					definition->range.section()->variableDefinitions[name] = definition;
-					// create Variable in highest section
-					highestSection->variables[name] = new Variable(name, definition);
-
-					// link all references to the definition
-					for (VariableReference *ref : groupRefs) {
-						if (ref != definition)
-							ref->definition = definition;
-					}
-				}
-			}
-			return true;
 		}
 	}
-
-	// some patterns couldn't be resolved
-	for (PatternReference *reference : unResolvedPatternReferences) {
-		context.diagnostics.push_back(
-			Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
-		);
-	}
-	return false;
+	return true;
 }
 
 // Resolve a variable expression through macro bindings to find the actual variable expression.
@@ -775,15 +835,14 @@ static bool inferExpressionType(
 }
 
 static bool
-inferMacroBody(Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
+inferMacroBody(Section *section, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
 	bool changed = false;
-	for (Section *child : macroSection->children) {
-		for (CodeLine *line : child->codeLines) {
-			if (line->expression) {
-				changed |= inferExpressionType(line->expression, context, bindings);
-			}
-		}
+	for (CodeLine *line : section->codeLines) {
+		if (line->expression)
+			changed |= inferExpressionType(line->expression, context, bindings);
 	}
+	for (Section *child : section->children)
+		changed |= inferMacroBody(child, bindings, context);
 	return changed;
 }
 
@@ -856,8 +915,8 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 				Type leftType = expr->arguments[1]->type;
 				Type rightType = expr->arguments[2]->type;
 				// Pointer arithmetic (ptr + int, ptr - int) is valid
-				bool ptrArith = isPointerArithmeticOperator(expr->intrinsicName) &&
-								(leftType.isPointer() || rightType.isPointer());
+				bool ptrArith =
+					isPointerArithmeticOperator(expr->intrinsicName) && (leftType.isPointer() || rightType.isPointer());
 				if (!ptrArith && leftType.isDeduced() && !leftType.isNumeric()) {
 					context.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error,
@@ -933,17 +992,15 @@ bool inferTypes(ParseContext &context) {
 	// Skip non-macro function body sections: their variables only get types during monomorphization
 	bool valid = true;
 	std::function<void(Section *)> validateVariables = [&](Section *section) {
-		bool isNonMacroFunctionBody = section->parent && !section->parent->isMacro &&
-									  !section->parent->patternDefinitions.empty();
-		if (!isNonMacroFunctionBody) {
-			for (auto &[name, var] : section->variables) {
-				if (!var->type.isDeduced()) {
-					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
-						var->definition->range
-					));
-					valid = false;
-				}
+		if (section->parent && !section->parent->isMacro && !section->parent->patternDefinitions.empty())
+			return;
+		for (auto &[name, var] : section->variables) {
+			if (!var->type.isDeduced()) {
+				context.diagnostics.push_back(Diagnostic(
+					Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
+					var->definition->range
+				));
+				valid = false;
 			}
 		}
 		for (Section *child : section->children)

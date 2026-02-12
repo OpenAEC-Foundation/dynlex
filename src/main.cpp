@@ -2,7 +2,7 @@
 #include "compiler/compiler.h"
 #include "lsp/fileSystem.h"
 #include "lsp/stdioTransport.h"
-#include "lsp/tbxServer.h"
+#include "lsp/dynlexServer.h"
 #include "parseContext.h"
 #include <iostream>
 #include <thread>
@@ -64,10 +64,10 @@ int main(int argumentCount, char *argumentValues[]) {
 
 	if (runLSP || useStdio) {
 		if (useStdio) {
-			lsp::TbxServer server(std::make_unique<lsp::StdioTransport>());
+			lsp::DynLexServer server(std::make_unique<lsp::StdioTransport>());
 			server.run();
 		} else {
-			lsp::TbxServer server;
+			lsp::DynLexServer server;
 			server.run();
 		}
 		return 0;

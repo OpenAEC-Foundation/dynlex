@@ -71,7 +71,7 @@ print x
 ## Code Conventions
 
 - **Minimize complexity** - Solutions must be clean and complete, no temporary workarounds
-- **Generalize** - Extract reusable components (e.g., languageServer is generic, tbxServer uses it)
+- **Generalize** - Extract reusable components (e.g., languageServer is generic, dynlexServer uses it)
 - **No hardcoding** - Nothing language-specific hardcoded; syntax comes from patterns
 - **Minimal dependencies** - Only LLVM for codegen, avoid other external deps
 - **Suggest improvements** - If you know a better approach, mention it
@@ -80,7 +80,13 @@ print x
 
 Test files in `tests/required/`. Each folder has a `.dl` file and expected output.
 
-Run test: Build compiler → run on test file → execute output → compare with expected.
+Run test: Build compiler → compile test to `.out` → execute → compare with expected.
+
+```bash
+./build/dynlex tests/required/0_simple/main.dl -o tests/required/0_simple/main.out && ./tests/required/0_simple/main.out
+```
+
+Compiled test binaries use the `.out` extension (gitignored).
 
 **Current state:** `0_simple` patterns parse correctly. Other tests may need work.
 

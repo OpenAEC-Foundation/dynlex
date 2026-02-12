@@ -1,0 +1,9 @@
+import lib/font.dl
+import lib/random.dl
+
+set window to a new window with width 400 and height 400
+set font to a loaded font from "games/fonts/LiberationMono-Regular.ttf" at size 24
+draw number 42 at 100 200 using font and color 255 255 255
+display the frame of window
+sleep for 2000 milliseconds
+close the window

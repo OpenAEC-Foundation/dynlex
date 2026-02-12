@@ -80,6 +80,9 @@ function getServerPath(): string {
     const configuredPath = config.get<string>('server.path');
 
     if (configuredPath && configuredPath.length > 0) {
+        if (!path.isAbsolute(configuredPath) && vscode.workspace.workspaceFolders?.[0]) {
+            return path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, configuredPath);
+        }
         return configuredPath;
     }
 
@@ -171,9 +174,10 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
         log(`Server path resolved to: ${serverPath}`);
         log(`Starting language server: ${serverPath} ${args.join(' ')} on port ${port}`);
 
-        // Spawn the server process
+        // Spawn the server process in the workspace folder so relative imports resolve
         serverProcess = spawn(serverPath, args, {
-            stdio: ['ignore', 'pipe', 'pipe']
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
         });
 
         serverProcess.stdout?.on('data', (data) => {

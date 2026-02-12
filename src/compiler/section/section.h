@@ -49,6 +49,11 @@ struct Section {
 	int unresolvedCount = 0;
 	// whether all pattern definitions in this section are resolved
 	bool patternDefinitionsResolved = false;
+	// Count of body references containing each VariableLike text.
+	// Shared across all definitions in this section since they share the same body.
+	// When a count reaches 0, that VL element can be classified as text (Other)
+	// without waiting for all body references to resolve.
+	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a macro (inlined at call site instead of function call)
 	bool isMacro = false;
 	// whether this sections patterns can be called from other files
@@ -58,7 +63,10 @@ struct Section {
 	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch
 	llvm::BasicBlock *exitBlock{};
 	llvm::BasicBlock *branchBackBlock{};
-	void collectPatternReferencesAndSections(std::list<PatternReference *> &patternReferences, std::list<Section *> &sections);
+	void collectPatternReferencesAndSections(
+		std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
+		std::list<Section *> &sections, bool insideDefinition = false
+	);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
 	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);

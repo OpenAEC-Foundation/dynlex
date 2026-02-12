@@ -1,4 +1,4 @@
-#include "tbxServer.h"
+#include "dynlexServer.h"
 #include "codeLine.h"
 #include "compiler.h"
 #include "expression.h"
@@ -13,13 +13,13 @@
 
 namespace lsp {
 
-TbxServer::TbxServer(int port) : LanguageServer(port) {}
+DynLexServer::DynLexServer(int port) : LanguageServer(port) {}
 
-TbxServer::TbxServer(std::unique_ptr<Transport> transport) : LanguageServer(std::move(transport)) {}
+DynLexServer::DynLexServer(std::unique_ptr<Transport> transport) : LanguageServer(std::move(transport)) {}
 
-TbxServer::~TbxServer() = default;
+DynLexServer::~DynLexServer() = default;
 
-InitializeResult TbxServer::onInitialize(const InitializeParams & /*params*/) {
+InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/) {
 	InitializeResult result;
 	result.capabilities.textDocumentSync = 2; // Incremental
 	result.capabilities.definitionProvider = true;
@@ -29,22 +29,22 @@ InitializeResult TbxServer::onInitialize(const InitializeParams & /*params*/) {
 	return result;
 }
 
-void TbxServer::onDidOpen(const DidOpenTextDocumentParams &params) {
+void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 	LanguageServer::onDidOpen(params);
 	recompileDocument(params.textDocument.uri);
 }
 
-void TbxServer::onDidChange(const DidChangeTextDocumentParams &params) {
+void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 	LanguageServer::onDidChange(params);
 	recompileDocument(params.textDocument.uri);
 }
 
-void TbxServer::onDidClose(const DidCloseTextDocumentParams &params) {
+void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	parseContexts.erase(params.textDocument.uri);
 	LanguageServer::onDidClose(params);
 }
 
-void TbxServer::recompileDocument(const std::string &uri) {
+void DynLexServer::recompileDocument(const std::string &uri) {
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
 		return;
@@ -69,7 +69,7 @@ void TbxServer::recompileDocument(const std::string &uri) {
 	publishDiagnostics(uri, lspDiagnostics);
 }
 
-Range TbxServer::convertRange(const ::Range &range) const {
+Range DynLexServer::convertRange(const ::Range &range) const {
 	Range lspRange;
 	lspRange.start.line = range.line->sourceFileLineIndex;
 	lspRange.start.character = range.start();
@@ -78,7 +78,7 @@ Range TbxServer::convertRange(const ::Range &range) const {
 	return lspRange;
 }
 
-Diagnostic TbxServer::convertDiagnostic(const ::Diagnostic &diag) const {
+Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	Diagnostic lspDiag;
 	lspDiag.range = convertRange(diag.range);
 	lspDiag.message = diag.message;
@@ -99,14 +99,14 @@ Diagnostic TbxServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	return lspDiag;
 }
 
-void TbxServer::publishDiagnostics(const std::string &uri, const std::vector<Diagnostic> &diagnostics) {
+void DynLexServer::publishDiagnostics(const std::string &uri, const std::vector<Diagnostic> &diagnostics) {
 	PublishDiagnosticsParams params;
 	params.uri = uri;
 	params.diagnostics = diagnostics;
 	sendNotification("textDocument/publishDiagnostics", params);
 }
 
-std::optional<Location> TbxServer::onDefinition(const TextDocumentPositionParams &params) {
+std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
 	auto info = findElementAtPosition(params.textDocument.uri, params.position);
 
 	// If it's a variable reference with a definition, go to the definition
@@ -136,7 +136,7 @@ std::optional<Location> TbxServer::onDefinition(const TextDocumentPositionParams
 	return std::nullopt;
 }
 
-TbxServer::PositionInfo TbxServer::findElementAtPosition(const std::string &uri, const Position &pos) {
+DynLexServer::PositionInfo DynLexServer::findElementAtPosition(const std::string &uri, const Position &pos) {
 	PositionInfo info;
 
 	auto ctxIt = parseContexts.find(uri);
@@ -192,19 +192,24 @@ TbxServer::PositionInfo TbxServer::findElementAtPosition(const std::string &uri,
 	return info;
 }
 
-SemanticTokens TbxServer::onSemanticTokensFull(const SemanticTokensParams &params) {
+SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &params) {
 	SemanticTokens result;
 	result.data = generateSemanticTokens(params.textDocument.uri);
 	return result;
 }
 
-std::vector<int> TbxServer::generateSemanticTokens(const std::string &uri) {
+std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	auto ctxIt = parseContexts.find(uri);
 	if (ctxIt == parseContexts.end()) {
 		return {};
 	}
 
 	ParseContext *context = ctxIt->second.get();
+	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(),
+		[](const ::Diagnostic &d) { return d.level == ::Diagnostic::Level::Error; });
+	if (hasErrors) {
+		return {};
+	}
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
 		return {};

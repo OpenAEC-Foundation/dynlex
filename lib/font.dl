@@ -1,21 +1,7 @@
 # DynLex Font Library - TrueType rendering via FreeType + OpenGL
 
-import lib/std.dl
+import lib/string.dl
 import lib/graphics.dl
-
-# --- Arrays (local helpers) ---
-
-expression allocate count items:
-    get:
-        return @intrinsic("call", "libc", "calloc", "pointer", count, 8)
-
-effect store value into array at index:
-    execute:
-        @intrinsic("store at", array, index, value)
-
-expression item index of array:
-    get:
-        return @intrinsic("load at", array, index)
 
 # --- FreeType struct definitions ---
 
@@ -220,35 +206,6 @@ effect draw number n at x y using font and color r g b:
 
 # --- Text rendering ---
 
-# Draws "SCORE" at x y
-effect draw score label at x y using font and color r g b:
-    execute:
-        enable text rendering
-        set cx to x
-        set cx to render char 83 at cx y using font and color r g b
-        set cx to render char 67 at cx y using font and color r g b
-        set cx to render char 79 at cx y using font and color r g b
-        set cx to render char 82 at cx y using font and color r g b
-        set cx to render char 69 at cx y using font and color r g b
-        disable text rendering
-
-# Draws "GAME OVER" at x y
-effect draw game over text at x y using font and color r g b:
-    execute:
-        enable text rendering
-        set cx to x
-        set cx to render char 71 at cx y using font and color r g b
-        set cx to render char 65 at cx y using font and color r g b
-        set cx to render char 77 at cx y using font and color r g b
-        set cx to render char 69 at cx y using font and color r g b
-        set cx to render char 32 at cx y using font and color r g b
-        set cx to render char 79 at cx y using font and color r g b
-        set cx to render char 86 at cx y using font and color r g b
-        set cx to render char 69 at cx y using font and color r g b
-        set cx to render char 82 at cx y using font and color r g b
-        disable text rendering
-
-# Generic text rendering (renders any string)
 effect draw text msg at x y using font and color r g b:
     execute:
         enable text rendering

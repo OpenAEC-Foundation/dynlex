@@ -1,0 +1,22 @@
+import lib/std.dl
+
+# Generic: "arg" is a parameter (resolves fast - intrinsic body)
+expression turn the item off for user:
+    get:
+        return item + 100 + user
+
+
+# "lights" appears in both definition and body ref "turn the lights off"
+# If generic matches body ref: "lights" captured as variable →
+# searchParentPatterns classifies "lights" as Variable in this definition too
+effect shut down the lights:
+    execute:
+        print turn the lights off for 4
+
+shut down the lights
+
+# Specific: "lights" is literal (resolves slow - needs set/+/return)
+expression turn the lights off for user:
+    get:
+        set result to 1 + 1 + user
+        return result
