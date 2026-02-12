@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Code conventions checker for 3BX C++ codebase.
+Code conventions checker for DynLex C++ codebase.
 Checks:
 1. Only one struct/class/enum per header file, none in source files
 2. File naming: camelCase

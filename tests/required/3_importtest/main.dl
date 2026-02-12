@@ -1,9 +1,9 @@
 #this test tests circular imports
-import other.3bx
+import other.dl
 
 effect first:
 	execute:
-		print "printing from main.3bx"
+		print "printing from main.dl"
 
 # we call third, which calls second, which calls first, which prints the message.
 effect third:

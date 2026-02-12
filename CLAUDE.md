@@ -1,4 +1,4 @@
-# 3BX Compiler
+# DynLex Compiler
 
 A natural-language-like programming language designed for humans and AI agents.
 
@@ -11,13 +11,15 @@ A natural-language-like programming language designed for humans and AI agents.
 ./scripts/build.sh
 
 # Run compiler on a file
-./build/3bx <file.3bx>
+./build/dynlex <file.dl>
 
 # Run LSP server (for VS Code extension)
-./build/3bx --lsp
+./build/dynlex --lsp
 ```
 
 **Dependencies:** C++23, Conan (nlohmann_json), LLVM (for codegen - to be added)
+
+**Implementation Details:** See `.claude/rules/implementation.md` for detailed documentation on type inference, bugs fixed, and implementation details.
 
 ## Current Priority
 
@@ -41,7 +43,7 @@ tests/required/           # Test cases with expected outputs
 
 ## Language Basics
 
-**File extension:** `.3bx`
+**File extension:** `.dl`
 
 **Pattern types:**
 - `effect` - Side effects (statements): `effect print msg:`
@@ -57,7 +59,7 @@ set x to 42
 print x
 ```
 
-**Intrinsics:** Keep minimal. Only basic ops (arithmetic, memory, comparison). Standard library will be written in 3BX itself.
+**Intrinsics:** Keep minimal. Only basic ops (arithmetic, memory, comparison). Standard library will be written in DynLex itself.
 
 ## Compilation Pipeline
 
@@ -76,7 +78,7 @@ print x
 
 ## Testing
 
-Test files in `tests/required/`. Each folder has a `.3bx` file and expected output.
+Test files in `tests/required/`. Each folder has a `.dl` file and expected output.
 
 Run test: Build compiler → run on test file → execute output → compare with expected.
 
@@ -86,7 +88,7 @@ Run test: Build compiler → run on test file → execute output → compare wit
 
 - **Compilation target:** Native code via LLVM (outputs .ll or executable based on flags)
 - **Type system:** Static typing with full inference (no annotations)
-- **Memory (3BX language):** Automatic scope-based destruction (RAII-style)
+- **Memory (DynLex language):** Automatic scope-based destruction (RAII-style)
 - **Memory (Compiler internals):** Arena-style allocation - objects allocated with `new` during compilation are not explicitly deleted. They're owned by ParseContext and cleaned up when compilation finishes. This includes: CodeLine, Section, Expression, Variable, PatternDefinition, PatternReference, VariableReference, MatchProgress. No smart pointers needed.
 - **Primitive types:** Sized numerics (i8/i16/i32/i64, f32/f64), bool, string
 - **Classes:** Data-only structs (no member functions), patterns operate on them

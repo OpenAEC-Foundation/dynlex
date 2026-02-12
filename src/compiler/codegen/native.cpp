@@ -44,10 +44,10 @@ bool emitNativeExecutable(ParseContext &context) {
 	// Determine output path
 	std::string outputPath = context.options.outputPath;
 	if (outputPath.empty()) {
-		// Remove .3bx extension if present
+		// Remove .dl extension if present
 		outputPath = context.options.inputPath;
-		if (outputPath.ends_with(".3bx")) {
-			outputPath = outputPath.substr(0, outputPath.size() - 4);
+		if (outputPath.ends_with(".dl")) {
+			outputPath = outputPath.substr(0, outputPath.size() - 3);
 		}
 	}
 

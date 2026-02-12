@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <vector>
 
-// possible invocation: 3bx main.3bx
-// will compile 3bx to an executable named main
+// possible invocation: dynlex main.dl
+// will compile DynLex to an executable named main
 // to execute that executable: ./main
 // the compiler will always receive one source file, since that file imports all other files
 // if no arguments are given, the program will print its arguments to the console
@@ -82,7 +82,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		}
 		context.printDiagnostics();
 	} else {
-		std::cerr << "Usage: 3bx <file.3bx> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
+		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
 	}
 
 	return 0;

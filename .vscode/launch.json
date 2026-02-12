@@ -5,9 +5,9 @@
 			"name": "Debug Test",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/build/3bx",
+			"program": "${workspaceFolder}/build/dynlex",
 			"args": [
-				"${workspaceFolder}/tests/required/0_simple/main.3bx",
+				"${workspaceFolder}/tests/required/0_simple/main.dl",
 				"--emit-llvm"
 			],
 			"stopAtEntry": false,
@@ -15,7 +15,7 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/3bx.natvis",
+			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
@@ -31,10 +31,10 @@
 			"miDebuggerPath": "/usr/bin/gdb"
 		},
 		{
-			"name": "Debug 3BX",
+			"name": "Debug DynLex",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/build/3bx",
+			"program": "${workspaceFolder}/build/dynlex",
 			"args": [
 				"${file}"
 			],
@@ -43,7 +43,7 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/3bx.natvis",
+			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
@@ -59,17 +59,17 @@
 			"miDebuggerPath": "/usr/bin/gdb"
 		},
 		{
-			"name": "Debug 3BX LSP Server",
+			"name": "Debug DynLex LSP Server",
 			"type": "cppdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/build/3bx",
+			"program": "${workspaceFolder}/build/dynlex",
 			"args": ["--lsp"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/3bx.natvis",
+			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
@@ -101,7 +101,7 @@
 	"compounds": [
 		{
 			"name": "Extension + C++ Debugger",
-			"configurations": ["Debug 3BX LSP Server", "Run VS Code Extension"],
+			"configurations": ["Debug DynLex LSP Server", "Run VS Code Extension"],
 			"stopAll": true
 		}
 	]

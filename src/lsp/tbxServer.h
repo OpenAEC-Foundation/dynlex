@@ -7,7 +7,7 @@
 
 namespace lsp {
 
-// 3BX-specific language server
+// DynLex-specific language server
 // Handles compilation, diagnostics, go-to-definition, and semantic tokens
 class TbxServer : public LanguageServer {
   public:
@@ -30,10 +30,10 @@ class TbxServer : public LanguageServer {
 	// Recompile a document and publish diagnostics
 	void recompileDocument(const std::string &uri);
 
-	// Convert 3BX Range to LSP Range
+	// Convert DynLex Range to LSP Range
 	Range convertRange(const ::Range &range) const;
 
-	// Convert 3BX Diagnostic to LSP Diagnostic
+	// Convert DynLex Diagnostic to LSP Diagnostic
 	Diagnostic convertDiagnostic(const ::Diagnostic &diag) const;
 
 	// Publish diagnostics for a document

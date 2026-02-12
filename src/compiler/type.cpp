@@ -37,8 +37,6 @@ llvm::Type *Type::toLLVM(llvm::LLVMContext &ctx) const {
 		default:
 			ASSERT_UNREACHABLE("Float type must have a valid byteSize (4/8) before codegen");
 		}
-	case Kind::String:
-		return llvm::PointerType::getUnqual(llvm::Type::getInt8Ty(ctx));
 	case Kind::Class: {
 		assert(classDefinition && classInstIndex >= 0 && "Class type must have classDefinition and instantiation index");
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];

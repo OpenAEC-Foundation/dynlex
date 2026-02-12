@@ -1,4 +1,4 @@
-import loop.3bx
+import loop.dl
 # this effect has a single pattern, defined right at the effect definition line instead of in a pattern section.
 expression var's next power of two:
 	get:

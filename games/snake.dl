@@ -1,8 +1,8 @@
-# Snake Game in 3BX
+# Snake Game in DynLex
 # A simple snake game with 20x20 grid
 
-import lib/std.3bx
-import lib/graphics.3bx
+import lib/std.dl
+import lib/graphics.dl
 
 # Helper patterns for arrays and random numbers
 expression allocate count items:

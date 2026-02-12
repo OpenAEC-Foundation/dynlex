@@ -1,0 +1,5 @@
+# Exclude local settings
+settings.local.json
+
+# Include rules (committed to repo)
+!rules/

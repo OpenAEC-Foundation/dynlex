@@ -6,7 +6,7 @@ Macros are patterns that get inlined at the call site instead of being compiled 
 
 ## Syntax
 
-```3bx
+```
 # Macro effect - inlined, uses "replacement:" instead of "execute:"
 macro effect return value:
     replacement:
@@ -74,7 +74,7 @@ expression factorial of n:
    - Need to bind pattern variables to their argument values
 
 2. **Update test file** to use macro syntax:
-   ```3bx
+   ```
    macro effect return value:
        replacement:
            @intrinsic("ret", value)

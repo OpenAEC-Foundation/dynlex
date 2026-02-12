@@ -1042,8 +1042,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 			if (targetStr == "string") {
 				// Convert to string via snprintf to a stack buffer
-				if (fromType.kind == Type::Kind::String)
-					return val; // already a string
+				if (fromType.isPointer())
+					return val; // already a pointer (string is i8*)
 				llvm::AllocaInst *strBuf = builder.CreateAlloca(builder.getInt8Ty(), builder.getInt64(32), "strbuf");
 				llvm::Function *snprintfFunc = context.llvmModule->getFunction("snprintf");
 				if (!snprintfFunc) {
@@ -1154,7 +1154,7 @@ static bool generateSectionCode(ParseContext &context, Section *section) {
 
 bool generateCode(ParseContext &context) {
 	context.llvmContext = new llvm::LLVMContext();
-	context.llvmModule = new llvm::Module("3bx_module", *context.llvmContext);
+	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 	context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 

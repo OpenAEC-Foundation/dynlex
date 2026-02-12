@@ -373,7 +373,6 @@ bool resolvePatterns(ParseContext &context) {
 					// add all unresolved definitions to the pattern tree
 					if (!definition->resolved) {
 						definition->resolved = true;
-
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
 						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 					}
@@ -511,7 +510,7 @@ static bool inferExpressionType(
 		} else if (std::holds_alternative<double>(expr->literalValue)) {
 			expr->type = {Type::Kind::Float, 8}; // C++ double = f64
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
-			expr->type = {Type::Kind::String};
+			expr->type = {Type::Kind::Integer, 1, 1};
 		}
 		break;
 	}
@@ -856,7 +855,10 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 			if (expr->arguments.size() >= 3) {
 				Type leftType = expr->arguments[1]->type;
 				Type rightType = expr->arguments[2]->type;
-				if (leftType.isDeduced() && !leftType.isNumeric()) {
+				// Pointer arithmetic (ptr + int, ptr - int) is valid
+				bool ptrArith = isPointerArithmeticOperator(expr->intrinsicName) &&
+								(leftType.isPointer() || rightType.isPointer());
+				if (!ptrArith && leftType.isDeduced() && !leftType.isNumeric()) {
 					context.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error,
 						"Cannot use " + leftType.toString() + " in arithmetic (expected a numeric type)",
@@ -864,7 +866,7 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 					));
 					valid = false;
 				}
-				if (rightType.isDeduced() && !rightType.isNumeric()) {
+				if (!ptrArith && rightType.isDeduced() && !rightType.isNumeric()) {
 					context.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error,
 						"Cannot use " + rightType.toString() + " in arithmetic (expected a numeric type)",
@@ -928,15 +930,20 @@ bool inferTypes(ParseContext &context) {
 	defaultNumericTypes(context.mainSection);
 
 	// Validate variables — all must have deduced types
+	// Skip non-macro function body sections: their variables only get types during monomorphization
 	bool valid = true;
 	std::function<void(Section *)> validateVariables = [&](Section *section) {
-		for (auto &[name, var] : section->variables) {
-			if (!var->type.isDeduced()) {
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
-					var->definition->range
-				));
-				valid = false;
+		bool isNonMacroFunctionBody = section->parent && !section->parent->isMacro &&
+									  !section->parent->patternDefinitions.empty();
+		if (!isNonMacroFunctionBody) {
+			for (auto &[name, var] : section->variables) {
+				if (!var->type.isDeduced()) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
+						var->definition->range
+					));
+					valid = false;
+				}
 			}
 		}
 		for (Section *child : section->children)

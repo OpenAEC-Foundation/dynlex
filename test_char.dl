@@ -1,0 +1,5 @@
+import lib/std.dl
+
+set msg to "Hello"
+set len to the length of msg
+print integer len on a new line

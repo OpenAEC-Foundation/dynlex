@@ -1,6 +1,6 @@
-# 3BX Graphics Library (GLFW + OpenGL)
+# DynLex Graphics Library (GLFW + OpenGL)
 
-import lib/std.3bx
+import lib/std.dl
 
 # GL constants
 # GL_COLOR_BUFFER_BIT = 0x4000 = 16384
@@ -16,7 +16,7 @@ import lib/std.3bx
 expression a new window with width w and height h:
 	get:
 		@intrinsic("call", "glfw", "glfwInit", "i32")
-		set window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "3BX", 0 as a pointer, 0 as a pointer)
+		set window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "DynLex", 0 as a pointer, 0 as a pointer)
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", window)
 		@intrinsic("call", "GL", "glMatrixMode", "void", 5889)
 		@intrinsic("call", "GL", "glLoadIdentity", "void")

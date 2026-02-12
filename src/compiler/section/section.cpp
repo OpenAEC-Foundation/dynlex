@@ -326,7 +326,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	// Replace number literals in pattern text and create sub-expressions.
 	// Search the transformed pattern text (where strings/intrinsics are already replaced with \a)
 	// to avoid matching digits inside string literals (e.g. "i64").
-	std::regex numLiteralRegex("\\d+(?:\\.\\d+)?");
+	std::regex numLiteralRegex("\\b\\d+(?:\\.\\d+)?\\b");
 	std::string patternSnapshot = reference->pattern.text;
 	std::sregex_iterator iter(patternSnapshot.begin(), patternSnapshot.end(), numLiteralRegex);
 	std::sregex_iterator end;

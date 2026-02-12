@@ -82,7 +82,7 @@ Diagnostic TbxServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	Diagnostic lspDiag;
 	lspDiag.range = convertRange(diag.range);
 	lspDiag.message = diag.message;
-	lspDiag.source = "3bx";
+	lspDiag.source = "dynlex";
 
 	switch (diag.level) {
 	case ::Diagnostic::Level::Error:

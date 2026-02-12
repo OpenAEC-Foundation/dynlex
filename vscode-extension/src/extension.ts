@@ -22,17 +22,17 @@ const MAX_RECONNECT_DELAY = 60000; // 1 minute
 
 export function activate(context: vscode.ExtensionContext) {
     extensionPath = context.extensionPath;
-    outputChannel = vscode.window.createOutputChannel('3BX Language Server');
+    outputChannel = vscode.window.createOutputChannel('DynLex Language Server');
     context.subscriptions.push(outputChannel);
 
-    log('3BX extension activating...');
+    log('DynLex extension activating...');
     log(`Extension path: ${extensionPath}`);
 
     // Start the language server
     startLanguageServer(context);
 
     // Watch for file changes and notify the server
-    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.3bx');
+    const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.dl');
     fileWatcher.onDidChange(uri => {
         log(`File changed on disk: ${uri.fsPath}`);
         // The LSP client handles didSave notifications automatically
@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register restart command
     context.subscriptions.push(
-        vscode.commands.registerCommand('3bx.restartServer', () => {
+        vscode.commands.registerCommand('dynlex.restartServer', () => {
             log('Restarting language server...');
             reconnectAttempts = 0;
             stopLanguageServer().then(() => startLanguageServer(context));
@@ -66,17 +66,17 @@ export function deactivate(): Thenable<void> | undefined {
 function log(message: string) {
     const timestamp = new Date().toISOString();
     outputChannel.appendLine(`[${timestamp}] ${message}`);
-    console.log(`[3BX] ${message}`);
+    console.log(`[DynLex] ${message}`);
 }
 
 function logError(message: string) {
     const timestamp = new Date().toISOString();
     outputChannel.appendLine(`[${timestamp}] ERROR: ${message}`);
-    console.error(`[3BX ERROR] ${message}`);
+    console.error(`[DynLex ERROR] ${message}`);
 }
 
 function getServerPath(): string {
-    const config = vscode.workspace.getConfiguration('3bx');
+    const config = vscode.workspace.getConfiguration('dynlex');
     const configuredPath = config.get<string>('server.path');
 
     if (configuredPath && configuredPath.length > 0) {
@@ -84,36 +84,36 @@ function getServerPath(): string {
     }
 
     // Check relative to extension installation path
-    // In development: extension is at {project}/vscode-extension, binary at {project}/build/3bx
+    // In development: extension is at {project}/vscode-extension, binary at {project}/build/dynlex
     // In production: extension is installed, binary should be bundled or in PATH
-    const devPath = path.join(extensionPath, '..', 'build', '3bx');
+    const devPath = path.join(extensionPath, '..', 'build', 'dynlex');
     if (fs.existsSync(devPath)) {
         return devPath;
     }
 
     // Check for bundled binary (production)
-    const bundledPath = path.join(extensionPath, 'bin', '3bx');
+    const bundledPath = path.join(extensionPath, 'bin', 'dynlex');
     if (fs.existsSync(bundledPath)) {
         return bundledPath;
     }
 
     // Fall back to assuming it's in PATH
-    return '3bx';
+    return 'dynlex';
 }
 
 function getServerPort(): number {
-    const config = vscode.workspace.getConfiguration('3bx');
+    const config = vscode.workspace.getConfiguration('dynlex');
     return config.get<number>('server.port') || 5007;
 }
 
 function getServerFlags(): string[] {
-    const config = vscode.workspace.getConfiguration('3bx');
+    const config = vscode.workspace.getConfiguration('dynlex');
     const flags = config.get<string>('server.flags') || '';
     return flags.split(/\s+/).filter(f => f.length > 0);
 }
 
 function useExternalServer(): boolean {
-    const config = vscode.workspace.getConfiguration('3bx');
+    const config = vscode.workspace.getConfiguration('dynlex');
     return config.get<boolean>('server.useExternal') || false;
 }
 
@@ -159,7 +159,7 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
         const ready = await waitForPort(port);
         if (!ready) {
             logError(`Timed out waiting for external server on port ${port}`);
-            vscode.window.showErrorMessage(`Timed out waiting for 3BX language server on port ${port}`);
+            vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on port ${port}`);
             return;
         }
         log(`External server is ready`);
@@ -186,14 +186,14 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
 
         serverProcess.on('error', (err) => {
             logError(`Failed to start server: ${err.message}`);
-            vscode.window.showErrorMessage(`Failed to start 3BX language server: ${err.message}`);
+            vscode.window.showErrorMessage(`Failed to start DynLex language server: ${err.message}`);
             scheduleReconnect(context);
         });
 
         serverProcess.on('exit', (code, signal) => {
             log(`Server process exited with code ${code}, signal ${signal}`);
             if (!isShuttingDown) {
-                vscode.window.showWarningMessage(`3BX language server exited unexpectedly.`);
+                vscode.window.showWarningMessage(`DynLex language server exited unexpectedly.`);
                 scheduleReconnect(context);
             }
         });
@@ -235,7 +235,7 @@ async function connectToServer(port: number, context: vscode.ExtensionContext) {
             socket.on('close', () => {
                 log('Socket closed');
                 if (!isShuttingDown && client) {
-                    vscode.window.showErrorMessage('Connection to 3BX language server lost.');
+                    vscode.window.showErrorMessage('Connection to DynLex language server lost.');
                     scheduleReconnect(context);
                 }
             });
@@ -245,16 +245,16 @@ async function connectToServer(port: number, context: vscode.ExtensionContext) {
     };
 
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: '3bx' }],
+        documentSelector: [{ scheme: 'file', language: 'dynlex' }],
         synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.3bx')
+            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.dl')
         },
         outputChannel: outputChannel
     };
 
     client = new LanguageClient(
-        '3bx-language-server',
-        '3BX Language Server',
+        'dynlex-language-server',
+        'DynLex Language Server',
         serverOptions,
         clientOptions
     );

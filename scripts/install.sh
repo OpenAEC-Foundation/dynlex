@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "Installing 3BX Compiler Dependencies..."
-echo "========================================"
+echo "Installing DynLex Compiler Dependencies..."
+echo "=========================================="
 
 # Update package list
 echo "Updating package list..."
@@ -49,7 +49,7 @@ go install github.com/isaacphi/mcp-language-server@latest
 
 echo ""
 echo "Note: MCP server is configured in .mcp.json"
-echo "Make sure to run the 3BX LSP server with: ./build/3bx --lsp"
+echo "Make sure to run the DynLex LSP server with: ./build/dynlex --lsp"
 
 echo ""
 echo "✓ Installation complete!"

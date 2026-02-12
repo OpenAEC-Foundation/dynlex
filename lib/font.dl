@@ -1,7 +1,7 @@
-# 3BX Font Library - TrueType rendering via FreeType + OpenGL
+# DynLex Font Library - TrueType rendering via FreeType + OpenGL
 
-import lib/std.3bx
-import lib/graphics.3bx
+import lib/std.dl
+import lib/graphics.dl
 
 # --- Arrays (local helpers) ---
 
@@ -246,4 +246,15 @@ effect draw game over text at x y using font and color r g b:
         set cx to render char 86 at cx y using font and color r g b
         set cx to render char 69 at cx y using font and color r g b
         set cx to render char 82 at cx y using font and color r g b
+        disable text rendering
+
+# Generic text rendering (renders any string)
+effect draw text msg at x y using font and color r g b:
+    execute:
+        enable text rendering
+        set cx to x
+        set i to 0
+        loop while i < the length of msg:
+            set cx to render char character i of msg at cx y using font and color r g b
+            set i to i + 1
         disable text rendering

@@ -1,0 +1,6 @@
+import lib/std.dl
+
+effect main:
+    execute:
+        set msg to "Hello"
+        print integer msg as an integer on a new line

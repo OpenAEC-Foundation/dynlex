@@ -10,7 +10,7 @@ class LLVMContext;
 struct ClassDefinition;
 
 struct Type {
-	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, String, Class, TypeReference };
+	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, Class, TypeReference };
 
 	Kind kind = Kind::Undeduced;
 	int byteSize = 0;							// Integer: 1/2/4/8, Float: 4/8, others: 0
@@ -126,7 +126,7 @@ struct Type {
 		if (s == "pointer")
 			return {Kind::Integer, 8, 1};
 		if (s == "string")
-			return {Kind::String};
+			return {Kind::Integer, 1, 1};
 		assert(false && "Unknown type string");
 		return {};
 	}
@@ -179,9 +179,6 @@ struct Type {
 				base = "float";
 				break;
 			}
-			break;
-		case Kind::String:
-			base = "string";
 			break;
 		case Kind::Class:
 			base = "class";

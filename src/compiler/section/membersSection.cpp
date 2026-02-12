@@ -95,15 +95,18 @@ static void insertAlignmentPadding(ClassDefinition *classDef, int alignment, Cod
 	int padding = (alignment - (offset % alignment)) % alignment;
 	int padIdx = 0;
 	while (padding >= 8) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i64")});
+		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i64")}
+		);
 		padding -= 8;
 	}
 	if (padding >= 4) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i32")});
+		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i32")}
+		);
 		padding -= 4;
 	}
 	if (padding >= 2) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i16")});
+		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i16")}
+		);
 		padding -= 2;
 	}
 	if (padding >= 1) {

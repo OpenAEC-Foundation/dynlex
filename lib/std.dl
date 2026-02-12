@@ -1,4 +1,4 @@
-# 3BX Standard Library
+# DynLex Standard Library
 
 # --- Return ---
 
@@ -61,6 +61,23 @@ macro expression [the|] value at ptr:
     replacement:
         @intrinsic("dereference", ptr)
 
+macro expression element index of ptr:
+    replacement:
+        @intrinsic("dereference", ptr + index)
+
+macro expression character index of str:
+    replacement:
+        @intrinsic("dereference", str + index)
+
+expression the length of str:
+    get:
+        set len to 0
+        set ch to character len of str
+        loop while ch is not 0:
+            set len to len + 1
+            set ch to character len of str
+        return len
+
 # --- Arithmetic ---
 
 macro expression left + right:
@@ -101,7 +118,7 @@ expression left = right:
     get:
         return @intrinsic("equal", left, right)
 
-expression left != right:
+expression left [!=|is not] right:
     get:
         return @intrinsic("not equal", left, right)
 

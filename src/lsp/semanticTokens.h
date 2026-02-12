@@ -4,7 +4,7 @@
 
 namespace lsp {
 
-// 3BX-specific semantic token types
+// DynLex-specific semantic token types
 // These indices must match the legend sent to the client
 enum class SemanticTokenType {
 	Expression = 0,
@@ -24,7 +24,7 @@ inline std::vector<std::string> getSemanticTokenTypes() {
 	return {"expression", "effect", "section", "variable", "comment", "patternDefinition", "number", "string", "intrinsic"};
 }
 
-// 3BX-specific semantic token modifiers
+// DynLex-specific semantic token modifiers
 enum class SemanticTokenModifier { Definition = 0, Count };
 
 // Get the token modifier names for the legend

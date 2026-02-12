@@ -1,4 +1,4 @@
-# Type Inference for 3BX
+# Type Inference for DynLex
 
 ## Design Decisions
 
@@ -123,6 +123,6 @@ When generating a pattern call:
 
 ```bash
 ./scripts/build.sh
-./build/3bx tests/required/0_simple/main.3bx && ./tests/required/0_simple/main  # expect: 52
-./build/3bx --emit-llvm tests/required/0_simple/main.3bx  # inspect .ll for correct types
+./build/dynlex tests/required/0_simple/main.dl && ./tests/required/0_simple/main  # expect: 52
+./build/dynlex --emit-llvm tests/required/0_simple/main.dl  # inspect .ll for correct types
 ```

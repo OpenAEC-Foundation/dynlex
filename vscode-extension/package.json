@@ -1,9 +1,9 @@
 {
-  "name": "3bx-language",
-  "displayName": "3BX Language",
-  "description": "Language support for the 3BX programming language",
+  "name": "dynlex-language",
+  "displayName": "DynLex Language",
+  "description": "Language support for the DynLex programming language",
   "version": "0.1.0",
-  "publisher": "3bx",
+  "publisher": "dynlex",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -11,26 +11,26 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onLanguage:3bx"
+    "onLanguage:dynlex"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "3bx",
+        "id": "dynlex",
         "aliases": [
-          "3BX",
-          "3bx"
+          "DynLex",
+          "dynlex"
         ],
         "extensions": [
-          ".3bx"
+          ".dl"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "semanticTokenScopes": [
       {
-        "language": "3bx",
+        "language": "dynlex",
         "scopes": {
           "expression": ["entity.name.function"],
           "effect": ["keyword.control"],
@@ -58,24 +58,24 @@
     },
     "configuration": {
       "type": "object",
-      "title": "3BX",
+      "title": "DynLex",
       "properties": {
-        "3bx.server.port": {
+        "dynlex.server.port": {
           "type": "number",
           "default": 5007,
-          "description": "Port for the 3BX language server"
+          "description": "Port for the DynLex language server"
         },
-        "3bx.server.path": {
+        "dynlex.server.path": {
           "type": "string",
           "default": "",
-          "description": "Path to the 3bx executable. Leave empty to use the bundled executable or PATH."
+          "description": "Path to the dynlex executable. Leave empty to use the bundled executable or PATH."
         },
-        "3bx.server.flags": {
+        "dynlex.server.flags": {
           "type": "string",
           "default": "",
-          "description": "Additional flags to pass to the 3bx server"
+          "description": "Additional flags to pass to the dynlex server"
         },
-        "3bx.server.useExternal": {
+        "dynlex.server.useExternal": {
           "type": "boolean",
           "default": false,
           "description": "Connect to an externally launched server instead of spawning one (for C++ debugging)"

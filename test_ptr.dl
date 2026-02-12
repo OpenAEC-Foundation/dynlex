@@ -1,0 +1,15 @@
+import lib/std.dl
+
+effect main:
+    execute:
+        set msg to "Hello"
+
+        # Test pointer arithmetic and dereference directly
+        set ptr0 to msg + 0
+        set ptr1 to msg + 1
+
+        set char0 to @intrinsic("dereference", ptr0)
+        set char1 to @intrinsic("dereference", ptr1)
+
+        print integer char0 on a new line
+        print integer char1 on a new line
