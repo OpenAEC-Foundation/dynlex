@@ -1,5 +1,0 @@
-effect turn the lights off:
-	execute:
-		@intrinsic("")
-
-effect turn the arg off:
