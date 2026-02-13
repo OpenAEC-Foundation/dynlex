@@ -7,13 +7,15 @@
 			"command": "./scripts/build.sh"
 		},
 		{
-			"label": "compile-extension",
+			"label": "Build & Install Extension",
 			"type": "shell",
-			"command": "npm run compile",
-			"options": {
-				"cwd": "${workspaceFolder}/vscode-extension"
+			"command": "./scripts/build-extension.sh",
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
 			},
-			"problemMatcher": "$tsc"
+			"problemMatcher": []
 		}
 	]
 }

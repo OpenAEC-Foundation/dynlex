@@ -90,6 +90,8 @@
 ## Bugs Fixed (more)
 - **Macro binding self-reference loop**: `resolveVarThroughMacro`/`resolveTypeThroughMacro`/`resolveMacroBinding` infinite recursion when user variable name matches macro parameter name (e.g. `set var to 2` where `set` pattern param is `var`). Fix: check `it->second != expr` (pointer equality detects the cycle).
 - **Single-arg intrinsic parsing**: `@intrinsic("name")` with no comma failed to parse intrinsic name. The `"` node was passed to `detectPatternsRecursively` which didn't handle `"` as the root node. Fix: extracted `createStringLiteral()` helper, used in `processIntrinsicArg` for `"` nodes.
+- **TransformedPattern keyframe shift bug**: `replaceLocal()` computed `shift = (endPos - startPos) + replacement.length()` — should be `-` not `+`. Over-shifted keyframes by `2 * replacement.length()` per replacement, causing variable token positions to drift when strings/numbers preceded them.
+- **Submatch patternPos not propagated**: When a submatch (sub-expression like `i - 1`) completed and the parent resumed, `patternPos` was not updated from the submatch. Variables discovered after a submatch had positions calculated as if the submatch text wasn't consumed. Fix: `stepUp.patternPos = patternPos` in the stepUp lambda.
 
 ## Debugging Tips
 - **Never dump LLVM IR to stdout/stderr in conversation** — it floods context. Use `--emit-llvm` to write to a file, or redirect output to a file and read selectively.

@@ -15,8 +15,11 @@ effect shut down the lights:
 
 shut down the lights
 
-# Specific: "lights" is literal (resolves slow - needs set/+/return)
+# Specific: "lights" is literal
 expression turn the lights off for user:
-    get:
-        set result to 1 + 1 + user
-        return result
+	get:
+		#reference the other pattern inside of this pattern so we are sure it resolves later
+		set dummy to 1
+		set test to turn the dummy off for user
+		set result to 1 + 1 + user
+		return result

@@ -32,6 +32,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		// (we have compared the last element already, the sourceElementIndex was increased then)
 		stepUp.sourceElementIndex = sourceElementIndex;
 		stepUp.sourceArgumentIndex = sourceArgumentIndex;
+		stepUp.patternPos = patternPos;
 		nextMatches.push_back(stepUp);
 	};
 

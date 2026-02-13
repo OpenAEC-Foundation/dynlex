@@ -1,8 +1,8 @@
 #include "codegen/codegen.h"
 #include "compiler/compiler.h"
+#include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
 #include "lsp/stdioTransport.h"
-#include "lsp/dynlexServer.h"
 #include "parseContext.h"
 #include <iostream>
 #include <thread>

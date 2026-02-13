@@ -205,8 +205,9 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	}
 
 	ParseContext *context = ctxIt->second.get();
-	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(),
-		[](const ::Diagnostic &d) { return d.level == ::Diagnostic::Level::Error; });
+	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(), [](const ::Diagnostic &d) {
+		return d.level == ::Diagnostic::Level::Error;
+	});
 	if (hasErrors) {
 		return {};
 	}

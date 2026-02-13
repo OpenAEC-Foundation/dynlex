@@ -55,7 +55,7 @@ void TransformedPattern::replaceLocal(
 ) {
 	text = text.substr(0, patternStartPos) + replacement + text.substr(patternEndPos);
 	// insert a new keyframe after the argument char and check for any keyframes which got redundant
-	int shift = (patternEndPos - patternStartPos) + replacement.length();
+	int shift = (patternEndPos - patternStartPos) - replacement.length();
 	if (shift) {
 		bool added{};
 		const KeyFrame &newKeyFrame{.patternPos = patternStartPos + replacement.length(), .linePos = lineEndPos};
