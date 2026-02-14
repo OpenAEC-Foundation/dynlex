@@ -84,11 +84,43 @@ bool emitNativeExecutable(ParseContext &context) {
 		linkCommand += " -l" + lib;
 	}
 
+	// Capture linker stderr to detect missing libraries
+	std::string linkCommandWithRedirect = linkCommand + " 2>&1";
+	FILE *pipe = popen(linkCommandWithRedirect.c_str(), "r");
+	std::string linkerOutput;
+	if (pipe) {
+		char buffer[256];
+		while (fgets(buffer, sizeof(buffer), pipe)) {
+			linkerOutput += buffer;
+		}
+		pclose(pipe);
+	}
+
 	int linkResult = std::system(linkCommand.c_str());
 	if (linkResult != 0) {
-		context.diagnostics.push_back(
-			Diagnostic(Diagnostic::Level::Error, "Linking failed with exit code " + std::to_string(linkResult), Range())
-		);
+		std::string errorMsg = "Linking failed with exit code " + std::to_string(linkResult);
+
+		// Check which libraries are actually missing
+		std::vector<std::string> missingLibs;
+		for (const std::string &lib : context.requiredLibraries) {
+			if (linkerOutput.find("cannot find -l" + lib) != std::string::npos) {
+				missingLibs.push_back(lib);
+			}
+		}
+
+		if (!missingLibs.empty()) {
+			errorMsg += "\nMissing libraries: ";
+			bool first = true;
+			for (const std::string &lib : missingLibs) {
+				if (!first)
+					errorMsg += ", ";
+				errorMsg += lib;
+				first = false;
+			}
+			errorMsg += "\nSearch online for installation instructions for your system.";
+		}
+
+		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, errorMsg, Range()));
 		return false;
 	}
 

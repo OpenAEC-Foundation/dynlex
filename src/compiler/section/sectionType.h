@@ -21,6 +21,8 @@ enum class SectionType {
 	Replacement,
 	// members of a class
 	Members,
+	// globals declaration in a function
+	Globals,
 	Count
 };
 

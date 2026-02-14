@@ -32,11 +32,11 @@ size_t TransformedPattern::getPatternPos(size_t linePos) {
 }
 
 void TransformedPattern::replaceLine(size_t lineStartPos, size_t lineEndPos, const std::string &replacement) {
-	replaceLocal(getPatternPos(lineStartPos), getPatternPos(lineEndPos), lineEndPos, replacement);
+	replaceRange(getPatternPos(lineStartPos), getPatternPos(lineEndPos), lineEndPos, replacement);
 }
 
 void TransformedPattern::replacePattern(size_t patternStartPos, size_t patternEndPos, const std::string &replacement) {
-	replaceLocal(patternStartPos, patternEndPos, getLinePos(patternEndPos), replacement);
+	replaceRange(patternStartPos, patternEndPos, getLinePos(patternEndPos), replacement);
 }
 std::string TransformedPattern::toString() const {
 	std::string result;
@@ -50,7 +50,7 @@ std::string TransformedPattern::toString() const {
 	return result;
 }
 
-void TransformedPattern::replaceLocal(
+void TransformedPattern::replaceRange(
 	size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, const std::string &replacement
 ) {
 	text = text.substr(0, patternStartPos) + replacement + text.substr(patternEndPos);

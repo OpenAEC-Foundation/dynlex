@@ -495,13 +495,40 @@ bool resolvePatterns(ParseContext &context) {
 			expandExpression(line->expression, line->section);
 	}
 	for (auto &[name, references] : context.unresolvedVariableReferences) {
+		bool isGlobal = context.declaredGlobalVariables.contains(name);
+
 		std::unordered_map<Section *, Section *> sectionToHighest;
 		for (VariableReference *ref : references) {
 			Section *sec = ref->range.section();
 			if (sectionToHighest.contains(sec))
 				continue;
 			Section *highest = sec;
+
+			// Find the enclosing function (Expression/Effect section)
+			Section *functionScope = nullptr;
+			for (Section *a = sec; a; a = a->parent) {
+				if ((a->type == SectionType::Expression || a->type == SectionType::Effect) && !a->isMacro) {
+					functionScope = a;
+					break;
+				}
+			}
+
+			// Check if THIS function declares the variable as global
+			bool declaredGlobalHere = false;
+			if (functionScope) {
+				for (const std::string &globalVar : functionScope->globalVariables) {
+					if (globalVar == name) {
+						declaredGlobalHere = true;
+						break;
+					}
+				}
+			}
+
 			for (Section *a = sec->parent; a; a = a->parent) {
+				// Stop at function boundary unless this function declares it as global
+				if (!declaredGlobalHere && a == functionScope) {
+					break;
+				}
 				if (a->variableReferences.contains(name))
 					highest = a;
 			}
@@ -514,8 +541,22 @@ bool resolvePatterns(ParseContext &context) {
 			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
 				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
 			});
-			definition->range.section()->variableDefinitions[name] = definition;
-			highestSection->variables[name] = new Variable(name, definition);
+
+			// This group is the global one if the variable is declared global and
+			// the group's highest section is at the top level (no enclosing function)
+			bool groupIsGlobal = false;
+			if (isGlobal) {
+				groupIsGlobal = true;
+				for (Section *a = highestSection; a; a = a->parent) {
+					if ((a->type == SectionType::Expression || a->type == SectionType::Effect) && !a->isMacro) {
+						groupIsGlobal = false;
+						break;
+					}
+				}
+			}
+
+			highestSection->variableDefinitions[name] = definition;
+			highestSection->variables[name] = new Variable(name, definition, groupIsGlobal);
 			for (VariableReference *ref : groupRefs) {
 				if (ref != definition)
 					ref->definition = definition;

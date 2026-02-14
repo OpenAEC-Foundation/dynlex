@@ -43,14 +43,14 @@ std::vector<MatchProgress> MatchProgress::step() {
 			addMatchData(match);
 		}
 
-		if (canBeSubstitute()) {
+		if (canBeSubmatch()) {
 			// this might be a submatch of a higher level match.
 			if (parent) {
 				// there already is a parent match which submatched, possibly for this match
 				//  f.e: '$ + $' in 'set $ to $ + $'
 				stepUp(*parent);
 			}
-			if (canSubstitute() && rootNode->argumentChild) {
+			if (canStartSubmatch() && rootNode->argumentChild) {
 				// this might be the first submatch of a higher level match between parent and this match,
 				// making the current parent the grand parent.
 				// f.e: 'the result' in 'the result = 10'
@@ -79,7 +79,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		// less priority: arguments
 		if (currentNode->argumentChild) {
 
-			if (canSubstitute()) {
+			if (canStartSubmatch()) {
 				// substitute the following part of the pattern
 				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
 				MatchProgress subMatch = *this;
@@ -145,12 +145,12 @@ std::vector<MatchProgress> MatchProgress::step() {
 	return nextMatches;
 }
 
-bool MatchProgress::canSubstitute() const {
+bool MatchProgress::canStartSubmatch() const {
 	// prevent infinite recursion
 	return type != SectionType::Expression || currentNode != rootNode;
 }
 
-bool MatchProgress::canBeSubstitute() const { return type == SectionType::Expression; }
+bool MatchProgress::canBeSubmatch() const { return type == SectionType::Expression; }
 
 void MatchProgress::addMatchData(PatternMatch &match) {
 	match.matchedEndNode = currentNode;

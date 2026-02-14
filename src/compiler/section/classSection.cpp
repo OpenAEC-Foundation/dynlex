@@ -1,6 +1,7 @@
 #include "classSection.h"
 #include "membersSection.h"
 #include "parseContext.h"
+#include "parseUtils.h"
 #include "patternsSection.h"
 
 // Forward declaration from membersSection.cpp
@@ -11,25 +12,9 @@ bool ClassSection::processLine(ParseContext &context, CodeLine *line) {
 	std::string_view text = line->patternText;
 	if (text.starts_with("members: ") || text.starts_with("members:")) {
 		std::string_view fields = text.substr(text.find(':') + 1);
-		// Split by comma
-		while (!fields.empty()) {
-			// Trim leading whitespace
-			size_t start = fields.find_first_not_of(" \t");
-			if (start == std::string_view::npos)
-				break;
-			fields = fields.substr(start);
-			size_t comma = fields.find(',');
-			std::string_view fieldText = (comma != std::string_view::npos) ? fields.substr(0, comma) : fields;
-			// Trim trailing whitespace from field text
-			size_t end = fieldText.find_last_not_of(" \t");
-			if (end != std::string_view::npos)
-				fieldText = fieldText.substr(0, end + 1);
-			if (!fieldText.empty())
-				classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
-			if (comma == std::string_view::npos)
-				break;
-			fields = fields.substr(comma + 1);
-		}
+		parseCommaSeparatedList(fields, [&](std::string_view fieldText) {
+			classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
+		});
 		line->resolved = true;
 		return true;
 	}

@@ -56,6 +56,8 @@ struct ParseContext {
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
+	// Global variables (module-level, accessible across all DynLex files in the program)
+	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;
@@ -75,6 +77,8 @@ struct ParseContext {
 	PatternTreeNode *patternTrees[(int)SectionType::Count];
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
+	// variable names declared as global (collected from globals: sections)
+	std::unordered_set<std::string> declaredGlobalVariables;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}

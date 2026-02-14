@@ -117,7 +117,7 @@ static void insertAlignmentPadding(ClassDefinition *classDef, int alignment, Cod
 bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 	auto *cls = static_cast<ClassSection *>(parent);
 
-	// Handle alignment directive: "alignment: N"
+	// Handle alignment directive: "padding: N"
 	std::string_view text = line->patternText;
 	if (text.starts_with("padding:")) {
 		size_t colonPos = text.find(':');
@@ -133,14 +133,11 @@ bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 		return true;
 	}
 
-	cls->classDefinition->fields.push_back(parseFieldDeclaration(context, line->patternText, line));
-	line->resolved = true;
-	return true;
+	// Delegate to base class for comma-separated parsing
+	return ListingSection::processLine(context, line);
 }
 
-Section *MembersSection::createSection(ParseContext &context, CodeLine *line) {
-	context.diagnostics.push_back(
-		Diagnostic(Diagnostic::Level::Error, "you can't create sections in a members section", Range(line, line->patternText))
-	);
-	return nullptr;
+void MembersSection::addItem(ParseContext &context, std::string_view fieldText, CodeLine *line) {
+	auto *cls = static_cast<ClassSection *>(parent);
+	cls->classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
 }

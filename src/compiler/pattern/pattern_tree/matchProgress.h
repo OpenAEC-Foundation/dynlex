@@ -38,8 +38,8 @@ struct MatchProgress {
 	// to most important ([length() - 1])
 	std::vector<MatchProgress> step();
 	// whether this progress can start a submatch
-	bool canSubstitute() const;
+	bool canStartSubmatch() const;
 	// whether this progress can be a submatch
-	bool canBeSubstitute() const;
+	bool canBeSubmatch() const;
 	void addMatchData(PatternMatch &match);
 };

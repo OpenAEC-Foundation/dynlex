@@ -7,6 +7,7 @@
 #include "patternTreeNode.h"
 #include "sectionSection.h"
 #include "stringHierarchy.h"
+#include <iostream>
 #include <stack>
 using namespace std::literals;
 
@@ -98,41 +99,41 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	return newSection;
 }
 
-StringHierarchy *createHierarchy(ParseContext &context, Range range) {
+StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 	std::stack<StringHierarchy *> nodeStack;
 	StringHierarchy *base = new StringHierarchy(0, 0);
 	nodeStack.push(base);
 
 	for (size_t index = 0; index < range.subString.size(); index++) {
-		char charachter = range.subString[index];
+		char character = range.subString[index];
 
-		auto push = [&nodeStack, index, charachter] {
-			StringHierarchy *newChild = new StringHierarchy(charachter, index + 1);
+		auto push = [&nodeStack, index, character] {
+			StringHierarchy *newChild = new StringHierarchy(character, index + 1);
 			nodeStack.top()->children.push_back(newChild);
 			nodeStack.push(newChild);
 		};
-		auto tryPop = [&nodeStack, &context, &range, base, index, charachter](char requiredCharachter) {
-			if (nodeStack.top()->charachter == requiredCharachter) {
+		auto tryPop = [&nodeStack, &context, &range, base, index, character](char requiredCharacter) {
+			if (nodeStack.top()->character == requiredCharacter) {
 				nodeStack.top()->end = index;
 				nodeStack.pop();
 				return true;
 			} else {
 				delete base;
 				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, std::string("unmatched closing charachter found: '") + charachter + "'",
+					Diagnostic::Level::Error, std::string("unmatched closing character found: '") + character + "'",
 					Range(range.line, range.subString.substr(index, 1))
 				));
 				return false;
 			}
 		};
 
-		switch (charachter) {
+		switch (character) {
 		case '(': {
 			push();
 			break;
 		}
 		case ')': {
-			if (nodeStack.top()->charachter == ',') {
+			if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
 				nodeStack.pop();
 			}
@@ -147,7 +148,7 @@ StringHierarchy *createHierarchy(ParseContext &context, Range range) {
 				stringIt = std::find(stringIt + 1, range.subString.end(), '\"');
 				if (stringIt == range.subString.end()) {
 					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error, std::string("unmatched string charachter found: '\"'"),
+						Diagnostic::Level::Error, std::string("unmatched string character found: '\"'"),
 						Range(range.line, range.subString.substr(index, 1))
 					));
 					delete base;
@@ -163,22 +164,22 @@ StringHierarchy *createHierarchy(ParseContext &context, Range range) {
 			break;
 		}
 		case '\\': {
-			if (nodeStack.top()->charachter == '"')
-				// skip the next charachter
+			if (nodeStack.top()->character == '"')
+				// skip the next character
 				index++;
 			break;
 		}
 		case ',': {
-			if (nodeStack.top()->charachter == '(') {
+			if (nodeStack.top()->character == '(') {
 				// add the child, don't push
-				StringHierarchy *newChild = new StringHierarchy(charachter, nodeStack.top()->start);
+				StringHierarchy *newChild = new StringHierarchy(character, nodeStack.top()->start);
 				// move all other children to this new child
 				newChild->children = nodeStack.top()->children;
 				newChild->end = index;
 				nodeStack.top()->children = {newChild};
 				// add another ',' child and push
 				push();
-			} else if (nodeStack.top()->charachter == ',') {
+			} else if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
 				nodeStack.pop();
 				push();
@@ -199,7 +200,7 @@ StringHierarchy *createHierarchy(ParseContext &context, Range range) {
 	if (nodeStack.size() > 1) {
 		while (nodeStack.size() > 1) {
 			context.diagnostics.push_back(Diagnostic(
-				Diagnostic::Level::Error, "unmatched closing charachter found: '"s + nodeStack.top()->charachter + "'",
+				Diagnostic::Level::Error, "unmatched closing character found: '"s + nodeStack.top()->character + "'",
 				range.subRange(nodeStack.top()->start, nodeStack.top()->start + 1)
 			));
 			nodeStack.pop();
@@ -213,7 +214,7 @@ StringHierarchy *createHierarchy(ParseContext &context, Range range) {
 }
 
 Expression *Section::detectPatterns(ParseContext &context, Range range, SectionType patternType) {
-	StringHierarchy *hierarchy = createHierarchy(context, range);
+	StringHierarchy *hierarchy = parseBracketHierarchy(context, range);
 	if (!hierarchy)
 		return nullptr;
 	Expression *expr = detectPatternsRecursively(context, range, hierarchy, patternType);
@@ -256,7 +257,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 	constexpr std::string_view intrinsicKeyword = "@intrinsic"sv;
 	for (StringHierarchy *child : node->children) {
-		if (child->charachter == '(') {
+		if (child->character == '(') {
 			size_t parenPos = child->start - 1; // position of '(' in relativeRange
 
 			// Check if @intrinsic precedes this parenthesis
@@ -274,7 +275,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				// Process arguments - first argument is the intrinsic name
 				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
 					Expression *argExpr;
-					if (argNode->charachter == '"') {
+					if (argNode->character == '"') {
 						argExpr = createStringLiteral(range, argNode);
 					} else {
 						argExpr = detectPatternsRecursively(
@@ -295,7 +296,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 					return true;
 				};
 
-				if (child->children.size() && child->children[0]->charachter == ',') {
+				if (child->children.size() && child->children[0]->character == ',') {
 					for (StringHierarchy *subChild : child->children) {
 						if (!processIntrinsicArg(subChild))
 							return nullptr;
@@ -309,7 +310,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {
 				// Regular parentheses - process arguments inside
-				if (child->children.size() && child->children[0]->charachter == ',') {
+				if (child->children.size() && child->children[0]->character == ',') {
 					for (StringHierarchy *subChild : child->children) {
 						if (!delegate(subChild))
 							return nullptr;
@@ -320,7 +321,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				}
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
-		} else if (child->charachter == '"') {
+		} else if (child->character == '"') {
 			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
@@ -419,6 +420,7 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 }
 
 void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
+	// std::cerr << "[DEBUG] searchParentPatterns: var '" << reference->name << "' in section " << this << "\n";
 	bool found = false;
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {

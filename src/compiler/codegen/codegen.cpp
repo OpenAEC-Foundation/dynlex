@@ -274,7 +274,25 @@ static void allocateSectionVariables(ParseContext &context, Section *section) {
 			varType = var->type;
 		if (!varType.isDeduced())
 			continue;
-		varDef->alloca = createEntryAlloca(context, name, varType);
+
+		// Check if this is a global variable
+		if (var && var->isGlobal) {
+			// Create or get existing global variable
+			if (!context.globalLLVMVariables.contains(name)) {
+				llvm::Type *llvmType = varType.toLLVM(*context.llvmContext);
+				llvm::Constant *initializer = llvm::Constant::getNullValue(llvmType);
+				auto *globalVar = new llvm::GlobalVariable(
+					*context.llvmModule, llvmType, false, // not constant
+					llvm::GlobalValue::InternalLinkage, initializer, name
+				);
+				context.globalLLVMVariables[name] = globalVar;
+				// Store in alloca field so existing code can find it
+				varDef->alloca = reinterpret_cast<llvm::AllocaInst *>(globalVar);
+			}
+		} else {
+			// Local variable - create alloca as before
+			varDef->alloca = createEntryAlloca(context, name, varType);
+		}
 	}
 }
 

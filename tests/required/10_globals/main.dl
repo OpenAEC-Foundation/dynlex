@@ -1,0 +1,39 @@
+import lib/std.dl
+import lib/string.dl
+
+# test 1: global variable shared across multiple functions
+effect add amount to total:
+    globals: total
+    execute:
+        set total to total + amount
+
+effect print total:
+    globals: total
+    execute:
+        print total as line
+
+set total to 0
+add 10 to total
+add 20 to total
+add 5 to total
+print total
+
+# test 2: local variable with same name as global (shadowing)
+expression double value:
+    get:
+        set total to value * 2
+        return total
+
+print double 7 as line
+
+# test 3: global should still be unchanged after shadowing
+print total
+
+# test 4: function-local variable doesn't leak across functions
+expression the length of msg:
+    get:
+        set len to the length of msg
+        return len
+
+set msg to "HELLO"
+print the length of msg as line

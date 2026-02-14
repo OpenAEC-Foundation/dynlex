@@ -7,6 +7,17 @@
 			"command": "./scripts/build.sh"
 		},
 		{
+			"label": "run tests",
+			"type": "shell",
+			"command": "./scripts/run_tests.sh",
+			"group": "test",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "Build & Install Extension",
 			"type": "shell",
 			"command": "./scripts/build-extension.sh",

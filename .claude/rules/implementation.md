@@ -93,6 +93,59 @@
 - **TransformedPattern keyframe shift bug**: `replaceLocal()` computed `shift = (endPos - startPos) + replacement.length()` — should be `-` not `+`. Over-shifted keyframes by `2 * replacement.length()` per replacement, causing variable token positions to drift when strings/numbers preceded them.
 - **Submatch patternPos not propagated**: When a submatch (sub-expression like `i - 1`) completed and the parent resumed, `patternPos` was not updated from the submatch. Variables discovered after a submatch had positions calculated as if the submatch text wasn't consumed. Fix: `stepUp.patternPos = patternPos` in the stepUp lambda.
 
+## Pattern Specificity Rematching (implemented)
+- When a more-specific definition is added to the tree (literal where existing def has argument slot),
+  references matched to the less-specific definition are invalidated and re-matched
+- **Key functions:**
+  - `findLessSpecificDefinitions`: walks definition path through tree, tracking argument-alternative paths.
+    Only reports definitions that complete a full match through the argument path (avoids false positives).
+  - `walkElementsForOverlap`: helper that advances both the literal path and argument-alternative nodes
+  - `classifyDiscoveredVariables`: lightweight VL→Variable classification without creating VariableReferences
+  - `trackMatchDefinitions`: recursively tracks definitions from sub-matches (not just top-level)
+  - `incrementVariableLikeCounts`: inverse of decrement, used when un-resolving references
+- **Resolution phases:**
+  1. Iterative loop: resolve definitions (add to tree, detect overlaps), invalidate stale matches, resolve body refs (deferred VarRef creation)
+  2. Create VariableReferences from all stable matches
+  3. Resolve global references
+  4. Expand expressions, resolve variable references
+- **Invalidation flow:** revert ALL Variable→VariableLike, re-derive from valid matches + singleVarRefs, check which defs need re-resolution, rebuild trees
+- **Key invariant:** `definitionToReferences` must track sub-match definitions too (not just top-level), otherwise sub-expression rematching won't trigger
+
+## Bugs Fixed (specificity & codegen)
+- **Word element missing in `walkElementsForOverlap`**: When the new definition had a `{word:name}` element, it fell into the `else` (literal) branch. This looked for `literalChildren[param_name]` (wrong) and treated `wordChild` as less specific (wrong — same specificity). Fix: added explicit `Word` case that follows `wordChild` on `current` and `argumentChild` on `argAlternatives`.
+- **Macro binding variable capture in codegen**: `return value + 1000` inside a non-macro function crashed with infinite recursion. The `return value:` macro bound "value" → expression(`value + 1000`). The Variable("value") inside the argument re-resolved through the same binding → infinite loop. Fix: in the Variable codegen, when resolving through macroExpressionBindings, temporarily erase the binding while generating the resolved expression. This ensures macro arguments evaluate in the caller's context.
+- **Macro bindings leaking into non-macro functions**: `generateSpecializedFunction` didn't save/clear `macroExpressionBindings`. Call-site macro bindings (e.g., from `set var to val:`) leaked into the function body, causing parameter name collisions. Fix: save/clear/restore `macroExpressionBindings` in `generateSpecializedFunction`.
+- **Numeric literals in definitions can't be matched**: Definitions like `expression compute 3 + 5 quickly:` have "3"/"5" as literal text (Other), but references replace numbers with `\a` (argument markers). Variable elements in references skip literal matching in `step()`, so such definitions can never be matched. This is a known design limitation, not a bug — definitions should use words, not numbers, for fixed text.
+
+## Variable Scoping & Global Variables (implemented)
+
+### Function-boundary scoping
+- Variables are local to their function scope by default
+- Phase 4 (variable resolution) stops grouping at **function boundaries** (non-macro Expression/Effect sections)
+- This prevents same-named variables in different functions from being merged into one (e.g., `len` in main vs `len` in `the length of str`)
+- Variables inside nested blocks (loops, if-statements) still access their parent function's variables
+
+### Global variables
+- Declared via `globals:` section in Expression/Effect definitions
+- Syntax: inline `globals: var1, var2, var3` or block form (one per line)
+- Stored as `globalVariables` on the Expression/Effect Section
+- `declaredGlobalVariables` set on ParseContext (populated during section parsing for fast lookup)
+- Functions that declare `globals: var` can read/write the module-level variable
+- Functions that don't declare it get their own local variable (shadowing, no error)
+- LLVM codegen: `@name = internal global <type> zeroinitializer` (module-level, internal linkage — visible within the executable only)
+- Global variables stored via `reinterpret_cast<AllocaInst*>(globalVar)` in `varDef->alloca` so existing codegen paths work unchanged
+- Key files: `compiler.cpp` (Phase 4 grouping), `codegen.cpp` (allocateSectionVariables), `definitionSection.cpp` (inline parsing), `globalsSection.cpp`/`h` (block parsing)
+
+### ListingSection base class
+- Shared base for `MembersSection` and `GlobalsSection`
+- Handles comma-separated and newline-separated lists via `processLine` → `addItem` virtual dispatch
+- `parseCommaSeparatedList` utility in `parseUtils.h` used by both ListingSection and inline parsing in ClassSection/DefinitionSection
+- Test: `tests/required/10_globals/` — covers shared globals, shadowing, and function-local scoping
+
+## Bugs Fixed (variable scoping)
+- **Cross-function variable grouping**: Variables with the same name in unrelated functions (e.g., `len` in main and `len` in `the length of str`) were grouped together in Phase 4 because the parent-chain walk had no function boundary check. The earliest reference was chosen as the definition, placing the alloca in the wrong function. Other functions then tried to use a `%var` that didn't exist in their scope → invalid IR. Fix: stop walking the parent chain at non-macro Expression/Effect sections unless the variable is declared as global.
+- **variableDefinitions placed in wrong section**: `definition->range.section()->variableDefinitions[name]` put the definition in whichever section the earliest reference happened to be in, not the highest section. Changed to `highestSection->variableDefinitions[name]` so the alloca is created in the correct scope.
+
 ## Debugging Tips
 - **Never dump LLVM IR to stdout/stderr in conversation** — it floods context. Use `--emit-llvm` to write to a file, or redirect output to a file and read selectively.
 

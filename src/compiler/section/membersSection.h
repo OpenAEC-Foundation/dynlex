@@ -1,9 +1,9 @@
 #pragma once
-#include "section.h"
+#include "listingSection.h"
 
-struct MembersSection : public Section {
-	MembersSection(Section *parent) : Section(SectionType::Members, parent) {}
+struct MembersSection : public ListingSection {
+	MembersSection(Section *parent) : ListingSection(SectionType::Members, parent) {}
 
 	virtual bool processLine(ParseContext &context, CodeLine *line) override;
-	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
+	virtual void addItem(ParseContext &context, std::string_view item, CodeLine *line) override;
 };

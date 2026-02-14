@@ -58,6 +58,8 @@ struct Section {
 	bool isMacro = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
+	// list of variable names declared as global in this function (from globals: section)
+	std::vector<std::string> globalVariables;
 	// Control flow blocks for this section body (set by intrinsics like loop_while, if, etc.)
 	// exitBlock: where code continues after this section (always set for control flow)
 	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch

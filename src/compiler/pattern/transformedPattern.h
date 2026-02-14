@@ -6,8 +6,8 @@
 #include <ranges>
 #include <vector>
 
-// the BEL charachter is supposed to ring a bell in terminals. since this is code, there's no reason for the user to need this
-// charachter.
+// the BEL character is supposed to ring a bell in terminals. since this is code, there's no reason for the user to need this
+// character.
 constexpr char argumentChar = '\a';
 /**
  * when modifying a line, you'll be able to find where a part of the line was first.
@@ -33,6 +33,6 @@ struct TransformedPattern {
 	void replaceLine(size_t lineStartPos, size_t lineEndPos, const std::string &replacement = std::string() + argumentChar);
 	void
 	replacePattern(size_t patternStartPos, size_t patternEndPos, const std::string &replacement = std::string() + argumentChar);
-	void replaceLocal(size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, const std::string &replacement);
+	void replaceRange(size_t patternStartPos, size_t patternEndPos, size_t lineEndPos, const std::string &replacement);
 	std::string toString() const;
 };

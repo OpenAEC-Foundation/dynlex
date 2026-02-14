@@ -21,6 +21,8 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Replacement;
 	if (str == "members")
 		return SectionType::Members;
+	if (str == "globals")
+		return SectionType::Globals;
 	return SectionType::Custom;
 }
 
@@ -46,6 +48,8 @@ std::string sectionTypeToString(SectionType type) {
 		return "replacement";
 	case SectionType::Members:
 		return "members";
+	case SectionType::Globals:
+		return "globals";
 	default:
 		return "custom";
 	}
