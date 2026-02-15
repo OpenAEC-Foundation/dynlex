@@ -81,6 +81,11 @@ int main(int argumentCount, char *argumentValues[]) {
 			generateCode(context);
 		}
 		context.printDiagnostics();
+		bool hasErrors = std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [](const Diagnostic &d) {
+			return d.level == Diagnostic::Level::Error;
+		});
+		if (hasErrors)
+			return 1;
 	} else {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
 	}

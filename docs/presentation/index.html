@@ -15,7 +15,6 @@
 		void main() {
 			gl_Position = vec4(a_position, 0.0, 1.0);
 			v_texCoord = (a_position + 1.0) / 2.0;
-			v_texCoord.y = 1.0 - v_texCoord.y;
 		}
 	</script>
 
@@ -54,73 +53,53 @@
 		}
 	</script>
 
-	<!-- Light Streaks Shader -->
-	<script id="streaks-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		varying vec2 v_texCoord;
-		uniform float u_time;
-		uniform float u_intensity;
-		uniform vec2 u_resolution;
-		uniform vec3 u_rayColor;
-		uniform vec3 u_bgColor;
-		uniform float u_solidBg;
-
-		// Random function
-		float random(vec2 st) {
-			return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453);
-		}
+	<!-- 3D Tunnel Vertex Shader -->
+	<script id="tunnel-vertex-shader" type="x-shader/x-vertex">
+		attribute vec3 a_position;
+		attribute float a_alpha;
+		uniform mat4 u_viewProjection;
+		varying float v_alpha;
 
 		void main() {
-			vec2 center = vec2(0.5, 0.5);
-			vec2 uv = v_texCoord - center;
+			gl_Position = u_viewProjection * vec4(a_position, 1.0);
+			v_alpha = a_alpha;
+		}
+	</script>
 
-			float aspect = u_resolution.x / u_resolution.y;
-			uv.x *= aspect;
+	<!-- 3D Tunnel Fragment Shader -->
+	<script id="tunnel-fragment-shader" type="x-shader/x-fragment">
+		precision mediump float;
+		uniform vec3 u_color;
+		varying float v_alpha;
 
-			// Convert to polar coordinates
-			float angle = atan(uv.y, uv.x);
-			float dist = length(uv);
+		void main() {
+			gl_FragColor = vec4(u_color, v_alpha);
+		}
+	</script>
 
-			// Create radial streaks
-			float numStreaks = 120.0;
-			float streak = random(vec2(floor(angle * numStreaks / 6.28318), 0.0));
+	<!-- Textured Plane Vertex Shader -->
+	<script id="plane-vertex-shader" type="x-shader/x-vertex">
+		attribute vec3 a_position;
+		attribute vec2 a_texCoord;
+		uniform mat4 u_viewProjection;
+		varying vec2 v_texCoord;
 
-			// Animate streaks outward
-			float speed = u_time * 3.0;
-			float streakDist = fract(streak + speed);
+		void main() {
+			gl_Position = u_viewProjection * vec4(a_position, 1.0);
+			v_texCoord = a_texCoord;
+		}
+	</script>
 
-			// Only show streaks that are "passing by"
-			float streakWidth = 0.008;
-			float streakLength = 0.3 + streak * 0.4;
+	<!-- Textured Plane Fragment Shader -->
+	<script id="plane-fragment-shader" type="x-shader/x-fragment">
+		precision mediump float;
+		uniform sampler2D u_texture;
+		varying vec2 v_texCoord;
 
-			// Distance-based visibility (streaks appear to rush from center)
-			float minDist = streakDist * 0.8;
-			float maxDist = minDist + streakLength;
-
-			float inStreak = step(minDist, dist) * step(dist, maxDist);
-			float brightness = inStreak * (1.0 - smoothstep(0.0, streakLength, dist - minDist));
-
-			// Angular width variation
-			float angleVariation = fract(angle * numStreaks / 6.28318);
-			float angularMask = smoothstep(0.0, streakWidth, angleVariation) *
-			                    smoothstep(streakWidth * 2.0, streakWidth, angleVariation);
-
-			brightness *= angularMask;
-
-			// Fade based on distance from center (brighter at edges)
-			brightness *= smoothstep(0.0, 0.3, dist);
-
-			// Apply intensity
-			brightness *= u_intensity;
-
-			if (u_solidBg > 0.5) {
-				// Solid background mode: mix bg and ray colors
-				vec3 color = mix(u_bgColor, u_rayColor, brightness);
-				gl_FragColor = vec4(color, 1.0);
-			} else {
-				// Transparent mode: rays only with alpha
-				gl_FragColor = vec4(u_rayColor * brightness, brightness);
-			}
+		void main() {
+			vec4 texColor = texture2D(u_texture, v_texCoord);
+			if (texColor.a < 0.01) discard;
+			gl_FragColor = texColor;
 		}
 	</script>
 </head>
@@ -129,7 +108,6 @@
 	<!-- Intro Animation -->
 	<div class="intro-overlay" id="intro">
 		<canvas id="introCanvas"></canvas>
-		<canvas id="streaksCanvas"></canvas>
 	</div>
 	<div class="intro-flash" id="flash"></div>
 
@@ -333,13 +311,11 @@ glEnd();</code></pre>
 	</div>
 
 	<script>
-		// WebGL-based intro with fish-eye distortion and light streaks
+		// Unified WebGL intro: 3D tunnel + textured code plane + fish-eye post-process
 		const intro = document.getElementById('intro');
 		const flash = document.getElementById('flash');
 		const canvas = document.getElementById('introCanvas');
-		const streaksCanvas = document.getElementById('streaksCanvas');
 		const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-		const gl2 = streaksCanvas.getContext('webgl') || streaksCanvas.getContext('experimental-webgl');
 
 		// Code lines with syntax highlighting
 		const codeLines = [
@@ -365,72 +341,203 @@ glEnd();</code></pre>
 			]
 		];
 
-		// Canvas setup
 		const fontSize = 32;
 		const lineHeight = fontSize * 1.4;
 		const padding = 40;
 		let sourceCanvas, sourceCtx, measureCanvas, measureCtx;
 		let animationId;
-		let glProgram, glTexture, streaksProgram;
 
-		// Helper to load shader from script tag
+		// WebGL state
+		let tunnelProg, planeProg, postProg;
+		let tunnelVBO, planeVBO, postQuadVBO;
+		let framebuffer, sceneTex, depthBuf;
+		let codeTexture;
+		let fbWidth = 0, fbHeight = 0;
+
+		// Plane positions in tunnel
+		const CODE_PLANE_Z = 15;
+		const CODE_PLANE_HALF_H = 6;
+		const PAGE_PLANE_Z = 350;
+		const PAGE_PLANE_HALF_H = 7;
+		const PAGE_PLANE_SHOW_DIST = 40; // only render page when camera is this close
+		let pageTexture;
+
+		// === 3D Tunnel System ===
+		const tunnel = {
+			radius: 8,
+			speed: 55,
+			numLines: 400,
+			viewDist: 100,
+			angularWidth: 0.05,
+			lengthMin: 2,
+			lengthMax: 8,
+			lines: null,
+			cameraZ: 0,
+			lastTime: -1
+		};
+
+		function tunnelPath(z) {
+			// Straight at the start (code plane at z=15), curves in middle, straightens near page plane
+			const blendIn = smoothstep(20, 45, z);
+			const blendOut = 1 - smoothstep(PAGE_PLANE_Z - 60, PAGE_PLANE_Z - 10, z);
+			const blend = blendIn * blendOut;
+			return [
+				blend * (5.0 * Math.sin(z * 0.06) + 2.5 * Math.sin(z * 0.11)),
+				blend * 3.0 * Math.sin(z * 0.05)
+			];
+		}
+
+		function createTunnelLine(zAhead, intensity) {
+			return {
+				angle: Math.random() * Math.PI * 2,
+				zStart: tunnel.cameraZ + zAhead,
+				length: tunnel.lengthMin + Math.random() * (tunnel.lengthMax - tunnel.lengthMin),
+				opacity: intensity
+			};
+		}
+
+		function initTunnelLines() {
+			tunnel.lines = [];
+			tunnel.cameraZ = 0;
+			tunnel.lastTime = -1;
+			for (let i = 0; i < tunnel.numLines; i++) {
+				tunnel.lines.push(createTunnelLine(Math.random() * tunnel.viewDist, 0));
+			}
+		}
+
+		function smoothstep(edge0, edge1, x) {
+			const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+			return t * t * (3 - 2 * t);
+		}
+
+		// Matrix math (column-major for WebGL)
+		function mat4Perspective(fov, aspect, near, far) {
+			const f = 1.0 / Math.tan(fov * 0.5);
+			const nf = 1.0 / (near - far);
+			return new Float32Array([
+				f / aspect, 0, 0, 0,
+				0, f, 0, 0,
+				0, 0, (far + near) * nf, -1,
+				0, 0, 2 * far * near * nf, 0
+			]);
+		}
+
+		function mat4LookAt(eye, target, up) {
+			let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
+			const fLen = Math.sqrt(fx * fx + fy * fy + fz * fz);
+			fx /= fLen; fy /= fLen; fz /= fLen;
+			// right = cross(up, forward) for correct handedness
+			let rx = up[1] * fz - up[2] * fy;
+			let ry = up[2] * fx - up[0] * fz;
+			let rz = up[0] * fy - up[1] * fx;
+			const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
+			rx /= rLen; ry /= rLen; rz /= rLen;
+			// up = cross(forward, right) to match swapped right vector
+			const ux = fy * rz - fz * ry;
+			const uy = fz * rx - fx * rz;
+			const uz = fx * ry - fy * rx;
+			return new Float32Array([
+				rx, ux, -fx, 0,
+				ry, uy, -fy, 0,
+				rz, uz, -fz, 0,
+				-(rx * eye[0] + ry * eye[1] + rz * eye[2]),
+				-(ux * eye[0] + uy * eye[1] + uz * eye[2]),
+				(fx * eye[0] + fy * eye[1] + fz * eye[2]),
+				1
+			]);
+		}
+
+		function mat4Multiply(a, b) {
+			const o = new Float32Array(16);
+			for (let i = 0; i < 4; i++) {
+				for (let j = 0; j < 4; j++) {
+					o[j * 4 + i] = a[i] * b[j * 4] + a[4 + i] * b[j * 4 + 1] + a[8 + i] * b[j * 4 + 2] + a[12 + i] * b[j * 4 + 3];
+				}
+			}
+			return o;
+		}
+
+		// Shader helpers
 		function getShaderSource(id) {
 			return document.getElementById(id).textContent;
 		}
 
-		// Helper to compile shader
-		function compileShader(glCtx, type, source) {
-			const shader = glCtx.createShader(type);
-			glCtx.shaderSource(shader, source);
-			glCtx.compileShader(shader);
+		function compileShader(type, source) {
+			const shader = gl.createShader(type);
+			gl.shaderSource(shader, source);
+			gl.compileShader(shader);
 			return shader;
 		}
 
-		// Helper to create program
-		function createProgram(glCtx, vertexSrc, fragmentSrc) {
-			const program = glCtx.createProgram();
-			glCtx.attachShader(program, compileShader(glCtx, glCtx.VERTEX_SHADER, vertexSrc));
-			glCtx.attachShader(program, compileShader(glCtx, glCtx.FRAGMENT_SHADER, fragmentSrc));
-			glCtx.linkProgram(program);
+		function createProgram(vsSrc, fsSrc) {
+			const program = gl.createProgram();
+			gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vsSrc));
+			gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+			gl.linkProgram(program);
 			return program;
 		}
 
-		// Helper to setup fullscreen quad
-		function setupQuad(glCtx, program) {
-			const buffer = glCtx.createBuffer();
-			glCtx.bindBuffer(glCtx.ARRAY_BUFFER, buffer);
-			glCtx.bufferData(glCtx.ARRAY_BUFFER, new Float32Array([
-				-1, -1, 1, -1, -1, 1,
-				-1, 1, 1, -1, 1, 1
-			]), glCtx.STATIC_DRAW);
-			const posLoc = glCtx.getAttribLocation(program, 'a_position');
-			glCtx.enableVertexAttribArray(posLoc);
-			glCtx.vertexAttribPointer(posLoc, 2, glCtx.FLOAT, false, 0, 0);
-		}
-
-		function initWebGL() {
-			if (!gl || !gl2) return false;
-
-			const vertexSrc = getShaderSource('vertex-shader');
-
-			// Distortion shader
-			glProgram = createProgram(gl, vertexSrc, getShaderSource('distortion-shader'));
-			gl.useProgram(glProgram);
-			setupQuad(gl, glProgram);
-
-			glTexture = gl.createTexture();
-			gl.bindTexture(gl.TEXTURE_2D, glTexture);
+		function createTexture() {
+			const tex = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D, tex);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			return tex;
+		}
 
-			// Streaks shader
-			streaksProgram = createProgram(gl2, vertexSrc, getShaderSource('streaks-shader'));
-			gl2.useProgram(streaksProgram);
-			setupQuad(gl2, streaksProgram);
-			gl2.enable(gl2.BLEND);
+		function ensureFramebuffer(w, h) {
+			if (fbWidth === w && fbHeight === h) return;
+			fbWidth = w; fbHeight = h;
 
+			if (!framebuffer) framebuffer = gl.createFramebuffer();
+			if (!sceneTex) sceneTex = createTexture();
+			if (!depthBuf) depthBuf = gl.createRenderbuffer();
+
+			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+			gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuf);
+			gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
+			gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuf);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+		}
+
+		function initWebGL() {
+			if (!gl) return false;
+
+			// Tunnel program (3D lines)
+			tunnelProg = createProgram(
+				getShaderSource('tunnel-vertex-shader'),
+				getShaderSource('tunnel-fragment-shader'));
+			tunnelVBO = gl.createBuffer();
+
+			// Plane program (textured 3D quads)
+			planeProg = createProgram(
+				getShaderSource('plane-vertex-shader'),
+				getShaderSource('plane-fragment-shader'));
+			planeVBO = gl.createBuffer();
+
+			// Post-process program (fish-eye distortion)
+			postProg = createProgram(
+				getShaderSource('vertex-shader'),
+				getShaderSource('distortion-shader'));
+			postQuadVBO = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+				-1, -1, 1, -1, -1, 1,
+				-1, 1, 1, -1, 1, 1
+			]), gl.STATIC_DRAW);
+
+			// Textures
+			codeTexture = createTexture();
+			renderPageContent();
+
+			gl.enable(gl.BLEND);
 			return true;
 		}
 
@@ -476,7 +583,6 @@ glEnd();</code></pre>
 			codeLines.forEach((line, lineIdx) => {
 				let x = startX;
 				const y = startY + lineIdx * lineHeight;
-
 				line.forEach(part => {
 					sourceCtx.fillStyle = part.color;
 					for (let i = 0; i < part.text.length; i++) {
@@ -496,58 +602,237 @@ glEnd();</code></pre>
 					sourceCtx.clearRect(0, lastLineY, sourceCanvas.width, lineHeight);
 				}
 			}
-		}
 
-		function applyDistortionWebGL(distortionStrength) {
-			if (!sourceCanvas || !gl) return;
-
-			canvas.width = sourceCanvas.width;
-			canvas.height = sourceCanvas.height;
-			gl.viewport(0, 0, canvas.width, canvas.height);
-
-			gl.bindTexture(gl.TEXTURE_2D, glTexture);
+			// Upload to WebGL texture
+			gl.bindTexture(gl.TEXTURE_2D, codeTexture);
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
-
-			gl.uniform1f(gl.getUniformLocation(glProgram, 'u_distortion'), distortionStrength);
-			gl.uniform2f(gl.getUniformLocation(glProgram, 'u_resolution'), canvas.width, canvas.height);
-
-			gl.drawArrays(gl.TRIANGLES, 0, 6);
 		}
 
-		function renderStreaks(time, intensity, rayColor, bgColor, solidBg) {
-			if (!gl2) return;
+		function renderPageContent() {
+			const c = document.createElement('canvas');
+			c.width = 1024;
+			c.height = 768;
+			const ctx = c.getContext('2d');
 
-			streaksCanvas.width = window.innerWidth;
-			streaksCanvas.height = window.innerHeight;
-			gl2.viewport(0, 0, streaksCanvas.width, streaksCanvas.height);
+			// Match page background
+			ctx.fillStyle = '#0a0a0f';
+			ctx.fillRect(0, 0, c.width, c.height);
 
-			// Use additive blending for transparent mode (glowing white rays)
-			// Use standard alpha blending for solid mode (opaque background)
-			if (solidBg) {
-				gl2.blendFunc(gl2.SRC_ALPHA, gl2.ONE_MINUS_SRC_ALPHA);
-			} else {
-				gl2.blendFunc(gl2.SRC_ALPHA, gl2.ONE);
+			// "DynLex" title
+			ctx.fillStyle = '#e0e0ff';
+			ctx.font = 'bold 90px system-ui, -apple-system, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText('DynLex', c.width / 2, c.height * 0.35);
+
+			// Tagline
+			ctx.fillStyle = '#8888bb';
+			ctx.font = '26px system-ui, -apple-system, sans-serif';
+			ctx.fillText('A programming language designed for humans.', c.width / 2, c.height * 0.52);
+			ctx.fillText('Write code that reads like natural language.', c.width / 2, c.height * 0.60);
+
+			pageTexture = createTexture();
+			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+		}
+
+		// Build plane vertices at z position on tunnel path
+		function buildPlaneVerts(z, halfW, halfH) {
+			const c = tunnelPath(z);
+			// 4 corners, each with position (3) + texcoord (2) = 5 floats
+			// Two triangles: 0-1-2, 1-3-2
+			const x = c[0], y = c[1];
+			return new Float32Array([
+				// tri 1
+				x - halfW, y - halfH, z, 0, 1,
+				x + halfW, y - halfH, z, 1, 1,
+				x - halfW, y + halfH, z, 0, 0,
+				// tri 2
+				x + halfW, y - halfH, z, 1, 1,
+				x + halfW, y + halfH, z, 1, 0,
+				x - halfW, y + halfH, z, 0, 0,
+			]);
+		}
+
+		function renderScene(elapsed, distortion, bgColor, lineColor, lineIntensity, revealProgress) {
+			const w = window.innerWidth;
+			const h = window.innerHeight;
+			canvas.width = w;
+			canvas.height = h;
+			ensureFramebuffer(w, h);
+
+			// === Pass 1: Render 3D scene to framebuffer ===
+			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+			gl.viewport(0, 0, w, h);
+			gl.clearColor(bgColor[0], bgColor[1], bgColor[2], 1);
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			gl.enable(gl.DEPTH_TEST);
+
+			// Init tunnel lines on first call
+			if (!tunnel.lines) initTunnelLines();
+
+			// Update camera (only moves after distortion starts)
+			if (tunnel.lastTime >= 0) {
+				const dt = elapsed - tunnel.lastTime;
+				tunnel.cameraZ += tunnel.speed * dt;
+			}
+			tunnel.lastTime = elapsed;
+
+			// Recycle lines behind camera
+			for (let i = 0; i < tunnel.lines.length; i++) {
+				const line = tunnel.lines[i];
+				if (line.zStart + line.length < tunnel.cameraZ - 2) {
+					tunnel.lines[i] = createTunnelLine(
+						tunnel.viewDist * 0.4 + Math.random() * tunnel.viewDist * 0.6,
+						lineIntensity
+					);
+				}
 			}
 
-			gl2.clear(gl2.COLOR_BUFFER_BIT);
-			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_time'), time);
-			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_intensity'), intensity);
-			gl2.uniform2f(gl2.getUniformLocation(streaksProgram, 'u_resolution'), streaksCanvas.width, streaksCanvas.height);
-			gl2.uniform3f(gl2.getUniformLocation(streaksProgram, 'u_rayColor'), rayColor[0], rayColor[1], rayColor[2]);
-			gl2.uniform3f(gl2.getUniformLocation(streaksProgram, 'u_bgColor'), bgColor[0], bgColor[1], bgColor[2]);
-			gl2.uniform1f(gl2.getUniformLocation(streaksProgram, 'u_solidBg'), solidBg ? 1.0 : 0.0);
+			// Camera follows tunnel path
+			const camP = tunnelPath(tunnel.cameraZ);
+			const lookAhead = 12;
+			const lookP = tunnelPath(tunnel.cameraZ + lookAhead);
+			const eye = [camP[0], camP[1], tunnel.cameraZ];
+			const target = [lookP[0], lookP[1], tunnel.cameraZ + lookAhead];
 
-			gl2.drawArrays(gl2.TRIANGLES, 0, 6);
+			const aspect = w / h;
+			const proj = mat4Perspective(Math.PI * 0.45, aspect, 0.1, 300);
+			const view = mat4LookAt(eye, target, [0, 1, 0]);
+			const vp = mat4Multiply(proj, view);
+
+			// --- Draw textured planes (opaque, write depth) ---
+			gl.useProgram(planeProg);
+			gl.depthMask(true);
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+			const pPosLoc = gl.getAttribLocation(planeProg, 'a_position');
+			const pTexLoc = gl.getAttribLocation(planeProg, 'a_texCoord');
+			gl.enableVertexAttribArray(pPosLoc);
+			gl.enableVertexAttribArray(pTexLoc);
+			gl.uniformMatrix4fv(gl.getUniformLocation(planeProg, 'u_viewProjection'), false, vp);
+			gl.uniform1i(gl.getUniformLocation(planeProg, 'u_texture'), 0);
+			gl.activeTexture(gl.TEXTURE0);
+
+			// Code text plane (fixed size inside tunnel)
+			if (CODE_PLANE_Z > tunnel.cameraZ - 5) {
+				renderSourceText(revealProgress);
+				const codeHalfW = CODE_PLANE_HALF_H * aspect;
+				const codeVerts = buildPlaneVerts(CODE_PLANE_Z, codeHalfW, CODE_PLANE_HALF_H);
+
+				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
+				gl.bufferData(gl.ARRAY_BUFFER, codeVerts, gl.DYNAMIC_DRAW);
+				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
+				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
+				gl.bindTexture(gl.TEXTURE_2D, codeTexture);
+				gl.drawArrays(gl.TRIANGLES, 0, 6);
+			}
+
+			// Page content plane (at end of tunnel, matches viewport aspect)
+			const distToPagePlane = PAGE_PLANE_Z - tunnel.cameraZ;
+			if (pageTexture && distToPagePlane > 0 && distToPagePlane < PAGE_PLANE_SHOW_DIST) {
+				// 15% oversized to ensure full screen coverage at snap point
+				const margin = 1.15;
+				const pageHalfW = PAGE_PLANE_HALF_H * aspect * margin;
+				const pageHalfH = PAGE_PLANE_HALF_H * margin;
+				const pageVerts = buildPlaneVerts(PAGE_PLANE_Z, pageHalfW, pageHalfH);
+
+				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
+				gl.bufferData(gl.ARRAY_BUFFER, pageVerts, gl.DYNAMIC_DRAW);
+				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
+				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
+				gl.bindTexture(gl.TEXTURE_2D, pageTexture);
+				gl.drawArrays(gl.TRIANGLES, 0, 6);
+			}
+
+			// --- Draw tunnel lines (semi-transparent, no depth write) ---
+			gl.depthMask(false);
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+			const R = tunnel.radius;
+			const dA = tunnel.angularWidth;
+			const verts = new Float32Array(tunnel.lines.length * 6 * 4);
+			let vi = 0;
+
+			for (const line of tunnel.lines) {
+				const z0 = line.zStart;
+				const z1 = z0 + line.length;
+				const a0 = line.angle;
+				const a1 = a0 + dA;
+				const p0 = tunnelPath(z0);
+				const p1 = tunnelPath(z1);
+				const c0a0 = Math.cos(a0), s0a0 = Math.sin(a0);
+				const c0a1 = Math.cos(a1), s0a1 = Math.sin(a1);
+
+				const corners = [
+					p0[0] + R * c0a0, p0[1] + R * s0a0, z0,
+					p0[0] + R * c0a1, p0[1] + R * s0a1, z0,
+					p1[0] + R * c0a0, p1[1] + R * s0a0, z1,
+					p1[0] + R * c0a1, p1[1] + R * s0a1, z1
+				];
+
+				const midZ = (z0 + z1) * 0.5 - tunnel.cameraZ;
+				const distFade = smoothstep(0, 6, midZ) * (1 - smoothstep(tunnel.viewDist * 0.6, tunnel.viewDist, midZ));
+				const alpha = line.opacity * distFade;
+
+				const idx = [0, 1, 2, 1, 3, 2];
+				for (const ci of idx) {
+					verts[vi++] = corners[ci * 3];
+					verts[vi++] = corners[ci * 3 + 1];
+					verts[vi++] = corners[ci * 3 + 2];
+					verts[vi++] = alpha;
+				}
+			}
+
+			gl.useProgram(tunnelProg);
+			gl.bindBuffer(gl.ARRAY_BUFFER, tunnelVBO);
+			gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+
+			const tPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
+			const tAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
+			gl.enableVertexAttribArray(tPosLoc);
+			gl.vertexAttribPointer(tPosLoc, 3, gl.FLOAT, false, 16, 0);
+			gl.enableVertexAttribArray(tAlphaLoc);
+			gl.vertexAttribPointer(tAlphaLoc, 1, gl.FLOAT, false, 16, 12);
+
+			gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
+			gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), lineColor[0], lineColor[1], lineColor[2]);
+
+			gl.drawArrays(gl.TRIANGLES, 0, tunnel.lines.length * 6);
+			gl.depthMask(true);
+
+			// === Pass 2: Post-process (fish-eye) to screen ===
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.viewport(0, 0, w, h);
+			gl.disable(gl.DEPTH_TEST);
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+			gl.useProgram(postProg);
+			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
+
+			// Disable attribs from previous draw calls, then enable only what we need
+			for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+			const ppPosLoc = gl.getAttribLocation(postProg, 'a_position');
+			gl.enableVertexAttribArray(ppPosLoc);
+			gl.vertexAttribPointer(ppPosLoc, 2, gl.FLOAT, false, 0, 0);
+
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+			gl.uniform1i(gl.getUniformLocation(postProg, 'u_texture'), 0);
+			gl.uniform1f(gl.getUniformLocation(postProg, 'u_distortion'), 0); // disabled for debugging
+			gl.uniform2f(gl.getUniformLocation(postProg, 'u_resolution'), w, h);
+
+			gl.drawArrays(gl.TRIANGLES, 0, 6);
 		}
 
 		function resetIntro() {
 			if (animationId) cancelAnimationFrame(animationId);
 			intro.classList.remove('hidden');
 			intro.style.opacity = 1;
-			flash.classList.remove('active', 'fade-out');
 			flash.style.opacity = 0;
-			canvas.style.opacity = 1;
 			sourceCanvas = null;
+			tunnel.lines = null;
+			tunnel.lastTime = -1;
+			tunnel.cameraZ = 0;
 		}
 
 		function playIntro() {
@@ -560,21 +845,19 @@ glEnd();</code></pre>
 				const elapsed = (currentTime - startTime) / 1000;
 
 				// Timeline:
-				// 0-3: typewriter
+				// 0-3: typewriter, camera stationary
 				// 3-3.5: pause
-				// 3.5-4: executing...
-				// 4-5.5: distortion + white rays ramp up
-				// 5-5.5: fade to white, rays white->black
-				// 5.5-7.5: tunnel (white bg, black rays)
-				// 7.5-8.5: rays fade out
-				// 8.5-10: white fades out to reveal page
-				const distortionStart = 4;
-				const distortionEnd = 5.5;
+				// 3.5-4: "executing..."
+				// 4-5.5: camera accelerates through code plane, fish-eye ramps up
+				// 5-5.5: bg black→white, lines white→black (flash)
+				// 5.5-7.5: bg white→dark, full speed tunnel
+				// 8.5-10: lines fade
+				// ~10.4: page plane fills viewport → snap to real page
+				const moveStart = 4;
 				const flashStart = 5;
 				const flashEnd = 5.5;
-				const tunnelEnd = 7.5;
-				const raysFadeEnd = 8.5;
-				const whiteFadeEnd = 10;
+				const tunnelEnd = 8.5;
+				const raysFadeEnd = 10;
 
 				// Typewriter progress
 				const firstThreeLinesRatio = 0.88;
@@ -587,85 +870,76 @@ glEnd();</code></pre>
 					revealProgress = 1;
 				}
 
-				// Calculate distortion
+				// Camera: stationary before moveStart, then moves
+				if (elapsed < moveStart) {
+					tunnel.cameraZ = 0;
+					tunnel.lastTime = -1;
+				} else if (tunnel.lastTime < 0) {
+					tunnel.lastTime = elapsed;
+				}
+
+				// Fish-eye distortion
 				let distortion = 0;
-				if (elapsed >= distortionStart && elapsed < distortionEnd) {
-					const progress = (elapsed - distortionStart) / (distortionEnd - distortionStart);
-					distortion = progress * progress; // ease in
-				} else if (elapsed >= distortionEnd) {
+				if (elapsed >= moveStart && elapsed < flashEnd) {
+					const p = (elapsed - moveStart) / (flashEnd - moveStart);
+					distortion = p * p;
+				} else if (elapsed >= flashEnd) {
 					distortion = 1;
 				}
 
-				// Calculate flash/white overlay opacity
-				let flashOpacity = 0;
+				// Background color: black → white (flash) → dark (page bg)
+				const pageBg = [0.04, 0.04, 0.06]; // matches #0a0a0f
+				let bgColor = [0, 0, 0];
 				if (elapsed >= flashStart && elapsed < flashEnd) {
-					flashOpacity = (elapsed - flashStart) / (flashEnd - flashStart);
-				} else if (elapsed >= flashEnd && elapsed < raysFadeEnd) {
-					flashOpacity = 1;
-				} else if (elapsed >= raysFadeEnd && elapsed < whiteFadeEnd) {
-					flashOpacity = 1 - (elapsed - raysFadeEnd) / (whiteFadeEnd - raysFadeEnd);
+					const p = (elapsed - flashStart) / (flashEnd - flashStart);
+					bgColor = [p, p, p];
+				} else if (elapsed >= flashEnd && elapsed < flashEnd + 2) {
+					const p = (elapsed - flashEnd) / 2;
+					bgColor = [1 - p * (1 - pageBg[0]), 1 - p * (1 - pageBg[1]), 1 - p * (1 - pageBg[2])];
+				} else if (elapsed >= flashEnd + 2) {
+					bgColor = pageBg;
 				}
 
-				// Calculate ray color (white -> black), intensity, and background mode
-				let rayColor = [0.9, 0.95, 1.0]; // white with blue tint
-				let bgColor = [0, 0, 0]; // black background initially
-				let streakIntensity = 0;
-				let solidBg = false;
+				// Line color: white → black
+				let lineColor = [0.9, 0.95, 1.0];
+				if (elapsed >= flashStart && elapsed < flashEnd) {
+					const p = (elapsed - flashStart) / (flashEnd - flashStart);
+					lineColor = [0.9 * (1 - p), 0.95 * (1 - p), 1.0 * (1 - p)];
+				} else if (elapsed >= flashEnd) {
+					lineColor = [0, 0, 0];
+				}
 
-				if (elapsed >= distortionStart && elapsed < flashStart) {
-					// Ramp up white rays on transparent bg (so text shows through)
-					const progress = (elapsed - distortionStart) / (flashStart - distortionStart);
-					streakIntensity = progress * 1.5;
-					rayColor = [0.9, 0.95, 1.0];
-					solidBg = false;
-				} else if (elapsed >= flashStart && elapsed < flashEnd) {
-					// Transition: rays white->black, bg black->white
-					const progress = (elapsed - flashStart) / (flashEnd - flashStart);
-					streakIntensity = 1.5;
-					rayColor = [0.9 * (1 - progress), 0.95 * (1 - progress), 1.0 * (1 - progress)];
-					bgColor = [progress, progress, progress];
-					solidBg = true;
-				} else if (elapsed >= flashEnd && elapsed < tunnelEnd) {
-					// Tunnel: black rays on white bg
-					streakIntensity = 1.5;
-					rayColor = [0, 0, 0];
-					bgColor = [1, 1, 1];
-					solidBg = true;
+				// Line spawn intensity
+				let lineIntensity = 0;
+				if (elapsed >= moveStart && elapsed < flashStart) {
+					lineIntensity = ((elapsed - moveStart) / (flashStart - moveStart)) * 1.5;
+				} else if (elapsed >= flashStart && elapsed < tunnelEnd) {
+					lineIntensity = 1.5;
 				} else if (elapsed >= tunnelEnd && elapsed < raysFadeEnd) {
-					// Rays fade out
-					const progress = (elapsed - tunnelEnd) / (raysFadeEnd - tunnelEnd);
-					streakIntensity = 1.5 * (1 - progress);
-					rayColor = [0, 0, 0];
-					bgColor = [1, 1, 1];
-					solidBg = true;
-				} else if (elapsed >= raysFadeEnd) {
-					// Just white, no rays
-					streakIntensity = 0;
-					bgColor = [1, 1, 1];
-					solidBg = true;
+					lineIntensity = 1.5 * (1 - (elapsed - tunnelEnd) / (raysFadeEnd - tunnelEnd));
 				}
 
-				// Render text (only before flash completes)
-				if (elapsed < flashEnd) {
-					renderSourceText(revealProgress);
-					applyDistortionWebGL(distortion);
-					canvas.style.opacity = elapsed >= flashStart ? 1 - (elapsed - flashStart) / (flashEnd - flashStart) : 1;
-				} else {
-					canvas.style.opacity = 0;
+				// Render unified scene
+				renderScene(elapsed, distortion, bgColor, lineColor, lineIntensity, revealProgress);
+
+				// Check if page plane fills the viewport → snap to real page
+				const distToPage = PAGE_PLANE_Z - tunnel.cameraZ;
+				if (distToPage > 0 && distToPage < PAGE_PLANE_SHOW_DIST) {
+					const halfFovTan = Math.tan(Math.PI * 0.45 * 0.5);
+					const screenHalfH = distToPage * halfFovTan;
+					// Use 0.85 threshold (plane has 15% margin) to ensure full coverage
+					const pageCoverage = PAGE_PLANE_HALF_H / screenHalfH;
+					if (pageCoverage >= 1.15) {
+						// Page plane fills the screen — stop animation, show real page
+						intro.classList.add('hidden');
+						flash.style.opacity = 0;
+						localStorage.setItem('intro_seen', 'true');
+						return;
+					}
 				}
 
-				// Render streaks
-				renderStreaks(elapsed, streakIntensity, rayColor, bgColor, solidBg);
-
-				// Apply flash overlay for the fade-out phase
-				flash.style.opacity = elapsed >= raysFadeEnd ? flashOpacity : 0;
-
-				// Hide intro overlay after white fade starts
-				if (elapsed >= raysFadeEnd) {
-					intro.style.opacity = flashOpacity;
-				}
-
-				if (elapsed >= whiteFadeEnd) {
+				// Safety: stop after max time
+				if (elapsed >= 15) {
 					intro.classList.add('hidden');
 					flash.style.opacity = 0;
 					localStorage.setItem('intro_seen', 'true');

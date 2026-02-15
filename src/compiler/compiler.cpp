@@ -7,10 +7,12 @@
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "stringFunctions.h"
+#include "transformedPattern.h"
 #include "type.h"
 #include "variable.h"
 #include <algorithm>
 #include <list>
+#include <queue>
 #include <ranges>
 #include <regex>
 #include <unordered_set>
@@ -607,7 +609,24 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	};
 
+	// Helper: add a definition to the pattern tree and emit a diagnostic if a duplicate exists.
+	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
+		PatternDefinition *existing =
+			context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
+		if (existing) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error,
+				"Duplicate pattern definition (conflicts with definition at " + existing->range.toString() + ")",
+				definition->range
+			));
+		}
+		invalidateStaleMatches(definition, treeType);
+	};
+
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
+
+		bool madeProgress = false;
+		size_t sectionsBefore = unResolvedSections.size();
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&](Section *section) {
@@ -619,7 +638,6 @@ bool resolvePatterns(ParseContext &context) {
 						if (element.type == PatternElement::Type::VariableLike) {
 							if (definition->patternElements.size() > 1) {
 								if (section->variableLikeCounts[element.text] == 0) {
-									// No body references use this as a variable — classify as text
 									element.type = PatternElement::Type::Other;
 								} else {
 									definition->resolved = false;
@@ -630,8 +648,7 @@ bool resolvePatterns(ParseContext &context) {
 					});
 					if (definition->resolved) {
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
-						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
-						invalidateStaleMatches(definition, treeType);
+						addDefinitionToTree(definition, treeType);
 					}
 				}
 			}
@@ -643,18 +660,42 @@ bool resolvePatterns(ParseContext &context) {
 					if (!definition->resolved) {
 						definition->resolved = true;
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
-						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
-						invalidateStaleMatches(definition, treeType);
+						addDefinitionToTree(definition, treeType);
 					}
 				}
 			}
 			return section->patternDefinitionsResolved;
 		});
 
-		resolveReferences(context, bodyReferences, true, &definitionToReferences);
+		if (unResolvedSections.size() < sectionsBefore)
+			madeProgress = true;
+
+		if (resolveReferences(context, bodyReferences, true, &definitionToReferences))
+			madeProgress = true;
 
 		if (unResolvedSections.empty() && bodyReferences.empty())
 			break;
+
+		// Deadlock detection: if no progress was made, we have a cycle (self-recursion,
+		// mutual recursion, or any dependency loop). Break the cycle by force-resolving
+		// all remaining sections — their unresolved VL elements become parameters.
+		// The cyclic body references will then resolve against the newly-added definitions
+		// in the next iteration.
+		if (!madeProgress) {
+			if (unResolvedSections.empty())
+				break; // no sections to force-resolve and no progress — truly stuck
+			for (Section *section : unResolvedSections) {
+				section->patternDefinitionsResolved = true;
+				for (PatternDefinition *definition : section->patternDefinitions) {
+					if (!definition->resolved) {
+						definition->resolved = true;
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						addDefinitionToTree(definition, treeType);
+					}
+				}
+			}
+			unResolvedSections.clear();
+		}
 	}
 
 	// Phase 2: resolve global references (all definitions are now in the tree)
@@ -665,6 +706,14 @@ bool resolvePatterns(ParseContext &context) {
 	}
 
 	if (!unResolvedSections.empty() || !bodyReferences.empty() || !globalReferences.empty()) {
+		for (Section *sec : unResolvedSections) {
+			for (PatternDefinition *def : sec->patternDefinitions) {
+				context.diagnostics.push_back(Diagnostic(
+					Diagnostic::Level::Error,
+					"This pattern definition couldn't be resolved: " + (std::string)def->range.subString, def->range
+				));
+			}
+		}
 		for (PatternReference *reference : bodyReferences)
 			context.diagnostics.push_back(
 				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
@@ -674,6 +723,186 @@ bool resolvePatterns(ParseContext &context) {
 				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
 			);
 		return false;
+	}
+
+	// Phase 3: Resolve precedence declarations and re-match affected references
+	{
+		// Resolve before:/after: signature strings to pattern definitions in the expression trie
+		auto resolveSignature = [&](const std::string &signature) -> PatternDefinition * {
+			std::string converted = signature;
+			for (char &c : converted) {
+				if (c == '$')
+					c = argumentChar;
+			}
+			auto elements = getPatternElements(converted);
+			PatternTreeNode *node = context.patternTrees[(int)SectionType::Expression];
+			for (const auto &elem : elements) {
+				if (!node)
+					return nullptr;
+				if (elem.type == PatternElement::Type::Variable) {
+					node = node->argumentChild;
+				} else {
+					auto it = node->literalChildren.find(elem.text);
+					node = (it != node->literalChildren.end()) ? it->second : nullptr;
+				}
+			}
+			return node ? node->matchingDefinition : nullptr;
+		};
+
+		// Collect precedence edges: higher → lower (higher prec = evaluated first)
+		struct PrecedenceEdge {
+			PatternDefinition *higher;
+			PatternDefinition *lower;
+		};
+		std::vector<PrecedenceEdge> edges;
+		std::unordered_set<PatternDefinition *> involvedDefs;
+
+		std::function<bool(Section *)> collectPrecedence = [&](Section *section) -> bool {
+			if (!section->beforePatterns.empty() || !section->afterPatterns.empty()) {
+				for (PatternDefinition *def : section->patternDefinitions) {
+					involvedDefs.insert(def);
+
+					// before: B means "this definition evaluates before B" = higher precedence
+					for (const std::string &beforeStr : section->beforePatterns) {
+						PatternDefinition *target = resolveSignature(beforeStr);
+						if (!target) {
+							context.diagnostics.push_back(
+								Diagnostic(Diagnostic::Level::Error, "Precedence target not found: " + beforeStr, def->range)
+							);
+							return false;
+						}
+						involvedDefs.insert(target);
+						edges.push_back({def, target});
+					}
+
+					// after: A means "this definition evaluates after A" = lower precedence
+					for (const std::string &afterStr : section->afterPatterns) {
+						PatternDefinition *target = resolveSignature(afterStr);
+						if (!target) {
+							context.diagnostics.push_back(
+								Diagnostic(Diagnostic::Level::Error, "Precedence target not found: " + afterStr, def->range)
+							);
+							return false;
+						}
+						involvedDefs.insert(target);
+						edges.push_back({target, def});
+					}
+				}
+			}
+			for (Section *child : section->children)
+				if (!collectPrecedence(child))
+					return false;
+			return true;
+		};
+
+		if (!collectPrecedence(context.mainSection))
+			return false;
+
+		if (!involvedDefs.empty()) {
+			// Topological sort (Kahn's algorithm) to assign precedence levels
+			std::unordered_map<PatternDefinition *, std::vector<PatternDefinition *>> adjList;
+			std::unordered_map<PatternDefinition *, int> inDegree;
+			for (PatternDefinition *def : involvedDefs)
+				inDegree[def] = 0;
+			for (auto &edge : edges) {
+				adjList[edge.higher].push_back(edge.lower);
+				inDegree[edge.lower]++;
+			}
+
+			std::queue<PatternDefinition *> topoQueue;
+			for (auto &[def, deg] : inDegree) {
+				if (deg == 0)
+					topoQueue.push(def);
+			}
+
+			std::vector<PatternDefinition *> topoOrder;
+			while (!topoQueue.empty()) {
+				PatternDefinition *def = topoQueue.front();
+				topoQueue.pop();
+				topoOrder.push_back(def);
+				for (PatternDefinition *lower : adjList[def]) {
+					if (--inDegree[lower] == 0)
+						topoQueue.push(lower);
+				}
+			}
+
+			if (topoOrder.size() != involvedDefs.size()) {
+				context.diagnostics.push_back(
+					Diagnostic(Diagnostic::Level::Error, "Cycle detected in precedence declarations", Range())
+				);
+				return false;
+			}
+
+			// Assign levels: first in topo order = highest precedence
+			int maxLevel = (int)topoOrder.size();
+			for (int i = 0; i < maxLevel; i++)
+				topoOrder[i]->precedence = maxLevel - i;
+
+			// Re-match body references that involve operators with precedence
+			std::function<bool(PatternMatch &)> matchInvolvesPrecedence = [&](PatternMatch &match) -> bool {
+				if (match.matchedEndNode && match.matchedEndNode->matchingDefinition &&
+					match.matchedEndNode->matchingDefinition->precedence > 0)
+					return true;
+				for (PatternMatch &sub : match.subMatches)
+					if (matchInvolvesPrecedence(sub))
+						return true;
+				return false;
+			};
+
+			// Helper to remove variable references from a match (simplified, no VL count changes)
+			std::function<void(PatternReference *, PatternMatch &)> removeMatchVarRefs = [&](PatternReference *reference,
+																							 PatternMatch &match) {
+				Section *refSection = reference->range().section();
+				for (VariableMatch &varMatch : match.discoveredVariables) {
+					if (!varMatch.variableReference)
+						continue;
+					const std::string &name = varMatch.variableReference->name;
+					auto it = refSection->variableReferences.find(name);
+					if (it != refSection->variableReferences.end()) {
+						auto &vec = it->second;
+						vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
+						if (vec.empty())
+							refSection->variableReferences.erase(it);
+					}
+					auto uit = context.unresolvedVariableReferences.find(name);
+					if (uit != context.unresolvedVariableReferences.end()) {
+						auto &vec = uit->second;
+						vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
+						if (vec.empty())
+							context.unresolvedVariableReferences.erase(uit);
+					}
+					varMatch.variableReference = nullptr;
+				}
+				for (PatternMatch &sub : match.subMatches)
+					removeMatchVarRefs(reference, sub);
+			};
+
+			// Collect all pattern references from all sections
+			std::vector<PatternReference *> allRefs;
+			std::function<void(Section *)> collectRefs = [&](Section *section) {
+				allRefs.insert(allRefs.end(), section->patternReferences.begin(), section->patternReferences.end());
+				for (Section *child : section->children)
+					collectRefs(child);
+			};
+			collectRefs(context.mainSection);
+
+			// Re-match references that involve operators with precedence
+			for (PatternReference *ref : allRefs) {
+				if (!ref->resolved || !ref->match)
+					continue;
+				if (!matchInvolvesPrecedence(*ref->match))
+					continue;
+
+				// Remove variable references from old match
+				removeMatchVarRefs(ref, *ref->match);
+
+				// Re-match with precedence constraints active
+				PatternMatch *newMatch = context.match(ref);
+				ref->match = newMatch;
+				if (newMatch)
+					addVariableReferencesFromMatch(context, ref, *newMatch);
+			}
+		}
 	}
 
 	// All patterns resolved — expand expressions and resolve variable references
@@ -1042,10 +1271,14 @@ static bool inferExpressionType(
 					}
 
 					Instantiation &inst = matchedSection->instantiations[argTypes];
-					Instantiation *savedInst = context.currentInstantiation;
-					context.currentInstantiation = &inst;
-					changed |= inferMacroBody(matchedSection, callBindings, context);
-					context.currentInstantiation = savedInst;
+					if (!inst.inferring) {
+						inst.inferring = true;
+						Instantiation *savedInst = context.currentInstantiation;
+						context.currentInstantiation = &inst;
+						changed |= inferMacroBody(matchedSection, callBindings, context);
+						context.currentInstantiation = savedInst;
+						inst.inferring = false;
+					}
 
 					if (inst.returnType.isDeduced())
 						expr->type = inst.returnType;
@@ -1235,6 +1468,27 @@ bool inferTypes(ParseContext &context) {
 			validateVariables(child);
 	};
 	validateVariables(context.mainSection);
+
+	// Validate non-macro expression functions have deduced return types
+	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
+		if (section->type == SectionType::Expression && !section->isMacro && !section->patternDefinitions.empty()) {
+			for (auto &[argTypes, inst] : section->instantiations) {
+				if (!inst.returnType.isDeduced()) {
+					context.diagnostics.push_back(Diagnostic(
+						Diagnostic::Level::Error,
+						"Expression '" + (std::string)section->patternDefinitions.front()->range.subString +
+							"' has no deduced return type",
+						section->patternDefinitions.front()->range
+					));
+					valid = false;
+					break; // one error per section is enough
+				}
+			}
+		}
+		for (Section *child : section->children)
+			validateReturnTypes(child);
+	};
+	validateReturnTypes(context.mainSection);
 
 	// Validate expression types
 	for (CodeLine *line : context.codeLines) {

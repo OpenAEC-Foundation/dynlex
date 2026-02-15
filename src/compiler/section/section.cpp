@@ -334,10 +334,13 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	std::string patternSnapshot = reference->pattern.text;
 	std::sregex_iterator iter(patternSnapshot.begin(), patternSnapshot.end(), numLiteralRegex);
 	std::sregex_iterator end;
-	// Collect matches, then process in reverse so pattern positions stay valid
+	// Collect matches, then process in reverse so pattern positions stay valid.
+	// Number expressions are collected separately and added in forward (left-to-right) order
+	// after all pattern replacements, so that sourceArgumentIndex maps to the correct expression.
 	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
 	for (; iter != end; ++iter)
 		numMatches.emplace_back(iter->position(), iter->position() + iter->length(), iter->str());
+	std::vector<Expression *> numExprs;
 	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
 		auto &[pos, endPos, numStr] = *it;
 		Expression *numExpr = new Expression();
@@ -350,9 +353,13 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 		} else {
 			numExpr->literalValue = static_cast<int64_t>(std::stoll(numStr));
 		}
-		expr->arguments.push_back(numExpr);
+		numExprs.push_back(numExpr);
 		reference->pattern.replacePattern(pos, endPos);
 	}
+	// Reverse to restore left-to-right order (numbers were processed right-to-left above)
+	std::reverse(numExprs.begin(), numExprs.end());
+	for (Expression *numExpr : numExprs)
+		expr->arguments.push_back(numExpr);
 
 	// Whitespace handling
 	auto addWhiteSpaceWarning = [&context, &range, &reference](size_t start, size_t end) {
@@ -480,6 +487,14 @@ void Section::decrementUnresolved() {
 	if (unresolvedCount == 0 && parent) {
 		parent->decrementUnresolved();
 	}
+}
+
+bool Section::isDescendantOf(Section *ancestor) {
+	for (Section *s = parent; s; s = s->parent) {
+		if (s == ancestor)
+			return true;
+	}
+	return false;
 }
 
 Variable *Section::findVariable(const std::string &name) {

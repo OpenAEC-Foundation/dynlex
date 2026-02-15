@@ -2,21 +2,21 @@ import lib/std.dl
 import lib/string.dl
 
 # test 1: global variable shared across multiple functions
-effect add amount to total:
+effect increase total by amount:
     globals: total
     execute:
         set total to total + amount
 
-effect print total:
+effect show total:
     globals: total
     execute:
         print total as line
 
 set total to 0
-add 10 to total
-add 20 to total
-add 5 to total
-print total
+increase total by 10
+increase total by 20
+increase total by 5
+show total
 
 # test 2: local variable with same name as global (shadowing)
 expression double value:
@@ -29,11 +29,23 @@ print double 7 as line
 # test 3: global should still be unchanged after shadowing
 print total
 
-# test 4: function-local variable doesn't leak across functions
-expression the length of msg:
+# test 4: function-local variable doesn't leak to global scope
+set result to 99
+expression triple value:
     get:
-        set len to the length of msg
-        return len
+        set result to value * 3
+        return result
 
-set msg to "HELLO"
-print the length of msg as line
+print triple 5 as line
+# global "result" should still be 99, not overwritten by triple's local
+print result as line
+
+# test 5: effect with globals: DOES modify the global
+effect set result to value times multiplier:
+    globals: result
+    execute:
+        set result to value * multiplier
+
+set result to 7 times 3
+# global "result" should now be 21
+print result as line

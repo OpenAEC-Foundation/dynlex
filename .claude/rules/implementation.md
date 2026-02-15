@@ -142,8 +142,40 @@
 - **Cross-function variable grouping**: Variables with the same name in unrelated functions (e.g., `len` in main and `len` in `the length of str`) were grouped together in Phase 4 because the parent-chain walk had no function boundary check. The earliest reference was chosen as the definition, placing the alloca in the wrong function. Other functions then tried to use a `%var` that didn't exist in their scope → invalid IR. Fix: stop walking the parent chain at non-macro Expression/Effect sections unless the variable is declared as global.
 - **variableDefinitions placed in wrong section**: `definition->range.section()->variableDefinitions[name]` put the definition in whichever section the earliest reference happened to be in, not the highest section. Changed to `highestSection->variableDefinitions[name]` so the alloca is created in the correct scope.
 
+## Recursive Pattern Resolution (implemented)
+
+### Pattern resolution deadlock
+- Recursive body references (self-recursion or mutual recursion) keep VariableLike counts elevated, preventing definition resolution, which prevents the body references from resolving — a deadlock.
+- **Solution: no-progress detection** in the resolution loop (`resolvePatterns` in `compiler.cpp`). Each iteration tracks `madeProgress` (set when any section resolves or any reference resolves). When no progress is made:
+  - If unresolved sections remain: force-resolve them all (remaining VL elements become parameters), breaking the cycle. The cyclic body references resolve against the newly-added definitions in the next iteration.
+  - If no unresolved sections remain: break out of the loop (truly stuck — unresolvable references will be reported as errors).
+- This handles all cycle types: self-recursion, mutual recursion, and arbitrary dependency loops.
+
+### Type inference recursion guard
+- `Instantiation` struct has an `inferring` flag (in `section.h`)
+- Before calling `inferMacroBody` for a non-macro function, check `inst.inferring` — if true, skip re-entry
+- Prevents stack overflow when inferring recursive function bodies
+
+### Codegen recursion support
+- `generateSpecializedFunction` (in `codegen.cpp`) stores `inst.llvmFunction` immediately after creating the LLVM function, **before** generating the body
+- Recursive calls within the body find the function already declared via `inst.llvmFunction != nullptr`
+- Function signature changed from returning `llvm::Function*` to `void`, taking `Instantiation&` to store early
+
+### Unresolved section error reporting
+- Previously, unresolved sections produced no diagnostics (silent failure)
+- Now reports "This pattern definition couldn't be resolved" for each unresolved definition
+
+### std.dl additions
+- `is less than or equal to` / `is greater than or equal to` as alternatives for `<=` / `>=`
+- `multiply value by factor`, `divide value by divisor`, `add value to target`, `subtract value from target` — macro effects for in-place arithmetic
+
+### Tests
+- `tests/required/recursion/` — self-recursion (factorial), mutual recursion (is_even/is_odd)
+- `tests/required/globals/` — updated with local variable scoping test and globals effect test
+
 ## Debugging Tips
 - **Never dump LLVM IR to stdout/stderr in conversation** — it floods context. Use `--emit-llvm` to write to a file, or redirect output to a file and read selectively.
 
 ## TODO / Known Issues
 - `promote()` doesn't check that operands are numeric before promoting (e.g. `promote(String, Float)` returns Float)
+- **Expression precedence**: `factorial of n - 1` parses as `(factorial of n) - 1` instead of `factorial of (n - 1)`. Pattern arguments greedily consume tokens without considering operator precedence.

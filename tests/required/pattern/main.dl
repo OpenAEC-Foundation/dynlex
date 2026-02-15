@@ -5,10 +5,11 @@ expression var's next power of two:
 		set result to 1
 		while result < var:
 			multiply result by 2
+		return result
 
 effect say message:
 	execute:
-		print message
+		print message as line
 
 class:
 	patterns:
@@ -24,7 +25,7 @@ expression number%:
 say "Hello, World!"
 		
 # should print 8
-print 5.5's next power of two
+print 5.5's next power of two as line
 
 #should print 0.1
-print 10%
+print 10% as line

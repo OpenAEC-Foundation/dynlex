@@ -238,12 +238,16 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 	return result;
 }
 
-void PatternTreeNode::addPatternPart(std::vector<PatternElement> &elements, PatternDefinition *definition, size_t index) {
+PatternDefinition *
+PatternTreeNode::addPatternPart(std::vector<PatternElement> &elements, PatternDefinition *definition, size_t index) {
 	std::vector<PatternElement> remaining(elements.begin() + index, elements.end());
 	auto endpoints = addElementSequence({this}, remaining, definition);
 	for (auto *node : endpoints) {
+		if (node->matchingDefinition && node->matchingDefinition != definition)
+			return node->matchingDefinition;
 		node->matchingDefinition = definition;
 	}
+	return nullptr;
 }
 
 // Check if a tree node has no children, no matchingDefinition, and no parameterNames.

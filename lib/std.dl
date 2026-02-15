@@ -65,69 +65,98 @@ macro expression element index of ptr:
     replacement:
         @intrinsic("dereference", ptr + index)
 
-# --- Arithmetic ---
+# --- Arithmetic (with precedence) ---
+
+# Precedence chain (lowest to highest):
+#   or < and < not < comparisons < +,- < *,/,mod < negative
 
 macro expression left + right:
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("add", left, right)
 
 macro expression left - right:
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("subtract", left, right)
 
 macro expression left * right:
+    before: $ + $, $ - $
     replacement:
         @intrinsic("multiply", left, right)
 
 macro expression left / right:
+    before: $ + $, $ - $
     replacement:
         @intrinsic("divide", left, right)
 
 macro expression left mod right:
+    before: $ + $, $ - $
     replacement:
         @intrinsic("modulo", left, right)
 
 macro expression [the|] [negative|opposite] [of|] value:
+    before: $ * $, $ / $, $ mod $
     replacement:
         @intrinsic("negate", value)
 
-macro expression multiply value by factor:
+macro effect multiply value by factor:
 	replacement:
 		set value to @intrinsic("multiply", value, factor)
+
+macro effect divide value by divisor:
+	replacement:
+		set value to @intrinsic("divide", value, divisor)
+
+macro effect add value to target:
+	replacement:
+		set target to @intrinsic("add", target, value)
+
+macro effect subtract value from target:
+	replacement:
+		set target to @intrinsic("subtract", target, value)
 
 # --- Comparison ---
 
 expression left < right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("less than", left, right)
 
 expression left > right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("greater than", left, right)
 
 expression left = right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("equal", left, right)
 
 expression left [!=|is not] right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("not equal", left, right)
 
-expression left <= right:
+expression left [is less than or equal to|<=] right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("less than or equal", left, right)
 
-expression left >= right:
+expression left [is greater than or equal to|>=] right:
+    before: $ or $, $ and $, not $
     get:
         return @intrinsic("greater than or equal", left, right)
 
 # --- Logic ---
 
 macro expression not value:
+    before: $ or $, $ and $
     replacement:
         @intrinsic("not", value)
 
 macro expression left and right:
+    before: $ or $
     replacement:
         @intrinsic("and", left, right)
 

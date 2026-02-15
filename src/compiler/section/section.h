@@ -24,6 +24,7 @@ struct Expression;
 struct Instantiation {
 	Type returnType;
 	llvm::Function *llvmFunction = nullptr;
+	bool inferring = false;
 };
 
 struct Section {
@@ -60,6 +61,8 @@ struct Section {
 	bool isLocal = false;
 	// list of variable names declared as global in this function (from globals: section)
 	std::vector<std::string> globalVariables;
+	// precedence declarations: patterns that this definition evaluates before/after
+	std::vector<std::string> beforePatterns, afterPatterns;
 	// Control flow blocks for this section body (set by intrinsics like loop_while, if, etc.)
 	// exitBlock: where code continues after this section (always set for control flow)
 	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch
@@ -78,6 +81,9 @@ struct Section {
 	void addPatternReference(PatternReference *reference);
 	void incrementUnresolved();
 	void decrementUnresolved();
+
+	// Check if this section is a descendant of (nested inside) another section
+	bool isDescendantOf(Section *ancestor);
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);

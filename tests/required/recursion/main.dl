@@ -1,0 +1,28 @@
+import lib/std.dl
+
+# test: recursive function (factorial)
+expression factorial of n:
+    get:
+        if n is less than or equal to 1:
+            return 1
+        set m to n - 1
+        return n * factorial of m
+
+print factorial of 5 as line
+print factorial of 10 as line
+
+# test: mutual recursion (is even / is odd)
+expression n is even:
+    get:
+        if n = 0:
+            return 1
+        return n - 1 is odd
+
+expression n is odd:
+    get:
+        if n = 0:
+            return 0
+        return n - 1 is even
+
+print 4 is even as line
+print 7 is even as line

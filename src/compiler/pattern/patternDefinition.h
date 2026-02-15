@@ -2,6 +2,7 @@
 #include "codeLine.h"
 #include "pattern_tree/patternElement.h"
 #include "range.h"
+#include <climits>
 #include <string_view>
 struct Section;
 struct PatternDefinition {
@@ -12,5 +13,7 @@ struct PatternDefinition {
 	std::vector<PatternElement> patternElements;
 	// when resolved, this pattern has been added to the pattern tree
 	bool resolved{};
+	// precedence level (higher = evaluated first). 0 = no precedence declared.
+	int precedence = 0;
 	PatternDefinition(Range range, Section *section);
 };

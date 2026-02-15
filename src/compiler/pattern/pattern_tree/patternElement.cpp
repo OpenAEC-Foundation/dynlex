@@ -18,7 +18,13 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 		PatternElement::Type newType = *it == argumentChar								? PatternElement::Type::Variable
 									   : std::regex_match(""s + *it, std::regex("\\w")) ? PatternElement::Type::VariableLike
 																						: PatternElement::Type::Other;
-		if (newType != currentType) {
+		// Split Other-type sequences at space boundaries so spaces are always separate elements.
+		// Without this, "% " would merge into one element, preventing sub-expression matching
+		// (e.g. "10%" where "%" is part of an expression pattern but followed by a space).
+		bool splitAtSpace =
+			(newType == PatternElement::Type::Other && currentType == PatternElement::Type::Other &&
+			 ((*it == ' ') != (*currentStart == ' ')));
+		if (newType != currentType || splitAtSpace) {
 			if (currentStart) {
 				elements.push_back(
 					PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin())
@@ -31,6 +37,62 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 	elements.push_back(PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin()));
 
 	return elements;
+}
+
+// Absorb VariableLike elements adjacent to Choice elements into the Choice alternatives.
+// e.g., VL("te") + Choice([VL("st")], []) → Choice([VL("test")], [VL("te")])
+// This ensures structurally different but semantically equivalent patterns produce the same trie paths.
+// Only VariableLike elements are absorbed: a merged VariableLike (e.g. "test" from "te"+"st") can never
+// be a variable since variables are single standalone words, so this is always safe.
+static void normalizePatternElements(std::vector<PatternElement> &elements) {
+	// Recursively normalize inside Choice alternatives first
+	for (auto &elem : elements) {
+		if (elem.type == PatternElement::Type::Choice) {
+			for (auto &alt : elem.alternatives)
+				normalizePatternElements(alt);
+		}
+	}
+
+	// Repeatedly absorb adjacent VariableLike elements into choices until no more changes
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (size_t i = 0; i < elements.size(); i++) {
+			if (elements[i].type != PatternElement::Type::Choice)
+				continue;
+
+			// Absorb preceding VariableLike element
+			if (i > 0 && elements[i - 1].type == PatternElement::Type::VariableLike) {
+				auto &prev = elements[i - 1];
+				for (auto &alt : elements[i].alternatives) {
+					if (alt.empty() || alt.front().type != PatternElement::Type::VariableLike) {
+						alt.insert(alt.begin(), prev);
+					} else {
+						alt.front().text = prev.text + alt.front().text;
+						alt.front().startPos = prev.startPos;
+					}
+				}
+				elements.erase(elements.begin() + (i - 1));
+				changed = true;
+				break;
+			}
+
+			// Absorb following VariableLike element
+			if (i + 1 < elements.size() && elements[i + 1].type == PatternElement::Type::VariableLike) {
+				auto &next = elements[i + 1];
+				for (auto &alt : elements[i].alternatives) {
+					if (alt.empty() || alt.back().type != PatternElement::Type::VariableLike) {
+						alt.push_back(next);
+					} else {
+						alt.back().text += next.text;
+					}
+				}
+				elements.erase(elements.begin() + (i + 1));
+				changed = true;
+				break;
+			}
+		}
+	}
 }
 
 std::vector<PatternElement> parsePatternElements(std::string_view patternString, size_t offset) {
@@ -141,5 +203,6 @@ std::vector<PatternElement> parsePatternElements(std::string_view patternString,
 		pos = i; // continue after closing bracket
 	}
 
+	normalizePatternElements(result);
 	return result;
 }

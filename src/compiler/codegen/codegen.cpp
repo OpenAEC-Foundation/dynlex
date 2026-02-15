@@ -25,9 +25,9 @@ static bool generateSectionCode(ParseContext &context, Section *section);
 static llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
 static llvm::Value *
 generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<Expression *> &args, Type resultType);
-static llvm::Function *generateSpecializedFunction(
+static void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<Type> &argTypes
+	const std::vector<Type> &argTypes, Instantiation &inst
 );
 
 // Get the LLVM type for a given Type
@@ -183,10 +183,11 @@ static std::string getPatternFunctionName(Section *section) {
 	return name;
 }
 
-// Generate a monomorphized LLVM function for a pattern definition with specific argument types
-static llvm::Function *generateSpecializedFunction(
+// Generate a monomorphized LLVM function for a pattern definition with specific argument types.
+// The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
+static void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<Type> &argTypes
+	const std::vector<Type> &argTypes, Instantiation &inst
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
@@ -218,6 +219,7 @@ static llvm::Function *generateSpecializedFunction(
 	}
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
+	inst.llvmFunction = func;
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
@@ -261,8 +263,6 @@ static llvm::Function *generateSpecializedFunction(
 	if (savedBlock) {
 		builder.SetInsertPoint(savedBlock, savedPoint);
 	}
-
-	return func;
 }
 
 // Allocate all variables for a section at its start
@@ -523,7 +523,7 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		// Look up or generate the specialized function
 		Instantiation &inst = matchedSection->instantiations[argTypes];
 		if (!inst.llvmFunction) {
-			inst.llvmFunction = generateSpecializedFunction(context, matchedSection, paramBindings, argTypes);
+			generateSpecializedFunction(context, matchedSection, paramBindings, argTypes, inst);
 		}
 		llvm::Function *func = inst.llvmFunction;
 

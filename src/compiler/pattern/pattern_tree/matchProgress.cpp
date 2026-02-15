@@ -1,6 +1,7 @@
 #include "matchProgress.h"
 #include "parseContext.h"
 #include "patternReference.h"
+#include <algorithm>
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)
 	: context(context), patternReference(patternReference), type(patternReference->patternType) {
 
@@ -38,38 +39,57 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 	if (currentNode->matchingDefinition) {
 		// end node found
+		PatternDefinition *def = currentNode->matchingDefinition;
 
-		if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
-			addMatchData(match);
+		// Precedence check: reject this completion if constraints are violated
+		bool precedenceOK = true;
+		if (def->precedence > 0) {
+			if (def->precedence > maxPrecedence || def->precedence >= minRightPrecedence)
+				precedenceOK = false;
 		}
 
-		if (canBeSubmatch()) {
-			// this might be a submatch of a higher level match.
-			if (parent) {
-				// there already is a parent match which submatched, possibly for this match
-				//  f.e: '$ + $' in 'set $ to $ + $'
-				stepUp(*parent);
+		if (precedenceOK) {
+			if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
+				addMatchData(match);
 			}
-			if (canStartSubmatch() && rootNode->argumentChild) {
-				// this might be the first submatch of a higher level match between parent and this match,
-				// making the current parent the grand parent.
-				// f.e: 'the result' in 'the result = 10'
-				// or: '$ + $' in 'set $ to $ + $ dollars'
-				// set $ to $: grandparent
-				// $ dollars: parent (just discovered)
-				// $ + $: current match (we just finished matching this)
-				MatchProgress clone = *this;
-				// the old parent progress becomes 'grandparent'
-				if (parent)
-					clone.parent = new MatchProgress(*parent);
-				clone.rootNode = rootNode;
-				// advance past the argument slot — the completed sub-expression occupies it
-				clone.currentNode = rootNode->argumentChild;
-				clone.match = {};
-				clone.match.nodesPassed.push_back(clone.currentNode);
 
-				clone.type = SectionType::Expression;
-				stepUp(clone);
+			if (canBeSubmatch()) {
+				// this might be a submatch of a higher level match.
+				if (parent) {
+					// there already is a parent match which submatched, possibly for this match
+					//  f.e: '$ + $' in 'set $ to $ + $'
+					stepUp(*parent);
+					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
+					// propagate the completed expression's precedence as a constraint
+					if (parent->match.nodesPassed.size() > 1) {
+						int rightPrec = (def->precedence > 0) ? def->precedence : INT_MAX;
+						nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
+					}
+				}
+				if (canStartSubmatch() && rootNode->argumentChild) {
+					// this might be the first submatch of a higher level match between parent and this match,
+					// making the current parent the grand parent.
+					// f.e: 'the result' in 'the result = 10'
+					// or: '$ + $' in 'set $ to $ + $ dollars'
+					// set $ to $: grandparent
+					// $ dollars: parent (just discovered)
+					// $ + $: current match (we just finished matching this)
+					MatchProgress clone = *this;
+					// the old parent progress becomes 'grandparent'
+					if (parent)
+						clone.parent = new MatchProgress(*parent);
+					clone.rootNode = rootNode;
+					// advance past the argument slot — the completed sub-expression occupies it
+					clone.currentNode = rootNode->argumentChild;
+					clone.match = {};
+					clone.match.nodesPassed.push_back(clone.currentNode);
+
+					// Case C: completed match becomes LEFT argument of new operator
+					clone.maxPrecedence = (def->precedence > 0) ? def->precedence : INT_MAX;
+
+					clone.type = SectionType::Expression;
+					stepUp(clone);
+				}
 			}
 		}
 	}
@@ -88,6 +108,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 				subMatch.type = SectionType::Expression;
 				subMatch.patternStartPos = patternPos;
 				subMatch.match = {};
+
+				// Case D: new submatch — reset precedence constraints (fresh expression parse)
+				subMatch.maxPrecedence = INT_MAX;
+				subMatch.minRightPrecedence = INT_MAX;
 
 				// deleting null doesn't matter
 				delete subMatch.parent;

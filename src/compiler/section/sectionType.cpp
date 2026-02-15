@@ -23,6 +23,10 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Members;
 	if (str == "globals")
 		return SectionType::Globals;
+	if (str == "before")
+		return SectionType::Before;
+	if (str == "after")
+		return SectionType::After;
 	return SectionType::Custom;
 }
 
@@ -50,6 +54,10 @@ std::string sectionTypeToString(SectionType type) {
 		return "members";
 	case SectionType::Globals:
 		return "globals";
+	case SectionType::Before:
+		return "before";
+	case SectionType::After:
+		return "after";
 	default:
 		return "custom";
 	}

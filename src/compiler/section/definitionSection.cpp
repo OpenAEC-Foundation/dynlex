@@ -4,6 +4,7 @@
 #include "parseContext.h"
 #include "parseUtils.h"
 #include "patternsSection.h"
+#include "precedenceSection.h"
 
 bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	// Handle inline globals: "globals: var1, var2, var3"
@@ -14,6 +15,26 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 			std::string varNameStr(varName);
 			globalVariables.push_back(varNameStr);
 			context.declaredGlobalVariables.insert(varNameStr);
+		});
+		line->resolved = true;
+		return true;
+	}
+
+	// Handle inline before: "before: $ + $, $ - $"
+	if (text.starts_with("before: ") || text.starts_with("before:")) {
+		std::string_view patterns = text.substr(text.find(':') + 1);
+		parseCommaSeparatedList(patterns, [&](std::string_view pattern) {
+			beforePatterns.push_back(std::string(pattern));
+		});
+		line->resolved = true;
+		return true;
+	}
+
+	// Handle inline after: "after: $ + $, $ - $"
+	if (text.starts_with("after: ") || text.starts_with("after:")) {
+		std::string_view patterns = text.substr(text.find(':') + 1);
+		parseCommaSeparatedList(patterns, [&](std::string_view pattern) {
+			afterPatterns.push_back(std::string(pattern));
 		});
 		line->resolved = true;
 		return true;
@@ -37,6 +58,14 @@ Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line)
 
 	if (line->patternText == "globals") {
 		return new GlobalsSection(this);
+	}
+
+	if (line->patternText == "before") {
+		return new PrecedenceSection(SectionType::Before, this);
+	}
+
+	if (line->patternText == "after") {
+		return new PrecedenceSection(SectionType::After, this);
 	}
 
 	// Nothing matched - give error

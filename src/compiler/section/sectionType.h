@@ -23,6 +23,9 @@ enum class SectionType {
 	Members,
 	// globals declaration in a function
 	Globals,
+	// precedence declarations
+	Before,
+	After,
 	Count
 };
 
