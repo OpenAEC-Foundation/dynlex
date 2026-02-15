@@ -17,5 +17,11 @@ struct PatternTreeNode : public PatternElement {
 	std::unordered_map<PatternDefinition *, std::string> parameterNames{};
 	using PatternElement::PatternElement;
 	void addPatternPart(std::vector<PatternElement> &elements, PatternDefinition *definition, size_t index = 0);
+	// Remove a definition from the tree (clears matchingDefinition and parameterNames).
+	// Must be called with the SAME elements that were used in addPatternPart (before any element type changes).
+	void removePatternPart(std::vector<PatternElement> &elements, PatternDefinition *definition);
 	PatternTreeNode *match(const std::vector<PatternElement> &elements);
+	// Find definitions already in the tree that are less specific than the given definition.
+	// A definition is less specific if it has an argument/word slot where the new definition has a literal/word.
+	std::vector<PatternDefinition *> findLessSpecificDefinitions(std::vector<PatternElement> &elements);
 };

@@ -80,15 +80,17 @@ print x
 
 Test files in `tests/required/`. Each folder has a `.dl` file and expected output.
 
-Run test: Build compiler → compile test to `.out` → execute → compare with expected.
-
 ```bash
+# Run all tests
+./scripts/run_tests.sh
+
+# Run a single test
 ./build/dynlex tests/required/0_simple/main.dl -o tests/required/0_simple/main.out && ./tests/required/0_simple/main.out
 ```
 
 Compiled test binaries use the `.out` extension (gitignored).
 
-**Current state:** `0_simple` patterns parse correctly. Other tests may need work.
+**Current state:** Tests 0, 4, 6, 7, 8, 9, 10 pass. Tests 1, 2, 3, 5 fail due to missing import files.
 
 ## Key Design Decisions
 

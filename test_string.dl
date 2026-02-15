@@ -1,0 +1,6 @@
+import lib/string.dl
+import lib/std.dl
+
+set msg to "HELLO"
+set len to the length of msg
+print len as line

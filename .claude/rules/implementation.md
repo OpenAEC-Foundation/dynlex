@@ -96,23 +96,19 @@
 ## Pattern Specificity Rematching (implemented)
 - When a more-specific definition is added to the tree (literal where existing def has argument slot),
   references matched to the less-specific definition are invalidated and re-matched
-- **Key functions:**
-  - `findLessSpecificDefinitions`: walks definition path through tree, tracking argument-alternative paths.
-    Only reports definitions that complete a full match through the argument path (avoids false positives).
-  - `walkElementsForOverlap`: helper that advances both the literal path and argument-alternative nodes
-  - `classifyDiscoveredVariables`: lightweight VL→Variable classification without creating VariableReferences
-  - `trackMatchDefinitions`: recursively tracks definitions from sub-matches (not just top-level)
+- **Key functions** (in `patternTreeNode.cpp` and `compiler.cpp`):
+  - `findLessSpecificDefinitions` / `walkForLessSpecific`: dual-path walk through tree — main path follows exact definition elements, less-specific path follows argument/word alternatives. Argument nodes on the less-specific path can absorb multiple elements (sub-expression spans).
+  - `trackMatchDefinitions`: recursively tracks definitions from sub-matches (not just top-level) into `definitionToReferences` map
   - `incrementVariableLikeCounts`: inverse of decrement, used when un-resolving references
-- **Resolution phases:**
-  1. Iterative loop: resolve definitions (add to tree, detect overlaps), invalidate stale matches, resolve body refs (deferred VarRef creation)
-  2. Create VariableReferences from all stable matches
-  3. Resolve global references
-  4. Expand expressions, resolve variable references
-- **Invalidation flow:** revert ALL Variable→VariableLike, re-derive from valid matches + singleVarRefs, check which defs need re-resolution, rebuild trees
+  - `removeVariableReferencesFromMatch`: undoes `addVariableReferencesFromMatch` + `searchParentPatterns` effects; reverts Variable→VariableLike in affected definitions and marks their sections for re-resolution
+  - `unresolveReference`: combines removeVarRefs, incrementVLCounts, defToRefs cleanup, returns affected definition sections
+  - `invalidateStaleMatches` (lambda in Phase 1): after adding a definition, calls findLessSpecificDefinitions, unresolves stale refs, re-adds affected definition sections to unResolvedSections
+- **Invalidation flow:** unresolve reference → revert Variable→VariableLike in ancestor definitions → mark definition unresolved → re-add section to unResolvedSections → next iteration re-classifies and re-adds to tree (old tree entry coexists; matcher prefers literals)
 - **Key invariant:** `definitionToReferences` must track sub-match definitions too (not just top-level), otherwise sub-expression rematching won't trigger
+- **Key invariant:** argument nodes on the less-specific path must stay in `nextLess` across multiple elements (absorbing), because sub-expressions can span multiple tokens
+- Test: `tests/required/9_specificity/` — covers literal vs argument, submatch overlap, word vs literal
 
 ## Bugs Fixed (specificity & codegen)
-- **Word element missing in `walkElementsForOverlap`**: When the new definition had a `{word:name}` element, it fell into the `else` (literal) branch. This looked for `literalChildren[param_name]` (wrong) and treated `wordChild` as less specific (wrong — same specificity). Fix: added explicit `Word` case that follows `wordChild` on `current` and `argumentChild` on `argAlternatives`.
 - **Macro binding variable capture in codegen**: `return value + 1000` inside a non-macro function crashed with infinite recursion. The `return value:` macro bound "value" → expression(`value + 1000`). The Variable("value") inside the argument re-resolved through the same binding → infinite loop. Fix: in the Variable codegen, when resolving through macroExpressionBindings, temporarily erase the binding while generating the resolved expression. This ensures macro arguments evaluate in the caller's context.
 - **Macro bindings leaking into non-macro functions**: `generateSpecializedFunction` didn't save/clear `macroExpressionBindings`. Call-site macro bindings (e.g., from `set var to val:`) leaked into the function body, causing parameter name collisions. Fix: save/clear/restore `macroExpressionBindings` in `generateSpecializedFunction`.
 - **Numeric literals in definitions can't be matched**: Definitions like `expression compute 3 + 5 quickly:` have "3"/"5" as literal text (Other), but references replace numbers with `\a` (argument markers). Variable elements in references skip literal matching in `step()`, so such definitions can never be matched. This is a known design limitation, not a bug — definitions should use words, not numbers, for fixed text.

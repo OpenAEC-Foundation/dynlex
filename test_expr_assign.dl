@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set x to 10 + 5
+print x as line

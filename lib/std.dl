@@ -91,6 +91,10 @@ macro expression [the|] [negative|opposite] [of|] value:
     replacement:
         @intrinsic("negate", value)
 
+macro expression multiply value by factor:
+	replacement:
+		set value to @intrinsic("multiply", value, factor)
+
 # --- Comparison ---
 
 expression left < right:
@@ -133,7 +137,7 @@ macro expression left or right:
 
 # --- Control flow ---
 
-macro section loop while condition:
+macro section [loop |]while condition:
     replacement:
         @intrinsic("loop while", condition)
 

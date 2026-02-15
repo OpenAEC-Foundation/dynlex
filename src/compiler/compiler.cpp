@@ -374,15 +374,161 @@ static void decrementVariableLikeCounts(PatternReference *reference) {
 	}
 }
 
+// Recursively record which definition each reference matched (including sub-match definitions)
+static void trackMatchDefinitions(
+	PatternMatch &match, PatternReference *reference,
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
+) {
+	if (match.matchedEndNode && match.matchedEndNode->matchingDefinition) {
+		defToRefs[match.matchedEndNode->matchingDefinition].push_back(reference);
+	}
+	for (PatternMatch &subMatch : match.subMatches) {
+		trackMatchDefinitions(subMatch, reference, defToRefs);
+	}
+}
+
+// Inverse of decrementVariableLikeCounts — re-increment VL counts for a reference being un-resolved
+static void incrementVariableLikeCounts(PatternReference *reference) {
+	Section *sec = reference->range().section();
+	while (sec) {
+		if (!sec->patternDefinitions.empty()) {
+			for (const PatternElement &refElem : reference->patternElements) {
+				if (refElem.type == PatternElement::Type::VariableLike) {
+					auto it = sec->variableLikeCounts.find(refElem.text);
+					if (it != sec->variableLikeCounts.end())
+						it->second++;
+				}
+			}
+		}
+		sec = sec->parent;
+	}
+}
+
+// Remove VariableReferences created from a match, undoing addVariableReferencesFromMatch and searchParentPatterns effects.
+// If any ancestor definitions had VL→Variable promotions reverted, their sections are added to affectedSections.
+static void removeVariableReferencesFromMatch(
+	ParseContext &context, PatternReference *reference, PatternMatch &match, std::unordered_set<Section *> &affectedSections
+) {
+	Section *refSection = reference->range().section();
+	for (VariableMatch &varMatch : match.discoveredVariables) {
+		if (!varMatch.variableReference)
+			continue;
+		const std::string &name = varMatch.variableReference->name;
+
+		// Remove from section's variableReferences
+		auto it = refSection->variableReferences.find(name);
+		if (it != refSection->variableReferences.end()) {
+			auto &vec = it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
+			if (vec.empty())
+				refSection->variableReferences.erase(it);
+		}
+
+		// Remove from unresolvedVariableReferences
+		auto uit = context.unresolvedVariableReferences.find(name);
+		if (uit != context.unresolvedVariableReferences.end()) {
+			auto &vec = uit->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
+			if (vec.empty())
+				context.unresolvedVariableReferences.erase(uit);
+		}
+
+		// Undo searchParentPatterns effects: if this varRef caused a VL→Variable promotion
+		// in an ancestor definition, and no other references to this name remain in the section,
+		// revert the element back to VariableLike
+		if (varMatch.variableReference->definition) {
+			// Check if there are still other references to this name in the section
+			bool hasOtherRefs = refSection->variableReferences.contains(name);
+			if (!hasOtherRefs) {
+				// Walk up parent sections to find the definition that was modified
+				for (Section *sec = refSection; sec; sec = sec->parent) {
+					// Remove variableDefinitions entry if it was created by searchParentPatterns
+					auto defIt = sec->variableDefinitions.find(name);
+					if (defIt != sec->variableDefinitions.end()) {
+						// Remove the definition VarRef from variableReferences too
+						auto vit = sec->variableReferences.find(name);
+						if (vit != sec->variableReferences.end()) {
+							auto &vec = vit->second;
+							vec.erase(std::remove(vec.begin(), vec.end(), defIt->second), vec.end());
+							if (vec.empty())
+								sec->variableReferences.erase(vit);
+						}
+						sec->variableDefinitions.erase(defIt);
+					}
+
+					// Revert Variable→VariableLike in pattern definitions and mark for re-resolution
+					for (PatternDefinition *def : sec->patternDefinitions) {
+						forEachLeafElement(def->patternElements, [&](PatternElement &element) {
+							if (element.type == PatternElement::Type::Variable && element.text == name) {
+								element.type = PatternElement::Type::VariableLike;
+								// This definition needs re-resolution since its VL classification changed
+								def->resolved = false;
+								sec->patternDefinitionsResolved = false;
+								affectedSections.insert(sec);
+							}
+						});
+					}
+					// Stop if we found pattern definitions (that's where searchParentPatterns would have acted)
+					if (!sec->patternDefinitions.empty())
+						break;
+				}
+			}
+		}
+
+		varMatch.variableReference = nullptr;
+	}
+	for (PatternMatch &subMatch : match.subMatches) {
+		removeVariableReferencesFromMatch(context, reference, subMatch, affectedSections);
+	}
+}
+
+// Un-resolve a reference: undo all effects and prepare it for re-matching.
+// Returns the set of definition sections that had their VL classification affected.
+static std::unordered_set<Section *> unresolveReference(
+	ParseContext &context, PatternReference *reference,
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
+) {
+	std::unordered_set<Section *> affectedSections;
+	if (!reference->resolved || !reference->match)
+		return affectedSections;
+
+	// Remove variable references created from the match
+	removeVariableReferencesFromMatch(context, reference, *reference->match, affectedSections);
+
+	// Re-increment VL counts (inverse of decrementVariableLikeCounts done during resolve)
+	incrementVariableLikeCounts(reference);
+
+	// Remove from defToRefs tracking
+	if (reference->match->matchedEndNode && reference->match->matchedEndNode->matchingDefinition) {
+		auto it = defToRefs.find(reference->match->matchedEndNode->matchingDefinition);
+		if (it != defToRefs.end()) {
+			auto &vec = it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
+		}
+	}
+
+	// Clear match and mark unresolved
+	reference->match = nullptr;
+	reference->resolved = false;
+	reference->range().section()->incrementUnresolved();
+
+	return affectedSections;
+}
+
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
-static bool resolveReferences(ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts) {
-	return std::erase_if(references, [&context, decrementCounts](PatternReference *reference) {
+static bool resolveReferences(
+	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts,
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr
+) {
+	return std::erase_if(references, [&context, decrementCounts, defToRefs](PatternReference *reference) {
 		PatternMatch *match = context.match(reference);
 		if (match) {
 			reference->resolve(match);
 			addVariableReferencesFromMatch(context, reference, *match);
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
+			if (defToRefs)
+				trackMatchDefinitions(*match, reference, *defToRefs);
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			reference->patternElements[0].type = PatternElement::Type::Variable;
@@ -422,10 +568,38 @@ bool resolvePatterns(ParseContext &context) {
 	});
 
 	// Phase 1: resolve body references and definitions
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
+
+	// Helper: after adding a definition to the tree, find less-specific definitions
+	// and unresolve any references that matched them so they can re-match the more specific one.
+	auto invalidateStaleMatches = [&](PatternDefinition *definition, SectionType treeType) {
+		auto lessSpecific = context.patternTrees[(size_t)treeType]->findLessSpecificDefinitions(definition->patternElements);
+		for (PatternDefinition *lessDef : lessSpecific) {
+			auto it = definitionToReferences.find(lessDef);
+			if (it == definitionToReferences.end())
+				continue;
+			// Copy the vector since unresolveReference modifies it
+			std::vector<PatternReference *> refs = it->second;
+			for (PatternReference *ref : refs) {
+				if (!ref->resolved)
+					continue;
+				auto affectedSections = unresolveReference(context, ref, definitionToReferences);
+				bodyReferences.push_back(ref);
+				// If any ancestor definitions had VL→Variable reverted, re-add their sections
+				// for re-resolution so they can re-classify correctly
+				for (Section *sec : affectedSections) {
+					if (std::find(unResolvedSections.begin(), unResolvedSections.end(), sec) == unResolvedSections.end()) {
+						unResolvedSections.push_back(sec);
+					}
+				}
+			}
+		}
+	};
+
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 
 		// each iteration, we go over all sections first
-		std::erase_if(unResolvedSections, [&context](Section *section) {
+		std::erase_if(unResolvedSections, [&](Section *section) {
 			section->patternDefinitionsResolved = true;
 			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
@@ -446,6 +620,7 @@ bool resolvePatterns(ParseContext &context) {
 					if (definition->resolved) {
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
 						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
+						invalidateStaleMatches(definition, treeType);
 					}
 				}
 			}
@@ -458,13 +633,14 @@ bool resolvePatterns(ParseContext &context) {
 						definition->resolved = true;
 						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
 						context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
+						invalidateStaleMatches(definition, treeType);
 					}
 				}
 			}
 			return section->patternDefinitionsResolved;
 		});
 
-		resolveReferences(context, bodyReferences, true);
+		resolveReferences(context, bodyReferences, true, &definitionToReferences);
 
 		if (unResolvedSections.empty() && bodyReferences.empty())
 			break;
