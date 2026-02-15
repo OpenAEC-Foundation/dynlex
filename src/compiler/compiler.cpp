@@ -456,12 +456,23 @@ static void removeVariableReferencesFromMatch(
 						sec->variableDefinitions.erase(defIt);
 					}
 
-					// Revert Variable→VariableLike in pattern definitions and mark for re-resolution
+					// Revert Variable→VariableLike in pattern definitions and mark for re-resolution.
+					// Must remove from tree BEFORE changing element types (tree was built with old types).
 					for (PatternDefinition *def : sec->patternDefinitions) {
+						bool needsReResolution = false;
+						forEachLeafElement(def->patternElements, [&](PatternElement &element) {
+							if (element.type == PatternElement::Type::Variable && element.text == name)
+								needsReResolution = true;
+						});
+						if (needsReResolution && def->resolved) {
+							// Remove from tree while elements still reflect the old path
+							SectionType treeType = sec->type == SectionType::Class ? SectionType::Expression : sec->type;
+							context.patternTrees[(size_t)treeType]->removePatternPart(def->patternElements, def);
+						}
+						// Now revert element types
 						forEachLeafElement(def->patternElements, [&](PatternElement &element) {
 							if (element.type == PatternElement::Type::Variable && element.text == name) {
 								element.type = PatternElement::Type::VariableLike;
-								// This definition needs re-resolution since its VL classification changed
 								def->resolved = false;
 								sec->patternDefinitionsResolved = false;
 								affectedSections.insert(sec);

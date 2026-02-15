@@ -246,82 +246,77 @@ void PatternTreeNode::addPatternPart(std::vector<PatternElement> &elements, Patt
 	}
 }
 
-// Walk the tree following existing nodes (no creation) and collect endpoint nodes.
-// Handles Choice elements by branching. Returns empty if path doesn't exist.
-static std::vector<PatternTreeNode *>
-followElementSequence(std::vector<PatternTreeNode *> currentNodes, const std::vector<PatternElement> &elements, PatternDefinition *definition) {
-	for (const auto &elem : elements) {
-		if (elem.type == PatternElement::Type::Choice) {
-			std::vector<PatternTreeNode *> branchEndpoints;
-			for (const auto &alternative : elem.alternatives) {
-				auto endpoints = followElementSequence(currentNodes, alternative, definition);
-				branchEndpoints.insert(branchEndpoints.end(), endpoints.begin(), endpoints.end());
-			}
-			std::unordered_set<PatternTreeNode *> seen;
-			currentNodes.clear();
-			for (auto *node : branchEndpoints) {
-				if (seen.insert(node).second)
-					currentNodes.push_back(node);
-			}
-		} else {
-			std::vector<PatternTreeNode *> nextNodes;
-			std::unordered_set<PatternTreeNode *> seen;
-			for (auto *parent : currentNodes) {
-				PatternTreeNode *child = nullptr;
-				if (elem.type == PatternElement::Type::Variable) {
-					child = parent->argumentChild;
-				} else if (elem.type == PatternElement::Type::Word) {
-					child = parent->wordChild;
-				} else {
-					auto it = parent->literalChildren.find(elem.text);
-					if (it != parent->literalChildren.end())
-						child = it->second;
-				}
-				if (child && seen.insert(child).second)
-					nextNodes.push_back(child);
-			}
-			currentNodes = nextNodes;
-		}
-		if (currentNodes.empty())
-			break;
+// Check if a tree node has no children, no matchingDefinition, and no parameterNames.
+// Such nodes are dead-ends that can be detached from their parent.
+static bool isNodeEmpty(PatternTreeNode *node) {
+	return !node->matchingDefinition && node->literalChildren.empty() && !node->argumentChild && !node->wordChild &&
+		   node->parameterNames.empty();
+}
+
+// Recursively remove a definition from the tree, walking the element path.
+// At each level: find the child, recurse into it, then detach the child if it became empty.
+// Returns true if `current` is now empty (caller should detach it).
+static bool removeDefinitionPath(
+	PatternTreeNode *current, const std::vector<PatternElement> &elements, size_t index, PatternDefinition *definition
+) {
+	if (index >= elements.size()) {
+		// Endpoint: clear matchingDefinition if it belongs to this definition
+		if (current->matchingDefinition == definition)
+			current->matchingDefinition = nullptr;
+		current->parameterNames.erase(definition);
+		return isNodeEmpty(current);
 	}
-	return currentNodes;
+
+	const PatternElement &elem = elements[index];
+
+	if (elem.type == PatternElement::Type::Choice) {
+		// Branch into each alternative. Build sub-sequences: alternative + remaining elements after choice.
+		for (const auto &alternative : elem.alternatives) {
+			std::vector<PatternElement> subElements(alternative.begin(), alternative.end());
+			subElements.insert(subElements.end(), elements.begin() + index + 1, elements.end());
+			removeDefinitionPath(current, subElements, 0, definition);
+		}
+		return isNodeEmpty(current);
+	}
+
+	// Find the child node for this element
+	PatternTreeNode *child = nullptr;
+	if (elem.type == PatternElement::Type::Variable) {
+		child = current->argumentChild;
+	} else if (elem.type == PatternElement::Type::Word) {
+		child = current->wordChild;
+	} else {
+		auto it = current->literalChildren.find(elem.text);
+		if (it != current->literalChildren.end())
+			child = it->second;
+	}
+
+	if (!child)
+		return isNodeEmpty(current);
+
+	// Clean parameterNames on argument/word nodes
+	if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
+		child->parameterNames.erase(definition);
+
+	// Recurse into child
+	bool childEmpty = removeDefinitionPath(child, elements, index + 1, definition);
+
+	if (childEmpty) {
+		// Detach this specific parent→child link.
+		// Other parents may still point to this child (shared nodes from Choice convergence),
+		// but this parent's link is dead.
+		if (elem.type == PatternElement::Type::Variable)
+			current->argumentChild = nullptr;
+		else if (elem.type == PatternElement::Type::Word)
+			current->wordChild = nullptr;
+		else
+			current->literalChildren.erase(elem.text);
+		// Note: we don't delete the child node (arena allocation — owned by ParseContext)
+	}
+
+	return isNodeEmpty(current);
 }
 
 void PatternTreeNode::removePatternPart(std::vector<PatternElement> &elements, PatternDefinition *definition) {
-	std::vector<PatternElement> remaining(elements.begin(), elements.end());
-	auto endpoints = followElementSequence({this}, remaining, definition);
-	for (auto *node : endpoints) {
-		if (node->matchingDefinition == definition)
-			node->matchingDefinition = nullptr;
-		node->parameterNames.erase(definition);
-	}
-	// Also clean parameterNames from intermediate argument/word nodes
-	auto intermediates = followElementSequence({this}, remaining, definition);
-	// Walk element by element to find argument/word nodes and clean their parameterNames
-	std::vector<PatternTreeNode *> current = {this};
-	for (const auto &elem : remaining) {
-		if (elem.type == PatternElement::Type::Choice)
-			continue; // simplified — Choice cleanup handled by endpoint cleanup
-		std::vector<PatternTreeNode *> next;
-		for (auto *parent : current) {
-			PatternTreeNode *child = nullptr;
-			if (elem.type == PatternElement::Type::Variable)
-				child = parent->argumentChild;
-			else if (elem.type == PatternElement::Type::Word)
-				child = parent->wordChild;
-			else {
-				auto it = parent->literalChildren.find(elem.text);
-				if (it != parent->literalChildren.end())
-					child = it->second;
-			}
-			if (child) {
-				child->parameterNames.erase(definition);
-				next.push_back(child);
-			}
-		}
-		current = next;
-		if (current.empty())
-			break;
-	}
+	removeDefinitionPath(this, elements, 0, definition);
 }

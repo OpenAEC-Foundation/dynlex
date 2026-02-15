@@ -420,7 +420,6 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 }
 
 void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
-	// std::cerr << "[DEBUG] searchParentPatterns: var '" << reference->name << "' in section " << this << "\n";
 	bool found = false;
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {

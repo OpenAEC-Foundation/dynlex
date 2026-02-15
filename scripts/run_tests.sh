@@ -35,18 +35,44 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    if [[ ! -f "$expected_file" ]]; then
-        echo -e "${YELLOW}SKIP${NC} $test_name (no expected.txt)"
+    expected_error_file="$test_dir/expected_error.txt"
+
+    if [[ ! -f "$expected_file" && ! -f "$expected_error_file" ]]; then
+        echo -e "${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_error.txt)"
         ((skipped++))
         continue
     fi
 
     # Compile
     compile_output=$("$COMPILER" "$source_file" -o "$output_binary" 2>&1)
-    if [[ $? -ne 0 || ! -x "$output_binary" ]]; then
-        echo -e "${RED}FAIL${NC} $test_name (compilation failed)"
-        [[ -n "$compile_output" ]] && echo "  $compile_output"
-        ((failed++)) || true
+    compile_exit=$?
+    if [[ $compile_exit -ne 0 || ! -f "$output_binary" || ! -x "$output_binary" ]]; then
+        # Compilation failed — check if this was expected
+        if [[ -f "$expected_error_file" ]]; then
+            expected_error=$(<"$expected_error_file")
+            if [[ "$compile_output" == *"$expected_error"* ]]; then
+                echo -e "${GREEN}PASS${NC} $test_name (expected compile error)"
+                ((passed++))
+            else
+                echo -e "${RED}FAIL${NC} $test_name (compile error mismatch)"
+                echo "  Expected error containing: $expected_error"
+                echo "  Actual: $compile_output"
+                ((failed++))
+                failures+=("$test_name")
+            fi
+        else
+            echo -e "${RED}FAIL${NC} $test_name (compilation failed)"
+            [[ -n "$compile_output" ]] && echo "  $compile_output"
+            ((failed++)) || true
+            failures+=("$test_name")
+        fi
+        continue
+    fi
+
+    # Compilation succeeded but we expected an error
+    if [[ -f "$expected_error_file" && ! -f "$expected_file" ]]; then
+        echo -e "${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded)"
+        ((failed++))
         failures+=("$test_name")
         continue
     fi

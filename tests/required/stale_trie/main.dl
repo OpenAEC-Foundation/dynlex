@@ -1,0 +1,10 @@
+import tests/required/specificity/main.dl
+
+# After the specificity test, "shut down the lights:" was re-resolved with
+# "lights" as a literal (Other). The OLD tree entry that had an argumentChild
+# at the "lights" position must have been removed.
+#
+# If the stale tree entry still exists, "shut down the fans" would incorrectly
+# match "shut down the <arg>:" with arg="fans". This line should NOT compile
+# because there is no "shut down the fans:" pattern defined anywhere.
+shut down the fans

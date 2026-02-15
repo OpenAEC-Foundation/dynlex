@@ -85,12 +85,14 @@ Test files in `tests/required/`. Each folder has a `.dl` file and expected outpu
 ./scripts/run_tests.sh
 
 # Run a single test
-./build/dynlex tests/required/0_simple/main.dl -o tests/required/0_simple/main.out && ./tests/required/0_simple/main.out
+./build/dynlex tests/required/simple/main.dl -o tests/required/simple/main.out && ./tests/required/simple/main.out
 ```
 
 Compiled test binaries use the `.out` extension (gitignored).
 
-**Current state:** Tests 0, 4, 6, 7, 8, 9, 10 pass. Tests 1, 2, 3, 5 fail due to missing import files.
+Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expected compilation failure, substring match).
+
+**Current state:** Tests simple, custompatternstest, languagetest, loops, classtest, specificity, globals, stale_trie pass. Tests libtest, patterntest, importtest, sectiontest fail due to missing import files.
 
 ## Key Design Decisions
 
