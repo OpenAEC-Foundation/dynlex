@@ -116,41 +116,67 @@ macro effect subtract value from target:
 	replacement:
 		set target to @intrinsic("subtract", target, value)
 
+macro effect increment val:
+	replacement:
+		set val to @intrinsic("add", val, 1)
+
+macro effect decrement val:
+	replacement:
+		set val to @intrinsic("subtract", val, 1)
+
+# --- Clamping ---
+
+macro effect clamp val between low and high:
+	replacement:
+		if val < low:
+			set val to low
+		if val > high:
+			set val to high
+
 # --- Math functions ---
 
 macro expression [the|] sine of value:
+    after: default
     replacement:
         @intrinsic("sin", value)
 
 macro expression [the|] cosine of value:
+    after: default
     replacement:
         @intrinsic("cos", value)
 
 macro expression [the|] square root of value:
+    after: default
     replacement:
         @intrinsic("sqrt", value)
 
 macro expression [the|] absolute value of value:
+    after: default
     replacement:
         @intrinsic("abs", value)
 
 macro expression [the|] floor of value:
+    after: default
     replacement:
         @intrinsic("floor", value)
 
 macro expression [the|] ceiling of value:
+    after: default
     replacement:
         @intrinsic("ceil", value)
 
 macro expression value [raised|] to the power [of|] exponent:
+    after: default
     replacement:
         @intrinsic("pow", value, exponent)
 
 macro expression [the|] minimum of a and b:
+    after: default
     replacement:
         @intrinsic("min", a, b)
 
 macro expression [the|] maximum of a and b:
+    after: default
     replacement:
         @intrinsic("max", a, b)
 
@@ -199,6 +225,7 @@ macro expression left and right:
         @intrinsic("and", left, right)
 
 macro expression left or right:
+    before: default
     replacement:
         @intrinsic("or", left, right)
 

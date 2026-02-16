@@ -863,26 +863,34 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		auto it = floatIntrinsics.find(name);
 		if (it != floatIntrinsics.end()) {
 			const IntrinsicInfo *info = findIntrinsic(name);
+			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
+			// Use f32 for SPIR-V targets, f64 for native targets.
+			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
+			Type mathFloat = {Type::Kind::Float, mathFloatBytes};
 			if (info->argCount == 1 && args.size() >= 1) {
 				llvm::Value *val = generateExpressionCode(context, args[0]);
 				Type valType = getEffectiveType(context, args[0]);
-				if (valType.kind != Type::Kind::Float)
-					val = ensureType(context, val, valType, {Type::Kind::Float, 8});
+				if (valType.kind != Type::Kind::Float || valType.byteSize != mathFloatBytes)
+					val = ensureType(context, val, valType, mathFloat);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
-				return builder.CreateCall(fn, {val}, name);
+				llvm::Value *result = builder.CreateCall(fn, {val}, name);
+				// Convert back to f64 for SPIR-V so the rest of the computation stays consistent
+				if (context.options.emitSPIRV)
+					result = builder.CreateFPExt(result, llvm::Type::getDoubleTy(*context.llvmContext));
+				return result;
 			}
 			if (info->argCount == 2 && args.size() >= 2) {
 				llvm::Value *left = generateExpressionCode(context, args[0]);
 				llvm::Value *right = generateExpressionCode(context, args[1]);
 				Type leftType = getEffectiveType(context, args[0]);
 				Type rightType = getEffectiveType(context, args[1]);
-				Type promoted = Type::promote(leftType, rightType);
-				if (promoted.kind != Type::Kind::Float)
-					promoted = {Type::Kind::Float, 8};
-				left = ensureType(context, left, leftType, promoted);
-				right = ensureType(context, right, rightType, promoted);
+				left = ensureType(context, left, leftType, mathFloat);
+				right = ensureType(context, right, rightType, mathFloat);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {left->getType()});
-				return builder.CreateCall(fn, {left, right}, name);
+				llvm::Value *result = builder.CreateCall(fn, {left, right}, name);
+				if (context.options.emitSPIRV)
+					result = builder.CreateFPExt(result, llvm::Type::getDoubleTy(*context.llvmContext));
+				return result;
 			}
 		}
 

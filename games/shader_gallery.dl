@@ -1,0 +1,59 @@
+import lib/graphics.dl
+
+# Shader gallery — press any arrow key to cycle through shaders
+#
+# Build:
+#   ./build/dynlex games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o games/passthrough.spv
+#   ./build/dynlex games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o games/mandelbrot.spv
+#   ./build/dynlex games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o games/plasma.spv
+#   ./build/dynlex games/julia_shader.dl --emit-spirv --shader-stage=fragment -o games/julia.spv
+#   ./build/dynlex games/rings_shader.dl --emit-spirv --shader-stage=fragment -o games/rings.spv
+#   ./build/dynlex games/shader_gallery.dl -o games/shader_gallery
+# Run:
+#   ./games/shader_gallery
+
+set window to a new window with width 800 and height 600
+
+# Load vertex shader (shared by all programs)
+set vert to a vertex shader from "games/passthrough.spv"
+
+# Load all fragment shaders
+set frag0 to a fragment shader from "games/mandelbrot.spv"
+set frag1 to a fragment shader from "games/plasma.spv"
+set frag2 to a fragment shader from "games/julia.spv"
+set frag3 to a fragment shader from "games/rings.spv"
+
+# Create shader programs
+set prog0 to a shader program with vertex vert and fragment frag0
+set prog1 to a shader program with vertex vert and fragment frag1
+set prog2 to a shader program with vertex vert and fragment frag2
+set prog3 to a shader program with vertex vert and fragment frag3
+
+set current to 0
+set was_pressed to 0
+use shader program prog0
+
+while not the window should close:
+    set key to the pressed key of window
+    if key > 0:
+        if key < 5:
+            if was_pressed = 0:
+                set current to current + 1
+                if current > 3:
+                    set current to 0
+                if current = 0:
+                    use shader program prog0
+                if current = 1:
+                    use shader program prog1
+                if current = 2:
+                    use shader program prog2
+                if current = 3:
+                    use shader program prog3
+                set was_pressed to 1
+    if key = 0:
+        set was_pressed to 0
+    clear the screen
+    draw a fullscreen quad
+    display the frame of window
+
+close the window

@@ -60,10 +60,13 @@ std::vector<MatchProgress> MatchProgress::step() {
 					//  f.e: '$ + $' in 'set $ to $ + $'
 					stepUp(*parent);
 					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
-					// propagate the completed expression's precedence as a constraint
+					// propagate the completed expression's precedence as a constraint.
+					// Skip for default-level patterns — they capture full expressions and shouldn't
+					// constrain parent operators (minRightPrecedence is for same-level associativity).
 					if (parent->match.nodesPassed.size() > 1) {
 						int rightPrec = (def->precedence > 0) ? def->precedence : INT_MAX;
-						nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
+						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
+							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
 					}
 				}
 				if (canStartSubmatch() && rootNode->argumentChild) {

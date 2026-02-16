@@ -758,6 +758,11 @@ bool resolvePatterns(ParseContext &context) {
 		std::vector<PrecedenceEdge> edges;
 		std::unordered_set<PatternDefinition *> involvedDefs;
 
+		// Virtual sentinel for "default" precedence — expression patterns without explicit
+		// precedence get this level, which is below all operators that declare "before: default".
+		PatternDefinition defaultSentinel(Range(), nullptr);
+		bool hasDefaultPrecedence = false;
+
 		std::function<bool(Section *)> collectPrecedence = [&](Section *section) -> bool {
 			if (!section->beforePatterns.empty() || !section->afterPatterns.empty()) {
 				for (PatternDefinition *def : section->patternDefinitions) {
@@ -765,6 +770,12 @@ bool resolvePatterns(ParseContext &context) {
 
 					// before: B means "this definition evaluates before B" = higher precedence
 					for (const std::string &beforeStr : section->beforePatterns) {
+						if (beforeStr == "default") {
+							hasDefaultPrecedence = true;
+							involvedDefs.insert(&defaultSentinel);
+							edges.push_back({def, &defaultSentinel});
+							continue;
+						}
 						PatternDefinition *target = resolveSignature(beforeStr);
 						if (!target) {
 							context.diagnostics.push_back(
@@ -778,6 +789,12 @@ bool resolvePatterns(ParseContext &context) {
 
 					// after: A means "this definition evaluates after A" = lower precedence
 					for (const std::string &afterStr : section->afterPatterns) {
+						if (afterStr == "default") {
+							hasDefaultPrecedence = true;
+							involvedDefs.insert(&defaultSentinel);
+							edges.push_back({&defaultSentinel, def});
+							continue;
+						}
 						PatternDefinition *target = resolveSignature(afterStr);
 						if (!target) {
 							context.diagnostics.push_back(
@@ -841,6 +858,13 @@ bool resolvePatterns(ParseContext &context) {
 					Diagnostic(Diagnostic::Level::Error, "Cycle detected in precedence declarations", Range())
 				);
 				return false;
+			}
+
+			// Store default precedence level for use in pattern matching.
+			// Patterns that want lowest precedence (math functions) declare "after: default".
+			// Patterns without explicit precedence stay at 0 (bypass precedence checks).
+			if (hasDefaultPrecedence && defaultSentinel.precedence > 0) {
+				context.defaultPrecedenceLevel = defaultSentinel.precedence;
 			}
 
 			// Re-match body references that involve operators with precedence

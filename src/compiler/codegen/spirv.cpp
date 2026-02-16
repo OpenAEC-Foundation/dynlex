@@ -148,8 +148,13 @@ static bool patchShaderBinary(
 		if (op == spvOpDecorate && wc >= 3 && binary[pos + 2] == spvDecorationLinkageAttributes)
 			skip = true;
 
-		// Insert OpEntryPoint before the first non-header, non-debug instruction
-		if (!entryPointInserted && op != spvOpCapability && op != spvOpMemoryModel && op != spvOpName && op != spvOpDecorate) {
+		// Insert OpEntryPoint right after OpMemoryModel (SPIR-V logical layout requires:
+		// Capability → Extension → ExtInstImport → MemoryModel → EntryPoint → ...)
+		if (!entryPointInserted && op == spvOpMemoryModel) {
+			// First, emit the MemoryModel instruction itself
+			output.insert(output.end(), binary.begin() + pos, binary.begin() + pos + wc);
+
+			// Then emit the EntryPoint
 			std::vector<uint32_t> nameWords = encodeSpvString("main");
 			uint32_t entryWc = 3 + nameWords.size() + vars.size();
 			output.push_back(spvInstWord(entryWc, spvOpEntryPoint));
@@ -159,6 +164,7 @@ static bool patchShaderBinary(
 			for (const auto &v : vars)
 				output.push_back(v.id);
 			entryPointInserted = true;
+			skip = true; // MemoryModel already emitted above
 		}
 
 		if (!skip) {

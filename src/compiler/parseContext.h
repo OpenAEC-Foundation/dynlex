@@ -85,6 +85,9 @@ struct ParseContext {
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count];
+	// Precedence level assigned to expression patterns not in the explicit precedence system.
+	// Default-level patterns should not propagate minRightPrecedence constraints.
+	int defaultPrecedenceLevel = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// variable names declared as global (collected from globals: sections)
