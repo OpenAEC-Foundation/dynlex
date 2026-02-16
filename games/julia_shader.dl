@@ -1,0 +1,37 @@
+import lib/shader.dl
+
+# Julia set fragment shader — beautiful fractal
+# Compile: ./build/dynlex games/julia_shader.dl --emit-spirv --shader-stage=fragment -o games/julia.spv
+
+set px to the fragment x coordinate
+set py to the fragment y coordinate
+
+# Map pixel to complex plane [-2, 2] x [-1.5, 1.5]
+set zx to px / 200.0 - 2.0
+set zy to py / 200.0 - 1.5
+
+# Julia constant — this one produces a beautiful dendrite
+set cx to 0.0 - 0.8
+set cy to 0.156
+
+set iteration to 0
+set max_iterations to 200
+
+while iteration < max_iterations and zx * zx + zy * zy < 4.0:
+    set zx2 to zx * zx
+    set zy2 to zy * zy
+    set tmp to zx2 - zy2 + cx
+    set zy to 2.0 * zx * zy + cy
+    set zx to tmp
+    set iteration to iteration + 1
+
+if iteration = max_iterations:
+    set the fragment color to 0.0 0.0 0.0 1.0
+else:
+    # Smooth coloring using sqrt for gradient
+    set t to iteration as a float / max_iterations as a float
+    set st to the square root of t
+    set r to st
+    set g to t * t
+    set b to the sine of t * 6.283 * 0.5 + 0.5
+    set the fragment color to r g b 1.0

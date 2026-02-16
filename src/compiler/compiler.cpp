@@ -2,6 +2,7 @@
 #include "IndentData.h"
 #include "classSection.h"
 #include "expression.h"
+#include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "patternElement.h"
@@ -815,28 +816,32 @@ bool resolvePatterns(ParseContext &context) {
 					topoQueue.push(def);
 			}
 
-			std::vector<PatternDefinition *> topoOrder;
+			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
+			// This ensures operators like * and / (no edge between them) share the same level,
+			// enforcing left-to-right associativity for same-precedence operators.
+			size_t processedCount = 0;
+			int currentLevel = (int)involvedDefs.size();
 			while (!topoQueue.empty()) {
-				PatternDefinition *def = topoQueue.front();
-				topoQueue.pop();
-				topoOrder.push_back(def);
-				for (PatternDefinition *lower : adjList[def]) {
-					if (--inDegree[lower] == 0)
-						topoQueue.push(lower);
+				size_t waveSize = topoQueue.size();
+				for (size_t i = 0; i < waveSize; i++) {
+					PatternDefinition *def = topoQueue.front();
+					topoQueue.pop();
+					def->precedence = currentLevel;
+					processedCount++;
+					for (PatternDefinition *lower : adjList[def]) {
+						if (--inDegree[lower] == 0)
+							topoQueue.push(lower);
+					}
 				}
+				currentLevel--;
 			}
 
-			if (topoOrder.size() != involvedDefs.size()) {
+			if (processedCount != involvedDefs.size()) {
 				context.diagnostics.push_back(
 					Diagnostic(Diagnostic::Level::Error, "Cycle detected in precedence declarations", Range())
 				);
 				return false;
 			}
-
-			// Assign levels: first in topo order = highest precedence
-			int maxLevel = (int)topoOrder.size();
-			for (int i = 0; i < maxLevel; i++)
-				topoOrder[i]->precedence = maxLevel - i;
 
 			// Re-match body references that involve operators with precedence
 			std::function<bool(PatternMatch &)> matchInvolvesPrecedence = [&](PatternMatch &match) -> bool {
@@ -1055,160 +1060,163 @@ static bool inferExpressionType(
 	}
 
 	case Expression::Kind::IntrinsicCall: {
-		if (isArithmeticOperator(expr->intrinsicName)) {
-			if (expr->arguments.size() >= 3) {
-				Type leftType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				Type rightType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
-				if (leftType.isDeduced() && rightType.isDeduced()) {
-					expr->type = isPointerArithmeticOperator(expr->intrinsicName) ? Type::promoteArithmetic(leftType, rightType)
-																				  : Type::promote(leftType, rightType);
-				}
-			}
-		} else if (isComparisonOperator(expr->intrinsicName)) {
-			expr->type = {Type::Kind::Bool};
-		} else if (expr->intrinsicName == "and" || expr->intrinsicName == "or") {
-			expr->type = {Type::Kind::Bool};
-		} else if (expr->intrinsicName == "not") {
-			expr->type = {Type::Kind::Bool};
-		} else if (expr->intrinsicName == "address of") {
-			if (expr->arguments.size() >= 2) {
-				Type varType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				if (varType.isDeduced())
-					expr->type = varType.pointed();
-			}
-		} else if (expr->intrinsicName == "dereference") {
-			if (expr->arguments.size() >= 2) {
-				Type ptrType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				if (ptrType.isDeduced() && ptrType.isPointer())
-					expr->type = ptrType.dereferenced();
-			}
-		} else if (expr->intrinsicName == "store at") {
-			expr->type = {Type::Kind::Void};
-		} else if (expr->intrinsicName == "load at") {
-			expr->type = {Type::Kind::Integer, 8};
-		} else if (expr->intrinsicName == "store") {
-			if (expr->arguments.size() >= 3) {
-				Expression *destExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
-				Type valType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
-				if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
-					Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
-					Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
-					if (var && var->type.canRefineTo(valType)) {
-						var->type = valType;
-						changed = true;
+		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
+		if (info) {
+			switch (info->returnKind) {
+			case IntrinsicReturnKind::SameAsArgs:
+				if (info->argCount == 1 && expr->arguments.size() >= 2) {
+					Type argType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					if (argType.isDeduced())
+						expr->type = argType;
+				} else if (info->argCount == 2 && expr->arguments.size() >= 3) {
+					Type leftType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type rightType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+					if (leftType.isDeduced() && rightType.isDeduced()) {
+						expr->type = isPointerArithmeticOperator(expr->intrinsicName)
+										 ? Type::promoteArithmetic(leftType, rightType)
+										 : Type::promote(leftType, rightType);
 					}
-				} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
-						   valType.isDeduced()) {
-					// Storing to a class field: @intrinsic("store", @intrinsic("property", instance, field), value)
-					Type instType = resolveTypeThroughMacro(destExpr->arguments[1], macroBindings);
-					if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
-						Expression *propExpr = resolveVarThroughMacro(destExpr->arguments[2], macroBindings);
-						std::string fieldName;
-						if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
-							fieldName = *str;
-						if (!fieldName.empty()) {
-							ClassDefinition *classDef = instType.classDefinition;
-							auto &fieldTypes = classDef->instantiations[instType.classInstIndex].fieldTypes;
-							for (size_t i = 0; i < classDef->fields.size(); i++) {
-								if (classDef->fields[i].name == fieldName && fieldTypes[i].canRefineTo(valType)) {
-									fieldTypes[i] = valType;
-									changed = true;
-									break;
+				}
+				break;
+			case IntrinsicReturnKind::Bool:
+				expr->type = {Type::Kind::Bool};
+				break;
+			case IntrinsicReturnKind::Void:
+				// "store" has side effects on variable types beyond just being Void
+				if (expr->intrinsicName == "store" && expr->arguments.size() >= 3) {
+					Expression *destExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
+					Type valType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+					if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
+						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
+						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
+						if (var && var->type.canRefineTo(valType)) {
+							var->type = valType;
+							changed = true;
+						}
+					} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
+							   valType.isDeduced()) {
+						Type instType = resolveTypeThroughMacro(destExpr->arguments[1], macroBindings);
+						if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+							Expression *propExpr = resolveVarThroughMacro(destExpr->arguments[2], macroBindings);
+							std::string fieldName;
+							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
+								fieldName = *str;
+							if (!fieldName.empty()) {
+								ClassDefinition *classDef = instType.classDefinition;
+								auto &fieldTypes = classDef->instantiations[instType.classInstIndex].fieldTypes;
+								for (size_t i = 0; i < classDef->fields.size(); i++) {
+									if (classDef->fields[i].name == fieldName && fieldTypes[i].canRefineTo(valType)) {
+										fieldTypes[i] = valType;
+										changed = true;
+										break;
+									}
 								}
 							}
 						}
 					}
 				}
-			}
-			expr->type = {Type::Kind::Void};
-		} else if (expr->intrinsicName == "return") {
-			if (expr->arguments.size() >= 2) {
-				Type retType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				if (retType.isDeduced()) {
-					expr->type = retType;
-					if (context.currentInstantiation)
-						context.currentInstantiation->returnType = retType;
-				}
-			}
-		} else if (expr->intrinsicName == "call") {
-			// Format: @intrinsic("call", "library", "function", "return type", args...)
-			if (expr->arguments.size() >= 4) {
-				std::string retTypeStr;
-				if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
-					retTypeStr = *str;
-				if (!retTypeStr.empty())
-					expr->type = Type::fromString(retTypeStr);
-			}
-		} else if (expr->intrinsicName == "cast") {
-			// Format: @intrinsic("cast", value, type_pattern_or_string[, bit_size])
-			if (expr->arguments.size() >= 3) {
-				// Check if the type argument resolved to a TypeReference (class pattern)
-				Type typeArgType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
-				if (typeArgType.kind == Type::Kind::TypeReference && typeArgType.classDefinition) {
-					ClassDefinition *classDef = typeArgType.classDefinition;
-					int instIdx = classDef->instantiations.empty() ? -1 : 0;
-					expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
-				} else {
-					std::string targetStr;
-					if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
-						targetStr = *str;
-					if (targetStr == "integer" || targetStr == "float") {
-						Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
-						int byteSize = 8; // default 64 bit
-						if (expr->arguments.size() >= 4) {
-							if (auto *bits = std::get_if<int64_t>(&expr->arguments[3]->literalValue))
-								byteSize = *bits / 8;
+				expr->type = {Type::Kind::Void};
+				break;
+			case IntrinsicReturnKind::Float:
+				expr->type = {Type::Kind::Float, 4};
+				break;
+			case IntrinsicReturnKind::Custom:
+				if (expr->intrinsicName == "address of") {
+					if (expr->arguments.size() >= 2) {
+						Type varType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						if (varType.isDeduced())
+							expr->type = varType.pointed();
+					}
+				} else if (expr->intrinsicName == "dereference") {
+					if (expr->arguments.size() >= 2) {
+						Type ptrType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						if (ptrType.isDeduced() && ptrType.isPointer())
+							expr->type = ptrType.dereferenced();
+					}
+				} else if (expr->intrinsicName == "load at") {
+					expr->type = {Type::Kind::Integer, 8};
+				} else if (expr->intrinsicName == "return") {
+					if (expr->arguments.size() >= 2) {
+						Type retType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						if (retType.isDeduced()) {
+							expr->type = retType;
+							if (context.currentInstantiation)
+								context.currentInstantiation->returnType = retType;
 						}
-						expr->type = {kind, byteSize};
-					} else if (!targetStr.empty()) {
-						expr->type = Type::fromString(targetStr);
 					}
-				}
-			}
-		} else if (expr->intrinsicName == "construct") {
-			// Format: @intrinsic("construct", type_ref, field_values...)
-			if (expr->arguments.size() >= 2) {
-				Type typeRefType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				if (typeRefType.kind == Type::Kind::TypeReference && typeRefType.classDefinition) {
-					ClassDefinition *classDef = typeRefType.classDefinition;
-					std::vector<Type> fieldTypes;
-					bool allDeduced = true;
-					for (size_t i = 2; i < expr->arguments.size(); i++) {
-						Type ft = resolveTypeThroughMacro(expr->arguments[i], macroBindings);
-						if (!ft.isDeduced())
-							allDeduced = false;
-						fieldTypes.push_back(ft);
+				} else if (expr->intrinsicName == "call") {
+					if (expr->arguments.size() >= 4) {
+						std::string retTypeStr;
+						if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
+							retTypeStr = *str;
+						if (!retTypeStr.empty())
+							expr->type = Type::fromString(retTypeStr);
 					}
-					if (allDeduced) {
-						int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
-						expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+				} else if (expr->intrinsicName == "cast") {
+					if (expr->arguments.size() >= 3) {
+						Type typeArgType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+						if (typeArgType.kind == Type::Kind::TypeReference && typeArgType.classDefinition) {
+							ClassDefinition *classDef = typeArgType.classDefinition;
+							int instIdx = classDef->instantiations.empty() ? -1 : 0;
+							expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+						} else {
+							std::string targetStr;
+							if (auto *str = std::get_if<std::string>(&expr->arguments[2]->literalValue))
+								targetStr = *str;
+							if (targetStr == "integer" || targetStr == "float") {
+								Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
+								int byteSize = 8;
+								if (expr->arguments.size() >= 4) {
+									if (auto *bits = std::get_if<int64_t>(&expr->arguments[3]->literalValue))
+										byteSize = *bits / 8;
+								}
+								expr->type = {kind, byteSize};
+							} else if (!targetStr.empty()) {
+								expr->type = Type::fromString(targetStr);
+							}
+						}
 					}
-				}
-			}
-		} else if (expr->intrinsicName == "property") {
-			// Format: @intrinsic("property", instance, fieldname_string)
-			// instance type must be Class, fieldname is a string literal from {word:} capture
-			if (expr->arguments.size() >= 3) {
-				Type instType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-				if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
-					Expression *propExpr = resolveVarThroughMacro(expr->arguments[2], macroBindings);
-					std::string fieldName;
-					if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
-						fieldName = *str;
-					if (!fieldName.empty()) {
-						ClassDefinition *classDef = instType.classDefinition;
-						for (size_t i = 0; i < classDef->fields.size(); i++) {
-							if (classDef->fields[i].name == fieldName) {
-								expr->type = classDef->instantiations[instType.classInstIndex].fieldTypes[i];
-								break;
+				} else if (expr->intrinsicName == "construct") {
+					if (expr->arguments.size() >= 2) {
+						Type typeRefType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						if (typeRefType.kind == Type::Kind::TypeReference && typeRefType.classDefinition) {
+							ClassDefinition *classDef = typeRefType.classDefinition;
+							std::vector<Type> fieldTypes;
+							bool allDeduced = true;
+							for (size_t i = 2; i < expr->arguments.size(); i++) {
+								Type ft = resolveTypeThroughMacro(expr->arguments[i], macroBindings);
+								if (!ft.isDeduced())
+									allDeduced = false;
+								fieldTypes.push_back(ft);
+							}
+							if (allDeduced) {
+								int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
+								expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+							}
+						}
+					}
+				} else if (expr->intrinsicName == "property") {
+					if (expr->arguments.size() >= 3) {
+						Type instType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+							Expression *propExpr = resolveVarThroughMacro(expr->arguments[2], macroBindings);
+							std::string fieldName;
+							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
+								fieldName = *str;
+							if (!fieldName.empty()) {
+								ClassDefinition *classDef = instType.classDefinition;
+								for (size_t i = 0; i < classDef->fields.size(); i++) {
+									if (classDef->fields[i].name == fieldName) {
+										expr->type = classDef->instantiations[instType.classInstIndex].fieldTypes[i];
+										break;
+									}
+								}
 							}
 						}
 					}
 				}
+				break;
 			}
-		} else if (expr->intrinsicName == "loop while" || expr->intrinsicName == "if" || expr->intrinsicName == "else if" ||
-				   expr->intrinsicName == "else" || expr->intrinsicName == "switch" || expr->intrinsicName == "case") {
-			expr->type = {Type::Kind::Void};
 		}
 		break;
 	}
@@ -1544,6 +1552,11 @@ bool isArithmeticOperator(const std::string &name) {
 bool isPointerArithmeticOperator(const std::string &name) { return name == "add" || name == "subtract"; }
 
 bool isComparisonOperator(const std::string &name) {
-	return name == "less than" || name == "greater than" || name == "equal" || name == "not equal" ||
-		   name == "less than or equal" || name == "greater than or equal";
+	const IntrinsicInfo *info = findIntrinsic(name);
+	return info && info->returnKind == IntrinsicReturnKind::Bool && name != "and" && name != "or" && name != "not";
+}
+
+bool isMathFunction(const std::string &name) {
+	const IntrinsicInfo *info = findIntrinsic(name);
+	return info && info->returnKind == IntrinsicReturnKind::SameAsArgs && !isArithmeticOperator(name) && name != "negate";
 }

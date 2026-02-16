@@ -99,12 +99,14 @@ add_definitions (-DGLFW_INCvLUDE_NONE
                  -DPROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
 add_executable (${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS}
                                 ${PROJECT_CONFIGS})
-                                
+
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-# Get LLVM libraries for code generation, optimization, and native compilation
-llvm_map_components_to_libnames(llvm_libs core support irreader passes native)
+# LLVM 20+ includes the SPIR-V backend as an official target.
+# We use the static component libraries for codegen, optimization, native compilation,
+# and SPIR-V emission.
+llvm_map_components_to_libnames(llvm_libs core support irreader passes native SPIRV)
 
 target_link_libraries (${PROJECT_NAME}
 PRIVATE

@@ -37,6 +37,12 @@ int main(int argumentCount, char *argumentValues[]) {
 			useStdio = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
+		} else if (arg == "--emit-spirv") {
+			context.options.emitSPIRV = true;
+		} else if (arg == "--shader-stage=vertex") {
+			context.options.shaderStage = ParseContext::ShaderStage::Vertex;
+		} else if (arg == "--shader-stage=fragment") {
+			context.options.shaderStage = ParseContext::ShaderStage::Fragment;
 		} else if (arg == "-O0") {
 			context.options.optimizationLevel = 0;
 		} else if (arg == "-O1") {
@@ -86,7 +92,9 @@ int main(int argumentCount, char *argumentValues[]) {
 		if (hasErrors)
 			return 1;
 	} else {
-		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [-O0|-O1|-O2|-O3] [-o output]" << std::endl;
+		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--shader-stage=vertex|fragment] [-O0|-O1|-O2|-O3] "
+					 "[-o output]"
+				  << std::endl;
 	}
 
 	return 0;

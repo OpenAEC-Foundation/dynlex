@@ -16,6 +16,14 @@ import lib/std.dl
 expression a new window with width w and height h:
 	get:
 		@intrinsic("call", "glfw", "glfwInit", "i32")
+		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
+		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
+		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
+		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
+		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
+		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139266, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139267, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139272, 204802)
 		set window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "DynLex", 0 as a pointer, 0 as a pointer)
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", window)
 		@intrinsic("call", "GL", "glMatrixMode", "void", 5889)
@@ -68,3 +76,65 @@ effect close [the|] window:
 	execute:
 		@intrinsic("call", "glfw", "glfwDestroyWindow", "void", window)
 		@intrinsic("call", "glfw", "glfwTerminate", "void")
+
+# --- Shader support (OpenGL 4.6 / SPIR-V) ---
+
+# GL_FRAGMENT_SHADER = 0x8B30 = 35632
+# GL_VERTEX_SHADER = 0x8B31 = 35633
+# GL_SHADER_BINARY_FORMAT_SPIR_V = 0x9551 = 38225
+# GL_COMPILE_STATUS = 0x8B81 = 35713
+# GL_LINK_STATUS = 0x8B82 = 35714
+
+expression [a|] fragment shader from path:
+	get:
+		set shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35632)
+		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
+		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
+		set size to @intrinsic("call", "libc", "ftell", "i64", data)
+		@intrinsic("call", "libc", "fseek", "i32", data, 0, 0)
+		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
+		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
+		@intrinsic("call", "libc", "fclose", "i32", data)
+		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", "void", shader, "main", 0, 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "libc", "free", "void", buf)
+		return shader
+
+expression [a|] vertex shader from path:
+	get:
+		set shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35633)
+		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
+		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
+		set size to @intrinsic("call", "libc", "ftell", "i64", data)
+		@intrinsic("call", "libc", "fseek", "i32", data, 0, 0)
+		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
+		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
+		@intrinsic("call", "libc", "fclose", "i32", data)
+		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", "void", shader, "main", 0, 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "libc", "free", "void", buf)
+		return shader
+
+expression [a|] shader program with vertex vert and fragment frag:
+	get:
+		set prog to @intrinsic("call", "GL", "glCreateProgram", "i32")
+		@intrinsic("call", "GL", "glAttachShader", "void", prog, vert)
+		@intrinsic("call", "GL", "glAttachShader", "void", prog, frag)
+		@intrinsic("call", "GL", "glLinkProgram", "void", prog)
+		return prog
+
+effect use shader program prog:
+	execute:
+		@intrinsic("call", "GL", "glUseProgram", "void", prog)
+
+effect draw [a|] fullscreen quad:
+	execute:
+		# Draw a fullscreen triangle strip (covers screen with 2D quad)
+		# GL_TRIANGLE_STRIP = 0x0005 = 5
+		# Use glVertex2d (takes double) since DynLex floats are f64
+		@intrinsic("call", "GL", "glBegin", "void", 5)
+		@intrinsic("call", "GL", "glVertex2d", "void", 0.0 - 1.0, 0.0 - 1.0)
+		@intrinsic("call", "GL", "glVertex2d", "void", 1.0, 0.0 - 1.0)
+		@intrinsic("call", "GL", "glVertex2d", "void", 0.0 - 1.0, 1.0)
+		@intrinsic("call", "GL", "glVertex2d", "void", 1.0, 1.0)
+		@intrinsic("call", "GL", "glEnd", "void")

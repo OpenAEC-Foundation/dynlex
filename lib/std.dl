@@ -116,6 +116,44 @@ macro effect subtract value from target:
 	replacement:
 		set target to @intrinsic("subtract", target, value)
 
+# --- Math functions ---
+
+macro expression [the|] sine of value:
+    replacement:
+        @intrinsic("sin", value)
+
+macro expression [the|] cosine of value:
+    replacement:
+        @intrinsic("cos", value)
+
+macro expression [the|] square root of value:
+    replacement:
+        @intrinsic("sqrt", value)
+
+macro expression [the|] absolute value of value:
+    replacement:
+        @intrinsic("abs", value)
+
+macro expression [the|] floor of value:
+    replacement:
+        @intrinsic("floor", value)
+
+macro expression [the|] ceiling of value:
+    replacement:
+        @intrinsic("ceil", value)
+
+macro expression value [raised|] to the power [of|] exponent:
+    replacement:
+        @intrinsic("pow", value, exponent)
+
+macro expression [the|] minimum of a and b:
+    replacement:
+        @intrinsic("min", a, b)
+
+macro expression [the|] maximum of a and b:
+    replacement:
+        @intrinsic("max", a, b)
+
 # --- Comparison ---
 
 expression left < right:

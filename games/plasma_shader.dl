@@ -1,0 +1,30 @@
+import lib/shader.dl
+
+# Plasma fragment shader — colorful interference pattern
+# Compile: ./build/dynlex games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o games/plasma.spv
+
+set px to the fragment x coordinate
+set py to the fragment y coordinate
+
+# Normalize to [-1, 1]
+set x to px / 400.0 - 1.0
+set y to py / 300.0 - 1.0
+
+# Layered sine waves that create plasma interference
+set v1 to the sine of x * 10.0
+set v2 to the sine of 10.0 * y + v1
+set d to the square root of x * x + y * y
+set v3 to the sine of d * 10.0 - v2
+set v to v1 + v2 + v3
+
+# Map to RGB via phase-shifted sines
+set r to the sine of v * 3.14159
+set g to the sine of v * 3.14159 + 2.094
+set b to the sine of v * 3.14159 + 4.189
+
+# Remap [-1,1] to [0,1]
+set r to r * 0.5 + 0.5
+set g to g * 0.5 + 0.5
+set b to b * 0.5 + 0.5
+
+set the fragment color to r g b 1.0

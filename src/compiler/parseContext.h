@@ -22,10 +22,14 @@ class BasicBlock;
 } // namespace llvm
 
 struct ParseContext {
+	enum class ShaderStage { Fragment, Vertex };
+
 	struct Options {
 		std::string inputPath;
 		std::string outputPath;
 		bool emitLLVM = false;
+		bool emitSPIRV = false;
+		ShaderStage shaderStage = ShaderStage::Fragment;
 		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
 		// Maximum iterations for resolving pattern references and sections.
 		// Pattern resolution is iterative: each pass resolves patterns that become unambiguous

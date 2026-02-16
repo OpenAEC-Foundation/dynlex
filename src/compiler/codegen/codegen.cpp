@@ -4,9 +4,11 @@
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "expression.h"
+#include "intrinsicInfo.h"
 #include "native.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
+#include "spirv.h"
 #include "type.h"
 #include "variable.h"
 #include "llvm/IR/CFG.h"
@@ -127,21 +129,29 @@ static Type getEffectiveType(ParseContext &context, Expression *expr) {
 	case Expression::Kind::IntrinsicCall: {
 		// For intrinsics in non-macro function bodies, expr->type may be Undeduced.
 		// Compute the type dynamically from the resolved argument types.
-		if (isArithmeticOperator(expr->intrinsicName)) {
-			if (expr->arguments.size() >= 3) {
-				Type leftType = getEffectiveType(context, expr->arguments[1]);
-				Type rightType = getEffectiveType(context, expr->arguments[2]);
-				return isPointerArithmeticOperator(expr->intrinsicName) ? Type::promoteArithmetic(leftType, rightType)
-																		: Type::promote(leftType, rightType);
+		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
+		if (info) {
+			switch (info->returnKind) {
+			case IntrinsicReturnKind::SameAsArgs:
+				if (info->argCount == 1 && expr->arguments.size() >= 2)
+					return getEffectiveType(context, expr->arguments[1]);
+				if (info->argCount == 2 && expr->arguments.size() >= 3) {
+					Type leftType = getEffectiveType(context, expr->arguments[1]);
+					Type rightType = getEffectiveType(context, expr->arguments[2]);
+					return isPointerArithmeticOperator(expr->intrinsicName) ? Type::promoteArithmetic(leftType, rightType)
+																			: Type::promote(leftType, rightType);
+				}
+				break;
+			case IntrinsicReturnKind::Bool:
+				return {Type::Kind::Bool};
+			case IntrinsicReturnKind::Void:
+				return {Type::Kind::Void};
+			case IntrinsicReturnKind::Float:
+				return {Type::Kind::Float, 4};
+			case IntrinsicReturnKind::Custom:
+				break;
 			}
 		}
-		if (isComparisonOperator(expr->intrinsicName) || expr->intrinsicName == "and" || expr->intrinsicName == "or" ||
-			expr->intrinsicName == "not")
-			return {Type::Kind::Bool};
-		if (expr->intrinsicName == "store" || expr->intrinsicName == "store at" || expr->intrinsicName == "loop while" ||
-			expr->intrinsicName == "if" || expr->intrinsicName == "else if" || expr->intrinsicName == "else" ||
-			expr->intrinsicName == "switch" || expr->intrinsicName == "case")
-			return {Type::Kind::Void};
 		if (expr->intrinsicName == "address of" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]).pointed();
 		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
@@ -334,29 +344,50 @@ static void allocateSectionVariables(ParseContext &context, Section *section) {
 	}
 }
 
-// Get the pointer for a variable expression (for store operations)
+// Get the pointer for a variable expression (for store operations).
+// Recursively resolves through nested macro binding scopes to find the actual variable.
 static llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
-	Expression *resolved = resolveMacroBinding(context, expr);
-	MacroScopeGuard guard(context);
-	if (resolved != expr && !context.macroBindingStack.empty())
-		guard.popToCallerScope();
-	expr = resolved;
+	// Resolve through potentially multiple levels of macro bindings.
+	// Each level pops to the caller's scope, so nested macros like
+	// `add value to target` → `set var to val` can resolve var → target → iteration.
+	std::vector<std::unordered_map<std::string, Expression *>> poppedScopes;
 
-	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
-		return nullptr;
+	while (true) {
+		Expression *resolved = resolveMacroBinding(context, expr);
+		if (resolved == expr)
+			break; // No more macro bindings to resolve
+		// Pop to caller scope so the resolved expression is evaluated in the right context
+		if (!context.macroBindingStack.empty()) {
+			poppedScopes.push_back(context.macroExpressionBindings);
+			context.macroExpressionBindings = context.macroBindingStack.top();
+			context.macroBindingStack.pop();
+		}
+		expr = resolved;
+	}
 
-	std::string varName = expr->variable->name;
+	llvm::Value *result = nullptr;
 
-	auto bindingIt = context.patternBindings.find(varName);
-	if (bindingIt != context.patternBindings.end())
-		return bindingIt->second;
+	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		std::string varName = expr->variable->name;
 
-	VariableReference *varRef = expr->variable;
-	VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-	if (definition->alloca)
-		return definition->alloca;
+		auto bindingIt = context.patternBindings.find(varName);
+		if (bindingIt != context.patternBindings.end()) {
+			result = bindingIt->second;
+		} else {
+			VariableReference *varRef = expr->variable;
+			VariableReference *definition = varRef->definition ? varRef->definition : varRef;
+			if (definition->alloca)
+				result = definition->alloca;
+		}
+	}
 
-	return nullptr;
+	// Restore all popped scopes in reverse order
+	for (auto it = poppedScopes.rbegin(); it != poppedScopes.rend(); ++it) {
+		context.macroBindingStack.push(context.macroExpressionBindings);
+		context.macroExpressionBindings = *it;
+	}
+
+	return result;
 }
 
 // Ensure a value has the target LLVM type by inserting conversions if needed
@@ -806,6 +837,76 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		return builder.getFalse();
 	}
 
+	// Negate
+	if (name == "negate") {
+		if (args.size() >= 1) {
+			llvm::Value *val = generateExpressionCode(context, args[0]);
+			Type valType = getEffectiveType(context, args[0]);
+			if (valType.kind == Type::Kind::Float)
+				return builder.CreateFNeg(val, "fneg");
+			return builder.CreateNeg(val, "neg");
+		}
+		return nullptr;
+	}
+
+	// Math functions (sin, cos, sqrt, abs, floor, ceil, round, exp, log, pow, atan2, min, max)
+	if (isMathFunction(name)) {
+		context.requiredLibraries.insert("m");
+		// Map intrinsic names to LLVM intrinsic IDs
+		static const std::unordered_map<std::string, llvm::Intrinsic::ID> floatIntrinsics = {
+			{"sin", llvm::Intrinsic::sin},	   {"cos", llvm::Intrinsic::cos},	  {"sqrt", llvm::Intrinsic::sqrt},
+			{"abs", llvm::Intrinsic::fabs},	   {"floor", llvm::Intrinsic::floor}, {"ceil", llvm::Intrinsic::ceil},
+			{"round", llvm::Intrinsic::round}, {"exp", llvm::Intrinsic::exp},	  {"log", llvm::Intrinsic::log},
+			{"pow", llvm::Intrinsic::pow},	   {"min", llvm::Intrinsic::minnum},  {"max", llvm::Intrinsic::maxnum},
+		};
+
+		auto it = floatIntrinsics.find(name);
+		if (it != floatIntrinsics.end()) {
+			const IntrinsicInfo *info = findIntrinsic(name);
+			if (info->argCount == 1 && args.size() >= 1) {
+				llvm::Value *val = generateExpressionCode(context, args[0]);
+				Type valType = getEffectiveType(context, args[0]);
+				if (valType.kind != Type::Kind::Float)
+					val = ensureType(context, val, valType, {Type::Kind::Float, 8});
+				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
+				return builder.CreateCall(fn, {val}, name);
+			}
+			if (info->argCount == 2 && args.size() >= 2) {
+				llvm::Value *left = generateExpressionCode(context, args[0]);
+				llvm::Value *right = generateExpressionCode(context, args[1]);
+				Type leftType = getEffectiveType(context, args[0]);
+				Type rightType = getEffectiveType(context, args[1]);
+				Type promoted = Type::promote(leftType, rightType);
+				if (promoted.kind != Type::Kind::Float)
+					promoted = {Type::Kind::Float, 8};
+				left = ensureType(context, left, leftType, promoted);
+				right = ensureType(context, right, rightType, promoted);
+				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {left->getType()});
+				return builder.CreateCall(fn, {left, right}, name);
+			}
+		}
+
+		// atan2: no LLVM intrinsic, call libm
+		if (name == "atan2" && args.size() >= 2) {
+			llvm::Value *y = generateExpressionCode(context, args[0]);
+			llvm::Value *x = generateExpressionCode(context, args[1]);
+			Type yType = getEffectiveType(context, args[0]);
+			Type xType = getEffectiveType(context, args[1]);
+			Type promoted = Type::promote(yType, xType);
+			if (promoted.kind != Type::Kind::Float)
+				promoted = {Type::Kind::Float, 8};
+			y = ensureType(context, y, yType, promoted);
+			x = ensureType(context, x, xType, promoted);
+			llvm::Type *floatType = promoted.toLLVM(*context.llvmContext);
+			llvm::FunctionType *ft = llvm::FunctionType::get(floatType, {floatType, floatType}, false);
+			const char *fnName = promoted.byteSize == 4 ? "atan2f" : "atan2";
+			llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(fnName, ft);
+			return builder.CreateCall(callee, {y, x}, "atan2");
+		}
+
+		return nullptr;
+	}
+
 	// Pointer intrinsics
 	if (name == "address of") {
 		if (args.size() >= 1) {
@@ -1223,6 +1324,73 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
 	}
 
+	// Shader I/O intrinsics (only available in --emit-spirv mode)
+	if (name == "shader_input") {
+		// @intrinsic("shader_input", globalName) → load vec4 from named shader input global
+		std::string inputName = args.size() >= 1 ? getStringLiteral(args[0]) : "";
+		std::string globalName;
+		if (inputName == "FragCoord")
+			globalName = "gl_FragCoord";
+		else if (inputName == "Position")
+			globalName = "in_Position";
+		else {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown shader input: " + inputName, Range()));
+			return nullptr;
+		}
+		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
+		assert(global && "Shader input global not declared — check --emit-spirv and --shader-stage");
+		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
+		return builder.CreateLoad(vec4Ty, global, inputName);
+	}
+
+	if (name == "shader_output") {
+		// @intrinsic("shader_output", r, g, b, a) → store vec4 to shader output global
+		if (args.size() >= 4) {
+			llvm::Value *r = generateExpressionCode(context, args[0]);
+			llvm::Value *g = generateExpressionCode(context, args[1]);
+			llvm::Value *b = generateExpressionCode(context, args[2]);
+			llvm::Value *a = generateExpressionCode(context, args[3]);
+
+			Type rType = getEffectiveType(context, args[0]);
+			Type gType = getEffectiveType(context, args[1]);
+			Type bType = getEffectiveType(context, args[2]);
+			Type aType = getEffectiveType(context, args[3]);
+			Type f32 = {Type::Kind::Float, 4};
+			r = ensureType(context, r, rType, f32);
+			g = ensureType(context, g, gType, f32);
+			b = ensureType(context, b, bType, f32);
+			a = ensureType(context, a, aType, f32);
+
+			llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
+			llvm::Value *color = llvm::UndefValue::get(vec4Ty);
+			color = builder.CreateInsertElement(color, r, (uint64_t)0, "color_r");
+			color = builder.CreateInsertElement(color, g, (uint64_t)1, "color_g");
+			color = builder.CreateInsertElement(color, b, (uint64_t)2, "color_b");
+			color = builder.CreateInsertElement(color, a, (uint64_t)3, "color_a");
+
+			// Find the output global: gl_FragColor (fragment) or gl_Position (vertex)
+			std::string outName =
+				(context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
+			llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
+			assert(outGlobal && "Shader output global not declared — check --emit-spirv and --shader-stage");
+			builder.CreateStore(color, outGlobal);
+		}
+		return nullptr;
+	}
+
+	if (name == "extract_element") {
+		// @intrinsic("extract_element", vector, index) → extract scalar from vector
+		if (args.size() >= 2) {
+			llvm::Value *vec = generateExpressionCode(context, args[0]);
+			if (auto *idxLit = std::get_if<int64_t>(&args[1]->literalValue)) {
+				return builder.CreateExtractElement(vec, (uint64_t)*idxLit, "elem");
+			}
+			llvm::Value *idx = generateExpressionCode(context, args[1]);
+			return builder.CreateExtractElement(vec, idx, "elem");
+		}
+		return nullptr;
+	}
+
 	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown intrinsic: " + name, Range()));
 	return nullptr;
 }
@@ -1243,15 +1411,49 @@ bool generateCode(ParseContext &context) {
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
-	context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
+	if (context.options.emitSPIRV) {
+		context.llvmModule->setTargetTriple("spirv-unknown-vulkan1.3");
+	} else {
+		context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
+	}
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	// No first pass — non-macro functions are generated on-demand via monomorphization.
 
-	// Create main function
-	llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getInt32Ty(), false);
-	llvm::Function *mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
+	// In SPIR-V mode, declare shader I/O globals before generating code
+	llvm::GlobalVariable *shaderInputGlobal = nullptr;
+	llvm::GlobalVariable *shaderOutputGlobal = nullptr;
+	if (context.options.emitSPIRV) {
+		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
+		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
+
+		// Input global (address space 1 = SPIR-V Input storage class)
+		std::string inputName = isVertex ? "in_Position" : "gl_FragCoord";
+		shaderInputGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, inputName, nullptr,
+			llvm::GlobalValue::NotThreadLocal, 1
+		);
+		shaderInputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+
+		// Output global (address space 2 = SPIR-V Output storage class)
+		std::string outputName = isVertex ? "gl_Position" : "gl_FragColor";
+		shaderOutputGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, outputName, nullptr,
+			llvm::GlobalValue::NotThreadLocal, 2
+		);
+		shaderOutputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+	}
+
+	// Create main function: void main() for shaders, int main() for native
+	llvm::Function *mainFunc;
+	if (context.options.emitSPIRV) {
+		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getVoidTy(), false);
+		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
+	} else {
+		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getInt32Ty(), false);
+		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
+	}
 
 	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
 	builder.SetInsertPoint(entry);
@@ -1259,7 +1461,27 @@ bool generateCode(ParseContext &context) {
 	if (!generateSectionCode(context, context.mainSection))
 		return false;
 
-	builder.CreateRet(builder.getInt32(0));
+	if (context.options.emitSPIRV) {
+		builder.CreateRetVoid();
+	} else {
+		builder.CreateRet(builder.getInt32(0));
+	}
+
+	// Add SPIR-V metadata for shader execution model and decorations
+	if (context.options.emitSPIRV) {
+		llvm::LLVMContext &ctx = *context.llvmContext;
+		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
+
+		// spirv.ExecutionMode: OriginUpperLeft (required for Fragment only)
+		if (!isVertex) {
+			llvm::Metadata *execModeOps[] = {
+				llvm::ValueAsMetadata::get(mainFunc),
+				llvm::ConstantAsMetadata::get(builder.getInt32(7)), // OriginUpperLeft
+			};
+			llvm::MDNode *execModeNode = llvm::MDNode::get(ctx, execModeOps);
+			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
+		}
+	}
 
 	// Verify
 	std::string error;
@@ -1307,7 +1529,10 @@ bool generateCode(ParseContext &context) {
 	}
 
 	// Output
-	if (context.options.emitLLVM) {
+	if (context.options.emitSPIRV) {
+		if (!emitSPIRVModule(context))
+			return false;
+	} else if (context.options.emitLLVM) {
 		std::string outputPath = context.options.outputPath;
 		if (outputPath.empty())
 			outputPath = context.options.inputPath + ".ll";

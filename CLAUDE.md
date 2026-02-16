@@ -17,7 +17,7 @@ A natural-language-like programming language designed for humans and AI agents.
 ./build/dynlex --lsp
 ```
 
-**Dependencies:** C++23, Conan (nlohmann_json), LLVM (for codegen - to be added)
+**Dependencies:** C++23, Conan (nlohmann_json), LLVM 20 (for codegen + SPIR-V backend)
 
 **Implementation Details:** See `.claude/rules/implementation.md` for detailed documentation on type inference, bugs fixed, and implementation details.
 
@@ -75,6 +75,7 @@ print x
 - **No hardcoding** - Nothing language-specific hardcoded; syntax comes from patterns
 - **Minimal dependencies** - Only LLVM for codegen, avoid other external deps
 - **Suggest improvements** - If you know a better approach, mention it
+- **Verify before assuming** - Always check what packages/versions are actually available (e.g., `apt-cache search`, `llc --version`, `apt-cache show`) before choosing a dependency version. Don't guess that a specific version exists or has a feature — verify it first.
 
 ## Testing
 
@@ -96,7 +97,7 @@ Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expec
 
 ## Key Design Decisions
 
-- **Compilation target:** Native code via LLVM (outputs .ll or executable based on flags)
+- **Compilation target:** Native code via LLVM (outputs .ll, .spv, or executable based on flags)
 - **Type system:** Static typing with full inference (no annotations)
 - **Memory (DynLex language):** Automatic scope-based destruction (RAII-style)
 - **Memory (Compiler internals):** Arena-style allocation - objects allocated with `new` during compilation are not explicitly deleted. They're owned by ParseContext and cleaned up when compilation finishes. This includes: CodeLine, Section, Expression, Variable, PatternDefinition, PatternReference, VariableReference, MatchProgress. No smart pointers needed.
