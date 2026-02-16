@@ -43,9 +43,15 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    # Compile
-    compile_output=$("$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+    # Compile (5 second timeout)
+    compile_output=$(timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     compile_exit=$?
+    if [[ $compile_exit -eq 124 ]]; then
+        echo -e "${RED}FAIL${NC} $test_name (compilation timed out)"
+        ((failed++))
+        failures+=("$test_name")
+        continue
+    fi
     if [[ $compile_exit -ne 0 || ! -f "$output_binary" || ! -x "$output_binary" ]]; then
         # Compilation failed — check if this was expected
         if [[ -f "$expected_error_file" ]]; then
@@ -77,9 +83,17 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    # Run
-    if ! actual_output=$("$output_binary" 2>&1); then
-        echo -e "${RED}FAIL${NC} $test_name (runtime error)"
+    # Run (5 second timeout)
+    actual_output=$(timeout 5 "$output_binary" 2>&1)
+    run_exit=$?
+    if [[ $run_exit -eq 124 ]]; then
+        echo -e "${RED}FAIL${NC} $test_name (execution timed out)"
+        ((failed++))
+        failures+=("$test_name")
+        continue
+    fi
+    if [[ $run_exit -ne 0 ]]; then
+        echo -e "${RED}FAIL${NC} $test_name (runtime error, exit $run_exit)"
         echo "  $actual_output"
         ((failed++))
         failures+=("$test_name")

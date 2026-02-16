@@ -6,6 +6,7 @@
 #include "patternTreeNode.h"
 #include "section.h"
 #include <list>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -35,7 +36,8 @@ struct ParseContext {
 	// LLVM
 
 	// File system for reading source files (imports)
-	lsp::FileSystem *fileSystem{};
+	// Owned by ParseContext so cached SourceFile objects outlive compilation
+	std::unique_ptr<lsp::FileSystem> fileSystem;
 
 	// LLVM codegen state (initialized in codegen.cpp)
 	llvm::LLVMContext *llvmContext{};
@@ -48,7 +50,11 @@ struct ParseContext {
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
 	std::unordered_map<std::string, Type> patternParamTypes;
 	// Macro expression bindings: maps variable name to Expression* (for macro expansion)
+	// Only contains the CURRENT macro's parameter bindings (scoped, not inherited).
 	std::unordered_map<std::string, Expression *> macroExpressionBindings;
+	// Stack of caller macro bindings (pushed when entering a macro, popped when exiting).
+	// Used to restore caller scope when generating resolved argument expressions.
+	std::stack<std::unordered_map<std::string, Expression *>> macroBindingStack;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
 	// Current instantiation being inferred (set during non-macro function body inference)

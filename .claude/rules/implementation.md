@@ -173,6 +173,19 @@
 - `tests/required/recursion/` — self-recursion (factorial), mutual recursion (is_even/is_odd)
 - `tests/required/globals/` — updated with local variable scoping test and globals effect test
 
+## Scoped Macro Bindings (implemented)
+- Macros can no longer access variables from the caller's scope that aren't passed explicitly
+- `macroBindingStack` (`std::stack`) on ParseContext: pushed on macro entry, popped on exit
+- `resolveMacroBinding` in codegen: non-recursive (single lookup, no chaining through bindings)
+- `MacroScopeGuard` RAII struct: temporarily pops to caller scope when generating resolved argument expressions
+- Key files: `parseContext.h` (stack), `codegen.cpp` (MacroScopeGuard, PatternCall macro handler, generateSpecializedFunction)
+
+## Bugs Fixed (macro scoping & type inference)
+- **Macro parameter name shadowing in codegen**: The `+` macro's parameter "left" shadowed local variable `left` in `render char`, causing `px + left` to generate `px + px`. Fix: scoped macro bindings with a stack — macros only see their own parameter bindings.
+- **Stale macro body types in inference**: Macro body expression nodes are shared across all callers. If a previous caller set the body type to f64 (e.g., from float arithmetic), and the current caller had an undeduced operand, the arithmetic guard skipped the update, leaving the stale f64. The caller then read this stale type, permanently locking variables to f64. Fix: `resetSectionTypes()` clears non-literal expression types in macro bodies (recursively, including child sections) before each `inferMacroBody` call. Only applies to macro sections (`section->isMacro`); non-macro functions retain their body types across iterations.
+- Key functions: `resetExpressionTypes`, `resetSectionTypes` (in `compiler.cpp`)
+- **Spurious instantiations from top-level inference**: The top-level inference loop processes ALL code lines, including non-macro function bodies before their callers provide argument types. This created instantiations with undeduced arg types that could never resolve. Fix: skip non-macro function body inference when any argument type is undeduced (guard in PatternCall handler, `compiler.cpp`).
+
 ## Debugging Tips
 - **Never dump LLVM IR to stdout/stderr in conversation** — it floods context. Use `--emit-llvm` to write to a file, or redirect output to a file and read selectively.
 

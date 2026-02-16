@@ -8,7 +8,6 @@ Features and design decisions planned for later implementation.
 
 ## Error Handling
 
-- Not implemented yet
 - Plan: Exceptions that exit sections until a block with a catch intrinsic is reached
 - All internal workings handled via intrinsics
 
@@ -17,17 +16,12 @@ Features and design decisions planned for later implementation.
 - File = module
 - Everything public by default
 - `local` modifier for private definitions
+- Import system (partially implemented, some test cases still failing)
 
 ## Platform Targets
 
 - Cross-platform (Linux, macOS, Windows)
 - Future: JavaScript compilation for browser/universal support
-
-## Multi-Language Syntax
-
-- Nothing hardcoded in the compiler
-- Any human language can be used for patterns
-- Example: Dutch syntax works (see `tests/required/6_languagetest/`)
 
 ## AI Integration
 
@@ -35,7 +29,10 @@ Features and design decisions planned for later implementation.
 - Output tokens filtered by pattern tree
 - Ensures AI can only output valid syntax
 
-## Project History
+## Decompilation to DynLex
 
-- Name origin: 3BM (company name) + X (executable)
-- Now under Impertio Studio
+- Decompile any executable into readable DynLex code
+- Pipeline: binary → LLVM IR (via lifters like RetDec/Remill) → DynLex pattern matching → AI naming pass
+- AI generates meaningful function/variable names by analyzing behavior, string literals, system calls, and data flow patterns
+- DynLex's natural-language syntax makes decompiled output genuinely readable, unlike traditional C decompilation
+- Could leverage debug symbols (DWARF) when available for even better results

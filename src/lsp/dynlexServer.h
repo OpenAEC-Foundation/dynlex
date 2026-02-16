@@ -39,14 +39,6 @@ class DynLexServer : public LanguageServer {
 	// Publish diagnostics for a document
 	void publishDiagnostics(const std::string &uri, const std::vector<Diagnostic> &diagnostics);
 
-	// Find the element at a given position
-	struct PositionInfo {
-		VariableReference *variableRef = nullptr;
-		PatternReference *patternRef = nullptr;
-		Section *section = nullptr;
-	};
-	PositionInfo findElementAtPosition(const std::string &uri, const Position &pos);
-
 	// Generate semantic tokens for a document
 	std::vector<int> generateSemanticTokens(const std::string &uri);
 };

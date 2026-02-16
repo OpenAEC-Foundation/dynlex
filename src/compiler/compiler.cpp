@@ -1270,6 +1270,17 @@ static bool inferExpressionType(
 						}
 					}
 
+					// Skip if any argument type is undeduced — can't meaningfully
+					// infer the body without knowing all argument types.
+					bool allDeduced = true;
+					for (auto &t : argTypes)
+						if (!t.isDeduced()) {
+							allDeduced = false;
+							break;
+						}
+					if (!allDeduced)
+						break;
+
 					Instantiation &inst = matchedSection->instantiations[argTypes];
 					if (!inst.inferring) {
 						inst.inferring = true;
@@ -1295,8 +1306,35 @@ static bool inferExpressionType(
 	return changed || (expr->type != oldType);
 }
 
+// Reset non-literal expression types in a section and all its children.
+// Macro body expression nodes are shared across all callers. Without resetting,
+// if a previous caller set the body type to (e.g.) f64, and the current caller
+// has an undeduced operand, the arithmetic guard skips the update and the stale
+// f64 type is read as if it were the current call's result.
+static void resetExpressionTypes(Expression *expr) {
+	if (!expr)
+		return;
+	if (expr->kind != Expression::Kind::Literal)
+		expr->type = {};
+	for (Expression *arg : expr->arguments)
+		resetExpressionTypes(arg);
+}
+
+static void resetSectionTypes(Section *section) {
+	for (CodeLine *line : section->codeLines)
+		if (line->expression)
+			resetExpressionTypes(line->expression);
+	for (Section *child : section->children)
+		resetSectionTypes(child);
+}
+
 static bool
 inferMacroBody(Section *section, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
+	// Only macros need resetting — non-macro functions are inferred per-
+	// instantiation and their body types must persist across iterations.
+	if (section->isMacro)
+		resetSectionTypes(section);
+
 	bool changed = false;
 	for (CodeLine *line : section->codeLines) {
 		if (line->expression)

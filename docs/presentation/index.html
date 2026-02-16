@@ -609,30 +609,54 @@ glEnd();</code></pre>
 		}
 
 		function renderPageContent() {
-			const c = document.createElement('canvas');
-			c.width = 1024;
-			c.height = 768;
-			const ctx = c.getContext('2d');
+			// Capture the actual rendered page as a texture using SVG foreignObject
+			const w = window.innerWidth;
+			const h = window.innerHeight;
 
-			// Match page background
-			ctx.fillStyle = '#0a0a0f';
-			ctx.fillRect(0, 0, c.width, c.height);
+			// Temporarily show the real page content for capture
+			const content = document.querySelector('.content');
+			const bgOrbs = document.querySelector('.bg-orbs');
+			const body = document.body;
 
-			// "DynLex" title
-			ctx.fillStyle = '#e0e0ff';
-			ctx.font = 'bold 90px system-ui, -apple-system, sans-serif';
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillText('DynLex', c.width / 2, c.height * 0.35);
+			// Create a container that mimics the full page layout
+			const captureDiv = document.createElement('div');
+			captureDiv.style.cssText = `position:fixed;top:0;left:0;width:${w}px;height:${h}px;z-index:-1;overflow:hidden;`;
+			document.body.appendChild(captureDiv);
 
-			// Tagline
-			ctx.fillStyle = '#8888bb';
-			ctx.font = '26px system-ui, -apple-system, sans-serif';
-			ctx.fillText('A programming language designed for humans.', c.width / 2, c.height * 0.52);
-			ctx.fillText('Write code that reads like natural language.', c.width / 2, c.height * 0.60);
+			// Use html2canvas-style: render to SVG foreignObject, then to canvas
+			const serializer = new XMLSerializer();
+			const styles = Array.from(document.styleSheets).map(sheet => {
+				try { return Array.from(sheet.cssRules).map(r => r.cssText).join('\n'); }
+				catch(e) { return ''; }
+			}).join('\n');
 
-			pageTexture = createTexture();
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+			const heroHTML = document.querySelector('.hero').outerHTML;
+			const orbsHTML = bgOrbs ? bgOrbs.outerHTML : '';
+
+			const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+				<foreignObject width="100%" height="100%">
+					<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;background:linear-gradient(-45deg,#0f0c29,#302b63,#24243e,#0f0c29);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff;overflow:hidden;position:relative;">
+						<style>${styles}</style>
+						${orbsHTML}
+						<div class="content" style="position:relative;z-index:1;">${heroHTML}</div>
+					</div>
+				</foreignObject>
+			</svg>`;
+
+			captureDiv.remove();
+
+			const img = new Image();
+			img.onload = () => {
+				const c = document.createElement('canvas');
+				c.width = w;
+				c.height = h;
+				const ctx = c.getContext('2d');
+				ctx.drawImage(img, 0, 0);
+
+				pageTexture = createTexture();
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+			};
+			img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
 		}
 
 		// Build plane vertices at z position on tunnel path
@@ -730,11 +754,8 @@ glEnd();</code></pre>
 			// Page content plane (at end of tunnel, matches viewport aspect)
 			const distToPagePlane = PAGE_PLANE_Z - tunnel.cameraZ;
 			if (pageTexture && distToPagePlane > 0 && distToPagePlane < PAGE_PLANE_SHOW_DIST) {
-				// 15% oversized to ensure full screen coverage at snap point
-				const margin = 1.15;
-				const pageHalfW = PAGE_PLANE_HALF_H * aspect * margin;
-				const pageHalfH = PAGE_PLANE_HALF_H * margin;
-				const pageVerts = buildPlaneVerts(PAGE_PLANE_Z, pageHalfW, pageHalfH);
+				const pageHalfW = PAGE_PLANE_HALF_H * aspect;
+				const pageVerts = buildPlaneVerts(PAGE_PLANE_Z, pageHalfW, PAGE_PLANE_HALF_H);
 
 				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
 				gl.bufferData(gl.ARRAY_BUFFER, pageVerts, gl.DYNAMIC_DRAW);
@@ -922,20 +943,15 @@ glEnd();</code></pre>
 				// Render unified scene
 				renderScene(elapsed, distortion, bgColor, lineColor, lineIntensity, revealProgress);
 
-				// Check if page plane fills the viewport → snap to real page
+				// Snap to real page when camera reaches the exact distance where page plane fills viewport
+				// At distance d, visible halfH = d * tan(halfFov). Snap when d <= PAGE_PLANE_HALF_H / tan(halfFov).
 				const distToPage = PAGE_PLANE_Z - tunnel.cameraZ;
-				if (distToPage > 0 && distToPage < PAGE_PLANE_SHOW_DIST) {
-					const halfFovTan = Math.tan(Math.PI * 0.45 * 0.5);
-					const screenHalfH = distToPage * halfFovTan;
-					// Use 0.85 threshold (plane has 15% margin) to ensure full coverage
-					const pageCoverage = PAGE_PLANE_HALF_H / screenHalfH;
-					if (pageCoverage >= 1.15) {
-						// Page plane fills the screen — stop animation, show real page
-						intro.classList.add('hidden');
-						flash.style.opacity = 0;
-						localStorage.setItem('intro_seen', 'true');
-						return;
-					}
+				const snapDist = PAGE_PLANE_HALF_H / Math.tan(Math.PI * 0.45 * 0.5);
+				if (distToPage > 0 && distToPage <= snapDist) {
+					intro.classList.add('hidden');
+					flash.style.opacity = 0;
+					localStorage.setItem('intro_seen', 'true');
+					return;
 				}
 
 				// Safety: stop after max time

@@ -9,9 +9,20 @@
 #include "semanticTokenBuilder.h"
 #include "sourceFile.h"
 #include <algorithm>
+#include <filesystem>
 #include <regex>
 
 namespace lsp {
+
+// Ensure a URI is an absolute file:// URI.
+// Imported files may have relative paths (e.g. "lib/random.dl") that need
+// to be resolved to absolute file:// URIs for the LSP client.
+static std::string toAbsoluteUri(const std::string &uri) {
+	if (uri.starts_with("file://")) {
+		return uri;
+	}
+	return "file://" + std::filesystem::absolute(uri).string();
+}
 
 DynLexServer::DynLexServer(int port) : LanguageServer(port) {}
 
@@ -52,8 +63,7 @@ void DynLexServer::recompileDocument(const std::string &uri) {
 
 	// Create new parse context with LSP file system
 	auto context = std::make_unique<ParseContext>();
-	LspFileSystem lspFs(documents);
-	context->fileSystem = &lspFs;
+	context->fileSystem = std::make_unique<LspFileSystem>(documents);
 
 	// Use the compiler to parse and analyze
 	compile(uri, *context);
@@ -106,90 +116,78 @@ void DynLexServer::publishDiagnostics(const std::string &uri, const std::vector<
 	sendNotification("textDocument/publishDiagnostics", params);
 }
 
-std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
-	auto info = findElementAtPosition(params.textDocument.uri, params.position);
-
-	// If it's a variable reference with a definition, go to the definition
-	if (info.variableRef && info.variableRef->definition) {
-		Location loc;
-		loc.uri = info.variableRef->definition->range.line->sourceFile->uri;
-		loc.range = convertRange(info.variableRef->definition->range);
-		return loc;
-	}
-
-	// If it's a pattern reference, try to find the corresponding section
-	if (info.patternRef && info.section) {
-		// Find the section that defines this pattern
-		// For now, return the section's first line
-		if (!info.section->codeLines.empty()) {
-			CodeLine *firstLine = info.section->codeLines[0];
-			Location loc;
-			loc.uri = firstLine->sourceFile->uri;
-			loc.range.start.line = firstLine->sourceFileLineIndex;
-			loc.range.start.character = 0;
-			loc.range.end.line = firstLine->sourceFileLineIndex;
-			loc.range.end.character = static_cast<int>(firstLine->rightTrimmedText.length());
-			return loc;
+// Find the deepest expression containing the cursor position.
+// Depth-first: children (subexpressions) take priority over parents,
+// matching the semantic tokenizer's slicing behavior.
+static Expression *findDeepestExpression(Expression *expr, int character) {
+	for (Expression *arg : expr->arguments) {
+		if (arg->range.start() <= character && character < arg->range.end()) {
+			Expression *deeper = findDeepestExpression(arg, character);
+			if (deeper)
+				return deeper;
 		}
 	}
+	if (expr->range.start() <= character && character < expr->range.end()) {
+		return expr;
+	}
+	return nullptr;
+}
 
+// Get the definition location for an expression, following the same
+// semantic categories as the tokenizer (Variable, PatternCall, etc.)
+static std::optional<::Range> getDefinitionTarget(Expression *expr) {
+	switch (expr->kind) {
+	case Expression::Kind::Variable:
+		if (expr->variable && expr->variable->definition) {
+			return expr->variable->definition->range;
+		}
+		break;
+	case Expression::Kind::PatternCall:
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
+			expr->patternMatch->matchedEndNode->matchingDefinition) {
+			return expr->patternMatch->matchedEndNode->matchingDefinition->range;
+		}
+		break;
+	default:
+		break;
+	}
 	return std::nullopt;
 }
 
-DynLexServer::PositionInfo DynLexServer::findElementAtPosition(const std::string &uri, const Position &pos) {
-	PositionInfo info;
-
-	auto ctxIt = parseContexts.find(uri);
+std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
+	auto ctxIt = parseContexts.find(params.textDocument.uri);
 	if (ctxIt == parseContexts.end()) {
-		return info;
+		return std::nullopt;
 	}
 
 	ParseContext *context = ctxIt->second.get();
 
-	// Find the code line at this position
-	if (pos.line < 0 || pos.line >= static_cast<int>(context->codeLines.size())) {
-		return info;
-	}
-
-	// Search through code lines to find one matching the position
+	// Find the code line at the cursor position
 	for (CodeLine *codeLine : context->codeLines) {
-		if (codeLine->sourceFileLineIndex != pos.line) {
+		if (codeLine->sourceFileLineIndex != params.position.line) {
+			continue;
+		}
+		if (codeLine->sourceFile->uri != params.textDocument.uri) {
 			continue;
 		}
 
-		// Check if position is within this line's source file URI
-		if (codeLine->sourceFile->uri != uri) {
-			continue;
-		}
-
-		info.section = codeLine->section;
-
-		// Search for variable references at this position
-		if (codeLine->section) {
-			for (auto &[name, refs] : codeLine->section->variableReferences) {
-				for (VariableReference *ref : refs) {
-					if (ref->range.line == codeLine && ref->range.start() <= pos.character &&
-						pos.character <= ref->range.end()) {
-						info.variableRef = ref;
-						return info;
-					}
-				}
-			}
-
-			// Search for pattern references at this position
-			for (PatternReference *ref : codeLine->section->patternReferences) {
-				if (ref->range().line == codeLine && ref->range().start() <= pos.character &&
-					pos.character <= ref->range().end()) {
-					info.patternRef = ref;
-					return info;
+		// Walk the expression tree to find the deepest expression at cursor
+		if (codeLine->expression) {
+			Expression *expr = findDeepestExpression(codeLine->expression, params.position.character);
+			if (expr) {
+				auto target = getDefinitionTarget(expr);
+				if (target) {
+					Location loc;
+					loc.uri = toAbsoluteUri(target->line->sourceFile->uri);
+					loc.range = convertRange(*target);
+					return loc;
 				}
 			}
 		}
-
 		break;
 	}
 
-	return info;
+	return std::nullopt;
 }
 
 SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &params) {

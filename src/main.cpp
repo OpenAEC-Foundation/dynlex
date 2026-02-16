@@ -74,8 +74,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	}
 
 	if (!inputFile.empty()) {
-		lsp::LocalFileSystem localFs;
-		context.fileSystem = &localFs;
+		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		context.options.inputPath = inputFile;
 		if (compile(inputFile, context)) {
 			generateCode(context);

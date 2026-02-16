@@ -47,15 +47,44 @@ convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condT
 	return builder.CreateICmpNE(condValue, llvm::ConstantInt::get(intTy, 0), name);
 }
 
-// Resolve a variable expression through macro bindings, stopping on self-reference.
+// Resolve a variable expression through the current macro's bindings (single level).
+// With scoped bindings, only the current macro's parameters are in the map.
+// Caller scope resolution is handled by popping the binding stack.
 static Expression *resolveMacroBinding(ParseContext &context, Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
 	auto it = context.macroExpressionBindings.find(expr->variable->name);
 	if (it != context.macroExpressionBindings.end() && it->second != expr)
-		return resolveMacroBinding(context, it->second);
+		return it->second;
 	return expr;
 }
+
+// RAII guard: pops to caller's macro binding scope, restores on destruction.
+// Use when generating a resolved macro argument (which belongs to the caller's scope).
+struct MacroScopeGuard {
+	ParseContext &context;
+	std::unordered_map<std::string, Expression *> savedBindings;
+	bool active = false;
+
+	MacroScopeGuard(ParseContext &ctx) : context(ctx) {}
+	MacroScopeGuard(const MacroScopeGuard &) = delete;
+	MacroScopeGuard &operator=(const MacroScopeGuard &) = delete;
+
+	void popToCallerScope() {
+		assert(!context.macroBindingStack.empty());
+		savedBindings = context.macroExpressionBindings;
+		context.macroExpressionBindings = context.macroBindingStack.top();
+		context.macroBindingStack.pop();
+		active = true;
+	}
+
+	~MacroScopeGuard() {
+		if (active) {
+			context.macroBindingStack.push(context.macroExpressionBindings);
+			context.macroExpressionBindings = savedBindings;
+		}
+	}
+};
 
 // Resolve the effective type of an expression during codegen.
 // Follows macro expression bindings and pattern parameter types to compute the real type,
@@ -70,8 +99,12 @@ static Type getEffectiveType(ParseContext &context, Expression *expr) {
 
 	case Expression::Kind::Variable: {
 		Expression *resolved = resolveMacroBinding(context, expr);
-		if (resolved != expr)
+		if (resolved != expr) {
+			MacroScopeGuard guard(context);
+			if (!context.macroBindingStack.empty())
+				guard.popToCallerScope();
 			return getEffectiveType(context, resolved);
+		}
 
 		if (!expr->variable)
 			return expr->type;
@@ -233,6 +266,9 @@ static void generateSpecializedFunction(
 	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
+	// Push macro bindings — function bodies must not see caller's macro bindings
+	context.macroBindingStack.push(context.macroExpressionBindings);
+	context.macroExpressionBindings.clear();
 
 	builder.SetInsertPoint(entry);
 
@@ -257,6 +293,8 @@ static void generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
+	context.macroExpressionBindings = context.macroBindingStack.top();
+	context.macroBindingStack.pop();
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 
@@ -298,7 +336,12 @@ static void allocateSectionVariables(ParseContext &context, Section *section) {
 
 // Get the pointer for a variable expression (for store operations)
 static llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
-	expr = resolveMacroBinding(context, expr);
+	Expression *resolved = resolveMacroBinding(context, expr);
+	MacroScopeGuard guard(context);
+	if (resolved != expr && !context.macroBindingStack.empty())
+		guard.popToCallerScope();
+	expr = resolved;
+
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return nullptr;
 
@@ -405,8 +448,12 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 
 	case Expression::Kind::Variable: {
 		Expression *resolved = resolveMacroBinding(context, expr);
-		if (resolved != expr)
+		if (resolved != expr) {
+			MacroScopeGuard guard(context);
+			if (!context.macroBindingStack.empty())
+				guard.popToCallerScope();
 			return generateExpressionCode(context, resolved);
+		}
 
 		if (!expr->variable)
 			return nullptr;
@@ -470,8 +517,10 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 		}
 
 		if (matchedSection->isMacro) {
-			// Macro: inline the body with expression substitution
-			auto savedMacroBindings = context.macroExpressionBindings;
+			// Macro: inline the body with expression substitution.
+			// Push current bindings and set only this macro's parameters (scoped).
+			context.macroBindingStack.push(context.macroExpressionBindings);
+			context.macroExpressionBindings.clear();
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
@@ -508,7 +557,8 @@ static llvm::Value *generateExpressionCode(ParseContext &context, Expression *ex
 				}
 			}
 
-			context.macroExpressionBindings = savedMacroBindings;
+			context.macroExpressionBindings = context.macroBindingStack.top();
+			context.macroBindingStack.pop();
 			context.currentBodySection = savedBodySection;
 			return result;
 		}
