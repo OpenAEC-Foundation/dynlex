@@ -80,6 +80,10 @@ bool emitNativeExecutable(ParseContext &context) {
 	// Link object file to executable using system linker
 	std::string linkCommand = "cc " + objectPath + " -o " + outputPath;
 
+	// Preserve debug info sections
+	if (context.options.emitDebugInfo)
+		linkCommand += " -g";
+
 	// Add any required libraries
 	for (const std::string &lib : context.requiredLibraries) {
 		linkCommand += " -l" + lib;

@@ -13,6 +13,8 @@
 #include "type.h"
 #include "variable.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -66,11 +68,27 @@ void generateSpecializedFunction(
 		arg.setName(varNames[argIdx++]);
 	}
 
+	// Create debug info subprogram
+	llvm::DIScope *savedDebugScope = context.currentDebugScope;
+	if (context.diBuilder && !section->codeLines.empty()) {
+		CodeLine *firstLine = section->codeLines[0];
+		llvm::DIFile *diFile = getOrCreateDIFile(context, firstLine->sourceFile);
+		unsigned line = firstLine->sourceFileLineIndex + 1;
+		auto *funcDIType = context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(std::nullopt));
+		auto *sp = context.diBuilder->createFunction(
+			diFile, funcName, funcName, diFile, line, funcDIType, line, llvm::DINode::FlagPrototyped,
+			llvm::DISubprogram::SPFlagDefinition
+		);
+		func->setSubprogram(sp);
+		context.currentDebugScope = sp;
+	}
+
 	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", func);
 
 	// Save all codegen state
 	llvm::BasicBlock *savedBlock = builder.GetInsertBlock();
 	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
+	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
 	// Push macro bindings — function bodies must not see caller's macro bindings
@@ -104,9 +122,11 @@ void generateSpecializedFunction(
 	context.macroBindingStack.pop();
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
+	context.currentDebugScope = savedDebugScope;
 
 	if (savedBlock) {
 		builder.SetInsertPoint(savedBlock, savedPoint);
+		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
 }
 
@@ -317,8 +337,15 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
 	for (CodeLine *line : section->codeLines) {
-		if (line->expression)
+		if (line->expression) {
+			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
+				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+				builder.SetCurrentDebugLocation(
+					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, context.currentDebugScope)
+				);
+			}
 			generateExpressionCode(context, line->expression);
+		}
 	}
 
 	return true;
@@ -335,6 +362,20 @@ bool generateCode(ParseContext &context) {
 	}
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+
+	// Initialize debug info builder (skip for SPIR-V — no DWARF in SPIR-V)
+	if (context.options.emitDebugInfo && !context.options.emitSPIRV) {
+		context.diBuilder = new llvm::DIBuilder(*context.llvmModule);
+		lsp::SourceFile *mainSourceFile = !context.codeLines.empty() ? context.codeLines[0]->sourceFile : nullptr;
+		llvm::DIFile *mainFile = getOrCreateDIFile(context, mainSourceFile);
+		context.diCompileUnit = context.diBuilder->createCompileUnit(
+			llvm::dwarf::DW_LANG_C, mainFile, "DynLex Compiler", context.options.optimizationLevel > 0, "", 0
+		);
+		context.currentDebugScope = context.diCompileUnit;
+
+		context.llvmModule->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+		context.llvmModule->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
+	}
 
 	// No first pass — non-macro functions are generated on-demand via monomorphization.
 
@@ -375,6 +416,20 @@ bool generateCode(ParseContext &context) {
 		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
 	}
 
+	// Create debug info subprogram for main
+	if (context.diBuilder) {
+		lsp::SourceFile *mainSourceFile = !context.codeLines.empty() ? context.codeLines[0]->sourceFile : nullptr;
+		llvm::DIFile *mainFile = getOrCreateDIFile(context, mainSourceFile);
+		unsigned mainLine = !context.codeLines.empty() ? context.codeLines[0]->sourceFileLineIndex + 1 : 1;
+		auto *mainFuncDIType = context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(std::nullopt));
+		auto *mainSP = context.diBuilder->createFunction(
+			mainFile, "main", "main", mainFile, mainLine, mainFuncDIType, mainLine, llvm::DINode::FlagPrototyped,
+			llvm::DISubprogram::SPFlagDefinition
+		);
+		mainFunc->setSubprogram(mainSP);
+		context.currentDebugScope = mainSP;
+	}
+
 	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
 	builder.SetInsertPoint(entry);
 
@@ -402,6 +457,10 @@ bool generateCode(ParseContext &context) {
 			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
 		}
 	}
+
+	// Finalize debug info before verification
+	if (context.diBuilder)
+		context.diBuilder->finalize();
 
 	// Verify
 	std::string error;

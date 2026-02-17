@@ -5,15 +5,103 @@
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
 #include "patternDefinition.h"
+#include "sourceFile.h"
 #include "type.h"
 #include "variable.h"
+#include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <filesystem>
 #include <unordered_map>
 
 // Get the LLVM type for a given Type
 llvm::Type *getLLVMType(ParseContext &context, Type type) { return type.toLLVM(*context.llvmContext); }
+
+// Get the DWARF debug type for a given Type
+llvm::DIType *getDIType(ParseContext &context, Type type) {
+	if (!context.diBuilder)
+		return nullptr;
+
+	if (type.kind == Type::Kind::Void)
+		return nullptr;
+
+	// Pointers: create pointer to inner type
+	if (type.pointerDepth > 0) {
+		Type inner = type;
+		inner.pointerDepth--;
+		return context.diBuilder->createPointerType(getDIType(context, inner), 64);
+	}
+
+	switch (type.kind) {
+	case Type::Kind::Bool:
+		return context.diBuilder->createBasicType("bool", 8, llvm::dwarf::DW_ATE_boolean);
+	case Type::Kind::Integer: {
+		int bits = type.byteSize * 8;
+		return context.diBuilder->createBasicType("i" + std::to_string(type.byteSize * 8), bits, llvm::dwarf::DW_ATE_signed);
+	}
+	case Type::Kind::Float: {
+		int bits = type.byteSize * 8;
+		std::string name = type.byteSize == 4 ? "f32" : "f64";
+		return context.diBuilder->createBasicType(name, bits, llvm::dwarf::DW_ATE_float);
+	}
+	case Type::Kind::Class: {
+		if (!type.classDefinition || type.classInstIndex < 0)
+			return nullptr;
+		ClassInstantiation &inst = type.classDefinition->instantiations[type.classInstIndex];
+		auto &fields = type.classDefinition->fields;
+		llvm::DIFile *file = nullptr;
+		if (!type.classDefinition->range.line)
+			return nullptr;
+		file = getOrCreateDIFile(context, type.classDefinition->range.line->sourceFile);
+
+		// Calculate struct layout
+		std::vector<llvm::Metadata *> members;
+		uint64_t offsetBits = 0;
+		for (size_t i = 0; i < fields.size() && i < inst.fieldTypes.size(); i++) {
+			llvm::DIType *fieldDIType = getDIType(context, inst.fieldTypes[i]);
+			uint64_t fieldSizeBits = fieldDIType ? fieldDIType->getSizeInBits() : 64;
+			auto *member = context.diBuilder->createMemberType(
+				nullptr, fields[i].name, file, 0, fieldSizeBits, 0, offsetBits, llvm::DINode::FlagZero, fieldDIType
+			);
+			members.push_back(member);
+			offsetBits += fieldSizeBits;
+		}
+		std::string className = type.classDefinition->patternNames.empty() ? "class" : type.classDefinition->patternNames[0];
+		return context.diBuilder->createStructType(
+			nullptr, className, file, 0, offsetBits, 0, llvm::DINode::FlagZero, nullptr,
+			context.diBuilder->getOrCreateArray(members)
+		);
+	}
+	default:
+		return nullptr;
+	}
+}
+
+// Get or create a DIFile for a source file
+llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFile) {
+	if (!context.diBuilder || !sourceFile)
+		return nullptr;
+
+	auto it = context.diFiles.find(sourceFile->uri);
+	if (it != context.diFiles.end())
+		return it->second;
+
+	// Convert URI to filesystem path (strip file:// prefix if present)
+	std::string path = sourceFile->uri;
+	if (path.starts_with("file://"))
+		path = path.substr(7);
+
+	std::filesystem::path fsPath(path);
+	std::string directory = fsPath.parent_path().string();
+	std::string filename = fsPath.filename().string();
+
+	llvm::DIFile *diFile = context.diBuilder->createFile(filename, directory);
+	context.diFiles[sourceFile->uri] = diFile;
+	return diFile;
+}
 
 // Convert any value to boolean (i1) for conditional branches
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condType, const std::string &name) {
@@ -219,10 +307,36 @@ void allocateSectionVariables(ParseContext &context, Section *section) {
 				context.globalLLVMVariables[name] = globalVar;
 				// Store in alloca field so existing code can find it
 				varDef->alloca = reinterpret_cast<llvm::AllocaInst *>(globalVar);
+
+				// Emit debug info for global variable
+				if (context.diBuilder && varDef->range.line) {
+					llvm::DIFile *diFile = getOrCreateDIFile(context, varDef->range.line->sourceFile);
+					unsigned line = varDef->range.line->sourceFileLineIndex + 1;
+					llvm::DIType *diType = getDIType(context, varType);
+					auto *gvExpr = context.diBuilder->createExpression();
+					context.diBuilder->createGlobalVariableExpression(
+						context.diCompileUnit, name, name, diFile, line, diType, /*IsLocalToUnit=*/true, gvExpr
+					);
+				}
 			}
 		} else {
 			// Local variable - create alloca as before
 			varDef->alloca = createEntryAlloca(context, name, varType);
+
+			// Emit debug info for local variable
+			if (context.diBuilder && varDef->range.line && context.currentDebugScope) {
+				llvm::DIFile *diFile = getOrCreateDIFile(context, varDef->range.line->sourceFile);
+				unsigned line = varDef->range.line->sourceFileLineIndex + 1;
+				llvm::DIType *diType = getDIType(context, varType);
+				if (diType) {
+					auto *diVar = context.diBuilder->createAutoVariable(context.currentDebugScope, name, diFile, line, diType);
+					context.diBuilder->insertDeclare(
+						varDef->alloca, diVar, context.diBuilder->createExpression(),
+						llvm::DILocation::get(*context.llvmContext, line, varDef->range.start() + 1, context.currentDebugScope),
+						static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder).GetInsertBlock()
+					);
+				}
+			}
 		}
 	}
 }

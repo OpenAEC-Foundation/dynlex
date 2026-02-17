@@ -9,7 +9,13 @@ namespace llvm {
 class Value;
 class Type;
 class AllocaInst;
+class DIType;
+class DIFile;
 } // namespace llvm
+
+namespace lsp {
+struct SourceFile;
+}
 
 // Shared codegen utilities (codegenTypes.cpp)
 llvm::Type *getLLVMType(ParseContext &context, Type type);
@@ -35,6 +41,10 @@ struct MacroScopeGuard {
 	void popToCallerScope();
 	~MacroScopeGuard();
 };
+
+// Debug info helpers (codegenTypes.cpp)
+llvm::DIType *getDIType(ParseContext &context, Type type);
+llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFile);
 
 // Expression/section code generation (codegen.cpp)
 bool generateSectionCode(ParseContext &context, Section *section);

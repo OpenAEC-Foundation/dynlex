@@ -43,6 +43,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			context.options.shaderStage = ParseContext::ShaderStage::Vertex;
 		} else if (arg == "--shader-stage=fragment") {
 			context.options.shaderStage = ParseContext::ShaderStage::Fragment;
+		} else if (arg == "-g" || arg == "--debug") {
+			context.options.emitDebugInfo = true;
 		} else if (arg == "-O0") {
 			context.options.optimizationLevel = 0;
 		} else if (arg == "-O1") {
@@ -94,6 +96,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	} else {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--shader-stage=vertex|fragment] [-O0|-O1|-O2|-O3] "
 					 "[-o output]"
+					 "[-g]"
 				  << std::endl;
 	}
 

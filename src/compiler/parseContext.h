@@ -19,6 +19,10 @@ class Value;
 class GlobalVariable;
 class SwitchInst;
 class BasicBlock;
+class DIBuilder;
+class DICompileUnit;
+class DIFile;
+class DIScope;
 } // namespace llvm
 
 struct ParseContext {
@@ -35,6 +39,7 @@ struct ParseContext {
 		// Pattern resolution is iterative: each pass resolves patterns that become unambiguous
 		// when other patterns are resolved. 256 iterations is sufficient for deeply nested patterns.
 		int maxResolutionIterations = 256;
+		bool emitDebugInfo = false;
 	} options;
 
 	// LLVM
@@ -47,6 +52,12 @@ struct ParseContext {
 	llvm::LLVMContext *llvmContext{};
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
+
+	// Debug info (initialized when emitDebugInfo is true, not for SPIR-V)
+	llvm::DIBuilder *diBuilder{};
+	llvm::DICompileUnit *diCompileUnit{};
+	std::unordered_map<std::string, llvm::DIFile *> diFiles;
+	llvm::DIScope *currentDebugScope{};
 
 	// Temporary codegen bindings (pushed/popped during generation)
 	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
