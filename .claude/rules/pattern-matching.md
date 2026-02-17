@@ -1,7 +1,7 @@
 ---
 paths:
   - "src/compiler/pattern/**"
-  - "src/compiler/compiler.cpp"
+  - "src/compiler/patternResolution.cpp"
 ---
 
 # Pattern Matching & Resolution

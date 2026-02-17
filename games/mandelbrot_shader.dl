@@ -8,7 +8,8 @@ set py to the fragment y coordinate
 set t to the shader time
 
 # Animated zoom: oscillate zoom level with time
-set zoom to 1.0 + 2.0 * the sine of t * 0.3 * the sine of t * 0.3
+set zoom_sin to the sine of (t * 0.3)
+set zoom to 1.0 + 2.0 * zoom_sin * zoom_sin
 set zoom to zoom * zoom * zoom
 
 # Zoom target: Seahorse Valley area (-0.745, 0.186)
@@ -16,8 +17,8 @@ set center_x to 0.0 - 0.745
 set center_y to 0.186
 
 # Map pixel to complex plane centered on zoom target
-set cx to center_x + px / 800.0 * 3.0 - 1.5 / zoom
-set cy to center_y + py / 600.0 * 3.0 - 1.5 / zoom
+set cx to center_x + (px / 800.0 * 3.0 - 1.5) / zoom
+set cy to center_y + (py / 600.0 * 3.0 - 1.5) / zoom
 
 set zx to 0.0
 set zy to 0.0

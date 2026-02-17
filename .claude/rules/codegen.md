@@ -18,16 +18,15 @@ paths:
 - `getVariablePointer`: recursively resolves through multiple macro scopes by popping/restoring the stack
 
 ## Intrinsics Reference
-- `@intrinsic("call", "library", "function", "return_type", args...)` — external function call
-- `@intrinsic("cast", value, type_string[, bit_size])` — type cast
-- `@intrinsic("store", var, val)` / `@intrinsic("address of", var)` / `@intrinsic("dereference", ptr)`
-- `@intrinsic("if")` / `@intrinsic("else if")` / `@intrinsic("else")` — control flow
-- `@intrinsic("switch", value)` / `@intrinsic("case", value)` — switch/case
-- `@intrinsic("shader input", name)` / `@intrinsic("shader output", r, g, b, a)` — shader I/O
-- `@intrinsic("shader uniform", name)` — shader uniform (e.g., time)
-- `@intrinsic("extract element", vec, index)` — vec4 component extraction
-- Math: `@intrinsic("sin", v)`, `"cos"`, `"sqrt"`, `"abs"`, `"floor"`, `"ceil"`, `"round"`, `"exp"`, `"log"` (unary), `"pow"`, `"min"`, `"max"`, `"atan2"` (binary)
-- `@intrinsic("negate", v)` — arithmetic negation
+- **Memory**: `@intrinsic("store", var, val)` / `@intrinsic("store at", ptr, index, val)` / `@intrinsic("load at", ptr, index)` / `@intrinsic("address of", var)` / `@intrinsic("dereference", ptr)`
+- **Arithmetic**: `@intrinsic("add", a, b)`, `"subtract"`, `"multiply"`, `"divide"`, `"modulo"` / `@intrinsic("negate", v)`
+- **Comparison**: `@intrinsic("less than", a, b)`, `"greater than"`, `"equal"`, `"not equal"`, `"less than or equal"`, `"greater than or equal"`
+- **Logical**: `@intrinsic("and", a, b)` / `@intrinsic("or", a, b)` / `@intrinsic("not", v)`
+- **Math**: `@intrinsic("sin", v)`, `"cos"`, `"sqrt"`, `"abs"`, `"floor"`, `"ceil"`, `"round"`, `"exp"`, `"log"` (unary), `"pow"`, `"min"`, `"max"`, `"atan2"` (binary)
+- **Control flow**: `@intrinsic("if", cond)` / `@intrinsic("else if", cond)` / `@intrinsic("else")` / `@intrinsic("loop while", cond)` / `@intrinsic("switch", value)` / `@intrinsic("case", value)`
+- **Functions**: `@intrinsic("call", "library", "function", "return_type", args...)` / `@intrinsic("return"[, value])`
+- **Types**: `@intrinsic("cast", value, type_string[, bit_size])` / `@intrinsic("construct", type, fields...)` / `@intrinsic("property", instance, fieldname)`
+- **Shader I/O**: `@intrinsic("shader input", name)` / `@intrinsic("shader output", r, g, b, a)` / `@intrinsic("shader uniform", name)` / `@intrinsic("extract element", vec, index)`
 
 ## Math Function Codegen
 - Most math intrinsics map to LLVM intrinsics (e.g. `llvm::Intrinsic::sin`), which lower to libm calls
@@ -56,3 +55,5 @@ paths:
 - **Nested macro store**: `add value to target` → `set var to val` needed multi-level resolution. Fix: `getVariablePointer` recursively pops macro scopes.
 - **Stale macro body types**: Shared expression nodes retained types from prior callers. Fix: `resetSectionTypes()` before each `inferMacroBody` (macro sections only).
 - **Spurious instantiations**: Top-level inference created instantiations with undeduced args. Fix: skip non-macro function body inference when any arg is undeduced.
+- **Cast macro resolution**: Cast intrinsic's type string and bits arguments may be macro-bound variable references. Both type inference (`compiler.cpp`) and codegen (`codegen.cpp` — `getEffectiveType` and `generateIntrinsicCode`) must resolve through macro bindings before checking `literalValue`.
+- **SPIR-V UBO uniforms**: `glUniform1f` doesn't work with SPIR-V shaders — requires UBOs. The SPIR-V patcher (`spirv.cpp`) wraps scalar float uniforms in OpTypeStruct with Block decoration, OpAccessChain access, and Binding/DescriptorSet decorations. Host-side uses `glGenBuffers`/`glBindBufferBase`/`glBufferSubData` (patterns in `lib/graphics.dl`).

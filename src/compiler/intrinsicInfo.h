@@ -12,69 +12,73 @@ enum class IntrinsicReturnKind {
 };
 
 struct IntrinsicInfo {
-	int argCount; // expected argument count (-1 = variadic)
+	int argCount; // expected argument count including name (-1 = variadic)
 	IntrinsicReturnKind returnKind;
 };
 
 // Central registry of all intrinsic signatures.
+// argCount includes the name argument (e.g. @intrinsic("add", a, b) → argCount=3).
 // Adding a new math function: add here + add LLVM mapping in codegen.cpp.
 // clang-format off
 inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry() {
 	static const std::unordered_map<std::string, IntrinsicInfo> registry = {
-		// Binary arithmetic
-		{"add",                    {2, IntrinsicReturnKind::SameAsArgs}},
-		{"subtract",               {2, IntrinsicReturnKind::SameAsArgs}},
-		{"multiply",               {2, IntrinsicReturnKind::SameAsArgs}},
-		{"divide",                 {2, IntrinsicReturnKind::SameAsArgs}},
-		{"modulo",                 {2, IntrinsicReturnKind::SameAsArgs}},
-		// Unary arithmetic
-		{"negate",                 {1, IntrinsicReturnKind::SameAsArgs}},
-		// Math functions
-		{"sin",                    {1, IntrinsicReturnKind::SameAsArgs}},
-		{"cos",                    {1, IntrinsicReturnKind::SameAsArgs}},
-		{"sqrt",                   {1, IntrinsicReturnKind::SameAsArgs}},
-		{"abs",                    {1, IntrinsicReturnKind::SameAsArgs}},
-		{"floor",                  {1, IntrinsicReturnKind::SameAsArgs}},
-		{"ceil",                   {1, IntrinsicReturnKind::SameAsArgs}},
-		{"round",                  {1, IntrinsicReturnKind::SameAsArgs}},
-		{"exp",                    {1, IntrinsicReturnKind::SameAsArgs}},
-		{"log",                    {1, IntrinsicReturnKind::SameAsArgs}},
-		{"pow",                    {2, IntrinsicReturnKind::SameAsArgs}},
-		{"atan2",                  {2, IntrinsicReturnKind::SameAsArgs}},
-		{"min",                    {2, IntrinsicReturnKind::SameAsArgs}},
-		{"max",                    {2, IntrinsicReturnKind::SameAsArgs}},
-		// Comparisons
-		{"less than",              {2, IntrinsicReturnKind::Bool}},
-		{"greater than",           {2, IntrinsicReturnKind::Bool}},
-		{"equal",                  {2, IntrinsicReturnKind::Bool}},
-		{"not equal",              {2, IntrinsicReturnKind::Bool}},
-		{"less than or equal",     {2, IntrinsicReturnKind::Bool}},
-		{"greater than or equal",  {2, IntrinsicReturnKind::Bool}},
-		// Logical
-		{"and",                    {2, IntrinsicReturnKind::Bool}},
-		{"or",                     {2, IntrinsicReturnKind::Bool}},
-		{"not",                    {1, IntrinsicReturnKind::Bool}},
+		// Binary arithmetic: @intrinsic("op", left, right)
+		{"add",                    {3, IntrinsicReturnKind::SameAsArgs}},
+		{"subtract",               {3, IntrinsicReturnKind::SameAsArgs}},
+		{"multiply",               {3, IntrinsicReturnKind::SameAsArgs}},
+		{"divide",                 {3, IntrinsicReturnKind::SameAsArgs}},
+		{"modulo",                 {3, IntrinsicReturnKind::SameAsArgs}},
+		// Unary arithmetic: @intrinsic("op", val)
+		{"negate",                 {2, IntrinsicReturnKind::SameAsArgs}},
+		// Math functions (unary): @intrinsic("fn", val)
+		{"sin",                    {2, IntrinsicReturnKind::SameAsArgs}},
+		{"cos",                    {2, IntrinsicReturnKind::SameAsArgs}},
+		{"sqrt",                   {2, IntrinsicReturnKind::SameAsArgs}},
+		{"abs",                    {2, IntrinsicReturnKind::SameAsArgs}},
+		{"floor",                  {2, IntrinsicReturnKind::SameAsArgs}},
+		{"ceil",                   {2, IntrinsicReturnKind::SameAsArgs}},
+		{"round",                  {2, IntrinsicReturnKind::SameAsArgs}},
+		{"exp",                    {2, IntrinsicReturnKind::SameAsArgs}},
+		{"log",                    {2, IntrinsicReturnKind::SameAsArgs}},
+		// Math functions (binary): @intrinsic("fn", a, b)
+		{"pow",                    {3, IntrinsicReturnKind::SameAsArgs}},
+		{"atan2",                  {3, IntrinsicReturnKind::SameAsArgs}},
+		{"min",                    {3, IntrinsicReturnKind::SameAsArgs}},
+		{"max",                    {3, IntrinsicReturnKind::SameAsArgs}},
+		// Comparisons: @intrinsic("op", left, right)
+		{"less than",              {3, IntrinsicReturnKind::Bool}},
+		{"greater than",           {3, IntrinsicReturnKind::Bool}},
+		{"equal",                  {3, IntrinsicReturnKind::Bool}},
+		{"not equal",              {3, IntrinsicReturnKind::Bool}},
+		{"less than or equal",     {3, IntrinsicReturnKind::Bool}},
+		{"greater than or equal",  {3, IntrinsicReturnKind::Bool}},
+		// Logical: @intrinsic("op", left, right) or @intrinsic("not", val)
+		{"and",                    {3, IntrinsicReturnKind::Bool}},
+		{"or",                     {3, IntrinsicReturnKind::Bool}},
+		{"not",                    {2, IntrinsicReturnKind::Bool}},
 		// Side effects
-		{"store",                  {2, IntrinsicReturnKind::Void}},
-		{"store at",               {2, IntrinsicReturnKind::Void}},
-		{"loop while",             {1, IntrinsicReturnKind::Void}},
-		{"if",                     {1, IntrinsicReturnKind::Void}},
-		{"else if",                {1, IntrinsicReturnKind::Void}},
-		{"else",                   {0, IntrinsicReturnKind::Void}},
-		{"switch",                 {1, IntrinsicReturnKind::Void}},
-		{"case",                   {1, IntrinsicReturnKind::Void}},
-		{"shader output",          {4, IntrinsicReturnKind::Void}},
+		{"store",                  {3, IntrinsicReturnKind::Void}},       // @intrinsic("store", dest, val)
+		{"store at",               {4, IntrinsicReturnKind::Void}},       // @intrinsic("store at", ptr, index, val)
+		{"loop while",             {2, IntrinsicReturnKind::Void}},       // @intrinsic("loop while", cond)
+		{"if",                     {2, IntrinsicReturnKind::Void}},       // @intrinsic("if", cond)
+		{"else if",                {2, IntrinsicReturnKind::Void}},       // @intrinsic("else if", cond)
+		{"else",                   {1, IntrinsicReturnKind::Void}},       // @intrinsic("else")
+		{"switch",                 {2, IntrinsicReturnKind::Void}},       // @intrinsic("switch", val)
+		{"case",                   {2, IntrinsicReturnKind::Void}},       // @intrinsic("case", val)
+		{"shader output",          {5, IntrinsicReturnKind::Void}},       // @intrinsic("shader output", r, g, b, a)
 		// Shader I/O
-		{"shader input",           {1, IntrinsicReturnKind::Float}},
-		{"shader uniform",         {1, IntrinsicReturnKind::Float}},
-		{"extract element",        {2, IntrinsicReturnKind::Float}},
+		{"shader input",           {2, IntrinsicReturnKind::Float}},      // @intrinsic("shader input", name)
+		{"shader uniform",         {2, IntrinsicReturnKind::Float}},      // @intrinsic("shader uniform", name)
+		{"extract element",        {3, IntrinsicReturnKind::Float}},      // @intrinsic("extract element", vec, idx)
 		// Custom return type logic
-		{"address of",             {1, IntrinsicReturnKind::Custom}},
-		{"dereference",            {1, IntrinsicReturnKind::Custom}},
-		{"load at",                {1, IntrinsicReturnKind::Custom}},
-		{"return",                 {-1, IntrinsicReturnKind::Custom}},
-		{"call",                   {-1, IntrinsicReturnKind::Custom}},
-		{"cast",                   {-1, IntrinsicReturnKind::Custom}},
+		{"address of",             {2, IntrinsicReturnKind::Custom}},     // @intrinsic("address of", var)
+		{"dereference",            {2, IntrinsicReturnKind::Custom}},     // @intrinsic("dereference", ptr)
+		{"load at",                {3, IntrinsicReturnKind::Custom}},     // @intrinsic("load at", ptr, index)
+		{"construct",              {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("construct", type, fields...)
+		{"property",               {3, IntrinsicReturnKind::Custom}},     // @intrinsic("property", instance, fieldname)
+		{"return",                 {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("return"[, val])
+		{"call",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("call", lib, func, rettype, args...)
+		{"cast",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("cast", val, type[, bits])
 	};
 	return registry;
 }

@@ -22,23 +22,42 @@
 - **Precedence constraints (maxPrecedence, minRightPrecedence) only apply to infix operators** — patterns that consumed a left argument via `argumentChild` (detected at runtime via `match.nodesPassed[0] == rootNode->argumentChild`). Prefix patterns (like `the sine of value`) produce atomic values; their precedence should not constrain which operators can take them as operands. Without this, `the sine of a + the sine of a` fails because `+` is rejected by the sine's low precedence level.
 
 ## Compilation Phases
-1. **Import** — read source files
-2. **Section Analysis** — parse indentation, identify sections
-3. **Pattern Resolution** — match patterns, resolve variables, assign precedence (topological sort)
-4. **Variable Resolution** — group variables by scope (function boundaries), handle globals
-5. **Type Inference** — fixed-point iteration over all code lines
-6. **Codegen** — LLVM IR generation → native executable, .ll, or .spv
+1. **Import** — read source files (`compiler.cpp`: `importSourceFile`)
+2. **Section Analysis** — parse indentation, identify sections (`compiler.cpp`: `analyzeSections`)
+3. **Pattern Resolution** — match patterns, resolve variables, assign precedence (`patternResolution.cpp`: `resolvePatterns`)
+4. **Variable Resolution** — group variables by scope, handle globals (part of `resolvePatterns`)
+5. **Type Inference** — fixed-point iteration over all code lines (`typeInference.cpp`: `inferTypes`)
+6. **Codegen** — LLVM IR generation → native executable, .ll, or .spv (`codegen/`)
+
+## Source File Organization
+
+### Compiler core (`src/compiler/`)
+- `compiler.cpp` — import phase, section analysis, intrinsic classifier helpers (`isArithmeticOperator`, etc.)
+- `patternResolution.cpp` — pattern matching, resolution loop, precedence assignment, variable scoping
+- `typeInference.cpp` — fixed-point type inference, macro body inference, type defaulting/validation
+
+### Code generation (`src/compiler/codegen/`)
+- `codegen.cpp` — expression codegen (`generateExpressionCode`), monomorphized function generation (`generateSpecializedFunction`), section codegen, main driver (`generateCode`)
+- `codegenTypes.cpp` — type utilities (`getLLVMType`, `ensureType`), macro binding infrastructure (`resolveMacroBinding`, `MacroScopeGuard`, `getVariablePointer`), effective type resolution (`getEffectiveType`), variable allocation
+- `codegenIntrinsics.cpp` — all intrinsic code generation (`generateIntrinsicCode`): arithmetic, comparison, logical, math, pointer, control flow, return, call, cast, construct, property, shader I/O
+- `codegenInternal.h` — shared declarations across codegen files (functions in codegenTypes.cpp and codegenIntrinsics.cpp that are called from codegen.cpp, and vice versa)
+- `spirv.cpp` — SPIR-V shader binary emission and patching
+- `native.cpp` — native executable emission via LLVM target machine
 
 ## Intrinsic Registry & Type Inference
-- `intrinsicInfo.h`: central registry mapping intrinsic names → `{argCount, IntrinsicReturnKind}`
+- `intrinsicInfo.h`: central registry mapping intrinsic names → `{argCount, IntrinsicReturnKind}`. `argCount` includes the name argument (e.g. `@intrinsic("add", a, b)` → 3). Arg counts are validated at parse time in `section.cpp`; codegen and type inference do not re-check.
 - `IntrinsicReturnKind` enum: `SameAsArgs`, `Bool`, `Void`, `Float`, `Custom`
-- Type inference (`compiler.cpp`, `IntrinsicCall` case) uses registry lookup + switch on return kind:
+- Type inference (`typeInference.cpp`, `IntrinsicCall` case) uses registry lookup + switch on return kind:
   - **SameAsArgs**: unary (1 arg) or binary (2 args) with pointer arithmetic special case for add/subtract
   - **Bool**: direct `Bool` assignment
   - **Void**: direct `Void` assignment + special `store` side effects (type propagation to variables)
   - **Float**: direct `Float` assignment (e.g. shader inputs)
   - **Custom**: individual handlers for `address of`, `dereference`, `load at`, `return`, `call`, `cast`, `construct`, `property`
 - Adding a new intrinsic: add to registry in `intrinsicInfo.h` → type inference and codegen helpers (`isMathFunction`, `isComparisonOperator`, etc.) automatically pick it up
+
+## Bugs Fixed
+- **Cast macro resolution**: `value as a 32 bit float` (macro `@intrinsic("cast", value, "float", bits)`) — the `bits` parameter is a macro-bound variable reference, not a literal. Type inference and codegen must resolve cast's type string and bits arguments through macro bindings (`resolveVarThroughMacro` in compiler.cpp, `resolveMacroBinding` in codegen.cpp). Without this, sized casts default to 8 bytes.
+- **Argument position ordering**: `section.cpp` processes parenthesized expressions before number literals, so `expr->arguments` had parens first then numbers regardless of text position. Pattern matcher's `sourceArgumentIndex` walks `\a` placeholders left-to-right, mapping to wrong arguments. Fix: sort `expr->arguments` by source position after collection. Note: `expandMatch` also produces non-positional order (direct args, submatches, variables, words), so codegen/inference `sortArgumentsByPosition` calls are also needed — both sorts serve different purposes.
 
 ## TODO / Known Issues
 - `promote()` doesn't check that operands are numeric before promoting

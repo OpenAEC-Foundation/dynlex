@@ -23,22 +23,31 @@ A natural-language-like programming language designed for humans and AI agents.
 
 ## Current Priority
 
-**LLVM code generation**
+**Compiler maturity** — fix remaining test failures, improve error messages, expand standard library
 
 ## Project Structure
 
 ```
 src/
-├── main.cpp              # Entry point (--lsp flag for LSP mode)
-├── compiler/             # Core compiler
-│   ├── compiler.cpp/h    # Main compilation pipeline
-│   ├── section/          # Section types (expression, effect, custom)
-│   ├── pattern/          # Pattern definitions and references
-│   └── pattern/pattern_tree/  # Tree-based pattern matching
-├── lsp/                  # Language server (port 5007)
-└── pexlit/               # C++ utility library (git submodule)
-vscode-extension/         # VS Code extension (TypeScript)
-tests/required/           # Test cases with expected outputs
+├── main.cpp                    # Entry point (--lsp flag for LSP mode)
+├── compiler/                   # Core compiler
+│   ├── compiler.cpp/h          # Import, section analysis, intrinsic classifiers
+│   ├── patternResolution.cpp   # Pattern matching and resolution
+│   ├── typeInference.cpp       # Type inference (fixed-point iteration)
+│   ├── section/                # Section types (expression, effect, custom)
+│   ├── pattern/                # Pattern definitions and references
+│   ├── pattern/pattern_tree/   # Tree-based pattern matching
+│   └── codegen/                # LLVM code generation
+│       ├── codegen.cpp/h       # Expression codegen, specialized functions, driver
+│       ├── codegenInternal.h   # Shared declarations across codegen files
+│       ├── codegenTypes.cpp    # Type utilities, macro infrastructure, variables
+│       ├── codegenIntrinsics.cpp # Intrinsic code generation
+│       ├── spirv.cpp/h         # SPIR-V shader backend
+│       └── native.cpp/h        # Native executable backend
+├── lsp/                        # Language server (port 5007)
+└── pexlit/                     # C++ utility library (git submodule)
+vscode-extension/               # VS Code extension (TypeScript)
+tests/required/                 # Test cases with expected outputs
 ```
 
 ## Language Basics
@@ -66,7 +75,7 @@ print x
 1. **Import** - Read source files, handle imports
 2. **Section Analysis** - Parse indentation, identify sections, track patterns
 3. **Pattern Resolution** - Match patterns, resolve variables
-4. **(TODO) Codegen** - Generate LLVM IR → executable or .ll file
+4. **Codegen** - Generate LLVM IR → native executable, .ll, or .spv
 
 ## Code Conventions
 
@@ -93,7 +102,7 @@ Compiled test binaries use the `.out` extension (gitignored).
 
 Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expected compilation failure, substring match).
 
-**Current state:** Tests simple, custompatternstest, languagetest, loops, classtest, specificity, globals, stale_trie pass. Tests libtest, patterntest, importtest, sectiontest fail due to missing import files.
+**Current state:** 11 pass (simple, custom_patterns, language, loops, class, specificity, precedence, recursion, pattern, stale_trie, duplicate_pattern). 4 fail: globals (output format), import/lib/section (missing import files).
 
 ## Key Design Decisions
 

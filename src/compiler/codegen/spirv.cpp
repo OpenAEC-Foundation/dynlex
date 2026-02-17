@@ -9,6 +9,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include <cstring>
 #include <fstream>
+#include <unordered_set>
 #include <vector>
 
 // SPIR-V opcodes
@@ -19,13 +20,21 @@ static constexpr uint32_t spvOpDecorate = 71;
 static constexpr uint32_t spvOpName = 5;
 static constexpr uint32_t spvOpVariable = 59;
 static constexpr uint32_t spvOpTypePointer = 32;
+static constexpr uint32_t spvOpLoad = 61;
+static constexpr uint32_t spvOpStore = 62;
 
 // SPIR-V constants
 static constexpr uint32_t spvCapabilityLinkage = 5;
 static constexpr uint32_t spvDecorationLinkageAttributes = 41;
 static constexpr uint32_t spvDecorationBuiltIn = 11;
 static constexpr uint32_t spvDecorationLocation = 30;
+static constexpr uint32_t spvDecorationBlock = 2;
+static constexpr uint32_t spvDecorationBinding = 33;
+static constexpr uint32_t spvDecorationDescriptorSet = 34;
+static constexpr uint32_t spvDecorationOffset = 35;
+static constexpr uint32_t spvOpMemberDecorate = 72;
 static constexpr uint32_t spvStorageClassInput = 1;
+static constexpr uint32_t spvStorageClassUniform = 2;
 static constexpr uint32_t spvStorageClassOutput = 3;
 
 // ExecutionModel: Vertex=0, Fragment=4
@@ -59,12 +68,15 @@ static std::vector<uint32_t> encodeSpvString(const std::string &str) {
 
 // Decoration info for a shader I/O variable
 struct ShaderIoVar {
-	std::string name;		  // LLVM global name (e.g. "gl_FragCoord", "in_Position")
-	uint32_t id = 0;		  // SPIR-V result ID (found by scanning OpName)
-	uint32_t typeId = 0;	  // pointer type ID used by OpVariable
-	uint32_t storageClass;	  // target storage class (Input or Output)
-	bool isBuiltIn;			  // true = BuiltIn decoration, false = Location decoration
-	uint32_t decorationValue; // BuiltIn ID or Location number
+	std::string name;		   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
+	uint32_t id = 0;		   // SPIR-V result ID (found by scanning OpName)
+	uint32_t typeId = 0;	   // pointer type ID used by OpVariable
+	uint32_t structTypeId = 0; // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
+	uint32_t storageClass;	   // target storage class (Input, Output, or Uniform)
+	bool isBuiltIn;			   // true = BuiltIn decoration, false = Location decoration
+	uint32_t decorationValue;  // BuiltIn ID or Location number
+	bool isUBO = false;		   // true = Uniform block (needs Block/Binding/DescriptorSet/Offset decorations)
+	uint32_t binding = 0;	   // UBO binding point
 };
 
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
@@ -92,11 +104,24 @@ static bool patchShaderBinary(
 		return false;
 	}
 
-	// Find IDs by scanning OpName instructions
+	// First pass: collect all OpVariable result IDs so we only match names against actual variables
+	std::unordered_set<uint32_t> variableIds;
+	size_t pos = 5;
+	while (pos < binary.size()) {
+		uint32_t wc = spvWordCount(binary[pos]);
+		uint32_t op = spvOpcode(binary[pos]);
+		if (wc == 0)
+			break;
+		if (op == spvOpVariable && wc >= 4)
+			variableIds.insert(binary[pos + 2]); // result ID
+		pos += wc;
+	}
+
+	// Second pass: find IDs by scanning OpName instructions (only match variable IDs for I/O vars)
 	uint32_t mainId = 0;
 	std::vector<ShaderIoVar> vars = ioVars; // mutable copy to fill in IDs
 
-	size_t pos = 5;
+	pos = 5;
 	while (pos < binary.size()) {
 		uint32_t wc = spvWordCount(binary[pos]);
 		uint32_t op = spvOpcode(binary[pos]);
@@ -107,9 +132,12 @@ static bool patchShaderBinary(
 			std::string name = readSpvString(binary.data(), pos + 2, pos + wc);
 			if (name == "main")
 				mainId = id;
-			for (auto &v : vars) {
-				if (name == v.name)
-					v.id = id;
+			// Only match I/O variable names against actual OpVariable IDs
+			if (variableIds.count(id)) {
+				for (auto &v : vars) {
+					if (name == v.name)
+						v.id = id;
+				}
 			}
 		}
 		pos += wc;
@@ -184,8 +212,23 @@ static bool patchShaderBinary(
 					}
 				}
 			}
-			if (!isIoVar)
-				output.insert(output.end(), binary.begin() + pos, binary.begin() + pos + wc);
+			if (!isIoVar) {
+				// Strip Aligned memory operands from OpLoad/OpStore (requires Kernel capability)
+				if ((op == spvOpLoad || op == spvOpStore) && wc > (op == spvOpLoad ? 4u : 3u)) {
+					uint32_t baseWc = (op == spvOpLoad) ? 4 : 3;
+					uint32_t memMask = binary[pos + baseWc];
+					if (memMask & 0x2) {
+						// Has Aligned — emit without memory operands
+						output.push_back(spvInstWord(baseWc, op));
+						for (uint32_t w = 1; w < baseWc; w++)
+							output.push_back(binary[pos + w]);
+					} else {
+						output.insert(output.end(), binary.begin() + pos, binary.begin() + pos + wc);
+					}
+				} else {
+					output.insert(output.end(), binary.begin() + pos, binary.begin() + pos + wc);
+				}
+			}
 		}
 
 		pos += wc;
@@ -205,10 +248,170 @@ static bool patchShaderBinary(
 		pos += wc2;
 	}
 
+	// For UBO vars, wrap the scalar type in a struct and fix all references.
+	// The codegen emits a plain float global; we transform it into:
+	//   %StructType = OpTypeStruct %float
+	//   %PtrUniformStruct = OpTypePointer Uniform %StructType
+	//   %PtrUniformFloat = OpTypePointer Uniform %float
+	//   %uint_0 = OpConstant %uint 0
+	//   %var = OpVariable %PtrUniformStruct Uniform
+	//   ...
+	//   %ptr = OpAccessChain %PtrUniformFloat %var %uint_0
+	//   %val = OpLoad %float %ptr
+	for (auto &v : vars) {
+		if (!v.isUBO)
+			continue;
+
+		// Find the old pointer type and float type from the variable
+		uint32_t oldPtrTypeId = 0;
+		uint32_t floatTypeId = 0;
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpVariable && wc2 >= 4 && output[pos + 2] == v.id)
+				oldPtrTypeId = output[pos + 1];
+			pos += wc2;
+		}
+		// Get the float type from the old pointer type
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpTypePointer && wc2 >= 4 && output[pos + 1] == oldPtrTypeId)
+				floatTypeId = output[pos + 3];
+			pos += wc2;
+		}
+
+		// Find uint type and uint_0 constant (needed for AccessChain index)
+		uint32_t uintTypeId = 0;
+		uint32_t uint0Id = 0;
+		static constexpr uint32_t spvOpTypeInt = 21;
+		static constexpr uint32_t spvOpConstant = 43;
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpTypeInt && wc2 >= 4 && output[pos + 2] == 32 && output[pos + 3] == 0)
+				uintTypeId = output[pos + 1]; // unsigned 32-bit int
+			if (op2 == spvOpConstant && wc2 >= 4 && uintTypeId && output[pos + 1] == uintTypeId && output[pos + 3] == 0)
+				uint0Id = output[pos + 2]; // constant 0
+			pos += wc2;
+		}
+
+		// Allocate new IDs
+		uint32_t structTypeId = output[3]++;
+		uint32_t ptrUniformStructId = output[3]++;
+		uint32_t ptrUniformFloatId = output[3]++;
+		uint32_t accessChainId = output[3]++;
+		v.structTypeId = structTypeId;
+
+		// Find where to insert new types (before first OpVariable)
+		size_t typeInsertPos = output.size();
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpVariable) {
+				typeInsertPos = pos;
+				break;
+			}
+			pos += wc2;
+		}
+
+		// Insert new type declarations
+		std::vector<uint32_t> newTypes;
+		// OpTypeStruct structTypeId floatTypeId
+		newTypes.push_back(spvInstWord(3, 30)); // OpTypeStruct
+		newTypes.push_back(structTypeId);
+		newTypes.push_back(floatTypeId);
+		// OpTypePointer ptrUniformStructId Uniform structTypeId
+		newTypes.push_back(spvInstWord(4, spvOpTypePointer));
+		newTypes.push_back(ptrUniformStructId);
+		newTypes.push_back(spvStorageClassUniform);
+		newTypes.push_back(structTypeId);
+		// OpTypePointer ptrUniformFloatId Uniform floatTypeId
+		newTypes.push_back(spvInstWord(4, spvOpTypePointer));
+		newTypes.push_back(ptrUniformFloatId);
+		newTypes.push_back(spvStorageClassUniform);
+		newTypes.push_back(floatTypeId);
+		output.insert(output.begin() + typeInsertPos, newTypes.begin(), newTypes.end());
+
+		// Fix the OpVariable to use the new struct pointer type
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpVariable && wc2 >= 4 && output[pos + 2] == v.id)
+				output[pos + 1] = ptrUniformStructId;
+			pos += wc2;
+		}
+
+		// Replace every OpLoad from this variable with OpAccessChain + OpLoad
+		static constexpr uint32_t spvOpAccessChain = 65;
+		for (pos = 5; pos < output.size();) {
+			uint32_t wc2 = spvWordCount(output[pos]);
+			uint32_t op2 = spvOpcode(output[pos]);
+			if (wc2 == 0)
+				break;
+			if (op2 == spvOpLoad && wc2 >= 4 && output[pos + 3] == v.id) {
+				// Original: OpLoad %float %result %var [Aligned N]
+				// Replace with: OpAccessChain %ptrUniformFloat %acId %var %uint0
+				//               OpLoad %float %result %acId
+				uint32_t loadResultType = output[pos + 1];
+				uint32_t loadResultId = output[pos + 2];
+				std::vector<uint32_t> replacement;
+				// OpAccessChain
+				replacement.push_back(spvInstWord(5, spvOpAccessChain));
+				replacement.push_back(ptrUniformFloatId);
+				replacement.push_back(accessChainId);
+				replacement.push_back(v.id);
+				replacement.push_back(uint0Id);
+				// OpLoad (without Aligned)
+				replacement.push_back(spvInstWord(4, spvOpLoad));
+				replacement.push_back(loadResultType);
+				replacement.push_back(loadResultId);
+				replacement.push_back(accessChainId);
+
+				output.erase(output.begin() + pos, output.begin() + pos + wc2);
+				output.insert(output.begin() + pos, replacement.begin(), replacement.end());
+				pos += replacement.size();
+				continue;
+			}
+			pos += wc2;
+		}
+	}
+
 	// Add decorations for I/O variables
 	std::vector<uint32_t> newDecors;
 	for (const auto &v : vars) {
-		if (v.isBuiltIn) {
+		if (v.isUBO) {
+			// Block decoration on the struct type
+			newDecors.push_back(spvInstWord(3, spvOpDecorate));
+			newDecors.push_back(v.structTypeId);
+			newDecors.push_back(spvDecorationBlock);
+			// MemberDecorate Offset 0 on member 0
+			newDecors.push_back(spvInstWord(5, spvOpMemberDecorate));
+			newDecors.push_back(v.structTypeId);
+			newDecors.push_back(0); // member index
+			newDecors.push_back(spvDecorationOffset);
+			newDecors.push_back(0); // offset
+			// Binding decoration on the variable
+			newDecors.push_back(spvInstWord(4, spvOpDecorate));
+			newDecors.push_back(v.id);
+			newDecors.push_back(spvDecorationBinding);
+			newDecors.push_back(v.binding);
+			// DescriptorSet 0
+			newDecors.push_back(spvInstWord(4, spvOpDecorate));
+			newDecors.push_back(v.id);
+			newDecors.push_back(spvDecorationDescriptorSet);
+			newDecors.push_back(0);
+		} else if (v.isBuiltIn) {
 			newDecors.push_back(spvInstWord(4, spvOpDecorate));
 			newDecors.push_back(v.id);
 			newDecors.push_back(spvDecorationBuiltIn);
@@ -372,25 +575,37 @@ bool emitSPIRVModule(ParseContext &context) {
 	bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
 	uint32_t executionModel = isVertex ? 0 : 4; // Vertex=0, Fragment=4
 
+	auto makeIoVar = [](const std::string &name, uint32_t sc, bool builtIn, uint32_t decVal) {
+		ShaderIoVar v;
+		v.name = name;
+		v.storageClass = sc;
+		v.isBuiltIn = builtIn;
+		v.decorationValue = decVal;
+		return v;
+	};
+
 	std::vector<ShaderIoVar> ioVars;
-	// Track next available Location index for non-BuiltIn variables
-	uint32_t nextLocation = 0;
 	if (isVertex) {
-		// Vertex: input at Location 0, output at BuiltIn Position
-		ioVars.push_back({"in_Position", 0, 0, spvStorageClassInput, false, 0}); // Location 0
-		ioVars.push_back({"gl_Position", 0, 0, spvStorageClassOutput, true, 0}); // BuiltIn Position(0)
-		nextLocation = 1;														 // Location 0 used by in_Position
+		ioVars.push_back(makeIoVar("in_Position", spvStorageClassInput, false, 0));
+		ioVars.push_back(makeIoVar("gl_Position", spvStorageClassOutput, true, 0));
 	} else {
-		// Fragment: input at BuiltIn FragCoord, output at Location 0
-		ioVars.push_back({"gl_FragCoord", 0, 0, spvStorageClassInput, true, 15});  // BuiltIn FragCoord(15)
-		ioVars.push_back({"gl_FragColor", 0, 0, spvStorageClassOutput, false, 0}); // Location 0
-		nextLocation = 1;														   // Location 0 used by gl_FragColor
+		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));
+		ioVars.push_back(makeIoVar("gl_FragColor", spvStorageClassOutput, false, 0));
 	}
 
-	// Add uniform variables (UniformConstant storage class = 0)
-	static constexpr uint32_t spvStorageClassUniformConstant = 0;
+	// Add uniform variables as UBOs (Uniform storage class with Block decoration)
+	// SPIR-V shaders in OpenGL require buffer-backed uniforms, not UniformConstant
+	uint32_t nextBinding = 0;
 	for (const auto &uniformName : context.shaderUniformNames) {
-		ioVars.push_back({uniformName, 0, 0, spvStorageClassUniformConstant, false, nextLocation++});
+		std::string globalName = "ubo_" + uniformName;
+		ShaderIoVar uboVar;
+		uboVar.name = globalName;
+		uboVar.storageClass = spvStorageClassUniform;
+		uboVar.isBuiltIn = false;
+		uboVar.decorationValue = 0;
+		uboVar.isUBO = true;
+		uboVar.binding = nextBinding++;
+		ioVars.push_back(uboVar);
 	}
 
 	std::string patchError;

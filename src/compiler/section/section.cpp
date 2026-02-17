@@ -3,6 +3,7 @@
 #include "effectSection.h"
 #include "expression.h"
 #include "expressionSection.h"
+#include "intrinsicInfo.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
 #include "sectionSection.h"
@@ -306,6 +307,27 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 						return nullptr;
 				}
 
+				// Validate argument count against intrinsic registry
+				if (!intrinsicExpr->intrinsicName.empty()) {
+					const IntrinsicInfo *info = findIntrinsic(intrinsicExpr->intrinsicName);
+					if (!info) {
+						context.diagnostics.push_back(Diagnostic(
+							Diagnostic::Level::Error, "unknown intrinsic: \"" + intrinsicExpr->intrinsicName + "\"",
+							intrinsicExpr->range
+						));
+						return nullptr;
+					}
+					if (info->argCount >= 0 && (int)intrinsicExpr->arguments.size() != info->argCount) {
+						context.diagnostics.push_back(Diagnostic(
+							Diagnostic::Level::Error,
+							"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + std::to_string(info->argCount - 1) +
+								" argument(s), got " + std::to_string(intrinsicExpr->arguments.size() - 1),
+							intrinsicExpr->range
+						));
+						return nullptr;
+					}
+				}
+
 				expr->arguments.push_back(intrinsicExpr);
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {
@@ -360,6 +382,10 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	std::reverse(numExprs.begin(), numExprs.end());
 	for (Expression *numExpr : numExprs)
 		expr->arguments.push_back(numExpr);
+
+	// Sort arguments by source position so sourceArgumentIndex in pattern matching
+	// maps correctly (parens and numbers may be interleaved in the text)
+	expr->arguments = sortArgumentsByPosition(expr->arguments);
 
 	// Whitespace handling
 	auto addWhiteSpaceWarning = [&context, &range, &reference](size_t start, size_t end) {

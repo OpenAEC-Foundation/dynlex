@@ -1,6 +1,8 @@
 ---
 paths:
   - "src/compiler/compiler.cpp"
+  - "src/compiler/patternResolution.cpp"
+  - "src/compiler/typeInference.cpp"
   - "src/compiler/section/**"
 ---
 

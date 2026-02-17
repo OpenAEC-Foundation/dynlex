@@ -12,19 +12,19 @@ set x to px / 400.0 - 1.0
 set y to py / 300.0 - 1.0
 
 # Distance from center
-set d to the square root of x * x + y * y
+set d to the square root of (x * x + y * y)
 
 # Concentric rings with smooth color bands (animated)
-set ring to the sine of d * 30.0 - t * 4.0
+set ring to the sine of (d * 30.0 - t * 4.0)
 
 # Angle for directional color variation
 set angle to 0.0
 if d > 0.001:
     set angle to x / d
 
-set r to the sine of ring + angle * 3.0 * 0.5 + 0.5
-set g to the sine of ring * 1.5 + 1.0 * 0.5 + 0.5
-set b to the sine of ring * 2.0 + 2.0 * 0.5 + 0.5
+set r to the sine of (ring + angle * 3.0) * 0.5 + 0.5
+set g to the sine of (ring * 1.5 + 1.0) * 0.5 + 0.5
+set b to the sine of (ring * 2.0 + 2.0) * 0.5 + 0.5
 
 # Darken edges with vignette
 set vignette to 1.0 - d * 0.5

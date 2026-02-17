@@ -136,6 +136,32 @@ effect set [the|] uniform name of prog to value:
 		set loc to @intrinsic("call", "GL", "glGetUniformLocation", "i32", prog, name)
 		@intrinsic("call", "GL", "glUniform1f", "void", loc, value as a 32 bit float)
 
+effect set [the|] uniform at location to value:
+	execute:
+		@intrinsic("call", "GL", "glUniform1f", "void", location, value as a 32 bit float)
+
+# --- UBO (Uniform Buffer Object) support for SPIR-V shaders ---
+# GL_UNIFORM_BUFFER = 0x8A11 = 35345
+# GL_DYNAMIC_DRAW = 0x88E8 = 35048
+
+expression [a|] uniform buffer:
+	get:
+		set buf to 0
+		@intrinsic("call", "GL", "glGenBuffers", "void", 1, address of buf)
+		@intrinsic("call", "GL", "glBindBuffer", "void", 35345, buf)
+		@intrinsic("call", "GL", "glBufferData", "void", 35345, 4 as a 64 bit integer, 0 as a pointer, 35048)
+		return buf
+
+effect bind uniform buffer buf to binding:
+	execute:
+		@intrinsic("call", "GL", "glBindBufferBase", "void", 35345, binding, buf)
+
+effect update uniform buffer buf with value:
+	execute:
+		set fval to value as a 32 bit float
+		@intrinsic("call", "GL", "glBindBuffer", "void", 35345, buf)
+		@intrinsic("call", "GL", "glBufferSubData", "void", 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, address of fval)
+
 effect draw [a|] fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)

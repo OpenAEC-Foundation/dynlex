@@ -15,5 +15,3 @@ bool isArithmeticOperator(const std::string &name);
 bool isPointerArithmeticOperator(const std::string &name);
 bool isComparisonOperator(const std::string &name);
 bool isMathFunction(const std::string &name);
-
-// Helper utilities - sortArgumentsByPosition is now inline in expression.h

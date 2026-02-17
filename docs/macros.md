@@ -64,7 +64,7 @@ expression factorial of n:
    - Falls back to base class which gives error if nothing matches
 
 5. **Codegen skips macros** (`codegen.cpp`):
-   - `generatePatternFunctions` skips sections with `isMacro = true`
+   - `generateExpressionCode` inlines macro bodies instead of calling functions
 
 ### TODO
 

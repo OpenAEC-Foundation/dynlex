@@ -29,6 +29,9 @@ set prog1 to a shader program with vertex vert and fragment frag1
 set prog2 to a shader program with vertex vert and fragment frag2
 set prog3 to a shader program with vertex vert and fragment frag3
 
+set time_ubo to a uniform buffer
+bind uniform buffer time_ubo to 0
+
 set current to 0
 set was_pressed to 0
 use shader program prog0
@@ -53,12 +56,9 @@ while not the window should close:
     if key = 0:
         set was_pressed to 0
 
-    # Pass time uniform to all shader programs for animation
+    # Pass time uniform via UBO (required for SPIR-V shaders)
     set t to the current time
-    set the uniform "time" of prog0 to t
-    set the uniform "time" of prog1 to t
-    set the uniform "time" of prog2 to t
-    set the uniform "time" of prog3 to t
+    update uniform buffer time_ubo with t
 
     clear the screen
     draw a fullscreen quad
