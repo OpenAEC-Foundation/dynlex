@@ -23,8 +23,9 @@ paths:
 - `@intrinsic("store", var, val)` / `@intrinsic("address of", var)` / `@intrinsic("dereference", ptr)`
 - `@intrinsic("if")` / `@intrinsic("else if")` / `@intrinsic("else")` — control flow
 - `@intrinsic("switch", value)` / `@intrinsic("case", value)` — switch/case
-- `@intrinsic("shader_input", name)` / `@intrinsic("shader_output", r, g, b, a)` — shader I/O
-- `@intrinsic("extract_element", vec, index)` — vec4 component extraction
+- `@intrinsic("shader input", name)` / `@intrinsic("shader output", r, g, b, a)` — shader I/O
+- `@intrinsic("shader uniform", name)` — shader uniform (e.g., time)
+- `@intrinsic("extract element", vec, index)` — vec4 component extraction
 - Math: `@intrinsic("sin", v)`, `"cos"`, `"sqrt"`, `"abs"`, `"floor"`, `"ceil"`, `"round"`, `"exp"`, `"log"` (unary), `"pow"`, `"min"`, `"max"`, `"atan2"` (binary)
 - `@intrinsic("negate", v)` — arithmetic negation
 

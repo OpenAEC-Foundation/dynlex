@@ -24,6 +24,7 @@
 		varying vec2 v_texCoord;
 		uniform sampler2D u_texture;
 		uniform float u_distortion;
+		uniform float u_bounce;
 		uniform vec2 u_resolution;
 
 		void main() {
@@ -37,19 +38,20 @@
 			vec2 relOffset = offset / maxDist;
 			float rSquared = dot(relOffset, relOffset);
 
-			// Fish-eye distortion: edges zoom faster
-			float multiplier = 1.0 - pow(rSquared, 0.1);
+			// Fish-eye distortion: gentle barrel, center stays clear, edges compress
+			float multiplier = 1.0 - 0.4 * rSquared;
 			float lerpedMult = u_distortion * multiplier + (1.0 - u_distortion);
+
+			// Bounce: inflate/deflate from center like a rubber membrane
+			// Positive = bulge toward viewer (barrel), negative = dip away (pincushion)
+			float bounceMult = 1.0 + u_bounce * 0.2 * (1.0 - rSquared);
+			lerpedMult *= bounceMult;
 
 			vec2 distorted = offset * lerpedMult;
 			distorted.x /= aspect;
 			vec2 sampleCoord = center + distorted;
 
-			if (sampleCoord.x < 0.0 || sampleCoord.x > 1.0 || sampleCoord.y < 0.0 || sampleCoord.y > 1.0) {
-				gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-			} else {
-				gl_FragColor = texture2D(u_texture, sampleCoord);
-			}
+			gl_FragColor = texture2D(u_texture, clamp(sampleCoord, 0.0, 1.0));
 		}
 	</script>
 
@@ -346,10 +348,11 @@ glEnd();</code></pre>
 		const padding = 40;
 		let sourceCanvas, sourceCtx, measureCanvas, measureCtx;
 		let animationId;
+		let bounceStartTime = -1, bounceCameraZ = 0;
 
 		// WebGL state
 		let tunnelProg, planeProg, postProg;
-		let tunnelVBO, planeVBO, postQuadVBO;
+		let tunnelVBO, tunnelMeshVBO, planeVBO, postQuadVBO;
 		let framebuffer, sceneTex, depthBuf;
 		let codeTexture;
 		let fbWidth = 0, fbHeight = 0;
@@ -357,18 +360,16 @@ glEnd();</code></pre>
 		// Plane positions in tunnel
 		const CODE_PLANE_Z = 15;
 		const CODE_PLANE_HALF_H = 6;
-		const PAGE_PLANE_Z = 350;
+		const PAGE_PLANE_Z = 700;
 		const PAGE_PLANE_HALF_H = 7;
-		const PAGE_PLANE_SHOW_DIST = 40; // only render page when camera is this close
-		let pageTexture;
 
 		// === 3D Tunnel System ===
 		const tunnel = {
-			radius: 8,
-			speed: 55,
+			radius: 16,
+			speed: 110,
 			numLines: 400,
 			viewDist: 100,
-			angularWidth: 0.05,
+			angularWidth: 0.1,
 			lengthMin: 2,
 			lengthMax: 8,
 			lines: null,
@@ -376,14 +377,19 @@ glEnd();</code></pre>
 			lastTime: -1
 		};
 
+		function sharpCurve(x, sharpness) {
+			// tanh squashes sine into flat plateaus with sharp transitions
+			return Math.tanh(sharpness * Math.sin(x));
+		}
+
 		function tunnelPath(z) {
 			// Straight at the start (code plane at z=15), curves in middle, straightens near page plane
-			const blendIn = smoothstep(20, 45, z);
-			const blendOut = 1 - smoothstep(PAGE_PLANE_Z - 60, PAGE_PLANE_Z - 10, z);
+			const blendIn = smoothstep(80, 140, z);
+			const blendOut = 1 - smoothstep(PAGE_PLANE_Z - 50, PAGE_PLANE_Z - 8, z);
 			const blend = blendIn * blendOut;
 			return [
-				blend * (5.0 * Math.sin(z * 0.06) + 2.5 * Math.sin(z * 0.11)),
-				blend * 3.0 * Math.sin(z * 0.05)
+				blend * 22.0 * sharpCurve(z * 0.012, 3),
+				blend * 16.0 * sharpCurve(z * 0.0085, 3)
 			];
 		}
 
@@ -515,6 +521,7 @@ glEnd();</code></pre>
 				getShaderSource('tunnel-vertex-shader'),
 				getShaderSource('tunnel-fragment-shader'));
 			tunnelVBO = gl.createBuffer();
+			tunnelMeshVBO = gl.createBuffer();
 
 			// Plane program (textured 3D quads)
 			planeProg = createProgram(
@@ -535,7 +542,6 @@ glEnd();</code></pre>
 
 			// Textures
 			codeTexture = createTexture();
-			renderPageContent();
 
 			gl.enable(gl.BLEND);
 			return true;
@@ -608,57 +614,6 @@ glEnd();</code></pre>
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
 		}
 
-		function renderPageContent() {
-			// Capture the actual rendered page as a texture using SVG foreignObject
-			const w = window.innerWidth;
-			const h = window.innerHeight;
-
-			// Temporarily show the real page content for capture
-			const content = document.querySelector('.content');
-			const bgOrbs = document.querySelector('.bg-orbs');
-			const body = document.body;
-
-			// Create a container that mimics the full page layout
-			const captureDiv = document.createElement('div');
-			captureDiv.style.cssText = `position:fixed;top:0;left:0;width:${w}px;height:${h}px;z-index:-1;overflow:hidden;`;
-			document.body.appendChild(captureDiv);
-
-			// Use html2canvas-style: render to SVG foreignObject, then to canvas
-			const serializer = new XMLSerializer();
-			const styles = Array.from(document.styleSheets).map(sheet => {
-				try { return Array.from(sheet.cssRules).map(r => r.cssText).join('\n'); }
-				catch(e) { return ''; }
-			}).join('\n');
-
-			const heroHTML = document.querySelector('.hero').outerHTML;
-			const orbsHTML = bgOrbs ? bgOrbs.outerHTML : '';
-
-			const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-				<foreignObject width="100%" height="100%">
-					<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;background:linear-gradient(-45deg,#0f0c29,#302b63,#24243e,#0f0c29);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#fff;overflow:hidden;position:relative;">
-						<style>${styles}</style>
-						${orbsHTML}
-						<div class="content" style="position:relative;z-index:1;">${heroHTML}</div>
-					</div>
-				</foreignObject>
-			</svg>`;
-
-			captureDiv.remove();
-
-			const img = new Image();
-			img.onload = () => {
-				const c = document.createElement('canvas');
-				c.width = w;
-				c.height = h;
-				const ctx = c.getContext('2d');
-				ctx.drawImage(img, 0, 0);
-
-				pageTexture = createTexture();
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-			};
-			img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
-		}
-
 		// Build plane vertices at z position on tunnel path
 		function buildPlaneVerts(z, halfW, halfH) {
 			const c = tunnelPath(z);
@@ -677,7 +632,7 @@ glEnd();</code></pre>
 			]);
 		}
 
-		function renderScene(elapsed, distortion, bgColor, lineColor, lineIntensity, revealProgress) {
+		function renderScene(elapsed, distortion, bounce, bgColor, lineColor, lineIntensity, revealProgress) {
 			const w = window.innerWidth;
 			const h = window.innerHeight;
 			canvas.width = w;
@@ -693,13 +648,6 @@ glEnd();</code></pre>
 
 			// Init tunnel lines on first call
 			if (!tunnel.lines) initTunnelLines();
-
-			// Update camera (only moves after distortion starts)
-			if (tunnel.lastTime >= 0) {
-				const dt = elapsed - tunnel.lastTime;
-				tunnel.cameraZ += tunnel.speed * dt;
-			}
-			tunnel.lastTime = elapsed;
 
 			// Recycle lines behind camera
 			for (let i = 0; i < tunnel.lines.length; i++) {
@@ -720,9 +668,70 @@ glEnd();</code></pre>
 			const target = [lookP[0], lookP[1], tunnel.cameraZ + lookAhead];
 
 			const aspect = w / h;
-			const proj = mat4Perspective(Math.PI * 0.45, aspect, 0.1, 300);
+			const proj = mat4Perspective(Math.PI * 0.45, aspect, 0.1, 600);
 			const view = mat4LookAt(eye, target, [0, 1, 0]);
 			const vp = mat4Multiply(proj, view);
+
+			// --- Draw solid tunnel mesh (opaque wall behind stripes) ---
+			{
+				gl.useProgram(tunnelProg);
+				gl.depthMask(true);
+				gl.disable(gl.BLEND);
+
+				const meshSegLen = 4;
+				const meshRingN = 16;
+				const meshR = tunnel.radius + 1.5;
+				const meshStartZ = Math.max(tunnel.cameraZ - 2, 0);
+				const meshEndZ = tunnel.cameraZ + tunnel.viewDist;
+				const numMeshSegs = Math.ceil((meshEndZ - meshStartZ) / meshSegLen);
+				const meshVerts = new Float32Array(numMeshSegs * meshRingN * 6 * 4);
+				let mi = 0;
+
+				for (let seg = 0; seg < numMeshSegs; seg++) {
+					const z0 = meshStartZ + seg * meshSegLen;
+					const z1 = z0 + meshSegLen;
+					const c0 = tunnelPath(z0);
+					const c1 = tunnelPath(z1);
+
+					for (let v = 0; v < meshRingN; v++) {
+						const a0 = (v / meshRingN) * Math.PI * 2;
+						const a1 = ((v + 1) / meshRingN) * Math.PI * 2;
+						const cos0 = Math.cos(a0), sin0 = Math.sin(a0);
+						const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
+
+						const pts = [
+							c0[0] + meshR * cos0, c0[1] + meshR * sin0, z0,
+							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
+							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
+							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
+							c1[0] + meshR * cos1, c1[1] + meshR * sin1, z1,
+							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
+						];
+						for (let t = 0; t < 6; t++) {
+							meshVerts[mi++] = pts[t * 3];
+							meshVerts[mi++] = pts[t * 3 + 1];
+							meshVerts[mi++] = pts[t * 3 + 2];
+							meshVerts[mi++] = 1.0;
+						}
+					}
+				}
+
+				gl.bindBuffer(gl.ARRAY_BUFFER, tunnelMeshVBO);
+				gl.bufferData(gl.ARRAY_BUFFER, meshVerts, gl.DYNAMIC_DRAW);
+
+				const mPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
+				const mAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
+				gl.enableVertexAttribArray(mPosLoc);
+				gl.vertexAttribPointer(mPosLoc, 3, gl.FLOAT, false, 16, 0);
+				gl.enableVertexAttribArray(mAlphaLoc);
+				gl.vertexAttribPointer(mAlphaLoc, 1, gl.FLOAT, false, 16, 12);
+
+				gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
+				gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), bgColor[0], bgColor[1], bgColor[2]);
+
+				gl.drawArrays(gl.TRIANGLES, 0, numMeshSegs * meshRingN * 6);
+				gl.enable(gl.BLEND);
+			}
 
 			// --- Draw textured planes (opaque, write depth) ---
 			gl.useProgram(planeProg);
@@ -748,20 +757,6 @@ glEnd();</code></pre>
 				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
 				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
 				gl.bindTexture(gl.TEXTURE_2D, codeTexture);
-				gl.drawArrays(gl.TRIANGLES, 0, 6);
-			}
-
-			// Page content plane (at end of tunnel, matches viewport aspect)
-			const distToPagePlane = PAGE_PLANE_Z - tunnel.cameraZ;
-			if (pageTexture && distToPagePlane > 0 && distToPagePlane < PAGE_PLANE_SHOW_DIST) {
-				const pageHalfW = PAGE_PLANE_HALF_H * aspect;
-				const pageVerts = buildPlaneVerts(PAGE_PLANE_Z, pageHalfW, PAGE_PLANE_HALF_H);
-
-				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
-				gl.bufferData(gl.ARRAY_BUFFER, pageVerts, gl.DYNAMIC_DRAW);
-				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
-				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
-				gl.bindTexture(gl.TEXTURE_2D, pageTexture);
 				gl.drawArrays(gl.TRIANGLES, 0, 6);
 			}
 
@@ -792,7 +787,7 @@ glEnd();</code></pre>
 				];
 
 				const midZ = (z0 + z1) * 0.5 - tunnel.cameraZ;
-				const distFade = smoothstep(0, 6, midZ) * (1 - smoothstep(tunnel.viewDist * 0.6, tunnel.viewDist, midZ));
+				const distFade = smoothstep(0, 6, midZ);
 				const alpha = line.opacity * distFade;
 
 				const idx = [0, 1, 2, 1, 3, 2];
@@ -839,7 +834,8 @@ glEnd();</code></pre>
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
 			gl.uniform1i(gl.getUniformLocation(postProg, 'u_texture'), 0);
-			gl.uniform1f(gl.getUniformLocation(postProg, 'u_distortion'), 0); // disabled for debugging
+			gl.uniform1f(gl.getUniformLocation(postProg, 'u_distortion'), distortion);
+			gl.uniform1f(gl.getUniformLocation(postProg, 'u_bounce'), bounce);
 			gl.uniform2f(gl.getUniformLocation(postProg, 'u_resolution'), w, h);
 
 			gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -849,11 +845,16 @@ glEnd();</code></pre>
 			if (animationId) cancelAnimationFrame(animationId);
 			intro.classList.remove('hidden');
 			intro.style.opacity = 1;
-			flash.style.opacity = 0;
 			sourceCanvas = null;
 			tunnel.lines = null;
 			tunnel.lastTime = -1;
 			tunnel.cameraZ = 0;
+			bounceStartTime = -1;
+			bounceCameraZ = 0;
+			// Pause all animations so background matches our static render at snap
+			document.body.style.animationPlayState = 'paused';
+			document.body.style.backgroundPosition = '0% 50%';
+			document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = 'paused');
 		}
 
 		function playIntro() {
@@ -880,84 +881,98 @@ glEnd();</code></pre>
 				const tunnelEnd = 8.5;
 				const raysFadeEnd = 10;
 
-				// Typewriter progress
-				const firstThreeLinesRatio = 0.88;
+				// Typewriter progress — compute ratio from actual text data
+				let totalChars = 0, firstLinesChars = 0;
+				codeLines.forEach((line, i) => {
+					const lineLen = line.reduce((sum, part) => sum + part.text.length, 0);
+					totalChars += lineLen;
+					if (i < codeLines.length - 1) firstLinesChars += lineLen;
+				});
+				const firstLinesRatio = firstLinesChars / totalChars;
 				let revealProgress;
 				if (elapsed < 3) {
-					revealProgress = elapsed / 3 * firstThreeLinesRatio;
+					revealProgress = elapsed / 3 * firstLinesRatio;
 				} else if (elapsed < 3.5) {
-					revealProgress = firstThreeLinesRatio;
+					revealProgress = firstLinesRatio;
 				} else {
 					revealProgress = 1;
 				}
 
-				// Camera: stationary before moveStart, then moves
+				// Camera: exponential acceleration after moveStart
+				// pos = A * (e^(k*t) - 1), starts slow, gets very fast
+				const expK = 0.7;
+				const expA = PAGE_PLANE_Z / (Math.exp(expK * 6.5) - 1); // reach page in ~6.5s of movement
+				const snapDist = PAGE_PLANE_HALF_H / Math.tan(Math.PI * 0.45 * 0.5);
+				const maxCameraZ = PAGE_PLANE_Z - snapDist; // page fills viewport here
+				let distortion = 0;
+				let bounce = 0;
+
 				if (elapsed < moveStart) {
 					tunnel.cameraZ = 0;
-					tunnel.lastTime = -1;
-				} else if (tunnel.lastTime < 0) {
-					tunnel.lastTime = elapsed;
+				} else {
+					const t = elapsed - moveStart;
+					tunnel.cameraZ = Math.min(expA * (Math.exp(expK * t) - 1), maxCameraZ);
+					distortion = 1 - Math.exp(-1.5 * t);
+
+					// Trigger bounce when camera hits the page
+					if (bounceStartTime < 0 && tunnel.cameraZ >= maxCameraZ) {
+						bounceStartTime = elapsed;
+					}
 				}
 
-				// Fish-eye distortion
-				let distortion = 0;
-				if (elapsed >= moveStart && elapsed < flashEnd) {
-					const p = (elapsed - moveStart) / (flashEnd - moveStart);
-					distortion = p * p;
-				} else if (elapsed >= flashEnd) {
-					distortion = 1;
+				// When camera hits the page, switch to real page with CSS bounce
+				if (bounceStartTime >= 0) {
+					// Hide intro, show real page
+					intro.classList.add('hidden');
+					document.body.style.animationPlayState = '';
+					document.body.style.backgroundPosition = '';
+					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
+					localStorage.setItem('intro_seen', 'true');
+
+					// CSS bounce animation on the real page — scale from viewport center
+					const html = document.documentElement;
+					html.style.transformOrigin = '50% 50vh';
+					html.style.overflow = 'hidden';
+
+					function animateBounce(time) {
+						const bt = (time - bounceStartTime * 1000 - startTime) / 1000;
+						const scale = 1 + 0.08 * Math.exp(-4.0 * bt) * Math.sin(18.0 * bt);
+						html.style.transform = `scale(${scale})`;
+
+						if (bt < 1.2) {
+							requestAnimationFrame(animateBounce);
+						} else {
+							html.style.transform = '';
+							html.style.transformOrigin = '';
+							html.style.overflow = '';
+						}
+					}
+					requestAnimationFrame(animateBounce);
+					return;
 				}
 
-				// Background color: black → white (flash) → dark (page bg)
-				const pageBg = [0.04, 0.04, 0.06]; // matches #0a0a0f
-				let bgColor = [0, 0, 0];
-				if (elapsed >= flashStart && elapsed < flashEnd) {
-					const p = (elapsed - flashStart) / (flashEnd - flashStart);
-					bgColor = [p, p, p];
-				} else if (elapsed >= flashEnd && elapsed < flashEnd + 2) {
-					const p = (elapsed - flashEnd) / 2;
-					bgColor = [1 - p * (1 - pageBg[0]), 1 - p * (1 - pageBg[1]), 1 - p * (1 - pageBg[2])];
-				} else if (elapsed >= flashEnd + 2) {
-					bgColor = pageBg;
-				}
+				// Background color: dark throughout
+				const bgColor = [0.04, 0.04, 0.06];
 
-				// Line color: white → black
-				let lineColor = [0.9, 0.95, 1.0];
-				if (elapsed >= flashStart && elapsed < flashEnd) {
-					const p = (elapsed - flashStart) / (flashEnd - flashStart);
-					lineColor = [0.9 * (1 - p), 0.95 * (1 - p), 1.0 * (1 - p)];
-				} else if (elapsed >= flashEnd) {
-					lineColor = [0, 0, 0];
-				}
+				// Line color: always white
+				const lineColor = [0.9, 0.95, 1.0];
 
 				// Line spawn intensity
 				let lineIntensity = 0;
 				if (elapsed >= moveStart && elapsed < flashStart) {
 					lineIntensity = ((elapsed - moveStart) / (flashStart - moveStart)) * 1.5;
-				} else if (elapsed >= flashStart && elapsed < tunnelEnd) {
+				} else if (elapsed >= flashStart) {
 					lineIntensity = 1.5;
-				} else if (elapsed >= tunnelEnd && elapsed < raysFadeEnd) {
-					lineIntensity = 1.5 * (1 - (elapsed - tunnelEnd) / (raysFadeEnd - tunnelEnd));
 				}
 
-				// Render unified scene
-				renderScene(elapsed, distortion, bgColor, lineColor, lineIntensity, revealProgress);
+				renderScene(elapsed, distortion, 0, bgColor, lineColor, lineIntensity, revealProgress);
 
-				// Snap to real page when camera reaches the exact distance where page plane fills viewport
-				// At distance d, visible halfH = d * tan(halfFov). Snap when d <= PAGE_PLANE_HALF_H / tan(halfFov).
-				const distToPage = PAGE_PLANE_Z - tunnel.cameraZ;
-				const snapDist = PAGE_PLANE_HALF_H / Math.tan(Math.PI * 0.45 * 0.5);
-				if (distToPage > 0 && distToPage <= snapDist) {
+				// Safety timeout
+				if (elapsed >= 20) {
 					intro.classList.add('hidden');
-					flash.style.opacity = 0;
-					localStorage.setItem('intro_seen', 'true');
-					return;
-				}
-
-				// Safety: stop after max time
-				if (elapsed >= 15) {
-					intro.classList.add('hidden');
-					flash.style.opacity = 0;
+					document.body.style.animationPlayState = '';
+					document.body.style.backgroundPosition = '';
+					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
 					localStorage.setItem('intro_seen', 'true');
 					return;
 				}

@@ -75,6 +75,9 @@ struct ParseContext {
 	// String constants (maps string content to global variable)
 	std::unordered_map<std::string, llvm::GlobalVariable *> stringConstants;
 
+	// Shader uniform names (collected during codegen from @intrinsic("shader uniform", ...) calls)
+	std::vector<std::string> shaderUniformNames;
+
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
 	// all code lines in 'chronological' order: imported code lines get put before the import statement

@@ -1,10 +1,11 @@
 import lib/shader.dl
 
-# Concentric rings with color wave — hypnotic pattern
+# Concentric rings with animated color wave — hypnotic pattern
 # Compile: ./build/dynlex games/rings_shader.dl --emit-spirv --shader-stage=fragment -o games/rings.spv
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate
+set t to the shader time
 
 # Center and normalize
 set x to px / 400.0 - 1.0
@@ -13,8 +14,8 @@ set y to py / 300.0 - 1.0
 # Distance from center
 set d to the square root of x * x + y * y
 
-# Concentric rings with smooth color bands
-set ring to the sine of d * 30.0
+# Concentric rings with smooth color bands (animated)
+set ring to the sine of d * 30.0 - t * 4.0
 
 # Angle for directional color variation
 set angle to 0.0

@@ -5,6 +5,7 @@
 #include "parseUtils.h"
 #include "patternsSection.h"
 #include "precedenceSection.h"
+#include "replacementSection.h"
 
 bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	// Handle inline globals: "globals: var1, var2, var3"
@@ -49,7 +50,7 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
 	// Macros use "replacement", handled here in base class
 	if (isMacro && line->patternText == "replacement") {
-		return new Section(SectionType::Replacement, this);
+		return new ReplacementSection(this);
 	}
 
 	if (line->patternText == "patterns") {

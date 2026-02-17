@@ -19,6 +19,7 @@
 - `macroBindingStack` (`std::stack`): macros only see their own bindings. `MacroScopeGuard` pops to caller scope for argument evaluation
 - `getVariablePointer` recursively resolves through multiple macro binding scopes (for nested macros like `add value to target` → `set var to val`)
 - Operator precedence uses wave-based BFS level assignment — same-wave operators get same precedence, enforcing left-to-right associativity
+- **Precedence constraints (maxPrecedence, minRightPrecedence) only apply to infix operators** — patterns that consumed a left argument via `argumentChild` (detected at runtime via `match.nodesPassed[0] == rootNode->argumentChild`). Prefix patterns (like `the sine of value`) produce atomic values; their precedence should not constrain which operators can take them as operands. Without this, `the sine of a + the sine of a` fails because `+` is rejected by the sine's low precedence level.
 
 ## Compilation Phases
 1. **Import** — read source files

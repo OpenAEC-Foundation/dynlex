@@ -4,42 +4,48 @@ import lib/std.dl
 
 macro expression [the|] fragment coordinates:
     replacement:
-        @intrinsic("shader_input", "FragCoord")
+        @intrinsic("shader input", "FragCoord")
 
 macro expression [the|] fragment x coordinate:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "FragCoord"), 0)
+        @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 0)
 
 macro expression [the|] fragment y coordinate:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "FragCoord"), 1)
+        @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
 
 macro effect set [the|] fragment color to r g b a:
     replacement:
-        @intrinsic("shader_output", r, g, b, a)
+        @intrinsic("shader output", r, g, b, a)
 
 # Vertex shader I/O
 
 macro expression [the|] vertex position:
     replacement:
-        @intrinsic("shader_input", "Position")
+        @intrinsic("shader input", "Position")
 
 macro expression [the|] vertex x:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "Position"), 0)
+        @intrinsic("extract element", @intrinsic("shader input", "Position"), 0)
 
 macro expression [the|] vertex y:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "Position"), 1)
+        @intrinsic("extract element", @intrinsic("shader input", "Position"), 1)
 
 macro expression [the|] vertex z:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "Position"), 2)
+        @intrinsic("extract element", @intrinsic("shader input", "Position"), 2)
 
 macro expression [the|] vertex w:
     replacement:
-        @intrinsic("extract_element", @intrinsic("shader_input", "Position"), 3)
+        @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
 macro effect set [the|] output position to x y z w:
     replacement:
-        @intrinsic("shader_output", x, y, z, w)
+        @intrinsic("shader output", x, y, z, w)
+
+# Shader uniforms (values passed from host each frame)
+
+macro expression [the|] shader time:
+    replacement:
+        @intrinsic("shader uniform", "time")

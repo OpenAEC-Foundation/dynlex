@@ -63,10 +63,11 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 		{"else",                   {0, IntrinsicReturnKind::Void}},
 		{"switch",                 {1, IntrinsicReturnKind::Void}},
 		{"case",                   {1, IntrinsicReturnKind::Void}},
-		{"shader_output",          {4, IntrinsicReturnKind::Void}},
+		{"shader output",          {4, IntrinsicReturnKind::Void}},
 		// Shader I/O
-		{"shader_input",           {1, IntrinsicReturnKind::Float}},
-		{"extract_element",        {2, IntrinsicReturnKind::Float}},
+		{"shader input",           {1, IntrinsicReturnKind::Float}},
+		{"shader uniform",         {1, IntrinsicReturnKind::Float}},
+		{"extract element",        {2, IntrinsicReturnKind::Float}},
 		// Custom return type logic
 		{"address of",             {1, IntrinsicReturnKind::Custom}},
 		{"dereference",            {1, IntrinsicReturnKind::Custom}},

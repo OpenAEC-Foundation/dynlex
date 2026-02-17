@@ -52,6 +52,14 @@ while not the window should close:
                 set was_pressed to 1
     if key = 0:
         set was_pressed to 0
+
+    # Pass time uniform to all shader programs for animation
+    set t to the current time
+    set the uniform "time" of prog0 to t
+    set the uniform "time" of prog1 to t
+    set the uniform "time" of prog2 to t
+    set the uniform "time" of prog3 to t
+
     clear the screen
     draw a fullscreen quad
     display the frame of window

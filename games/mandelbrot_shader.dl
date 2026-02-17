@@ -1,16 +1,23 @@
 import lib/shader.dl
 
-# Mandelbrot fragment shader
-# Compile with: ./build/dynlex games/mandelbrot_shader.dl --emit-spirv -o games/mandelbrot.spv
+# Animated Mandelbrot fragment shader — zooms into the fractal
+# Compile with: ./build/dynlex games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o games/mandelbrot.spv
 
-# Map fragment coordinates to complex plane
 set px to the fragment x coordinate
 set py to the fragment y coordinate
+set t to the shader time
 
-# Map pixel to complex plane [-2, 1] x [-1.5, 1.5]
-# Assumes 800x600 viewport
-set cx to px / 800.0 * 3.0 - 2.0
-set cy to py / 600.0 * 3.0 - 1.5
+# Animated zoom: oscillate zoom level with time
+set zoom to 1.0 + 2.0 * the sine of t * 0.3 * the sine of t * 0.3
+set zoom to zoom * zoom * zoom
+
+# Zoom target: Seahorse Valley area (-0.745, 0.186)
+set center_x to 0.0 - 0.745
+set center_y to 0.186
+
+# Map pixel to complex plane centered on zoom target
+set cx to center_x + px / 800.0 * 3.0 - 1.5 / zoom
+set cy to center_y + py / 600.0 * 3.0 - 1.5 / zoom
 
 set zx to 0.0
 set zy to 0.0
@@ -24,8 +31,8 @@ while iteration < max_iterations and zx * zx + zy * zy < 4.0:
     set iteration to iteration + 1
 
 # Color based on iteration count
-set t to iteration as a float / max_iterations as a float
+set tf to iteration as a float / max_iterations as a float
 if iteration = max_iterations:
     set the fragment color to 0.0 0.0 0.0 1.0
 else:
-    set the fragment color to t 0.5 * t 1.0 - t 1.0
+    set the fragment color to tf 0.5 * tf 1.0 - tf 1.0

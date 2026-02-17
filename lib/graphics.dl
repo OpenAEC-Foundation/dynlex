@@ -127,6 +127,15 @@ effect use shader program prog:
 	execute:
 		@intrinsic("call", "GL", "glUseProgram", "void", prog)
 
+expression [the|] current time:
+	get:
+		return @intrinsic("call", "glfw", "glfwGetTime", "f64")
+
+effect set [the|] uniform name of prog to value:
+	execute:
+		set loc to @intrinsic("call", "GL", "glGetUniformLocation", "i32", prog, name)
+		@intrinsic("call", "GL", "glUniform1f", "void", loc, value as a 32 bit float)
+
 effect draw [a|] fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)

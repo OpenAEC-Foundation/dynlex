@@ -2,6 +2,7 @@
 #include "parseContext.h"
 #include "patternReference.h"
 #include <algorithm>
+
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)
 	: context(context), patternReference(patternReference), type(patternReference->patternType) {
 
@@ -64,7 +65,11 @@ std::vector<MatchProgress> MatchProgress::step() {
 					// Skip for default-level patterns — they capture full expressions and shouldn't
 					// constrain parent operators (minRightPrecedence is for same-level associativity).
 					if (parent->match.nodesPassed.size() > 1) {
-						int rightPrec = (def->precedence > 0) ? def->precedence : INT_MAX;
+						// Only propagate precedence for matches that consumed a left argument
+						// (infix operators like $ + $). Prefix patterns (sine, not, etc.) produce
+						// atomic values — their precedence shouldn't constrain parent operators.
+						bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
+						int rightPrec = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
 						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
 							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
 					}
@@ -87,8 +92,11 @@ std::vector<MatchProgress> MatchProgress::step() {
 					clone.match = {};
 					clone.match.nodesPassed.push_back(clone.currentNode);
 
-					// Case C: completed match becomes LEFT argument of new operator
-					clone.maxPrecedence = (def->precedence > 0) ? def->precedence : INT_MAX;
+					// Case C: completed match becomes LEFT argument of new operator.
+					// Only constrain for matches that consumed a left argument (infix operators).
+					// Prefix patterns produce atomic values — no precedence constraint needed.
+					bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
+					clone.maxPrecedence = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
 
 					clone.type = SectionType::Expression;
 					stepUp(clone);

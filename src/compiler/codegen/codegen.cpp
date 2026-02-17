@@ -1333,8 +1333,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	}
 
 	// Shader I/O intrinsics (only available in --emit-spirv mode)
-	if (name == "shader_input") {
-		// @intrinsic("shader_input", globalName) → load vec4 from named shader input global
+	if (name == "shader input") {
+		// @intrinsic("shader input", globalName) → load vec4 from named shader input global
 		std::string inputName = args.size() >= 1 ? getStringLiteral(args[0]) : "";
 		std::string globalName;
 		if (inputName == "FragCoord")
@@ -1351,8 +1351,27 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		return builder.CreateLoad(vec4Ty, global, inputName);
 	}
 
-	if (name == "shader_output") {
-		// @intrinsic("shader_output", r, g, b, a) → store vec4 to shader output global
+	if (name == "shader uniform") {
+		// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global, extend to f64
+		std::string uniformName = args.size() >= 1 ? getStringLiteral(args[0]) : "";
+		assert(!uniformName.empty() && "shader uniform requires a string literal name");
+		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(uniformName);
+		if (!global) {
+			// Create the global lazily (address space 3 = SPIR-V UniformConstant)
+			llvm::Type *f32Ty = builder.getFloatTy();
+			global = new llvm::GlobalVariable(
+				*context.llvmModule, f32Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, uniformName, nullptr,
+				llvm::GlobalValue::NotThreadLocal, 3
+			);
+			global->setInitializer(llvm::Constant::getNullValue(f32Ty));
+			context.shaderUniformNames.push_back(uniformName);
+		}
+		llvm::Value *val = builder.CreateLoad(builder.getFloatTy(), global, uniformName);
+		return builder.CreateFPExt(val, llvm::Type::getDoubleTy(*context.llvmContext), uniformName + "_f64");
+	}
+
+	if (name == "shader output") {
+		// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
 		if (args.size() >= 4) {
 			llvm::Value *r = generateExpressionCode(context, args[0]);
 			llvm::Value *g = generateExpressionCode(context, args[1]);
@@ -1386,8 +1405,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		return nullptr;
 	}
 
-	if (name == "extract_element") {
-		// @intrinsic("extract_element", vector, index) → extract scalar from vector
+	if (name == "extract element") {
+		// @intrinsic("extract element", vector, index) → extract scalar from vector
 		if (args.size() >= 2) {
 			llvm::Value *vec = generateExpressionCode(context, args[0]);
 			if (auto *idxLit = std::get_if<int64_t>(&args[1]->literalValue)) {
@@ -1451,6 +1470,9 @@ bool generateCode(ParseContext &context) {
 			llvm::GlobalValue::NotThreadLocal, 2
 		);
 		shaderOutputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+
+		// Shader uniform globals are created lazily during codegen when
+		// "shader uniform" intrinsics are encountered (see generateIntrinsicCode).
 	}
 
 	// Create main function: void main() for shaders, int main() for native

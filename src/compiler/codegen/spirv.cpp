@@ -373,14 +373,24 @@ bool emitSPIRVModule(ParseContext &context) {
 	uint32_t executionModel = isVertex ? 0 : 4; // Vertex=0, Fragment=4
 
 	std::vector<ShaderIoVar> ioVars;
+	// Track next available Location index for non-BuiltIn variables
+	uint32_t nextLocation = 0;
 	if (isVertex) {
 		// Vertex: input at Location 0, output at BuiltIn Position
 		ioVars.push_back({"in_Position", 0, 0, spvStorageClassInput, false, 0}); // Location 0
 		ioVars.push_back({"gl_Position", 0, 0, spvStorageClassOutput, true, 0}); // BuiltIn Position(0)
+		nextLocation = 1;														 // Location 0 used by in_Position
 	} else {
 		// Fragment: input at BuiltIn FragCoord, output at Location 0
 		ioVars.push_back({"gl_FragCoord", 0, 0, spvStorageClassInput, true, 15});  // BuiltIn FragCoord(15)
 		ioVars.push_back({"gl_FragColor", 0, 0, spvStorageClassOutput, false, 0}); // Location 0
+		nextLocation = 1;														   // Location 0 used by gl_FragColor
+	}
+
+	// Add uniform variables (UniformConstant storage class = 0)
+	static constexpr uint32_t spvStorageClassUniformConstant = 0;
+	for (const auto &uniformName : context.shaderUniformNames) {
+		ioVars.push_back({uniformName, 0, 0, spvStorageClassUniformConstant, false, nextLocation++});
 	}
 
 	std::string patchError;
