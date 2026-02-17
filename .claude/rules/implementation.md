@@ -59,6 +59,21 @@
 - **Cast macro resolution**: `value as a 32 bit float` (macro `@intrinsic("cast", value, "float", bits)`) — the `bits` parameter is a macro-bound variable reference, not a literal. Type inference and codegen must resolve cast's type string and bits arguments through macro bindings (`resolveVarThroughMacro` in compiler.cpp, `resolveMacroBinding` in codegen.cpp). Without this, sized casts default to 8 bytes.
 - **Argument position ordering**: `section.cpp` processes parenthesized expressions before number literals, so `expr->arguments` had parens first then numbers regardless of text position. Pattern matcher's `sourceArgumentIndex` walks `\a` placeholders left-to-right, mapping to wrong arguments. Fix: sort `expr->arguments` by source position after collection. Note: `expandMatch` also produces non-positional order (direct args, submatches, variables, words), so codegen/inference `sortArgumentsByPosition` calls are also needed — both sorts serve different purposes.
 
+## LSP Architecture (`src/lsp/`)
+
+### Multi-file diagnostic tracking
+- The LSP tracks an **import graph** (`importedBy`: imported URI → set of main URIs) and **cached diagnostics per main document** (`diagnosticsPerMain`: main URI → file URI → diagnostics).
+- `onDidOpen`: if the file is already an import of an open main document, skip compilation (diagnostics already published). Otherwise compile as a new main document.
+- `onDidChange`: recompile the file if it's a main document. Also recompile all main documents that import it (via `importedBy`).
+- `onDidClose`: clean up state, re-publish merged diagnostics for affected files.
+- Diagnostics are **grouped by source file URI** and published separately to each file. When multiple main documents produce diagnostics for the same file, they're merged with deduplication (same range + message = same diagnostic).
+- `generateSemanticTokens` only suppresses tokens for errors **in the requested file**, not errors in imported files.
+
+### Diagnostic related information
+- Compiler `Diagnostic` has a `relatedInfo` vector (`RelatedInfo{message, range}`) for linking to related source locations.
+- The LSP converts these to `DiagnosticRelatedInformation` with proper absolute URIs, rendered as clickable links in VS Code.
+- Example: "Duplicate pattern definition" links to the conflicting definition.
+
 ## TODO / Known Issues
 - `promote()` doesn't check that operands are numeric before promoting
 - **Argument greediness**: `factorial of n - 1` parses as `(factorial of n) - 1`. Pattern arguments greedily consume tokens. Operator precedence (wave-based) fixes associativity but not argument boundaries for non-operator patterns.

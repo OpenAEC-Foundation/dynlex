@@ -57,7 +57,7 @@ while not the window should close:
         set was_pressed to 0
 
     # Pass time uniform via UBO (required for SPIR-V shaders)
-    set t to the current time
+    set t to the time since start
     update uniform buffer time_ubo with t
 
     clear the screen

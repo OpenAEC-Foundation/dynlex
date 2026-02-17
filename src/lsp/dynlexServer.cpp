@@ -42,23 +42,86 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/)
 
 void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 	LanguageServer::onDidOpen(params);
-	recompileDocument(params.textDocument.uri);
+	const std::string &uri = params.textDocument.uri;
+
+	// If this file is already compiled as an import of a main document, skip —
+	// diagnostics are already published from the main document's compilation.
+	if (importedBy.contains(uri) && !importedBy[uri].empty()) {
+		return;
+	}
+
+	recompileMainDocument(uri);
 }
 
 void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 	LanguageServer::onDidChange(params);
-	recompileDocument(params.textDocument.uri);
+	const std::string &uri = params.textDocument.uri;
+
+	// If this file is a main document, recompile it
+	if (parseContexts.contains(uri)) {
+		recompileMainDocument(uri);
+	}
+
+	// If this file is imported by main documents, recompile those too
+	auto it = importedBy.find(uri);
+	if (it != importedBy.end()) {
+		// Copy: recompilation may modify importedBy
+		auto mainUris = it->second;
+		for (const auto &mainUri : mainUris) {
+			recompileMainDocument(mainUri);
+		}
+	}
 }
 
 void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
-	parseContexts.erase(params.textDocument.uri);
+	const std::string &uri = params.textDocument.uri;
+
+	if (parseContexts.contains(uri)) {
+		// Collect file URIs this main document had diagnostics for
+		std::unordered_set<std::string> affectedUris;
+		auto diagIt = diagnosticsPerMain.find(uri);
+		if (diagIt != diagnosticsPerMain.end()) {
+			for (const auto &[fileUri, _] : diagIt->second) {
+				affectedUris.insert(fileUri);
+			}
+		}
+
+		// Remove this main document from importedBy entries
+		for (auto &[imported, mains] : importedBy) {
+			mains.erase(uri);
+		}
+
+		// Clean up state
+		parseContexts.erase(uri);
+		diagnosticsPerMain.erase(uri);
+
+		// Re-publish merged diagnostics for affected files (now without this main's contribution)
+		for (const auto &fileUri : affectedUris) {
+			publishMergedDiagnostics(fileUri);
+		}
+	}
+
 	LanguageServer::onDidClose(params);
 }
 
-void DynLexServer::recompileDocument(const std::string &uri) {
+void DynLexServer::recompileMainDocument(const std::string &uri) {
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
 		return;
+	}
+
+	// Collect file URIs that previously had diagnostics from this main document
+	std::unordered_set<std::string> previouslyAffected;
+	auto oldDiagIt = diagnosticsPerMain.find(uri);
+	if (oldDiagIt != diagnosticsPerMain.end()) {
+		for (const auto &[fileUri, _] : oldDiagIt->second) {
+			previouslyAffected.insert(fileUri);
+		}
+	}
+
+	// Remove old import tracking for this main document
+	for (auto &[imported, mains] : importedBy) {
+		mains.erase(uri);
 	}
 
 	// Create new parse context with LSP file system
@@ -68,15 +131,58 @@ void DynLexServer::recompileDocument(const std::string &uri) {
 	// Use the compiler to parse and analyze
 	compile(uri, *context);
 
-	// Convert diagnostics
-	std::vector<Diagnostic> lspDiagnostics;
-	for (const auto &diag : context->diagnostics) {
-		lspDiagnostics.push_back(convertDiagnostic(diag));
+	// Update import graph
+	for (const auto &[path, sourceFile] : context->importedFiles) {
+		std::string importedUri = toAbsoluteUri(sourceFile->uri);
+		if (importedUri != uri) {
+			importedBy[importedUri].insert(uri);
+		}
 	}
 
-	// Store context and publish diagnostics
+	// Group diagnostics by their actual source file
+	auto &diagsForMain = diagnosticsPerMain[uri];
+	diagsForMain.clear();
+	diagsForMain[uri]; // always include main file so it gets cleared
+	for (const auto &diag : context->diagnostics) {
+		std::string fileUri = diag.range.line ? toAbsoluteUri(diag.range.line->sourceFile->uri) : uri;
+		diagsForMain[fileUri].push_back(convertDiagnostic(diag));
+	}
+
+	// Collect all affected file URIs (old and new) and re-publish
+	std::unordered_set<std::string> allAffected = previouslyAffected;
+	for (const auto &[fileUri, _] : diagsForMain) {
+		allAffected.insert(fileUri);
+	}
+	for (const auto &fileUri : allAffected) {
+		publishMergedDiagnostics(fileUri);
+	}
+
+	// Store context
 	parseContexts[uri] = std::move(context);
-	publishDiagnostics(uri, lspDiagnostics);
+}
+
+void DynLexServer::publishMergedDiagnostics(const std::string &fileUri) {
+	std::vector<Diagnostic> merged;
+
+	for (const auto &[mainUri, diagsByFile] : diagnosticsPerMain) {
+		auto it = diagsByFile.find(fileUri);
+		if (it != diagsByFile.end()) {
+			for (const auto &diag : it->second) {
+				// Deduplicate: skip if same range + message already present
+				bool duplicate = std::any_of(merged.begin(), merged.end(), [&](const Diagnostic &existing) {
+					return existing.range.start.line == diag.range.start.line &&
+						   existing.range.start.character == diag.range.start.character &&
+						   existing.range.end.line == diag.range.end.line &&
+						   existing.range.end.character == diag.range.end.character && existing.message == diag.message;
+				});
+				if (!duplicate) {
+					merged.push_back(diag);
+				}
+			}
+		}
+	}
+
+	publishDiagnostics(fileUri, merged);
 }
 
 Range DynLexServer::convertRange(const ::Range &range) const {
@@ -104,6 +210,14 @@ Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	case ::Diagnostic::Level::Info:
 		lspDiag.severity = DiagnosticSeverity::Information;
 		break;
+	}
+
+	for (const auto &related : diag.relatedInfo) {
+		DiagnosticRelatedInformation info;
+		info.message = related.message;
+		info.location.uri = toAbsoluteUri(related.range.line->sourceFile->uri);
+		info.location.range = convertRange(related.range);
+		lspDiag.relatedInformation.push_back(std::move(info));
 	}
 
 	return lspDiag;
@@ -203,8 +317,10 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	}
 
 	ParseContext *context = ctxIt->second.get();
-	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(), [](const ::Diagnostic &d) {
-		return d.level == ::Diagnostic::Level::Error;
+
+	// Only suppress semantic tokens for errors in THIS file, not imported files
+	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(), [&uri](const ::Diagnostic &d) {
+		return d.level == ::Diagnostic::Level::Error && d.range.line && toAbsoluteUri(d.range.line->sourceFile->uri) == uri;
 	});
 	if (hasErrors) {
 		return {};

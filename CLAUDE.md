@@ -44,7 +44,7 @@ src/
 │       ├── codegenIntrinsics.cpp # Intrinsic code generation
 │       ├── spirv.cpp/h         # SPIR-V shader backend
 │       └── native.cpp/h        # Native executable backend
-├── lsp/                        # Language server (port 5007)
+├── lsp/                        # Language server (port 5007, multi-file diagnostic tracking)
 └── pexlit/                     # C++ utility library (git submodule)
 vscode-extension/               # VS Code extension (TypeScript)
 tests/required/                 # Test cases with expected outputs

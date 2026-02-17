@@ -50,11 +50,21 @@ inline void from_json(const Json &j, Location &l) {
 // Diagnostic severity levels (1-indexed per LSP spec)
 enum class DiagnosticSeverity { Error = 1, Warning = 2, Information = 3, Hint = 4 };
 
+struct DiagnosticRelatedInformation {
+	Location location;
+	std::string message;
+};
+
+inline void to_json(Json &j, const DiagnosticRelatedInformation &r) {
+	j = Json{{"location", r.location}, {"message", r.message}};
+}
+
 struct Diagnostic {
 	Range range;
 	std::optional<DiagnosticSeverity> severity;
 	std::string message;
 	std::optional<std::string> source;
+	std::vector<DiagnosticRelatedInformation> relatedInformation;
 };
 
 inline void to_json(Json &j, const Diagnostic &d) {
@@ -64,6 +74,9 @@ inline void to_json(Json &j, const Diagnostic &d) {
 	}
 	if (d.source) {
 		j["source"] = *d.source;
+	}
+	if (!d.relatedInformation.empty()) {
+		j["relatedInformation"] = d.relatedInformation;
 	}
 }
 

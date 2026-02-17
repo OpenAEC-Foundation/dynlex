@@ -4,6 +4,7 @@
 #include "semanticTokens.h"
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace lsp {
 
@@ -24,11 +25,20 @@ class DynLexServer : public LanguageServer {
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
 
   private:
-	// ParseContext per document URI
+	// ParseContext per main document URI
 	std::unordered_map<std::string, std::unique_ptr<ParseContext>> parseContexts;
 
-	// Recompile a document and publish diagnostics
-	void recompileDocument(const std::string &uri);
+	// Import graph: imported file URI → set of main URIs that import it
+	std::unordered_map<std::string, std::unordered_set<std::string>> importedBy;
+
+	// Cached LSP diagnostics per main document, grouped by source file URI
+	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Diagnostic>>> diagnosticsPerMain;
+
+	// Compile a main document and update all tracking state
+	void recompileMainDocument(const std::string &uri);
+
+	// Publish merged diagnostics for a file from all main compilations that reference it
+	void publishMergedDiagnostics(const std::string &fileUri);
 
 	// Convert DynLex Range to LSP Range
 	Range convertRange(const ::Range &range) const;

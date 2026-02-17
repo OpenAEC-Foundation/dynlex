@@ -397,11 +397,9 @@ bool resolvePatterns(ParseContext &context) {
 		PatternDefinition *existing =
 			context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 		if (existing) {
-			context.diagnostics.push_back(Diagnostic(
-				Diagnostic::Level::Error,
-				"Duplicate pattern definition (conflicts with definition at " + existing->range.toString() + ")",
-				definition->range
-			));
+			Diagnostic diag(Diagnostic::Level::Error, "Duplicate pattern definition", definition->range);
+			diag.relatedInfo.push_back({"Conflicts with this definition", existing->range});
+			context.diagnostics.push_back(std::move(diag));
 		}
 		invalidateStaleMatches(definition, treeType);
 	};

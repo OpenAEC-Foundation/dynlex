@@ -4,12 +4,19 @@
 #include "stringFunctions.h"
 #include <string>
 #include <string_view>
+#include <vector>
+
+struct RelatedInfo {
+	std::string message;
+	Range range;
+};
 
 struct Diagnostic {
 	enum class Level { Info, Warning, Error };
 	Level level;
 	std::string message;
 	Range range;
+	std::vector<RelatedInfo> relatedInfo;
 	Diagnostic(Level level, const std::string &message, Range range) : level(level), message(message), range(range) {}
 	std::string toString() const;
 };

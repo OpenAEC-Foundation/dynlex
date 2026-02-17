@@ -127,7 +127,7 @@ effect use shader program prog:
 	execute:
 		@intrinsic("call", "GL", "glUseProgram", "void", prog)
 
-expression [the|] current time:
+expression [the|] time since start:
 	get:
 		return @intrinsic("call", "glfw", "glfwGetTime", "f64")
 
