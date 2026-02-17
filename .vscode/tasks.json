@@ -39,5 +39,38 @@
 			},
 			"problemMatcher": []
 		},
+		{
+			"label": "package",
+			"type": "shell",
+			"command": "./scripts/package.sh",
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "install",
+			"type": "shell",
+			"command": "sudo dpkg -i $(ls -t build/dynlex-*.deb | head -1)",
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "uninstall",
+			"type": "shell",
+			"command": "sudo dpkg -r dynlex",
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
 	]
 }

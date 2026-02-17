@@ -117,3 +117,21 @@ set_target_properties (${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+#
+# Install targets
+#
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION share/dynlex/lib FILES_MATCHING PATTERN "*.dl")
+
+#
+# CPack .deb packaging
+#
+set(CPACK_GENERATOR "DEB")
+set(CPACK_PACKAGE_NAME "dynlex")
+set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DynLex — a natural-language-like programming language")
+set(CPACK_PACKAGE_CONTACT "DynLex maintainers")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, zlib1g, libzstd1")
+set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+include(CPack)

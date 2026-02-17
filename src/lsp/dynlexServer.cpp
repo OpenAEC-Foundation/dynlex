@@ -104,6 +104,26 @@ void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	LanguageServer::onDidClose(params);
 }
 
+ParseContext *DynLexServer::findContextFor(const std::string &uri) {
+	auto ctxIt = parseContexts.find(uri);
+	if (ctxIt != parseContexts.end()) {
+		return ctxIt->second.get();
+	}
+
+	// Check if this file is imported by a main document
+	auto importIt = importedBy.find(uri);
+	if (importIt != importedBy.end()) {
+		for (const auto &mainUri : importIt->second) {
+			auto mainCtxIt = parseContexts.find(mainUri);
+			if (mainCtxIt != parseContexts.end()) {
+				return mainCtxIt->second.get();
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 void DynLexServer::recompileMainDocument(const std::string &uri) {
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
@@ -269,19 +289,17 @@ static std::optional<::Range> getDefinitionTarget(Expression *expr) {
 }
 
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
-	auto ctxIt = parseContexts.find(params.textDocument.uri);
-	if (ctxIt == parseContexts.end()) {
+	ParseContext *context = findContextFor(params.textDocument.uri);
+	if (!context) {
 		return std::nullopt;
 	}
-
-	ParseContext *context = ctxIt->second.get();
 
 	// Find the code line at the cursor position
 	for (CodeLine *codeLine : context->codeLines) {
 		if (codeLine->sourceFileLineIndex != params.position.line) {
 			continue;
 		}
-		if (codeLine->sourceFile->uri != params.textDocument.uri) {
+		if (toAbsoluteUri(codeLine->sourceFile->uri) != params.textDocument.uri) {
 			continue;
 		}
 
@@ -311,12 +329,10 @@ SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &pa
 }
 
 std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
-	auto ctxIt = parseContexts.find(uri);
-	if (ctxIt == parseContexts.end()) {
+	ParseContext *context = findContextFor(uri);
+	if (!context) {
 		return {};
 	}
-
-	ParseContext *context = ctxIt->second.get();
 
 	// Only suppress semantic tokens for errors in THIS file, not imported files
 	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(), [&uri](const ::Diagnostic &d) {
@@ -334,7 +350,7 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 
 	// Helper to add a token from a Range
 	auto addToken = [&builder, &uri](const ::Range &range, SemanticTokenType type, bool isDefinition) {
-		if (range.line->sourceFile->uri != uri) {
+		if (toAbsoluteUri(range.line->sourceFile->uri) != uri) {
 			return;
 		}
 		int modifiers = isDefinition ? (1 << static_cast<int>(SemanticTokenModifier::Definition)) : 0;
@@ -391,7 +407,7 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	};
 
 	for (CodeLine *line : context->codeLines) {
-		if (line->sourceFile->uri != uri || !line->expression)
+		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
 			continue;
 		tokenizeExpression(line->expression, line);
 	}
@@ -409,14 +425,14 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 
 	// Section openings cover entire lines
 	for (CodeLine *line : context->codeLines) {
-		if (line->sourceFile->uri != uri || !line->sectionOpening)
+		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)
 			continue;
 		addToken(::Range(line, line->rightTrimmedText), SemanticTokenType::Section, false);
 	}
 
 	// Comments (lowest priority, sliced around everything)
 	for (CodeLine *line : context->codeLines) {
-		if (line->sourceFile->uri != uri) {
+		if (toAbsoluteUri(line->sourceFile->uri) != uri) {
 			continue;
 		}
 

@@ -49,6 +49,9 @@ class DynLexServer : public LanguageServer {
 	// Publish diagnostics for a document
 	void publishDiagnostics(const std::string &uri, const std::vector<Diagnostic> &diagnostics);
 
+	// Find the ParseContext for a URI (either as a main document or via importedBy)
+	ParseContext *findContextFor(const std::string &uri);
+
 	// Generate semantic tokens for a document
 	std::vector<int> generateSemanticTokens(const std::string &uri);
 };

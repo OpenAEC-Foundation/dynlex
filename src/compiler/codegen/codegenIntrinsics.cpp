@@ -283,9 +283,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		llvm::Value *ptr = generateExpressionCode(context, args[0]);
 		llvm::Value *index = generateExpressionCode(context, args[1]);
 		llvm::Value *value = generateExpressionCode(context, args[2]);
-		Type ptrType = getEffectiveType(context, args[0]);
-
-		assert(ptrType.isPointer() && "store at requires a pointer argument");
+		assert(getEffectiveType(context, args[0]).isPointer() && "store at requires a pointer argument");
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
 		builder.CreateAlignedStore(value, elementPtr, llvm::Align(8));
 		return nullptr;
@@ -294,9 +292,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (name == "load at") {
 		llvm::Value *ptr = generateExpressionCode(context, args[0]);
 		llvm::Value *index = generateExpressionCode(context, args[1]);
-		Type ptrType = getEffectiveType(context, args[0]);
+		assert(getEffectiveType(context, args[0]).isPointer() && "load at requires a pointer argument");
 
-		assert(ptrType.isPointer() && "load at requires a pointer argument");
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
 		return builder.CreateAlignedLoad(builder.getInt64Ty(), elementPtr, llvm::Align(8));
 	}
@@ -392,11 +389,11 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
 		llvm::Value *switchValue = generateExpressionCode(context, args[0]);
-		Type switchType = getEffectiveType(context, args[0]);
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
 		assert(
-			(switchType.kind == Type::Kind::Integer || switchType.kind == Type::Kind::Bool) &&
+			(getEffectiveType(context, args[0]).kind == Type::Kind::Integer ||
+			 getEffectiveType(context, args[0]).kind == Type::Kind::Bool) &&
 			"switch requires an integer value"
 		);
 

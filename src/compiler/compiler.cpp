@@ -7,8 +7,32 @@
 #include "lsp/sourceFile.h"
 #include "stringFunctions.h"
 #include "type.h"
+#include <filesystem>
 #include <regex>
 using namespace std::literals;
+
+// Search paths for library imports (e.g., "lib/std.dl")
+// Tries: original path, then installed location, then source tree
+static std::string resolveImportPath(const std::string &path, lsp::FileSystem *fileSystem) {
+	// Try the path as-is first (relative to CWD)
+	if (fileSystem->getFile(path)) {
+		return path;
+	}
+
+	// Try installed system path
+	std::string systemPath = "/usr/share/dynlex/" + path;
+	if (fileSystem->getFile(systemPath)) {
+		return systemPath;
+	}
+
+	// Try relative to the project source directory (for development builds)
+	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
+	if (fileSystem->getFile(devPath)) {
+		return devPath;
+	}
+
+	return path; // Return original path (will fail with proper error)
+}
 
 // Find the position of # that's not inside a string literal
 // Returns npos if no comment found
@@ -73,8 +97,9 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		// check if the line is an import statement
 		if (line->rightTrimmedText.starts_with("import ")) {
 			// recursively import the file, replacing this line with the imported content
-			std::string_view importPath = line->rightTrimmedText.substr("import "sv.length());
-			if (!importSourceFile((std::string)importPath, context)) {
+			std::string importPath =
+				resolveImportPath(std::string(line->rightTrimmedText.substr("import "sv.length())), context.fileSystem.get());
+			if (!importSourceFile(importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error, "failed to import source file: " + (std::string)importPath,
 					Range(line, "import "sv.length(), line->rightTrimmedText.length())

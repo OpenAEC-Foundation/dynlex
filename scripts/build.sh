@@ -6,10 +6,12 @@ LLVM_VERSION=20
 
 # Parse arguments
 LINT=true
+BUILD_TYPE=Debug
 for arg in "$@"; do
     case $arg in
         --lint=false) LINT=false ;;
         --lint=true) LINT=true ;;
+        --release) BUILD_TYPE=Release; LINT=false ;;
     esac
 done
 
@@ -46,12 +48,12 @@ export CXX=clang++-$LLVM_VERSION
 # Format source files
 find src -name '*.cpp' -o -name '*.hpp' -o -name '*.h' | xargs clang-format-$LLVM_VERSION -i
 
-conan install . --output-folder=build --build=missing --settings=build_type=Debug --settings=compiler=clang --settings=compiler.version=$LLVM_VERSION
+conan install . --output-folder=build --build=missing --settings=build_type=$BUILD_TYPE --settings=compiler=clang --settings=compiler.version=$LLVM_VERSION
 
 mkdir -p build
 cd build
 
-cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=./conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-$LLVM_VERSION -DCMAKE_CXX_COMPILER=clang++-$LLVM_VERSION
+cmake .. -G Ninja -DCMAKE_TOOLCHAIN_FILE=./conan_toolchain.cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=clang-$LLVM_VERSION -DCMAKE_CXX_COMPILER=clang++-$LLVM_VERSION
 
 # Run clang-tidy if enabled (only on files changed since last lint)
 if [ "$LINT" = "true" ]; then
