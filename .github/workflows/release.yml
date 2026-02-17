@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-20 clang-format-20 llvm-20 llvm-20-dev
+
+      - name: Install build tools
+        run: |
+          sudo apt-get install -y cmake ninja-build
+          pipx install conan
+          conan profile detect --force
+
+      - name: Build (Release)
+        run: ./scripts/build.sh --release
+
+      - name: Run tests
+        run: ./scripts/run_tests.sh
+
+      - name: Package .deb
+        run: cd build && cpack
+
+      - name: Determine release type
+        id: release_type
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/dynlex-*.deb
+          prerelease: ${{ steps.release_type.outputs.prerelease }}
+          generate_release_notes: true
