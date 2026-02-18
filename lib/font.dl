@@ -110,11 +110,11 @@ expression a loaded font from path at size s:
         set glyph_raw to the glyph of face_class
 
         # Return font handle: [face, tex_id, glyph_slot]
-        set font to allocate 3 items
-        store face_raw into font at 0
-        store tex_id into font at 1
-        store glyph_raw into font at 2
-        return font
+        set new_font to allocate 3 items
+        store face_raw into new_font at 0
+        store tex_id into new_font at 1
+        store glyph_raw into new_font at 2
+        return new_font
 
 # --- Character rendering ---
 # Renders one character and returns the new x position (cursor advance)

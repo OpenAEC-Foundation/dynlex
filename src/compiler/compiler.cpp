@@ -54,7 +54,8 @@ const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)")
 
 bool compile(const std::string &path, ParseContext &context) {
 	// first, read all source files
-	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) && inferTypes(context);
+	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) && validate(context) &&
+		   inferTypes(context);
 }
 
 bool importSourceFile(const std::string &path, ParseContext &context) {

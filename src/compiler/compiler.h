@@ -8,6 +8,7 @@ bool compile(const std::string &path, ParseContext &context);
 bool importSourceFile(const std::string &path, ParseContext &context);
 bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
+bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
 
 // Intrinsic operator checking utilities

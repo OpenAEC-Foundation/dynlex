@@ -296,28 +296,38 @@ Json GdbMI::parseMiResult(const std::string &s, size_t &pos) {
 	return obj;
 }
 
-MiRecord GdbMI::sendAndWait(const std::string &command, std::function<void(const MiRecord &)> asyncHandler) {
+MiRecord GdbMI::sendAndWait(const std::string &command) {
 	int token = send(command);
-	MiRecord record;
-	while (readRecord(record)) {
-		if (record.type == MiRecord::Result && record.token == token) {
-			return record;
-		}
-		if (record.type == MiRecord::Prompt) {
-			continue;
-		}
-		if (asyncHandler) {
-			asyncHandler(record);
-		}
+
+	std::unique_lock<std::mutex> lock(resultMutex);
+	resultCV.wait(lock, [&] {
+		return pendingResults.count(token) > 0 || shuttingDown.load();
+	});
+
+	if (shuttingDown.load()) {
+		MiRecord error;
+		error.type = MiRecord::Result;
+		error.recordClass = "error";
+		error.values = {{"msg", "GDB connection lost"}};
+		return error;
 	}
-	// GDB died or pipe closed
-	record.type = MiRecord::Result;
-	record.recordClass = "error";
-	record.values = {{"msg", "GDB connection lost"}};
-	return record;
+
+	MiRecord result = std::move(pendingResults[token]);
+	pendingResults.erase(token);
+	return result;
+}
+
+void GdbMI::deliverResult(const MiRecord &record) {
+	std::lock_guard<std::mutex> lock(resultMutex);
+	pendingResults[record.token] = record;
+	resultCV.notify_all();
 }
 
 void GdbMI::terminate() {
+	// Wake up any sendAndWait calls
+	shuttingDown.store(true);
+	resultCV.notify_all();
+
 	if (pid <= 0)
 		return;
 

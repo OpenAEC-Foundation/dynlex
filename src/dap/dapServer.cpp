@@ -221,6 +221,10 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 		return;
 	}
 
+	// Start the GDB reader thread — must be running before sendAndWait calls
+	// so it can deliver result records
+	gdbReaderThread = std::thread(&DapServer::gdbReaderLoop, this);
+
 	// Set working directory: use launch config's cwd, or default to the DAP server's cwd
 	// (VS Code sets the DAP adapter's cwd to the workspace root)
 	std::string cwd = args.value("cwd", "");
@@ -239,9 +243,6 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 
 	// Save launch options
 	stopOnEntry = args.value("stopOnEntry", false);
-
-	// Start the GDB reader thread
-	gdbReaderThread = std::thread(&DapServer::gdbReaderLoop, this);
 
 	sendResponse(reqSeq, "launch", Json::object());
 }
@@ -310,9 +311,7 @@ void DapServer::handleConfigurationDone(int reqSeq, const Json & /*args*/) {
 }
 
 void DapServer::handleThreads(int reqSeq, const Json & /*args*/) {
-	MiRecord result = gdb.sendAndWait("thread-info", [this](const MiRecord &r) {
-		handleGdbRecord(r);
-	});
+	MiRecord result = gdb.sendAndWait("thread-info");
 
 	std::vector<Thread> threads;
 	if (result.values.contains("threads")) {
@@ -332,9 +331,7 @@ void DapServer::handleThreads(int reqSeq, const Json & /*args*/) {
 }
 
 void DapServer::handleStackTrace(int reqSeq, const Json & /*args*/) {
-	MiRecord result = gdb.sendAndWait("stack-list-frames", [this](const MiRecord &r) {
-		handleGdbRecord(r);
-	});
+	MiRecord result = gdb.sendAndWait("stack-list-frames");
 
 	std::vector<StackFrame> frames;
 	if (result.values.contains("stack")) {
@@ -373,9 +370,7 @@ void DapServer::handleScopes(int reqSeq, const Json & /*args*/) {
 void DapServer::handleVariables(int reqSeq, const Json &args) {
 	int ref = args.value("variablesReference", 0);
 
-	MiRecord result = gdb.sendAndWait("stack-list-variables --all-values", [this](const MiRecord &r) {
-		handleGdbRecord(r);
-	});
+	MiRecord result = gdb.sendAndWait("stack-list-variables --all-values");
 
 	std::vector<Variable> vars;
 	if (result.values.contains("variables")) {
@@ -445,7 +440,11 @@ void DapServer::gdbReaderLoop() {
 			break;
 		if (record.type == MiRecord::Prompt)
 			continue;
-		handleGdbRecord(record);
+		if (record.type == MiRecord::Result) {
+			gdb.deliverResult(record);
+		} else {
+			handleGdbRecord(record);
+		}
 	}
 }
 

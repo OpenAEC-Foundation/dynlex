@@ -1,0 +1,173 @@
+#include "compiler.h"
+#include "expression.h"
+#include <algorithm>
+
+using Bindings = std::unordered_map<std::string, Expression *>;
+
+static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
+	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
+		return expr;
+	auto it = bindings.find(expr->variable->name);
+	if (it != bindings.end() && it->second != expr)
+		return resolveVar(it->second, bindings);
+	return expr;
+}
+
+static Bindings buildBindings(Expression *expr) {
+	Bindings result;
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return result;
+	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinition;
+	if (!def)
+		return result;
+	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	size_t argIndex = 0;
+	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+		auto paramIt = node->parameterNames.find(def);
+		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+			result[paramIt->second] = sortedArgs[argIndex];
+			argIndex++;
+		}
+	}
+	return result;
+}
+
+struct VarUsage {
+	bool writes = false, reads = false;
+};
+
+// Determine whether an expression writes to and/or reads from a named variable,
+// resolving through macro bindings to reach the underlying intrinsics.
+static VarUsage analyzeVariableUsage(
+	Expression *expr, const std::string &varName, const Bindings &bindings, std::unordered_set<Expression *> &visited
+) {
+	VarUsage usage;
+	if (!expr || !visited.insert(expr).second)
+		return usage;
+
+	switch (expr->kind) {
+	case Expression::Kind::IntrinsicCall:
+		if (expr->intrinsicName == "store") {
+			Expression *dest = resolveVar(expr->arguments[1], bindings);
+			if (dest && dest->kind == Expression::Kind::Variable && dest->variable && dest->variable->name == varName)
+				usage.writes = true;
+			usage.reads |= analyzeVariableUsage(expr->arguments[2], varName, bindings, visited).reads;
+			return usage;
+		}
+		for (size_t i = 1; i < expr->arguments.size(); i++)
+			usage.reads |= analyzeVariableUsage(expr->arguments[i], varName, bindings, visited).reads;
+		return usage;
+
+	case Expression::Kind::PatternCall: {
+		PatternDefinition *def = nullptr;
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode)
+			def = expr->patternMatch->matchedEndNode->matchingDefinition;
+		if (def && def->section && def->section->isMacro) {
+			Bindings merged = bindings;
+			for (auto &[key, val] : buildBindings(expr))
+				merged[key] = resolveVar(val, bindings);
+			for (Section *child : def->section->children)
+				for (CodeLine *line : child->codeLines)
+					if (line->expression) {
+						VarUsage body = analyzeVariableUsage(line->expression, varName, merged, visited);
+						usage.writes |= body.writes;
+						usage.reads |= body.reads;
+					}
+			return usage;
+		}
+		for (Expression *arg : expr->arguments)
+			usage.reads |= analyzeVariableUsage(arg, varName, bindings, visited).reads;
+		return usage;
+	}
+
+	case Expression::Kind::Variable:
+		if (expr->variable) {
+			Expression *resolved = resolveVar(expr, bindings);
+			if (resolved != expr)
+				return analyzeVariableUsage(resolved, varName, bindings, visited);
+			if (expr->variable->name == varName)
+				usage.reads = true;
+		}
+		return usage;
+
+	default:
+		for (Expression *arg : expr->arguments) {
+			VarUsage a = analyzeVariableUsage(arg, varName, bindings, visited);
+			usage.writes |= a.writes;
+			usage.reads |= a.reads;
+		}
+		return usage;
+	}
+}
+
+static void collectVariableReferences(Section *section, const std::string &name, std::vector<VariableReference *> &refs) {
+	auto it = section->variableReferences.find(name);
+	if (it != section->variableReferences.end())
+		for (VariableReference *ref : it->second)
+			refs.push_back(ref);
+	for (Section *child : section->children)
+		collectVariableReferences(child, name, refs);
+}
+
+static void validateSection(ParseContext &context, Section *section) {
+	for (auto &[name, defRef] : section->variableDefinitions) {
+		bool isPatternArg = false;
+		if (!section->isMacro)
+			for (PatternDefinition *def : section->patternDefinitions)
+				forEachLeafElement(def->patternElements, [&](PatternElement &el) {
+					if (el.type == PatternElement::Type::Variable && el.text == name)
+						isPatternArg = true;
+				});
+
+		// Collect references: children only for pattern args (body), whole section for locals
+		std::vector<VariableReference *> refs;
+		if (isPatternArg) {
+			for (Section *child : section->children)
+				collectVariableReferences(child, name, refs);
+		} else {
+			collectVariableReferences(section, name, refs);
+		}
+
+		// Find the reference to warn about
+		VariableReference *warnRef = nullptr;
+		if (isPatternArg) {
+			if (refs.empty())
+				continue;
+			warnRef = *std::min_element(refs.begin(), refs.end(), [](auto *a, auto *b) {
+				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
+			});
+		} else {
+			int defLine = defRef->range.line->mergedLineIndex;
+			for (VariableReference *ref : refs)
+				if (ref != defRef && ref->range.line->mergedLineIndex == defLine) {
+					warnRef = ref;
+					break;
+				}
+		}
+		if (!warnRef || !warnRef->range.line->expression)
+			continue;
+
+		std::unordered_set<Expression *> visited;
+		VarUsage usage = analyzeVariableUsage(warnRef->range.line->expression, name, Bindings{}, visited);
+		bool problem = isPatternArg ? (usage.writes && !usage.reads) : usage.reads;
+		if (!problem)
+			continue;
+
+		Diagnostic diag(
+			Diagnostic::Level::Warning,
+			isPatternArg ? "Pattern argument '" + name + "' is assigned before being read"
+						 : "Variable '" + name + "' may be read before being assigned",
+			warnRef->range
+		);
+		diag.relatedInfo.push_back({isPatternArg ? "Defined as argument here" : "Assigned here", defRef->range});
+		context.diagnostics.push_back(std::move(diag));
+	}
+
+	for (Section *child : section->children)
+		validateSection(context, child);
+}
+
+bool validate(ParseContext &context) {
+	validateSection(context, context.mainSection);
+	return true;
+}

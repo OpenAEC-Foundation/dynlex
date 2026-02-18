@@ -1,8 +1,12 @@
 #pragma once
+#include <atomic>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <sys/types.h>
+#include <unordered_map>
 
 namespace dap {
 
@@ -43,22 +47,29 @@ class GdbMI {
 	// Read one MI output record (blocks until available)
 	bool readRecord(MiRecord &record);
 
-	// Send command and wait for its result record, passing async records to callback
-	MiRecord sendAndWait(const std::string &command, std::function<void(const MiRecord &)> asyncHandler = nullptr);
+	// Send command and wait for its result record.
+	// Must only be called when the reader thread is running (it delivers results).
+	MiRecord sendAndWait(const std::string &command);
+
+	// Called by the reader thread to deliver a result record for a pending sendAndWait.
+	void deliverResult(const MiRecord &record);
 
 	// Terminate GDB subprocess
 	void terminate();
 
 	bool isRunning() const { return pid > 0; }
 
-	// Get the read fd for polling
-	int getReadFd() const { return fromGdb; }
-
   private:
 	pid_t pid = -1;
 	int toGdb = -1;	  // write end of stdin pipe
 	int fromGdb = -1; // read end of stdout pipe
 	int nextToken = 1;
+
+	// Synchronization for sendAndWait: reader thread delivers results via deliverResult()
+	std::mutex resultMutex;
+	std::condition_variable resultCV;
+	std::unordered_map<int, MiRecord> pendingResults;
+	std::atomic<bool> shuttingDown{false};
 
 	// Read a single line from GDB (blocks)
 	std::string readLine();

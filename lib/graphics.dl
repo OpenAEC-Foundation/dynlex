@@ -24,8 +24,8 @@ expression a new window with width w and height h:
 		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139266, 4)
 		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139267, 6)
 		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139272, 204802)
-		set window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "DynLex", 0 as a pointer, 0 as a pointer)
-		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", window)
+		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "DynLex", 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", new_window)
 		@intrinsic("call", "GL", "glMatrixMode", "void", 5889)
 		@intrinsic("call", "GL", "glLoadIdentity", "void")
 		set wf to w as a 64 bit float
@@ -34,7 +34,7 @@ expression a new window with width w and height h:
 		@intrinsic("call", "GL", "glOrtho", "void", 0.0, wf, hf, 0.0, neg, 1.0)
 		@intrinsic("call", "GL", "glMatrixMode", "void", 5888)
 		@intrinsic("call", "GL", "glLoadIdentity", "void")
-		return window
+		return new_window
 
 effect clear [the|] screen:
 	execute:
@@ -87,7 +87,7 @@ effect close [the|] window:
 
 expression [a|] fragment shader from path:
 	get:
-		set shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35632)
+		set new_shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35632)
 		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
 		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
 		set size to @intrinsic("call", "libc", "ftell", "i64", data)
@@ -95,14 +95,14 @@ expression [a|] fragment shader from path:
 		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
 		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
 		@intrinsic("call", "libc", "fclose", "i32", data)
-		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of shader, 38225, buf, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", "void", shader, "main", 0, 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of new_shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", "void", new_shader, "main", 0, 0 as a pointer, 0 as a pointer)
 		@intrinsic("call", "libc", "free", "void", buf)
-		return shader
+		return new_shader
 
 expression [a|] vertex shader from path:
 	get:
-		set shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35633)
+		set new_shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35633)
 		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
 		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
 		set size to @intrinsic("call", "libc", "ftell", "i64", data)
@@ -110,10 +110,10 @@ expression [a|] vertex shader from path:
 		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
 		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
 		@intrinsic("call", "libc", "fclose", "i32", data)
-		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of shader, 38225, buf, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", "void", shader, "main", 0, 0 as a pointer, 0 as a pointer)
+		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of new_shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", "void", new_shader, "main", 0, 0 as a pointer, 0 as a pointer)
 		@intrinsic("call", "libc", "free", "void", buf)
-		return shader
+		return new_shader
 
 expression [a|] shader program with vertex vert and fragment frag:
 	get:

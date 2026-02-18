@@ -36,3 +36,7 @@ Features and design decisions planned for later implementation.
 - AI generates meaningful function/variable names by analyzing behavior, string literals, system calls, and data flow patterns
 - DynLex's natural-language syntax makes decompiled output genuinely readable, unlike traditional C decompilation
 - Could leverage debug symbols (DWARF) when available for even better results
+
+# Matching names in debugging, better printing and expression evaluation
+# It expression (refer to subject)
+# 
