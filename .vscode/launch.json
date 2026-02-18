@@ -85,6 +85,13 @@
 			"miDebuggerPath": "/usr/bin/gdb"
 		},
 		{
+			"name": "Debug .dl Program",
+			"type": "dynlex",
+			"request": "launch",
+			"program": "${file}",
+			"preLaunchTask": "build"
+		},
+		{
 			"name": "Run VS Code Extension",
 			"type": "extensionHost",
 			"request": "launch",

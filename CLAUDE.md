@@ -15,6 +15,9 @@ A natural-language-like programming language designed for humans and AI agents.
 
 # Run LSP server (for VS Code extension)
 ./build/dynlex --lsp
+
+# Run DAP debug adapter (for VS Code debugging, uses stdio)
+./build/dynlex --dap
 ```
 
 **Dependencies:** C++23, Conan (nlohmann_json), LLVM 20 (for codegen + SPIR-V backend)
@@ -29,7 +32,7 @@ A natural-language-like programming language designed for humans and AI agents.
 
 ```
 src/
-├── main.cpp                    # Entry point (--lsp flag for LSP mode)
+├── main.cpp                    # Entry point (--lsp, --dap flags)
 ├── compiler/                   # Core compiler
 │   ├── compiler.cpp/h          # Import, section analysis, intrinsic classifiers
 │   ├── patternResolution.cpp   # Pattern matching and resolution
@@ -44,6 +47,10 @@ src/
 │       ├── codegenIntrinsics.cpp # Intrinsic code generation
 │       ├── spirv.cpp/h         # SPIR-V shader backend
 │       └── native.cpp/h        # Native executable backend
+├── dap/                        # Debug Adapter Protocol server (GDB MI backend)
+│   ├── dapServer.cpp/h         # DAP message loop, request handlers
+│   ├── dapProtocol.h           # DAP JSON types (Source, Breakpoint, StackFrame, etc.)
+│   └── gdbmi.cpp/h             # GDB MI subprocess manager and output parser
 ├── lsp/                        # Language server (port 5007, multi-file diagnostic tracking)
 └── pexlit/                     # C++ utility library (git submodule)
 vscode-extension/               # VS Code extension (TypeScript)
@@ -106,6 +113,7 @@ Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expec
 
 ## Key Design Decisions
 
+- **Debugging:** DWARF debug info (`-g` flag) + DAP server (`--dap`) for VS Code debugging via GDB
 - **Compilation target:** Native code via LLVM (outputs .ll, .spv, or executable based on flags)
 - **Type system:** Static typing with full inference (no annotations)
 - **Memory (DynLex language):** Automatic scope-based destruction (RAII-style)

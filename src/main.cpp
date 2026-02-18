@@ -1,5 +1,6 @@
 #include "codegen/codegen.h"
 #include "compiler/compiler.h"
+#include "dap/dapServer.h"
 #include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
 #include "lsp/stdioTransport.h"
@@ -22,6 +23,7 @@ int main(int argumentCount, char *argumentValues[]) {
 
 	ParseContext context{};
 	bool runLSP = false;
+	bool runDAP = false;
 	bool useStdio = false;
 	bool waitDebugger = false;
 	std::string inputFile;
@@ -31,6 +33,8 @@ int main(int argumentCount, char *argumentValues[]) {
 		const std::string &arg = args[i];
 		if (arg == "--wait-debugger") {
 			waitDebugger = true;
+		} else if (arg == "--dap") {
+			runDAP = true;
 		} else if (arg == "--lsp") {
 			runLSP = true;
 		} else if (arg == "--stdio") {
@@ -70,6 +74,12 @@ int main(int argumentCount, char *argumentValues[]) {
 		std::cerr << "Continuing..." << std::endl;
 	}
 
+	if (runDAP) {
+		dap::DapServer server(std::make_unique<lsp::StdioTransport>());
+		server.run();
+		return 0;
+	}
+
 	if (runLSP || useStdio) {
 		if (useStdio) {
 			lsp::DynLexServer server(std::make_unique<lsp::StdioTransport>());
@@ -95,8 +105,7 @@ int main(int argumentCount, char *argumentValues[]) {
 			return 1;
 	} else {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--shader-stage=vertex|fragment] [-O0|-O1|-O2|-O3] "
-					 "[-o output]"
-					 "[-g]"
+					 "[-o output] [-g] [--lsp] [--stdio] [--dap]"
 				  << std::endl;
 	}
 

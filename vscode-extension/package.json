@@ -99,6 +99,50 @@
         }
       }
     },
+    "debuggers": [
+      {
+        "type": "dynlex",
+        "label": "DynLex Debug",
+        "languages": ["dynlex"],
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the .dl file to debug",
+                "default": "${file}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch",
+                "default": false
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "dynlex",
+            "request": "launch",
+            "name": "Debug DynLex Program",
+            "program": "${file}"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "DynLex: Launch",
+            "description": "Launch and debug a DynLex program",
+            "body": {
+              "type": "dynlex",
+              "request": "launch",
+              "name": "Debug DynLex Program",
+              "program": "^\"\\${file}\""
+            }
+          }
+        ]
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "DynLex",

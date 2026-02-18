@@ -20,7 +20,7 @@
 		{
 			"label": "Build & Install Extension",
 			"type": "shell",
-			"command": "./scripts/build-extension.sh",
+			"command": "./scripts/install_extension.sh",
 			"group": "build",
 			"presentation": {
 				"reveal": "always",

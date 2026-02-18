@@ -26,11 +26,3 @@ npm run bundle
 # Package .vsix
 echo "Packaging .vsix..."
 npx @vscode/vsce package --allow-missing-repository
-
-# Install into VS Code
-VSIX=$(ls -t dynlex-language-*.vsix | head -1)
-echo "Installing $VSIX..."
-code --install-extension "$VSIX"
-
-echo ""
-echo "Extension installed. Please reload VS Code (Ctrl+Shift+P → 'Developer: Reload Window')."

@@ -45,6 +45,16 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(fileWatcher);
 
+    // Register debug adapter
+    context.subscriptions.push(
+        vscode.debug.registerDebugAdapterDescriptorFactory('dynlex', {
+            createDebugAdapterDescriptor(_session: vscode.DebugSession) {
+                const serverPath = getServerPath();
+                return new vscode.DebugAdapterExecutable(serverPath, ['--dap']);
+            }
+        })
+    );
+
     // Register restart command
     context.subscriptions.push(
         vscode.commands.registerCommand('dynlex.restartServer', () => {
