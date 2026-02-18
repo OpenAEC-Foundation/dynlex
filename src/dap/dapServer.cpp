@@ -156,6 +156,8 @@ void DapServer::handleMessage(const Json &msg) {
 		handleLaunch(reqSeq, args);
 	else if (command == "setBreakpoints")
 		handleSetBreakpoints(reqSeq, args);
+	else if (command == "setExceptionBreakpoints")
+		handleSetExceptionBreakpoints(reqSeq, args);
 	else if (command == "configurationDone")
 		handleConfigurationDone(reqSeq, args);
 	else if (command == "threads")
@@ -203,8 +205,13 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 
 	// Compile the .dl file
 	compiledBinary = program + ".debug_bin";
-	if (!compileDlFile(program, compiledBinary)) {
-		sendErrorResponse(reqSeq, "launch", "Compilation failed");
+	std::string compileErrors;
+	if (!compileDlFile(program, compiledBinary, compileErrors)) {
+		std::string msg = "Compilation failed";
+		if (!compileErrors.empty()) {
+			msg += ":\n" + compileErrors;
+		}
+		sendErrorResponse(reqSeq, "launch", msg);
 		return;
 	}
 
@@ -214,6 +221,14 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 		return;
 	}
 
+	// Set working directory: use launch config's cwd, or default to the DAP server's cwd
+	// (VS Code sets the DAP adapter's cwd to the workspace root)
+	std::string cwd = args.value("cwd", "");
+	if (cwd.empty()) {
+		cwd = std::filesystem::current_path().string();
+	}
+	gdb.sendAndWait("environment-cd " + cwd);
+
 	// Load the binary
 	MiRecord result = gdb.sendAndWait("file-exec-and-symbols " + compiledBinary);
 	if (result.recordClass != "done") {
@@ -221,6 +236,9 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 		sendErrorResponse(reqSeq, "launch", msg);
 		return;
 	}
+
+	// Save launch options
+	stopOnEntry = args.value("stopOnEntry", false);
 
 	// Start the GDB reader thread
 	gdbReaderThread = std::thread(&DapServer::gdbReaderLoop, this);
@@ -275,8 +293,17 @@ void DapServer::handleSetBreakpoints(int reqSeq, const Json &args) {
 	sendResponse(reqSeq, "setBreakpoints", {{"breakpoints", breakpoints}});
 }
 
+void DapServer::handleSetExceptionBreakpoints(int reqSeq, const Json & /*args*/) {
+	sendResponse(reqSeq, "setExceptionBreakpoints", {{"breakpoints", Json::array()}});
+}
+
 void DapServer::handleConfigurationDone(int reqSeq, const Json & /*args*/) {
 	sendResponse(reqSeq, "configurationDone", Json::object());
+
+	// Set a temporary breakpoint on main if stopOnEntry is requested
+	if (stopOnEntry) {
+		gdb.sendAndWait("break-insert -t main");
+	}
 
 	// Start the program
 	gdb.send("exec-run");
@@ -467,25 +494,62 @@ void DapServer::handleGdbRecord(const MiRecord &record) {
 
 // --- Helpers ---
 
-bool DapServer::compileDlFile(const std::string &dlFile, const std::string &outputPath) {
+bool DapServer::compileDlFile(const std::string &dlFile, const std::string &outputPath, std::string &errorOutput) {
 	std::string selfPath = findSelfPath();
 	if (selfPath.empty()) {
 		log("Failed to find self executable path");
+		errorOutput = "Failed to find self executable path";
+		return false;
+	}
+
+	// Create pipes to capture stdout and stderr from the compiler
+	int stderrPipe[2];
+	int stdoutPipe[2];
+	if (pipe(stderrPipe) != 0 || pipe(stdoutPipe) != 0) {
+		log("Failed to create pipes");
+		errorOutput = "Failed to create pipes for compilation";
 		return false;
 	}
 
 	pid_t pid = fork();
 	if (pid < 0) {
 		log("Fork failed for compilation");
+		errorOutput = "Fork failed for compilation";
+		close(stderrPipe[0]);
+		close(stderrPipe[1]);
+		close(stdoutPipe[0]);
+		close(stdoutPipe[1]);
 		return false;
 	}
 
 	if (pid == 0) {
-		// Child: run dynlex compiler
-		// Redirect stderr to a pipe so parent can capture errors
+		// Child: redirect stdout/stderr to pipes
+		close(stderrPipe[0]);
+		close(stdoutPipe[0]);
+		dup2(stdoutPipe[1], STDOUT_FILENO);
+		dup2(stderrPipe[1], STDERR_FILENO);
+		close(stdoutPipe[1]);
+		close(stderrPipe[1]);
+
 		execlp(selfPath.c_str(), selfPath.c_str(), dlFile.c_str(), "-g", "-O0", ("-o" + outputPath).c_str(), nullptr);
 		_exit(1);
 	}
+
+	// Parent: read captured output
+	close(stderrPipe[1]);
+	close(stdoutPipe[1]);
+
+	std::string captured;
+	char buf[4096];
+	ssize_t n;
+	while ((n = read(stdoutPipe[0], buf, sizeof(buf))) > 0) {
+		captured.append(buf, n);
+	}
+	close(stdoutPipe[0]);
+	while ((n = read(stderrPipe[0], buf, sizeof(buf))) > 0) {
+		captured.append(buf, n);
+	}
+	close(stderrPipe[0]);
 
 	int status;
 	waitpid(pid, &status, 0);
@@ -494,6 +558,7 @@ bool DapServer::compileDlFile(const std::string &dlFile, const std::string &outp
 		return true;
 	}
 
+	errorOutput = captured;
 	log("Compilation failed with exit code " + std::to_string(WEXITSTATUS(status)));
 	return false;
 }

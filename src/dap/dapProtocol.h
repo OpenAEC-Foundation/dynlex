@@ -91,6 +91,7 @@ struct Capabilities {
 	bool supportsEvaluateForHovers = false;
 	bool supportsStepBack = false;
 	bool supportsSetVariable = false;
+	bool supportTerminateDebuggee = true;
 };
 
 inline void to_json(Json &j, const Capabilities &c) {
@@ -101,6 +102,8 @@ inline void to_json(Json &j, const Capabilities &c) {
 		{"supportsEvaluateForHovers", c.supportsEvaluateForHovers},
 		{"supportsStepBack", c.supportsStepBack},
 		{"supportsSetVariable", c.supportsSetVariable},
+		{"supportTerminateDebuggee", c.supportTerminateDebuggee},
+		{"exceptionBreakpointFilters", Json::array()},
 	};
 }
 

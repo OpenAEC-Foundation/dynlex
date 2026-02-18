@@ -34,6 +34,9 @@ class DapServer {
 	// The compiled output binary path
 	std::string compiledBinary;
 
+	// Launch options
+	bool stopOnEntry = false;
+
 	// Variable reference IDs: 1=locals, 2=arguments
 	static constexpr int localsRef = 1;
 	static constexpr int argsRef = 2;
@@ -52,6 +55,7 @@ class DapServer {
 	void handleInitialize(int seq, const Json &args);
 	void handleLaunch(int seq, const Json &args);
 	void handleSetBreakpoints(int seq, const Json &args);
+	void handleSetExceptionBreakpoints(int seq, const Json &args);
 	void handleConfigurationDone(int seq, const Json &args);
 	void handleThreads(int seq, const Json &args);
 	void handleStackTrace(int seq, const Json &args);
@@ -69,7 +73,7 @@ class DapServer {
 	void handleGdbRecord(const MiRecord &record);
 
 	// Helpers
-	bool compileDlFile(const std::string &dlFile, const std::string &outputPath);
+	bool compileDlFile(const std::string &dlFile, const std::string &outputPath, std::string &errorOutput);
 	std::string findSelfPath();
 	std::string demangleFunctionName(const std::string &mangled);
 

@@ -45,12 +45,39 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(fileWatcher);
 
+    // Register debug configuration provider (enables F5 without launch.json)
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider('dynlex', {
+            resolveDebugConfiguration(
+                _folder: vscode.WorkspaceFolder | undefined,
+                config: vscode.DebugConfiguration,
+            ): vscode.ProviderResult<vscode.DebugConfiguration> {
+                if (!config.type && !config.request && !config.name) {
+                    const editor = vscode.window.activeTextEditor;
+                    if (editor && editor.document.languageId === 'dynlex') {
+                        config.type = 'dynlex';
+                        config.name = 'Debug DynLex Program';
+                        config.request = 'launch';
+                        config.program = '${file}';
+                        config.cwd = '${workspaceFolder}';
+                    }
+                }
+                if (!config.program) {
+                    vscode.window.showErrorMessage('Cannot find a DynLex file to debug');
+                    return undefined;
+                }
+                return config;
+            }
+        })
+    );
+
     // Register debug adapter
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('dynlex', {
             createDebugAdapterDescriptor(_session: vscode.DebugSession) {
                 const serverPath = getServerPath();
-                return new vscode.DebugAdapterExecutable(serverPath, ['--dap']);
+                const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+                return new vscode.DebugAdapterExecutable(serverPath, ['--dap'], { cwd });
             }
         })
     );

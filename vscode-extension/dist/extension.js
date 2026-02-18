@@ -18046,10 +18046,32 @@ function activate(context) {
   });
   context.subscriptions.push(fileWatcher);
   context.subscriptions.push(
+    vscode.debug.registerDebugConfigurationProvider("dynlex", {
+      resolveDebugConfiguration(_folder, config) {
+        if (!config.type && !config.request && !config.name) {
+          const editor = vscode.window.activeTextEditor;
+          if (editor && editor.document.languageId === "dynlex") {
+            config.type = "dynlex";
+            config.name = "Debug DynLex Program";
+            config.request = "launch";
+            config.program = "${file}";
+            config.cwd = "${workspaceFolder}";
+          }
+        }
+        if (!config.program) {
+          vscode.window.showErrorMessage("Cannot find a DynLex file to debug");
+          return void 0;
+        }
+        return config;
+      }
+    })
+  );
+  context.subscriptions.push(
     vscode.debug.registerDebugAdapterDescriptorFactory("dynlex", {
       createDebugAdapterDescriptor(_session) {
         const serverPath = getServerPath();
-        return new vscode.DebugAdapterExecutable(serverPath, ["--dap"]);
+        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        return new vscode.DebugAdapterExecutable(serverPath, ["--dap"], { cwd });
       }
     })
   );

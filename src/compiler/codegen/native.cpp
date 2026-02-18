@@ -89,19 +89,18 @@ bool emitNativeExecutable(ParseContext &context) {
 		linkCommand += " -l" + lib;
 	}
 
-	// Capture linker stderr to detect missing libraries
+	// Capture linker output to detect missing libraries
 	std::string linkCommandWithRedirect = linkCommand + " 2>&1";
 	FILE *pipe = popen(linkCommandWithRedirect.c_str(), "r");
 	std::string linkerOutput;
+	int linkResult = -1;
 	if (pipe) {
 		char buffer[256];
 		while (fgets(buffer, sizeof(buffer), pipe)) {
 			linkerOutput += buffer;
 		}
-		pclose(pipe);
+		linkResult = pclose(pipe);
 	}
-
-	int linkResult = std::system(linkCommand.c_str());
 	if (linkResult != 0) {
 		std::string errorMsg = "Linking failed with exit code " + std::to_string(linkResult);
 
