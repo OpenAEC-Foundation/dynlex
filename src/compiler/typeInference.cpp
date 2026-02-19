@@ -202,29 +202,48 @@ static bool inferExpressionType(
 						expr->type = Type::fromString(retTypeStr);
 				} else if (expr->intrinsicName == "cast") {
 					Type typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
-					if (typeArgType.kind == Type::Kind::TypeReference && typeArgType.classDefinition) {
-						ClassDefinition *classDef = typeArgType.classDefinition;
-						int instIdx = classDef->instantiations.empty() ? -1 : 0;
-						expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
-					} else {
-						// Resolve type string through macro bindings (e.g. "float" might be a macro arg)
-						Expression *typeStrExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
-						std::string targetStr;
-						if (auto *str = std::get_if<std::string>(&typeStrExpr->literalValue))
-							targetStr = *str;
-						if (targetStr == "integer" || targetStr == "float") {
-							Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
-							int byteSize = 8;
-							if (expr->arguments.size() >= 4) {
-								// Resolve bits through macro bindings (e.g. bits=32 might be a macro arg)
-								Expression *bitsExpr = resolveThroughBindings(expr->arguments[3], macroBindings);
-								if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
-									byteSize = *bits / 8;
-							}
-							expr->type = {kind, byteSize};
-						} else if (!targetStr.empty()) {
-							expr->type = Type::fromString(targetStr);
+					if (typeArgType.kind == Type::Kind::TypeReference)
+						expr->type = typeArgType.toReferencedType();
+				} else if (expr->intrinsicName == "type") {
+					// @intrinsic("type", kindString[, bits])
+					// Resolve kind string through macro bindings
+					Expression *kindExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
+					std::string kindStr;
+					if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
+						kindStr = *str;
+					if (!kindStr.empty()) {
+						Type::Kind refKind = Type::Kind::Undeduced;
+						int byteSize = 0;
+						int ptrDepth = 0;
+						if (kindStr == "int") {
+							refKind = Type::Kind::Integer;
+							byteSize = 4; // default
+						} else if (kindStr == "float") {
+							refKind = Type::Kind::Float;
+							byteSize = 8; // default
+						} else if (kindStr == "bool") {
+							refKind = Type::Kind::Bool;
+						} else if (kindStr == "void") {
+							refKind = Type::Kind::Void;
+						} else if (kindStr == "string") {
+							// string = pointer to byte (i8*)
+							refKind = Type::Kind::Integer;
+							byteSize = 1;
+							ptrDepth = 1;
 						}
+						// Override byte size if bits argument provided
+						if (expr->arguments.size() >= 3) {
+							Expression *bitsExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
+							if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
+								byteSize = *bits / 8;
+						}
+						expr->type = {Type::Kind::TypeReference, byteSize, ptrDepth, nullptr, -1, refKind};
+					}
+				} else if (expr->intrinsicName == "add pointer depth") {
+					Type typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeArgType.kind == Type::Kind::TypeReference) {
+						expr->type = typeArgType;
+						expr->type.pointerDepth++;
 					}
 				} else if (expr->intrinsicName == "construct") {
 					Type typeRefType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
@@ -325,7 +344,7 @@ static bool inferExpressionType(
 					}
 				}
 
-				if (matchedSection->type == SectionType::Class) {
+				if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
 					auto *classSec = static_cast<ClassSection *>(matchedSection);
 					expr->type = {Type::Kind::TypeReference, 0, 0, classSec->classDefinition};
 				} else if (matchedSection->type == SectionType::Effect) {

@@ -196,6 +196,37 @@ struct SemanticTokensParams {
 
 inline void from_json(const Json &j, SemanticTokensParams &p) { j.at("textDocument").get_to(p.textDocument); }
 
+// SymbolKind (subset used by DynLex)
+enum class SymbolKind { File = 1, Module = 2, Namespace = 3, Class = 5, Function = 12, Variable = 13, Operator = 25 };
+
+struct DocumentSymbol {
+	std::string name;
+	std::string detail;
+	SymbolKind kind;
+	Range range;
+	Range selectionRange;
+	std::vector<DocumentSymbol> children;
+};
+
+inline void to_json(Json &j, const DocumentSymbol &s) {
+	j = Json{
+		{"name", s.name},
+		{"detail", s.detail},
+		{"kind", static_cast<int>(s.kind)},
+		{"range", s.range},
+		{"selectionRange", s.selectionRange}
+	};
+	if (!s.children.empty()) {
+		j["children"] = s.children;
+	}
+}
+
+struct DocumentSymbolParams {
+	TextDocumentIdentifier textDocument;
+};
+
+inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").get_to(p.textDocument); }
+
 // Initialize params (simplified)
 struct InitializeParams {
 	std::optional<int> processId;
@@ -216,6 +247,7 @@ struct ServerCapabilities {
 	// Text document sync kind: 0=None, 1=Full, 2=Incremental
 	int textDocumentSync = 2;
 	bool definitionProvider = true;
+	bool documentSymbolProvider = false;
 	struct {
 		bool full = true;
 		SemanticTokensLegend legend;
@@ -228,6 +260,9 @@ inline void to_json(Json &j, const ServerCapabilities &c) {
 		{"definitionProvider", c.definitionProvider},
 		{"semanticTokensProvider", Json{{"full", c.semanticTokensProvider.full}, {"legend", c.semanticTokensProvider.legend}}}
 	};
+	if (c.documentSymbolProvider) {
+		j["documentSymbolProvider"] = true;
+	}
 }
 
 struct InitializeResult {

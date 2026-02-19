@@ -23,6 +23,7 @@ class DynLexServer : public LanguageServer {
 	void onDidClose(const DidCloseTextDocumentParams &params) override;
 	std::optional<Location> onDefinition(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
+	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
 
   private:
 	// ParseContext per main document URI

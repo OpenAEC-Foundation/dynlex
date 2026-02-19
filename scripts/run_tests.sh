@@ -16,9 +16,10 @@ passed=0
 failed=0
 skipped=0
 failures=()
+test_output=""
 
 # Known failing tests — these don't count as unexpected failures
-KNOWN_FAILURES="globals import lib section"
+KNOWN_FAILURES=""
 
 if [[ ! -x "$COMPILER" ]]; then
     echo -e "${YELLOW}Compiler not found, building...${NC}"
@@ -33,7 +34,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     output_binary="$test_dir/main.out"
 
     if [[ ! -f "$source_file" ]]; then
-        echo -e "${YELLOW}SKIP${NC} $test_name (no main.dl)"
+        test_output+="${YELLOW}SKIP${NC} $test_name (no main.dl)\n"
         ((skipped++))
         continue
     fi
@@ -41,7 +42,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     expected_error_file="$test_dir/expected_error.txt"
 
     if [[ ! -f "$expected_file" && ! -f "$expected_error_file" ]]; then
-        echo -e "${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_error.txt)"
+        test_output+="${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_error.txt)\n"
         ((skipped++))
         continue
     fi
@@ -50,7 +51,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     compile_output=$(timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
-        echo -e "${RED}FAIL${NC} $test_name (compilation timed out)"
+        test_output+="${RED}FAIL${NC} $test_name (compilation timed out)\n"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -60,18 +61,18 @@ for test_dir in "$TESTS_DIR"/*/; do
         if [[ -f "$expected_error_file" ]]; then
             expected_error=$(<"$expected_error_file")
             if [[ "$compile_output" == *"$expected_error"* ]]; then
-                echo -e "${GREEN}PASS${NC} $test_name (expected compile error)"
+                test_output+="${GREEN}PASS${NC} $test_name\n"
                 ((passed++))
             else
-                echo -e "${RED}FAIL${NC} $test_name (compile error mismatch)"
-                echo "  Expected error containing: $expected_error"
-                echo "  Actual: $compile_output"
+                test_output+="${RED}FAIL${NC} $test_name (compile error mismatch)\n"
+                test_output+="  Expected error containing: $expected_error\n"
+                test_output+="  Actual: $compile_output\n"
                 ((failed++))
                 failures+=("$test_name")
             fi
         else
-            echo -e "${RED}FAIL${NC} $test_name (compilation failed)"
-            [[ -n "$compile_output" ]] && echo "  $compile_output"
+            test_output+="${RED}FAIL${NC} $test_name (compilation failed)\n"
+            [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
             ((failed++)) || true
             failures+=("$test_name")
         fi
@@ -80,7 +81,7 @@ for test_dir in "$TESTS_DIR"/*/; do
 
     # Compilation succeeded but we expected an error
     if [[ -f "$expected_error_file" && ! -f "$expected_file" ]]; then
-        echo -e "${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded)"
+        test_output+="${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded)\n"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -90,14 +91,14 @@ for test_dir in "$TESTS_DIR"/*/; do
     actual_output=$(timeout 5 "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
-        echo -e "${RED}FAIL${NC} $test_name (execution timed out)"
+        test_output+="${RED}FAIL${NC} $test_name (execution timed out)\n"
         ((failed++))
         failures+=("$test_name")
         continue
     fi
     if [[ $run_exit -ne 0 ]]; then
-        echo -e "${RED}FAIL${NC} $test_name (runtime error, exit $run_exit)"
-        echo "  $actual_output"
+        test_output+="${RED}FAIL${NC} $test_name (runtime error, exit $run_exit)\n"
+        test_output+="  $actual_output\n"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -106,18 +107,22 @@ for test_dir in "$TESTS_DIR"/*/; do
     # Compare
     expected_output=$(<"$expected_file")
     if [[ "$actual_output" == "$expected_output" ]]; then
-        echo -e "${GREEN}PASS${NC} $test_name"
+        test_output+="${GREEN}PASS${NC} $test_name\n"
         ((passed++))
     else
-        echo -e "${RED}FAIL${NC} $test_name (output mismatch)"
-        echo "  Expected: $(head -c 200 <<< "$expected_output")"
-        echo "  Actual:   $(head -c 200 <<< "$actual_output")"
+        test_output+="${RED}FAIL${NC} $test_name (output mismatch)\n"
+        test_output+="  Expected: $(head -c 200 <<< "$expected_output")\n"
+        test_output+="  Actual:   $(head -c 200 <<< "$actual_output")\n"
         ((failed++))
         failures+=("$test_name")
     fi
 done
 
-echo ""
+# Only show per-test details if there are failures
+if [[ $failed -gt 0 ]]; then
+    echo -e "$test_output"
+fi
+
 echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped"
 
 if [[ ${#failures[@]} -gt 0 ]]; then

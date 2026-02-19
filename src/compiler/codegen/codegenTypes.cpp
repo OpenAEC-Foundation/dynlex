@@ -265,27 +265,11 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
 			return expr->type; // Type fully determined during inference
 		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
-			// Class cast: type was fully determined during inference
 			if (expr->type.kind == Type::Kind::Class)
 				return expr->type;
-			// Format: @intrinsic("cast", value, type_string[, bit_size])
-			// Resolve through macro bindings since cast args may be macro parameters
-			Expression *typeStrExpr = resolveVariableBinding(context, expr->arguments[2]);
-			std::string target;
-			if (auto *str = std::get_if<std::string>(&typeStrExpr->literalValue))
-				target = *str;
-			if (target == "integer" || target == "float") {
-				Type::Kind kind = target == "integer" ? Type::Kind::Integer : Type::Kind::Float;
-				int byteSize = 8;
-				if (expr->arguments.size() >= 4) {
-					Expression *bitsExpr = resolveVariableBinding(context, expr->arguments[3]);
-					if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
-						byteSize = *bits / 8;
-				}
-				return {kind, byteSize};
-			}
-			if (!target.empty())
-				return Type::fromString(target);
+			Type typeArgType = getEffectiveType(context, expr->arguments[2]);
+			if (typeArgType.kind == Type::Kind::TypeReference)
+				return typeArgType.toReferencedType();
 		}
 		return expr->type;
 	}

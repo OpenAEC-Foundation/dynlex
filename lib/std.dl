@@ -12,35 +12,47 @@ macro effect set var to val:
     replacement:
         @intrinsic("store", var, val)
 
+# --- Primitive types ---
+
+macro class [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+macro class [an|a|] bits bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+macro class [a|] float:
+    replacement:
+        @intrinsic("type", "float", 64)
+
+macro class [a|] bits bit float:
+    replacement:
+        @intrinsic("type", "float", bits)
+
+macro class [a|] byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+macro class [a|] boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+# --- Pointer and string types ---
+
+macro class [a|] pointer to type:
+    replacement:
+        @intrinsic("add pointer depth", type)
+
+macro class [a|] string:
+    replacement:
+        @intrinsic("type", "string")
+
 # --- Type casts ---
 
-macro expression value as [a|an|] bits bit integer:
+macro expression value as type:
     replacement:
-        @intrinsic("cast", value, "integer", bits)
-
-macro expression value as [an|] integer:
-    replacement:
-        @intrinsic("cast", value, "integer")
-
-macro expression value as [a|] bits bit float:
-    replacement:
-        @intrinsic("cast", value, "float", bits)
-
-macro expression value as [a|] float:
-    replacement:
-        @intrinsic("cast", value, "float")
-
-macro expression value as [a|] byte:
-    replacement:
-        @intrinsic("cast", value, "integer", 8)
-
-macro expression value as [a|] string:
-    replacement:
-        @intrinsic("cast", value, "string")
-
-macro expression value as [a|] pointer:
-    replacement:
-        @intrinsic("cast", value, "pointer")
+        @intrinsic("cast", value, type)
 
 # --- Class properties ---
 

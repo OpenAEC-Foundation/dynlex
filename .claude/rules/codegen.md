@@ -29,7 +29,7 @@ paths:
 - **Math**: `@intrinsic("sin", v)`, `"cos"`, `"sqrt"`, `"abs"`, `"floor"`, `"ceil"`, `"round"`, `"exp"`, `"log"` (unary), `"pow"`, `"min"`, `"max"`, `"atan2"` (binary)
 - **Control flow**: `@intrinsic("if", cond)` / `@intrinsic("else if", cond)` / `@intrinsic("else")` / `@intrinsic("loop while", cond)` / `@intrinsic("switch", value)` / `@intrinsic("case", value)`
 - **Functions**: `@intrinsic("call", "library", "function", "return_type", args...)` / `@intrinsic("return"[, value])`
-- **Types**: `@intrinsic("cast", value, type_string[, bit_size])` / `@intrinsic("construct", type, fields...)` / `@intrinsic("property", instance, fieldname)`
+- **Types**: `@intrinsic("cast", value, type_ref)` / `@intrinsic("type", kind[, bits])` / `@intrinsic("add pointer depth", type_ref)` / `@intrinsic("construct", type, fields...)` / `@intrinsic("property", instance, fieldname)`
 - **Shader I/O**: `@intrinsic("shader input", name)` / `@intrinsic("shader output", r, g, b, a)` / `@intrinsic("shader uniform", name)` / `@intrinsic("extract element", vec, index)`
 
 ## Math Function Codegen
@@ -65,5 +65,5 @@ paths:
 - **Nested macro store**: `add value to target` → `set var to val` needed multi-level resolution. Fix: `getVariablePointer` recursively pops macro scopes. For property stores through nested macros (e.g., `add value to the x of target`), `resolveThroughMacroLayers` now also crosses scope boundaries. The store handler generates the value first, then saves/restores scopes around dest resolution.
 - **Stale macro body types**: Shared expression nodes retained types from prior callers. Fix: `resetSectionTypes()` before each `inferMacroBody` (macro sections only).
 - **Spurious instantiations**: Top-level inference created instantiations with undeduced args. Fix: skip non-macro function body inference when any arg is undeduced.
-- **Cast macro resolution**: Cast intrinsic's type string and bits arguments may be macro-bound variable references. Both type inference (`compiler.cpp`) and codegen (`codegen.cpp` — `getEffectiveType` and `generateIntrinsicCode`) must resolve through macro bindings before checking `literalValue`.
+- **Cast simplification**: Cast now always takes a TypeReference (from `@intrinsic("type", ...)` or class patterns), not a string+bits. The old string-based path (`"integer"`, `"float"`, `"string"`, `"pointer"`) was removed. String cast is detected by checking target type `{Integer, 1, ptr=1}` + numeric source → snprintf path.
 - **SPIR-V UBO uniforms**: `glUniform1f` doesn't work with SPIR-V shaders — requires UBOs. The SPIR-V patcher (`spirv.cpp`) wraps scalar float uniforms in OpTypeStruct with Block decoration, OpAccessChain access, and Binding/DescriptorSet decorations. Host-side uses `glGenBuffers`/`glBindBufferBase`/`glBufferSubData` (patterns in `lib/graphics.dl`).

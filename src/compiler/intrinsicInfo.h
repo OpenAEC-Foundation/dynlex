@@ -78,7 +78,9 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 		{"property",               {3, IntrinsicReturnKind::Custom}},     // @intrinsic("property", instance, fieldname)
 		{"return",                 {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("return"[, val])
 		{"call",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("call", lib, func, rettype, args...)
-		{"cast",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("cast", val, type[, bits])
+		{"cast",                   {3, IntrinsicReturnKind::Custom}},     // @intrinsic("cast", val, type)
+		{"type",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("type", kind[, bits])
+		{"add pointer depth",      {2, IntrinsicReturnKind::Custom}},     // @intrinsic("add pointer depth", type)
 	};
 	return registry;
 }

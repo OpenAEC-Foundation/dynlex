@@ -28,6 +28,19 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 		return path;
 	}
 
+	// Try relative to the project source directory (for development builds)
+	// These come before system paths so dev builds use the source tree's libraries
+	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
+	if (fileSystem->getFile(devPath)) {
+		return devPath;
+	}
+
+	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
+	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
+	if (fileSystem->getFile(devLibPath)) {
+		return devLibPath;
+	}
+
 	// Try installed system path
 	std::string systemPath = "/usr/share/dynlex/" + path;
 	if (fileSystem->getFile(systemPath)) {
@@ -38,18 +51,6 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 	std::string systemLibPath = "/usr/share/dynlex/lib/" + path;
 	if (fileSystem->getFile(systemLibPath)) {
 		return systemLibPath;
-	}
-
-	// Try relative to the project source directory (for development builds)
-	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
-	if (fileSystem->getFile(devPath)) {
-		return devPath;
-	}
-
-	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
-	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
-	if (fileSystem->getFile(devLibPath)) {
-		return devLibPath;
 	}
 
 	return path; // Return original path (will fail with proper error)
@@ -95,6 +96,9 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	}
 
 	context.importedFiles[path] = sourceFile;
+	// The first file imported is the main source file
+	if (!context.mainSourceFile)
+		context.mainSourceFile = sourceFile;
 
 	// iterate over lines, each match includes the line terminator
 	std::string_view fileView{sourceFile->content};

@@ -6,6 +6,7 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "section.h"
+#include "sectionType.h"
 #include "semanticTokenBuilder.h"
 #include "sourceFile.h"
 #include <algorithm>
@@ -34,6 +35,7 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/)
 	InitializeResult result;
 	result.capabilities.textDocumentSync = 2; // Incremental
 	result.capabilities.definitionProvider = true;
+	result.capabilities.documentSymbolProvider = true;
 	result.capabilities.semanticTokensProvider.full = true;
 	result.capabilities.semanticTokensProvider.legend.tokenTypes = getSemanticTokenTypes();
 	result.capabilities.semanticTokensProvider.legend.tokenModifiers = getSemanticTokenModifiers();
@@ -322,6 +324,87 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 	return std::nullopt;
 }
 
+// Reconstruct pattern name from definition elements
+static std::string getPatternName(const PatternDefinition *def) {
+	std::string name;
+	for (const auto &elem : def->patternElements) {
+		if (elem.type == PatternElement::Choice && !elem.alternatives.empty()) {
+			name += elem.alternatives[0][0].text;
+		} else {
+			name += elem.text;
+		}
+	}
+	return name;
+}
+
+static SymbolKind symbolKindForSection(SectionType type) {
+	switch (type) {
+	case SectionType::Expression:
+	case SectionType::Effect:
+		return SymbolKind::Function;
+	case SectionType::Class:
+		return SymbolKind::Class;
+	case SectionType::Pattern:
+		return SymbolKind::Module;
+	default:
+		return SymbolKind::Namespace;
+	}
+}
+
+std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolParams &params) {
+	ParseContext *context = findContextFor(params.textDocument.uri);
+	if (!context) {
+		return {};
+	}
+
+	std::function<void(Section *, std::vector<DocumentSymbol> &)> collectSymbols = [&](Section *section,
+																					   std::vector<DocumentSymbol> &out) {
+		for (PatternDefinition *def : section->patternDefinitions) {
+			if (!def->range.line || toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
+				continue;
+			}
+
+			DocumentSymbol sym;
+			sym.name = getPatternName(def);
+			std::string typeStr = sectionTypeToString(section->type);
+			sym.detail = section->isMacro ? "macro " + typeStr : typeStr;
+			sym.kind = symbolKindForSection(section->type);
+			sym.selectionRange = convertRange(def->range);
+
+			// Full range: from definition line through last code line of the section
+			sym.range = sym.selectionRange;
+			if (!section->codeLines.empty()) {
+				CodeLine *last = section->codeLines.back();
+				if (toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
+					(last->sourceFileLineIndex > sym.range.end.line ||
+					 (last->sourceFileLineIndex == sym.range.end.line &&
+					  static_cast<int>(last->rightTrimmedText.size()) > sym.range.end.character))) {
+					sym.range.end.line = last->sourceFileLineIndex;
+					sym.range.end.character = static_cast<int>(last->rightTrimmedText.size());
+				}
+			}
+
+			// Recurse into child sections
+			for (Section *child : section->children) {
+				collectSymbols(child, sym.children);
+			}
+
+			out.push_back(std::move(sym));
+		}
+
+		// Sections without pattern definitions but with children (e.g. main section)
+		if (section->patternDefinitions.empty()) {
+			for (Section *child : section->children) {
+				collectSymbols(child, out);
+			}
+		}
+	};
+
+	std::vector<DocumentSymbol> result;
+	collectSymbols(context->mainSection, result);
+	return result;
+}
+
 SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &params) {
 	SemanticTokens result;
 	result.data = generateSemanticTokens(params.textDocument.uri);
@@ -396,8 +479,13 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 			if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
 				!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
 				SectionType sectionType = expr->patternMatch->matchedEndNode->matchingDefinitions[0]->section->type;
-				SemanticTokenType tokenType =
-					sectionType == SectionType::Expression ? SemanticTokenType::Expression : SemanticTokenType::Effect;
+				SemanticTokenType tokenType;
+				if (sectionType == SectionType::Expression)
+					tokenType = SemanticTokenType::Expression;
+				else if (sectionType == SectionType::Class)
+					tokenType = SemanticTokenType::Type;
+				else
+					tokenType = SemanticTokenType::Effect;
 				addToken(expr->range, tokenType, false);
 			}
 			break;

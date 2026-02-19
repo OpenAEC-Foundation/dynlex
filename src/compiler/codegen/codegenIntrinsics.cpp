@@ -544,7 +544,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	}
 
 	if (name == "cast") {
-		// Format: args[0]=value, args[1]=type_string_or_type_ref[, args[2]=bit_size]
+		// Format: args[0]=value, args[1]=type (TypeReference)
 		// Class cast: reinterpret as pointer to the class struct
 		if (resultType.kind == Type::Kind::Class) {
 			llvm::Value *val = generateExpressionCode(context, args[0]);
@@ -554,16 +554,17 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			return val;
 		}
 
-		// Resolve type string through macro bindings (e.g. cast args may be macro parameters)
-		Expression *typeStrExpr = resolveVariableBinding(context, args[1]);
-		std::string targetStr = getStringLiteral(typeStrExpr);
 		llvm::Value *val = generateExpressionCode(context, args[0]);
 		Type fromType = getEffectiveType(context, args[0]);
 
-		if (targetStr == "string") {
-			// Convert to string via snprintf to a stack buffer
-			if (fromType.isPointer())
-				return val; // already a pointer (string is i8*)
+		// Get target type from the TypeReference argument
+		Type typeArgType = getEffectiveType(context, args[1]);
+		if (typeArgType.kind != Type::Kind::TypeReference)
+			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
+		Type toType = typeArgType.toReferencedType();
+
+		// String cast: numeric → string via snprintf
+		if (toType.kind == Type::Kind::Integer && toType.byteSize == 1 && toType.pointerDepth == 1 && fromType.isNumeric()) {
 			llvm::AllocaInst *strBuf = builder.CreateAlloca(builder.getInt8Ty(), builder.getInt64(32), "strbuf");
 			llvm::Function *snprintfFunc = context.llvmModule->getFunction("snprintf");
 			if (!snprintfFunc) {
@@ -591,20 +592,21 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			return strBuf;
 		}
 
-		Type toType;
-		if (targetStr == "integer" || targetStr == "float") {
-			Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
-			int byteSize = 8;
-			if (args.size() >= 3) {
-				Expression *bitsExpr = resolveVariableBinding(context, args[2]);
-				if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
-					byteSize = *bits / 8;
-			}
-			toType = {kind, byteSize};
-		} else {
-			toType = Type::fromString(targetStr);
-		}
+		// Already a pointer casting to string — pass through
+		if (toType.kind == Type::Kind::Integer && toType.byteSize == 1 && toType.pointerDepth == 1 && fromType.isPointer())
+			return val;
+
 		return ensureType(context, val, fromType, toType);
+	}
+
+	if (name == "type") {
+		// Types are compile-time only — no runtime code
+		return nullptr;
+	}
+
+	if (name == "add pointer depth") {
+		// Compile-time only — modifies TypeReference, no runtime code
+		return nullptr;
 	}
 
 	if (name == "construct") {

@@ -1,4 +1,9 @@
-# DynLex Compiler — Core Architecture
+---
+paths:
+  - "src/compiler/**"
+---
+
+# Compiler Core Architecture
 
 ## Design Principles
 - **No short-term solutions** — code must be clean and correct
@@ -52,62 +57,20 @@
   - **Bool**: direct `Bool` assignment
   - **Void**: direct `Void` assignment + special `store` side effects (type propagation to variables)
   - **Float**: direct `Float` assignment (e.g. shader inputs)
-  - **Custom**: individual handlers for `address of`, `dereference`, `load at`, `return`, `call`, `cast`, `construct`, `property`
+  - **Custom**: individual handlers for `address of`, `dereference`, `load at`, `return`, `call`, `cast`, `type`, `add pointer depth`, `construct`, `property`
 - Adding a new intrinsic: add to registry in `intrinsicInfo.h` → type inference and codegen helpers (`isMathFunction`, `isComparisonOperator`, etc.) automatically pick it up
 
+## Import Resolution Order
+- Relative to importing file → CWD → `PROJECT_SOURCE_DIR/` → `PROJECT_SOURCE_DIR/lib/` → `/usr/share/dynlex/` → `/usr/share/dynlex/lib/`
+- Dev paths come before system paths so debug builds use source tree libraries, not stale installed copies
+
 ## Bugs Fixed
-- **Cast macro resolution**: `value as a 32 bit float` (macro `@intrinsic("cast", value, "float", bits)`) — the `bits` parameter is a macro-bound variable reference, not a literal. Type inference and codegen must resolve cast's type string and bits arguments through macro bindings (`resolveThroughBindings` in typeInference.cpp, `resolveVariableBinding` in codegenTypes.cpp). Without this, sized casts default to 8 bytes.
+- **Cast simplification**: Cast now always takes a TypeReference (`@intrinsic("cast", value, type_ref)`), not a string+bits. Type patterns (`@intrinsic("type", "int", bits)`) and class patterns produce TypeReferences. The old string-based path was removed. New intrinsics: `@intrinsic("type", kind[, bits])` produces a TypeReference; `@intrinsic("add pointer depth", type_ref)` wraps a TypeReference with one more pointer level. String type = `@intrinsic("type", "string")` → `{Integer, 1, ptr=1}` TypeReference.
 - **Argument position ordering**: `section.cpp` processes parenthesized expressions before number literals, so `expr->arguments` had parens first then numbers regardless of text position. Pattern matcher's `sourceArgumentIndex` walks `\a` placeholders left-to-right, mapping to wrong arguments. Fix: sort `expr->arguments` by source position after collection. Note: `expandMatch` also produces non-positional order (direct args, submatches, variables, words), so codegen/inference `sortArgumentsByPosition` calls are also needed — both sorts serve different purposes.
 - **Property store through macros**: `set the x of target to val` — the store destination resolves to `the x of target` (a PatternCall to the property macro), not directly to `@intrinsic("property", ...)`. Both codegen (`resolveThroughMacroLayers`) and type inference (`resolveThroughBindingsDeep`) must expand through macro PatternCalls to detect property stores and generate GEP+store / propagate field types.
 - **Per-variable class instantiations (copy-on-assign)**: `ClassInstantiation::fieldTypes` is shared mutable state via `getOrCreateInstantiation`. When two variables are constructed with the same field types, they share an instantiation. Property stores (e.g., `multiply v1 by 4.5` promoting Numeric→Float) mutated the shared `fieldTypes`, contaminating all variables sharing that instantiation. Fix: on first assignment of a Class type to a variable (Undeduced→Class in the store handler), copy the instantiation so each variable gets its own independent `fieldTypes`. This runs exactly once per variable since `canRefineTo(Class→Class)` is false afterward. The old oscillation workaround in the construct handler (preferring existing compatible instantiations) was removed — with per-variable copies, the construct's instantiation is never mutated, so oscillation can't occur.
 - **Class store type mismatch**: Per-variable instantiation copies can diverge from the construct's instantiation after field type promotion. E.g., construct creates `{i32,i32,i32}` (Numeric→Integer) but the variable's copy is promoted to `{f64,f64,f64}` (Float). A whole-struct `load`/`store` would reinterpret bit patterns incorrectly. Fix: store codegen (`codegenIntrinsics.cpp`) detects when source and destination class instantiations have different field type layouts and generates element-wise load+convert+store (`ensureType` per field) instead of a single struct copy.
 - **Cross-scope store destination resolution**: `add value to the x of target` chains through 3 macro layers: scalar `add` macro → `set` macro → `@intrinsic("store", var, val)`. The store dest `var` resolves to `target` (in set's scope), but `target` is bound to `the x of target` in the ADD macro's scope (one level up). `resolveThroughMacroLayers` only searched the current scope. Fix: `resolveThroughMacroLayers` now pops to parent scopes when a variable isn't found in the current scope. The store handler generates the value FIRST (in the original scope), then saves/restores the full scope state (`macroExpressionBindings` + `macroBindingStack`) around destination resolution, since `resolveThroughMacroLayers` freely modifies scopes. Changed signature from `int` (scope count) to `void` (caller saves/restores instead).
-
-## LSP Architecture (`src/lsp/`)
-
-### Multi-file diagnostic tracking
-- The LSP tracks an **import graph** (`importedBy`: imported URI → set of main URIs) and **cached diagnostics per main document** (`diagnosticsPerMain`: main URI → file URI → diagnostics).
-- `onDidOpen`: if the file is already an import of an open main document, skip compilation (diagnostics already published). Otherwise compile as a new main document.
-- `onDidChange`: recompile the file if it's a main document. Also recompile all main documents that import it (via `importedBy`).
-- `onDidClose`: clean up state, re-publish merged diagnostics for affected files.
-- Diagnostics are **grouped by source file URI** and published separately to each file. When multiple main documents produce diagnostics for the same file, they're merged with deduplication (same range + message = same diagnostic).
-- `generateSemanticTokens` only suppresses tokens for errors **in the requested file**, not errors in imported files.
-
-### Diagnostic related information
-- Compiler `Diagnostic` has a `relatedInfo` vector (`RelatedInfo{message, range}`) for linking to related source locations.
-- The LSP converts these to `DiagnosticRelatedInformation` with proper absolute URIs, rendered as clickable links in VS Code.
-- Example: "Duplicate pattern definition" links to the conflicting definition.
-
-## DAP Architecture (`src/dap/`)
-
-The DAP (Debug Adapter Protocol) server enables VS Code debugging of DynLex programs. It embeds in the `dynlex` binary (`--dap`), compiles the `.dl` file with `-g -O0`, launches GDB as a subprocess, and translates between DAP and GDB MI protocol.
-
-### Components
-
-- **`gdbmi.h/cpp`** — GDB subprocess manager. Launches GDB via `fork`/`exec` with two pipes (stdin/stdout). Includes a recursive-descent MI value parser for `"string"`, `{tuple}`, `[list]` syntax. Key methods: `send()` (async), `sendAndWait()` (sync with async callback), `readRecord()`.
-- **`dapProtocol.h`** — Header-only DAP type definitions with `nlohmann::json` serialization: `Source`, `Breakpoint`, `StackFrame`, `Scope`, `Variable`, `Thread`, `Capabilities`.
-- **`dapServer.h/cpp`** — Main DAP server. Reuses `lsp::Transport`/`StdioTransport` for Content-Length framing (same protocol as LSP, different message format).
-
-### Threading model
-Main thread handles DAP messages from the client. A reader thread reads GDB MI output and translates async records (`*stopped`, `@"text"`, etc.) into DAP events. Mutex on `sendJson()` prevents interleaved writes.
-
-### Request handlers
-`initialize`, `launch`, `setBreakpoints`, `configurationDone`, `threads`, `stackTrace`, `scopes`, `variables`, `continue`, `next`, `stepIn`, `stepOut`, `pause`, `disconnect`.
-
-### Launch workflow
-1. Find self via `/proc/self/exe`
-2. Run `<self> <file.dl> -g -O0 -o <output>` via `fork`/`exec`
-3. Launch GDB on the compiled binary with `--interpreter=mi`
-4. Start reader thread for async GDB output
-
-### GDB async → DAP events
-- `*stopped,reason="breakpoint-hit"` → `stopped` event (reason: "breakpoint")
-- `*stopped,reason="end-stepping-range"` → `stopped` event (reason: "step")
-- `*stopped,reason="exited-normally"` → `terminated` event
-- `@"text"` (target stream) → `output` event (category: "stdout")
-
-### Name demangling
-Reverses `getPatternFunctionName()` from `codegenTypes.cpp`: strips type suffixes (`_i32`, `_f64`, etc.), replaces `_` back to spaces. Heuristic — works for most pattern names.
 
 ## TODO / Known Issues
 - `promote()` doesn't check that operands are numeric before promoting

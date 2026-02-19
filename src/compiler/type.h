@@ -17,10 +17,12 @@ struct Type {
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
 	ClassDefinition *classDefinition = nullptr; // For Kind::Class
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
+	Kind referencedKind = Kind::Undeduced;		// For Kind::TypeReference: the primitive kind it refers to
 
 	bool operator==(const Type &other) const {
 		return kind == other.kind && byteSize == other.byteSize && pointerDepth == other.pointerDepth &&
-			   classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
+			   classDefinition == other.classDefinition && classInstIndex == other.classInstIndex &&
+			   referencedKind == other.referencedKind;
 	}
 	bool operator!=(const Type &other) const { return !(*this == other); }
 	bool operator<(const Type &other) const {
@@ -32,7 +34,19 @@ struct Type {
 			return pointerDepth < other.pointerDepth;
 		if (classDefinition != other.classDefinition)
 			return classDefinition < other.classDefinition;
-		return classInstIndex < other.classInstIndex;
+		if (classInstIndex != other.classInstIndex)
+			return classInstIndex < other.classInstIndex;
+		return referencedKind < other.referencedKind;
+	}
+
+	// Convert a TypeReference to the type it refers to.
+	// For class TypeReferences (classDefinition != nullptr), returns a Class type.
+	// For primitive TypeReferences (referencedKind set), returns the primitive type.
+	Type toReferencedType() const {
+		assert(kind == Kind::TypeReference && "toReferencedType only valid for TypeReference");
+		if (classDefinition)
+			return {Kind::Class, 0, 0, classDefinition, classInstIndex};
+		return {referencedKind, byteSize, pointerDepth};
 	}
 
 	bool isNumeric() const {

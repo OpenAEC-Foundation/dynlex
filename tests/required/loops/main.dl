@@ -8,7 +8,7 @@ macro effect set var to val:
 
 macro expression value as [a|an|] bits bit integer:
     replacement:
-        @intrinsic("cast", value, "integer", bits)
+        @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
 effect print msg as line:
     execute:

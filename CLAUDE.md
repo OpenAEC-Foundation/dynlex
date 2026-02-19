@@ -22,7 +22,7 @@ A natural-language-like programming language designed for humans and AI agents.
 
 **Dependencies:** C++23, Conan (nlohmann_json), LLVM 20 (for codegen + SPIR-V backend)
 
-**Implementation Details:** See `.claude/rules/implementation.md` for detailed documentation on type inference, bugs fixed, and implementation details.
+**Implementation Details:** See `.claude/rules/` for path-scoped docs: `compiler.md` (core compiler), `codegen.md` (LLVM codegen), `lsp.md` (language server), `dap.md` (debugger). These load automatically when working on matching files.
 
 ## Current Priority
 
@@ -51,7 +51,7 @@ src/
 │   ├── dapServer.cpp/h         # DAP message loop, request handlers
 │   ├── dapProtocol.h           # DAP JSON types (Source, Breakpoint, StackFrame, etc.)
 │   └── gdbmi.cpp/h             # GDB MI subprocess manager and output parser
-├── lsp/                        # Language server (port 5007, multi-file diagnostic tracking)
+├── lsp/                        # Language server (port 5007, LSP protocol)
 └── pexlit/                     # C++ utility library (git submodule)
 vscode-extension/               # VS Code extension (TypeScript)
 tests/required/                 # Test cases with expected outputs
@@ -92,6 +92,11 @@ print x
 - **Minimal dependencies** - Only LLVM for codegen, avoid other external deps
 - **Suggest improvements** - If you know a better approach, mention it
 - **Verify before assuming** - Always check what packages/versions are actually available (e.g., `apt-cache search`, `llc --version`, `apt-cache show`) before choosing a dependency version. Don't guess that a specific version exists or has a feature — verify it first.
+- **Document important fixes** - Record in `.claude/rules/` files (not MEMORY.md), so all clones/agents see the info via git.
+- **Be cautious with git** - Other agents may work in the working tree concurrently.
+- **Never read compiled binaries (ELF files)** with the Read tool - produces useless binary garbage. Run executables instead.
+- **Understand full scope before fixing** - Don't make assumptions. Check for existing helpers before writing new code. No DRY violations.
+- **Use `std::stack`** over `std::vector` for stack-like data structures.
 
 ## Testing
 
@@ -109,7 +114,7 @@ Compiled test binaries use the `.out` extension (gitignored).
 
 Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expected compilation failure, substring match).
 
-**Current state:** 11 pass (simple, custom_patterns, language, loops, class, specificity, precedence, recursion, pattern, stale_trie, duplicate_pattern). 4 fail: globals (output format), import/lib/section (missing import files).
+**Current state:** 15 pass, 0 fail.
 
 ## Key Design Decisions
 
@@ -121,3 +126,9 @@ Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expec
 - **Primitive types:** Sized numerics (i8/i16/i32/i64, f32/f64), bool, string
 - **Classes:** Data-only structs (no member functions), patterns operate on them
 - **Pattern ambiguity:** Compiler error if multiple patterns match
+
+## Current State
+- Key libs: `lib/std.dl`, `lib/graphics.dl`, `lib/font.dl`, `lib/string.dl`, `lib/random.dl`, `lib/vector.dl`
+- Shader gallery works with 4 animated SPIR-V shaders (mandelbrot, plasma, julia, rings)
+- Typed pattern arguments (`{type:name}`) and overload dispatch working
+- Snake game is used as a guide for compiler development — used to discover and fix compiler bugs

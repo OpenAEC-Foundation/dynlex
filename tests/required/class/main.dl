@@ -1,18 +1,4 @@
-macro effect set var to val:
-    replacement:
-        @intrinsic("store", var, val)
-
-macro expression value as [a|an|] bits bit integer:
-    replacement:
-        @intrinsic("cast", value, "integer", bits)
-
-effect print msg as line:
-    execute:
-        @intrinsic("call", "libc", "printf", "i32", "%ld\n", msg as a 64 bit integer)
-
-macro expression left + right:
-    replacement:
-        @intrinsic("add", left, right)
+import lib/std.dl
 
 class:
     patterns:
@@ -25,14 +11,13 @@ macro expression new point with x px and y py:
     replacement:
         @intrinsic("construct", point, px, py)
 
-macro expression:
-    patterns:
-        the {word:propertyname} of ownername
-        ownername's {word:propertyname}
-    replacement:
-        @intrinsic("property", ownername, propertyname)
-
 set p to new point with x 10 and y 20
 print the x of p as line
 print p's y as line
 print the x of p + the y of p as line
+
+# Type cast tests
+print 3.14 as an integer as line
+print 42 as a 16 bit integer as line
+print 7 as a byte as line
+print 100 as a float as line

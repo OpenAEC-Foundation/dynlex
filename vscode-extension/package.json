@@ -57,6 +57,10 @@
       {
         "id": "intrinsic",
         "description": "DynLex intrinsic function"
+      },
+      {
+        "id": "type",
+        "description": "DynLex type reference"
       }
     ],
     "semanticTokenScopes": [
@@ -89,6 +93,9 @@
           ],
           "intrinsic": [
             "support.function"
+          ],
+          "type": [
+            "support.type"
           ]
         }
       }

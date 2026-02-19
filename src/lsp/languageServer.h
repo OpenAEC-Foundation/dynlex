@@ -51,6 +51,9 @@ class LanguageServer {
 	// Called for semantic tokens request
 	virtual SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params);
 
+	// Called for document symbol request
+	virtual std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params);
+
 	// Send a notification to the client (e.g., publishDiagnostics)
 	void sendNotification(const std::string &method, const Json &params);
 

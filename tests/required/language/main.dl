@@ -1,6 +1,6 @@
 macro expression waarde als bits bit integer:
 	replacement:
-		@intrinsic("cast", waarde, "integer", bits)
+		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
 effect zeg bericht:
 	execute:

@@ -180,6 +180,10 @@ void LanguageServer::handleRequest(const Json &message) {
 			SemanticTokensParams p = params.get<SemanticTokensParams>();
 			SemanticTokens result = onSemanticTokensFull(p);
 			sendResponse(id, result);
+		} else if (method == "textDocument/documentSymbol") {
+			DocumentSymbolParams p = params.get<DocumentSymbolParams>();
+			auto result = onDocumentSymbol(p);
+			sendResponse(id, result);
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
@@ -267,5 +271,7 @@ void LanguageServer::onDidSave(const DidSaveTextDocumentParams & /*params*/) {
 std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
 
 SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams & /*params*/) { return SemanticTokens{}; }
+
+std::vector<DocumentSymbol> LanguageServer::onDocumentSymbol(const DocumentSymbolParams & /*params*/) { return {}; }
 
 } // namespace lsp

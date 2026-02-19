@@ -60,33 +60,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 			}
 
 			if (canBeSubmatch()) {
-				// this might be a submatch of a higher level match.
-				if (parent) {
-					// there already is a parent match which submatched, possibly for this match
-					//  f.e: '$ + $' in 'set $ to $ + $'
-					stepUp(*parent);
-					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
-					// propagate the completed expression's precedence as a constraint.
-					// Skip for default-level patterns — they capture full expressions and shouldn't
-					// constrain parent operators (minRightPrecedence is for same-level associativity).
-					if (parent->match.nodesPassed.size() > 1) {
-						// Only propagate precedence for matches that consumed a left argument
-						// (infix operators like $ + $). Prefix patterns (sine, not, etc.) produce
-						// atomic values — their precedence shouldn't constrain parent operators.
-						bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
-						int rightPrec = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
-						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
-							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
-					}
-				}
+				// Try extending as left operand of a new expression first (lower LIFO priority).
+				// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
 				if (canStartSubmatch() && rootNode->argumentChild) {
-					// this might be the first submatch of a higher level match between parent and this match,
-					// making the current parent the grand parent.
-					// f.e: 'the result' in 'the result = 10'
-					// or: '$ + $' in 'set $ to $ + $ dollars'
-					// set $ to $: grandparent
-					// $ dollars: parent (just discovered)
-					// $ + $: current match (we just finished matching this)
 					MatchProgress clone = *this;
 					// the old parent progress becomes 'grandparent'
 					if (parent)
@@ -105,6 +81,21 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 					clone.type = SectionType::Expression;
 					stepUp(clone);
+				}
+				// Step up to parent match (higher LIFO priority — prefer returning to the
+				// parent over speculatively extending into a new expression).
+				if (parent) {
+					stepUp(*parent);
+					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
+					// propagate the completed expression's precedence as a constraint.
+					// Skip for default-level patterns — they capture full expressions and shouldn't
+					// constrain parent operators (minRightPrecedence is for same-level associativity).
+					if (parent->match.nodesPassed.size() > 1) {
+						bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
+						int rightPrec = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
+						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
+							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
+					}
 				}
 			}
 		}

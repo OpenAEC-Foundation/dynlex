@@ -251,8 +251,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (!matchedSection)
 			return nullptr;
 
-		// Class type references are compile-time only — no runtime code
-		if (matchedSection->type == SectionType::Class)
+		// Non-macro class type references are compile-time only — no runtime code.
+		// Macro class sections (primitive type definitions) fall through to macro expansion.
+		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro)
 			return nullptr;
 
 		// Build parameter name → argument expression mapping
@@ -367,8 +368,14 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 		if (line->expression) {
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+				// Use a DILexicalBlockFile scope when the code line's source file
+				// differs from the current scope's file (e.g., imported code in main)
+				llvm::DIScope *scope = context.currentDebugScope;
+				llvm::DIFile *lineFile = getOrCreateDIFile(context, line->sourceFile);
+				if (lineFile && lineFile != scope->getFile())
+					scope = context.diBuilder->createLexicalBlockFile(scope, lineFile);
 				builder.SetCurrentDebugLocation(
-					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, context.currentDebugScope)
+					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
 			generateExpressionCode(context, line->expression);
@@ -393,8 +400,7 @@ bool generateCode(ParseContext &context) {
 	// Initialize debug info builder (skip for SPIR-V — no DWARF in SPIR-V)
 	if (context.options.emitDebugInfo && !context.options.emitSPIRV) {
 		context.diBuilder = new llvm::DIBuilder(*context.llvmModule);
-		lsp::SourceFile *mainSourceFile = !context.codeLines.empty() ? context.codeLines[0]->sourceFile : nullptr;
-		llvm::DIFile *mainFile = getOrCreateDIFile(context, mainSourceFile);
+		llvm::DIFile *mainFile = getOrCreateDIFile(context, context.mainSourceFile);
 		context.diCompileUnit = context.diBuilder->createCompileUnit(
 			llvm::dwarf::DW_LANG_C, mainFile, "DynLex Compiler", context.options.optimizationLevel > 0, "", 0
 		);
@@ -445,9 +451,8 @@ bool generateCode(ParseContext &context) {
 
 	// Create debug info subprogram for main
 	if (context.diBuilder) {
-		lsp::SourceFile *mainSourceFile = !context.codeLines.empty() ? context.codeLines[0]->sourceFile : nullptr;
-		llvm::DIFile *mainFile = getOrCreateDIFile(context, mainSourceFile);
-		unsigned mainLine = !context.codeLines.empty() ? context.codeLines[0]->sourceFileLineIndex + 1 : 1;
+		llvm::DIFile *mainFile = getOrCreateDIFile(context, context.mainSourceFile);
+		unsigned mainLine = 1;
 		auto *mainFuncDIType = context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(std::nullopt));
 		auto *mainSP = context.diBuilder->createFunction(
 			mainFile, "main", "main", mainFile, mainLine, mainFuncDIType, mainLine, llvm::DINode::FlagPrototyped,

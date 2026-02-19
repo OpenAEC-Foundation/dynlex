@@ -13,7 +13,7 @@ effect say message:
 
 class:
 	patterns:
-		byte
+		octet
 		unsigned char
 		uint_8
 
