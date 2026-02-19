@@ -3,25 +3,25 @@ import lib/graphics.dl
 # Shader gallery — press any arrow key to cycle through shaders
 #
 # Build:
-#   ./build/dynlex games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o games/passthrough.spv
-#   ./build/dynlex games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o games/mandelbrot.spv
-#   ./build/dynlex games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o games/plasma.spv
-#   ./build/dynlex games/julia_shader.dl --emit-spirv --shader-stage=fragment -o games/julia.spv
-#   ./build/dynlex games/rings_shader.dl --emit-spirv --shader-stage=fragment -o games/rings.spv
-#   ./build/dynlex games/shader_gallery.dl -o games/shader_gallery
+#   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
+#   ./build/dynlex tests/games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/mandelbrot.spv
+#   ./build/dynlex tests/games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/plasma.spv
+#   ./build/dynlex tests/games/julia_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/julia.spv
+#   ./build/dynlex tests/games/rings_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/rings.spv
+#   ./build/dynlex tests/games/shader_gallery.dl -o tests/games/shader_gallery
 # Run:
-#   ./games/shader_gallery
+#   ./tests/games/shader_gallery
 
 set window to a new window with width 800 and height 600
 
 # Load vertex shader (shared by all programs)
-set vert to a vertex shader from "games/passthrough.spv"
+set vert to a vertex shader from "tests/games/passthrough.spv"
 
 # Load all fragment shaders
-set frag0 to a fragment shader from "games/mandelbrot.spv"
-set frag1 to a fragment shader from "games/plasma.spv"
-set frag2 to a fragment shader from "games/julia.spv"
-set frag3 to a fragment shader from "games/rings.spv"
+set frag0 to a fragment shader from "tests/games/mandelbrot.spv"
+set frag1 to a fragment shader from "tests/games/plasma.spv"
+set frag2 to a fragment shader from "tests/games/julia.spv"
+set frag3 to a fragment shader from "tests/games/rings.spv"
 
 # Create shader programs
 set prog0 to a shader program with vertex vert and fragment frag0

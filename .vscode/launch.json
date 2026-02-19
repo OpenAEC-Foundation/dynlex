@@ -15,7 +15,7 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
+			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
@@ -43,7 +43,7 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
+			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
@@ -69,7 +69,7 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/dynlex.natvis",
+			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",

@@ -1,7 +1,7 @@
 import lib/shader.dl
 
 # Animated Mandelbrot fragment shader — zooms into the fractal
-# Compile with: ./build/dynlex games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o games/mandelbrot.spv
+# Compile with: ./build/dynlex tests/games/mandelbrot_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/mandelbrot.spv
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate

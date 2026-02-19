@@ -3,7 +3,7 @@
 import lib/font.dl
 
 set window to a new window with width 400 and height 300
-set font to a loaded font from "games/fonts/LiberationMono-Regular.ttf" at size 32
+set font to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32
 enable text rendering
 draw text "Hello DynLex!" at 20 100 using font and color 255 255 255
 disable text rendering

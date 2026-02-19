@@ -4,17 +4,17 @@ import lib/graphics.dl
 # Loads SPIR-V vertex and fragment shaders, renders a fullscreen quad
 #
 # Build:
-#   ./build/dynlex games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o games/passthrough.spv
-#   ./build/dynlex games/mandelbrot_shader.dl --emit-spirv -o games/mandelbrot.spv
-#   ./build/dynlex games/mandelbrot.dl -o games/mandelbrot
+#   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
+#   ./build/dynlex tests/games/mandelbrot_shader.dl --emit-spirv -o tests/games/mandelbrot.spv
+#   ./build/dynlex tests/games/mandelbrot.dl -o tests/games/mandelbrot
 # Run:
-#   ./games/mandelbrot
+#   ./tests/games/mandelbrot
 
 set window to a new window with width 800 and height 600
 
 # Load both SPIR-V shaders
-set vert to a vertex shader from "games/passthrough.spv"
-set frag to a fragment shader from "games/mandelbrot.spv"
+set vert to a vertex shader from "tests/games/passthrough.spv"
+set frag to a fragment shader from "tests/games/mandelbrot.spv"
 
 # Link shader program
 set prog to a shader program with vertex vert and fragment frag

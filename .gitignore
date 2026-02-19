@@ -7,9 +7,10 @@ CMakeUserPresets.json
 *.ll
 *.out
 *.spv
+*.debug_bin
 
 # Compiled game binaries
-games/mandelbrot
+tests/games/mandelbrot
 
 # Compiled test binaries
 tests/required/*/main

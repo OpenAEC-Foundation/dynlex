@@ -2,15 +2,15 @@ import lib/graphics.dl
 
 # Plasma host program
 # Build:
-#   ./build/dynlex games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o games/plasma.spv
-#   ./build/dynlex games/plasma.dl -o games/plasma
+#   ./build/dynlex tests/games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/plasma.spv
+#   ./build/dynlex tests/games/plasma.dl -o tests/games/plasma
 # Run:
-#   ./games/plasma
+#   ./tests/games/plasma
 
 set window to a new window with width 800 and height 600
 
-set vert to a vertex shader from "games/passthrough.spv"
-set frag to a fragment shader from "games/plasma.spv"
+set vert to a vertex shader from "tests/games/passthrough.spv"
+set frag to a fragment shader from "tests/games/plasma.spv"
 set prog to a shader program with vertex vert and fragment frag
 use shader program prog
 

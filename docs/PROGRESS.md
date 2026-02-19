@@ -46,7 +46,7 @@ effect draw text msg at x y using font and color r g b:
         disable text rendering
 ```
 
-### Update `games/snake.dl`
+### Update `tests/games/snake.dl`
 - Import `lib/font.dl`
 - Load font at startup
 - Add `point` class for food position

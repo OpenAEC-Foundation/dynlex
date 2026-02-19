@@ -18,7 +18,7 @@ set dir_left to 4
 # Initialize
 seed random with current time
 set window to a new window with width window_size and height window_size
-set font to a loaded font from "games/fonts/LiberationMono-Regular.ttf" at size 24
+set font to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
 
 # Snake body arrays
 set snake_x to allocate max_length items
