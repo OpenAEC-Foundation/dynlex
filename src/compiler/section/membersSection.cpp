@@ -3,12 +3,12 @@
 #include "parseContext.h"
 
 // Parse a type string, supporting primitive types and class names
-static Type parseFieldType(ParseContext &context, std::string_view typeStr) {
+static DataType parseFieldType(ParseContext &context, std::string_view typeStr) {
 	std::string s(typeStr);
 	// Try primitive types first
 	if (s == "void" || s == "bool" || s == "i8" || s == "i16" || s == "i32" || s == "i64" || s == "f32" || s == "f64" ||
 		s == "pointer" || s == "string")
-		return Type::fromString(s);
+		return DataType::fromString(s);
 
 	// Look up class name in pattern trees
 	// Class patterns are stored in the Expression tree (SectionType::Expression)
@@ -32,7 +32,7 @@ static Type parseFieldType(ParseContext &context, std::string_view typeStr) {
 			for (auto *d : node->matchingDefinitions) {
 				if (d->section && d->section->type == SectionType::Class) {
 					auto *classSec = static_cast<ClassSection *>(d->section);
-					return {Type::Kind::Class, 0, 0, classSec->classDefinition, 0};
+					return {DataType::Kind::Class, 0, 0, classSec->classDefinition, 0};
 				}
 			}
 		}
@@ -59,22 +59,22 @@ FieldDefinition parseFieldDeclaration(ParseContext &context, std::string_view fi
 		if (typeEnd != std::string_view::npos)
 			typeStr = typeStr.substr(0, typeEnd + 1);
 
-		Type declaredType = parseFieldType(context, typeStr);
+		DataType declaredType = parseFieldType(context, typeStr);
 		return {std::string(name), Range(line, line->patternText), declaredType};
 	}
 	return {std::string(fieldText), Range(line, line->patternText), {}};
 }
 
 // Get natural size and alignment for a type (x86-64 ABI)
-static std::pair<int, int> typeSizeAlign(const Type &t) {
+static std::pair<int, int> typeSizeAlign(const DataType &t) {
 	if (t.isPointer())
 		return {8, 8};
 	switch (t.kind) {
-	case Type::Kind::Integer:
+	case DataType::Kind::Integer:
 		return {t.byteSize, t.byteSize};
-	case Type::Kind::Float:
+	case DataType::Kind::Float:
 		return {t.byteSize, t.byteSize};
-	case Type::Kind::Bool:
+	case DataType::Kind::Bool:
 		return {1, 1};
 	default:
 		return {8, 8}; // pointer-sized default
@@ -98,22 +98,27 @@ static void insertAlignmentPadding(ClassDefinition *classDef, int alignment, Cod
 	int padding = (alignment - (offset % alignment)) % alignment;
 	int padIdx = 0;
 	while (padding >= 8) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i64")}
+		classDef->fields.push_back(
+			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i64")}
 		);
 		padding -= 8;
 	}
 	if (padding >= 4) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i32")}
+		classDef->fields.push_back(
+			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i32")}
 		);
 		padding -= 4;
 	}
 	if (padding >= 2) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i16")}
+		classDef->fields.push_back(
+			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i16")}
 		);
 		padding -= 2;
 	}
 	if (padding >= 1) {
-		classDef->fields.push_back({"_pad" + std::to_string(padIdx++), Range(line, line->patternText), Type::fromString("i8")});
+		classDef->fields.push_back(
+			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i8")}
+		);
 	}
 }
 

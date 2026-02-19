@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <regex>
+using namespace std::literals;
 
 namespace lsp {
 
@@ -498,6 +499,16 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
 			continue;
 		tokenizeExpression(line->expression, line);
+	}
+
+	// Import lines: "import" as effect, path as string
+	for (CodeLine *line : context->codeLines) {
+		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->patternText.starts_with("import "))
+			continue;
+		std::string_view importKeyword = line->patternText.substr(0, "import"sv.length());
+		std::string_view importPath = line->patternText.substr("import "sv.length());
+		addToken(::Range(line, importKeyword), SemanticTokenType::Effect, false);
+		addToken(::Range(line, importPath), SemanticTokenType::String, false);
 	}
 
 	std::function<void(Section *)> tokenizePatternDefinitions = [&](Section *section) {

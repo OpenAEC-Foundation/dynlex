@@ -1,10 +1,9 @@
 {
   "mcpServers": {
     "lsp": {
-      "command": "mcp-language-server",
+      "command": "bash",
       "args": [
-        "-workspace", ".",
-        "-lsp", "clangd", "--", "--background-index"
+        "-c", "mcp-language-server -workspace . -lsp \"$(ls /usr/bin/clangd-* 2>/dev/null | sort -V | tail -1)\" -- --background-index"
       ]
     }
   }

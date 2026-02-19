@@ -29,7 +29,7 @@
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<Type> &argTypes, Instantiation &inst
+	const std::vector<DataType> &argTypes, Instantiation &inst
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
@@ -56,7 +56,7 @@ void generateSpecializedFunction(
 
 	// Name includes type signature for uniqueness
 	std::string funcName = getPatternFunctionName(section);
-	for (const Type &t : argTypes) {
+	for (const DataType &t : argTypes) {
 		funcName += "_" + t.toString();
 	}
 
@@ -140,12 +140,12 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		if (auto *intVal = std::get_if<int64_t>(&expr->literalValue)) {
-			Type intType = getEffectiveType(context, expr);
+			DataType intType = getEffectiveType(context, expr);
 			llvm::Type *llvmIntType = intType.toLLVM(*context.llvmContext);
 			return llvm::ConstantInt::get(llvmIntType, *intVal, true);
 		}
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
-			Type floatType = getEffectiveType(context, expr);
+			DataType floatType = getEffectiveType(context, expr);
 			llvm::Type *llvmFloatType = floatType.toLLVM(*context.llvmContext);
 			return llvm::ConstantFP::get(llvmFloatType, *doubleVal);
 		}
@@ -181,10 +181,10 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::string varName = expr->variable->name;
 
 		// Determine this variable's type for loading
-		Type varType = getEffectiveType(context, expr);
+		DataType varType = getEffectiveType(context, expr);
 
 		// Class types: return the pointer directly (structs are passed by pointer)
-		if (varType.kind == Type::Kind::Class) {
+		if (varType.kind == DataType::Kind::Class) {
 			auto bindingIt = context.patternBindings.find(varName);
 			if (bindingIt != context.patternBindings.end())
 				return bindingIt->second;
@@ -224,7 +224,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 
 		// Build argument types for overload selection
-		std::vector<Type> argTypesForOverload;
+		std::vector<DataType> argTypesForOverload;
 		{
 			size_t ai = 0;
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
@@ -315,7 +315,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		// Non-macro pattern: monomorphized function call.
 		// Compute argument types at this call site for specialization.
-		std::vector<Type> argTypes;
+		std::vector<DataType> argTypes;
 		for (const auto &[paramName, argExpr] : paramBindings) {
 			argTypes.push_back(getEffectiveType(context, argExpr));
 		}

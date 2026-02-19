@@ -22,7 +22,7 @@ struct Expression;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
-	Type returnType;
+	DataType returnType;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
 };
@@ -43,7 +43,7 @@ struct Section {
 	std::vector<Section *> children;
 	std::unordered_map<std::string, Variable *> variables;
 	// Monomorphization: each argument type combination gets its own instantiation
-	std::map<std::vector<Type>, Instantiation> instantiations;
+	std::map<std::vector<DataType>, Instantiation> instantiations;
 	// the start and end index of this section in compiled lines.
 	int startLineIndex, endLineIndex;
 	// count of unresolved pattern references + unresolved child sections
@@ -57,6 +57,8 @@ struct Section {
 	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a macro (inlined at call site instead of function call)
 	bool isMacro = false;
+	// recursion guard for type inference of effects/macros
+	bool inferring = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
 	// list of variable names declared as global in this function (from globals: section)

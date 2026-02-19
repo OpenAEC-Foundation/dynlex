@@ -9,7 +9,7 @@ class LLVMContext;
 
 struct ClassDefinition;
 
-struct Type {
+struct DataType {
 	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, Class, TypeReference };
 
 	Kind kind = Kind::Undeduced;
@@ -19,13 +19,13 @@ struct Type {
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
 	Kind referencedKind = Kind::Undeduced;		// For Kind::TypeReference: the primitive kind it refers to
 
-	bool operator==(const Type &other) const {
+	bool operator==(const DataType &other) const {
 		return kind == other.kind && byteSize == other.byteSize && pointerDepth == other.pointerDepth &&
 			   classDefinition == other.classDefinition && classInstIndex == other.classInstIndex &&
 			   referencedKind == other.referencedKind;
 	}
-	bool operator!=(const Type &other) const { return !(*this == other); }
-	bool operator<(const Type &other) const {
+	bool operator!=(const DataType &other) const { return !(*this == other); }
+	bool operator<(const DataType &other) const {
 		if (kind != other.kind)
 			return kind < other.kind;
 		if (byteSize != other.byteSize)
@@ -42,7 +42,7 @@ struct Type {
 	// Convert a TypeReference to the type it refers to.
 	// For class TypeReferences (classDefinition != nullptr), returns a Class type.
 	// For primitive TypeReferences (referencedKind set), returns the primitive type.
-	Type toReferencedType() const {
+	DataType toReferencedType() const {
 		assert(kind == Kind::TypeReference && "toReferencedType only valid for TypeReference");
 		if (classDefinition)
 			return {Kind::Class, 0, 0, classDefinition, classInstIndex};
@@ -56,7 +56,7 @@ struct Type {
 	bool isDeduced() const { return kind != Kind::Undeduced; }
 
 	// Whether this type can be refined to a more specific type
-	bool canRefineTo(const Type &target) const {
+	bool canRefineTo(const DataType &target) const {
 		if (!isDeduced())
 			return true;
 		if (pointerDepth != target.pointerDepth)
@@ -72,21 +72,22 @@ struct Type {
 	}
 
 	// Return this type with one more level of indirection
-	Type pointed() const {
+	DataType pointed() const {
 		assert(isDeduced() && "Cannot take pointer to undeduced type");
 		return {kind, byteSize, pointerDepth + 1};
 	}
 
 	// Return this type with one less level of indirection
-	Type dereferenced() const {
+	DataType dereferenced() const {
 		assert(pointerDepth > 0 && "Cannot dereference non-pointer type");
 		return {kind, byteSize, pointerDepth - 1};
 	}
 
-	// Promote two numeric types for arithmetic: Numeric adapts, Float wins over Integer
-	static Type promote(const Type &a, const Type &b) {
-		assert((a.isNumeric() || a.kind == Kind::Undeduced) && "First operand must be numeric type");
-		assert((b.isNumeric() || b.kind == Kind::Undeduced) && "Second operand must be numeric type");
+	// Promote two numeric types for arithmetic: Numeric adapts, Float wins over Integer.
+	// Returns Undeduced if either operand is non-numeric (caller handles the mismatch).
+	static DataType promote(const DataType &a, const DataType &b) {
+		if (!(a.isNumeric() || a.kind == Kind::Undeduced) || !(b.isNumeric() || b.kind == Kind::Undeduced))
+			return {Kind::Undeduced};
 
 		if (a.kind == Kind::Float || b.kind == Kind::Float) {
 			// Float wins. Pick the larger byteSize.
@@ -112,7 +113,7 @@ struct Type {
 	}
 
 	// Promote for arithmetic, including pointer + integer -> pointer
-	static Type promoteArithmetic(const Type &a, const Type &b) {
+	static DataType promoteArithmetic(const DataType &a, const DataType &b) {
 		if (a.isPointer() && (b.isNumeric() || b.kind == Kind::Undeduced))
 			return a;
 		if (b.isPointer() && (a.isNumeric() || a.kind == Kind::Undeduced))
@@ -120,7 +121,7 @@ struct Type {
 		return promote(a, b);
 	}
 
-	static Type fromString(const std::string &s) {
+	static DataType fromString(const std::string &s) {
 		if (s == "void")
 			return {Kind::Void};
 		if (s == "bool")

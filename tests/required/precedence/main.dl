@@ -1,14 +1,15 @@
 import lib/std.dl
 
 # Multiplication before addition
-print integer 3 * 2 + 1 as line
-print integer 1 + 3 * 2 as line
-print integer 10 - 2 * 3 as line
+print 3 * 2 + 1 as line
+print 1 + 3 * 2 as line
+print 10 - 2 * 3 as line
 
 # Left-associative
-print integer 2 + 3 + 4 as line
-print integer 2 * 3 * 4 as line
+print 2 + 3 + 4 as line
+print 2 * 3 * 4 as line
 
 # Prefix functions with operators: (f(a) + f(a)), not f(f(a) + a)
 set a to 4.0
-print integer the square root of a + the square root of a as line
+set result to the square root of a + the square root of a
+print result as an integer as line

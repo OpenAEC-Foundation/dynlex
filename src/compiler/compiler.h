@@ -22,5 +22,5 @@ bool isMathFunction(const std::string &name);
 // Returns the best-matching definition, preferring type-constrained overloads over unconstrained ones.
 PatternDefinition *selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
-	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<Type> &argTypes
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );

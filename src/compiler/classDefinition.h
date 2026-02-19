@@ -11,11 +11,11 @@ class StructType;
 struct FieldDefinition {
 	std::string name;
 	Range range;
-	Type declaredType; // Kind::Undeduced if not specified
+	DataType declaredType; // Kind::Undeduced if not specified
 };
 
 struct ClassInstantiation {
-	std::vector<Type> fieldTypes;
+	std::vector<DataType> fieldTypes;
 	llvm::StructType *llvmStructType = nullptr;
 };
 
@@ -27,7 +27,7 @@ struct ClassDefinition {
 	Range range;
 
 	// Find or create instantiation for given field types. Returns index.
-	int getOrCreateInstantiation(const std::vector<Type> &fieldTypes) {
+	int getOrCreateInstantiation(const std::vector<DataType> &fieldTypes) {
 		for (int i = 0; i < (int)instantiations.size(); i++) {
 			if (instantiations[i].fieldTypes == fieldTypes)
 				return i;

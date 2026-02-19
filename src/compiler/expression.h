@@ -21,7 +21,7 @@ struct Expression {
 	};
 
 	Kind kind = Kind::Pending;
-	Type type;
+	DataType type;
 	Range range;
 
 	// For Literal: the actual value

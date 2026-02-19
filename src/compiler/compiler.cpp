@@ -134,7 +134,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 				));
 				return false;
 			}
-			continue;
+			// Fall through to add import line to codeLines (tokenized during section analysis)
 		}
 		line->mergedLineIndex = context.codeLines.size();
 		context.codeLines.push_back(line);
@@ -237,7 +237,11 @@ bool analyzeSections(ParseContext &context) {
 			data.indentLevel++;
 		} else {
 			line->patternText = trimmedText;
-			if (line->patternText.length()) {
+			if (line->patternText.starts_with("import ")) {
+				// Import lines are already processed during importSourceFile;
+				// tokenize "import" as effect and the path as string
+				line->resolved = true;
+			} else if (line->patternText.length()) {
 				currentSection->processLine(context, line);
 			} else {
 				line->resolved = true;
@@ -253,7 +257,7 @@ bool analyzeSections(ParseContext &context) {
 			ClassDefinition *classDef = classSec->classDefinition;
 			if (!classDef->fields.empty() && classDef->instantiations.empty()) {
 				bool allDeclared = true;
-				std::vector<Type> fieldTypes;
+				std::vector<DataType> fieldTypes;
 				for (const auto &field : classDef->fields) {
 					if (!field.declaredType.isDeduced()) {
 						allDeclared = false;
@@ -292,7 +296,7 @@ bool isMathFunction(const std::string &name) {
 
 PatternDefinition *selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
-	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<Type> &argTypes
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 ) {
 	if (definitions.size() <= 1)
 		return definitions.empty() ? nullptr : definitions[0];
@@ -319,11 +323,21 @@ PatternDefinition *selectOverload(
 			const std::string &paramName = paramIt->second;
 			for (auto &elem : candidate->patternElements) {
 				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
-					if (elem.resolvedType) {
-						// Type constraint exists — check if argument type matches
-						const Type &argType = argTypes[argIdx];
-						if (argType.kind == Type::Kind::Class && argType.classDefinition == elem.resolvedType) {
-							score++; // constraint matched
+					if (elem.resolvedTypeConstraint.isDeduced()) {
+						// DataType constraint exists — check if argument type matches
+						const DataType &argType = argTypes[argIdx];
+						const DataType &constraint = elem.resolvedTypeConstraint;
+						bool matches = false;
+						if (constraint.kind == DataType::Kind::Class) {
+							matches =
+								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
+						} else {
+							// Primitive type constraint: match kind and pointer depth
+							// (byteSize is ignored — e.g., {integer:x} matches i8, i16, i32, i64)
+							matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
+						}
+						if (matches) {
+							score++;
 						} else {
 							constraintFailed = true;
 						}

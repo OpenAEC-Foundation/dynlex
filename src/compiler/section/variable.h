@@ -8,7 +8,7 @@ struct Variable {
 	Variable(const std::string &name, VariableReference *definition, bool isGlobal = false)
 		: name(name), definition(definition), isGlobal(isGlobal) {}
 	std::string name;
-	Type type;
+	DataType type;
 	// the first reference to this variable (the definition point)
 	VariableReference *definition;
 	// whether this variable is global (module-level) or local (function-level)

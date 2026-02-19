@@ -5,7 +5,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
 
-llvm::Type *Type::toLLVM(llvm::LLVMContext &ctx) const {
+llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 	// Any pointer type maps to opaque ptr
 	if (pointerDepth > 0)
 		return llvm::PointerType::getUnqual(ctx);
@@ -42,7 +42,7 @@ llvm::Type *Type::toLLVM(llvm::LLVMContext &ctx) const {
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
 			std::vector<llvm::Type *> fieldTypes;
-			for (const Type &ft : inst.fieldTypes)
+			for (const DataType &ft : inst.fieldTypes)
 				fieldTypes.push_back(ft.toLLVM(ctx));
 			inst.llvmStructType = llvm::StructType::create(ctx, fieldTypes, "class");
 		}

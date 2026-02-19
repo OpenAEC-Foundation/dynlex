@@ -18,16 +18,16 @@ struct SourceFile;
 }
 
 // Shared codegen utilities (codegenTypes.cpp)
-llvm::Type *getLLVMType(ParseContext &context, Type type);
-llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condType, const std::string &name);
+llvm::Type *getLLVMType(ParseContext &context, DataType type);
+llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, DataType condType, const std::string &name);
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
 void resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
-Type getEffectiveType(ParseContext &context, Expression *expr);
-llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, Type type);
+DataType getEffectiveType(ParseContext &context, Expression *expr);
+llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
 std::string getPatternFunctionName(Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section);
 llvm::Value *getVariablePointer(ParseContext &context, Expression *expr);
-llvm::Value *ensureType(ParseContext &context, llvm::Value *val, Type fromType, Type toType);
+llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
 
 // MacroScopeGuard: RAII guard that pops to caller's macro binding scope, restores on destruction.
 struct MacroScopeGuard {
@@ -44,7 +44,7 @@ struct MacroScopeGuard {
 };
 
 // Debug info helpers (codegenTypes.cpp)
-llvm::DIType *getDIType(ParseContext &context, Type type);
+llvm::DIType *getDIType(ParseContext &context, DataType type);
 llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFile);
 
 // Expression/section code generation (codegen.cpp)
@@ -52,10 +52,11 @@ bool generateSectionCode(ParseContext &context, Section *section);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
 void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<Type> &argTypes, Instantiation &inst
+	const std::vector<DataType> &argTypes, Instantiation &inst
 );
 
 // Intrinsic code generation (codegenIntrinsics.cpp)
-llvm::Value *
-generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<Expression *> &args, Type resultType);
+llvm::Value *generateIntrinsicCode(
+	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+);
 std::string getStringLiteral(Expression *expr);

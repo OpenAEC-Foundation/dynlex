@@ -17,37 +17,37 @@
 #include <filesystem>
 #include <unordered_map>
 
-// Get the LLVM type for a given Type
-llvm::Type *getLLVMType(ParseContext &context, Type type) { return type.toLLVM(*context.llvmContext); }
+// Get the LLVM type for a given DataType
+llvm::Type *getLLVMType(ParseContext &context, DataType type) { return type.toLLVM(*context.llvmContext); }
 
-// Get the DWARF debug type for a given Type
-llvm::DIType *getDIType(ParseContext &context, Type type) {
+// Get the DWARF debug type for a given DataType
+llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (!context.diBuilder)
 		return nullptr;
 
-	if (type.kind == Type::Kind::Void)
+	if (type.kind == DataType::Kind::Void)
 		return nullptr;
 
 	// Pointers: create pointer to inner type
 	if (type.pointerDepth > 0) {
-		Type inner = type;
+		DataType inner = type;
 		inner.pointerDepth--;
 		return context.diBuilder->createPointerType(getDIType(context, inner), 64);
 	}
 
 	switch (type.kind) {
-	case Type::Kind::Bool:
+	case DataType::Kind::Bool:
 		return context.diBuilder->createBasicType("bool", 8, llvm::dwarf::DW_ATE_boolean);
-	case Type::Kind::Integer: {
+	case DataType::Kind::Integer: {
 		int bits = type.byteSize * 8;
 		return context.diBuilder->createBasicType("i" + std::to_string(type.byteSize * 8), bits, llvm::dwarf::DW_ATE_signed);
 	}
-	case Type::Kind::Float: {
+	case DataType::Kind::Float: {
 		int bits = type.byteSize * 8;
 		std::string name = type.byteSize == 4 ? "f32" : "f64";
 		return context.diBuilder->createBasicType(name, bits, llvm::dwarf::DW_ATE_float);
 	}
-	case Type::Kind::Class: {
+	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
 			return nullptr;
 		ClassInstantiation &inst = type.classDefinition->instantiations[type.classInstIndex];
@@ -104,11 +104,11 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 }
 
 // Convert any value to boolean (i1) for conditional branches
-llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condType, const std::string &name) {
+llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, DataType condType, const std::string &name) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	if (condType.kind == Type::Kind::Bool)
+	if (condType.kind == DataType::Kind::Bool)
 		return condValue; // already i1
-	if (condType.kind == Type::Kind::Float) {
+	if (condType.kind == DataType::Kind::Float) {
 		llvm::Type *floatTy = condType.toLLVM(*context.llvmContext);
 		return builder.CreateFCmpONE(condValue, llvm::ConstantFP::get(floatTy, 0.0), name);
 	}
@@ -183,7 +183,7 @@ MacroScopeGuard::~MacroScopeGuard() {
 // Resolve the effective type of an expression during codegen.
 // Follows macro expression bindings and pattern parameter types to compute the real type,
 // even for expressions inside non-macro function bodies whose .type was never inferred.
-Type getEffectiveType(ParseContext &context, Expression *expr) {
+DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return {};
 
@@ -228,17 +228,17 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 				if (info->argCount == 2) {
 					return getEffectiveType(context, expr->arguments[1]);
 				} else {
-					Type leftType = getEffectiveType(context, expr->arguments[1]);
-					Type rightType = getEffectiveType(context, expr->arguments[2]);
-					return isPointerArithmeticOperator(expr->intrinsicName) ? Type::promoteArithmetic(leftType, rightType)
-																			: Type::promote(leftType, rightType);
+					DataType leftType = getEffectiveType(context, expr->arguments[1]);
+					DataType rightType = getEffectiveType(context, expr->arguments[2]);
+					return isPointerArithmeticOperator(expr->intrinsicName) ? DataType::promoteArithmetic(leftType, rightType)
+																			: DataType::promote(leftType, rightType);
 				}
 			case IntrinsicReturnKind::Bool:
-				return {Type::Kind::Bool};
+				return {DataType::Kind::Bool};
 			case IntrinsicReturnKind::Void:
-				return {Type::Kind::Void};
+				return {DataType::Kind::Void};
 			case IntrinsicReturnKind::Float:
-				return {Type::Kind::Float, 4};
+				return {DataType::Kind::Float, 4};
 			case IntrinsicReturnKind::Custom:
 				break;
 			}
@@ -248,7 +248,7 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]).dereferenced();
 		if (expr->intrinsicName == "load at")
-			return {Type::Kind::Integer, 8};
+			return {DataType::Kind::Integer, 8};
 		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]);
 		if (expr->intrinsicName == "call") {
@@ -258,17 +258,17 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 				if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
 					retTypeStr = *str;
 				if (!retTypeStr.empty())
-					return Type::fromString(retTypeStr);
+					return DataType::fromString(retTypeStr);
 			}
-			return {Type::Kind::Integer, 4};
+			return {DataType::Kind::Integer, 4};
 		}
 		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
-			return expr->type; // Type fully determined during inference
+			return expr->type; // DataType fully determined during inference
 		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
-			if (expr->type.kind == Type::Kind::Class)
+			if (expr->type.kind == DataType::Kind::Class)
 				return expr->type;
-			Type typeArgType = getEffectiveType(context, expr->arguments[2]);
-			if (typeArgType.kind == Type::Kind::TypeReference)
+			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);
+			if (typeArgType.kind == DataType::Kind::TypeReference)
 				return typeArgType.toReferencedType();
 		}
 		return expr->type;
@@ -283,7 +283,7 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 }
 
 // Create an alloca at function entry (avoids stack growth in loops)
-llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, Type type) {
+llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
 	llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
@@ -307,7 +307,7 @@ std::string getPatternFunctionName(Section *section) {
 // Allocate all variables for a section at its start
 void allocateSectionVariables(ParseContext &context, Section *section) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
-		Type varType = {Type::Kind::Integer}; // fallback
+		DataType varType = {DataType::Kind::Integer}; // fallback
 		Variable *var = section->findVariable(name);
 		if (var)
 			varType = var->type;
@@ -408,46 +408,46 @@ llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 }
 
 // Ensure a value has the target LLVM type by inserting conversions if needed
-llvm::Value *ensureType(ParseContext &context, llvm::Value *val, Type fromType, Type toType) {
+llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType) {
 	if (fromType == toType || !val)
 		return val;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Type *targetLLVM = toType.toLLVM(*context.llvmContext);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
-	if (fromType.isPointer() && toType.kind == Type::Kind::Integer && !toType.isPointer())
+	if (fromType.isPointer() && toType.kind == DataType::Kind::Integer && !toType.isPointer())
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
-	if (!fromType.isPointer() && fromType.kind == Type::Kind::Integer && toType.isPointer())
+	if (!fromType.isPointer() && fromType.kind == DataType::Kind::Integer && toType.isPointer())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
 
 	// Integer → Integer (different sizes)
-	if (fromType.kind == Type::Kind::Integer && toType.kind == Type::Kind::Integer) {
+	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Integer) {
 		if (fromType.byteSize < toType.byteSize)
 			return builder.CreateSExt(val, targetLLVM, "sext");
 		return builder.CreateTrunc(val, targetLLVM, "trunc");
 	}
 
 	// Float → Float (different sizes)
-	if (fromType.kind == Type::Kind::Float && toType.kind == Type::Kind::Float) {
+	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
 		if (fromType.byteSize < toType.byteSize)
 			return builder.CreateFPExt(val, targetLLVM, "fpext");
 		return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
 	}
 
 	// Integer → Float
-	if (fromType.kind == Type::Kind::Integer && toType.kind == Type::Kind::Float)
+	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Float)
 		return builder.CreateSIToFP(val, targetLLVM, "itof");
 
 	// Float → Integer
-	if (fromType.kind == Type::Kind::Float && toType.kind == Type::Kind::Integer)
+	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Integer)
 		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
 
 	// Bool → Integer
-	if (fromType.kind == Type::Kind::Bool && toType.kind == Type::Kind::Integer)
+	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Integer)
 		return builder.CreateZExt(val, targetLLVM, "btoi");
 
 	// Bool → Float
-	if (fromType.kind == Type::Kind::Bool && toType.kind == Type::Kind::Float) {
+	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Float) {
 		llvm::Value *intVal = builder.CreateZExt(val, builder.getInt64Ty(), "btoi");
 		return builder.CreateSIToFP(intVal, targetLLVM, "itof");
 	}

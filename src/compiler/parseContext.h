@@ -63,7 +63,7 @@ struct ParseContext {
 	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
-	std::unordered_map<std::string, Type> patternParamTypes;
+	std::unordered_map<std::string, DataType> patternParamTypes;
 	// Macro expression bindings: maps variable name to Expression* (for macro expansion)
 	// Only contains the CURRENT macro's parameter bindings (scoped, not inherited).
 	std::unordered_map<std::string, Expression *> macroExpressionBindings;

@@ -45,9 +45,9 @@ static Expression *resolveThroughBindingsDeep(
 }
 
 // Convenience: resolve an expression through bindings, then return its type.
-static Type resolveTypeThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
+static DataType resolveTypeThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
 	Expression *resolved = resolveThroughBindings(expr, bindings);
-	return resolved ? resolved->type : Type{};
+	return resolved ? resolved->type : DataType{};
 }
 
 // Infer types through a macro body with given parameter bindings. Returns true if anything changed.
@@ -68,16 +68,16 @@ static bool inferExpressionType(
 		changed |= inferExpressionType(arg, context, macroBindings);
 	}
 
-	Type oldType = expr->type;
+	DataType oldType = expr->type;
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		if (std::holds_alternative<int64_t>(expr->literalValue)) {
-			expr->type = {Type::Kind::Numeric};
+			expr->type = {DataType::Kind::Numeric};
 		} else if (std::holds_alternative<double>(expr->literalValue)) {
-			expr->type = {Type::Kind::Float, 8}; // C++ double = f64
+			expr->type = {DataType::Kind::Float, 8}; // C++ double = f64
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
-			expr->type = {Type::Kind::Integer, 1, 1};
+			expr->type = {DataType::Kind::Integer, 1, 1};
 		}
 		break;
 	}
@@ -88,7 +88,7 @@ static bool inferExpressionType(
 			// Check macro bindings first
 			auto macroIt = macroBindings.find(varName);
 			if (macroIt != macroBindings.end()) {
-				Type boundType = macroIt->second->type;
+				DataType boundType = macroIt->second->type;
 				if (boundType.isDeduced()) {
 					expr->type = boundType;
 				}
@@ -110,28 +110,36 @@ static bool inferExpressionType(
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
 				if (info->argCount == 2) {
-					Type argType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					DataType argType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (argType.isDeduced())
 						expr->type = argType;
 				} else {
-					Type leftType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					Type rightType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+					DataType leftType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					DataType rightType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (leftType.isDeduced() && rightType.isDeduced()) {
-						expr->type = isPointerArithmeticOperator(expr->intrinsicName)
-										 ? Type::promoteArithmetic(leftType, rightType)
-										 : Type::promote(leftType, rightType);
+						DataType result = isPointerArithmeticOperator(expr->intrinsicName)
+											  ? DataType::promoteArithmetic(leftType, rightType)
+											  : DataType::promote(leftType, rightType);
+						if (!result.isDeduced()) {
+							context.diagnostics.push_back(Diagnostic(
+								Diagnostic::Level::Error, "Cannot apply '" + expr->intrinsicName + "' to non-numeric operands",
+								expr->range
+							));
+							return false;
+						}
+						expr->type = result;
 					}
 				}
 				break;
 			case IntrinsicReturnKind::Bool:
-				expr->type = {Type::Kind::Bool};
+				expr->type = {DataType::Kind::Bool};
 				break;
 			case IntrinsicReturnKind::Void:
 				// "store" has side effects on variable types beyond just being Void
 				if (expr->intrinsicName == "store") {
 					std::unordered_map<std::string, Expression *> destBindings;
 					Expression *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
-					Type valType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+					DataType valType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
 						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
 						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
@@ -140,7 +148,7 @@ static bool inferExpressionType(
 							changed = true;
 							// Give this variable its own instantiation copy so property stores
 							// don't contaminate other variables sharing the same construct instantiation
-							if (var->type.kind == Type::Kind::Class && var->type.classDefinition &&
+							if (var->type.kind == DataType::Kind::Class && var->type.classDefinition &&
 								var->type.classInstIndex >= 0) {
 								auto &src = var->type.classDefinition->instantiations[var->type.classInstIndex].fieldTypes;
 								var->type.classInstIndex = (int)var->type.classDefinition->instantiations.size();
@@ -149,8 +157,9 @@ static bool inferExpressionType(
 						}
 					} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
 							   valType.isDeduced()) {
-						Type instType = resolveTypeThroughBindings(destExpr->arguments[1], destBindings);
-						if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+						DataType instType = resolveTypeThroughBindings(destExpr->arguments[1], destBindings);
+						if (instType.kind == DataType::Kind::Class && instType.classDefinition &&
+							instType.classInstIndex >= 0) {
 							Expression *propExpr = resolveThroughBindings(destExpr->arguments[2], destBindings);
 							std::string fieldName;
 							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
@@ -169,25 +178,25 @@ static bool inferExpressionType(
 						}
 					}
 				}
-				expr->type = {Type::Kind::Void};
+				expr->type = {DataType::Kind::Void};
 				break;
 			case IntrinsicReturnKind::Float:
-				expr->type = {Type::Kind::Float, 4};
+				expr->type = {DataType::Kind::Float, 4};
 				break;
 			case IntrinsicReturnKind::Custom:
 				if (expr->intrinsicName == "address of") {
-					Type varType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					DataType varType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (varType.isDeduced())
 						expr->type = varType.pointed();
 				} else if (expr->intrinsicName == "dereference") {
-					Type ptrType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					DataType ptrType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (ptrType.isDeduced() && ptrType.isPointer())
 						expr->type = ptrType.dereferenced();
 				} else if (expr->intrinsicName == "load at") {
-					expr->type = {Type::Kind::Integer, 8};
+					expr->type = {DataType::Kind::Integer, 8};
 				} else if (expr->intrinsicName == "return") {
 					if (expr->arguments.size() >= 2) {
-						Type retType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+						DataType retType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 						if (retType.isDeduced()) {
 							expr->type = retType;
 							if (context.currentInstantiation)
@@ -199,11 +208,18 @@ static bool inferExpressionType(
 					if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
 						retTypeStr = *str;
 					if (!retTypeStr.empty())
-						expr->type = Type::fromString(retTypeStr);
+						expr->type = DataType::fromString(retTypeStr);
 				} else if (expr->intrinsicName == "cast") {
-					Type typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
-					if (typeArgType.kind == Type::Kind::TypeReference)
+					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+					if (typeArgType.kind == DataType::Kind::TypeReference) {
 						expr->type = typeArgType.toReferencedType();
+						// If casting to a class type without a specific instantiation,
+						// use the declared-types instantiation (index 0) if available.
+						if (expr->type.kind == DataType::Kind::Class && expr->type.classDefinition &&
+							expr->type.classInstIndex < 0 && !expr->type.classDefinition->instantiations.empty()) {
+							expr->type.classInstIndex = 0;
+						}
+					}
 				} else if (expr->intrinsicName == "type") {
 					// @intrinsic("type", kindString[, bits])
 					// Resolve kind string through macro bindings
@@ -212,22 +228,22 @@ static bool inferExpressionType(
 					if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
 						kindStr = *str;
 					if (!kindStr.empty()) {
-						Type::Kind refKind = Type::Kind::Undeduced;
+						DataType::Kind refKind = DataType::Kind::Undeduced;
 						int byteSize = 0;
 						int ptrDepth = 0;
 						if (kindStr == "int") {
-							refKind = Type::Kind::Integer;
+							refKind = DataType::Kind::Integer;
 							byteSize = 4; // default
 						} else if (kindStr == "float") {
-							refKind = Type::Kind::Float;
+							refKind = DataType::Kind::Float;
 							byteSize = 8; // default
 						} else if (kindStr == "bool") {
-							refKind = Type::Kind::Bool;
+							refKind = DataType::Kind::Bool;
 						} else if (kindStr == "void") {
-							refKind = Type::Kind::Void;
+							refKind = DataType::Kind::Void;
 						} else if (kindStr == "string") {
 							// string = pointer to byte (i8*)
-							refKind = Type::Kind::Integer;
+							refKind = DataType::Kind::Integer;
 							byteSize = 1;
 							ptrDepth = 1;
 						}
@@ -237,34 +253,34 @@ static bool inferExpressionType(
 							if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
 								byteSize = *bits / 8;
 						}
-						expr->type = {Type::Kind::TypeReference, byteSize, ptrDepth, nullptr, -1, refKind};
+						expr->type = {DataType::Kind::TypeReference, byteSize, ptrDepth, nullptr, -1, refKind};
 					}
 				} else if (expr->intrinsicName == "add pointer depth") {
-					Type typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					if (typeArgType.kind == Type::Kind::TypeReference) {
+					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeArgType.kind == DataType::Kind::TypeReference) {
 						expr->type = typeArgType;
 						expr->type.pointerDepth++;
 					}
 				} else if (expr->intrinsicName == "construct") {
-					Type typeRefType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					if (typeRefType.kind == Type::Kind::TypeReference && typeRefType.classDefinition) {
+					DataType typeRefType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeRefType.kind == DataType::Kind::TypeReference && typeRefType.classDefinition) {
 						ClassDefinition *classDef = typeRefType.classDefinition;
-						std::vector<Type> fieldTypes;
+						std::vector<DataType> fieldTypes;
 						bool allDeduced = true;
 						for (size_t i = 2; i < expr->arguments.size(); i++) {
-							Type ft = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
+							DataType ft = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
 							if (!ft.isDeduced())
 								allDeduced = false;
 							fieldTypes.push_back(ft);
 						}
 						if (allDeduced) {
 							int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
-							expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
+							expr->type = {DataType::Kind::Class, 0, 0, classDef, instIdx};
 						}
 					}
 				} else if (expr->intrinsicName == "property") {
-					Type instType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+					DataType instType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
 						Expression *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 						std::string fieldName;
 						if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
@@ -297,7 +313,7 @@ static bool inferExpressionType(
 
 			// Build argument types for overload selection
 			// Use the first definition to walk nodesPassed (all overloads share the same trie path)
-			std::vector<Type> argTypesForOverload;
+			std::vector<DataType> argTypesForOverload;
 			{
 				size_t ai = 0;
 				for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
@@ -310,7 +326,7 @@ static bool inferExpressionType(
 						}
 					}
 					if (isParam && ai < sortedArgs.size()) {
-						Type argType = resolveTypeThroughBindings(sortedArgs[ai], macroBindings);
+						DataType argType = resolveTypeThroughBindings(sortedArgs[ai], macroBindings);
 						argTypesForOverload.push_back(argType);
 						ai++;
 					}
@@ -346,14 +362,24 @@ static bool inferExpressionType(
 
 				if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
 					auto *classSec = static_cast<ClassSection *>(matchedSection);
-					expr->type = {Type::Kind::TypeReference, 0, 0, classSec->classDefinition};
+					expr->type = {DataType::Kind::TypeReference, 0, 0, classSec->classDefinition};
 				} else if (matchedSection->type == SectionType::Effect) {
 					// Effects: infer body, result type is Void
-					changed |= inferMacroBody(matchedSection, callBindings, context);
-					expr->type = {Type::Kind::Void};
+					// Guard against infinite recursion (e.g., `print msg` calling `print msg as a string`
+					// which re-matches `print msg` when types are still undeduced)
+					if (!matchedSection->inferring) {
+						matchedSection->inferring = true;
+						changed |= inferMacroBody(matchedSection, callBindings, context);
+						matchedSection->inferring = false;
+					}
+					expr->type = {DataType::Kind::Void};
 				} else if (matchedSection->isMacro) {
 					// Code replacement: infer body, type = replacement expression type
-					changed |= inferMacroBody(matchedSection, callBindings, context);
+					if (!matchedSection->inferring) {
+						matchedSection->inferring = true;
+						changed |= inferMacroBody(matchedSection, callBindings, context);
+						matchedSection->inferring = false;
+					}
 					for (Section *child : matchedSection->children) {
 						for (CodeLine *line : child->codeLines) {
 							if (line->expression && line->expression->type.isDeduced())
@@ -363,7 +389,7 @@ static bool inferExpressionType(
 				} else {
 					// Non-macro function: infer body per-instantiation
 					// Build argTypes in nodesPassed order (must match codegen's paramBindings order)
-					std::vector<Type> argTypes;
+					std::vector<DataType> argTypes;
 					size_t argTypeIndex = 0;
 					for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 						auto paramIt = node->parameterNames.find(def);
@@ -455,7 +481,7 @@ inferMacroBody(Section *section, const std::unordered_map<std::string, Expressio
 static void defaultNumericExpressions(Expression *expr) {
 	if (!expr)
 		return;
-	if (expr->type.kind == Type::Kind::Numeric) {
+	if (expr->type.kind == DataType::Kind::Numeric) {
 		int size = 4; // default to i32
 		if (expr->kind == Expression::Kind::Literal) {
 			if (auto *intVal = std::get_if<int64_t>(&expr->literalValue)) {
@@ -463,7 +489,7 @@ static void defaultNumericExpressions(Expression *expr) {
 					size = 8;
 			}
 		}
-		expr->type = {Type::Kind::Integer, size};
+		expr->type = {DataType::Kind::Integer, size};
 	}
 	for (Expression *arg : expr->arguments)
 		defaultNumericExpressions(arg);
@@ -471,30 +497,30 @@ static void defaultNumericExpressions(Expression *expr) {
 
 static void defaultNumericTypes(Section *section) {
 	for (auto &[name, var] : section->variables) {
-		if (var->type.kind == Type::Kind::Numeric)
-			var->type = {Type::Kind::Integer, 4}; // default to i32
+		if (var->type.kind == DataType::Kind::Numeric)
+			var->type = {DataType::Kind::Integer, 4}; // default to i32
 	}
 	// Default Numeric→Integer(4) in class instantiation field types
 	if (section->type == SectionType::Class) {
 		auto *classSec = static_cast<ClassSection *>(section);
 		for (ClassInstantiation &inst : classSec->classDefinition->instantiations) {
-			for (Type &ft : inst.fieldTypes) {
-				if (ft.kind == Type::Kind::Numeric)
-					ft = {Type::Kind::Integer, 4};
+			for (DataType &ft : inst.fieldTypes) {
+				if (ft.kind == DataType::Kind::Numeric)
+					ft = {DataType::Kind::Integer, 4};
 			}
 		}
 	}
 	// Default Numeric→Integer(4) in instantiation map keys
 	if (!section->instantiations.empty()) {
-		std::map<std::vector<Type>, Instantiation> updated;
+		std::map<std::vector<DataType>, Instantiation> updated;
 		for (auto &[argTypes, inst] : section->instantiations) {
-			std::vector<Type> defaultedTypes = argTypes;
-			for (Type &t : defaultedTypes) {
-				if (t.kind == Type::Kind::Numeric)
-					t = {Type::Kind::Integer, 4};
+			std::vector<DataType> defaultedTypes = argTypes;
+			for (DataType &t : defaultedTypes) {
+				if (t.kind == DataType::Kind::Numeric)
+					t = {DataType::Kind::Integer, 4};
 			}
-			if (inst.returnType.kind == Type::Kind::Numeric)
-				inst.returnType = {Type::Kind::Integer, 4};
+			if (inst.returnType.kind == DataType::Kind::Numeric)
+				inst.returnType = {DataType::Kind::Integer, 4};
 			updated[defaultedTypes] = std::move(inst);
 		}
 		section->instantiations = std::move(updated);
@@ -515,8 +541,8 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 	if (expr->kind == Expression::Kind::IntrinsicCall) {
 		if (isArithmeticOperator(expr->intrinsicName)) {
 			if (expr->arguments.size() >= 3) {
-				Type leftType = expr->arguments[1]->type;
-				Type rightType = expr->arguments[2]->type;
+				DataType leftType = expr->arguments[1]->type;
+				DataType rightType = expr->arguments[2]->type;
 				// Pointer arithmetic (ptr + int, ptr - int) is valid
 				bool ptrArith =
 					isPointerArithmeticOperator(expr->intrinsicName) && (leftType.isPointer() || rightType.isPointer());
@@ -539,8 +565,8 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 			}
 		} else if (isComparisonOperator(expr->intrinsicName)) {
 			if (expr->arguments.size() >= 3) {
-				Type leftType = expr->arguments[1]->type;
-				Type rightType = expr->arguments[2]->type;
+				DataType leftType = expr->arguments[1]->type;
+				DataType rightType = expr->arguments[2]->type;
 				if (leftType.isDeduced() && rightType.isDeduced() && !leftType.isNumeric() && !rightType.isNumeric() &&
 					leftType != rightType) {
 					context.diagnostics.push_back(Diagnostic(
@@ -552,7 +578,7 @@ static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
 			}
 		} else if (expr->intrinsicName == "negate") {
 			if (expr->arguments.size() >= 2) {
-				Type operandType = expr->arguments[1]->type;
+				DataType operandType = expr->arguments[1]->type;
 				if (operandType.isDeduced() && !operandType.isNumeric()) {
 					context.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error, "Cannot negate " + operandType.toString() + " (expected a numeric type)",

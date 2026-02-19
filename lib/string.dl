@@ -2,9 +2,20 @@
 
 import lib/array.dl
 
+class:
+    patterns:
+        string
+    members:
+        data: pointer to byte
+        length: integer
+
+macro expression new string from data ptr with length len:
+    replacement:
+        @intrinsic("construct", string, ptr, len)
+
 macro expression character index of str:
     replacement:
-        @intrinsic("dereference", str + index)
+        @intrinsic("dereference", the data of str + index)
 
 expression the length of str:
     get:
@@ -14,3 +25,52 @@ expression the length of str:
             set len to len + 1
             set ch to character len of str
         return len
+
+# --- Conversions to string ---
+
+expression {integer:value} as a string:
+    get:
+        set buf to @intrinsic("call", "libc", "malloc", "string", 21)
+        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 21, "%ld", value as a 64 bit integer)
+        return new string from data buf with length len
+
+expression {float:value} as a string:
+    get:
+        set buf to @intrinsic("call", "libc", "malloc", "string", 32)
+        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 32, "%g", value as a 64 bit float)
+        return new string from data buf with length len
+
+expression {boolean:value} as a string:
+    get:
+        set buf to @intrinsic("call", "libc", "malloc", "string", 2)
+        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 2, "%ld", value as a 64 bit integer)
+        return new string from data buf with length len
+
+# --- Line suffix ---
+
+expression value as [a|] line:
+    get:
+        return value as a string + "\n"
+
+# --- Output ---
+
+effect print {string:msg}:
+    execute:
+        @intrinsic("call", "libc", "printf", "i32", "%s", the data of msg)
+
+effect print msg:
+    execute:
+        print msg as a string
+
+# --- Concatenation ---
+
+expression {string:left} + {string:right}:
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    get:
+        set left_len to the length of left
+        set right_len to the length of right
+        set total to left_len + right_len
+        set result to @intrinsic("call", "libc", "malloc", "string", total + 1)
+        @intrinsic("call", "libc", "memcpy", "string", result, the data of left, left_len)
+        @intrinsic("call", "libc", "memcpy", "string", result + left_len, the data of right, right_len + 1)
+        return new string from data result with length total

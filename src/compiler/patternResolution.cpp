@@ -246,8 +246,11 @@ static void removeVariableReferencesFromMatch(
 					// Must remove from tree BEFORE changing element types (tree was built with old types).
 					for (PatternDefinition *def : sec->patternDefinitions) {
 						bool needsReResolution = false;
-						forEachLeafElement(def->patternElements, [&](PatternElement &element) {
-							if (element.type == PatternElement::Type::Variable && element.text == name)
+						forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
+							// Only revert unconstrained Variables — typed arguments ({type:name})
+							// were never VariableLike and must not be reverted.
+							if (element.type == PatternElement::Type::Variable && element.text == name &&
+								element.typeConstraintName.empty())
 								needsReResolution = true;
 						});
 						if (needsReResolution && def->resolved) {
@@ -255,9 +258,10 @@ static void removeVariableReferencesFromMatch(
 							SectionType treeType = sec->type == SectionType::Class ? SectionType::Expression : sec->type;
 							context.patternTrees[(size_t)treeType]->removePatternPart(def->patternElements, def);
 						}
-						// Now revert element types
-						forEachLeafElement(def->patternElements, [&](PatternElement &element) {
-							if (element.type == PatternElement::Type::Variable && element.text == name) {
+						// Now revert element types (only unconstrained — typed arguments stay Variable)
+						forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
+							if (element.type == PatternElement::Type::Variable && element.text == name &&
+								element.typeConstraintName.empty()) {
 								element.type = PatternElement::Type::VariableLike;
 								def->resolved = false;
 								sec->patternDefinitionsResolved = false;
@@ -322,6 +326,7 @@ static bool resolveReferences(
 	return std::erase_if(references, [&context, decrementCounts, defToRefs](PatternReference *reference) {
 		PatternMatch *match = context.match(reference);
 		if (match) {
+			// Multi-word reference matched a pattern in the tree
 			reference->resolve(match);
 			addVariableReferencesFromMatch(context, reference, *match);
 			if (decrementCounts)
@@ -330,6 +335,23 @@ static bool resolveReferences(
 				trackMatchDefinitions(*match, reference, *defToRefs);
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
+			// Single-word reference that didn't match any pattern — must be a variable.
+			// This confirms that the word is used as a parameter in the body, so promote
+			// any matching VariableLike elements in ancestor definitions from ambiguous (VL)
+			// to confirmed parameter (Variable). Without this, the ancestor definition stays
+			// unresolved because VL counts never reach 0 — the decrement checks for VL type
+			// but we've already reclassified the element as Variable.
+			const std::string &varName = reference->patternElements[0].text;
+			Section *sec = reference->range().section();
+			while (sec) {
+				for (PatternDefinition *def : sec->patternDefinitions) {
+					forEachLeafElement(def->patternElements, [&](PatternElement &elem) {
+						if (elem.type == PatternElement::Type::VariableLike && elem.text == varName)
+							elem.type = PatternElement::Type::Variable;
+					});
+				}
+				sec = sec->parent;
+			}
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
 			reference->range().section()->addVariableReference(
@@ -531,17 +553,55 @@ bool resolvePatterns(ParseContext &context) {
 					}
 					if (node && !node->matchingDefinitions.empty()) {
 						for (auto *d : node->matchingDefinitions) {
-							if (d->section && d->section->type == SectionType::Class) {
+							if (!d->section)
+								continue;
+							if (d->section->type == SectionType::Class && !d->section->isMacro) {
+								// Real class (e.g., vector, point)
 								auto *classSec = static_cast<ClassSection *>(d->section);
-								elem.resolvedType = classSec->classDefinition;
+								elem.resolvedTypeConstraint = {DataType::Kind::Class, 0, 0, classSec->classDefinition};
 								break;
+							}
+							if (d->section->type == SectionType::Class && d->section->isMacro) {
+								// Macro class (e.g., integer, float, string) — evaluate the type intrinsic
+								for (Section *child : d->section->children) {
+									for (CodeLine *cl : child->codeLines) {
+										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
+											cl->expression->intrinsicName == "type") {
+											auto &args = cl->expression->arguments;
+											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
+												if (*kindStr == "int") {
+													int bits = 32;
+													if (args.size() >= 3)
+														if (auto *b = std::get_if<int64_t>(&args[2]->literalValue))
+															bits = (int)*b;
+													elem.resolvedTypeConstraint = {DataType::Kind::Integer, bits / 8};
+												} else if (*kindStr == "float") {
+													int bits = 64;
+													if (args.size() >= 3)
+														if (auto *b = std::get_if<int64_t>(&args[2]->literalValue))
+															bits = (int)*b;
+													elem.resolvedTypeConstraint = {DataType::Kind::Float, bits / 8};
+												} else if (*kindStr == "bool") {
+													elem.resolvedTypeConstraint = {DataType::Kind::Bool};
+												} else if (*kindStr == "string") {
+													elem.resolvedTypeConstraint = {DataType::Kind::Integer, 1, 1};
+												}
+											}
+											break;
+										}
+									}
+									if (elem.resolvedTypeConstraint.isDeduced())
+										break;
+								}
+								if (elem.resolvedTypeConstraint.isDeduced())
+									break;
 							}
 						}
 					}
-					if (!elem.resolvedType) {
+					if (!elem.resolvedTypeConstraint.isDeduced()) {
 						context.diagnostics.push_back(Diagnostic(
 							Diagnostic::Level::Error,
-							"Type constraint '" + elem.typeConstraintName + "' does not refer to a known class", def->range
+							"Type constraint '" + elem.typeConstraintName + "' does not refer to a known type", def->range
 						));
 					}
 				}

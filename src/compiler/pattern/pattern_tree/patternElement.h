@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-struct ClassDefinition;
+#include "type.h"
 
 struct PatternElement {
 	enum Type {
@@ -37,8 +37,8 @@ struct DefinitionPatternElement : public PatternElement {
 	std::vector<std::vector<DefinitionPatternElement>> alternatives;
 	// for Variable type: type constraint name from {type:name} syntax (empty if unconstrained)
 	std::string typeConstraintName;
-	// resolved type constraint (set during type constraint resolution step, nullptr if unconstrained)
-	ClassDefinition *resolvedType = nullptr;
+	// resolved type constraint (set during type constraint resolution step, Undeduced if unconstrained)
+	DataType resolvedTypeConstraint;
 
 	using PatternElement::PatternElement;
 	// Construct from a base PatternElement (for converting getPatternElements results)

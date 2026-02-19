@@ -97,6 +97,7 @@ print x
 - **Never read compiled binaries (ELF files)** with the Read tool - produces useless binary garbage. Run executables instead.
 - **Understand full scope before fixing** - Don't make assumptions. Check for existing helpers before writing new code. No DRY violations.
 - **Use `std::stack`** over `std::vector` for stack-like data structures.
+- **Use MCP tools** - Prefer LSP MCP features (rename, references, diagnostics, hover) over manual search/replace for refactoring.
 
 ## Testing
 
@@ -126,6 +127,9 @@ Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expec
 - **Primitive types:** Sized numerics (i8/i16/i32/i64, f32/f64), bool, string
 - **Classes:** Data-only structs (no member functions), patterns operate on them
 - **Pattern ambiguity:** Compiler error if multiple patterns match
+
+## Future Plans
+- **Multi-threading** — Compiler is currently single-threaded. Future work could parallelize independent compilation phases (e.g., per-file import/analysis, independent function codegen).
 
 ## Current State
 - Key libs: `lib/std.dl`, `lib/graphics.dl`, `lib/font.dl`, `lib/string.dl`, `lib/random.dl`, `lib/vector.dl`

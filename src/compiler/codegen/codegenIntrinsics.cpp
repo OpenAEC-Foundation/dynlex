@@ -21,14 +21,15 @@ std::string getStringLiteral(Expression *expr) {
 
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
-llvm::Value *
-generateIntrinsicCode(ParseContext &context, const std::string &name, const std::vector<Expression *> &args, Type resultType) {
+llvm::Value *generateIntrinsicCode(
+	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
 		// Generate the value in the current (original) macro scope first,
 		// before resolving the destination which may cross scope boundaries.
-		Type valType = getEffectiveType(context, args[1]);
+		DataType valType = getEffectiveType(context, args[1]);
 		llvm::Value *val = generateExpressionCode(context, args[1]);
 
 		// Save scope state — resolveThroughMacroLayers freely crosses scope
@@ -46,7 +47,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property") {
 			// Storing to a class field: generate GEP + store
 			Expression *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
-			Type instType = getEffectiveType(context, instExpr);
+			DataType instType = getEffectiveType(context, instExpr);
 			ClassDefinition *classDef = instType.classDefinition;
 			Expression *propExpr = resolveVariableBinding(context, destExpr->arguments[2]);
 			std::string fieldName = getStringLiteral(propExpr);
@@ -63,7 +64,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			llvm::Type *structType = getLLVMType(context, instType);
 			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
 
-			Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
+			DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
 			val = ensureType(context, val, valType, fieldType);
 			builder.CreateStore(val, fieldPtr);
 		} else {
@@ -73,8 +74,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 			llvm::Value *ptr = getVariablePointer(context, args[0]);
 			if (ptr && val) {
-				Type destType = getEffectiveType(context, args[0]);
-				if (destType.kind == Type::Kind::Class && destType.classDefinition && destType.classInstIndex >= 0) {
+				DataType destType = getEffectiveType(context, args[0]);
+				if (destType.kind == DataType::Kind::Class && destType.classDefinition && destType.classInstIndex >= 0) {
 					ClassDefinition *classDef = destType.classDefinition;
 					auto &destFields = classDef->instantiations[destType.classInstIndex].fieldTypes;
 					auto &srcFields = valType.classDefinition
@@ -124,26 +125,26 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (isArithmeticOperator(name)) {
 		llvm::Value *left = generateExpressionCode(context, args[0]);
 		llvm::Value *right = generateExpressionCode(context, args[1]);
-		Type leftType = getEffectiveType(context, args[0]);
-		Type rightType = getEffectiveType(context, args[1]);
+		DataType leftType = getEffectiveType(context, args[0]);
+		DataType rightType = getEffectiveType(context, args[1]);
 
 		// Pointer arithmetic: ptr +/- integer → GEP
 		if (isPointerArithmeticOperator(name) && (leftType.isPointer() || rightType.isPointer())) {
 			llvm::Value *ptrVal = leftType.isPointer() ? left : right;
 			llvm::Value *indexVal = leftType.isPointer() ? right : left;
-			Type ptrType = leftType.isPointer() ? leftType : rightType;
+			DataType ptrType = leftType.isPointer() ? leftType : rightType;
 			llvm::Type *elemType = ptrType.dereferenced().toLLVM(*context.llvmContext);
 			if (name == "subtract" && leftType.isPointer())
 				indexVal = builder.CreateNeg(indexVal, "neg_idx");
 			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
 		}
 
-		Type promoted = Type::promote(leftType, rightType);
+		DataType promoted = DataType::promote(leftType, rightType);
 
 		left = ensureType(context, left, leftType, promoted);
 		right = ensureType(context, right, rightType, promoted);
 
-		if (promoted.kind == Type::Kind::Float) {
+		if (promoted.kind == DataType::Kind::Float) {
 			if (name == "add")
 				return builder.CreateFAdd(left, right, "fadd");
 			if (name == "subtract")
@@ -173,15 +174,15 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (isComparisonOperator(name)) {
 		llvm::Value *left = generateExpressionCode(context, args[0]);
 		llvm::Value *right = generateExpressionCode(context, args[1]);
-		Type leftType = getEffectiveType(context, args[0]);
-		Type rightType = getEffectiveType(context, args[1]);
-		Type promoted = Type::promote(leftType, rightType);
+		DataType leftType = getEffectiveType(context, args[0]);
+		DataType rightType = getEffectiveType(context, args[1]);
+		DataType promoted = DataType::promote(leftType, rightType);
 
 		left = ensureType(context, left, leftType, promoted);
 		right = ensureType(context, right, rightType, promoted);
 
 		llvm::Value *cmp;
-		if (promoted.kind == Type::Kind::Float) {
+		if (promoted.kind == DataType::Kind::Float) {
 			if (name == "less than")
 				cmp = builder.CreateFCmpOLT(left, right, "flt");
 			else if (name == "less than or equal")
@@ -210,7 +211,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		}
 
 		assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
-		if (resultType.kind == Type::Kind::Bool)
+		if (resultType.kind == DataType::Kind::Bool)
 			return cmp; // already i1
 		return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
 	}
@@ -219,8 +220,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (name == "and" || name == "or") {
 		llvm::Value *left = generateExpressionCode(context, args[0]);
 		llvm::Value *right = generateExpressionCode(context, args[1]);
-		Type leftType = getEffectiveType(context, args[0]);
-		Type rightType = getEffectiveType(context, args[1]);
+		DataType leftType = getEffectiveType(context, args[0]);
+		DataType rightType = getEffectiveType(context, args[1]);
 
 		left = convertConditionToBool(context, left, leftType, "tobool");
 		right = convertConditionToBool(context, right, rightType, "tobool");
@@ -233,7 +234,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 	if (name == "not") {
 		llvm::Value *val = generateExpressionCode(context, args[0]);
-		Type valType = getEffectiveType(context, args[0]);
+		DataType valType = getEffectiveType(context, args[0]);
 
 		val = convertConditionToBool(context, val, valType, "tobool");
 
@@ -243,8 +244,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	// Negate
 	if (name == "negate") {
 		llvm::Value *val = generateExpressionCode(context, args[0]);
-		Type valType = getEffectiveType(context, args[0]);
-		if (valType.kind == Type::Kind::Float)
+		DataType valType = getEffectiveType(context, args[0]);
+		if (valType.kind == DataType::Kind::Float)
 			return builder.CreateFNeg(val, "fneg");
 		return builder.CreateNeg(val, "neg");
 	}
@@ -265,11 +266,11 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
 			// Use f32 for SPIR-V targets, f64 for native targets.
 			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
-			Type mathFloat = {Type::Kind::Float, mathFloatBytes};
+			DataType mathFloat = {DataType::Kind::Float, mathFloatBytes};
 			if (args.size() == 1) {
 				llvm::Value *val = generateExpressionCode(context, args[0]);
-				Type valType = getEffectiveType(context, args[0]);
-				if (valType.kind != Type::Kind::Float || valType.byteSize != mathFloatBytes)
+				DataType valType = getEffectiveType(context, args[0]);
+				if (valType.kind != DataType::Kind::Float || valType.byteSize != mathFloatBytes)
 					val = ensureType(context, val, valType, mathFloat);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
 				llvm::Value *result = builder.CreateCall(fn, {val}, name);
@@ -280,8 +281,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			}
 			llvm::Value *left = generateExpressionCode(context, args[0]);
 			llvm::Value *right = generateExpressionCode(context, args[1]);
-			Type leftType = getEffectiveType(context, args[0]);
-			Type rightType = getEffectiveType(context, args[1]);
+			DataType leftType = getEffectiveType(context, args[0]);
+			DataType rightType = getEffectiveType(context, args[1]);
 			left = ensureType(context, left, leftType, mathFloat);
 			right = ensureType(context, right, rightType, mathFloat);
 			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {left->getType()});
@@ -295,11 +296,11 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		if (name == "atan2") {
 			llvm::Value *y = generateExpressionCode(context, args[0]);
 			llvm::Value *x = generateExpressionCode(context, args[1]);
-			Type yType = getEffectiveType(context, args[0]);
-			Type xType = getEffectiveType(context, args[1]);
-			Type promoted = Type::promote(yType, xType);
-			if (promoted.kind != Type::Kind::Float)
-				promoted = {Type::Kind::Float, 8};
+			DataType yType = getEffectiveType(context, args[0]);
+			DataType xType = getEffectiveType(context, args[1]);
+			DataType promoted = DataType::promote(yType, xType);
+			if (promoted.kind != DataType::Kind::Float)
+				promoted = {DataType::Kind::Float, 8};
 			y = ensureType(context, y, yType, promoted);
 			x = ensureType(context, x, xType, promoted);
 			llvm::Type *floatType = promoted.toLLVM(*context.llvmContext);
@@ -321,8 +322,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 	if (name == "dereference") {
 		llvm::Value *ptrVal = generateExpressionCode(context, args[0]);
-		Type ptrType = getEffectiveType(context, args[0]);
-		Type elemType = ptrType.dereferenced();
+		DataType ptrType = getEffectiveType(context, args[0]);
+		DataType elemType = ptrType.dereferenced();
 		llvm::Type *elemLLVMType = getLLVMType(context, elemType);
 		return builder.CreateAlignedLoad(elemLLVMType, ptrVal, llvm::Align(8), "deref");
 	}
@@ -361,7 +362,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		builder.SetInsertPoint(condBlock);
 
 		llvm::Value *condValue = generateExpressionCode(context, args[0]);
-		Type condType = getEffectiveType(context, args[0]);
+		DataType condType = getEffectiveType(context, args[0]);
 		llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "while_cond_bool");
 		builder.CreateCondBr(condBool, bodyBlock, exitBlock);
 
@@ -382,7 +383,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_exit", func);
 
 		llvm::Value *condValue = generateExpressionCode(context, args[0]);
-		Type condType = getEffectiveType(context, args[0]);
+		DataType condType = getEffectiveType(context, args[0]);
 		llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "if_cond");
 		builder.CreateCondBr(condBool, thenBlock, exitBlock);
 
@@ -421,7 +422,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
 			llvm::Value *condValue = generateExpressionCode(context, args[0]);
-			Type condType = getEffectiveType(context, args[0]);
+			DataType condType = getEffectiveType(context, args[0]);
 			llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "elif_cond");
 			builder.CreateCondBr(condBool, elifThenBlock, newExitBlock);
 
@@ -441,8 +442,8 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
 		assert(
-			(getEffectiveType(context, args[0]).kind == Type::Kind::Integer ||
-			 getEffectiveType(context, args[0]).kind == Type::Kind::Bool) &&
+			(getEffectiveType(context, args[0]).kind == DataType::Kind::Integer ||
+			 getEffectiveType(context, args[0]).kind == DataType::Kind::Bool) &&
 			"switch requires an integer value"
 		);
 
@@ -506,7 +507,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		if (!library.empty() && library != "libc")
 			context.requiredLibraries.insert(library);
 
-		Type returnType = Type::fromString(retTypeStr);
+		DataType returnType = DataType::fromString(retTypeStr);
 		llvm::Type *returnLLVMType = returnType.toLLVM(*context.llvmContext);
 
 		// Build call arguments — string literals become global constant pointers
@@ -538,7 +539,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 		llvm::Value *callResult = builder.CreateCall(func, callArgs);
 		// If return type is void, return nullptr (no value to use)
-		if (returnType.kind == Type::Kind::Void)
+		if (returnType.kind == DataType::Kind::Void)
 			return nullptr;
 		return callResult;
 	}
@@ -546,55 +547,22 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (name == "cast") {
 		// Format: args[0]=value, args[1]=type (TypeReference)
 		// Class cast: reinterpret as pointer to the class struct
-		if (resultType.kind == Type::Kind::Class) {
+		if (resultType.kind == DataType::Kind::Class) {
 			llvm::Value *val = generateExpressionCode(context, args[0]);
-			Type fromType = getEffectiveType(context, args[0]);
-			if (val && !fromType.isPointer() && fromType.kind == Type::Kind::Integer)
+			DataType fromType = getEffectiveType(context, args[0]);
+			if (val && !fromType.isPointer() && fromType.kind == DataType::Kind::Integer)
 				val = builder.CreateIntToPtr(val, llvm::PointerType::getUnqual(*context.llvmContext), "itop_class");
 			return val;
 		}
 
 		llvm::Value *val = generateExpressionCode(context, args[0]);
-		Type fromType = getEffectiveType(context, args[0]);
+		DataType fromType = getEffectiveType(context, args[0]);
 
 		// Get target type from the TypeReference argument
-		Type typeArgType = getEffectiveType(context, args[1]);
-		if (typeArgType.kind != Type::Kind::TypeReference)
+		DataType typeArgType = getEffectiveType(context, args[1]);
+		if (typeArgType.kind != DataType::Kind::TypeReference)
 			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
-		Type toType = typeArgType.toReferencedType();
-
-		// String cast: numeric → string via snprintf
-		if (toType.kind == Type::Kind::Integer && toType.byteSize == 1 && toType.pointerDepth == 1 && fromType.isNumeric()) {
-			llvm::AllocaInst *strBuf = builder.CreateAlloca(builder.getInt8Ty(), builder.getInt64(32), "strbuf");
-			llvm::Function *snprintfFunc = context.llvmModule->getFunction("snprintf");
-			if (!snprintfFunc) {
-				llvm::FunctionType *ft = llvm::FunctionType::get(builder.getInt32Ty(), {}, true);
-				snprintfFunc = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "snprintf", context.llvmModule);
-			}
-			const char *fmt = (fromType.kind == Type::Kind::Float) ? "%g" : "%ld";
-			llvm::Value *printVal = val;
-			if (fromType.kind == Type::Kind::Integer && fromType.byteSize < 8)
-				printVal = builder.CreateSExt(val, builder.getInt64Ty(), "widen_for_printf");
-			auto fmtIt = context.stringConstants.find(fmt);
-			llvm::Value *fmtVal;
-			if (fmtIt != context.stringConstants.end()) {
-				fmtVal = fmtIt->second;
-			} else {
-				std::string globalName = ".str." + std::to_string(context.stringConstants.size());
-				llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, fmt, true);
-				auto *strGlobal = new llvm::GlobalVariable(
-					*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
-				);
-				context.stringConstants[fmt] = strGlobal;
-				fmtVal = strGlobal;
-			}
-			builder.CreateCall(snprintfFunc, {strBuf, builder.getInt64(32), fmtVal, printVal});
-			return strBuf;
-		}
-
-		// Already a pointer casting to string — pass through
-		if (toType.kind == Type::Kind::Integer && toType.byteSize == 1 && toType.pointerDepth == 1 && fromType.isPointer())
-			return val;
+		DataType toType = typeArgType.toReferencedType();
 
 		return ensureType(context, val, fromType, toType);
 	}
@@ -621,7 +589,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		// Store each field value
 		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
 			llvm::Value *fieldVal = generateExpressionCode(context, args[i + 1]);
-			Type fieldFromType = getEffectiveType(context, args[i + 1]);
+			DataType fieldFromType = getEffectiveType(context, args[i + 1]);
 			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
 			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, i, "field_ptr");
 			builder.CreateStore(fieldVal, fieldPtr);
@@ -633,7 +601,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	if (name == "property") {
 		// Format: args[0]=instance, args[1]=fieldname (string literal from {word:} capture)
 		Expression *instExpr = resolveVariableBinding(context, args[0]);
-		Type instType = getEffectiveType(context, instExpr);
+		DataType instType = getEffectiveType(context, instExpr);
 		ClassDefinition *classDef = instType.classDefinition;
 
 		// Get field name from string literal
@@ -667,7 +635,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		llvm::Value *instPtr = getVariablePointer(context, instExpr);
 		llvm::Type *structType = getLLVMType(context, instType);
 		llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
-		Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
+		DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
 		return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
 	}
 
@@ -716,11 +684,11 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		llvm::Value *b = generateExpressionCode(context, args[2]);
 		llvm::Value *a = generateExpressionCode(context, args[3]);
 
-		Type rType = getEffectiveType(context, args[0]);
-		Type gType = getEffectiveType(context, args[1]);
-		Type bType = getEffectiveType(context, args[2]);
-		Type aType = getEffectiveType(context, args[3]);
-		Type f32 = {Type::Kind::Float, 4};
+		DataType rType = getEffectiveType(context, args[0]);
+		DataType gType = getEffectiveType(context, args[1]);
+		DataType bType = getEffectiveType(context, args[2]);
+		DataType aType = getEffectiveType(context, args[3]);
+		DataType f32 = {DataType::Kind::Float, 4};
 		r = ensureType(context, r, rType, f32);
 		g = ensureType(context, g, gType, f32);
 		b = ensureType(context, b, bType, f32);
