@@ -38,7 +38,7 @@
 
 ### Code generation (`src/compiler/codegen/`)
 - `codegen.cpp` — expression codegen (`generateExpressionCode`), monomorphized function generation (`generateSpecializedFunction`), section codegen, main driver (`generateCode`)
-- `codegenTypes.cpp` — type utilities (`getLLVMType`, `ensureType`), macro binding infrastructure (`resolveMacroBinding`, `MacroScopeGuard`, `getVariablePointer`), effective type resolution (`getEffectiveType`), variable allocation
+- `codegenTypes.cpp` — type utilities (`getLLVMType`, `ensureType`), macro binding infrastructure (`resolveVariableBinding`, `resolveThroughMacroLayers`, `MacroScopeGuard`, `getVariablePointer`), effective type resolution (`getEffectiveType`), variable allocation
 - `codegenIntrinsics.cpp` — all intrinsic code generation (`generateIntrinsicCode`): arithmetic, comparison, logical, math, pointer, control flow, return, call, cast, construct, property, shader I/O
 - `codegenInternal.h` — shared declarations across codegen files (functions in codegenTypes.cpp and codegenIntrinsics.cpp that are called from codegen.cpp, and vice versa)
 - `spirv.cpp` — SPIR-V shader binary emission and patching
@@ -56,8 +56,10 @@
 - Adding a new intrinsic: add to registry in `intrinsicInfo.h` → type inference and codegen helpers (`isMathFunction`, `isComparisonOperator`, etc.) automatically pick it up
 
 ## Bugs Fixed
-- **Cast macro resolution**: `value as a 32 bit float` (macro `@intrinsic("cast", value, "float", bits)`) — the `bits` parameter is a macro-bound variable reference, not a literal. Type inference and codegen must resolve cast's type string and bits arguments through macro bindings (`resolveVarThroughMacro` in compiler.cpp, `resolveMacroBinding` in codegen.cpp). Without this, sized casts default to 8 bytes.
+- **Cast macro resolution**: `value as a 32 bit float` (macro `@intrinsic("cast", value, "float", bits)`) — the `bits` parameter is a macro-bound variable reference, not a literal. Type inference and codegen must resolve cast's type string and bits arguments through macro bindings (`resolveThroughBindings` in typeInference.cpp, `resolveVariableBinding` in codegenTypes.cpp). Without this, sized casts default to 8 bytes.
 - **Argument position ordering**: `section.cpp` processes parenthesized expressions before number literals, so `expr->arguments` had parens first then numbers regardless of text position. Pattern matcher's `sourceArgumentIndex` walks `\a` placeholders left-to-right, mapping to wrong arguments. Fix: sort `expr->arguments` by source position after collection. Note: `expandMatch` also produces non-positional order (direct args, submatches, variables, words), so codegen/inference `sortArgumentsByPosition` calls are also needed — both sorts serve different purposes.
+- **Property store through macros**: `set the x of target to val` — the store destination resolves to `the x of target` (a PatternCall to the property macro), not directly to `@intrinsic("property", ...)`. Both codegen (`resolveThroughMacroLayers`) and type inference (`resolveThroughBindingsDeep`) must expand through macro PatternCalls to detect property stores and generate GEP+store / propagate field types.
+- **Construct instantiation oscillation**: `construct(vector, 0, 1, 2)` creates Integer fields, but later `multiply by 4.5` promotes fields to Float. On the next inference iteration, construct would create a new Integer instantiation (mismatching the now-Float one), causing the variable type to flip between instantiations. Fix: construct inference prefers an existing instantiation whose fields are refinements of the argument types.
 
 ## LSP Architecture (`src/lsp/`)
 

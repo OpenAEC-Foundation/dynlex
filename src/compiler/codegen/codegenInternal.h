@@ -20,7 +20,8 @@ struct SourceFile;
 // Shared codegen utilities (codegenTypes.cpp)
 llvm::Type *getLLVMType(ParseContext &context, Type type);
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condType, const std::string &name);
-Expression *resolveMacroBinding(ParseContext &context, Expression *expr);
+Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
+int resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
 Type getEffectiveType(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, Type type);
 std::string getPatternFunctionName(Section *section);

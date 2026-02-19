@@ -116,16 +116,50 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 	return builder.CreateICmpNE(condValue, llvm::ConstantInt::get(intTy, 0), name);
 }
 
-// Resolve a variable expression through the current macro's bindings (single level).
-// With scoped bindings, only the current macro's parameters are in the map.
-// Caller scope resolution is handled by popping the binding stack.
-Expression *resolveMacroBinding(ParseContext &context, Expression *expr) {
+// Resolve a Variable expression one step through the current macro's binding map.
+// Returns the bound expression (which lives in the caller's scope), or expr unchanged
+// if no binding exists. Each resolution crosses one scope boundary — the caller must
+// pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
+Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
 	auto it = context.macroExpressionBindings.find(expr->variable->name);
 	if (it != context.macroExpressionBindings.end() && it->second != expr)
 		return it->second;
 	return expr;
+}
+
+// Resolve an expression through all macro layers: variable bindings (which cross
+// scope boundaries upward) and macro PatternCall expansions (which push new scopes
+// downward). Variable bindings don't modify the stack; PatternCall expansions push
+// one scope each. Returns the number of scopes pushed, so the caller can pop them
+// when done. Use this when you need to see through macro indirection to inspect the
+// underlying expression kind (e.g., detecting a property intrinsic inside a store).
+int resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
+	int scopesPushed = 0;
+	while (expr) {
+		// Variable bindings: the bound expression is in the current scope's caller,
+		// but we don't pop here — the pushed PatternCall scopes will be popped by the caller.
+		if (expr->kind == Expression::Kind::Variable && expr->variable) {
+			auto it = context.macroExpressionBindings.find(expr->variable->name);
+			if (it != context.macroExpressionBindings.end() && it->second != expr) {
+				expr = it->second;
+				continue;
+			}
+		}
+		// Macro PatternCall: expand into the macro body, pushing a new binding scope
+		std::unordered_map<std::string, Expression *> innerBindings;
+		Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+		if (bodyExpr) {
+			context.macroBindingStack.push(context.macroExpressionBindings);
+			context.macroExpressionBindings = std::move(innerBindings);
+			scopesPushed++;
+			expr = bodyExpr;
+			continue;
+		}
+		break;
+	}
+	return scopesPushed;
 }
 
 // MacroScopeGuard implementation
@@ -156,7 +190,7 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 		return expr->type; // Literal types are always set by inference
 
 	case Expression::Kind::Variable: {
-		Expression *resolved = resolveMacroBinding(context, expr);
+		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (!context.macroBindingStack.empty())
@@ -234,7 +268,7 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 				return expr->type;
 			// Format: @intrinsic("cast", value, type_string[, bit_size])
 			// Resolve through macro bindings since cast args may be macro parameters
-			Expression *typeStrExpr = resolveMacroBinding(context, expr->arguments[2]);
+			Expression *typeStrExpr = resolveVariableBinding(context, expr->arguments[2]);
 			std::string target;
 			if (auto *str = std::get_if<std::string>(&typeStrExpr->literalValue))
 				target = *str;
@@ -242,7 +276,7 @@ Type getEffectiveType(ParseContext &context, Expression *expr) {
 				Type::Kind kind = target == "integer" ? Type::Kind::Integer : Type::Kind::Float;
 				int byteSize = 8;
 				if (expr->arguments.size() >= 4) {
-					Expression *bitsExpr = resolveMacroBinding(context, expr->arguments[3]);
+					Expression *bitsExpr = resolveVariableBinding(context, expr->arguments[3]);
 					if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
 						byteSize = *bits / 8;
 				}
@@ -350,7 +384,7 @@ llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 	std::vector<std::unordered_map<std::string, Expression *>> poppedScopes;
 
 	while (true) {
-		Expression *resolved = resolveMacroBinding(context, expr);
+		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved == expr)
 			break; // No more macro bindings to resolve
 		// Pop to caller scope so the resolved expression is evaluated in the right context

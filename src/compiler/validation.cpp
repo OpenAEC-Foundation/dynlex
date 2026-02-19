@@ -17,9 +17,9 @@ static Bindings buildBindings(Expression *expr) {
 	Bindings result;
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return result;
-	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinition;
-	if (!def)
+	if (expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return result;
+	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
 	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
@@ -60,8 +60,9 @@ static VarUsage analyzeVariableUsage(
 
 	case Expression::Kind::PatternCall: {
 		PatternDefinition *def = nullptr;
-		if (expr->patternMatch && expr->patternMatch->matchedEndNode)
-			def = expr->patternMatch->matchedEndNode->matchingDefinition;
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
+			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
+			def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
 		if (def && def->section && def->section->isMacro) {
 			Bindings merged = bindings;
 			for (auto &[key, val] : buildBindings(expr))

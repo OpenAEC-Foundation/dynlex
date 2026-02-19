@@ -168,7 +168,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::Variable: {
-		Expression *resolved = resolveMacroBinding(context, expr);
+		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (!context.macroBindingStack.empty())
@@ -215,7 +215,38 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
 			return nullptr;
 
-		PatternDefinition *matchedDef = expr->patternMatch->matchedEndNode->matchingDefinition;
+		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+		if (defs.empty())
+			return nullptr;
+
+		// Sort arguments by source position (expandMatch appends submatches/variables/words
+		// after direct args, so they may not be in text order)
+		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+
+		// Build argument types for overload selection
+		std::vector<Type> argTypesForOverload;
+		{
+			size_t ai = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				bool isParam = false;
+				for (auto *d : defs) {
+					if (node->parameterNames.contains(d)) {
+						isParam = true;
+						break;
+					}
+				}
+				if (isParam && ai < sortedArgs.size()) {
+					argTypesForOverload.push_back(getEffectiveType(context, sortedArgs[ai]));
+					ai++;
+				}
+			}
+		}
+
+		// Select the best overload based on argument types
+		PatternDefinition *matchedDef = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!matchedDef)
+			matchedDef = defs[0];
+
 		Section *matchedSection = matchedDef->section;
 		if (!matchedSection)
 			return nullptr;
@@ -223,10 +254,6 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Class type references are compile-time only — no runtime code
 		if (matchedSection->type == SectionType::Class)
 			return nullptr;
-
-		// Sort arguments by source position (expandMatch appends submatches/variables/words
-		// after direct args, so they may not be in text order)
-		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 
 		// Build parameter name → argument expression mapping
 		std::vector<std::pair<std::string, Expression *>> paramBindings;

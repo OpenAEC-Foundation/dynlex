@@ -44,7 +44,7 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 // This ensures structurally different but semantically equivalent patterns produce the same trie paths.
 // Only VariableLike elements are absorbed: a merged VariableLike (e.g. "test" from "te"+"st") can never
 // be a variable since variables are single standalone words, so this is always safe.
-static void normalizePatternElements(std::vector<PatternElement> &elements) {
+static void normalizePatternElements(std::vector<DefinitionPatternElement> &elements) {
 	// Recursively normalize inside Choice alternatives first
 	for (auto &elem : elements) {
 		if (elem.type == PatternElement::Type::Choice) {
@@ -95,8 +95,8 @@ static void normalizePatternElements(std::vector<PatternElement> &elements) {
 	}
 }
 
-std::vector<PatternElement> parsePatternElements(std::string_view patternString, size_t offset) {
-	std::vector<PatternElement> result;
+std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patternString, size_t offset) {
+	std::vector<DefinitionPatternElement> result;
 	size_t pos = 0;
 
 	while (pos < patternString.size()) {
@@ -108,18 +108,20 @@ std::vector<PatternElement> parsePatternElements(std::string_view patternString,
 		if (bracketStart == std::string_view::npos) {
 			// no more brackets - parse remaining plain text
 			auto plain = getPatternElements(patternString.substr(pos));
-			for (auto &elem : plain)
+			for (auto &elem : plain) {
 				elem.startPos += pos + offset;
-			result.insert(result.end(), plain.begin(), plain.end());
+				result.push_back(elem);
+			}
 			break;
 		}
 
 		// parse plain text before the bracket
 		if (bracketStart > pos) {
 			auto plain = getPatternElements(patternString.substr(pos, bracketStart - pos));
-			for (auto &elem : plain)
+			for (auto &elem : plain) {
 				elem.startPos += pos + offset;
-			result.insert(result.end(), plain.begin(), plain.end());
+				result.push_back(elem);
+			}
 		}
 
 		bool isCurly = (bracketStart == curlyStart);
@@ -148,9 +150,12 @@ std::vector<PatternElement> parsePatternElements(std::string_view patternString,
 			std::string_view captureType = content.substr(0, colonPos);
 			std::string name(content.substr(colonPos + 1));
 			if (captureType == "word") {
-				result.push_back(PatternElement(PatternElement::Type::Word, name, bracketStart + offset));
+				result.push_back(DefinitionPatternElement(PatternElement::Type::Word, name, bracketStart + offset));
 			} else {
-				assert(false && "Unknown capture type");
+				// Typed argument constraint: emit a Variable element with the type constraint
+				DefinitionPatternElement elem(PatternElement::Type::Variable, name, bracketStart + offset);
+				elem.typeConstraintName = std::string(captureType);
+				result.push_back(std::move(elem));
 			}
 		} else {
 			// [alternative1|alternative2|...] — choice element
@@ -172,7 +177,7 @@ std::vector<PatternElement> parsePatternElements(std::string_view patternString,
 			parts.push_back(content.substr(partStart));
 
 			// create Choice element with alternatives
-			PatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
+			DefinitionPatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
 			size_t altOffset = bracketStart + 1 + offset;
 			for (auto &part : parts) {
 				choice.alternatives.push_back(parsePatternElements(part, altOffset));
@@ -191,7 +196,7 @@ std::vector<PatternElement> parsePatternElements(std::string_view patternString,
 			if (hasEmptyAlternative && i < patternString.size() && patternString[i] == ' ') {
 				for (auto &alt : choice.alternatives) {
 					if (!alt.empty()) {
-						alt.push_back(PatternElement(PatternElement::Type::Other, " ", i + offset));
+						alt.push_back(DefinitionPatternElement(PatternElement::Type::Other, " ", i + offset));
 					}
 				}
 				i++; // skip the space in the main sequence

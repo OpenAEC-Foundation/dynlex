@@ -26,15 +26,18 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
-		Expression *destExpr = resolveMacroBinding(context, args[0]);
-		Type valType = getEffectiveType(context, args[1]);
+		// Resolve the destination through all macro layers to detect property stores.
+		// E.g., `set the x of target to val` → dest resolves through the `the ... of ...`
+		// macro to @intrinsic("property", ownername, propertyname).
+		Expression *destExpr = args[0];
+		int scopesPushed = resolveThroughMacroLayers(context, destExpr);
 
 		if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property") {
 			// Storing to a class field: generate GEP + store
-			Expression *instExpr = resolveMacroBinding(context, destExpr->arguments[1]);
+			Expression *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
 			Type instType = getEffectiveType(context, instExpr);
 			ClassDefinition *classDef = instType.classDefinition;
-			Expression *propExpr = resolveMacroBinding(context, destExpr->arguments[2]);
+			Expression *propExpr = resolveVariableBinding(context, destExpr->arguments[2]);
 			std::string fieldName = getStringLiteral(propExpr);
 
 			int fieldIdx = -1;
@@ -48,11 +51,27 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			llvm::Value *instPtr = getVariablePointer(context, instExpr);
 			llvm::Type *structType = getLLVMType(context, instType);
 			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
+
+			// Pop the pushed scopes before generating the value — args[1] lives in
+			// the original scope, not in the expanded property macro's scope.
+			for (int i = 0; i < scopesPushed; i++) {
+				context.macroExpressionBindings = context.macroBindingStack.top();
+				context.macroBindingStack.pop();
+			}
+
+			Type valType = getEffectiveType(context, args[1]);
 			llvm::Value *val = generateExpressionCode(context, args[1]);
 			Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
 			val = ensureType(context, val, valType, fieldType);
 			builder.CreateStore(val, fieldPtr);
 		} else {
+			// Pop macro layers — the else branch uses args[0] directly
+			for (int i = 0; i < scopesPushed; i++) {
+				context.macroExpressionBindings = context.macroBindingStack.top();
+				context.macroBindingStack.pop();
+			}
+
+			Type valType = getEffectiveType(context, args[1]);
 			llvm::Value *ptr = getVariablePointer(context, args[0]);
 			llvm::Value *val = generateExpressionCode(context, args[1]);
 			if (ptr && val) {
@@ -506,7 +525,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 		}
 
 		// Resolve type string through macro bindings (e.g. cast args may be macro parameters)
-		Expression *typeStrExpr = resolveMacroBinding(context, args[1]);
+		Expression *typeStrExpr = resolveVariableBinding(context, args[1]);
 		std::string targetStr = getStringLiteral(typeStrExpr);
 		llvm::Value *val = generateExpressionCode(context, args[0]);
 		Type fromType = getEffectiveType(context, args[0]);
@@ -547,7 +566,7 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			Type::Kind kind = targetStr == "integer" ? Type::Kind::Integer : Type::Kind::Float;
 			int byteSize = 8;
 			if (args.size() >= 3) {
-				Expression *bitsExpr = resolveMacroBinding(context, args[2]);
+				Expression *bitsExpr = resolveVariableBinding(context, args[2]);
 				if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
 					byteSize = *bits / 8;
 			}
@@ -581,12 +600,12 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 
 	if (name == "property") {
 		// Format: args[0]=instance, args[1]=fieldname (string literal from {word:} capture)
-		Expression *instExpr = resolveMacroBinding(context, args[0]);
+		Expression *instExpr = resolveVariableBinding(context, args[0]);
 		Type instType = getEffectiveType(context, instExpr);
 		ClassDefinition *classDef = instType.classDefinition;
 
 		// Get field name from string literal
-		Expression *propExpr = resolveMacroBinding(context, args[1]);
+		Expression *propExpr = resolveVariableBinding(context, args[1]);
 		std::string fieldName = getStringLiteral(propExpr);
 
 		if (!classDef) {

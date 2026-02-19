@@ -1,20 +1,20 @@
-import section.dl
+import std.dl
 set var to 3
 
 if var < 2:
-	print "var is less than 4"
+	print "var is less than 4" as line
 else if var < 4:
-	print "var is less than 4"
+	print "var is less than 4" as line
 else:
-	print "var is not less than 4"
+	print "var is not less than 4" as line
 
 match based on var:
 	case 1:
-		print "var is 1"
+		print "var is 1" as line
 	case 2:
-		print "var is 2"
+		print "var is 2" as line
 	case 3:
-		print "var is 3"
+		print "var is 3" as line
 	case 4:
-		print "var is 4"
+		print "var is 4" as line
 

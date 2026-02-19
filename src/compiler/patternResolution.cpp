@@ -164,8 +164,9 @@ static void trackMatchDefinitions(
 	PatternMatch &match, PatternReference *reference,
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
 ) {
-	if (match.matchedEndNode && match.matchedEndNode->matchingDefinition) {
-		defToRefs[match.matchedEndNode->matchingDefinition].push_back(reference);
+	if (match.matchedEndNode && !match.matchedEndNode->matchingDefinitions.empty()) {
+		for (auto *def : match.matchedEndNode->matchingDefinitions)
+			defToRefs[def].push_back(reference);
 	}
 	for (PatternMatch &subMatch : match.subMatches) {
 		trackMatchDefinitions(subMatch, reference, defToRefs);
@@ -295,11 +296,13 @@ static std::unordered_set<Section *> unresolveReference(
 	incrementVariableLikeCounts(reference);
 
 	// Remove from defToRefs tracking
-	if (reference->match->matchedEndNode && reference->match->matchedEndNode->matchingDefinition) {
-		auto it = defToRefs.find(reference->match->matchedEndNode->matchingDefinition);
-		if (it != defToRefs.end()) {
-			auto &vec = it->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
+	if (reference->match->matchedEndNode && !reference->match->matchedEndNode->matchingDefinitions.empty()) {
+		for (auto *def : reference->match->matchedEndNode->matchingDefinitions) {
+			auto it = defToRefs.find(def);
+			if (it != defToRefs.end()) {
+				auto &vec = it->second;
+				vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
+			}
 		}
 	}
 
@@ -506,6 +509,49 @@ bool resolvePatterns(ParseContext &context) {
 		return false;
 	}
 
+	// Phase 2.5: Resolve type constraints on definition elements.
+	// Walk all definitions and resolve typeConstraintName strings to ClassDefinition pointers
+	// by looking up the type name in the Class/Expression pattern tree.
+	{
+		PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Expression];
+		std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
+			for (PatternDefinition *def : section->patternDefinitions) {
+				for (auto &elem : def->patternElements) {
+					if (elem.typeConstraintName.empty())
+						continue;
+					// Look up the type name in the expression tree (class patterns are stored there)
+					PatternTreeNode *node = exprTree;
+					std::string_view remaining = elem.typeConstraintName;
+					while (!remaining.empty() && node) {
+						size_t space = remaining.find(' ');
+						std::string_view word = (space != std::string_view::npos) ? remaining.substr(0, space) : remaining;
+						auto it = node->literalChildren.find(std::string(word));
+						node = (it != node->literalChildren.end()) ? it->second : nullptr;
+						remaining = (space != std::string_view::npos) ? remaining.substr(space + 1) : std::string_view{};
+					}
+					if (node && !node->matchingDefinitions.empty()) {
+						for (auto *d : node->matchingDefinitions) {
+							if (d->section && d->section->type == SectionType::Class) {
+								auto *classSec = static_cast<ClassSection *>(d->section);
+								elem.resolvedType = classSec->classDefinition;
+								break;
+							}
+						}
+					}
+					if (!elem.resolvedType) {
+						context.diagnostics.push_back(Diagnostic(
+							Diagnostic::Level::Error,
+							"Type constraint '" + elem.typeConstraintName + "' does not refer to a known class", def->range
+						));
+					}
+				}
+			}
+			for (Section *child : section->children)
+				resolveTypeConstraints(child);
+		};
+		resolveTypeConstraints(context.mainSection);
+	}
+
 	// Phase 3: Resolve precedence declarations and re-match affected references
 	{
 		// Resolve before:/after: signature strings to pattern definitions in the expression trie
@@ -527,7 +573,7 @@ bool resolvePatterns(ParseContext &context) {
 					node = (it != node->literalChildren.end()) ? it->second : nullptr;
 				}
 			}
-			return node ? node->matchingDefinition : nullptr;
+			return (node && !node->matchingDefinitions.empty()) ? node->matchingDefinitions[0] : nullptr;
 		};
 
 		// Collect precedence edges: higher → lower (higher prec = evaluated first)
@@ -649,9 +695,12 @@ bool resolvePatterns(ParseContext &context) {
 
 			// Re-match body references that involve operators with precedence
 			std::function<bool(PatternMatch &)> matchInvolvesPrecedence = [&](PatternMatch &match) -> bool {
-				if (match.matchedEndNode && match.matchedEndNode->matchingDefinition &&
-					match.matchedEndNode->matchingDefinition->precedence > 0)
-					return true;
+				if (match.matchedEndNode) {
+					for (auto *def : match.matchedEndNode->matchingDefinitions) {
+						if (def->precedence > 0)
+							return true;
+					}
+				}
 				for (PatternMatch &sub : match.subMatches)
 					if (matchInvolvesPrecedence(sub))
 						return true;

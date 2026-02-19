@@ -112,3 +112,35 @@ struct ParseContext {
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
 };
+
+// Extract the body expression and parameter bindings from a macro PatternCall.
+// If expr is a PatternCall to a macro section, returns the macro body's last expression
+// and fills outBindings with parameter name → call-site argument expression.
+// Returns nullptr if expr is not a macro PatternCall. Does not modify any binding stack —
+// the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
+inline Expression *expandMacroPatternCall(Expression *expr, std::unordered_map<std::string, Expression *> &outBindings) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return nullptr;
+	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	PatternDefinition *def = defs.empty() ? nullptr : defs[0];
+	if (!def || !def->section || !def->section->isMacro)
+		return nullptr;
+	Expression *bodyExpr = nullptr;
+	for (Section *child : def->section->children) {
+		for (CodeLine *line : child->codeLines) {
+			if (line->expression)
+				bodyExpr = line->expression;
+		}
+	}
+	if (!bodyExpr)
+		return nullptr;
+	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	size_t argIndex = 0;
+	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+		auto paramIt = node->parameterNames.find(def);
+		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+			outBindings[paramIt->second] = sortedArgs[argIndex++];
+		}
+	}
+	return bodyExpr;
+}

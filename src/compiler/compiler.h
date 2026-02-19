@@ -16,3 +16,11 @@ bool isArithmeticOperator(const std::string &name);
 bool isPointerArithmeticOperator(const std::string &name);
 bool isComparisonOperator(const std::string &name);
 bool isMathFunction(const std::string &name);
+
+// Select the best overload from multiple definitions at the same trie endpoint.
+// argTypes: the deduced types of the call-site arguments (in nodesPassed order).
+// Returns the best-matching definition, preferring type-constrained overloads over unconstrained ones.
+PatternDefinition *selectOverload(
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<Type> &argTypes
+);

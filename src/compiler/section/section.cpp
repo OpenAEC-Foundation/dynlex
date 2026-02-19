@@ -185,12 +185,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 				nodeStack.pop();
 				push();
 			} else {
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, std::string("found comma without enclosing braces"),
-					Range(range.line, range.subString.substr(index, 1))
-				));
-				delete base;
-				return nullptr;
+				// Top-level comma — treat as regular text, only commas inside () are special
 			}
 			break;
 		}

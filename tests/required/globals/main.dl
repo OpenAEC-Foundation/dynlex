@@ -27,7 +27,7 @@ expression double value:
 print double 7 as line
 
 # test 3: global should still be unchanged after shadowing
-print total
+print total as line
 
 # test 4: function-local variable doesn't leak to global scope
 set result to 99

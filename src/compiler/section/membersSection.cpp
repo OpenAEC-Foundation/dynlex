@@ -28,10 +28,13 @@ static Type parseFieldType(ParseContext &context, std::string_view typeStr) {
 				node = nullptr;
 			}
 		}
-		if (node && node->matchingDefinition && node->matchingDefinition->section &&
-			node->matchingDefinition->section->type == SectionType::Class) {
-			auto *classSec = static_cast<ClassSection *>(node->matchingDefinition->section);
-			return {Type::Kind::Class, 0, 0, classSec->classDefinition, 0};
+		if (node && !node->matchingDefinitions.empty()) {
+			for (auto *d : node->matchingDefinitions) {
+				if (d->section && d->section->type == SectionType::Class) {
+					auto *classSec = static_cast<ClassSection *>(d->section);
+					return {Type::Kind::Class, 0, 0, classSec->classDefinition, 0};
+				}
+			}
 		}
 	}
 

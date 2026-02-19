@@ -6,21 +6,47 @@
 #include "type.h"
 #include "variable.h"
 
-// Resolve a variable expression through macro bindings to find the actual variable expression.
-// Stops if the binding is self-referential (call-site variable has the same name as the macro parameter).
-static Expression *
-resolveVarThroughMacro(Expression *expr, const std::unordered_map<std::string, Expression *> &macroBindings) {
+// Resolve a Variable expression through macro bindings to find the bound expression.
+// Only follows Variable → Variable chains; stops at non-Variable expressions (PatternCall,
+// IntrinsicCall, Literal, etc.). The caller handles those expression kinds separately.
+// See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp) which additionally
+// expands macro PatternCalls and operates on the context's binding stack.
+static Expression *resolveThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
-	auto it = macroBindings.find(expr->variable->name);
-	if (it != macroBindings.end() && it->second != expr)
-		return resolveVarThroughMacro(it->second, macroBindings);
+	auto it = bindings.find(expr->variable->name);
+	if (it != bindings.end() && it->second != expr)
+		return resolveThroughBindings(it->second, bindings);
 	return expr;
 }
 
-// Resolve an expression's type through macro bindings
-static Type resolveTypeThroughMacro(Expression *expr, const std::unordered_map<std::string, Expression *> &macroBindings) {
-	Expression *resolved = resolveVarThroughMacro(expr, macroBindings);
+// Like resolveThroughBindings, but also expands macro PatternCalls to find the
+// underlying expression. Outputs the final active bindings in outBindings so the
+// caller can resolve arguments of the returned expression. Use when inspecting
+// expression kind matters (e.g., detecting a property intrinsic inside a store
+// destination). See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp)
+// for the codegen equivalent that uses the context's binding stack.
+static Expression *resolveThroughBindingsDeep(
+	Expression *expr, const std::unordered_map<std::string, Expression *> &bindings,
+	std::unordered_map<std::string, Expression *> &outBindings
+) {
+	expr = resolveThroughBindings(expr, bindings);
+	outBindings = bindings;
+	if (!expr)
+		return expr;
+	std::unordered_map<std::string, Expression *> innerBindings;
+	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	if (bodyExpr) {
+		for (auto &[name, argExpr] : innerBindings)
+			argExpr = resolveThroughBindings(argExpr, bindings);
+		return resolveThroughBindingsDeep(bodyExpr, innerBindings, outBindings);
+	}
+	return expr;
+}
+
+// Convenience: resolve an expression through bindings, then return its type.
+static Type resolveTypeThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
+	Expression *resolved = resolveThroughBindings(expr, bindings);
 	return resolved ? resolved->type : Type{};
 }
 
@@ -84,12 +110,12 @@ static bool inferExpressionType(
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
 				if (info->argCount == 2) {
-					Type argType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type argType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (argType.isDeduced())
 						expr->type = argType;
 				} else {
-					Type leftType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
-					Type rightType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+					Type leftType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					Type rightType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (leftType.isDeduced() && rightType.isDeduced()) {
 						expr->type = isPointerArithmeticOperator(expr->intrinsicName)
 										 ? Type::promoteArithmetic(leftType, rightType)
@@ -103,8 +129,9 @@ static bool inferExpressionType(
 			case IntrinsicReturnKind::Void:
 				// "store" has side effects on variable types beyond just being Void
 				if (expr->intrinsicName == "store") {
-					Expression *destExpr = resolveVarThroughMacro(expr->arguments[1], macroBindings);
-					Type valType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+					std::unordered_map<std::string, Expression *> destBindings;
+					Expression *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
+					Type valType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
 						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
 						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
@@ -114,9 +141,9 @@ static bool inferExpressionType(
 						}
 					} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
 							   valType.isDeduced()) {
-						Type instType = resolveTypeThroughMacro(destExpr->arguments[1], macroBindings);
+						Type instType = resolveTypeThroughBindings(destExpr->arguments[1], destBindings);
 						if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
-							Expression *propExpr = resolveVarThroughMacro(destExpr->arguments[2], macroBindings);
+							Expression *propExpr = resolveThroughBindings(destExpr->arguments[2], destBindings);
 							std::string fieldName;
 							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
 								fieldName = *str;
@@ -141,18 +168,18 @@ static bool inferExpressionType(
 				break;
 			case IntrinsicReturnKind::Custom:
 				if (expr->intrinsicName == "address of") {
-					Type varType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type varType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (varType.isDeduced())
 						expr->type = varType.pointed();
 				} else if (expr->intrinsicName == "dereference") {
-					Type ptrType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type ptrType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (ptrType.isDeduced() && ptrType.isPointer())
 						expr->type = ptrType.dereferenced();
 				} else if (expr->intrinsicName == "load at") {
 					expr->type = {Type::Kind::Integer, 8};
 				} else if (expr->intrinsicName == "return") {
 					if (expr->arguments.size() >= 2) {
-						Type retType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+						Type retType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 						if (retType.isDeduced()) {
 							expr->type = retType;
 							if (context.currentInstantiation)
@@ -166,14 +193,14 @@ static bool inferExpressionType(
 					if (!retTypeStr.empty())
 						expr->type = Type::fromString(retTypeStr);
 				} else if (expr->intrinsicName == "cast") {
-					Type typeArgType = resolveTypeThroughMacro(expr->arguments[2], macroBindings);
+					Type typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (typeArgType.kind == Type::Kind::TypeReference && typeArgType.classDefinition) {
 						ClassDefinition *classDef = typeArgType.classDefinition;
 						int instIdx = classDef->instantiations.empty() ? -1 : 0;
 						expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
 					} else {
 						// Resolve type string through macro bindings (e.g. "float" might be a macro arg)
-						Expression *typeStrExpr = resolveVarThroughMacro(expr->arguments[2], macroBindings);
+						Expression *typeStrExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 						std::string targetStr;
 						if (auto *str = std::get_if<std::string>(&typeStrExpr->literalValue))
 							targetStr = *str;
@@ -182,7 +209,7 @@ static bool inferExpressionType(
 							int byteSize = 8;
 							if (expr->arguments.size() >= 4) {
 								// Resolve bits through macro bindings (e.g. bits=32 might be a macro arg)
-								Expression *bitsExpr = resolveVarThroughMacro(expr->arguments[3], macroBindings);
+								Expression *bitsExpr = resolveThroughBindings(expr->arguments[3], macroBindings);
 								if (auto *bits = std::get_if<int64_t>(&bitsExpr->literalValue))
 									byteSize = *bits / 8;
 							}
@@ -192,26 +219,48 @@ static bool inferExpressionType(
 						}
 					}
 				} else if (expr->intrinsicName == "construct") {
-					Type typeRefType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type typeRefType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (typeRefType.kind == Type::Kind::TypeReference && typeRefType.classDefinition) {
 						ClassDefinition *classDef = typeRefType.classDefinition;
 						std::vector<Type> fieldTypes;
 						bool allDeduced = true;
 						for (size_t i = 2; i < expr->arguments.size(); i++) {
-							Type ft = resolveTypeThroughMacro(expr->arguments[i], macroBindings);
+							Type ft = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
 							if (!ft.isDeduced())
 								allDeduced = false;
 							fieldTypes.push_back(ft);
 						}
 						if (allDeduced) {
-							int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
+							// Prefer an existing instantiation whose fields are refinements
+							// of the argument types. This avoids oscillation when later stores
+							// promote field types (e.g., Integer fields promoted to Float by
+							// a multiply operation).
+							int instIdx = -1;
+							for (int i = 0; i < (int)classDef->instantiations.size(); i++) {
+								auto &existing = classDef->instantiations[i].fieldTypes;
+								if (existing.size() != fieldTypes.size())
+									continue;
+								bool compatible = true;
+								for (size_t j = 0; j < fieldTypes.size(); j++) {
+									if (existing[j] != fieldTypes[j] && !fieldTypes[j].canRefineTo(existing[j])) {
+										compatible = false;
+										break;
+									}
+								}
+								if (compatible) {
+									instIdx = i;
+									break;
+								}
+							}
+							if (instIdx < 0)
+								instIdx = classDef->getOrCreateInstantiation(fieldTypes);
 							expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
 						}
 					}
 				} else if (expr->intrinsicName == "property") {
-					Type instType = resolveTypeThroughMacro(expr->arguments[1], macroBindings);
+					Type instType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (instType.kind == Type::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
-						Expression *propExpr = resolveVarThroughMacro(expr->arguments[2], macroBindings);
+						Expression *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 						std::string fieldName;
 						if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
 							fieldName = *str;
@@ -233,14 +282,43 @@ static bool inferExpressionType(
 	}
 
 	case Expression::Kind::PatternCall: {
-		if (expr->patternMatch && expr->patternMatch->matchedEndNode) {
-			PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinition;
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
+			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
+			auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+
+			// Sort arguments by source position (expandMatch appends submatches/variables/words
+			// after direct args, so they may not be in text order)
+			std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+
+			// Build argument types for overload selection
+			// Use the first definition to walk nodesPassed (all overloads share the same trie path)
+			std::vector<Type> argTypesForOverload;
+			{
+				size_t ai = 0;
+				for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+					// Check if this node is a parameter for ANY definition at this endpoint
+					bool isParam = false;
+					for (auto *d : defs) {
+						if (node->parameterNames.contains(d)) {
+							isParam = true;
+							break;
+						}
+					}
+					if (isParam && ai < sortedArgs.size()) {
+						Type argType = resolveTypeThroughBindings(sortedArgs[ai], macroBindings);
+						argTypesForOverload.push_back(argType);
+						ai++;
+					}
+				}
+			}
+
+			// Select the best overload based on argument types
+			PatternDefinition *def = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
+			if (!def)
+				def = defs[0]; // fallback if no overload matched (types may not be deduced yet)
+
 			if (def && def->section) {
 				Section *matchedSection = def->section;
-
-				// Sort arguments by source position (expandMatch appends submatches/variables/words
-				// after direct args, so they may not be in text order)
-				std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 
 				// Build parameter bindings from call-site arguments
 				std::unordered_map<std::string, Expression *> callBindings;
@@ -286,7 +364,7 @@ static bool inferExpressionType(
 						auto paramIt = node->parameterNames.find(def);
 						if (paramIt != node->parameterNames.end() && argTypeIndex < sortedArgs.size()) {
 							Expression *argExpr = callBindings[paramIt->second];
-							argTypes.push_back(resolveTypeThroughMacro(argExpr, macroBindings));
+							argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
 							argTypeIndex++;
 						}
 					}

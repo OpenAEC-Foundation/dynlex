@@ -1,0 +1,27 @@
+import std.dl
+
+class:
+    patterns:
+        vector
+    members:
+        x, y, z
+
+macro expression a new vector with x vx, y vy and z vz:
+    replacement:
+        @intrinsic("construct", vector, vx, vy, vz)
+
+effect add value to {vector:target}:
+    execute:
+        set the x of target to the x of target + value
+        set the y of target to the y of target + value
+        set the z of target to the z of target + value
+
+effect multiply {vector:value} by factor:
+    execute:
+        set the x of value to the x of value * factor
+        set the y of value to the y of value * factor
+        set the z of value to the z of value * factor
+
+effect print {vector:msg}:
+    execute:
+        @intrinsic("call", "libc", "printf", "i32", "[%g, %g, %g]\n", the x of msg as a float, the y of msg as a float, the z of msg as a float)

@@ -278,8 +278,8 @@ static std::optional<::Range> getDefinitionTarget(Expression *expr) {
 		break;
 	case Expression::Kind::PatternCall:
 		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
-			expr->patternMatch->matchedEndNode->matchingDefinition) {
-			return expr->patternMatch->matchedEndNode->matchingDefinition->range;
+			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
+			return expr->patternMatch->matchedEndNode->matchingDefinitions[0]->range;
 		}
 		break;
 	default:
@@ -394,8 +394,8 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 			break;
 		case Expression::Kind::PatternCall:
 			if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
-				expr->patternMatch->matchedEndNode->matchingDefinition) {
-				SectionType sectionType = expr->patternMatch->matchedEndNode->matchingDefinition->section->type;
+				!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
+				SectionType sectionType = expr->patternMatch->matchedEndNode->matchingDefinitions[0]->section->type;
 				SemanticTokenType tokenType =
 					sectionType == SectionType::Expression ? SemanticTokenType::Expression : SemanticTokenType::Effect;
 				addToken(expr->range, tokenType, false);

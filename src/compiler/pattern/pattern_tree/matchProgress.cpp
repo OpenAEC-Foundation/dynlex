@@ -38,18 +38,23 @@ std::vector<MatchProgress> MatchProgress::step() {
 		nextMatches.push_back(stepUp);
 	};
 
-	if (currentNode->matchingDefinition) {
-		// end node found
-		PatternDefinition *def = currentNode->matchingDefinition;
-
-		// Precedence check: reject this completion if constraints are violated
-		bool precedenceOK = true;
-		if (def->precedence > 0) {
-			if (def->precedence > maxPrecedence || def->precedence >= minRightPrecedence)
-				precedenceOK = false;
+	if (!currentNode->matchingDefinitions.empty()) {
+		// end node found — find the first definition with valid precedence
+		// (actual overload selection happens later in type inference/codegen based on argument types)
+		PatternDefinition *def = nullptr;
+		for (auto *d : currentNode->matchingDefinitions) {
+			bool precedenceOK = true;
+			if (d->precedence > 0) {
+				if (d->precedence > maxPrecedence || d->precedence >= minRightPrecedence)
+					precedenceOK = false;
+			}
+			if (precedenceOK) {
+				def = d;
+				break;
+			}
 		}
 
-		if (precedenceOK) {
+		if (def) {
 			if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
 				addMatchData(match);
 			}

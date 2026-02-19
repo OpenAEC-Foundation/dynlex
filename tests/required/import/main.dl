@@ -1,5 +1,6 @@
 #this test tests circular imports
 import other.dl
+import std.dl
 
 effect first:
 	execute:

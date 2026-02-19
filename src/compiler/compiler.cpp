@@ -13,8 +13,17 @@ using namespace std::literals;
 
 // Search paths for library imports (e.g., "lib/std.dl")
 // Tries: original path, then installed location, then source tree
-static std::string resolveImportPath(const std::string &path, lsp::FileSystem *fileSystem) {
-	// Try the path as-is first (relative to CWD)
+static std::string
+resolveImportPath(const std::string &path, const std::string &importingFileDir, lsp::FileSystem *fileSystem) {
+	// Try relative to the importing file's directory first
+	if (!importingFileDir.empty()) {
+		std::string relativePath = importingFileDir + "/" + path;
+		if (fileSystem->getFile(relativePath)) {
+			return relativePath;
+		}
+	}
+
+	// Try the path as-is (relative to CWD)
 	if (fileSystem->getFile(path)) {
 		return path;
 	}
@@ -25,10 +34,22 @@ static std::string resolveImportPath(const std::string &path, lsp::FileSystem *f
 		return systemPath;
 	}
 
+	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
+	std::string systemLibPath = "/usr/share/dynlex/lib/" + path;
+	if (fileSystem->getFile(systemLibPath)) {
+		return systemLibPath;
+	}
+
 	// Try relative to the project source directory (for development builds)
 	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
 	if (fileSystem->getFile(devPath)) {
 		return devPath;
+	}
+
+	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
+	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
+	if (fileSystem->getFile(devLibPath)) {
+		return devLibPath;
 	}
 
 	return path; // Return original path (will fail with proper error)
@@ -98,8 +119,10 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		// check if the line is an import statement
 		if (line->rightTrimmedText.starts_with("import ")) {
 			// recursively import the file, replacing this line with the imported content
-			std::string importPath =
-				resolveImportPath(std::string(line->rightTrimmedText.substr("import "sv.length())), context.fileSystem.get());
+			std::string importingDir = std::filesystem::path(path).parent_path().string();
+			std::string importPath = resolveImportPath(
+				std::string(line->rightTrimmedText.substr("import "sv.length())), importingDir, context.fileSystem.get()
+			);
 			if (!importSourceFile(importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error, "failed to import source file: " + (std::string)importPath,
@@ -261,4 +284,60 @@ bool isComparisonOperator(const std::string &name) {
 bool isMathFunction(const std::string &name) {
 	const IntrinsicInfo *info = findIntrinsic(name);
 	return info && info->returnKind == IntrinsicReturnKind::SameAsArgs && !isArithmeticOperator(name) && name != "negate";
+}
+
+PatternDefinition *selectOverload(
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<Type> &argTypes
+) {
+	if (definitions.size() <= 1)
+		return definitions.empty() ? nullptr : definitions[0];
+
+	// Score each candidate: count how many type constraints match
+	PatternDefinition *best = nullptr;
+	int bestScore = -1;
+
+	for (auto *candidate : definitions) {
+		int score = 0;
+		bool constraintFailed = false;
+
+		// Walk nodesPassed to map arguments to parameters for this candidate
+		size_t argIdx = 0;
+		for (PatternTreeNode *node : nodesPassed) {
+			auto paramIt = node->parameterNames.find(candidate);
+			if (paramIt == node->parameterNames.end() || argIdx >= argTypes.size()) {
+				if (paramIt != node->parameterNames.end())
+					argIdx++; // still counts as parameter slot
+				continue;
+			}
+
+			// Find the corresponding element in the candidate's definition to get its type constraint
+			const std::string &paramName = paramIt->second;
+			for (auto &elem : candidate->patternElements) {
+				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
+					if (elem.resolvedType) {
+						// Type constraint exists — check if argument type matches
+						const Type &argType = argTypes[argIdx];
+						if (argType.kind == Type::Kind::Class && argType.classDefinition == elem.resolvedType) {
+							score++; // constraint matched
+						} else {
+							constraintFailed = true;
+						}
+					}
+					break;
+				}
+			}
+			argIdx++;
+		}
+
+		if (constraintFailed)
+			continue;
+
+		if (score > bestScore) {
+			bestScore = score;
+			best = candidate;
+		}
+	}
+
+	return best;
 }

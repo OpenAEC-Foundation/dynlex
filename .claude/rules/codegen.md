@@ -13,9 +13,13 @@ paths:
 
 ## Scoped Macro Bindings
 - `macroBindingStack` (`std::stack`) on ParseContext: pushed on macro entry, popped on exit
-- `resolveMacroBinding`: single lookup, no chaining through bindings
+- `resolveVariableBinding` (codegenTypes.cpp): resolves one Variable through the current macro's binding map. Each resolution crosses one scope boundary — caller must pop before evaluating the result
+- `resolveThroughMacroLayers` (codegenTypes.cpp): resolves fully through variable bindings AND macro PatternCall expansions. Pushes one scope per PatternCall expanded; returns the count so callers can pop them. Use when inspecting the underlying expression kind (e.g., detecting property intrinsic in store dest)
+- `expandMacroPatternCall` (parseContext.h): extracts macro body + parameter bindings from a PatternCall. Shared by codegen and type inference. Does not modify any binding stack
+- `resolveThroughBindings` (typeInference.cpp): type inference counterpart of `resolveVariableBinding` — takes an explicit bindings map instead of using the context stack
+- `resolveThroughBindingsDeep` (typeInference.cpp): type inference counterpart of `resolveThroughMacroLayers` — resolves through variable bindings AND macro PatternCalls with explicit bindings. Returns the active bindings via output parameter
 - `MacroScopeGuard` RAII: temporarily pops to caller scope when generating resolved argument expressions
-- `getVariablePointer`: recursively resolves through multiple macro scopes by popping/restoring the stack
+- `getVariablePointer`: iterates `resolveVariableBinding` + scope pops to resolve through nested macro bindings to find the actual variable's alloca
 
 ## Intrinsics Reference
 - **Memory**: `@intrinsic("store", var, val)` / `@intrinsic("store at", ptr, index, val)` / `@intrinsic("load at", ptr, index)` / `@intrinsic("address of", var)` / `@intrinsic("dereference", ptr)`
