@@ -26,11 +26,22 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
-		// Resolve the destination through all macro layers to detect property stores.
-		// E.g., `set the x of target to val` → dest resolves through the `the ... of ...`
-		// macro to @intrinsic("property", ownername, propertyname).
+		// Generate the value in the current (original) macro scope first,
+		// before resolving the destination which may cross scope boundaries.
+		Type valType = getEffectiveType(context, args[1]);
+		llvm::Value *val = generateExpressionCode(context, args[1]);
+
+		// Save scope state — resolveThroughMacroLayers freely crosses scope
+		// boundaries, so we restore afterward.
+		auto savedBindings = context.macroExpressionBindings;
+		auto savedStack = context.macroBindingStack;
+
+		// Resolve the destination through all macro and scope layers to detect
+		// property stores. E.g., `add value to the x of target` chains through
+		// scalar add macro → set macro → @intrinsic("store", var, val), and the
+		// dest var resolves through multiple scopes to @intrinsic("property", ...).
 		Expression *destExpr = args[0];
-		int scopesPushed = resolveThroughMacroLayers(context, destExpr);
+		resolveThroughMacroLayers(context, destExpr);
 
 		if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property") {
 			// Storing to a class field: generate GEP + store
@@ -52,41 +63,60 @@ generateIntrinsicCode(ParseContext &context, const std::string &name, const std:
 			llvm::Type *structType = getLLVMType(context, instType);
 			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
 
-			// Pop the pushed scopes before generating the value — args[1] lives in
-			// the original scope, not in the expanded property macro's scope.
-			for (int i = 0; i < scopesPushed; i++) {
-				context.macroExpressionBindings = context.macroBindingStack.top();
-				context.macroBindingStack.pop();
-			}
-
-			Type valType = getEffectiveType(context, args[1]);
-			llvm::Value *val = generateExpressionCode(context, args[1]);
 			Type fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
 			val = ensureType(context, val, valType, fieldType);
 			builder.CreateStore(val, fieldPtr);
 		} else {
-			// Pop macro layers — the else branch uses args[0] directly
-			for (int i = 0; i < scopesPushed; i++) {
-				context.macroExpressionBindings = context.macroBindingStack.top();
-				context.macroBindingStack.pop();
-			}
+			// Restore scope state — the else branch evaluates args[0] directly
+			context.macroExpressionBindings = savedBindings;
+			context.macroBindingStack = savedStack;
 
-			Type valType = getEffectiveType(context, args[1]);
 			llvm::Value *ptr = getVariablePointer(context, args[0]);
-			llvm::Value *val = generateExpressionCode(context, args[1]);
 			if (ptr && val) {
 				Type destType = getEffectiveType(context, args[0]);
-				if (destType.kind == Type::Kind::Class) {
-					// Copy entire struct (value semantics)
-					llvm::Type *structType = getLLVMType(context, destType);
-					llvm::Value *srcVal = builder.CreateAlignedLoad(structType, val, llvm::Align(8), "struct_load");
-					builder.CreateAlignedStore(srcVal, ptr, llvm::Align(8));
+				if (destType.kind == Type::Kind::Class && destType.classDefinition && destType.classInstIndex >= 0) {
+					ClassDefinition *classDef = destType.classDefinition;
+					auto &destFields = classDef->instantiations[destType.classInstIndex].fieldTypes;
+					auto &srcFields = valType.classDefinition
+										  ? valType.classDefinition->instantiations[valType.classInstIndex].fieldTypes
+										  : destFields;
+					bool sameLayout = (srcFields.size() == destFields.size());
+					if (sameLayout) {
+						for (size_t i = 0; i < srcFields.size(); i++) {
+							if (srcFields[i] != destFields[i]) {
+								sameLayout = false;
+								break;
+							}
+						}
+					}
+					if (sameLayout) {
+						// Same field types — direct struct copy
+						llvm::Type *structType = getLLVMType(context, destType);
+						llvm::Value *srcVal = builder.CreateAlignedLoad(structType, val, llvm::Align(8), "struct_load");
+						builder.CreateAlignedStore(srcVal, ptr, llvm::Align(8));
+					} else {
+						// Different field types — element-wise copy with conversion
+						llvm::Type *srcStructType = getLLVMType(context, valType);
+						llvm::Type *destStructType = getLLVMType(context, destType);
+						for (size_t i = 0; i < destFields.size(); i++) {
+							llvm::Value *srcFieldPtr = builder.CreateStructGEP(srcStructType, val, i, "src_field");
+							llvm::Value *fieldVal =
+								builder.CreateLoad(srcFields[i].toLLVM(*context.llvmContext), srcFieldPtr, "field_val");
+							fieldVal = ensureType(context, fieldVal, srcFields[i], destFields[i]);
+							llvm::Value *destFieldPtr = builder.CreateStructGEP(destStructType, ptr, i, "dest_field");
+							builder.CreateStore(fieldVal, destFieldPtr);
+						}
+					}
 				} else {
 					val = ensureType(context, val, valType, destType);
 					builder.CreateAlignedStore(val, ptr, llvm::Align(8));
 				}
 			}
 		}
+
+		// Restore scope state
+		context.macroExpressionBindings = savedBindings;
+		context.macroBindingStack = savedStack;
 		return nullptr;
 	}
 

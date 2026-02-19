@@ -21,7 +21,7 @@ struct SourceFile;
 llvm::Type *getLLVMType(ParseContext &context, Type type);
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, Type condType, const std::string &name);
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
-int resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
+void resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
 Type getEffectiveType(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, Type type);
 std::string getPatternFunctionName(Section *section);

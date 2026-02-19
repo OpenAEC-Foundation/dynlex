@@ -135,15 +135,19 @@ Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 // one scope each. Returns the number of scopes pushed, so the caller can pop them
 // when done. Use this when you need to see through macro indirection to inspect the
 // underlying expression kind (e.g., detecting a property intrinsic inside a store).
-int resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
-	int scopesPushed = 0;
+void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
 	while (expr) {
-		// Variable bindings: the bound expression is in the current scope's caller,
-		// but we don't pop here — the pushed PatternCall scopes will be popped by the caller.
+		// Variable bindings: resolve in current scope, or pop to parent scopes
 		if (expr->kind == Expression::Kind::Variable && expr->variable) {
 			auto it = context.macroExpressionBindings.find(expr->variable->name);
 			if (it != context.macroExpressionBindings.end() && it->second != expr) {
 				expr = it->second;
+				continue;
+			}
+			// Not found in current scope — try parent scopes
+			if (!context.macroBindingStack.empty()) {
+				context.macroExpressionBindings = context.macroBindingStack.top();
+				context.macroBindingStack.pop();
 				continue;
 			}
 		}
@@ -153,13 +157,11 @@ int resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
 		if (bodyExpr) {
 			context.macroBindingStack.push(context.macroExpressionBindings);
 			context.macroExpressionBindings = std::move(innerBindings);
-			scopesPushed++;
 			expr = bodyExpr;
 			continue;
 		}
 		break;
 	}
-	return scopesPushed;
 }
 
 // MacroScopeGuard implementation

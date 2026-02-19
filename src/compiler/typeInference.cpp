@@ -138,6 +138,14 @@ static bool inferExpressionType(
 						if (var && var->type.canRefineTo(valType)) {
 							var->type = valType;
 							changed = true;
+							// Give this variable its own instantiation copy so property stores
+							// don't contaminate other variables sharing the same construct instantiation
+							if (var->type.kind == Type::Kind::Class && var->type.classDefinition &&
+								var->type.classInstIndex >= 0) {
+								auto &src = var->type.classDefinition->instantiations[var->type.classInstIndex].fieldTypes;
+								var->type.classInstIndex = (int)var->type.classDefinition->instantiations.size();
+								var->type.classDefinition->instantiations.push_back({src});
+							}
 						}
 					} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
 							   valType.isDeduced()) {
@@ -231,29 +239,7 @@ static bool inferExpressionType(
 							fieldTypes.push_back(ft);
 						}
 						if (allDeduced) {
-							// Prefer an existing instantiation whose fields are refinements
-							// of the argument types. This avoids oscillation when later stores
-							// promote field types (e.g., Integer fields promoted to Float by
-							// a multiply operation).
-							int instIdx = -1;
-							for (int i = 0; i < (int)classDef->instantiations.size(); i++) {
-								auto &existing = classDef->instantiations[i].fieldTypes;
-								if (existing.size() != fieldTypes.size())
-									continue;
-								bool compatible = true;
-								for (size_t j = 0; j < fieldTypes.size(); j++) {
-									if (existing[j] != fieldTypes[j] && !fieldTypes[j].canRefineTo(existing[j])) {
-										compatible = false;
-										break;
-									}
-								}
-								if (compatible) {
-									instIdx = i;
-									break;
-								}
-							}
-							if (instIdx < 0)
-								instIdx = classDef->getOrCreateInstantiation(fieldTypes);
+							int instIdx = classDef->getOrCreateInstantiation(fieldTypes);
 							expr->type = {Type::Kind::Class, 0, 0, classDef, instIdx};
 						}
 					}

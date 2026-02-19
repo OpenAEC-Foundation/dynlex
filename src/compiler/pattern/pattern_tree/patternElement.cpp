@@ -149,11 +149,12 @@ std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patt
 			assert(colonPos != std::string_view::npos && "Capture element must have format {type:name}");
 			std::string_view captureType = content.substr(0, colonPos);
 			std::string name(content.substr(colonPos + 1));
+			size_t namePos = bracketStart + 1 + colonPos + 1 + offset;
 			if (captureType == "word") {
-				result.push_back(DefinitionPatternElement(PatternElement::Type::Word, name, bracketStart + offset));
+				result.push_back(DefinitionPatternElement(PatternElement::Type::Word, name, namePos));
 			} else {
 				// Typed argument constraint: emit a Variable element with the type constraint
-				DefinitionPatternElement elem(PatternElement::Type::Variable, name, bracketStart + offset);
+				DefinitionPatternElement elem(PatternElement::Type::Variable, name, namePos);
 				elem.typeConstraintName = std::string(captureType);
 				result.push_back(std::move(elem));
 			}

@@ -14,7 +14,7 @@ paths:
 ## Scoped Macro Bindings
 - `macroBindingStack` (`std::stack`) on ParseContext: pushed on macro entry, popped on exit
 - `resolveVariableBinding` (codegenTypes.cpp): resolves one Variable through the current macro's binding map. Each resolution crosses one scope boundary — caller must pop before evaluating the result
-- `resolveThroughMacroLayers` (codegenTypes.cpp): resolves fully through variable bindings AND macro PatternCall expansions. Pushes one scope per PatternCall expanded; returns the count so callers can pop them. Use when inspecting the underlying expression kind (e.g., detecting property intrinsic in store dest)
+- `resolveThroughMacroLayers` (codegenTypes.cpp): resolves fully through variable bindings AND macro PatternCall expansions, crossing scope boundaries as needed (pops to parent scopes when a variable isn't found in the current scope). Freely modifies scope state — callers must save/restore `macroExpressionBindings` + `macroBindingStack`. Use when inspecting the underlying expression kind (e.g., detecting property intrinsic in store dest)
 - `expandMacroPatternCall` (parseContext.h): extracts macro body + parameter bindings from a PatternCall. Shared by codegen and type inference. Does not modify any binding stack
 - `resolveThroughBindings` (typeInference.cpp): type inference counterpart of `resolveVariableBinding` — takes an explicit bindings map instead of using the context stack
 - `resolveThroughBindingsDeep` (typeInference.cpp): type inference counterpart of `resolveThroughMacroLayers` — resolves through variable bindings AND macro PatternCalls with explicit bindings. Returns the active bindings via output parameter
@@ -53,10 +53,16 @@ paths:
 - `ensureType()`: SExt/Trunc (int↔int), FPExt/FPTrunc (float↔float), SIToFP/FPToSI (cross-type), PtrToInt/IntToPtr (pointer↔int)
 - Pointer: `pointerDepth > 0` → opaque `ptr`
 
+## Class Struct Store
+- When storing a class value to a variable (`store` intrinsic, non-property branch), codegen checks if source and destination have the same field type layout
+- **Same layout**: direct whole-struct `load`/`store` (fast path)
+- **Different layout**: element-wise load from source struct, `ensureType` conversion per field, store to destination struct. This handles per-variable instantiation copies where field types diverge (e.g., construct creates `{i32,i32,i32}` but variable's copy is promoted to `{f64,f64,f64}`)
+- The layout comparison checks `srcFields[i] != destFields[i]` for each field; any mismatch triggers element-wise path
+
 ## Bugs Fixed (codegen-specific)
 - **Macro binding variable capture**: `return value + 1000` caused infinite recursion. Fix: temporarily erase binding while generating resolved expression.
 - **Macro bindings leaking into functions**: `generateSpecializedFunction` now saves/clears/restores `macroExpressionBindings`.
-- **Nested macro store**: `add value to target` → `set var to val` needed multi-level resolution. Fix: `getVariablePointer` recursively pops macro scopes.
+- **Nested macro store**: `add value to target` → `set var to val` needed multi-level resolution. Fix: `getVariablePointer` recursively pops macro scopes. For property stores through nested macros (e.g., `add value to the x of target`), `resolveThroughMacroLayers` now also crosses scope boundaries. The store handler generates the value first, then saves/restores scopes around dest resolution.
 - **Stale macro body types**: Shared expression nodes retained types from prior callers. Fix: `resetSectionTypes()` before each `inferMacroBody` (macro sections only).
 - **Spurious instantiations**: Top-level inference created instantiations with undeduced args. Fix: skip non-macro function body inference when any arg is undeduced.
 - **Cast macro resolution**: Cast intrinsic's type string and bits arguments may be macro-bound variable references. Both type inference (`compiler.cpp`) and codegen (`codegen.cpp` — `getEffectiveType` and `generateIntrinsicCode`) must resolve through macro bindings before checking `literalValue`.

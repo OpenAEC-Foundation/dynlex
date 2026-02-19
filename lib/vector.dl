@@ -12,15 +12,15 @@ macro expression a new vector with x vx, y vy and z vz:
 
 effect add value to {vector:target}:
     execute:
-        set the x of target to the x of target + value
-        set the y of target to the y of target + value
-        set the z of target to the z of target + value
+        add value to the x of target
+        add value to the y of target
+        add value to the z of target
 
 effect multiply {vector:value} by factor:
     execute:
-        set the x of value to the x of value * factor
-        set the y of value to the y of value * factor
-        set the z of value to the z of value * factor
+        multiply the x of value by factor
+        multiply the y of value by factor
+        multiply the z of value by factor
 
 effect print {vector:msg}:
     execute:
