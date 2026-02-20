@@ -48,6 +48,17 @@ if [ ! -f "$HOME/.conan2/profiles/default" ]; then
     conan profile detect --force
 fi
 
+# Ensure Go bin directory is in PATH (go install puts binaries in ~/go/bin)
+if ! echo "$PATH" | grep -q "$(go env GOPATH)/bin"; then
+    export PATH="$(go env GOPATH)/bin:$PATH"
+    SHELL_RC="$HOME/.bashrc"
+    [ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
+    if ! grep -q 'GOPATH.*bin' "$SHELL_RC" 2>/dev/null; then
+        echo 'export PATH="$(go env GOPATH)/bin:$PATH"' >> "$SHELL_RC"
+        echo "Added Go bin directory to $SHELL_RC"
+    fi
+fi
+
 # Install MCP language server
 echo "Installing MCP language server..."
 go install github.com/isaacphi/mcp-language-server@latest || echo "Warning: mcp-language-server install failed (optional)"

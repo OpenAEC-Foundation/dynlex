@@ -49,14 +49,17 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 
 // Expression/section code generation (codegen.cpp)
 bool generateSectionCode(ParseContext &context, Section *section);
-llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
+bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value *&result);
+
 void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	const std::vector<DataType> &argTypes, Instantiation &inst
 );
 
 // Intrinsic code generation (codegenIntrinsics.cpp)
-llvm::Value *generateIntrinsicCode(
-	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+bool generateIntrinsicCode(
+	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType,
+	llvm::Value *&result
 );
+
 std::string getStringLiteral(Expression *expr);

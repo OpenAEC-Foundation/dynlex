@@ -50,22 +50,23 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 	return resolved ? resolved->type : DataType{};
 }
 
-// Infer types through a macro body with given parameter bindings. Returns true if anything changed.
-static bool
-inferMacroBody(Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context);
+// Infer types through a macro body with given parameter bindings. Returns false on error.
+static bool inferMacroBody(
+	Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context, bool &changed
+);
 
-// Infer the type of an expression bottom-up. Returns true if the type changed.
+// Infer the type of an expression bottom-up. Returns false on error.
 static bool inferExpressionType(
-	Expression *expr, ParseContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
+	Expression *expr, ParseContext &context, bool &changed,
+	const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
 	if (!expr)
-		return false;
-
-	bool changed = false;
+		return true;
 
 	// Recurse into arguments first (bottom-up)
 	for (Expression *arg : expr->arguments) {
-		changed |= inferExpressionType(arg, context, macroBindings);
+		if (!inferExpressionType(arg, context, changed, macroBindings))
+			return false;
 	}
 
 	DataType oldType = expr->type;
@@ -120,14 +121,9 @@ static bool inferExpressionType(
 						DataType result = isPointerArithmeticOperator(expr->intrinsicName)
 											  ? DataType::promoteArithmetic(leftType, rightType)
 											  : DataType::promote(leftType, rightType);
-						if (!result.isDeduced()) {
-							context.diagnostics.push_back(Diagnostic(
-								Diagnostic::Level::Error, "Cannot apply '" + expr->intrinsicName + "' to non-numeric operands",
-								expr->range
-							));
-							return false;
-						}
-						expr->type = result;
+						if (result.isDeduced())
+							expr->type = result;
+						// else: leave Undeduced, may resolve on next iteration with different overload
 					}
 				}
 				break;
@@ -335,8 +331,24 @@ static bool inferExpressionType(
 
 			// Select the best overload based on argument types
 			PatternDefinition *def = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
-			if (!def)
-				def = defs[0]; // fallback if no overload matched (types may not be deduced yet)
+			if (!def) {
+				// Fallback: prefer the unconstrained definition (no typed args) since
+				// constrained overloads can't be verified without deduced types.
+				for (auto *d : defs) {
+					bool hasConstraint = false;
+					for (auto &elem : d->patternElements)
+						if (!elem.typeConstraintName.empty()) {
+							hasConstraint = true;
+							break;
+						}
+					if (!hasConstraint) {
+						def = d;
+						break;
+					}
+				}
+				if (!def)
+					def = defs[0];
+			}
 
 			if (def && def->section) {
 				Section *matchedSection = def->section;
@@ -369,7 +381,10 @@ static bool inferExpressionType(
 					// which re-matches `print msg` when types are still undeduced)
 					if (!matchedSection->inferring) {
 						matchedSection->inferring = true;
-						changed |= inferMacroBody(matchedSection, callBindings, context);
+						if (!inferMacroBody(matchedSection, callBindings, context, changed)) {
+							matchedSection->inferring = false;
+							return false;
+						}
 						matchedSection->inferring = false;
 					}
 					expr->type = {DataType::Kind::Void};
@@ -377,7 +392,10 @@ static bool inferExpressionType(
 					// Code replacement: infer body, type = replacement expression type
 					if (!matchedSection->inferring) {
 						matchedSection->inferring = true;
-						changed |= inferMacroBody(matchedSection, callBindings, context);
+						if (!inferMacroBody(matchedSection, callBindings, context, changed)) {
+							matchedSection->inferring = false;
+							return false;
+						}
 						matchedSection->inferring = false;
 					}
 					for (Section *child : matchedSection->children) {
@@ -416,7 +434,11 @@ static bool inferExpressionType(
 						inst.inferring = true;
 						Instantiation *savedInst = context.currentInstantiation;
 						context.currentInstantiation = &inst;
-						changed |= inferMacroBody(matchedSection, callBindings, context);
+						if (!inferMacroBody(matchedSection, callBindings, context, changed)) {
+							context.currentInstantiation = savedInst;
+							inst.inferring = false;
+							return false;
+						}
 						context.currentInstantiation = savedInst;
 						inst.inferring = false;
 					}
@@ -433,7 +455,16 @@ static bool inferExpressionType(
 		break;
 	}
 
-	return changed || (expr->type != oldType);
+	if (expr->type != oldType) {
+		Section *sec = expr->range.line ? expr->range.line->section : nullptr;
+		fprintf(
+			stderr, "  CHANGED line=%d macro=%d: %s -> %s (%s)\n", expr->range.line ? expr->range.line->mergedLineIndex : -1,
+			sec ? (int)sec->isMacro : -1, oldType.toString().c_str(), expr->type.toString().c_str(),
+			expr->range.subString.data() ? std::string(expr->range.subString).substr(0, 40).c_str() : "?"
+		);
+		changed = true;
+	}
+	return true;
 }
 
 // Reset non-literal expression types in a section and all its children.
@@ -458,21 +489,29 @@ static void resetSectionTypes(Section *section) {
 		resetSectionTypes(child);
 }
 
-static bool
-inferMacroBody(Section *section, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
+static bool inferMacroBody(
+	Section *section, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context, bool &changed
+) {
 	// Only macros need resetting — non-macro functions are inferred per-
 	// instantiation and their body types must persist across iterations.
 	if (section->isMacro)
 		resetSectionTypes(section);
 
-	bool changed = false;
+	// Macro bodies are reset each call, so their expression types always appear
+	// to "change" from Undeduced→inferred. Use a local flag to avoid preventing
+	// the fixed-point loop from converging. Non-macro function bodies persist
+	// across iterations and should propagate changes normally.
+	bool localChanged = false;
+	bool &bodyChanged = section->isMacro ? localChanged : changed;
 	for (CodeLine *line : section->codeLines) {
 		if (line->expression)
-			changed |= inferExpressionType(line->expression, context, bindings);
+			if (!inferExpressionType(line->expression, context, bodyChanged, bindings))
+				return false;
 	}
 	for (Section *child : section->children)
-		changed |= inferMacroBody(child, bindings, context);
-	return changed;
+		if (!inferMacroBody(child, bindings, context, bodyChanged))
+			return false;
+	return true;
 }
 
 // Default a Numeric expression to a sized Integer type.
@@ -597,25 +636,41 @@ bool inferTypes(ParseContext &context) {
 	// Type inference uses fixed-point iteration: types flow through expressions
 	// until no more changes occur. 64 iterations handles deeply nested expressions
 	// with complex type dependencies (macros, pattern calls, arithmetic promotion).
+	bool defaultedNumerics = false;
 	for (int iteration = 0; iteration < 64; iteration++) {
 		bool changed = false;
 
 		for (CodeLine *line : context.codeLines) {
 			if (line->expression) {
-				changed |= inferExpressionType(line->expression, context);
+				if (!inferExpressionType(line->expression, context, changed))
+					return false;
 			}
 		}
 
-		if (!changed)
-			break;
+		fprintf(stderr, "DEBUG iteration %d: changed=%d defaulted=%d\n", iteration, changed, defaultedNumerics);
+		if (!changed) {
+			if (defaultedNumerics)
+				break;
+			// Default Numeric types to Integer, then run one more round so
+			// overload selection and non-macro function instantiation can use
+			// the concrete types.
+			defaultedNumerics = true;
+			for (CodeLine *line : context.codeLines) {
+				if (line->expression)
+					defaultNumericExpressions(line->expression);
+			}
+			defaultNumericTypes(context.mainSection);
+		}
 	}
 
-	// Default remaining Numeric types to sized Integer
-	for (CodeLine *line : context.codeLines) {
-		if (line->expression)
-			defaultNumericExpressions(line->expression);
+	if (!defaultedNumerics) {
+		// Loop hit iteration limit without stabilizing; still default numerics
+		for (CodeLine *line : context.codeLines) {
+			if (line->expression)
+				defaultNumericExpressions(line->expression);
+		}
+		defaultNumericTypes(context.mainSection);
 	}
-	defaultNumericTypes(context.mainSection);
 
 	// Validate variables — all must have deduced types
 	// Skip non-macro function body sections: their variables only get types during monomorphization

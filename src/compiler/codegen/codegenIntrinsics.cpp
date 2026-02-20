@@ -19,18 +19,26 @@ std::string getStringLiteral(Expression *expr) {
 	return "";
 }
 
+// Helper: generate expression code, returning false on failure.
+#define TRY_EXPR(var, expr)                                                                                                    \
+	llvm::Value *var;                                                                                                          \
+	if (!generateExpressionCode(context, expr, var))                                                                           \
+	return false
+
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
-llvm::Value *generateIntrinsicCode(
-	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+bool generateIntrinsicCode(
+	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType,
+	llvm::Value *&result
 ) {
+	result = nullptr;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	if (name == "store") {
 		// Generate the value in the current (original) macro scope first,
 		// before resolving the destination which may cross scope boundaries.
 		DataType valType = getEffectiveType(context, args[1]);
-		llvm::Value *val = generateExpressionCode(context, args[1]);
+		TRY_EXPR(val, args[1]);
 
 		// Save scope state — resolveThroughMacroLayers freely crosses scope
 		// boundaries, so we restore afterward.
@@ -118,13 +126,13 @@ llvm::Value *generateIntrinsicCode(
 		// Restore scope state
 		context.macroExpressionBindings = savedBindings;
 		context.macroBindingStack = savedStack;
-		return nullptr;
+		return true;
 	}
 
 	// Arithmetic intrinsics
 	if (isArithmeticOperator(name)) {
-		llvm::Value *left = generateExpressionCode(context, args[0]);
-		llvm::Value *right = generateExpressionCode(context, args[1]);
+		TRY_EXPR(left, args[0]);
+		TRY_EXPR(right, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
 
@@ -136,7 +144,8 @@ llvm::Value *generateIntrinsicCode(
 			llvm::Type *elemType = ptrType.dereferenced().toLLVM(*context.llvmContext);
 			if (name == "subtract" && leftType.isPointer())
 				indexVal = builder.CreateNeg(indexVal, "neg_idx");
-			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
+			result = builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
+			return true;
 		}
 
 		DataType promoted = DataType::promote(leftType, rightType);
@@ -146,34 +155,34 @@ llvm::Value *generateIntrinsicCode(
 
 		if (promoted.kind == DataType::Kind::Float) {
 			if (name == "add")
-				return builder.CreateFAdd(left, right, "fadd");
-			if (name == "subtract")
-				return builder.CreateFSub(left, right, "fsub");
-			if (name == "multiply")
-				return builder.CreateFMul(left, right, "fmul");
-			if (name == "divide")
-				return builder.CreateFDiv(left, right, "fdiv");
-			if (name == "modulo")
-				return builder.CreateFRem(left, right, "fmod");
+				result = builder.CreateFAdd(left, right, "fadd");
+			else if (name == "subtract")
+				result = builder.CreateFSub(left, right, "fsub");
+			else if (name == "multiply")
+				result = builder.CreateFMul(left, right, "fmul");
+			else if (name == "divide")
+				result = builder.CreateFDiv(left, right, "fdiv");
+			else if (name == "modulo")
+				result = builder.CreateFRem(left, right, "fmod");
 		} else {
 			if (name == "add")
-				return builder.CreateAdd(left, right, "add");
-			if (name == "subtract")
-				return builder.CreateSub(left, right, "sub");
-			if (name == "multiply")
-				return builder.CreateMul(left, right, "mul");
-			if (name == "divide")
-				return builder.CreateSDiv(left, right, "div");
-			if (name == "modulo")
-				return builder.CreateSRem(left, right, "mod");
+				result = builder.CreateAdd(left, right, "add");
+			else if (name == "subtract")
+				result = builder.CreateSub(left, right, "sub");
+			else if (name == "multiply")
+				result = builder.CreateMul(left, right, "mul");
+			else if (name == "divide")
+				result = builder.CreateSDiv(left, right, "div");
+			else if (name == "modulo")
+				result = builder.CreateSRem(left, right, "mod");
 		}
-		return nullptr;
+		return true;
 	}
 
 	// Comparison intrinsics
 	if (isComparisonOperator(name)) {
-		llvm::Value *left = generateExpressionCode(context, args[0]);
-		llvm::Value *right = generateExpressionCode(context, args[1]);
+		TRY_EXPR(left, args[0]);
+		TRY_EXPR(right, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
 		DataType promoted = DataType::promote(leftType, rightType);
@@ -211,15 +220,18 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
-		if (resultType.kind == DataType::Kind::Bool)
-			return cmp; // already i1
-		return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
+		if (resultType.kind == DataType::Kind::Bool) {
+			result = cmp;
+			return true;
+		}
+		result = builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
+		return true;
 	}
 
 	// Logical operators
 	if (name == "and" || name == "or") {
-		llvm::Value *left = generateExpressionCode(context, args[0]);
-		llvm::Value *right = generateExpressionCode(context, args[1]);
+		TRY_EXPR(left, args[0]);
+		TRY_EXPR(right, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
 
@@ -227,27 +239,31 @@ llvm::Value *generateIntrinsicCode(
 		right = convertConditionToBool(context, right, rightType, "tobool");
 
 		if (name == "and")
-			return builder.CreateAnd(left, right, "and");
+			result = builder.CreateAnd(left, right, "and");
 		else
-			return builder.CreateOr(left, right, "or");
+			result = builder.CreateOr(left, right, "or");
+		return true;
 	}
 
 	if (name == "not") {
-		llvm::Value *val = generateExpressionCode(context, args[0]);
+		TRY_EXPR(val, args[0]);
 		DataType valType = getEffectiveType(context, args[0]);
 
 		val = convertConditionToBool(context, val, valType, "tobool");
 
-		return builder.CreateXor(val, builder.getTrue(), "not");
+		result = builder.CreateXor(val, builder.getTrue(), "not");
+		return true;
 	}
 
 	// Negate
 	if (name == "negate") {
-		llvm::Value *val = generateExpressionCode(context, args[0]);
+		TRY_EXPR(val, args[0]);
 		DataType valType = getEffectiveType(context, args[0]);
 		if (valType.kind == DataType::Kind::Float)
-			return builder.CreateFNeg(val, "fneg");
-		return builder.CreateNeg(val, "neg");
+			result = builder.CreateFNeg(val, "fneg");
+		else
+			result = builder.CreateNeg(val, "neg");
+		return true;
 	}
 
 	// Math functions (sin, cos, sqrt, abs, floor, ceil, round, exp, log, pow, atan2, min, max)
@@ -268,34 +284,34 @@ llvm::Value *generateIntrinsicCode(
 			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
 			DataType mathFloat = {DataType::Kind::Float, mathFloatBytes};
 			if (args.size() == 1) {
-				llvm::Value *val = generateExpressionCode(context, args[0]);
+				TRY_EXPR(val, args[0]);
 				DataType valType = getEffectiveType(context, args[0]);
 				if (valType.kind != DataType::Kind::Float || valType.byteSize != mathFloatBytes)
 					val = ensureType(context, val, valType, mathFloat);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
-				llvm::Value *result = builder.CreateCall(fn, {val}, name);
+				result = builder.CreateCall(fn, {val}, name);
 				// Convert back to f64 for SPIR-V so the rest of the computation stays consistent
 				if (context.options.emitSPIRV)
 					result = builder.CreateFPExt(result, llvm::Type::getDoubleTy(*context.llvmContext));
-				return result;
+				return true;
 			}
-			llvm::Value *left = generateExpressionCode(context, args[0]);
-			llvm::Value *right = generateExpressionCode(context, args[1]);
+			TRY_EXPR(left, args[0]);
+			TRY_EXPR(right, args[1]);
 			DataType leftType = getEffectiveType(context, args[0]);
 			DataType rightType = getEffectiveType(context, args[1]);
 			left = ensureType(context, left, leftType, mathFloat);
 			right = ensureType(context, right, rightType, mathFloat);
 			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {left->getType()});
-			llvm::Value *result = builder.CreateCall(fn, {left, right}, name);
+			result = builder.CreateCall(fn, {left, right}, name);
 			if (context.options.emitSPIRV)
 				result = builder.CreateFPExt(result, llvm::Type::getDoubleTy(*context.llvmContext));
-			return result;
+			return true;
 		}
 
 		// atan2: no LLVM intrinsic, call libm
 		if (name == "atan2") {
-			llvm::Value *y = generateExpressionCode(context, args[0]);
-			llvm::Value *x = generateExpressionCode(context, args[1]);
+			TRY_EXPR(y, args[0]);
+			TRY_EXPR(x, args[1]);
 			DataType yType = getEffectiveType(context, args[0]);
 			DataType xType = getEffectiveType(context, args[1]);
 			DataType promoted = DataType::promote(yType, xType);
@@ -307,45 +323,49 @@ llvm::Value *generateIntrinsicCode(
 			llvm::FunctionType *ft = llvm::FunctionType::get(floatType, {floatType, floatType}, false);
 			const char *fnName = promoted.byteSize == 4 ? "atan2f" : "atan2";
 			llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(fnName, ft);
-			return builder.CreateCall(callee, {y, x}, "atan2");
+			result = builder.CreateCall(callee, {y, x}, "atan2");
+			return true;
 		}
 
-		return nullptr;
+		return true;
 	}
 
 	// Pointer intrinsics
 	if (name == "address of") {
 		llvm::Value *ptr = getVariablePointer(context, args[0]);
 		assert(ptr && "address of requires a variable");
-		return ptr;
+		result = ptr;
+		return true;
 	}
 
 	if (name == "dereference") {
-		llvm::Value *ptrVal = generateExpressionCode(context, args[0]);
+		TRY_EXPR(ptrVal, args[0]);
 		DataType ptrType = getEffectiveType(context, args[0]);
 		DataType elemType = ptrType.dereferenced();
 		llvm::Type *elemLLVMType = getLLVMType(context, elemType);
-		return builder.CreateAlignedLoad(elemLLVMType, ptrVal, llvm::Align(8), "deref");
+		result = builder.CreateAlignedLoad(elemLLVMType, ptrVal, llvm::Align(8), "deref");
+		return true;
 	}
 
 	// Array/pointer intrinsics
 	if (name == "store at") {
-		llvm::Value *ptr = generateExpressionCode(context, args[0]);
-		llvm::Value *index = generateExpressionCode(context, args[1]);
-		llvm::Value *value = generateExpressionCode(context, args[2]);
+		TRY_EXPR(ptr, args[0]);
+		TRY_EXPR(index, args[1]);
+		TRY_EXPR(value, args[2]);
 		assert(getEffectiveType(context, args[0]).isPointer() && "store at requires a pointer argument");
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
 		builder.CreateAlignedStore(value, elementPtr, llvm::Align(8));
-		return nullptr;
+		return true;
 	}
 
 	if (name == "load at") {
-		llvm::Value *ptr = generateExpressionCode(context, args[0]);
-		llvm::Value *index = generateExpressionCode(context, args[1]);
+		TRY_EXPR(ptr, args[0]);
+		TRY_EXPR(index, args[1]);
 		assert(getEffectiveType(context, args[0]).isPointer() && "load at requires a pointer argument");
 
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
-		return builder.CreateAlignedLoad(builder.getInt64Ty(), elementPtr, llvm::Align(8));
+		result = builder.CreateAlignedLoad(builder.getInt64Ty(), elementPtr, llvm::Align(8));
+		return true;
 	}
 
 	if (name == "loop while") {
@@ -361,7 +381,7 @@ llvm::Value *generateIntrinsicCode(
 		builder.CreateBr(condBlock);
 		builder.SetInsertPoint(condBlock);
 
-		llvm::Value *condValue = generateExpressionCode(context, args[0]);
+		TRY_EXPR(condValue, args[0]);
 		DataType condType = getEffectiveType(context, args[0]);
 		llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "while_cond_bool");
 		builder.CreateCondBr(condBool, bodyBlock, exitBlock);
@@ -370,7 +390,7 @@ llvm::Value *generateIntrinsicCode(
 		bodySection->exitBlock = exitBlock;
 		bodySection->branchBackBlock = condBlock;
 
-		return nullptr;
+		return true;
 	}
 
 	if (name == "if") {
@@ -382,7 +402,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::BasicBlock *thenBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_then", func);
 		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_exit", func);
 
-		llvm::Value *condValue = generateExpressionCode(context, args[0]);
+		TRY_EXPR(condValue, args[0]);
 		DataType condType = getEffectiveType(context, args[0]);
 		llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "if_cond");
 		builder.CreateCondBr(condBool, thenBlock, exitBlock);
@@ -391,7 +411,7 @@ llvm::Value *generateIntrinsicCode(
 		bodySection->exitBlock = exitBlock;
 		bodySection->branchBackBlock = nullptr;
 
-		return nullptr;
+		return true;
 	}
 
 	if (name == "else" || name == "else if") {
@@ -421,7 +441,7 @@ llvm::Value *generateIntrinsicCode(
 		if (name == "else if") {
 			llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
-			llvm::Value *condValue = generateExpressionCode(context, args[0]);
+			TRY_EXPR(condValue, args[0]);
 			DataType condType = getEffectiveType(context, args[0]);
 			llvm::Value *condBool = convertConditionToBool(context, condValue, condType, "elif_cond");
 			builder.CreateCondBr(condBool, elifThenBlock, newExitBlock);
@@ -432,13 +452,13 @@ llvm::Value *generateIntrinsicCode(
 		bodySection->exitBlock = newExitBlock;
 		bodySection->branchBackBlock = nullptr;
 
-		return nullptr;
+		return true;
 	}
 
 	if (name == "switch") {
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
-		llvm::Value *switchValue = generateExpressionCode(context, args[0]);
+		TRY_EXPR(switchValue, args[0]);
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
 		assert(
@@ -464,7 +484,7 @@ llvm::Value *generateIntrinsicCode(
 		// end up at switchExitBlock after all cases are processed.
 		builder.SetInsertPoint(exitBlock);
 
-		return nullptr;
+		return true;
 	}
 
 	if (name == "case") {
@@ -476,7 +496,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
 		// Evaluate the case value — must be a constant integer
-		llvm::Value *caseValue = generateExpressionCode(context, args[0]);
+		TRY_EXPR(caseValue, args[0]);
 		llvm::ConstantInt *caseConst = llvm::dyn_cast<llvm::ConstantInt>(caseValue);
 		assert(caseConst && "case value must be a constant integer");
 
@@ -487,15 +507,15 @@ llvm::Value *generateIntrinsicCode(
 		bodySection->exitBlock = context.currentSwitchExitBlock;
 		bodySection->branchBackBlock = nullptr;
 
-		return nullptr;
+		return true;
 	}
 
 	if (name == "return") {
 		if (args.size() >= 1) {
-			llvm::Value *returnValue = generateExpressionCode(context, args[0]);
+			TRY_EXPR(returnValue, args[0]);
 			builder.CreateRet(returnValue);
 		}
-		return nullptr;
+		return true;
 	}
 
 	if (name == "call") {
@@ -525,7 +545,9 @@ llvm::Value *generateIntrinsicCode(
 					continue;
 				}
 			}
-			llvm::Value *argVal = generateExpressionCode(context, args[i]);
+			llvm::Value *argVal;
+			if (!generateExpressionCode(context, args[i], argVal))
+				return false;
 			if (argVal)
 				callArgs.push_back(argVal);
 		}
@@ -538,43 +560,45 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		llvm::Value *callResult = builder.CreateCall(func, callArgs);
-		// If return type is void, return nullptr (no value to use)
-		if (returnType.kind == DataType::Kind::Void)
-			return nullptr;
-		return callResult;
+		// If return type is void, result stays nullptr
+		if (returnType.kind != DataType::Kind::Void)
+			result = callResult;
+		return true;
 	}
 
 	if (name == "cast") {
 		// Format: args[0]=value, args[1]=type (TypeReference)
 		// Class cast: reinterpret as pointer to the class struct
 		if (resultType.kind == DataType::Kind::Class) {
-			llvm::Value *val = generateExpressionCode(context, args[0]);
+			TRY_EXPR(val, args[0]);
 			DataType fromType = getEffectiveType(context, args[0]);
 			if (val && !fromType.isPointer() && fromType.kind == DataType::Kind::Integer)
 				val = builder.CreateIntToPtr(val, llvm::PointerType::getUnqual(*context.llvmContext), "itop_class");
-			return val;
+			result = val;
+			return true;
 		}
 
-		llvm::Value *val = generateExpressionCode(context, args[0]);
+		TRY_EXPR(val, args[0]);
 		DataType fromType = getEffectiveType(context, args[0]);
 
 		// Get target type from the TypeReference argument
 		DataType typeArgType = getEffectiveType(context, args[1]);
 		if (typeArgType.kind != DataType::Kind::TypeReference)
-			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
+			return true; // unresolved type (e.g. spurious top-level instantiation)
 		DataType toType = typeArgType.toReferencedType();
 
-		return ensureType(context, val, fromType, toType);
+		result = ensureType(context, val, fromType, toType);
+		return true;
 	}
 
 	if (name == "type") {
 		// Types are compile-time only — no runtime code
-		return nullptr;
+		return true;
 	}
 
 	if (name == "add pointer depth") {
 		// Compile-time only — modifies TypeReference, no runtime code
-		return nullptr;
+		return true;
 	}
 
 	if (name == "construct") {
@@ -588,14 +612,17 @@ llvm::Value *generateIntrinsicCode(
 
 		// Store each field value
 		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-			llvm::Value *fieldVal = generateExpressionCode(context, args[i + 1]);
+			llvm::Value *fieldVal;
+			if (!generateExpressionCode(context, args[i + 1], fieldVal))
+				return false;
 			DataType fieldFromType = getEffectiveType(context, args[i + 1]);
 			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
 			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, i, "field_ptr");
 			builder.CreateStore(fieldVal, fieldPtr);
 		}
 
-		return alloca;
+		result = alloca;
+		return true;
 	}
 
 	if (name == "property") {
@@ -612,7 +639,7 @@ llvm::Value *generateIntrinsicCode(
 			context.diagnostics.push_back(Diagnostic(
 				Diagnostic::Level::Error, instType.toString() + " is not a class and has no properties", args[0]->range
 			));
-			return nullptr;
+			return false;
 		}
 
 		// Find field index
@@ -628,7 +655,7 @@ llvm::Value *generateIntrinsicCode(
 			context.diagnostics.push_back(Diagnostic(
 				Diagnostic::Level::Error, instType.toString() + " doesn't have property \"" + fieldName + "\"", args[0]->range
 			));
-			return nullptr;
+			return false;
 		}
 
 		// Get instance pointer
@@ -636,7 +663,8 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Type *structType = getLLVMType(context, instType);
 		llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
 		DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
-		return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
+		result = builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
+		return true;
 	}
 
 	// Shader I/O intrinsics (only available in --emit-spirv mode)
@@ -650,19 +678,30 @@ llvm::Value *generateIntrinsicCode(
 			globalName = "in_Position";
 		else {
 			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown shader input: " + inputName, Range()));
-			return nullptr;
+			return false;
 		}
 		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-		assert(global && "Shader input global not declared — check --emit-spirv and --shader-stage");
+		if (!global) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, "Shader input '" + inputName + "' requires --emit-spirv and --shader-stage", Range()
+			));
+			return false;
+		}
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-		return builder.CreateLoad(vec4Ty, global, inputName);
+		result = builder.CreateLoad(vec4Ty, global, inputName);
+		return true;
 	}
 
 	if (name == "shader uniform") {
 		// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
 		// The SPIR-V patcher wraps this in a UBO struct with proper decorations
 		std::string uniformName = getStringLiteral(args[0]);
-		assert(!uniformName.empty() && "shader uniform requires a string literal name");
+		if (uniformName.empty()) {
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "shader uniform requires a string literal name", Range())
+			);
+			return false;
+		}
 		std::string globalName = "ubo_" + uniformName;
 		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 		if (!global) {
@@ -674,15 +713,16 @@ llvm::Value *generateIntrinsicCode(
 			global->setInitializer(llvm::Constant::getNullValue(f32Ty));
 			context.shaderUniformNames.push_back(uniformName);
 		}
-		return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
+		result = builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
+		return true;
 	}
 
 	if (name == "shader output") {
 		// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
-		llvm::Value *r = generateExpressionCode(context, args[0]);
-		llvm::Value *g = generateExpressionCode(context, args[1]);
-		llvm::Value *b = generateExpressionCode(context, args[2]);
-		llvm::Value *a = generateExpressionCode(context, args[3]);
+		TRY_EXPR(r, args[0]);
+		TRY_EXPR(g, args[1]);
+		TRY_EXPR(b, args[2]);
+		TRY_EXPR(a, args[3]);
 
 		DataType rType = getEffectiveType(context, args[0]);
 		DataType gType = getEffectiveType(context, args[1]);
@@ -705,19 +745,26 @@ llvm::Value *generateIntrinsicCode(
 		std::string outName =
 			(context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
 		llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
-		assert(outGlobal && "Shader output global not declared — check --emit-spirv and --shader-stage");
+		if (!outGlobal) {
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "Shader output requires --emit-spirv and --shader-stage", Range())
+			);
+			return false;
+		}
 		builder.CreateStore(color, outGlobal);
-		return nullptr;
+		return true;
 	}
 
 	if (name == "extract element") {
 		// @intrinsic("extract element", vector, index) → extract scalar from vector
-		llvm::Value *vec = generateExpressionCode(context, args[0]);
+		TRY_EXPR(vec, args[0]);
 		if (auto *idxLit = std::get_if<int64_t>(&args[1]->literalValue)) {
-			return builder.CreateExtractElement(vec, (uint64_t)*idxLit, "elem");
+			result = builder.CreateExtractElement(vec, (uint64_t)*idxLit, "elem");
+			return true;
 		}
-		llvm::Value *idx = generateExpressionCode(context, args[1]);
-		return builder.CreateExtractElement(vec, idx, "elem");
+		TRY_EXPR(idx, args[1]);
+		result = builder.CreateExtractElement(vec, idx, "elem");
+		return true;
 	}
 
 	ASSERT_UNREACHABLE("Unknown intrinsic: validated at parse time");

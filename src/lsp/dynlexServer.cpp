@@ -359,51 +359,53 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 	}
 
 	std::function<void(Section *, std::vector<DocumentSymbol> &)> collectSymbols = [&](Section *section,
-																					   std::vector<DocumentSymbol> &out) {
+																				   std::vector<DocumentSymbol> &out) {
+		if (!section)
+			return;
 		for (PatternDefinition *def : section->patternDefinitions) {
-			if (!def->range.line || toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
-				continue;
+		if (!def->range.line || toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
+			continue;
+		}
+
+		DocumentSymbol sym;
+		sym.name = getPatternName(def);
+		std::string typeStr = sectionTypeToString(section->type);
+		sym.detail = section->isMacro ? "macro " + typeStr : typeStr;
+		sym.kind = symbolKindForSection(section->type);
+		sym.selectionRange = convertRange(def->range);
+
+		// Full range: from definition line through last code line of the section
+		sym.range = sym.selectionRange;
+		if (!section->codeLines.empty()) {
+			CodeLine *last = section->codeLines.back();
+			if (toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
+				(last->sourceFileLineIndex > sym.range.end.line ||
+				 (last->sourceFileLineIndex == sym.range.end.line &&
+				  static_cast<int>(last->rightTrimmedText.size()) > sym.range.end.character))) {
+				sym.range.end.line = last->sourceFileLineIndex;
+				sym.range.end.character = static_cast<int>(last->rightTrimmedText.size());
 			}
+		}
 
-			DocumentSymbol sym;
-			sym.name = getPatternName(def);
-			std::string typeStr = sectionTypeToString(section->type);
-			sym.detail = section->isMacro ? "macro " + typeStr : typeStr;
-			sym.kind = symbolKindForSection(section->type);
-			sym.selectionRange = convertRange(def->range);
+		// Recurse into child sections
+		for (Section *child : section->children) {
+			collectSymbols(child, sym.children);
+		}
 
-			// Full range: from definition line through last code line of the section
-			sym.range = sym.selectionRange;
-			if (!section->codeLines.empty()) {
-				CodeLine *last = section->codeLines.back();
-				if (toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
-					(last->sourceFileLineIndex > sym.range.end.line ||
-					 (last->sourceFileLineIndex == sym.range.end.line &&
-					  static_cast<int>(last->rightTrimmedText.size()) > sym.range.end.character))) {
-					sym.range.end.line = last->sourceFileLineIndex;
-					sym.range.end.character = static_cast<int>(last->rightTrimmedText.size());
-				}
-			}
-
-			// Recurse into child sections
-			for (Section *child : section->children) {
-				collectSymbols(child, sym.children);
-			}
-
-			out.push_back(std::move(sym));
+		out.push_back(std::move(sym));
 		}
 
 		// Sections without pattern definitions but with children (e.g. main section)
 		if (section->patternDefinitions.empty()) {
-			for (Section *child : section->children) {
-				collectSymbols(child, out);
-			}
+		for (Section *child : section->children) {
+			collectSymbols(child, out);
 		}
-	};
+		}
+};
 
-	std::vector<DocumentSymbol> result;
-	collectSymbols(context->mainSection, result);
-	return result;
+std::vector<DocumentSymbol> result;
+collectSymbols(context->mainSection, result);
+return result;
 }
 
 SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &params) {

@@ -59,6 +59,13 @@ paths:
 - **Different layout**: element-wise load from source struct, `ensureType` conversion per field, store to destination struct. This handles per-variable instantiation copies where field types diverge (e.g., construct creates `{i32,i32,i32}` but variable's copy is promoted to `{f64,f64,f64}`)
 - The layout comparison checks `srcFields[i] != destFields[i]` for each field; any mismatch triggers element-wise path
 
+## Error Propagation in Codegen
+- `generateExpressionCode` returns `bool` (success/failure) with `llvm::Value *&result` output parameter. `false` = error (stop codegen immediately), `true` with `result=nullptr` = void/no-value success (e.g., store, control flow intrinsics)
+- `generateIntrinsicCode` uses the same `bool` + `llvm::Value *&result` convention
+- `generateSectionCode` calls `generateExpressionCode` per line and returns `false` on the first failure, stopping further IR generation
+- `TRY_EXPR(var, expr)` macro in `codegenIntrinsics.cpp`: declares `llvm::Value *var`, calls `generateExpressionCode`, returns `false` from the enclosing function on failure
+- **Why**: previously both functions returned `llvm::Value*` where `nullptr` meant both "void" and "error". Void intrinsics (store, if, loop) returning nullptr caused callers to incorrectly treat success as failure, and actual errors (e.g., shader intrinsics without `--emit-spirv`) produced nullptr that was passed to LLVM builder methods, causing segfaults and memory corruption
+
 ## Bugs Fixed (codegen-specific)
 - **Macro binding variable capture**: `return value + 1000` caused infinite recursion. Fix: temporarily erase binding while generating resolved expression.
 - **Macro bindings leaking into functions**: `generateSpecializedFunction` now saves/clears/restores `macroExpressionBindings`.
@@ -67,3 +74,5 @@ paths:
 - **Spurious instantiations**: Top-level inference created instantiations with undeduced args. Fix: skip non-macro function body inference when any arg is undeduced.
 - **Cast simplification**: Cast now always takes a TypeReference (from `@intrinsic("type", ...)` or class patterns), not a string+bits. The old string-based path (`"integer"`, `"float"`, `"string"`, `"pointer"`) was removed. String cast is detected by checking target type `{Integer, 1, ptr=1}` + numeric source → snprintf path.
 - **SPIR-V UBO uniforms**: `glUniform1f` doesn't work with SPIR-V shaders — requires UBOs. The SPIR-V patcher (`spirv.cpp`) wraps scalar float uniforms in OpTypeStruct with Block decoration, OpAccessChain access, and Binding/DescriptorSet decorations. Host-side uses `glGenBuffers`/`glBindBufferBase`/`glBufferSubData` (patterns in `lib/graphics.dl`).
+- **Shader intrinsics crash without --emit-spirv**: `shader input`, `shader uniform`, `shader output` had `assert()` calls that crashed when shader code was compiled without `--emit-spirv`. Replaced with proper error diagnostics + `return false`.
+- **Codegen null propagation crashes**: `generateExpressionCode` returning nullptr on error was passed directly to LLVM builder methods (`CreateExtractElement`, `CreateInsertElement`, etc.), causing segfaults and memory corruption. Fixed by refactoring to bool return + output parameter (see "Error Propagation in Codegen" above).
