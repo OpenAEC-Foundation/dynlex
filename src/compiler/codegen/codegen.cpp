@@ -41,16 +41,10 @@ void generateSpecializedFunction(
 	// All parameters are opaque pointers
 	std::vector<llvm::Type *> paramTypes(varNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
 
-	// Return type: void for effects, per-instantiation for expressions
-	llvm::Type *returnType;
-	if (section->type == SectionType::Effect) {
-		returnType = builder.getVoidTy();
-	} else {
-		auto it = section->instantiations.find(argTypes);
-		assert(it != section->instantiations.end() && "Missing instantiation for arg types");
-		assert(it->second.returnType.isDeduced() && "Return type must be deduced before codegen");
-		returnType = getLLVMType(context, it->second.returnType);
-	}
+	auto it = section->instantiations.find(argTypes);
+	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
+	assert(it->second.returnType.isDeduced() && "Return type must be deduced before codegen");
+	llvm::Type *returnType = getLLVMType(context, it->second.returnType);
 
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
@@ -112,8 +106,8 @@ void generateSpecializedFunction(
 		generateSectionCode(context, child);
 	}
 
-	// Add return for effects (expression functions use @intrinsic("return"))
-	if (section->type == SectionType::Effect) {
+	// Add implicit void return if the function returns void
+	if (inst.returnType.kind == DataType::Kind::Void) {
 		builder.CreateRetVoid();
 	}
 
@@ -139,15 +133,12 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
-		if (auto *intVal = std::get_if<int64_t>(&expr->literalValue)) {
-			DataType intType = getEffectiveType(context, expr);
-			llvm::Type *llvmIntType = intType.toLLVM(*context.llvmContext);
-			return llvm::ConstantInt::get(llvmIntType, *intVal, true);
-		}
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
-			DataType floatType = getEffectiveType(context, expr);
-			llvm::Type *llvmFloatType = floatType.toLLVM(*context.llvmContext);
-			return llvm::ConstantFP::get(llvmFloatType, *doubleVal);
+			DataType numType = getEffectiveType(context, expr);
+			llvm::Type *llvmType = numType.toLLVM(*context.llvmContext);
+			if (numType.kind == DataType::Kind::Int)
+				return llvm::ConstantInt::get(llvmType, (int64_t)*doubleVal, true);
+			return llvm::ConstantFP::get(llvmType, *doubleVal);
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
 			// TODO: strings are currently just i8* pointers to constant data.

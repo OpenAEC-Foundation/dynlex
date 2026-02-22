@@ -1,8 +1,8 @@
-macro effect return value:
+macro expression return value:
 	replacement:
 		@intrinsic("return", value)
 
-macro effect set var to val:
+macro expression set var to val:
     replacement:
         @intrinsic("store", var, val)
 
@@ -10,7 +10,7 @@ macro expression value as [a|an|] bits bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-effect print msg:
+expression print msg:
     execute:
         @intrinsic("call", "libc", "printf", "i32", "%ld", msg as a 64 bit integer)
 

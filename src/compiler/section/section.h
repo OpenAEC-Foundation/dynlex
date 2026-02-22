@@ -22,7 +22,7 @@ struct Expression;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
-	DataType returnType;
+	DataType returnType{DataType::Kind::Any};
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
 };
@@ -89,4 +89,9 @@ struct Section {
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);
+
+	// The line that opens this section (e.g. "loop 10 times:")
+	CodeLine *openingLine{};
+
+	virtual std::string toString() const { return openingLine ? std::string(openingLine->patternText) : "main"; }
 };

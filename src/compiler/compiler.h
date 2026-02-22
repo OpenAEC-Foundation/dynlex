@@ -10,6 +10,9 @@ bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
+void runInference(ParseContext &context);
+bool expressionTypesValid(Expression *expr);
+void expandExpression(Expression *expr, Section *section);
 
 // Intrinsic operator checking utilities
 bool isArithmeticOperator(const std::string &name);

@@ -139,12 +139,10 @@ llvm::Value *generateIntrinsicCode(
 			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
 		}
 
-		DataType promoted = DataType::promote(leftType, rightType);
+		left = ensureType(context, left, leftType, resultType);
+		right = ensureType(context, right, rightType, resultType);
 
-		left = ensureType(context, left, leftType, promoted);
-		right = ensureType(context, right, rightType, promoted);
-
-		if (promoted.kind == DataType::Kind::Float) {
+		if (resultType.kind == DataType::Kind::Float) {
 			if (name == "add")
 				return builder.CreateFAdd(left, right, "fadd");
 			if (name == "subtract")
@@ -176,7 +174,8 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *right = generateExpressionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
-		DataType promoted = DataType::promote(leftType, rightType);
+		DataType promoted;
+		DataType::promoteArithmetic(leftType, rightType, promoted);
 
 		left = ensureType(context, left, leftType, promoted);
 		right = ensureType(context, right, rightType, promoted);
@@ -270,7 +269,7 @@ llvm::Value *generateIntrinsicCode(
 			if (args.size() == 1) {
 				llvm::Value *val = generateExpressionCode(context, args[0]);
 				DataType valType = getEffectiveType(context, args[0]);
-				if (valType.kind != DataType::Kind::Float || valType.byteSize != mathFloatBytes)
+				if (valType.kind != DataType::Kind::Float || valType.numericSize != mathFloatBytes)
 					val = ensureType(context, val, valType, mathFloat);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
 				llvm::Value *result = builder.CreateCall(fn, {val}, name);
@@ -298,14 +297,15 @@ llvm::Value *generateIntrinsicCode(
 			llvm::Value *x = generateExpressionCode(context, args[1]);
 			DataType yType = getEffectiveType(context, args[0]);
 			DataType xType = getEffectiveType(context, args[1]);
-			DataType promoted = DataType::promote(yType, xType);
+			DataType promoted;
+			DataType::promoteArithmetic(yType, xType, promoted);
 			if (promoted.kind != DataType::Kind::Float)
 				promoted = {DataType::Kind::Float, 8};
 			y = ensureType(context, y, yType, promoted);
 			x = ensureType(context, x, xType, promoted);
 			llvm::Type *floatType = promoted.toLLVM(*context.llvmContext);
 			llvm::FunctionType *ft = llvm::FunctionType::get(floatType, {floatType, floatType}, false);
-			const char *fnName = promoted.byteSize == 4 ? "atan2f" : "atan2";
+			const char *fnName = promoted.numericSize == 4 ? "atan2f" : "atan2";
 			llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(fnName, ft);
 			return builder.CreateCall(callee, {y, x}, "atan2");
 		}
@@ -442,7 +442,7 @@ llvm::Value *generateIntrinsicCode(
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
 		assert(
-			(getEffectiveType(context, args[0]).kind == DataType::Kind::Integer ||
+			(getEffectiveType(context, args[0]).kind == DataType::Kind::Int ||
 			 getEffectiveType(context, args[0]).kind == DataType::Kind::Bool) &&
 			"switch requires an integer value"
 		);
@@ -550,7 +550,7 @@ llvm::Value *generateIntrinsicCode(
 		if (resultType.kind == DataType::Kind::Class) {
 			llvm::Value *val = generateExpressionCode(context, args[0]);
 			DataType fromType = getEffectiveType(context, args[0]);
-			if (val && !fromType.isPointer() && fromType.kind == DataType::Kind::Integer)
+			if (val && !fromType.isPointer() && fromType.kind == DataType::Kind::Int)
 				val = builder.CreateIntToPtr(val, llvm::PointerType::getUnqual(*context.llvmContext), "itop_class");
 			return val;
 		}
@@ -560,7 +560,7 @@ llvm::Value *generateIntrinsicCode(
 
 		// Get target type from the TypeReference argument
 		DataType typeArgType = getEffectiveType(context, args[1]);
-		if (typeArgType.kind != DataType::Kind::TypeReference)
+		if (typeArgType.kind != DataType::Kind::Type)
 			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
 		DataType toType = typeArgType.toReferencedType();
 
@@ -713,7 +713,7 @@ llvm::Value *generateIntrinsicCode(
 	if (name == "extract element") {
 		// @intrinsic("extract element", vector, index) → extract scalar from vector
 		llvm::Value *vec = generateExpressionCode(context, args[0]);
-		if (auto *idxLit = std::get_if<int64_t>(&args[1]->literalValue)) {
+		if (auto *idxLit = std::get_if<double>(&args[1]->literalValue)) {
 			return builder.CreateExtractElement(vec, (uint64_t)*idxLit, "elem");
 		}
 		llvm::Value *idx = generateExpressionCode(context, args[1]);

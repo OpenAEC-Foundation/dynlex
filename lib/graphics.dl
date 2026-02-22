@@ -36,16 +36,16 @@ expression a new window with width w and height h:
 		@intrinsic("call", "GL", "glLoadIdentity", "void")
 		return new_window
 
-effect clear [the|] screen:
+expression clear [the|] screen:
 	execute:
 		@intrinsic("call", "GL", "glClear", "void", 16384)
 
-effect [display|show] [the|] frame [of|in] window:
+expression [display|show] [the|] frame [of|in] window:
 	execute:
 		@intrinsic("call", "glfw", "glfwSwapBuffers", "void", window)
 		@intrinsic("call", "glfw", "glfwPollEvents", "void")
 
-effect draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
+expression draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
 	execute:
 		@intrinsic("call", "GL", "glColor3ub", "void", r, g, b)
 		@intrinsic("call", "GL", "glRecti", "void", x, y, x + w, y + h)
@@ -68,11 +68,11 @@ expression [the|] window should close:
 	get:
 		return @intrinsic("call", "glfw", "glfwWindowShouldClose", "i32", window)
 
-effect sleep [for|] ms milliseconds:
+expression sleep [for|] ms milliseconds:
 	execute:
 		@intrinsic("call", "libc", "usleep", "void", ms * 1000)
 
-effect close [the|] window:
+expression close [the|] window:
 	execute:
 		@intrinsic("call", "glfw", "glfwDestroyWindow", "void", window)
 		@intrinsic("call", "glfw", "glfwTerminate", "void")
@@ -123,7 +123,7 @@ expression [a|] shader program with vertex vert and fragment frag:
 		@intrinsic("call", "GL", "glLinkProgram", "void", prog)
 		return prog
 
-effect use shader program prog:
+expression use shader program prog:
 	execute:
 		@intrinsic("call", "GL", "glUseProgram", "void", prog)
 
@@ -131,12 +131,12 @@ expression [the|] time since start:
 	get:
 		return @intrinsic("call", "glfw", "glfwGetTime", "f64")
 
-effect set [the|] uniform name of prog to value:
+expression set [the|] uniform name of prog to value:
 	execute:
 		set loc to @intrinsic("call", "GL", "glGetUniformLocation", "i32", prog, name)
 		@intrinsic("call", "GL", "glUniform1f", "void", loc, value as a 32 bit float)
 
-effect set [the|] uniform at location to value:
+expression set [the|] uniform at location to value:
 	execute:
 		@intrinsic("call", "GL", "glUniform1f", "void", location, value as a 32 bit float)
 
@@ -152,17 +152,17 @@ expression [a|] uniform buffer:
 		@intrinsic("call", "GL", "glBufferData", "void", 35345, 4 as a 64 bit integer, 0 as a pointer to a byte, 35048)
 		return buf
 
-effect bind uniform buffer buf to binding:
+expression bind uniform buffer buf to binding:
 	execute:
 		@intrinsic("call", "GL", "glBindBufferBase", "void", 35345, binding, buf)
 
-effect update uniform buffer buf with value:
+expression update uniform buffer buf with value:
 	execute:
 		set fval to value as a 32 bit float
 		@intrinsic("call", "GL", "glBindBuffer", "void", 35345, buf)
 		@intrinsic("call", "GL", "glBufferSubData", "void", 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, address of fval)
 
-effect draw [a|] fullscreen quad:
+expression draw [a|] fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)
 		# GL_TRIANGLE_STRIP = 0x0005 = 5

@@ -81,11 +81,6 @@ bool compile(const std::string &path, ParseContext &context) {
 }
 
 bool importSourceFile(const std::string &path, ParseContext &context) {
-	// Check if already imported (circular import protection)
-	if (context.importedFiles.contains(path)) {
-		return true; // Already processed, skip
-	}
-
 	lsp::SourceFile *sourceFile = context.fileSystem->getFile(path);
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
@@ -95,7 +90,13 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		return false;
 	}
 
-	context.importedFiles[path] = sourceFile;
+	// Canonicalize path to prevent duplicate imports via different path strings
+	auto canonicalPath = std::filesystem::weakly_canonical(path).string();
+	if (context.importedFiles.contains(canonicalPath)) {
+		return true; // Already processed, skip
+	}
+
+	context.importedFiles[canonicalPath] = sourceFile;
 	// The first file imported is the main source file
 	if (!context.mainSourceFile)
 		context.mainSourceFile = sourceFile;
@@ -233,6 +234,7 @@ bool analyzeSections(ParseContext &context) {
 			if (!currentSection)
 				return false;
 			currentSection->startLineIndex = compiledLineIndex + 1;
+			currentSection->openingLine = line;
 			line->sectionOpening = currentSection;
 			data.indentLevel++;
 		} else {
@@ -331,9 +333,12 @@ PatternDefinition *selectOverload(
 						if (constraint.kind == DataType::Kind::Class) {
 							matches =
 								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
+						} else if (constraint.isNumeric()) {
+							// Numeric constraint: match exact kind (Int or Float) and pointer depth
+							// {integer:x} matches Int, {float:x} matches Float
+							matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
 						} else {
-							// Primitive type constraint: match kind and pointer depth
-							// (byteSize is ignored — e.g., {integer:x} matches i8, i16, i32, i64)
+							// Other primitive type constraint: match kind and pointer depth
 							matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
 						}
 						if (matches) {

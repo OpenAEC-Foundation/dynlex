@@ -1,7 +1,7 @@
-effect test:
+expression test:
 	execute:
 		@intrinsic("call", "libc", "printf", "i32", "1")
 
-effect te[st|]:
+expression te[st|]:
 	execute:
 		@intrinsic("call", "libc", "printf", "i32", "2")

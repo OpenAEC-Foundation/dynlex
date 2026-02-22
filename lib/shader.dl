@@ -14,7 +14,7 @@ macro expression [the|] fragment y coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
 
-macro effect set [the|] fragment color to r g b a:
+macro expression set [the|] fragment color to r g b a:
     replacement:
         @intrinsic("shader output", r, g, b, a)
 
@@ -40,7 +40,7 @@ macro expression [the|] vertex w:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
-macro effect set [the|] output position to x y z w:
+macro expression set [the|] output position to x y z w:
     replacement:
         @intrinsic("shader output", x, y, z, w)
 

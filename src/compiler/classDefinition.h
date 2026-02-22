@@ -11,11 +11,13 @@ class StructType;
 struct FieldDefinition {
 	std::string name;
 	Range range;
-	DataType declaredType; // Kind::Undeduced if not specified
+	DataType declaredType; // Any if untyped, Unresolved (with typeExpression) if type specified
 };
 
 struct ClassInstantiation {
-	std::vector<DataType> fieldTypes;
+	std::vector<DataType> fieldTypes = {};
+	std::vector<unsigned> llvmFieldIndices = {}; // fieldIdx → LLVM struct element index (accounts for padding)
+	int byteSize = 0;							 // Total struct size in bytes (computed in toLLVM)
 	llvm::StructType *llvmStructType = nullptr;
 };
 

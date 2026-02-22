@@ -6,7 +6,7 @@ SectionType sectionTypeFromString(std::string_view str) {
 	if (str == "expression")
 		return SectionType::Expression;
 	if (str == "effect")
-		return SectionType::Effect;
+		return SectionType::Expression;
 	if (str == "class")
 		return SectionType::Class;
 	if (str == "patterns")
@@ -36,8 +36,6 @@ std::string sectionTypeToString(SectionType type) {
 		return "section";
 	case SectionType::Expression:
 		return "expression";
-	case SectionType::Effect:
-		return "effect";
 	case SectionType::Class:
 		return "class";
 	case SectionType::Pattern:

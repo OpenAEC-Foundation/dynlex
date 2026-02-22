@@ -6,12 +6,11 @@ enum class SectionType {
 	Custom,
 	Section,
 	Expression,
-	Effect,
 	// a section defining a class.
 	Class,
 	// a section with patterns, always a child section of the main sections.
 	Pattern,
-	// execute of a section or effect
+	// execute of a section
 	Execute,
 	// get of an expression
 	Get,

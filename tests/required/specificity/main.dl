@@ -12,7 +12,7 @@ expression turn the item off for user:
 # It initially matches the generic pattern (with "lights" captured as argument).
 # When the specific pattern is added later, the compiler must detect the overlap
 # and re-match this reference to the specific pattern.
-effect shut down the lights:
+expression shut down the lights:
     execute:
         print turn the lights off for 4
 
@@ -45,26 +45,26 @@ expression a new message:
 # Generic: "show msg" has an argument slot. When matching
 # "show a new message", the argument could consume the sub-expression
 # "a new message" (which evaluates to 77).
-effect show msg:
+expression show msg:
     execute:
         print msg
 
 # Body reference uses "show a new message" — initially matches
 # "show msg" with msg = sub-expression "a new message" (value 77).
-# When the specific effect is added later, the overlap detector must
+# When the specific expression is added later, the overlap detector must
 # recognize that the generic's argument consumed a sub-expression
 # matching the specific's literal words, and re-match.
-effect demonstrate:
+expression demonstrate:
     execute:
         show a new message
 
 demonstrate
 
-# Specific: "a new message" are literals in the effect pattern,
+# Specific: "a new message" are literals in the expression pattern,
 # more specific than the generic "show msg". Its body calls
 # "show 99" (the generic) to confirm both coexist.
 # Defined AFTER the reference above.
-effect show a new message:
+expression show a new message:
     execute:
         show 99
 

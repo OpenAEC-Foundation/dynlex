@@ -2,12 +2,12 @@ import lib/std.dl
 import lib/string.dl
 
 # test 1: global variable shared across multiple functions
-effect increase total by amount:
+expression increase total by amount:
     globals: total
     execute:
         set total to total + amount
 
-effect show total:
+expression show total:
     globals: total
     execute:
         print total as line
@@ -40,8 +40,8 @@ print triple 5 as line
 # global "result" should still be 99, not overwritten by triple's local
 print result as line
 
-# test 5: effect with globals: DOES modify the global
-effect set result to value times multiplier:
+# test 5: expression with globals: DOES modify the global
+expression set result to value times multiplier:
     globals: result
     execute:
         set result to value * multiplier

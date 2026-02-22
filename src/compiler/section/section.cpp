@@ -1,6 +1,5 @@
 #include "section.h"
 #include "classSection.h"
-#include "effectSection.h"
 #include "expression.h"
 #include "expressionSection.h"
 #include "intrinsicInfo.h"
@@ -44,7 +43,7 @@ void Section::collectPatternReferencesAndSections(
 }
 
 bool Section::processLine(ParseContext &context, CodeLine *line) {
-	line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Effect);
+	line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Expression);
 	return line->expression != nullptr;
 }
 
@@ -65,9 +64,6 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 			isMacro = true;
 		} else if (current == "local") {
 			isLocal = true;
-		} else if (current == "effect") {
-			newSection = new EffectSection(this);
-			break;
 		} else if (current == "expression") {
 			newSection = new ExpressionSection(this);
 			break;
@@ -365,11 +361,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 		size_t lineEnd = reference->pattern.getLinePos(endPos);
 		numExpr->range = relativeRange.subRange(lineStart, lineEnd);
 		numExpr->kind = Expression::Kind::Literal;
-		if (numStr.find('.') != std::string::npos) {
-			numExpr->literalValue = std::stod(numStr);
-		} else {
-			numExpr->literalValue = static_cast<int64_t>(std::stoll(numStr));
-		}
+		numExpr->literalValue = std::stod(numStr);
 		numExprs.push_back(numExpr);
 		reference->pattern.replacePattern(pos, endPos);
 	}

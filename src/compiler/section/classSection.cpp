@@ -4,16 +4,16 @@
 #include "parseUtils.h"
 #include "patternsSection.h"
 
-// Forward declaration from membersSection.cpp
-FieldDefinition parseFieldDeclaration(ParseContext &context, std::string_view fieldText, CodeLine *line);
-
 bool ClassSection::processLine(ParseContext &context, CodeLine *line) {
 	// Inline members: "members: x, y, z" or "members: x as i32, y as i32"
 	std::string_view text = line->patternText;
 	if (text.starts_with("members: ") || text.starts_with("members:")) {
 		std::string_view fields = text.substr(text.find(':') + 1);
+		bool success = true;
 		parseCommaSeparatedList(fields, [&](std::string_view fieldText) {
-			classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
+			if (!parseFieldDeclaration(context, fieldText, line, this)) {
+				success = false;
+			}
 		});
 		line->resolved = true;
 		return true;

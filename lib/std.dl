@@ -4,45 +4,45 @@ import lib/string.dl
 
 # --- Return ---
 
-macro effect return value:
+macro expression return value:
     replacement:
         @intrinsic("return", value)
 
 # --- Variables ---
 
-macro effect set var to val:
+macro expression set var to val:
     replacement:
         @intrinsic("store", var, val)
 
 # --- Primitive types ---
 
-macro class [an|a|] integer:
+macro expression [an|a|] integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-macro class [an|a|] bits bit integer:
+macro expression [an|a|] bits bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
-macro class [a|] float:
+macro expression [a|] float:
     replacement:
         @intrinsic("type", "float", 64)
 
-macro class [a|] bits bit float:
+macro expression [a|] bits bit float:
     replacement:
         @intrinsic("type", "float", bits)
 
-macro class [a|] byte:
+macro expression [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-macro class [a|] boolean:
+macro expression [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
 # --- Pointer and string types ---
 
-macro class [a|] pointer to type:
+macro expression [a|] pointer to type:
     replacement:
         @intrinsic("add pointer depth", type)
 
@@ -110,33 +110,33 @@ macro expression [the|] [negative|opposite] [of|] value:
     replacement:
         @intrinsic("negate", value)
 
-macro effect multiply value by factor:
+macro expression multiply value by factor:
 	replacement:
 		set value to @intrinsic("multiply", value, factor)
 
-macro effect divide value by divisor:
+macro expression divide value by divisor:
 	replacement:
 		set value to @intrinsic("divide", value, divisor)
 
-macro effect add value to target:
+macro expression add value to target:
 	replacement:
 		set target to @intrinsic("add", target, value)
 
-macro effect subtract value from target:
+macro expression subtract value from target:
 	replacement:
 		set target to @intrinsic("subtract", target, value)
 
-macro effect increment val:
+macro expression increment val:
 	replacement:
 		set val to @intrinsic("add", val, 1)
 
-macro effect decrement val:
+macro expression decrement val:
 	replacement:
 		set val to @intrinsic("subtract", val, 1)
 
 # --- Clamping ---
 
-macro effect clamp val between low and high:
+macro expression clamp val between low and high:
 	replacement:
 		if val < low:
 			set val to low

@@ -38,14 +38,14 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	switch (type.kind) {
 	case DataType::Kind::Bool:
 		return context.diBuilder->createBasicType("bool", 8, llvm::dwarf::DW_ATE_boolean);
-	case DataType::Kind::Integer: {
-		int bits = type.byteSize * 8;
-		return context.diBuilder->createBasicType("i" + std::to_string(type.byteSize * 8), bits, llvm::dwarf::DW_ATE_signed);
-	}
 	case DataType::Kind::Float: {
-		int bits = type.byteSize * 8;
-		std::string name = type.byteSize == 4 ? "f32" : "f64";
+		int bits = type.numericSize * 8;
+		std::string name = type.numericSize == 4 ? "f32" : "f64";
 		return context.diBuilder->createBasicType(name, bits, llvm::dwarf::DW_ATE_float);
+	}
+	case DataType::Kind::Int: {
+		int bits = type.numericSize * 8;
+		return context.diBuilder->createBasicType("i" + std::to_string(bits), bits, llvm::dwarf::DW_ATE_signed);
 	}
 	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
@@ -230,8 +230,9 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 				} else {
 					DataType leftType = getEffectiveType(context, expr->arguments[1]);
 					DataType rightType = getEffectiveType(context, expr->arguments[2]);
-					return isPointerArithmeticOperator(expr->intrinsicName) ? DataType::promoteArithmetic(leftType, rightType)
-																			: DataType::promote(leftType, rightType);
+					DataType result;
+					DataType::promoteArithmetic(leftType, rightType, result);
+					return result;
 				}
 			case IntrinsicReturnKind::Bool:
 				return {DataType::Kind::Bool};
@@ -248,7 +249,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]).dereferenced();
 		if (expr->intrinsicName == "load at")
-			return {DataType::Kind::Integer, 8};
+			return {DataType::Kind::Int, 8};
 		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]);
 		if (expr->intrinsicName == "call") {
@@ -260,7 +261,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 				if (!retTypeStr.empty())
 					return DataType::fromString(retTypeStr);
 			}
-			return {DataType::Kind::Integer, 4};
+			return {DataType::Kind::Int, 4};
 		}
 		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
 			return expr->type; // DataType fully determined during inference
@@ -268,7 +269,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			if (expr->type.kind == DataType::Kind::Class)
 				return expr->type;
 			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);
-			if (typeArgType.kind == DataType::Kind::TypeReference)
+			if (typeArgType.kind == DataType::Kind::Type)
 				return typeArgType.toReferencedType();
 		}
 		return expr->type;
@@ -307,7 +308,7 @@ std::string getPatternFunctionName(Section *section) {
 // Allocate all variables for a section at its start
 void allocateSectionVariables(ParseContext &context, Section *section) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
-		DataType varType = {DataType::Kind::Integer}; // fallback
+		DataType varType = {DataType::Kind::Float, 8}; // fallback
 		Variable *var = section->findVariable(name);
 		if (var)
 			varType = var->type;
@@ -415,41 +416,35 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	llvm::Type *targetLLVM = toType.toLLVM(*context.llvmContext);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
-	if (fromType.isPointer() && toType.kind == DataType::Kind::Integer && !toType.isPointer())
+	if (fromType.isPointer() && toType.kind == DataType::Kind::Int)
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
-	if (!fromType.isPointer() && fromType.kind == DataType::Kind::Integer && toType.isPointer())
+	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
 
-	// Integer → Integer (different sizes)
-	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Integer) {
-		if (fromType.byteSize < toType.byteSize)
-			return builder.CreateSExt(val, targetLLVM, "sext");
-		return builder.CreateTrunc(val, targetLLVM, "trunc");
-	}
-
-	// Float → Float (different sizes)
-	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
-		if (fromType.byteSize < toType.byteSize)
-			return builder.CreateFPExt(val, targetLLVM, "fpext");
-		return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
-	}
-
-	// Integer → Float
-	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Float)
-		return builder.CreateSIToFP(val, targetLLVM, "itof");
-
-	// Float → Integer
-	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Integer)
+	// Numeric conversions
+	if (fromType.isNumeric() && toType.isNumeric()) {
+		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Int) {
+			if (fromType.numericSize < toType.numericSize)
+				return builder.CreateSExt(val, targetLLVM, "sext");
+			return builder.CreateTrunc(val, targetLLVM, "trunc");
+		}
+		if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
+			if (fromType.numericSize < toType.numericSize)
+				return builder.CreateFPExt(val, targetLLVM, "fpext");
+			return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
+		}
+		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Float)
+			return builder.CreateSIToFP(val, targetLLVM, "itof");
 		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
+	}
 
-	// Bool → Integer
-	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Integer)
+	// Bool → Numeric
+	if (fromType.kind == DataType::Kind::Bool && toType.isNumeric()) {
+		if (toType.kind == DataType::Kind::Float) {
+			llvm::Value *intVal = builder.CreateZExt(val, builder.getInt64Ty(), "btoi");
+			return builder.CreateSIToFP(intVal, targetLLVM, "itof");
+		}
 		return builder.CreateZExt(val, targetLLVM, "btoi");
-
-	// Bool → Float
-	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Float) {
-		llvm::Value *intVal = builder.CreateZExt(val, builder.getInt64Ty(), "btoi");
-		return builder.CreateSIToFP(intVal, targetLLVM, "itof");
 	}
 
 	// Unsupported conversion - this should not happen if type inference is correct

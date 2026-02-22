@@ -169,26 +169,26 @@ expression render char code at px py using font and color r g b:
 # --- Text rendering helpers ---
 
 # Enable GL texture state before drawing text
-effect enable text rendering:
+expression enable text rendering:
     execute:
         @intrinsic("call", "GL", "glEnable", "void", 3553)
         @intrinsic("call", "GL", "glEnable", "void", 3042)
         @intrinsic("call", "GL", "glBlendFunc", "void", 770, 771)
 
 # Disable GL texture state after drawing text
-effect disable text rendering:
+expression disable text rendering:
     execute:
         @intrinsic("call", "GL", "glDisable", "void", 3553)
 
 # Set font pixel size (call before rendering at a new size)
-effect set font pixel size to sz:
+expression set font pixel size to sz:
     execute:
         set face_raw to item 0 of font
         @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", "i32", face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
 
 # --- Number rendering ---
 
-effect draw number n at x y using font and color r g b:
+expression draw number n at x y using font and color r g b:
     execute:
         enable text rendering
         set cx to x
@@ -206,7 +206,7 @@ effect draw number n at x y using font and color r g b:
 
 # --- Text rendering ---
 
-effect draw text msg at x y using font and color r g b:
+expression draw text msg at x y using font and color r g b:
     execute:
         enable text rendering
         set cx to x

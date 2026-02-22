@@ -7,4 +7,10 @@ struct DefinitionSection : public Section {
 
 	virtual bool processLine(ParseContext &context, CodeLine *line) override;
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
+
+	std::string toString() const override {
+		if (!patternDefinitions.empty())
+			return patternDefinitions[0]->toString();
+		return Section::toString();
+	}
 };

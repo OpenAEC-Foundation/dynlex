@@ -10,18 +10,18 @@ macro expression a new vector with x vx, y vy and z vz:
     replacement:
         @intrinsic("construct", vector, vx, vy, vz)
 
-effect add value to {vector:target}:
+expression add value to {vector:target}:
     execute:
         add value to the x of target
         add value to the y of target
         add value to the z of target
 
-effect multiply {vector:value} by factor:
+expression multiply {vector:value} by factor:
     execute:
         multiply the x of value by factor
         multiply the y of value by factor
         multiply the z of value by factor
 
-effect print {vector:msg}:
+expression print {vector:msg}:
     execute:
         @intrinsic("call", "libc", "printf", "i32", "[%g, %g, %g]\n", the x of msg as a float, the y of msg as a float, the z of msg as a float)

@@ -6,8 +6,8 @@ class:
     patterns:
         string
     members:
-        data: pointer to byte
-        length: integer
+        data as pointer to byte
+        length as i32
 
 macro expression new string from data ptr with length len:
     replacement:
@@ -50,15 +50,15 @@ expression {boolean:value} as a string:
 
 expression value as [a|] line:
     get:
-        return value as a string + "\n"
+        return value as a string + new string from data "\n" with length 1
 
 # --- Output ---
 
-effect print {string:msg}:
+expression print {string:msg}:
     execute:
         @intrinsic("call", "libc", "printf", "i32", "%s", the data of msg)
 
-effect print msg:
+expression print msg:
     execute:
         print msg as a string
 

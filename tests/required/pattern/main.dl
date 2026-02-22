@@ -1,5 +1,5 @@
 import lib/std.dl
-# this effect has a single pattern, defined right at the effect definition line instead of in a pattern section.
+# this expression has a single pattern, defined right at the expression definition line instead of in a pattern section.
 expression var's next power of two:
 	get:
 		set result to 1
@@ -7,7 +7,7 @@ expression var's next power of two:
 			multiply result by 2
 		return result
 
-effect say message:
+expression say message:
 	execute:
 		print message as line
 

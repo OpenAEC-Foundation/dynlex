@@ -25,7 +25,7 @@ struct Expression {
 	Range range;
 
 	// For Literal: the actual value
-	std::variant<std::monostate, int64_t, double, std::string> literalValue;
+	std::variant<std::monostate, double, std::string> literalValue;
 
 	// For Variable: reference to the variable
 	VariableReference *variable{};

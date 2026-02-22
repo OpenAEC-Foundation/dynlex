@@ -341,7 +341,6 @@ static std::string getPatternName(const PatternDefinition *def) {
 static SymbolKind symbolKindForSection(SectionType type) {
 	switch (type) {
 	case SectionType::Expression:
-	case SectionType::Effect:
 		return SymbolKind::Function;
 	case SectionType::Class:
 		return SymbolKind::Class;
@@ -468,8 +467,7 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 		case Expression::Kind::Literal:
 			if (std::holds_alternative<std::string>(expr->literalValue)) {
 				addToken(expr->range, SemanticTokenType::String, false);
-			} else if (std::holds_alternative<int64_t>(expr->literalValue) ||
-					   std::holds_alternative<double>(expr->literalValue)) {
+			} else if (std::holds_alternative<double>(expr->literalValue)) {
 				addToken(expr->range, SemanticTokenType::Number, false);
 			}
 			break;

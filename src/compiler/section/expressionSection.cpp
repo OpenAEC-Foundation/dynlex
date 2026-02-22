@@ -2,8 +2,7 @@
 #include "parseContext.h"
 
 Section *ExpressionSection::createSection(ParseContext &context, CodeLine *line) {
-	// ExpressionSection uses "get" for its content
-	if (line->patternText == "get") {
+	if (line->patternText == "get" || line->patternText == "execute") {
 		return new Section(SectionType::Get, this);
 	}
 

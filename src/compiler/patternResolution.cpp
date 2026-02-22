@@ -479,6 +479,116 @@ bool resolvePatterns(ParseContext &context) {
 		if (resolveReferences(context, bodyReferences, true, &definitionToReferences))
 			madeProgress = true;
 
+		// Resolve type constraints on definition elements ({type:name} syntax).
+		// Walk all definitions and resolve typeConstraintName strings to DataTypes
+		// by looking up the type name in the expression pattern tree.
+		{
+			PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Expression];
+			std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
+				for (PatternDefinition *def : section->patternDefinitions) {
+					for (auto &elem : def->patternElements) {
+						if (elem.typeConstraintName.empty() || elem.resolvedTypeConstraint.isDeduced())
+							continue;
+						PatternTreeNode *node = exprTree;
+						std::string_view remaining = elem.typeConstraintName;
+						while (!remaining.empty() && node) {
+							size_t space = remaining.find(' ');
+							std::string_view word = (space != std::string_view::npos) ? remaining.substr(0, space) : remaining;
+							auto it = node->literalChildren.find(std::string(word));
+							node = (it != node->literalChildren.end()) ? it->second : nullptr;
+							remaining = (space != std::string_view::npos) ? remaining.substr(space + 1) : std::string_view{};
+						}
+						if (!node || node->matchingDefinitions.empty())
+							continue;
+						for (auto *d : node->matchingDefinitions) {
+							if (!d->section)
+								continue;
+							if (d->section->type == SectionType::Class && !d->section->isMacro) {
+								auto *classSec = static_cast<ClassSection *>(d->section);
+								elem.resolvedTypeConstraint = {DataType::Kind::Class, 0, 0, classSec->classDefinition};
+								break;
+							}
+							if (d->section->isMacro) {
+								// Macro type (e.g., integer, float, boolean) — evaluate the type intrinsic
+								for (Section *child : d->section->children) {
+									for (CodeLine *cl : child->codeLines) {
+										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
+											cl->expression->intrinsicName == "type") {
+											auto &args = cl->expression->arguments;
+											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
+												if (*kindStr == "int") {
+													int bits = 32;
+													if (args.size() >= 3)
+														if (auto *b = std::get_if<double>(&args[2]->literalValue))
+															bits = (int)*b;
+													elem.resolvedTypeConstraint = {DataType::Kind::Int, bits / 8};
+												} else if (*kindStr == "float") {
+													int bits = 64;
+													if (args.size() >= 3)
+														if (auto *b = std::get_if<double>(&args[2]->literalValue))
+															bits = (int)*b;
+													elem.resolvedTypeConstraint = {DataType::Kind::Float, bits / 8};
+												} else if (*kindStr == "bool") {
+													elem.resolvedTypeConstraint = {DataType::Kind::Bool};
+												} else if (*kindStr == "string") {
+													elem.resolvedTypeConstraint = {DataType::Kind::Int, 1};
+													elem.resolvedTypeConstraint.pointerDepth = 1;
+												}
+											}
+											break;
+										}
+									}
+									if (elem.resolvedTypeConstraint.isDeduced())
+										break;
+								}
+								if (elem.resolvedTypeConstraint.isDeduced())
+									break;
+							}
+						}
+						if (elem.resolvedTypeConstraint.isDeduced())
+							madeProgress = true;
+					}
+				}
+				for (Section *child : section->children)
+					resolveTypeConstraints(child);
+			};
+			resolveTypeConstraints(context.mainSection);
+		}
+
+		// Expand resolved expressions, reset types, and run inference so matchTypesValid has type info
+		for (CodeLine *line : context.codeLines) {
+			if (line->expression) {
+				expandExpression(line->expression, line->section);
+				std::function<void(Expression *)> resetTypes = [&](Expression *e) {
+					if (!e)
+						return;
+					if (e->kind != Expression::Kind::Literal)
+						e->type = {};
+					for (Expression *arg : e->arguments)
+						resetTypes(arg);
+				};
+				resetTypes(line->expression);
+			}
+		}
+		// Also reset instantiation return types so they get re-inferred
+		std::function<void(Section *)> resetInstantiations = [&](Section *section) {
+			for (auto &[argTypes, inst] : section->instantiations) {
+				inst.returnType = {DataType::Kind::Any};
+			}
+			for (Section *child : section->children)
+				resetInstantiations(child);
+		};
+		resetInstantiations(context.mainSection);
+		// Reset variable types
+		std::function<void(Section *)> resetVarTypes = [&](Section *section) {
+			for (auto &[name, var] : section->variables)
+				var->type = {};
+			for (Section *child : section->children)
+				resetVarTypes(child);
+		};
+		resetVarTypes(context.mainSection);
+		runInference(context);
+
 		if (unResolvedSections.empty() && bodyReferences.empty())
 			break;
 
@@ -531,74 +641,12 @@ bool resolvePatterns(ParseContext &context) {
 		return false;
 	}
 
-	// Phase 2.5: Resolve type constraints on definition elements.
-	// Walk all definitions and resolve typeConstraintName strings to ClassDefinition pointers
-	// by looking up the type name in the Class/Expression pattern tree.
+	// Validate type constraints — report unresolved ones as errors
 	{
-		PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Expression];
-		std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
+		std::function<void(Section *)> validateTypeConstraints = [&](Section *section) {
 			for (PatternDefinition *def : section->patternDefinitions) {
 				for (auto &elem : def->patternElements) {
-					if (elem.typeConstraintName.empty())
-						continue;
-					// Look up the type name in the expression tree (class patterns are stored there)
-					PatternTreeNode *node = exprTree;
-					std::string_view remaining = elem.typeConstraintName;
-					while (!remaining.empty() && node) {
-						size_t space = remaining.find(' ');
-						std::string_view word = (space != std::string_view::npos) ? remaining.substr(0, space) : remaining;
-						auto it = node->literalChildren.find(std::string(word));
-						node = (it != node->literalChildren.end()) ? it->second : nullptr;
-						remaining = (space != std::string_view::npos) ? remaining.substr(space + 1) : std::string_view{};
-					}
-					if (node && !node->matchingDefinitions.empty()) {
-						for (auto *d : node->matchingDefinitions) {
-							if (!d->section)
-								continue;
-							if (d->section->type == SectionType::Class && !d->section->isMacro) {
-								// Real class (e.g., vector, point)
-								auto *classSec = static_cast<ClassSection *>(d->section);
-								elem.resolvedTypeConstraint = {DataType::Kind::Class, 0, 0, classSec->classDefinition};
-								break;
-							}
-							if (d->section->type == SectionType::Class && d->section->isMacro) {
-								// Macro class (e.g., integer, float, string) — evaluate the type intrinsic
-								for (Section *child : d->section->children) {
-									for (CodeLine *cl : child->codeLines) {
-										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
-											cl->expression->intrinsicName == "type") {
-											auto &args = cl->expression->arguments;
-											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
-												if (*kindStr == "int") {
-													int bits = 32;
-													if (args.size() >= 3)
-														if (auto *b = std::get_if<int64_t>(&args[2]->literalValue))
-															bits = (int)*b;
-													elem.resolvedTypeConstraint = {DataType::Kind::Integer, bits / 8};
-												} else if (*kindStr == "float") {
-													int bits = 64;
-													if (args.size() >= 3)
-														if (auto *b = std::get_if<int64_t>(&args[2]->literalValue))
-															bits = (int)*b;
-													elem.resolvedTypeConstraint = {DataType::Kind::Float, bits / 8};
-												} else if (*kindStr == "bool") {
-													elem.resolvedTypeConstraint = {DataType::Kind::Bool};
-												} else if (*kindStr == "string") {
-													elem.resolvedTypeConstraint = {DataType::Kind::Integer, 1, 1};
-												}
-											}
-											break;
-										}
-									}
-									if (elem.resolvedTypeConstraint.isDeduced())
-										break;
-								}
-								if (elem.resolvedTypeConstraint.isDeduced())
-									break;
-							}
-						}
-					}
-					if (!elem.resolvedTypeConstraint.isDeduced()) {
+					if (!elem.typeConstraintName.empty() && !elem.resolvedTypeConstraint.isDeduced()) {
 						context.diagnostics.push_back(Diagnostic(
 							Diagnostic::Level::Error,
 							"Type constraint '" + elem.typeConstraintName + "' does not refer to a known type", def->range
@@ -607,9 +655,9 @@ bool resolvePatterns(ParseContext &context) {
 				}
 			}
 			for (Section *child : section->children)
-				resolveTypeConstraints(child);
+				validateTypeConstraints(child);
 		};
-		resolveTypeConstraints(context.mainSection);
+		validateTypeConstraints(context.mainSection);
 	}
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
@@ -767,34 +815,6 @@ bool resolvePatterns(ParseContext &context) {
 				return false;
 			};
 
-			// Helper to remove variable references from a match (simplified, no VL count changes)
-			std::function<void(PatternReference *, PatternMatch &)> removeMatchVarRefs = [&](PatternReference *reference,
-																							 PatternMatch &match) {
-				Section *refSection = reference->range().section();
-				for (VariableMatch &varMatch : match.discoveredVariables) {
-					if (!varMatch.variableReference)
-						continue;
-					const std::string &name = varMatch.variableReference->name;
-					auto it = refSection->variableReferences.find(name);
-					if (it != refSection->variableReferences.end()) {
-						auto &vec = it->second;
-						vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
-						if (vec.empty())
-							refSection->variableReferences.erase(it);
-					}
-					auto uit = context.unresolvedVariableReferences.find(name);
-					if (uit != context.unresolvedVariableReferences.end()) {
-						auto &vec = uit->second;
-						vec.erase(std::remove(vec.begin(), vec.end(), varMatch.variableReference), vec.end());
-						if (vec.empty())
-							context.unresolvedVariableReferences.erase(uit);
-					}
-					varMatch.variableReference = nullptr;
-				}
-				for (PatternMatch &sub : match.subMatches)
-					removeMatchVarRefs(reference, sub);
-			};
-
 			// Collect all pattern references from all sections
 			std::vector<PatternReference *> allRefs;
 			std::function<void(Section *)> collectRefs = [&](Section *section) {
@@ -812,7 +832,8 @@ bool resolvePatterns(ParseContext &context) {
 					continue;
 
 				// Remove variable references from old match
-				removeMatchVarRefs(ref, *ref->match);
+				std::unordered_set<Section *> affected;
+				removeVariableReferencesFromMatch(context, ref, *ref->match, affected);
 
 				// Re-match with precedence constraints active
 				PatternMatch *newMatch = context.match(ref);
@@ -841,7 +862,7 @@ bool resolvePatterns(ParseContext &context) {
 			// Find the enclosing function (Expression/Effect section)
 			Section *functionScope = nullptr;
 			for (Section *a = sec; a; a = a->parent) {
-				if ((a->type == SectionType::Expression || a->type == SectionType::Effect) && !a->isMacro) {
+				if (a->type == SectionType::Expression && !a->isMacro) {
 					functionScope = a;
 					break;
 				}
@@ -882,7 +903,7 @@ bool resolvePatterns(ParseContext &context) {
 			if (isGlobal) {
 				groupIsGlobal = true;
 				for (Section *a = highestSection; a; a = a->parent) {
-					if ((a->type == SectionType::Expression || a->type == SectionType::Effect) && !a->isMacro) {
+					if (a->type == SectionType::Expression && !a->isMacro) {
 						groupIsGlobal = false;
 						break;
 					}
