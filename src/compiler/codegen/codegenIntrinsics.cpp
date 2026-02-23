@@ -26,6 +26,12 @@ llvm::Value *generateIntrinsicCode(
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
+	if (name == "discard") {
+		// Evaluate the argument for side effects and discard the result
+		generateExpressionCode(context, args[0]);
+		return nullptr;
+	}
+
 	if (name == "store") {
 		// Generate the value in the current (original) macro scope first,
 		// before resolving the destination which may cross scope boundaries.
@@ -502,12 +508,11 @@ llvm::Value *generateIntrinsicCode(
 		// Format: args[0]="library", args[1]="function", args[2]="return type", args[3+]=actual args
 		std::string library = getStringLiteral(args[0]);
 		std::string funcName = getStringLiteral(args[1]);
-		std::string retTypeStr = getStringLiteral(args[2]);
-
 		if (!library.empty() && library != "libc")
 			context.requiredLibraries.insert(library);
 
-		DataType returnType = DataType::fromString(retTypeStr);
+		DataType retTypeRef = getEffectiveType(context, args[2]);
+		DataType returnType = retTypeRef.toReferencedType();
 		llvm::Type *returnLLVMType = returnType.toLLVM(*context.llvmContext);
 
 		// Build call arguments — string literals become global constant pointers

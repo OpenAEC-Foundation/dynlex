@@ -39,64 +39,32 @@ std::vector<MatchProgress> MatchProgress::step() {
 	};
 
 	if (!currentNode->matchingDefinitions.empty()) {
-		// end node found — find the first definition with valid precedence
-		// (actual overload selection happens later in type inference/codegen based on argument types)
-		PatternDefinition *def = nullptr;
-		for (auto *d : currentNode->matchingDefinitions) {
-			bool precedenceOK = true;
-			if (d->precedence > 0) {
-				if (d->precedence > maxPrecedence || d->precedence >= minRightPrecedence)
-					precedenceOK = false;
-			}
-			if (precedenceOK) {
-				def = d;
-				break;
-			}
+		// end node found — precedence and ordering are handled later during type inference
+		if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
+			addMatchData(match);
 		}
 
-		if (def) {
-			if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
-				addMatchData(match);
+		if (canBeSubmatch()) {
+			// Try extending as left operand of a new expression first (lower LIFO priority).
+			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
+			if (canStartSubmatch() && rootNode->argumentChild) {
+				MatchProgress clone = *this;
+				// the old parent progress becomes 'grandparent'
+				if (parent)
+					clone.parent = new MatchProgress(*parent);
+				clone.rootNode = rootNode;
+				// advance past the argument slot — the completed sub-expression occupies it
+				clone.currentNode = rootNode->argumentChild;
+				clone.match = {};
+				clone.match.nodesPassed.push_back(clone.currentNode);
+
+				clone.type = SectionType::Expression;
+				stepUp(clone);
 			}
-
-			if (canBeSubmatch()) {
-				// Try extending as left operand of a new expression first (lower LIFO priority).
-				// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
-				if (canStartSubmatch() && rootNode->argumentChild) {
-					MatchProgress clone = *this;
-					// the old parent progress becomes 'grandparent'
-					if (parent)
-						clone.parent = new MatchProgress(*parent);
-					clone.rootNode = rootNode;
-					// advance past the argument slot — the completed sub-expression occupies it
-					clone.currentNode = rootNode->argumentChild;
-					clone.match = {};
-					clone.match.nodesPassed.push_back(clone.currentNode);
-
-					// Case C: completed match becomes LEFT argument of new operator.
-					// Only constrain for matches that consumed a left argument (infix operators).
-					// Prefix patterns produce atomic values — no precedence constraint needed.
-					bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
-					clone.maxPrecedence = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
-
-					clone.type = SectionType::Expression;
-					stepUp(clone);
-				}
-				// Step up to parent match (higher LIFO priority — prefer returning to the
-				// parent over speculatively extending into a new expression).
-				if (parent) {
-					stepUp(*parent);
-					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
-					// propagate the completed expression's precedence as a constraint.
-					// Skip for default-level patterns — they capture full expressions and shouldn't
-					// constrain parent operators (minRightPrecedence is for same-level associativity).
-					if (parent->match.nodesPassed.size() > 1) {
-						bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
-						int rightPrec = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
-						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
-							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
-					}
-				}
+			// Step up to parent match (higher LIFO priority — prefer returning to the
+			// parent over speculatively extending into a new expression).
+			if (parent) {
+				stepUp(*parent);
 			}
 		}
 	}
@@ -115,10 +83,6 @@ std::vector<MatchProgress> MatchProgress::step() {
 				subMatch.type = SectionType::Expression;
 				subMatch.patternStartPos = patternPos;
 				subMatch.match = {};
-
-				// Case D: new submatch — reset precedence constraints (fresh expression parse)
-				subMatch.maxPrecedence = INT_MAX;
-				subMatch.minRightPrecedence = INT_MAX;
 
 				// deleting null doesn't matter
 				delete subMatch.parent;

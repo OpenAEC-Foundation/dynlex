@@ -24,4 +24,4 @@ expression multiply {vector:value} by factor:
 
 expression print {vector:msg}:
     execute:
-        @intrinsic("call", "libc", "printf", "i32", "[%g, %g, %g]\n", the x of msg as a float, the y of msg as a float, the z of msg as a float)
+        @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g]\n", the x of msg as a float, the y of msg as a float, the z of msg as a float)

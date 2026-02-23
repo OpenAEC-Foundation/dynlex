@@ -57,6 +57,7 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 		{"or",                     {3, IntrinsicReturnKind::Bool}},
 		{"not",                    {2, IntrinsicReturnKind::Bool}},
 		// Side effects
+		{"discard",                {2, IntrinsicReturnKind::Void}},       // @intrinsic("discard", val)
 		{"store",                  {3, IntrinsicReturnKind::Void}},       // @intrinsic("store", dest, val)
 		{"store at",               {4, IntrinsicReturnKind::Void}},       // @intrinsic("store at", ptr, index, val)
 		{"loop while",             {2, IntrinsicReturnKind::Void}},       // @intrinsic("loop while", cond)

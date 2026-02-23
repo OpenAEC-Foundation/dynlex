@@ -1,14 +1,18 @@
+macro expression [een|] bits bit integer:
+	replacement:
+		@intrinsic("type", "int", bits)
+
 macro expression waarde als bits bit integer:
 	replacement:
 		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
 expression zeg bericht:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "%s\n", bericht)
+		@intrinsic("call", "libc", "printf", een 32 bit integer, "%s\n", bericht)
 
 expression toon getal:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "%ld\n", getal als 64 bit integer)
+		@intrinsic("call", "libc", "printf", een 32 bit integer, "%ld\n", getal als 64 bit integer)
 
 macro expression maak variabele waarde:
 	replacement:

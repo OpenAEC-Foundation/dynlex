@@ -83,27 +83,27 @@ expression a loaded font from path at size s:
     get:
         # Initialize FreeType
         set lib_ptr to allocate 1 items
-        @intrinsic("call", "freetype", "FT_Init_FreeType", "i32", lib_ptr)
+        @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, lib_ptr)
         set library to item 0 of lib_ptr
 
         # Load font face
         set face_out to allocate 1 items
-        @intrinsic("call", "freetype", "FT_New_Face", "i32", library, path, 0 as a 64 bit integer, face_out)
+        @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a 64 bit integer, face_out)
         set face_raw to item 0 of face_out
 
         # Set pixel size
-        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", "i32", face_raw, 0 as a 32 bit integer, s as a 32 bit integer)
+        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, s as a 32 bit integer)
 
         # Set up GL state for texture rendering
-        @intrinsic("call", "GL", "glPixelStorei", "void", 3317, 1)
+        @intrinsic("call", "GL", "glPixelStorei", void, 3317, 1)
 
         # Create GL texture
         set tex_out to allocate 1 items
-        @intrinsic("call", "GL", "glGenTextures", "void", 1, tex_out)
+        @intrinsic("call", "GL", "glGenTextures", void, 1, tex_out)
         set tex_id to item 0 of tex_out
-        @intrinsic("call", "GL", "glBindTexture", "void", 3553, tex_id as a 32 bit integer)
-        @intrinsic("call", "GL", "glTexParameteri", "void", 3553, 10241, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", "void", 3553, 10240, 9729)
+        @intrinsic("call", "GL", "glBindTexture", void, 3553, tex_id as a 32 bit integer)
+        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10241, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10240, 9729)
 
         # Extract glyph slot pointer (stays the same across FT_Load_Char calls)
         set face_class to @intrinsic("cast", face_raw, ft face)
@@ -126,7 +126,7 @@ expression render char code at px py using font and color r g b:
         set glyph_raw to item 2 of font
 
         # Load and render the glyph
-        @intrinsic("call", "freetype", "FT_Load_Char", "i32", face_raw, code as a 64 bit integer, 4)
+        @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
 
         # Cast glyph slot pointer to access bitmap data
         set glyph to @intrinsic("cast", glyph_raw, ft glyph slot)
@@ -139,11 +139,11 @@ expression render char code at px py using font and color r g b:
         set adv to the advance_x of glyph
 
         # Upload bitmap to GL texture
-        @intrinsic("call", "GL", "glBindTexture", "void", 3553, tex_id as a 32 bit integer)
-        @intrinsic("call", "GL", "glTexImage2D", "void", 3553, 0, 6406, bw, bh, 0, 6406, 5121, buf)
+        @intrinsic("call", "GL", "glBindTexture", void, 3553, tex_id as a 32 bit integer)
+        @intrinsic("call", "GL", "glTexImage2D", void, 3553, 0, 6406, bw, bh, 0, 6406, 5121, buf)
 
         # Set text color
-        @intrinsic("call", "GL", "glColor3ub", "void", r, g, b)
+        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
 
         # Calculate quad corners
         set x1 to px + left
@@ -152,16 +152,16 @@ expression render char code at px py using font and color r g b:
         set y2 to y1 + bh
 
         # Draw textured quad
-        @intrinsic("call", "GL", "glBegin", "void", 7)
-        @intrinsic("call", "GL", "glTexCoord2d", "void", 0.0, 0.0)
-        @intrinsic("call", "GL", "glVertex2i", "void", x1, y1)
-        @intrinsic("call", "GL", "glTexCoord2d", "void", 1.0, 0.0)
-        @intrinsic("call", "GL", "glVertex2i", "void", x2, y1)
-        @intrinsic("call", "GL", "glTexCoord2d", "void", 1.0, 1.0)
-        @intrinsic("call", "GL", "glVertex2i", "void", x2, y2)
-        @intrinsic("call", "GL", "glTexCoord2d", "void", 0.0, 1.0)
-        @intrinsic("call", "GL", "glVertex2i", "void", x1, y2)
-        @intrinsic("call", "GL", "glEnd", "void")
+        @intrinsic("call", "GL", "glBegin", void, 7)
+        @intrinsic("call", "GL", "glTexCoord2d", void, 0.0, 0.0)
+        @intrinsic("call", "GL", "glVertex2i", void, x1, y1)
+        @intrinsic("call", "GL", "glTexCoord2d", void, 1.0, 0.0)
+        @intrinsic("call", "GL", "glVertex2i", void, x2, y1)
+        @intrinsic("call", "GL", "glTexCoord2d", void, 1.0, 1.0)
+        @intrinsic("call", "GL", "glVertex2i", void, x2, y2)
+        @intrinsic("call", "GL", "glTexCoord2d", void, 0.0, 1.0)
+        @intrinsic("call", "GL", "glVertex2i", void, x1, y2)
+        @intrinsic("call", "GL", "glEnd", void)
 
         # Return new cursor x (advance is in 26.6 fixed point, divide by 64)
         return px + adv / 64
@@ -171,20 +171,20 @@ expression render char code at px py using font and color r g b:
 # Enable GL texture state before drawing text
 expression enable text rendering:
     execute:
-        @intrinsic("call", "GL", "glEnable", "void", 3553)
-        @intrinsic("call", "GL", "glEnable", "void", 3042)
-        @intrinsic("call", "GL", "glBlendFunc", "void", 770, 771)
+        @intrinsic("call", "GL", "glEnable", void, 3553)
+        @intrinsic("call", "GL", "glEnable", void, 3042)
+        @intrinsic("call", "GL", "glBlendFunc", void, 770, 771)
 
 # Disable GL texture state after drawing text
 expression disable text rendering:
     execute:
-        @intrinsic("call", "GL", "glDisable", "void", 3553)
+        @intrinsic("call", "GL", "glDisable", void, 3553)
 
 # Set font pixel size (call before rendering at a new size)
 expression set font pixel size to sz:
     execute:
         set face_raw to item 0 of font
-        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", "i32", face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
+        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
 
 # --- Number rendering ---
 

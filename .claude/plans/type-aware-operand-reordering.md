@@ -12,21 +12,17 @@ Multiple definitions at the same tree endpoint (same keyword structure, differen
 
 ### Operand reordering during type inference
 
-When type inference discovers that a subexpression grouping produces invalid types (e.g., a type constraint fails), it tries alternative groupings of operands along shared argument edges.
+Type inference processes code in execution order (top to bottom). For each line, when multiple patterns share argument edges, the nesting is ambiguous. The algorithm tries all 2^N groupings (where N = shared edges), preferring left-side as submatch (left-to-right evaluation).
 
-**Shared argument edge:** two patterns share an argument edge when one's output could be another's input at an argument position. For example, in `x plus y length`, the patterns `$ plus $` and `$ length` share an edge — `y` could be the right arg of `plus` or the left arg of `length`.
+**Shared argument edge:** two patterns share an argument edge when one's output could be another's input at an argument position. For example, in `set z to x + y`, the patterns `set $ to $` and `$ + $` share an edge — `x` could be the right arg of `set` or the left arg of `+`.
 
-Reordering changes the nesting of subexpressions:
-- `(x plus y) length` ↔ `x plus (y length)`
+**Validation per grouping:**
+- Evaluate submatch return types bottom-up (macros: first expression's type; functions: instantiate and infer body)
+- Reject grouping if any submatch returns Void in value context
+- Reject grouping if argument types fail type constraints
+- First valid grouping wins; multiple valid = ambiguous error; none valid = type error
 
-Reordering changes:
-- The nesting of subexpressions (which arguments go to which pattern)
-- Which overload is selected at each endpoint (different argument types → different overload)
-- Return types of subexpressions (different overload → different return type)
-
-Reordering does NOT change:
-- Which tokens are keywords vs variables (tree path is fixed)
-- Which tree endpoints are reached (same endpoints, just different nesting)
+**Limit:** Error if more than 6 unresolved shared edges (precedence declarations resolve some edges).
 
 ### Operand reordering is instance-independent
 
@@ -36,36 +32,27 @@ The operand ordering for a given source location is the same across all instanti
 
 When the correct match requires a keyword↔variable reclassification (different tree path), reordering doesn't help. This is a type error with a diagnostic suggesting the variable may be shadowed by a keyword.
 
-Example: `x from start` where `{list:l} from start` (keywords win) is chosen over `{i32:x} from {i32:y}` (where `start` would be a variable). If `x: i32`, this is a type error — not solvable by reordering.
+## Implementation
 
-## Implementation Sketch
+### Replace the type inference engine
 
-### During type inference (fixed-point loop)
+The current fixed-point `runInference` loop is replaced by execution-order processing. For each code line, enumerate groupings, validate each, and commit the first valid one. Modify the expression tree directly when reordering.
 
-When inferring a PatternCall expression:
-1. Infer argument types (bottom-up as usual)
-2. Run `selectOverload` with argument types
-3. If no overload matches and argument types are deduced → try alternative operand groupings
-4. For each alternative grouping: re-infer argument types, re-check selectOverload
-5. If a valid grouping is found → restructure the expression tree, continue inference
-6. If no grouping works → type error diagnostic
+### Remove dead code
+
+- `matchTypesValid()` and `inferMatchReturnType()` in `parseContext.cpp`
+- Type inference + reset code in the pattern resolution loop (`patternResolution.cpp`)
+- `expressionTypesValid()` in `typeInference.cpp`
+- The fixed-point `runInference` loop
 
 ### Reordering mechanics
 
-The expression tree stores subexpressions as children. Reordering swaps the parent-child relationship between two expressions that share an argument edge. For example:
+The expression tree stores subexpressions as children. Reordering swaps the parent-child relationship between two PatternCall expressions at a shared edge. The inner expression's range is set to the shared operand's range so `sortArgumentsByPosition` maps parameters correctly.
 
-```
-Before:  PatternCall(plus, [x, PatternCall(length, [y])])
-         meaning: x plus (y length)
+### Return value enforcement
 
-After:   PatternCall(length, [PatternCall(plus, [x, y])])
-         meaning: (x plus y) length
-```
+In DynLex, return values cannot be ignored. If a top-level expression returns non-Void, it's an error. Users wrap in `discard <value>` which calls `@intrinsic("discard", value)`.
 
-After reordering, the overloads at each endpoint may change:
-- `plus` now gets [i32, i32] instead of [i32, string] → different overload selected
-- `length` now gets [i32] instead of [string] → different overload selected (or fails)
+### New intrinsic: `discard`
 
-### Consistency check
-
-After reordering, verify that ALL instantiations of the enclosing function still type-check with the new grouping. If any instantiation needs a different ordering than another, emit an error: "ambiguous operand grouping: `x plus y length` groups differently for different argument types." The programmer must disambiguate explicitly.
+`@intrinsic("discard", value)` — evaluates `value` for side effects and discards the result. Return type: Void.

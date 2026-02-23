@@ -138,8 +138,5 @@ struct DataType {
 
 	llvm::Type *toLLVM(llvm::LLVMContext &ctx) const;
 
-	std::string toString() const {
-		// even in error messages, custom patterns should be used!
-		return "";
-	}
+	std::string toString() const;
 };

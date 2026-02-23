@@ -30,20 +30,20 @@ expression the length of str:
 
 expression {integer:value} as a string:
     get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 21)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 21, "%ld", value as a 64 bit integer)
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 21)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 21, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
 expression {float:value} as a string:
     get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 32)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 32, "%g", value as a 64 bit float)
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 32)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 32, "%g", value as a 64 bit float)
         return new string from data buf with length len
 
 expression {boolean:value} as a string:
     get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 2)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 2, "%ld", value as a 64 bit integer)
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
 # --- Line suffix ---
@@ -56,7 +56,7 @@ expression value as [a|] line:
 
 expression print {string:msg}:
     execute:
-        @intrinsic("call", "libc", "printf", "i32", "%s", the data of msg)
+        @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
 
 expression print msg:
     execute:
@@ -70,7 +70,7 @@ expression {string:left} + {string:right}:
         set left_len to the length of left
         set right_len to the length of right
         set total to left_len + right_len
-        set result to @intrinsic("call", "libc", "malloc", "string", total + 1)
-        @intrinsic("call", "libc", "memcpy", "string", result, the data of left, left_len)
-        @intrinsic("call", "libc", "memcpy", "string", result + left_len, the data of right, right_len + 1)
+        set result to @intrinsic("call", "libc", "malloc", a pointer to a byte, total + 1)
+        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result, the data of left, left_len)
+        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result + left_len, the data of right, right_len + 1)
         return new string from data result with length total

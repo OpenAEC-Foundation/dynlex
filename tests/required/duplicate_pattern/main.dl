@@ -1,7 +1,11 @@
+macro expression [an|a|] integer:
+	replacement:
+		@intrinsic("type", "int", 32)
+
 expression test:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "1")
+		@intrinsic("call", "libc", "printf", an integer, "1")
 
 expression te[st|]:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "2")
+		@intrinsic("call", "libc", "printf", an integer, "2")

@@ -4,12 +4,12 @@ import lib/std.dl
 
 expression a random number:
     get:
-        return @intrinsic("call", "libc", "rand", "i32")
+        return @intrinsic("call", "libc", "rand", an integer)
 
 expression current time:
     get:
-        return @intrinsic("call", "libc", "time", "i64", 0)
+        return @intrinsic("call", "libc", "time", a 64 bit integer, 0)
 
 expression seed random with value:
     execute:
-        @intrinsic("call", "libc", "srand", "void", value)
+        @intrinsic("call", "libc", "srand", void, value)

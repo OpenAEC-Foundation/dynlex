@@ -2,9 +2,13 @@ macro expression set var to val:
 	replacement:
 		@intrinsic("store", var, val)
 
+macro expression [an|a|] integer:
+	replacement:
+		@intrinsic("type", "int", 32)
+
 expression say msg:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "%s\n", msg)
+		@intrinsic("call", "libc", "printf", an integer, "%s\n", msg)
 
 macro expression value as [a|an|] bits bit integer:
 	replacement:
@@ -12,7 +16,7 @@ macro expression value as [a|an|] bits bit integer:
 
 expression print msg:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "%ld\n", msg as a 64 bit integer)
+		@intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
 
 expression customadder:
 	execute:

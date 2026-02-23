@@ -5,6 +5,36 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
 
+std::string DataType::toString() const {
+	std::string result;
+	switch (kind) {
+	case Kind::Void:
+		result = "void";
+		break;
+	case Kind::Bool:
+		result = "bool";
+		break;
+	case Kind::Int:
+		result = "i" + std::to_string(numericSize * 8);
+		break;
+	case Kind::Float:
+		result = "f" + std::to_string(numericSize * 8);
+		break;
+	case Kind::Class:
+		result = (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
+		break;
+	case Kind::Type:
+		result = "type";
+		break;
+	case Kind::Any:
+	case Kind::Unresolved:
+		return "unresolved(" + (typeExpression ? std::string("expr") : std::string("?")) + ")";
+	}
+	for (int i = 0; i < pointerDepth; i++)
+		result += "*";
+	return result;
+}
+
 int DataType::getByteSize() const {
 	if (pointerDepth > 0)
 		return 8;

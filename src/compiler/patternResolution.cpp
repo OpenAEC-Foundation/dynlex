@@ -555,40 +555,6 @@ bool resolvePatterns(ParseContext &context) {
 			resolveTypeConstraints(context.mainSection);
 		}
 
-		// Expand resolved expressions, reset types, and run inference so matchTypesValid has type info
-		for (CodeLine *line : context.codeLines) {
-			if (line->expression) {
-				expandExpression(line->expression, line->section);
-				std::function<void(Expression *)> resetTypes = [&](Expression *e) {
-					if (!e)
-						return;
-					if (e->kind != Expression::Kind::Literal)
-						e->type = {};
-					for (Expression *arg : e->arguments)
-						resetTypes(arg);
-				};
-				resetTypes(line->expression);
-			}
-		}
-		// Also reset instantiation return types so they get re-inferred
-		std::function<void(Section *)> resetInstantiations = [&](Section *section) {
-			for (auto &[argTypes, inst] : section->instantiations) {
-				inst.returnType = {DataType::Kind::Any};
-			}
-			for (Section *child : section->children)
-				resetInstantiations(child);
-		};
-		resetInstantiations(context.mainSection);
-		// Reset variable types
-		std::function<void(Section *)> resetVarTypes = [&](Section *section) {
-			for (auto &[name, var] : section->variables)
-				var->type = {};
-			for (Section *child : section->children)
-				resetVarTypes(child);
-		};
-		resetVarTypes(context.mainSection);
-		runInference(context);
-
 		if (unResolvedSections.empty() && bodyReferences.empty())
 			break;
 

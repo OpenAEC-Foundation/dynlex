@@ -14,6 +14,10 @@ macro expression set var to val:
     replacement:
         @intrinsic("store", var, val)
 
+macro expression discard val:
+    replacement:
+        @intrinsic("discard", val)
+
 # --- Primitive types ---
 
 macro expression [an|a|] integer:
@@ -39,6 +43,10 @@ macro expression [a|] byte:
 macro expression [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
+
+macro expression void:
+    replacement:
+        @intrinsic("type", "void")
 
 # --- Pointer and string types ---
 

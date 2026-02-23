@@ -43,7 +43,17 @@ void generateSpecializedFunction(
 
 	auto it = section->instantiations.find(argTypes);
 	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
-	assert(it->second.returnType.isDeduced() && "Return type must be deduced before codegen");
+	if (!it->second.returnType.isDeduced()) {
+		fprintf(
+			stderr, "UNDEDUCED: '%s' args=[",
+			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString).c_str()
+		);
+		for (auto &t : argTypes)
+			fprintf(stderr, "%s ", t.toString().c_str());
+		fprintf(stderr, "]\n");
+		fflush(stderr);
+		assert(false && "Return type must be deduced before codegen");
+	}
 	llvm::Type *returnType = getLLVMType(context, it->second.returnType);
 
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
@@ -256,6 +266,20 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 				paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
 			}
 		}
+		if (!matchedSection->isMacro && matchedSection->type != SectionType::Class) {
+			fprintf(
+				stderr, "DEBUG CG '%s' args: [", std::string(matchedSection->patternDefinitions[0]->range.subString).c_str()
+			);
+			for (auto *a : sortedArgs)
+				fprintf(
+					stderr, "'%s'(%d:%s) ", std::string(a->range.subString).c_str(), (int)a->kind, a->type.toString().c_str()
+				);
+			fprintf(stderr, "] params: [");
+			for (auto &[n, e] : paramBindings)
+				fprintf(stderr, "%s='%s' ", n.c_str(), std::string(e->range.subString).c_str());
+			fprintf(stderr, "]\n");
+			fflush(stderr);
+		}
 
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with expression substitution.
@@ -308,7 +332,19 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Compute argument types at this call site for specialization.
 		std::vector<DataType> argTypes;
 		for (const auto &[paramName, argExpr] : paramBindings) {
-			argTypes.push_back(getEffectiveType(context, argExpr));
+			DataType t = getEffectiveType(context, argExpr);
+			if (!t.isDeduced()) {
+				fprintf(
+					stderr, "DEBUG CG: undeduced arg '%s' for '%s', argExpr->type=%s, argExpr->kind=%d, range='%s'\n",
+					paramName.c_str(),
+					matchedSection->patternDefinitions.empty()
+						? "?"
+						: std::string(matchedSection->patternDefinitions[0]->range.subString).c_str(),
+					argExpr->type.toString().c_str(), (int)argExpr->kind, std::string(argExpr->range.subString).c_str()
+				);
+				fflush(stderr);
+			}
+			argTypes.push_back(t);
 		}
 
 		// Look up or generate the specialized function

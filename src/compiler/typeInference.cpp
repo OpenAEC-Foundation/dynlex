@@ -1,6 +1,7 @@
 #include "classDefinition.h"
 #include "classSection.h"
 #include "compiler.h"
+#include "definitionSection.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "type.h"
@@ -50,12 +51,12 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 	return resolved ? resolved->type : DataType{};
 }
 
-// Infer types through a macro body with given parameter bindings. Returns true if anything changed.
+// Infer types for a section's code lines with operand reordering. Returns false on failure.
 static bool
-inferMacroBody(Section *macroSection, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context);
+inferSection(Section *section, ParseContext &context, const std::unordered_map<std::string, Expression *> &bindings = {});
 
 // Infer the type of an expression bottom-up. Returns true if the type changed.
-static bool inferExpressionType(
+static bool inferOrderedExpression(
 	Expression *expr, ParseContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
 	if (!expr)
@@ -65,7 +66,7 @@ static bool inferExpressionType(
 
 	// Recurse into arguments first (bottom-up)
 	for (Expression *arg : expr->arguments) {
-		changed |= inferExpressionType(arg, context, macroBindings);
+		changed |= inferOrderedExpression(arg, context, macroBindings);
 	}
 
 	DataType oldType = expr->type;
@@ -198,11 +199,9 @@ static bool inferExpressionType(
 						}
 					}
 				} else if (expr->intrinsicName == "call") {
-					std::string retTypeStr;
-					if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
-						retTypeStr = *str;
-					if (!retTypeStr.empty())
-						expr->type = DataType::fromString(retTypeStr);
+					DataType retTypeRef = resolveTypeThroughBindings(expr->arguments[3], macroBindings);
+					if (retTypeRef.kind == DataType::Kind::Type)
+						expr->type = retTypeRef.toReferencedType();
 				} else if (expr->intrinsicName == "cast") {
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
 					if (typeArgType.kind == DataType::Kind::Type) {
@@ -360,7 +359,7 @@ static bool inferExpressionType(
 					// Code replacement: infer body, type = replacement expression type
 					if (!matchedSection->inferring) {
 						matchedSection->inferring = true;
-						changed |= inferMacroBody(matchedSection, callBindings, context);
+						inferSection(matchedSection, context, callBindings);
 						matchedSection->inferring = false;
 					}
 					for (Section *child : matchedSection->children) {
@@ -399,7 +398,7 @@ static bool inferExpressionType(
 						inst.inferring = true;
 						Instantiation *savedInst = context.currentInstantiation;
 						context.currentInstantiation = &inst;
-						changed |= inferMacroBody(matchedSection, callBindings, context);
+						inferSection(matchedSection, context, callBindings);
 						context.currentInstantiation = savedInst;
 						inst.inferring = false;
 					}
@@ -407,7 +406,6 @@ static bool inferExpressionType(
 					// If no return intrinsic was found, default to Void
 					if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
 						inst.returnType = {DataType::Kind::Void};
-						changed = true;
 					}
 					if (inst.returnType.isDeduced())
 						expr->type = inst.returnType;
@@ -424,11 +422,7 @@ static bool inferExpressionType(
 	return changed || (expr->type != oldType);
 }
 
-// Reset non-literal expression types in a section and all its children.
-// Macro body expression nodes are shared across all callers. Without resetting,
-// if a previous caller set the body type to (e.g.) f64, and the current caller
-// has an undeduced operand, the arithmetic guard skips the update and the stale
-// f64 type is read as if it were the current call's result.
+// Reset non-literal expression types in a subtree.
 static void resetExpressionTypes(Expression *expr) {
 	if (!expr)
 		return;
@@ -438,164 +432,191 @@ static void resetExpressionTypes(Expression *expr) {
 		resetExpressionTypes(arg);
 }
 
-static void resetSectionTypes(Section *section) {
-	for (CodeLine *line : section->codeLines)
-		if (line->expression)
-			resetExpressionTypes(line->expression);
-	for (Section *child : section->children)
-		resetSectionTypes(child);
+// A shared argument edge between two adjacent PatternCall expressions.
+struct SharedEdge {
+	Expression *parent;
+	Expression *child;
+	size_t parentArgIdx; // index in parent->arguments where child lives
+	size_t childArgIdx;	 // index in child->arguments where shared operand lives
+	Expression *shared;	 // the boundary operand
+	Range childOrigRange;
+};
+
+// Sort arguments by source position recursively for all PatternCall nodes.
+static void sortArgumentsRecursive(Expression *expr) {
+	if (!expr)
+		return;
+	for (Expression *arg : expr->arguments)
+		sortArgumentsRecursive(arg);
+	if (expr->kind == Expression::Kind::PatternCall)
+		expr->arguments = sortArgumentsByPosition(expr->arguments);
 }
 
-static bool
-inferMacroBody(Section *section, const std::unordered_map<std::string, Expression *> &bindings, ParseContext &context) {
-	// Only macros need resetting — non-macro functions are inferred per-
-	// instantiation and their body types must persist across iterations.
-	if (section->isMacro)
-		resetSectionTypes(section);
-
-	bool changed = false;
-	for (CodeLine *line : section->codeLines) {
-		if (line->expression)
-			changed |= inferExpressionType(line->expression, context, bindings);
+// Collect shared edges in the expression tree (parent-child PatternCall pairs at boundary positions).
+static void collectSharedEdges(Expression *expr, std::vector<SharedEdge> &edges) {
+	if (expr->kind != Expression::Kind::PatternCall)
+		return;
+	for (size_t si = 0; si < expr->arguments.size(); si++) {
+		Expression *arg = expr->arguments[si];
+		if (arg->kind != Expression::Kind::PatternCall || !arg->patternMatch || !arg->patternMatch->matchedEndNode)
+			continue;
+		if (arg->arguments.empty())
+			continue;
+		// Shared operand: if child is rightmost parent arg, shared is child's leftmost;
+		// if child is leftmost parent arg, shared is child's rightmost.
+		size_t sharedSortedIdx;
+		if (si == expr->arguments.size() - 1)
+			sharedSortedIdx = 0;
+		else if (si == 0)
+			sharedSortedIdx = arg->arguments.size() - 1;
+		else
+			continue; // middle args — no clear boundary
+		Expression *shared = arg->arguments[sharedSortedIdx];
+		size_t childArgIdx = std::find(arg->arguments.begin(), arg->arguments.end(), shared) - arg->arguments.begin();
+		edges.push_back({expr, arg, si, childArgIdx, shared, arg->range});
 	}
-	for (Section *child : section->children)
-		changed |= inferMacroBody(child, bindings, context);
-	return changed;
+	for (Expression *arg : expr->arguments)
+		collectSharedEdges(arg, edges);
 }
 
-// Validate types after inference — check for type errors
-static bool validateExpressionTypes(Expression *expr, ParseContext &context) {
+// Swap the parent-child relationship at a shared edge.
+static void swapEdge(SharedEdge &edge) {
+	auto *parent = edge.parent;
+	auto *child = edge.child;
+	auto pMatch = parent->patternMatch;
+	auto pArgs = parent->arguments;
+	auto cArgs = child->arguments;
+
+	parent->patternMatch = child->patternMatch;
+	parent->arguments = cArgs;
+	parent->arguments[edge.childArgIdx] = child;
+
+	child->patternMatch = pMatch;
+	child->arguments = pArgs;
+	child->arguments[edge.parentArgIdx] = edge.shared;
+
+	child->range = edge.shared->range;
+}
+
+// Unswap: restore original parent-child relationship at a shared edge.
+static void unswapEdge(SharedEdge &edge) {
+	auto *parent = edge.parent;
+	auto *child = edge.child;
+	auto pMatch = parent->patternMatch;
+	auto pArgs = parent->arguments;
+	auto cArgs = child->arguments;
+
+	parent->patternMatch = child->patternMatch;
+	parent->arguments = cArgs;
+	parent->arguments[edge.parentArgIdx] = child;
+
+	child->patternMatch = pMatch;
+	child->arguments = pArgs;
+	child->arguments[edge.childArgIdx] = edge.shared;
+
+	child->range = edge.childOrigRange;
+}
+
+// Check if an inferred expression tree has valid types:
+// PatternCall arguments must be deduced and non-Void.
+// Unresolved types occur during recursive function inference (inst.inferring prevents re-entry,
+// leaving the return type unknown). Both Void and unresolved args indicate an invalid grouping.
+static bool isGroupingValid(Expression *expr) {
 	if (!expr)
 		return true;
-
-	bool valid = true;
-	for (Expression *arg : expr->arguments)
-		valid &= validateExpressionTypes(arg, context);
-
-	if (expr->kind == Expression::Kind::IntrinsicCall) {
-		if (isArithmeticOperator(expr->intrinsicName)) {
-			if (expr->arguments.size() >= 3) {
-				DataType leftType = expr->arguments[1]->type;
-				DataType rightType = expr->arguments[2]->type;
-				// Pointer arithmetic (ptr + int, ptr - int) is valid
-				bool ptrArith =
-					isPointerArithmeticOperator(expr->intrinsicName) && (leftType.isPointer() || rightType.isPointer());
-				if (!ptrArith && leftType.isDeduced() && !leftType.isNumeric()) {
-					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error,
-						"Cannot use " + leftType.toString() + " in arithmetic (expected a numeric type)",
-						expr->arguments[1]->range
-					));
-					valid = false;
-				}
-				if (!ptrArith && rightType.isDeduced() && !rightType.isNumeric()) {
-					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error,
-						"Cannot use " + rightType.toString() + " in arithmetic (expected a numeric type)",
-						expr->arguments[2]->range
-					));
-					valid = false;
-				}
-			}
-		} else if (isComparisonOperator(expr->intrinsicName)) {
-			if (expr->arguments.size() >= 3) {
-				DataType leftType = expr->arguments[1]->type;
-				DataType rightType = expr->arguments[2]->type;
-				if (leftType.isDeduced() && rightType.isDeduced() && !leftType.isNumeric() && !rightType.isNumeric() &&
-					leftType != rightType) {
-					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error, "Cannot compare " + leftType.toString() + " with " + rightType.toString(),
-						expr->range
-					));
-					valid = false;
-				}
-			}
-		} else if (expr->intrinsicName == "negate") {
-			if (expr->arguments.size() >= 2) {
-				DataType operandType = expr->arguments[1]->type;
-				if (operandType.isDeduced() && !operandType.isNumeric()) {
-					context.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error, "Cannot negate " + operandType.toString() + " (expected a numeric type)",
-						expr->arguments[1]->range
-					));
-					valid = false;
-				}
-			}
-		}
-	}
-
-	return valid;
-}
-
-void runInference(ParseContext &context) {
-	// Type inference uses fixed-point iteration: types flow through expressions
-	// until no more changes occur. 64 iterations handles deeply nested expressions
-	// with complex type dependencies (macros, pattern calls, arithmetic promotion).
-	for (int iteration = 0; iteration < 64; iteration++) {
-		bool changed = false;
-
-		for (CodeLine *line : context.codeLines) {
-			if (line->expression) {
-				changed |= inferExpressionType(line->expression, context);
-			}
-		}
-
-		if (!changed)
-			break;
-	}
-}
-
-// Check if an intrinsic's argument types are compatible with its signature.
-static bool intrinsicTypesValid(Expression *expr) {
-	const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
-	if (!info)
-		return true;
-
-	switch (info->returnKind) {
-	case IntrinsicReturnKind::SameAsArgs:
-		// All value arguments (skip index 0 = intrinsic name) must be numeric
-		for (size_t i = 1; i < expr->arguments.size(); i++) {
-			DataType argType = expr->arguments[i]->type;
-			if (argType.isDeduced() && !argType.isNumeric() && !argType.isPointer())
+	if (expr->kind == Expression::Kind::PatternCall) {
+		for (Expression *arg : expr->arguments) {
+			if (!arg->type.isDeduced() || arg->type.kind == DataType::Kind::Void)
+				return false;
+			if (!isGroupingValid(arg))
 				return false;
 		}
-		break;
-	case IntrinsicReturnKind::Bool:
-		// Comparison operands must not be void
-		for (size_t i = 1; i < expr->arguments.size(); i++) {
-			DataType argType = expr->arguments[i]->type;
-			if (argType.isDeduced() && argType.kind == DataType::Kind::Void)
-				return false;
-		}
-		break;
-	case IntrinsicReturnKind::Void:
-	case IntrinsicReturnKind::Float:
-	case IntrinsicReturnKind::Custom:
-		// Value arguments must not be void
-		for (size_t i = 1; i < expr->arguments.size(); i++) {
-			DataType argType = expr->arguments[i]->type;
-			if (argType.isDeduced() && argType.kind == DataType::Kind::Void)
-				return false;
-		}
-		break;
 	}
 	return true;
 }
 
-// Check if an expression tree has valid types (no void in value context, no non-numeric in arithmetic, etc.)
-bool expressionTypesValid(Expression *expr) {
-	if (!expr)
-		return true;
-	for (Expression *arg : expr->arguments) {
-		if (!expressionTypesValid(arg))
-			return false;
+// Infer an expression's types, reordering operands if needed.
+// If alreadyOrdered is true, skips reordering and just resets types and infers.
+// Returns false on failure (no valid grouping found).
+static bool inferExpression(
+	Expression *expr, ParseContext &context, bool alreadyOrdered,
+	const std::unordered_map<std::string, Expression *> &macroBindings = {}
+) {
+	sortArgumentsRecursive(expr);
+
+	if (alreadyOrdered) {
+		resetExpressionTypes(expr);
+		inferOrderedExpression(expr, context, macroBindings);
+		return isGroupingValid(expr);
 	}
-	if (expr->kind == Expression::Kind::IntrinsicCall)
-		return intrinsicTypesValid(expr);
-	// PatternCall arguments used as values should not be Void
-	if (expr->kind == Expression::Kind::PatternCall) {
-		for (Expression *arg : expr->arguments) {
-			if (arg->type.isDeduced() && arg->type.kind == DataType::Kind::Void)
+
+	std::vector<SharedEdge> edges;
+	collectSharedEdges(expr, edges);
+	if (edges.empty()) {
+		inferOrderedExpression(expr, context, macroBindings);
+		return true;
+	}
+	if (edges.size() > 6) {
+		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range)
+		);
+		return false;
+	}
+
+	size_t numGroupings = 1u << edges.size();
+	fprintf(
+		stderr, "DEBUG reorder '%s': %zu edges, %zu groupings\n", std::string(expr->range.subString).c_str(), edges.size(),
+		numGroupings
+	);
+	for (size_t i = 0; i < edges.size(); i++)
+		fprintf(
+			stderr, "  edge %zu: parent='%s' child='%s' shared='%s'\n", i,
+			std::string(edges[i].parent->range.subString).c_str(), std::string(edges[i].child->range.subString).c_str(),
+			std::string(edges[i].shared->range.subString).c_str()
+		);
+	for (size_t g = 0; g < numGroupings; g++) {
+		for (size_t i = 0; i < edges.size(); i++) {
+			if (g & (1u << i))
+				swapEdge(edges[i]);
+		}
+
+		resetExpressionTypes(expr);
+		inferOrderedExpression(expr, context, macroBindings);
+
+		fprintf(stderr, "DEBUG g=%zu: type=%s valid=%d\n", g, expr->type.toString().c_str(), isGroupingValid(expr));
+		if (isGroupingValid(expr))
+			return true;
+
+		for (size_t i = edges.size(); i-- > 0;) {
+			if (g & (1u << i))
+				unswapEdge(edges[i]);
+		}
+	}
+	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "No valid operand grouping found", expr->range));
+	return false;
+}
+
+// Returns false on failure.
+static bool
+inferSection(Section *section, ParseContext &context, const std::unordered_map<std::string, Expression *> &bindings) {
+	// The first instantiation determines operand ordering; subsequent ones reuse it.
+	// size() > 1 because the current instantiation is already inserted before inferSection is called.
+	bool alreadyOrdered = section->instantiations.size() > 1;
+
+	for (CodeLine *line : section->codeLines) {
+		if (line->expression) {
+			if (!inferExpression(line->expression, context, alreadyOrdered, bindings))
+				return false;
+			fprintf(
+				stderr, "DEBUG after infer: '%s' type=%s, args=[", std::string(line->expression->range.subString).c_str(),
+				line->expression->type.toString().c_str()
+			);
+			for (auto *a : line->expression->arguments)
+				fprintf(stderr, "'%s'(%s) ", std::string(a->range.subString).c_str(), a->type.toString().c_str());
+			fprintf(stderr, "]\n");
+			fflush(stderr);
+		}
+		if (line->sectionOpening && !dynamic_cast<DefinitionSection *>(line->sectionOpening)) {
+			if (!inferSection(line->sectionOpening, context, bindings))
 				return false;
 		}
 	}
@@ -603,7 +624,8 @@ bool expressionTypesValid(Expression *expr) {
 }
 
 bool inferTypes(ParseContext &context) {
-	runInference(context);
+	if (!inferSection(context.mainSection, context))
+		return false;
 
 	// Validate variables — all must have deduced types
 	// Skip non-macro function body sections: their variables only get types during monomorphization
@@ -645,12 +667,6 @@ bool inferTypes(ParseContext &context) {
 			validateReturnTypes(child);
 	};
 	validateReturnTypes(context.mainSection);
-
-	// Validate expression types
-	for (CodeLine *line : context.codeLines) {
-		if (line->expression)
-			valid &= validateExpressionTypes(line->expression, context);
-	}
 
 	return valid;
 }

@@ -253,13 +253,11 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]);
 		if (expr->intrinsicName == "call") {
-			// Format: @intrinsic("call", "library", "function", "return type", args...)
+			// Format: @intrinsic("call", "library", "function", type_ref, args...)
 			if (expr->arguments.size() >= 4) {
-				std::string retTypeStr;
-				if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
-					retTypeStr = *str;
-				if (!retTypeStr.empty())
-					return DataType::fromString(retTypeStr);
+				DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
+				if (retTypeRef.kind == DataType::Kind::Type)
+					return retTypeRef.toReferencedType();
 			}
 			return {DataType::Kind::Int, 4};
 		}

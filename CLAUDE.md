@@ -36,8 +36,8 @@ src/
 ├── compiler/                   # Core compiler
 │   ├── compiler.cpp/h          # Import, section analysis, intrinsic classifiers
 │   ├── patternResolution.cpp   # Pattern matching and resolution
-│   ├── typeInference.cpp       # Type inference (fixed-point iteration)
-│   ├── section/                # Section types (expression, effect, custom)
+│   ├── typeInference.cpp       # Type inference (execution-order, operand reordering)
+│   ├── section/                # Section types (expression, section, class)
 │   ├── pattern/                # Pattern definitions and references
 │   ├── pattern/pattern_tree/   # Tree-based pattern matching
 │   └── codegen/                # LLVM code generation
@@ -62,12 +62,14 @@ tests/required/                 # Test cases with expected outputs
 **File extension:** `.dl`
 
 **Pattern types:**
-- `effect` - Side effects (statements): `effect print msg:`
-- `expression` - Return values: `expression left + right:`
+- `expression` - A function. Void-returning expressions are used for side effects.
+- `section` - The outermost pattern of a section opening (loop, if, etc.)
+
+Classes add their patterns to the expression tree since a type literal is an expression.
 
 **Example:**
 ```
-macro effect set var to val:
+macro expression set var to val:
     replacement:
         @intrinsic("store", var, val)
 
