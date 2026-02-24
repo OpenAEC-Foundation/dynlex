@@ -41,6 +41,10 @@ struct Expression {
 
 	// Arguments (for PatternCall and IntrinsicCall)
 	std::vector<Expression *> arguments;
+
+	// True if this node was created from a subMatch in expandMatch.
+	// Only subMatch-originated PatternCalls participate in operand reordering.
+	bool isSubMatch = false;
 };
 
 // Utility: Sort expression arguments by their source position

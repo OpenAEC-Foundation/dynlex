@@ -50,7 +50,11 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
 	// Macros use "replacement", handled here in base class
 	if (isMacro && line->patternText == "replacement") {
-		return new ReplacementSection(this);
+		return executionSection = new ReplacementSection(this);
+	}
+
+	if (line->patternText == "execute") {
+		return executionSection = new Section(SectionType::Get, this);
 	}
 
 	if (line->patternText == "patterns") {
@@ -59,14 +63,6 @@ Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line)
 
 	if (line->patternText == "globals") {
 		return new GlobalsSection(this);
-	}
-
-	if (line->patternText == "before") {
-		return new PrecedenceSection(SectionType::Before, this);
-	}
-
-	if (line->patternText == "after") {
-		return new PrecedenceSection(SectionType::After, this);
 	}
 
 	// Nothing matched - give error

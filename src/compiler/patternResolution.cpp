@@ -33,6 +33,7 @@ void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *mat
 	expr->patternMatch = match;
 	for (const PatternMatch &subMatch : match->subMatches) {
 		Expression *arg = new Expression();
+		arg->isSubMatch = true;
 		arg->range = Range(
 			expr->range.line, rootExpression->range.start() + subMatch.lineStartPos,
 			rootExpression->range.start() + subMatch.lineEndPos
@@ -501,8 +502,6 @@ bool resolvePatterns(ParseContext &context) {
 						if (!node || node->matchingDefinitions.empty())
 							continue;
 						for (auto *d : node->matchingDefinitions) {
-							if (!d->section)
-								continue;
 							if (d->section->type == SectionType::Class && !d->section->isMacro) {
 								auto *classSec = static_cast<ClassSection *>(d->section);
 								elem.resolvedTypeConstraint = {DataType::Kind::Class, 0, 0, classSec->classDefinition};
@@ -566,7 +565,12 @@ bool resolvePatterns(ParseContext &context) {
 		if (!madeProgress) {
 			if (unResolvedSections.empty())
 				break; // no sections to force-resolve and no progress — truly stuck
-			for (Section *section : unResolvedSections) {
+			// Force-resolve all remaining sections by adding their definitions as-is.
+			// Copy the list first because addDefinitionToTree may trigger invalidations
+			// that re-add sections to unResolvedSections.
+			std::list<Section *> toForceResolve = std::move(unResolvedSections);
+			unResolvedSections.clear();
+			for (Section *section : toForceResolve) {
 				section->patternDefinitionsResolved = true;
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
@@ -576,7 +580,7 @@ bool resolvePatterns(ParseContext &context) {
 					}
 				}
 			}
-			unResolvedSections.clear();
+			// Sections may have been re-added by invalidation cascades — continue the loop
 		}
 	}
 
@@ -767,46 +771,8 @@ bool resolvePatterns(ParseContext &context) {
 				context.defaultPrecedenceLevel = defaultSentinel.precedence;
 			}
 
-			// Re-match body references that involve operators with precedence
-			std::function<bool(PatternMatch &)> matchInvolvesPrecedence = [&](PatternMatch &match) -> bool {
-				if (match.matchedEndNode) {
-					for (auto *def : match.matchedEndNode->matchingDefinitions) {
-						if (def->precedence > 0)
-							return true;
-					}
-				}
-				for (PatternMatch &sub : match.subMatches)
-					if (matchInvolvesPrecedence(sub))
-						return true;
-				return false;
-			};
-
-			// Collect all pattern references from all sections
-			std::vector<PatternReference *> allRefs;
-			std::function<void(Section *)> collectRefs = [&](Section *section) {
-				allRefs.insert(allRefs.end(), section->patternReferences.begin(), section->patternReferences.end());
-				for (Section *child : section->children)
-					collectRefs(child);
-			};
-			collectRefs(context.mainSection);
-
-			// Re-match references that involve operators with precedence
-			for (PatternReference *ref : allRefs) {
-				if (!ref->resolved || !ref->match)
-					continue;
-				if (!matchInvolvesPrecedence(*ref->match))
-					continue;
-
-				// Remove variable references from old match
-				std::unordered_set<Section *> affected;
-				removeVariableReferencesFromMatch(context, ref, *ref->match, affected);
-
-				// Re-match with precedence constraints active
-				PatternMatch *newMatch = context.match(ref);
-				ref->match = newMatch;
-				if (newMatch)
-					addVariableReferencesFromMatch(context, ref, *newMatch);
-			}
+			// Precedence re-matching is NOT done here — operand reordering in type inference
+			// handles grouping selection using def->precedence values.
 		}
 	}
 

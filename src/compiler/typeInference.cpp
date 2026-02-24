@@ -55,21 +55,19 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 static bool
 inferSection(Section *section, ParseContext &context, const std::unordered_map<std::string, Expression *> &bindings = {});
 
-// Infer the type of an expression bottom-up. Returns true if the type changed.
+// Infer the type of an expression bottom-up. Returns true when no compilation errors are found.
 static bool inferOrderedExpression(
-	Expression *expr, ParseContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
+	Expression *expr, ParseContext &context, bool &validTypes,
+	const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
-	if (!expr)
-		return false;
-
-	bool changed = false;
-
+	validTypes = true;
 	// Recurse into arguments first (bottom-up)
 	for (Expression *arg : expr->arguments) {
-		changed |= inferOrderedExpression(arg, context, macroBindings);
+		if (!inferOrderedExpression(arg, context, validTypes, macroBindings))
+			return false;
+		if (!validTypes)
+			return true;
 	}
-
-	DataType oldType = expr->type;
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
@@ -139,7 +137,6 @@ static bool inferOrderedExpression(
 						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
 						if (var && (!var->type.isDeduced() || var->type == valType)) {
 							var->type = valType;
-							changed = true;
 							// Give this variable its own instantiation copy so property stores
 							// don't contaminate other variables sharing the same construct instantiation
 							if (var->type.kind == DataType::Kind::Class && var->type.classDefinition &&
@@ -165,7 +162,6 @@ static bool inferOrderedExpression(
 									if (classDef->fields[i].name == fieldName &&
 										(!fieldTypes[i].isDeduced() || fieldTypes[i] == valType)) {
 										fieldTypes[i] = valType;
-										changed = true;
 										break;
 									}
 								}
@@ -295,131 +291,109 @@ static bool inferOrderedExpression(
 	}
 
 	case Expression::Kind::PatternCall: {
-		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
-			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
-			auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 
-			// Sort arguments by source position (expandMatch appends submatches/variables/words
-			// after direct args, so they may not be in text order)
-			std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-
-			// Build argument types for overload selection
-			// Use the first definition to walk nodesPassed (all overloads share the same trie path)
-			std::vector<DataType> argTypesForOverload;
-			{
-				size_t ai = 0;
-				for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-					// Check if this node is a parameter for ANY definition at this endpoint
-					bool isParam = false;
-					for (auto *d : defs) {
-						if (node->parameterNames.contains(d)) {
-							isParam = true;
-							break;
-						}
-					}
-					if (isParam && ai < sortedArgs.size()) {
-						DataType argType = resolveTypeThroughBindings(sortedArgs[ai], macroBindings);
-						argTypesForOverload.push_back(argType);
-						ai++;
-					}
-				}
-			}
-
-			// Select the best overload based on argument types
-			PatternDefinition *def = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
-			if (!def)
-				def = defs[0]; // fallback if no overload matched (types may not be deduced yet)
-
-			if (def && def->section) {
-				Section *matchedSection = def->section;
-
-				// Build parameter bindings from call-site arguments
-				std::unordered_map<std::string, Expression *> callBindings;
-				size_t argIndex = 0;
-				for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-					auto paramIt = node->parameterNames.find(def);
-					if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-						// Resolve through current macro bindings if we're inside a macro
-						Expression *actualArg = sortedArgs[argIndex];
-						if (actualArg->kind == Expression::Kind::Variable && actualArg->variable) {
-							auto macroIt = macroBindings.find(actualArg->variable->name);
-							if (macroIt != macroBindings.end()) {
-								actualArg = macroIt->second;
-							}
-						}
-						callBindings[paramIt->second] = actualArg;
-						argIndex++;
-					}
-				}
-
-				if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
-					auto *classSec = static_cast<ClassSection *>(matchedSection);
-					expr->type = {DataType::Kind::Type, 0, 0, classSec->classDefinition};
-				} else if (matchedSection->isMacro) {
-					// Code replacement: infer body, type = replacement expression type
-					if (!matchedSection->inferring) {
-						matchedSection->inferring = true;
-						inferSection(matchedSection, context, callBindings);
-						matchedSection->inferring = false;
-					}
-					for (Section *child : matchedSection->children) {
-						for (CodeLine *line : child->codeLines) {
-							if (line->expression && line->expression->type.isDeduced())
-								expr->type = line->expression->type;
-						}
-					}
-				} else {
-					// Non-macro function: infer body per-instantiation
-					// Build argTypes in nodesPassed order (must match codegen's paramBindings order)
-					std::vector<DataType> argTypes;
-					size_t argTypeIndex = 0;
-					for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-						auto paramIt = node->parameterNames.find(def);
-						if (paramIt != node->parameterNames.end() && argTypeIndex < sortedArgs.size()) {
-							Expression *argExpr = callBindings[paramIt->second];
-							argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
-							argTypeIndex++;
-						}
-					}
-
-					// Skip if any argument type is undeduced — can't meaningfully
-					// infer the body without knowing all argument types.
-					bool allDeduced = true;
-					for (auto &t : argTypes)
-						if (!t.isDeduced()) {
-							allDeduced = false;
-							break;
-						}
-					if (!allDeduced)
-						break;
-
-					Instantiation &inst = matchedSection->instantiations[argTypes];
-					if (!inst.inferring) {
-						inst.inferring = true;
-						Instantiation *savedInst = context.currentInstantiation;
-						context.currentInstantiation = &inst;
-						inferSection(matchedSection, context, callBindings);
-						context.currentInstantiation = savedInst;
-						inst.inferring = false;
-					}
-
-					// If no return intrinsic was found, default to Void
-					if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
-						inst.returnType = {DataType::Kind::Void};
-					}
-					if (inst.returnType.isDeduced())
-						expr->type = inst.returnType;
+		// Build argument types for overload selection.
+		// All overloads share the same trie path, so variable nodes are identical across definitions.
+		std::vector<DataType> argTypesForOverload;
+		{
+			size_t ai = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				if (node->type == PatternElement::Type::Variable) {
+					argTypesForOverload.push_back(resolveTypeThroughBindings(expr->arguments[ai], macroBindings));
+					ai++;
 				}
 			}
 		}
+
+		// Select the best overload based on argument types
+		PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!def)
+			def = defs[0]; // fallback if no overload matched (types may not be deduced yet)
+
+		Section *matchedSection = def->section;
+
+		// Build parameter bindings from call-site arguments
+		std::unordered_map<std::string, Expression *> callBindings;
+		size_t argIndex = 0;
+		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+			if (node->type == PatternElement::Type::Variable) {
+				// Resolve through current macro bindings if we're inside a macro
+				Expression *actualArg = expr->arguments[argIndex];
+				if (actualArg->kind == Expression::Kind::Variable && actualArg->variable) {
+					auto macroIt = macroBindings.find(actualArg->variable->name);
+					if (macroIt != macroBindings.end()) {
+						actualArg = macroIt->second;
+					}
+				}
+				callBindings[node->parameterNames[def]] = actualArg;
+				argIndex++;
+			}
+		}
+
+		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+			auto *classSec = static_cast<ClassSection *>(matchedSection);
+			expr->type = {DataType::Kind::Type, 0, 0, classSec->classDefinition};
+		} else if (matchedSection->isMacro) {
+			// Code replacement: infer body, type = replacement expression type
+			if (!matchedSection->inferring) {
+				matchedSection->inferring = true;
+				inferSection(matchedSection, context, callBindings);
+				matchedSection->inferring = false;
+			}
+			for (Section *child : matchedSection->children) {
+				for (CodeLine *line : child->codeLines) {
+					if (line->expression && line->expression->type.isDeduced())
+						expr->type = line->expression->type;
+				}
+			}
+		} else {
+			// Non-macro function: infer body per-instantiation
+			// Build argTypes in nodesPassed order (must match codegen's paramBindings order)
+			std::vector<DataType> argTypes;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				if (node->type == PatternElement::Type::Variable) {
+					Expression *argExpr = callBindings[node->parameterNames[def]];
+					argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
+				}
+			}
+
+			// Skip if any argument type is undeduced — can't meaningfully
+			// infer the body without knowing all argument types.
+			bool allDeduced = true;
+			for (auto &t : argTypes)
+				if (!t.isDeduced()) {
+					allDeduced = false;
+					break;
+				}
+			if (!allDeduced)
+				break;
+
+			Instantiation &inst = matchedSection->instantiations[argTypes];
+			if (!inst.inferring) {
+				inst.inferring = true;
+				Instantiation *savedInst = context.currentInstantiation;
+				context.currentInstantiation = &inst;
+				inferSection(matchedSection, context, callBindings);
+				context.currentInstantiation = savedInst;
+				inst.inferring = false;
+			}
+
+			// If no return intrinsic was found, default to Void
+			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
+				inst.returnType = {DataType::Kind::Void};
+			}
+			if (inst.returnType.isDeduced())
+				expr->type = inst.returnType;
+		}
+
 		break;
 	}
 
 	case Expression::Kind::Pending:
 		break;
 	}
-
-	return changed || (expr->type != oldType);
+	return true;
 }
 
 // Reset non-literal expression types in a subtree.
@@ -432,16 +406,6 @@ static void resetExpressionTypes(Expression *expr) {
 		resetExpressionTypes(arg);
 }
 
-// A shared argument edge between two adjacent PatternCall expressions.
-struct SharedEdge {
-	Expression *parent;
-	Expression *child;
-	size_t parentArgIdx; // index in parent->arguments where child lives
-	size_t childArgIdx;	 // index in child->arguments where shared operand lives
-	Expression *shared;	 // the boundary operand
-	Range childOrigRange;
-};
-
 // Sort arguments by source position recursively for all PatternCall nodes.
 static void sortArgumentsRecursive(Expression *expr) {
 	if (!expr)
@@ -452,145 +416,170 @@ static void sortArgumentsRecursive(Expression *expr) {
 		expr->arguments = sortArgumentsByPosition(expr->arguments);
 }
 
-// Collect shared edges in the expression tree (parent-child PatternCall pairs at boundary positions).
-static void collectSharedEdges(Expression *expr, std::vector<SharedEdge> &edges) {
-	if (expr->kind != Expression::Kind::PatternCall)
-		return;
-	for (size_t si = 0; si < expr->arguments.size(); si++) {
-		Expression *arg = expr->arguments[si];
-		if (arg->kind != Expression::Kind::PatternCall || !arg->patternMatch || !arg->patternMatch->matchedEndNode)
-			continue;
-		if (arg->arguments.empty())
-			continue;
-		// Shared operand: if child is rightmost parent arg, shared is child's leftmost;
-		// if child is leftmost parent arg, shared is child's rightmost.
-		size_t sharedSortedIdx;
-		if (si == expr->arguments.size() - 1)
-			sharedSortedIdx = 0;
-		else if (si == 0)
-			sharedSortedIdx = arg->arguments.size() - 1;
-		else
-			continue; // middle args — no clear boundary
-		Expression *shared = arg->arguments[sharedSortedIdx];
-		size_t childArgIdx = std::find(arg->arguments.begin(), arg->arguments.end(), shared) - arg->arguments.begin();
-		edges.push_back({expr, arg, si, childArgIdx, shared, arg->range});
-	}
-	for (Expression *arg : expr->arguments)
-		collectSharedEdges(arg, edges);
+static bool startsWithArgument(Expression *expression) {
+	return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
 }
 
-// Swap the parent-child relationship at a shared edge.
-static void swapEdge(SharedEdge &edge) {
-	auto *parent = edge.parent;
-	auto *child = edge.child;
-	auto pMatch = parent->patternMatch;
-	auto pArgs = parent->arguments;
-	auto cArgs = child->arguments;
-
-	parent->patternMatch = child->patternMatch;
-	parent->arguments = cArgs;
-	parent->arguments[edge.childArgIdx] = child;
-
-	child->patternMatch = pMatch;
-	child->arguments = pArgs;
-	child->arguments[edge.parentArgIdx] = edge.shared;
-
-	child->range = edge.shared->range;
-}
-
-// Unswap: restore original parent-child relationship at a shared edge.
-static void unswapEdge(SharedEdge &edge) {
-	auto *parent = edge.parent;
-	auto *child = edge.child;
-	auto pMatch = parent->patternMatch;
-	auto pArgs = parent->arguments;
-	auto cArgs = child->arguments;
-
-	parent->patternMatch = child->patternMatch;
-	parent->arguments = cArgs;
-	parent->arguments[edge.parentArgIdx] = child;
-
-	child->patternMatch = pMatch;
-	child->arguments = pArgs;
-	child->arguments[edge.childArgIdx] = edge.shared;
-
-	child->range = edge.childOrigRange;
-}
-
-// Check if an inferred expression tree has valid types:
-// PatternCall arguments must be deduced and non-Void.
-// Unresolved types occur during recursive function inference (inst.inferring prevents re-entry,
-// leaving the return type unknown). Both Void and unresolved args indicate an invalid grouping.
-static bool isGroupingValid(Expression *expr) {
-	if (!expr)
-		return true;
-	if (expr->kind == Expression::Kind::PatternCall) {
-		for (Expression *arg : expr->arguments) {
-			if (!arg->type.isDeduced() || arg->type.kind == DataType::Kind::Void)
-				return false;
-			if (!isGroupingValid(arg))
-				return false;
-		}
-	}
-	return true;
+static bool endsWithArgument(Expression *expression) {
+	return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
 }
 
 // Infer an expression's types, reordering operands if needed.
 // If alreadyOrdered is true, skips reordering and just resets types and infers.
 // Returns false on failure (no valid grouping found).
 static bool inferExpression(
-	Expression *expr, ParseContext &context, bool alreadyOrdered,
+	Expression *&expr, ParseContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
 	sortArgumentsRecursive(expr);
 
+	auto validate = [&]() -> bool {
+		bool validTypes;
+		inferOrderedExpression(expr, context, validTypes, macroBindings);
+		if (!validTypes) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Invalid operand types", expr->range));
+			return false;
+		}
+		return true;
+	};
+
 	if (alreadyOrdered) {
-		resetExpressionTypes(expr);
-		inferOrderedExpression(expr, context, macroBindings);
-		return isGroupingValid(expr);
+		return validate();
+	}
+	// Flatten the expression tree into token order for reordering.
+	// Operators (PatternCalls starting/ending with an argument) are interleaved
+	// with their boundary arguments. Everything else is a leaf.
+	//
+	// Example: "print the x of p + the y of p as line" produces:
+	//   [print, the_x_of, p, +, the_y_of, p, as_line]
+	//    pfx    pfx      leaf inx pfx     leaf sfx
+	std::vector<Expression *> flatNodes;
+	size_t operatorCount = 0;
+
+	std::function<void(Expression *, bool, bool)> collectFlatNodes = [&](Expression *expression, bool isOnBoundary,
+																		 bool isRoot) {
+		bool isPatternCall = expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty();
+
+		if (!isPatternCall) {
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		// Non-subMatch PatternCalls are independent groups (e.g. parenthesized expressions).
+		// The root is always flattened regardless of isSubMatch.
+		if (!isRoot && (!isOnBoundary || !expression->isSubMatch)) {
+			inferExpression(expression, context, false, macroBindings);
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		bool hasLeftEdge = startsWithArgument(expression);
+		bool hasRightEdge = endsWithArgument(expression);
+
+		if (!hasLeftEdge && !hasRightEdge) {
+			// No boundary arguments (e.g. "draw $ lines") — leaf.
+			for (Expression *&argument : expression->arguments)
+				inferExpression(argument, context, false, macroBindings);
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		// Operator: recurse into boundary args, add self in between (in-order).
+		if (hasLeftEdge)
+			collectFlatNodes(expression->arguments.front(), true, false);
+
+		// Infer non-boundary arguments independently.
+		for (size_t i = (hasLeftEdge ? 1 : 0); i < expression->arguments.size() - (hasRightEdge ? 1 : 0); i++)
+			inferExpression(expression->arguments[i], context, false, macroBindings);
+
+		operatorCount++;
+		flatNodes.push_back(expression);
+
+		if (hasRightEdge)
+			collectFlatNodes(expression->arguments.back(), true, false);
+	};
+
+	collectFlatNodes(expr, true, true);
+	if (operatorCount <= 1) {
+		return validate();
 	}
 
-	std::vector<SharedEdge> edges;
-	collectSharedEdges(expr, edges);
-	if (edges.empty()) {
-		inferOrderedExpression(expr, context, macroBindings);
-		return true;
-	}
-	if (edges.size() > 6) {
+	if (operatorCount > 6) {
 		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range)
 		);
 		return false;
 	}
 
-	size_t numGroupings = 1u << edges.size();
-	fprintf(
-		stderr, "DEBUG reorder '%s': %zu edges, %zu groupings\n", std::string(expr->range.subString).c_str(), edges.size(),
-		numGroupings
-	);
-	for (size_t i = 0; i < edges.size(); i++)
-		fprintf(
-			stderr, "  edge %zu: parent='%s' child='%s' shared='%s'\n", i,
-			std::string(edges[i].parent->range.subString).c_str(), std::string(edges[i].child->range.subString).c_str(),
-			std::string(edges[i].shared->range.subString).c_str()
-		);
-	for (size_t g = 0; g < numGroupings; g++) {
-		for (size_t i = 0; i < edges.size(); i++) {
-			if (g & (1u << i))
-				swapEdge(edges[i]);
-		}
+	// Constrained Catalan enumeration over the flat token-order sequence.
+	// Pick an operator as root of the range, partition into left/right subtrees, recurse.
+	//
+	// Root constraints based on operator shape:
+	//   Prefix  (e.g. "print $"):    can only be root at start of range
+	//   Postfix (e.g. "$ as line"):  can only be root at end of range
+	//   Infix   (e.g. "$ + $"):      needs nodes on both sides
+	//   Leaf    (e.g. variable, literal): only valid alone (start == end)
+	//
+	// Example: print  the_x_of  p  +  the_y_of  p  as_line
+	//          pfx    pfx      leaf inx pfx     leaf sfx
+	//
+	// Picking + as root of the full range:
+	//          +                 <- root
+	//         / \
+	//   print    the_y_of       <- left/right subtrees
+	//   the_x_of   p  as_line
+	//     p
+	//
+	// Right-to-left iteration prefers left-to-right evaluation order.
+	// Returns true on first valid grouping (early exit propagates up).
+	std::function<bool(int, int, std::function<bool(Expression *)>)> tryGroupings =
+		[&](int start, int end, std::function<bool(Expression *)> onResult) -> bool {
+		if (start > end)
+			return onResult(nullptr);
+		if (start == end)
+			return onResult(flatNodes[start]);
 
+		for (int rootIndex = end; rootIndex >= start; rootIndex--) {
+			Expression *rootExpression = flatNodes[rootIndex];
+
+			bool isPatternCall = rootExpression->kind == Expression::Kind::PatternCall && !rootExpression->arguments.empty();
+			if (!isPatternCall)
+				continue;
+			bool hasLeftEdge = startsWithArgument(rootExpression);
+			bool hasRightEdge = endsWithArgument(rootExpression);
+			if (!hasLeftEdge && rootIndex > start)
+				continue;
+			if (!hasRightEdge && rootIndex < end)
+				continue;
+			if (hasLeftEdge && hasRightEdge && (rootIndex == start || rootIndex == end))
+				continue;
+
+			bool done = tryGroupings(start, rootIndex - 1, [&](Expression *leftResult) -> bool {
+				if (hasLeftEdge)
+					rootExpression->arguments.front() = leftResult;
+				return tryGroupings(rootIndex + 1, end, [&](Expression *rightResult) -> bool {
+					if (hasRightEdge)
+						rootExpression->arguments.back() = rightResult;
+					return onResult(rootExpression);
+				});
+			});
+			if (done)
+				return true;
+		}
+		return false;
+	};
+
+	int lastIndex = (int)flatNodes.size() - 1;
+	bool found = tryGroupings(0, lastIndex, [&](Expression *rootExpression) -> bool {
+		expr = rootExpression;
 		resetExpressionTypes(expr);
-		inferOrderedExpression(expr, context, macroBindings);
+		bool validTypes;
+		inferOrderedExpression(expr, context, validTypes, macroBindings);
+		return validTypes;
+	});
 
-		fprintf(stderr, "DEBUG g=%zu: type=%s valid=%d\n", g, expr->type.toString().c_str(), isGroupingValid(expr));
-		if (isGroupingValid(expr))
-			return true;
+	if (found)
+		return true;
 
-		for (size_t i = edges.size(); i-- > 0;) {
-			if (g & (1u << i))
-				unswapEdge(edges[i]);
-		}
-	}
 	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "No valid operand grouping found", expr->range));
 	return false;
 }
@@ -606,14 +595,6 @@ inferSection(Section *section, ParseContext &context, const std::unordered_map<s
 		if (line->expression) {
 			if (!inferExpression(line->expression, context, alreadyOrdered, bindings))
 				return false;
-			fprintf(
-				stderr, "DEBUG after infer: '%s' type=%s, args=[", std::string(line->expression->range.subString).c_str(),
-				line->expression->type.toString().c_str()
-			);
-			for (auto *a : line->expression->arguments)
-				fprintf(stderr, "'%s'(%s) ", std::string(a->range.subString).c_str(), a->type.toString().c_str());
-			fprintf(stderr, "]\n");
-			fflush(stderr);
 		}
 		if (line->sectionOpening && !dynamic_cast<DefinitionSection *>(line->sectionOpening)) {
 			if (!inferSection(line->sectionOpening, context, bindings))

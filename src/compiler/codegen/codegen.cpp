@@ -266,21 +266,6 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 				paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
 			}
 		}
-		if (!matchedSection->isMacro && matchedSection->type != SectionType::Class) {
-			fprintf(
-				stderr, "DEBUG CG '%s' args: [", std::string(matchedSection->patternDefinitions[0]->range.subString).c_str()
-			);
-			for (auto *a : sortedArgs)
-				fprintf(
-					stderr, "'%s'(%d:%s) ", std::string(a->range.subString).c_str(), (int)a->kind, a->type.toString().c_str()
-				);
-			fprintf(stderr, "] params: [");
-			for (auto &[n, e] : paramBindings)
-				fprintf(stderr, "%s='%s' ", n.c_str(), std::string(e->range.subString).c_str());
-			fprintf(stderr, "]\n");
-			fflush(stderr);
-		}
-
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with expression substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
@@ -333,17 +318,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::vector<DataType> argTypes;
 		for (const auto &[paramName, argExpr] : paramBindings) {
 			DataType t = getEffectiveType(context, argExpr);
-			if (!t.isDeduced()) {
-				fprintf(
-					stderr, "DEBUG CG: undeduced arg '%s' for '%s', argExpr->type=%s, argExpr->kind=%d, range='%s'\n",
-					paramName.c_str(),
-					matchedSection->patternDefinitions.empty()
-						? "?"
-						: std::string(matchedSection->patternDefinitions[0]->range.subString).c_str(),
-					argExpr->type.toString().c_str(), (int)argExpr->kind, std::string(argExpr->range.subString).c_str()
-				);
-				fflush(stderr);
-			}
+			assert(t.isDeduced() && "Undeduced argument type at codegen");
 			argTypes.push_back(t);
 		}
 
