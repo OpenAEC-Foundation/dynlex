@@ -3,7 +3,7 @@
 import lib/std.dl
 
 expression allocate count items:
-    get:
+    execute:
         return @intrinsic("call", "libc", "calloc", a pointer to a byte, count, 8)
 
 expression store value into array at index:
@@ -11,5 +11,5 @@ expression store value into array at index:
         @intrinsic("store at", array, index, value)
 
 expression item index of array:
-    get:
+    execute:
         return @intrinsic("load at", array, index)

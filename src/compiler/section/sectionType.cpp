@@ -13,10 +13,6 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Pattern;
 	if (str == "execute")
 		return SectionType::Execute;
-	if (str == "get")
-		return SectionType::Get;
-	if (str == "set")
-		return SectionType::Set;
 	if (str == "replacement")
 		return SectionType::Replacement;
 	if (str == "members")
@@ -42,10 +38,6 @@ std::string sectionTypeToString(SectionType type) {
 		return "patterns";
 	case SectionType::Execute:
 		return "execute";
-	case SectionType::Get:
-		return "get";
-	case SectionType::Set:
-		return "set";
 	case SectionType::Replacement:
 		return "replacement";
 	case SectionType::Members:

@@ -19,7 +19,7 @@ paths:
 
 ## Key Invariants
 - Macro body expression nodes are **shared mutable state** — reset types before each `inferMacroBody` call (macro sections only)
-- Type inference: fixed-point iteration (64 max). Types refine downward only: `Undeduced → Numeric → Integer/Float`, never back up
+- Type inference: single-pass, execution-order processing (top to bottom). No fixed-point iteration.
 - Instantiation argTypes vector must be built in `nodesPassed` order (both inference and codegen)
 - `macroBindingStack` (`std::stack`): macros only see their own bindings. `MacroScopeGuard` pops to caller scope for argument evaluation
 - `getVariablePointer` recursively resolves through multiple macro binding scopes (for nested macros like `add value to target` → `set var to val`)
@@ -31,7 +31,7 @@ paths:
 2. **Section Analysis** — parse indentation, identify sections (`compiler.cpp`: `analyzeSections`)
 3. **Pattern Resolution** — match patterns, resolve variables, assign precedence (`patternResolution.cpp`: `resolvePatterns`)
 4. **Variable Resolution** — group variables by scope, handle globals (part of `resolvePatterns`)
-5. **Type Inference** — fixed-point iteration over all code lines (`typeInference.cpp`: `inferTypes`)
+5. **Type Inference** — single-pass execution-order processing with operand reordering (`typeInference.cpp`: `inferTypes`)
 6. **Codegen** — LLVM IR generation → native executable, .ll, or .spv (`codegen/`)
 
 ## Source File Organization
@@ -39,7 +39,7 @@ paths:
 ### Compiler core (`src/compiler/`)
 - `compiler.cpp` — import phase, section analysis, intrinsic classifier helpers (`isArithmeticOperator`, etc.)
 - `patternResolution.cpp` — pattern matching, resolution loop, precedence assignment, variable scoping
-- `typeInference.cpp` — fixed-point type inference, macro body inference, type defaulting/validation
+- `typeInference.cpp` — single-pass type inference with operand reordering, `InferenceContext` (trial mode for reordering), macro body inference, type validation
 
 ### Code generation (`src/compiler/codegen/`)
 - `codegen.cpp` — expression codegen (`generateExpressionCode`), monomorphized function generation (`generateSpecializedFunction`), section codegen, main driver (`generateCode`)
@@ -54,7 +54,7 @@ paths:
 - `IntrinsicReturnKind` enum: `SameAsArgs`, `Bool`, `Void`, `Float`, `Custom`
 - Type inference (`typeInference.cpp`, `IntrinsicCall` case) uses registry lookup + switch on return kind:
   - **SameAsArgs**: unary (1 arg) or binary (2 args) with pointer arithmetic special case for add/subtract
-  - **Bool**: direct `Bool` assignment
+  - **Bool**: validates operands via `promoteArithmetic` (rejects non-numeric like Void), then `Bool` assignment
   - **Void**: direct `Void` assignment + special `store` side effects (type propagation to variables)
   - **Float**: direct `Float` assignment (e.g. shader inputs)
   - **Custom**: individual handlers for `address of`, `dereference`, `load at`, `return`, `call`, `cast`, `type`, `add pointer depth`, `construct`, `property`
@@ -71,7 +71,14 @@ paths:
 - **Per-variable class instantiations (copy-on-assign)**: `ClassInstantiation::fieldTypes` is shared mutable state via `getOrCreateInstantiation`. When two variables are constructed with the same field types, they share an instantiation. Property stores (e.g., `multiply v1 by 4.5` promoting Numeric→Float) mutated the shared `fieldTypes`, contaminating all variables sharing that instantiation. Fix: on first assignment of a Class type to a variable (Undeduced→Class in the store handler), copy the instantiation so each variable gets its own independent `fieldTypes`. This runs exactly once per variable since `canRefineTo(Class→Class)` is false afterward. The old oscillation workaround in the construct handler (preferring existing compatible instantiations) was removed — with per-variable copies, the construct's instantiation is never mutated, so oscillation can't occur.
 - **Class store type mismatch**: Per-variable instantiation copies can diverge from the construct's instantiation after field type promotion. E.g., construct creates `{i32,i32,i32}` (Numeric→Integer) but the variable's copy is promoted to `{f64,f64,f64}` (Float). A whole-struct `load`/`store` would reinterpret bit patterns incorrectly. Fix: store codegen (`codegenIntrinsics.cpp`) detects when source and destination class instantiations have different field type layouts and generates element-wise load+convert+store (`ensureType` per field) instead of a single struct copy.
 - **Cross-scope store destination resolution**: `add value to the x of target` chains through 3 macro layers: scalar `add` macro → `set` macro → `@intrinsic("store", var, val)`. The store dest `var` resolves to `target` (in set's scope), but `target` is bound to `the x of target` in the ADD macro's scope (one level up). `resolveThroughMacroLayers` only searched the current scope. Fix: `resolveThroughMacroLayers` now pops to parent scopes when a variable isn't found in the current scope. The store handler generates the value FIRST (in the original scope), then saves/restores the full scope state (`macroExpressionBindings` + `macroBindingStack`) around destination resolution, since `resolveThroughMacroLayers` freely modifies scopes. Changed signature from `int` (scope count) to `void` (caller saves/restores instead).
+- **Parameter binding mismatch with Word captures**: Type inference's PatternCall handler used `node->type == Variable` to iterate `nodesPassed`, but `expr->arguments` contains both Variable and Word captures sorted by source position. This skipped Word nodes, desyncing `argIndex`. E.g., `the {word:propertyname} of ownername` bound arguments backwards. Fix: use `node->parameterNames.find(def)` (matching codegen's approach) in all three loops: overload arg types, callBindings, and function argTypes.
+- **InferenceContext and trial mode**: Replaced passing raw `ParseContext&` + `bool& validTypes` with `InferenceContext` struct. Trials for operand reordering now create a separate `InferenceContext` with `trial = true`, preventing diagnostics from leaking and ensuring `typesValid` is isolated per trial. Invalid instantiations created during trials are marked `inst.valid = false` and skipped during post-inference validation.
+- **Intrinsic operand validation for Bool**: Comparison intrinsics (`less than`, `equal`, etc.) unconditionally set return type to `Bool` without validating operands. Fix: call `promoteArithmetic` on operands before setting Bool — rejects non-numeric types (e.g., Void) and correctly invalidates wrong operand groupings during reordering trials.
+- **Cast validation in type inference**: Added `isSupportedCastConversion()` check during type inference. Rejects casts with Void source or unsupported type conversions (e.g., Class→Int) before reaching codegen, preventing `ensureType` assertion failures.
+- **Removed `get:`/`set:` section types**: Non-macro functions now use `execute:` consistently. The `SectionType::Get` and `SectionType::Set` enum values and their string mappings in `sectionType.cpp` were removed. All lib files and tests updated from `get:` to `execute:`.
+- **`currentInstantiation` moved to InferenceContext**: Removed `currentInstantiation` from `ParseContext` — it's only needed during type inference, not codegen. Now lives in `InferenceContext`.
+- **Codegen uses pre-sorted arguments**: `generateExpressionCode` no longer calls `sortArgumentsByPosition` — type inference now sorts arguments in-place, so codegen can use `expr->arguments` directly.
+- **Overload selection failure is an error**: When `selectOverload` returns null in both type inference and codegen, it's now treated as an error (with diagnostic) instead of silently falling back to `defs[0]`.
 
 ## TODO / Known Issues
-- `promote()` doesn't check that operands are numeric before promoting
 - **Argument greediness**: `factorial of n - 1` parses as `(factorial of n) - 1`. Pattern arguments greedily consume tokens. Operator precedence (wave-based) fixes associativity but not argument boundaries for non-operator patterns.

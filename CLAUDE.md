@@ -92,6 +92,7 @@ print x
 - **Generalize** - Extract reusable components (e.g., languageServer is generic, dynlexServer uses it)
 - **No hardcoding** - Nothing language-specific hardcoded; syntax comes from patterns
 - **Minimal dependencies** - Only LLVM for codegen, avoid other external deps
+- **Always answer user questions** - If the user asks a question, answer it directly instead of skipping it and continuing with other work
 - **Suggest improvements** - If you know a better approach, mention it
 - **Verify before assuming** - Always check what packages/versions are actually available (e.g., `apt-cache search`, `llc --version`, `apt-cache show`) before choosing a dependency version. Don't guess that a specific version exists or has a feature — verify it first.
 - **Document important fixes** - Record in `.claude/rules/` files (not MEMORY.md), so all clones/agents see the info via git.
@@ -100,6 +101,7 @@ print x
 - **Understand full scope before fixing** - Don't make assumptions. Check for existing helpers before writing new code. No DRY violations.
 - **Use `std::stack`** over `std::vector` for stack-like data structures.
 - **Use MCP tools** - Prefer LSP MCP features (rename, references, diagnostics, hover) over manual search/replace for refactoring.
+- **No newlines in Bash commands** - Use `&&` or `;` to chain commands on a single line instead.
 
 ## Testing
 
@@ -117,7 +119,7 @@ Compiled test binaries use the `.out` extension (gitignored).
 
 Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expected compilation failure, substring match).
 
-**Current state:** 15 pass, 0 fail.
+**Current state:** 7 pass, 8 fail.
 
 ## Key Design Decisions
 

@@ -40,15 +40,15 @@ effect print msg as line:
         @intrinsic("call", "libc", "printf", "%ld\n", msg)
 
 expression left < right:
-    get:
+    execute:
         return @intrinsic("less than", left, right)
 
 expression left > right:
-    get:
+    execute:
         return @intrinsic("greater than", left, right)
 
 expression left equals right:
-    get:
+    execute:
         return @intrinsic("equal", left, right)
 
 macro expression left + right:

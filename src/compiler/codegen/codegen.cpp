@@ -220,9 +220,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (defs.empty())
 			return nullptr;
 
-		// Sort arguments by source position (expandMatch appends submatches/variables/words
-		// after direct args, so they may not be in text order)
-		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+		// Arguments are already sorted by source position (type inference sorts in-place)
 
 		// Build argument types for overload selection
 		std::vector<DataType> argTypesForOverload;
@@ -236,17 +234,22 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 						break;
 					}
 				}
-				if (isParam && ai < sortedArgs.size()) {
-					argTypesForOverload.push_back(getEffectiveType(context, sortedArgs[ai]));
+				if (isParam && ai < expr->arguments.size()) {
+					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[ai]));
 					ai++;
 				}
 			}
 		}
 
 		// Select the best overload based on argument types
-		PatternDefinition *matchedDef = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
-		if (!matchedDef)
-			matchedDef = defs[0];
+		PatternDefinition *matchedDef =
+			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!matchedDef) {
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "No overload matches argument types", expr->range)
+			);
+			return nullptr;
+		}
 
 		Section *matchedSection = matchedDef->section;
 		if (!matchedSection)
@@ -262,8 +265,8 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		size_t argIndex = 0;
 		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 			auto paramIt = node->parameterNames.find(matchedDef);
-			if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-				paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
+			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
+				paramBindings.push_back({paramIt->second, expr->arguments[argIndex++]});
 			}
 		}
 		if (matchedSection->isMacro) {

@@ -80,7 +80,7 @@ class:
 # Returns a font handle (array: [face_ptr, texture_id, glyph_slot_ptr])
 
 expression a loaded font from path at size s:
-    get:
+    execute:
         # Initialize FreeType
         set lib_ptr to allocate 1 items
         @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, lib_ptr)
@@ -120,7 +120,7 @@ expression a loaded font from path at size s:
 # Renders one character and returns the new x position (cursor advance)
 
 expression render char code at px py using font and color r g b:
-    get:
+    execute:
         set face_raw to item 0 of font
         set tex_id to item 1 of font
         set glyph_raw to item 2 of font

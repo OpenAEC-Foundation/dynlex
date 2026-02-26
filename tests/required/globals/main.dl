@@ -20,7 +20,7 @@ show total
 
 # test 2: local variable with same name as global (shadowing)
 expression double value:
-    get:
+    execute:
         set total to value * 2
         return total
 
@@ -32,7 +32,7 @@ print total as line
 # test 4: function-local variable doesn't leak to global scope
 set result to 99
 expression triple value:
-    get:
+    execute:
         set result to value * 3
         return result
 

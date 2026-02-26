@@ -6,6 +6,7 @@
 #include "patternTreeNode.h"
 #include "section.h"
 #include <list>
+#include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -72,8 +73,6 @@ struct ParseContext {
 	std::stack<std::unordered_map<std::string, Expression *>> macroBindingStack;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
-	// Current instantiation being inferred (set during non-macro function body inference)
-	Instantiation *currentInstantiation{};
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
@@ -108,11 +107,14 @@ struct ParseContext {
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
+	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
+	std::map<DataType, std::string> typeAliasNames;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
+	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 };
 
 // Extract the body expression and parameter bindings from a macro PatternCall.

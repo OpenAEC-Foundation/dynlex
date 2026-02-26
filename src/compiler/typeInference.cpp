@@ -6,6 +6,7 @@
 #include "intrinsicInfo.h"
 #include "type.h"
 #include "variable.h"
+#include <unordered_set>
 
 // Resolve a Variable expression through macro bindings to find the bound expression.
 // Only follows Variable → Variable chains; stops at non-Variable expressions (PatternCall,
@@ -51,22 +52,85 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 	return resolved ? resolved->type : DataType{};
 }
 
+static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
+	auto it = parseContext.typeAliasNames.find(type);
+	if (it != parseContext.typeAliasNames.end())
+		return it->second;
+	return type.toString();
+}
+
+static std::string formatTypeList(const std::vector<DataType> &types, ParseContext &parseContext) {
+	std::string out;
+	for (size_t i = 0; i < types.size(); i++) {
+		if (i > 0)
+			out += ", ";
+		out += typeToUserName(types[i], parseContext);
+	}
+	return out;
+}
+
+static std::string buildTypeFailureDiagnostic(Expression *expr, const std::string &detail) {
+	std::string message =
+		"Expression '" + (std::string)expr->range.subString + "' parses successfully without types, but not with types";
+	if (!detail.empty())
+		message += ": " + detail;
+	return message;
+}
+
+// Must stay in sync with codegen's ensureType conversion support.
+static bool isSupportedCastConversion(const DataType &fromType, const DataType &toType) {
+	if (fromType == toType)
+		return true;
+	if (fromType.isPointer() && toType.kind == DataType::Kind::Int)
+		return true;
+	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
+		return true;
+	if (fromType.isNumeric() && toType.isNumeric())
+		return true;
+	if (fromType.kind == DataType::Kind::Bool && toType.isNumeric())
+		return true;
+	return false;
+}
+
+// Wraps ParseContext with type validity tracking and trial mode for operand reordering.
+// During reordering trials, diagnostics are suppressed and failures only affect the current trial.
+struct InferenceContext {
+	ParseContext &parseContext;
+	Instantiation *currentInstantiation{};
+	bool typesValid = true;
+	bool trial = false;
+	std::string typeFailureDetail;
+
+	InferenceContext(ParseContext &pc) : parseContext(pc) {}
+	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
+
+	void addDiagnostic(Diagnostic diagnostic) {
+		if (!trial)
+			parseContext.diagnostics.push_back(std::move(diagnostic));
+	}
+
+	void setTypeFailure(std::string detail) {
+		typesValid = false;
+		if (typeFailureDetail.empty())
+			typeFailureDetail = std::move(detail);
+	}
+};
+
 // Infer types for a section's code lines with operand reordering. Returns false on failure.
 static bool
-inferSection(Section *section, ParseContext &context, const std::unordered_map<std::string, Expression *> &bindings = {});
+inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings = {});
 
-// Infer the type of an expression bottom-up. Returns true when no compilation errors are found.
-static bool inferOrderedExpression(
-	Expression *expr, ParseContext &context, bool &validTypes,
-	const std::unordered_map<std::string, Expression *> &macroBindings = {}
+// Infer the type of an expression bottom-up.
+// Sets context.typesValid = false if types are invalid for this grouping.
+static void inferOrderedExpression(
+	Expression *expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
-	validTypes = true;
+	context.typesValid = true;
 	// Recurse into arguments first (bottom-up)
 	for (Expression *arg : expr->arguments) {
-		if (!inferOrderedExpression(arg, context, validTypes, macroBindings))
-			return false;
-		if (!validTypes)
-			return true;
+		inferOrderedExpression(arg, context, macroBindings);
+		if (!context.typesValid)
+			return;
 	}
 
 	switch (expr->kind) {
@@ -108,24 +172,35 @@ static bool inferOrderedExpression(
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
 				if (info->argCount == 2) {
-					DataType argType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					if (argType.isDeduced())
-						expr->type = argType;
+					expr->type = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 				} else {
 					DataType leftType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					DataType rightType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
-					if (leftType.isDeduced() && rightType.isDeduced()) {
-						DataType result;
-						DataType::promoteArithmetic(leftType, rightType, result);
-						if (!result.isDeduced())
-							return false;
-						expr->type = result;
+					DataType result;
+					if (!DataType::promoteArithmetic(leftType, rightType, result)) {
+						context.setTypeFailure(
+							"Incompatible operand types '" + typeToUserName(leftType, context.parseContext) + "' and '" +
+							typeToUserName(rightType, context.parseContext) + "'"
+						);
+						break;
 					}
+					expr->type = result;
 				}
 				break;
-			case IntrinsicReturnKind::Bool:
+			case IntrinsicReturnKind::Bool: {
+				DataType leftType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+				DataType rightType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+				DataType promoted;
+				if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
+					context.setTypeFailure(
+						"Incompatible operand types '" + typeToUserName(leftType, context.parseContext) + "' and '" +
+						typeToUserName(rightType, context.parseContext) + "'"
+					);
+					break;
+				}
 				expr->type = {DataType::Kind::Bool};
 				break;
+			}
 			case IntrinsicReturnKind::Void:
 				// "store" has side effects on variable types beyond just being Void
 				if (expr->intrinsicName == "store") {
@@ -199,9 +274,23 @@ static bool inferOrderedExpression(
 					if (retTypeRef.kind == DataType::Kind::Type)
 						expr->type = retTypeRef.toReferencedType();
 				} else if (expr->intrinsicName == "cast") {
+					DataType valueType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+					if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void) {
+						context.setTypeFailure(
+							"Invalid cast source type '" + typeToUserName(valueType, context.parseContext) + "'"
+						);
+						break;
+					}
 					if (typeArgType.kind == DataType::Kind::Type) {
 						expr->type = typeArgType.toReferencedType();
+						if (!isSupportedCastConversion(valueType, expr->type)) {
+							context.setTypeFailure(
+								"Unsupported cast from '" + typeToUserName(valueType, context.parseContext) + "' to '" +
+								typeToUserName(expr->type, context.parseContext) + "'"
+							);
+							break;
+						}
 						// If casting to a class type without a specific instantiation,
 						// use the declared-types instantiation (index 0) if available.
 						if (expr->type.kind == DataType::Kind::Class && expr->type.classDefinition &&
@@ -294,22 +383,33 @@ static bool inferOrderedExpression(
 		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 
 		// Build argument types for overload selection.
-		// All overloads share the same trie path, so variable nodes are identical across definitions.
+		// Arguments are sorted by source position and include both Variable and Word captures.
 		std::vector<DataType> argTypesForOverload;
-		{
-			size_t ai = 0;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				if (node->type == PatternElement::Type::Variable) {
-					argTypesForOverload.push_back(resolveTypeThroughBindings(expr->arguments[ai], macroBindings));
-					ai++;
-				}
-			}
+		for (size_t ai = 0; ai < expr->arguments.size(); ai++) {
+			argTypesForOverload.push_back(resolveTypeThroughBindings(expr->arguments[ai], macroBindings));
 		}
 
 		// Select the best overload based on argument types
 		PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-		if (!def)
-			def = defs[0]; // fallback if no overload matched (types may not be deduced yet)
+		if (!def) {
+			std::string candidates;
+			std::unordered_set<std::string> uniqueCandidates;
+			for (PatternDefinition *candidate : defs) {
+				std::string pattern = (std::string)candidate->range.subString;
+				if (!pattern.empty() && !uniqueCandidates.contains(pattern)) {
+					if (!candidates.empty())
+						candidates += ", ";
+					candidates += "'" + pattern + "'";
+					uniqueCandidates.insert(pattern);
+				}
+			}
+			context.setTypeFailure(
+				"No overload matches call '" + (std::string)expr->range.subString + "' for argument types [" +
+				formatTypeList(argTypesForOverload, context.parseContext) + "]" +
+				(candidates.empty() ? "" : (". Available overloads: " + candidates))
+			);
+			break;
+		}
 
 		Section *matchedSection = def->section;
 
@@ -317,17 +417,17 @@ static bool inferOrderedExpression(
 		std::unordered_map<std::string, Expression *> callBindings;
 		size_t argIndex = 0;
 		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-			if (node->type == PatternElement::Type::Variable) {
+			auto paramIt = node->parameterNames.find(def);
+			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
 				// Resolve through current macro bindings if we're inside a macro
-				Expression *actualArg = expr->arguments[argIndex];
+				Expression *actualArg = expr->arguments[argIndex++];
 				if (actualArg->kind == Expression::Kind::Variable && actualArg->variable) {
 					auto macroIt = macroBindings.find(actualArg->variable->name);
 					if (macroIt != macroBindings.end()) {
 						actualArg = macroIt->second;
 					}
 				}
-				callBindings[node->parameterNames[def]] = actualArg;
-				argIndex++;
+				callBindings[paramIt->second] = actualArg;
 			}
 		}
 
@@ -341,6 +441,8 @@ static bool inferOrderedExpression(
 				inferSection(matchedSection, context, callBindings);
 				matchedSection->inferring = false;
 			}
+			if (!context.typesValid)
+				break;
 			for (Section *child : matchedSection->children) {
 				for (CodeLine *line : child->codeLines) {
 					if (line->expression && line->expression->type.isDeduced())
@@ -352,8 +454,9 @@ static bool inferOrderedExpression(
 			// Build argTypes in nodesPassed order (must match codegen's paramBindings order)
 			std::vector<DataType> argTypes;
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				if (node->type == PatternElement::Type::Variable) {
-					Expression *argExpr = callBindings[node->parameterNames[def]];
+				auto paramIt = node->parameterNames.find(def);
+				if (paramIt != node->parameterNames.end()) {
+					Expression *argExpr = callBindings[paramIt->second];
 					argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
 				}
 			}
@@ -374,10 +477,17 @@ static bool inferOrderedExpression(
 				inst.inferring = true;
 				Instantiation *savedInst = context.currentInstantiation;
 				context.currentInstantiation = &inst;
-				inferSection(matchedSection, context, callBindings);
+				bool inferenceSucceeded = inferSection(matchedSection, context, callBindings);
 				context.currentInstantiation = savedInst;
 				inst.inferring = false;
+				inst.valid = inferenceSucceeded;
 			}
+			if (!inst.valid) {
+				context.typesValid = false;
+				break;
+			}
+			if (!context.typesValid)
+				break;
 
 			// If no return intrinsic was found, default to Void
 			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
@@ -393,7 +503,25 @@ static bool inferOrderedExpression(
 	case Expression::Kind::Pending:
 		break;
 	}
-	return true;
+}
+
+// Recompute expression ranges bottom-up after reordering. After swapping parent-child
+// relationships, the old root retains the full-line range even though it's now a child.
+// Fix by spanning each PatternCall's range from its first to last argument.
+static void recomputeRanges(Expression *expr) {
+	if (!expr)
+		return;
+	for (Expression *arg : expr->arguments)
+		recomputeRanges(arg);
+	if (expr->kind == Expression::Kind::PatternCall && !expr->arguments.empty()) {
+		int minStart = expr->range.start();
+		int maxEnd = expr->range.end();
+		for (Expression *arg : expr->arguments) {
+			minStart = std::min(minStart, arg->range.start());
+			maxEnd = std::max(maxEnd, arg->range.end());
+		}
+		expr->range = Range(expr->range.line, minStart, maxEnd);
+	}
 }
 
 // Reset non-literal expression types in a subtree.
@@ -428,23 +556,25 @@ static bool endsWithArgument(Expression *expression) {
 // If alreadyOrdered is true, skips reordering and just resets types and infers.
 // Returns false on failure (no valid grouping found).
 static bool inferExpression(
-	Expression *&expr, ParseContext &context, bool alreadyOrdered,
+	Expression *&expr, InferenceContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Expression *> &macroBindings = {}
 ) {
 	sortArgumentsRecursive(expr);
 
-	auto validate = [&]() -> bool {
-		bool validTypes;
-		inferOrderedExpression(expr, context, validTypes, macroBindings);
-		if (!validTypes) {
-			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Invalid operand types", expr->range));
-			return false;
-		}
-		return true;
+	auto tryInfer = [&]() -> bool {
+		context.typeFailureDetail.clear();
+		inferOrderedExpression(expr, context, macroBindings);
+		return context.typesValid;
 	};
 
 	if (alreadyOrdered) {
-		return validate();
+		if (!tryInfer()) {
+			context.addDiagnostic(
+				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(expr, context.typeFailureDetail), expr->range}
+			);
+			return false;
+		}
+		return true;
 	}
 	// Flatten the expression tree into token order for reordering.
 	// Operators (PatternCalls starting/ending with an argument) are interleaved
@@ -501,12 +631,17 @@ static bool inferExpression(
 
 	collectFlatNodes(expr, true, true);
 	if (operatorCount <= 1) {
-		return validate();
+		if (!tryInfer()) {
+			context.addDiagnostic(
+				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(expr, context.typeFailureDetail), expr->range}
+			);
+			return false;
+		}
+		return true;
 	}
 
 	if (operatorCount > 6) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range)
-		);
+		context.addDiagnostic({Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range});
 		return false;
 	}
 
@@ -569,43 +704,57 @@ static bool inferExpression(
 	};
 
 	int lastIndex = (int)flatNodes.size() - 1;
+	std::string trialFailureDetail;
 	bool found = tryGroupings(0, lastIndex, [&](Expression *rootExpression) -> bool {
 		expr = rootExpression;
 		resetExpressionTypes(expr);
-		bool validTypes;
-		inferOrderedExpression(expr, context, validTypes, macroBindings);
-		return validTypes;
+		InferenceContext trialContext(context.parseContext, true);
+		trialContext.currentInstantiation = context.currentInstantiation;
+		inferOrderedExpression(expr, trialContext, macroBindings);
+		if (!trialContext.typesValid && trialFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
+			trialFailureDetail = trialContext.typeFailureDetail;
+		return trialContext.typesValid;
 	});
 
-	if (found)
-		return true;
+	if (found) {
+		recomputeRanges(expr);
+		resetExpressionTypes(expr);
+		inferOrderedExpression(expr, context, macroBindings);
+		return context.typesValid;
+	}
 
-	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "No valid operand grouping found", expr->range));
+	context.addDiagnostic({Diagnostic::Level::Error, buildTypeFailureDiagnostic(expr, trialFailureDetail), expr->range});
 	return false;
 }
 
-// Returns false on failure.
+// Returns false on failure (sets context.typesValid = false).
 static bool
-inferSection(Section *section, ParseContext &context, const std::unordered_map<std::string, Expression *> &bindings) {
+inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings) {
 	// The first instantiation determines operand ordering; subsequent ones reuse it.
 	// size() > 1 because the current instantiation is already inserted before inferSection is called.
 	bool alreadyOrdered = section->instantiations.size() > 1;
 
 	for (CodeLine *line : section->codeLines) {
 		if (line->expression) {
-			if (!inferExpression(line->expression, context, alreadyOrdered, bindings))
+			if (!inferExpression(line->expression, context, alreadyOrdered, bindings)) {
+				context.typesValid = false;
 				return false;
+			}
 		}
 		if (line->sectionOpening && !dynamic_cast<DefinitionSection *>(line->sectionOpening)) {
-			if (!inferSection(line->sectionOpening, context, bindings))
+			if (!inferSection(line->sectionOpening, context, bindings)) {
+				context.typesValid = false;
 				return false;
+			}
 		}
 	}
+	context.typesValid = true;
 	return true;
 }
 
-bool inferTypes(ParseContext &context) {
-	if (!inferSection(context.mainSection, context))
+bool inferTypes(ParseContext &parseContext) {
+	InferenceContext context(parseContext);
+	if (!inferSection(parseContext.mainSection, context))
 		return false;
 
 	// Validate variables — all must have deduced types
@@ -616,7 +765,7 @@ bool inferTypes(ParseContext &context) {
 			return;
 		for (auto &[name, var] : section->variables) {
 			if (!var->type.isDeduced()) {
-				context.diagnostics.push_back(Diagnostic(
+				parseContext.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
 					var->definition->range
 				));
@@ -626,14 +775,17 @@ bool inferTypes(ParseContext &context) {
 		for (Section *child : section->children)
 			validateVariables(child);
 	};
-	validateVariables(context.mainSection);
+	validateVariables(parseContext.mainSection);
 
 	// Validate non-macro expression functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
 		if (section->type == SectionType::Expression && !section->isMacro && !section->patternDefinitions.empty()) {
 			for (auto &[argTypes, inst] : section->instantiations) {
+				(void)argTypes;
+				if (!inst.valid)
+					continue;
 				if (!inst.returnType.isDeduced()) {
-					context.diagnostics.push_back(Diagnostic(
+					parseContext.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error,
 						"Expression '" + (std::string)section->patternDefinitions.front()->range.subString +
 							"' has no deduced return type",
@@ -647,7 +799,7 @@ bool inferTypes(ParseContext &context) {
 		for (Section *child : section->children)
 			validateReturnTypes(child);
 	};
-	validateReturnTypes(context.mainSection);
+	validateReturnTypes(parseContext.mainSection);
 
 	return valid;
 }

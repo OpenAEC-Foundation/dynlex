@@ -202,32 +202,32 @@ macro expression [the|] maximum of a and b:
 
 expression left < right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("less than", left, right)
 
 expression left > right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("greater than", left, right)
 
 expression left = right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("equal", left, right)
 
 expression left [!=|is not] right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("not equal", left, right)
 
 expression left [is less than or equal to|<=] right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("less than or equal", left, right)
 
 expression left [is greater than or equal to|>=] right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("greater than or equal", left, right)
 
 # --- Logic ---

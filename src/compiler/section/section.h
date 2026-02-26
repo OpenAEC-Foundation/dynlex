@@ -25,6 +25,7 @@ struct Instantiation {
 	DataType returnType{DataType::Kind::Any};
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
+	bool valid = true;
 };
 
 struct Section {

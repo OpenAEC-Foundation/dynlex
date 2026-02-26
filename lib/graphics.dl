@@ -14,7 +14,7 @@ import lib/std.dl
 # GLFW_KEY_UP = 265
 
 expression a new window with width w and height h:
-	get:
+	execute:
 		@intrinsic("call", "glfw", "glfwInit", an integer)
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
 		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
@@ -51,7 +51,7 @@ expression draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b
 		@intrinsic("call", "GL", "glRecti", void, x, y, x + w, y + h)
 
 expression [the|] [last|] pressed key [of|in] window:
-	get:
+	execute:
 		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 265) = 1:
 			return 1
 		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
@@ -65,7 +65,7 @@ expression [the|] [last|] pressed key [of|in] window:
 		return 0
 
 expression [the|] window should close:
-	get:
+	execute:
 		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window)
 
 expression sleep [for|] ms milliseconds:
@@ -86,7 +86,7 @@ expression close [the|] window:
 # GL_LINK_STATUS = 0x8B82 = 35714
 
 expression [a|] fragment shader from path:
-	get:
+	execute:
 		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35632)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
 		@intrinsic("call", "libc", "fseek", an integer, data, 0, 2)
@@ -101,7 +101,7 @@ expression [a|] fragment shader from path:
 		return new_shader
 
 expression [a|] vertex shader from path:
-	get:
+	execute:
 		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35633)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
 		@intrinsic("call", "libc", "fseek", an integer, data, 0, 2)
@@ -116,7 +116,7 @@ expression [a|] vertex shader from path:
 		return new_shader
 
 expression [a|] shader program with vertex vert and fragment frag:
-	get:
+	execute:
 		set prog to @intrinsic("call", "GL", "glCreateProgram", an integer)
 		@intrinsic("call", "GL", "glAttachShader", void, prog, vert)
 		@intrinsic("call", "GL", "glAttachShader", void, prog, frag)
@@ -128,7 +128,7 @@ expression use shader program prog:
 		@intrinsic("call", "GL", "glUseProgram", void, prog)
 
 expression [the|] time since start:
-	get:
+	execute:
 		return @intrinsic("call", "glfw", "glfwGetTime", a float)
 
 expression set [the|] uniform name of prog to value:
@@ -145,7 +145,7 @@ expression set [the|] uniform at location to value:
 # GL_DYNAMIC_DRAW = 0x88E8 = 35048
 
 expression [a|] uniform buffer:
-	get:
+	execute:
 		set buf to 0
 		@intrinsic("call", "GL", "glGenBuffers", void, 1, address of buf)
 		@intrinsic("call", "GL", "glBindBuffer", void, 35345, buf)

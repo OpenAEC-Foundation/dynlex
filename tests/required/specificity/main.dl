@@ -5,7 +5,7 @@ import lib/std.dl
 # ==========================================================
 # Generic pattern: "item" resolves as a Variable (argument slot)
 expression turn the item off for user:
-    get:
+    execute:
         return item + 100 + user
 
 # Body reference "turn the lights off for 4" exists BEFORE the specific pattern.
@@ -22,7 +22,7 @@ shut down the lights
 # This is more specific than the generic pattern at the "lights" position.
 # Adding it must invalidate references that matched the generic pattern.
 expression turn the lights off for user:
-    get:
+    execute:
         # Reference the generic pattern to confirm it still works independently
         set dummy to 1
         set test to turn the dummy off for user
@@ -39,7 +39,7 @@ expression turn the lights off for user:
 # This means the generic "show msg" pattern's argument slot could
 # consume "a new message" as a sub-expression match.
 expression a new message:
-    get:
+    execute:
         return 77
 
 # Generic: "show msg" has an argument slot. When matching
@@ -78,12 +78,12 @@ expression show a new message:
 # position is more specific. The overlap detector must recognize that
 # a word capture is less specific than a literal.
 expression get the {word:prop} of item:
-    get:
+    execute:
         # word capture version: just return the item
         return item
 
 expression get the name of item:
-    get:
+    execute:
         # literal "name" is more specific than {word:prop}
         return item + 1
 

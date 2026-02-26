@@ -19,7 +19,7 @@ expression print msg as line:
         @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
 
 expression left < right:
-	get:
+	execute:
 		return @intrinsic("less than", left, right)
 
 macro expression left + right:

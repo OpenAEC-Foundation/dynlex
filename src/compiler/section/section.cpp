@@ -319,6 +319,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 					}
 				}
 
+				context.processEncounteredIntrinsic(intrinsicExpr);
 				expr->arguments.push_back(intrinsicExpr);
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {

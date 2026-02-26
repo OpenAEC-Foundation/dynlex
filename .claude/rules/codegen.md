@@ -6,8 +6,8 @@ paths:
 # Codegen Details
 
 ## Monomorphization / Instantiation
-- `Instantiation` struct: `returnType` + `llvmFunction`, stored per Section in `std::map<std::vector<Type>, Instantiation>`
-- `currentInstantiation` pointer on ParseContext: set during non-macro function body inference
+- `Instantiation` struct: `returnType` + `llvmFunction` + `valid`, stored per Section in `std::map<std::vector<Type>, Instantiation>`
+- `currentInstantiation` pointer on `InferenceContext`: set during non-macro function body inference (not on ParseContext)
 - `generateSpecializedFunction` stores `inst.llvmFunction` before generating body (enables recursion)
 - Function signature: `void generateSpecializedFunction(...)` taking `Instantiation&` to store early
 

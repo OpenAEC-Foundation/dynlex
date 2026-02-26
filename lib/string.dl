@@ -18,7 +18,7 @@ macro expression character index of str:
         @intrinsic("dereference", the data of str + index)
 
 expression the length of str:
-    get:
+    execute:
         set len to 0
         set ch to character len of str
         loop while ch is not 0:
@@ -29,19 +29,19 @@ expression the length of str:
 # --- Conversions to string ---
 
 expression {integer:value} as a string:
-    get:
+    execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 21)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 21, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
 expression {float:value} as a string:
-    get:
+    execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 32)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 32, "%g", value as a 64 bit float)
         return new string from data buf with length len
 
 expression {boolean:value} as a string:
-    get:
+    execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
@@ -49,7 +49,7 @@ expression {boolean:value} as a string:
 # --- Line suffix ---
 
 expression value as [a|] line:
-    get:
+    execute:
         return value as a string + new string from data "\n" with length 1
 
 # --- Output ---
@@ -66,7 +66,7 @@ expression print msg:
 
 expression {string:left} + {string:right}:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
-    get:
+    execute:
         set left_len to the length of left
         set right_len to the length of right
         set total to left_len + right_len

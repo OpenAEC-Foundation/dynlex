@@ -1,7 +1,7 @@
 import lib/std.dl
 # this expression has a single pattern, defined right at the expression definition line instead of in a pattern section.
 expression var's next power of two:
-	get:
+	execute:
 		set result to 1
 		while result < var:
 			multiply result by 2
@@ -19,7 +19,7 @@ class:
 
 
 expression number%:
-	get:
+	execute:
 		return number * 0.01
 
 say "Hello, World!"

@@ -7,7 +7,7 @@ struct DefinitionSection : public Section {
 
 	virtual bool processLine(ParseContext &context, CodeLine *line) override;
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
-	//the replacement: or execute: section that should run when this pattern is called
+	// the replacement: or execute: section that should run when this pattern is called
 	Section *executionSection{};
 
 	std::string toString() const override {
