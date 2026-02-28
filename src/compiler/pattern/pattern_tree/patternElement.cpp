@@ -1,6 +1,5 @@
 #include "patternElement.h"
 #include "transformedPattern.h"
-#include <cassert>
 #include <regex>
 using namespace std::literals;
 
@@ -95,7 +94,17 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 	}
 }
 
-std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patternString, size_t offset) {
+static std::vector<DefinitionPatternElement>
+parsePatternFailure(std::string *errorMessage, size_t *errorOffset, std::string message, size_t offset) {
+	if (errorMessage)
+		*errorMessage = std::move(message);
+	if (errorOffset)
+		*errorOffset = offset;
+	return {};
+}
+
+std::vector<DefinitionPatternElement>
+parsePatternElements(std::string_view patternString, size_t offset, std::string *errorMessage, size_t *errorOffset) {
 	std::vector<DefinitionPatternElement> result;
 	size_t pos = 0;
 
@@ -138,7 +147,11 @@ std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patt
 				depth--;
 			i++;
 		}
-		assert(depth == 0); // unmatched bracket
+		if (depth != 0) {
+			return parsePatternFailure(
+				errorMessage, errorOffset, std::string("Unmatched '") + openBracket + "' in pattern", bracketStart + offset
+			);
+		}
 
 		// extract content between brackets
 		std::string_view content = patternString.substr(bracketStart + 1, i - bracketStart - 2);
@@ -146,7 +159,11 @@ std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patt
 		if (isCurly) {
 			// {type:name} — capture element
 			size_t colonPos = content.find(':');
-			assert(colonPos != std::string_view::npos && "Capture element must have format {type:name}");
+			if (colonPos == std::string_view::npos) {
+				return parsePatternFailure(
+					errorMessage, errorOffset, "Capture element must have format {type:name}", bracketStart + offset
+				);
+			}
 			std::string_view captureType = content.substr(0, colonPos);
 			std::string name(content.substr(colonPos + 1));
 			size_t namePos = bracketStart + 1 + colonPos + 1 + offset;
@@ -181,7 +198,11 @@ std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patt
 			DefinitionPatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
 			size_t altOffset = bracketStart + 1 + offset;
 			for (auto &part : parts) {
-				choice.alternatives.push_back(parsePatternElements(part, altOffset));
+				std::vector<DefinitionPatternElement> alternative =
+					parsePatternElements(part, altOffset, errorMessage, errorOffset);
+				if (errorMessage && !errorMessage->empty())
+					return {};
+				choice.alternatives.push_back(std::move(alternative));
 				altOffset += part.size() + 1; // +1 for '|'
 			}
 			// if the choice has an empty alternative and is followed by a space,

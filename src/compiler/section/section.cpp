@@ -424,6 +424,14 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	// If pattern is just an argument placeholder, return the argument directly
 	// This happens for expressions or for intrinsic calls (which are effects on their own)
 	if (reference->pattern.text == ""s + argumentChar) {
+		if (expr->arguments.empty()) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, "Invalid use of reserved internal placeholder character in source code", range
+			));
+			delete expr;
+			delete reference;
+			return nullptr;
+		}
 		Expression *arg = expr->arguments[0];
 		if (patternType == SectionType::Expression || arg->kind == Expression::Kind::IntrinsicCall) {
 			delete expr;

@@ -371,11 +371,24 @@ bool resolvePatterns(ParseContext &context) {
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
+	bool hadPatternParseError = false;
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
-			unresolvedDefinition->patternElements = parsePatternElements(unresolvedDefinition->range.subString);
+			std::string errorMessage;
+			size_t errorOffset = 0;
+			unresolvedDefinition->patternElements =
+				parsePatternElements(unresolvedDefinition->range.subString, 0, &errorMessage, &errorOffset);
+			if (!errorMessage.empty()) {
+				hadPatternParseError = true;
+				size_t diagnosticEnd = std::min(errorOffset + 1, unresolvedDefinition->range.subString.size());
+				context.diagnostics.push_back(Diagnostic(
+					Diagnostic::Level::Error, errorMessage, unresolvedDefinition->range.subRange(errorOffset, diagnosticEnd)
+				));
+			}
 		}
 	}
+	if (hadPatternParseError)
+		return false;
 	for (PatternReference *ref : bodyReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	for (PatternReference *ref : globalReferences)

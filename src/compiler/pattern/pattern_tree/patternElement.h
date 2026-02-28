@@ -49,7 +49,9 @@ struct DefinitionPatternElement : public PatternElement {
 std::vector<PatternElement> getPatternElements(std::string_view patternString);
 
 // Parse pattern text with [bracket|alternatives] and {type:name} captures into definition elements
-std::vector<DefinitionPatternElement> parsePatternElements(std::string_view patternString, size_t offset = 0);
+std::vector<DefinitionPatternElement> parsePatternElements(
+	std::string_view patternString, size_t offset = 0, std::string *errorMessage = nullptr, size_t *errorOffset = nullptr
+);
 
 // Visit all leaf (non-Choice) elements recursively, including inside Choice alternatives
 template <typename Elem, typename F> void forEachLeafElement(std::vector<Elem> &elements, F &&callback) {
