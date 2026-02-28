@@ -5,6 +5,7 @@
 #include "sectionType.h"
 #include "transformedPattern.h"
 struct PatternReference {
+	Range sourceRange;
 	TransformedPattern pattern;
 	SectionType patternType;
 	std::vector<PatternElement> patternElements{};
@@ -14,5 +15,5 @@ struct PatternReference {
 	bool resolved{};
 	PatternReference(Expression *expression, SectionType patternType);
 	void resolve(PatternMatch *matchResult = nullptr);
-	const Range &range() const { return expression->range; }
+	const Range &range() const { return sourceRange; }
 };

@@ -5,8 +5,9 @@
 #include "patternReference.h"
 
 // Parse a single field declaration, handling optional "name as type" syntax
-bool parseFieldDeclaration(ParseContext & /*context*/, std::string_view fieldText, CodeLine *line, ClassSection *section) {
+bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection *section) {
 	// this is hardcoded syntax and will have to be replaced later.
+	std::string_view fieldText = fieldRange.subString;
 	std::string_view separator = " as ";
 	// Look for " as " separator
 	size_t asPos = fieldText.find(separator);
@@ -14,9 +15,14 @@ bool parseFieldDeclaration(ParseContext & /*context*/, std::string_view fieldTex
 	if (asPos != std::string_view::npos) {
 		std::string_view name = fieldText.substr(0, asPos);
 		std::string_view typeStr = fieldText.substr(asPos + separator.length());
+		context.addSourceToken(fieldRange.subRange(0, static_cast<int>(asPos)), ParseContext::SourceTokenKind::Variable);
+		context.addSourceToken(
+			fieldRange.subRange(static_cast<int>(asPos + 1), static_cast<int>(asPos + 3)),
+			ParseContext::SourceTokenKind::Keyword
+		);
 
 		// Create a class pattern reference for the type text
-		Range typeRange(line, typeStr);
+		Range typeRange(fieldRange.line, typeStr);
 		Expression *typeExpr = new Expression();
 		typeExpr->range = typeRange;
 		typeExpr->kind = Expression::Kind::Pending;
@@ -27,9 +33,10 @@ bool parseFieldDeclaration(ParseContext & /*context*/, std::string_view fieldTex
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;
 		type.typeExpression = typeExpr;
-		fieldDefinition = {std::string(name), Range(line, line->patternText), type};
+		fieldDefinition = {std::string(name), Range(fieldRange.line, fieldRange.line->patternText), type};
 	} else {
-		fieldDefinition = {std::string(fieldText), Range(line, line->patternText), {DataType::Kind::Any}};
+		context.addSourceToken(fieldRange, ParseContext::SourceTokenKind::Variable);
+		fieldDefinition = {std::string(fieldText), Range(fieldRange.line, fieldRange.line->patternText), {DataType::Kind::Any}};
 	}
 	section->classDefinition->fields.push_back(fieldDefinition);
 	return true;
@@ -47,6 +54,9 @@ bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 		if (start != std::string_view::npos)
 			numStr = numStr.substr(start);
 		int alignment = std::stoi(std::string(numStr));
+		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
+		if (!numStr.empty())
+			context.addSourceToken(Range(line, numStr), ParseContext::SourceTokenKind::Number);
 		if (alignment > cls->classDefinition->alignment)
 			cls->classDefinition->alignment = alignment;
 		line->resolved = true;
@@ -57,7 +67,11 @@ bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 	return ListingSection::processLine(context, line);
 }
 
-bool MembersSection::addItem(ParseContext &context, std::string_view fieldText, CodeLine *line) {
+bool MembersSection::addItem(ParseContext &context, Range itemRange) {
 	auto *cls = static_cast<ClassSection *>(parent);
-	return parseFieldDeclaration(context, fieldText, line, cls);
+	return parseFieldDeclaration(context, itemRange, cls);
+}
+
+void MembersSection::addSeparator(ParseContext &context, Range separatorRange) {
+	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::Keyword);
 }

@@ -28,6 +28,18 @@ class DIScope;
 
 struct ParseContext {
 	enum class ShaderStage { Fragment, Vertex };
+	enum class SourceTokenKind {
+		Keyword,
+		Variable,
+		Number,
+		PatternReference,
+	};
+
+	struct SourceTokenAnnotation {
+		Range range;
+		SourceTokenKind kind;
+		SectionType referencedPatternType = SectionType::Expression;
+	};
 
 	struct Options {
 		std::string inputPath;
@@ -109,9 +121,14 @@ struct ParseContext {
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
 	std::map<DataType, std::string> typeAliasNames;
+	// Parse-time source token annotations for metadata syntax that is not represented as normal expressions.
+	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}
+	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Expression) {
+		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
+	}
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);

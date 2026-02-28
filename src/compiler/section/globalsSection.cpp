@@ -1,10 +1,15 @@
 #include "globalsSection.h"
 #include "parseContext.h"
 
-bool GlobalsSection::addItem(ParseContext &context, std::string_view varName, CodeLine * /*line*/) {
+bool GlobalsSection::addItem(ParseContext &context, Range itemRange) {
 	// Add to parent Expression/Effect section's globalVariables list
-	std::string varNameStr(varName);
+	std::string varNameStr(itemRange.subString);
 	parent->globalVariables.push_back(varNameStr);
 	context.declaredGlobalVariables.insert(varNameStr);
+	context.addSourceToken(itemRange, ParseContext::SourceTokenKind::Variable);
 	return true;
+}
+
+void GlobalsSection::addSeparator(ParseContext &context, Range separatorRange) {
+	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::Keyword);
 }

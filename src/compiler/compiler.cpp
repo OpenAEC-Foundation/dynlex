@@ -5,6 +5,7 @@
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
+#include "pattern/pattern_tree/patternElement.h"
 #include "stringFunctions.h"
 #include "type.h"
 #include <filesystem>
@@ -74,16 +75,58 @@ size_t findCommentStart(std::string_view line) {
 // regex for line terminators - matches each line including its terminator
 const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
 
+static std::string toFilesystemPath(std::string_view path) {
+	if (path.starts_with("file://")) {
+		return std::string(path.substr("file://"sv.size()));
+	}
+	return std::string(path);
+}
+
+static std::string canonicalSourceKey(std::string_view path) {
+	std::filesystem::path fsPath = toFilesystemPath(path);
+	std::error_code ec;
+	std::filesystem::path canonical = std::filesystem::weakly_canonical(fsPath, ec);
+	if (ec) {
+		canonical = std::filesystem::absolute(fsPath, ec);
+		if (ec)
+			return fsPath.lexically_normal().string();
+	}
+	return canonical.lexically_normal().string();
+}
+
 bool isInternalSourcePath(std::string_view path) {
 	if (path.empty())
 		return false;
 
-	std::string normalized(path);
+	std::string normalized = canonicalSourceKey(path);
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
 	const std::string projectLibPrefix = std::string(PROJECT_SOURCE_DIR) + "/lib/";
 	return normalized.starts_with("lib/") || normalized.starts_with("/usr/share/dynlex/lib/") ||
 		   normalized.starts_with(projectLibPrefix);
+}
+
+PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
+	std::string converted(signature);
+	for (char &c : converted) {
+		if (c == '$')
+			c = argumentChar;
+	}
+
+	auto elements = getPatternElements(converted);
+	PatternTreeNode *node = context.patternTrees[(int)sectionType];
+	for (const auto &elem : elements) {
+		if (!node)
+			return nullptr;
+		if (elem.type == PatternElement::Type::Variable) {
+			node = node->argumentChild;
+		} else {
+			auto it = node->literalChildren.find(elem.text);
+			node = (it != node->literalChildren.end()) ? it->second : nullptr;
+		}
+	}
+
+	return (node && !node->matchingDefinitions.empty()) ? node->matchingDefinitions[0] : nullptr;
 }
 
 static DataType concretizeClassType(DataType type) {
@@ -285,7 +328,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	}
 
 	// Canonicalize path to prevent duplicate imports via different path strings
-	auto canonicalPath = std::filesystem::weakly_canonical(path).string();
+	std::string canonicalPath = canonicalSourceKey(sourceFile->uri.empty() ? path : sourceFile->uri);
 	if (context.importedFiles.contains(canonicalPath)) {
 		return true; // Already processed, skip
 	}
@@ -318,7 +361,9 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		// check if the line is an import statement
 		if (line->rightTrimmedText.starts_with("import ")) {
 			// recursively import the file, replacing this line with the imported content
-			std::string importingDir = std::filesystem::path(path).parent_path().string();
+			std::string importingDir = std::filesystem::path(toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
+										   .parent_path()
+										   .string();
 			std::string importPath = resolveImportPath(
 				std::string(line->rightTrimmedText.substr("import "sv.length())), importingDir, context.fileSystem.get()
 			);

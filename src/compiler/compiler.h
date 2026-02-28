@@ -23,6 +23,7 @@ bool isArithmeticOperator(const std::string &name);
 bool isPointerArithmeticOperator(const std::string &name);
 bool isComparisonOperator(const std::string &name);
 bool isMathFunction(const std::string &name);
+PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature);
 
 // Select the best overload from multiple definitions at the same trie endpoint.
 // argTypes: the deduced types of the call-site arguments (in nodesPassed order).

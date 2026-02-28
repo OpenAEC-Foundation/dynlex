@@ -8,6 +8,7 @@
 #include "section.h"
 #include "sectionType.h"
 #include "semanticTokenBuilder.h"
+#include "semanticTokenDebug.h"
 #include "sourceFile.h"
 #include <algorithm>
 #include <filesystem>
@@ -453,137 +454,11 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	if (!context) {
 		return {};
 	}
-
-	// Only suppress semantic tokens for errors in THIS file, not imported files
-	bool hasErrors = std::any_of(context->diagnostics.begin(), context->diagnostics.end(), [&uri](const ::Diagnostic &d) {
-		return d.level == ::Diagnostic::Level::Error && d.range.line && toAbsoluteUri(d.range.line->sourceFile->uri) == uri;
-	});
-	if (hasErrors) {
-		return {};
-	}
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
 		return {};
 	}
-
-	SemanticTokenBuilder builder(docIt->second->lineCount());
-
-	// Helper to add a token from a Range
-	auto addToken = [&builder, &uri](const ::Range &range, SemanticTokenType type, bool isDefinition) {
-		if (toAbsoluteUri(range.line->sourceFile->uri) != uri) {
-			return;
-		}
-		int modifiers = isDefinition ? (1 << static_cast<int>(SemanticTokenModifier::Definition)) : 0;
-		builder.add(range.line->sourceFileLineIndex, {range.start(), range.end(), type, modifiers});
-	};
-
-	// Walk through the parse context and collect tokens
-	// Order: variables → pattern matches → pattern definitions → comments (small to big, earlier slices later)
-
-	std::function<void(Section *)> tokenizeVariables = [&](Section *section) {
-		for (auto &[name, refs] : section->variableReferences) {
-			for (VariableReference *ref : refs) {
-				addToken(ref->range, SemanticTokenType::Variable, ref->isDefinition());
-			}
-		}
-		for (Section *child : section->children) {
-			tokenizeVariables(child);
-		}
-	};
-
-	tokenizeVariables(context->mainSection);
-
-	// Walk expression trees depth-first (children before parent, small tokens slice big ones)
-	std::function<void(const Expression *, CodeLine *)> tokenizeExpression = [&](const Expression *expr, CodeLine *line) {
-		// Tokenize arguments first (depth-first)
-		for (const Expression *arg : expr->arguments) {
-			tokenizeExpression(arg, line);
-		}
-
-		switch (expr->kind) {
-		case Expression::Kind::Literal:
-			if (std::holds_alternative<std::string>(expr->literalValue)) {
-				addToken(expr->range, SemanticTokenType::String, false);
-			} else if (std::holds_alternative<double>(expr->literalValue)) {
-				addToken(expr->range, SemanticTokenType::Number, false);
-			}
-			break;
-		case Expression::Kind::IntrinsicCall:
-			addToken(expr->range, SemanticTokenType::Intrinsic, false);
-			break;
-		case Expression::Kind::PatternCall:
-			if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
-				!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
-				SectionType sectionType = expr->patternMatch->matchedEndNode->matchingDefinitions[0]->section->type;
-				SemanticTokenType tokenType;
-				if (sectionType == SectionType::Expression)
-					tokenType = SemanticTokenType::Expression;
-				else if (sectionType == SectionType::Class)
-					tokenType = SemanticTokenType::Type;
-				else
-					tokenType = SemanticTokenType::Effect;
-				addToken(expr->range, tokenType, false);
-			}
-			break;
-		default:
-			break;
-		}
-	};
-
-	for (CodeLine *line : context->codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
-			continue;
-		tokenizeExpression(line->expression, line);
-	}
-
-	// Import lines: "import" as effect, path as string
-	for (CodeLine *line : context->codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->patternText.starts_with("import "))
-			continue;
-		std::string_view importKeyword = line->patternText.substr(0, "import"sv.length());
-		std::string_view importPath = line->patternText.substr("import "sv.length());
-		addToken(::Range(line, importKeyword), SemanticTokenType::Effect, false);
-		addToken(::Range(line, importPath), SemanticTokenType::String, false);
-	}
-
-	std::function<void(Section *)> tokenizePatternDefinitions = [&](Section *section) {
-		for (PatternDefinition *def : section->patternDefinitions) {
-			addToken(def->range, SemanticTokenType::PatternDefinition, true);
-		}
-		for (Section *child : section->children) {
-			tokenizePatternDefinitions(child);
-		}
-	};
-
-	tokenizePatternDefinitions(context->mainSection);
-
-	// Section openings cover entire lines
-	for (CodeLine *line : context->codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)
-			continue;
-		addToken(::Range(line, line->rightTrimmedText), SemanticTokenType::Section, false);
-	}
-
-	// Comments (lowest priority, sliced around everything)
-	for (CodeLine *line : context->codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri) {
-			continue;
-		}
-
-		size_t commentPos = line->fullText.find('#');
-		if (commentPos != std::string::npos) {
-			size_t endPos = line->fullText.find_first_of("\r\n", commentPos);
-			if (endPos == std::string::npos) {
-				endPos = line->fullText.length();
-			}
-			builder.add(
-				line->sourceFileLineIndex,
-				{static_cast<int>(commentPos), static_cast<int>(endPos), SemanticTokenType::Comment, 0}
-			);
-		}
-	}
-
-	return builder.build();
+	return encodeSemanticTokens(collectSemanticTokens(*context, uri, docIt->second->lineCount(), true));
 }
 
 } // namespace lsp

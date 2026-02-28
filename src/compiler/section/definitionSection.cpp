@@ -11,11 +11,16 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	// Handle inline globals: "globals: var1, var2, var3"
 	std::string_view text = line->patternText;
 	if (text.starts_with("globals: ") || text.starts_with("globals:")) {
-		std::string_view vars = text.substr(text.find(':') + 1);
-		parseCommaSeparatedList(vars, [&](std::string_view varName) {
+		size_t colonPos = text.find(':');
+		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
+		std::string_view vars = text.substr(colonPos + 1);
+		parseCommaSeparatedListWithRanges(vars, [&](std::string_view varName, size_t start, size_t end) {
 			std::string varNameStr(varName);
 			globalVariables.push_back(varNameStr);
 			context.declaredGlobalVariables.insert(varNameStr);
+			context.addSourceToken(
+				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::Variable
+			);
 		});
 		line->resolved = true;
 		return true;
@@ -23,9 +28,22 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 
 	// Handle inline before: "before: $ + $, $ - $"
 	if (text.starts_with("before: ") || text.starts_with("before:")) {
-		std::string_view patterns = text.substr(text.find(':') + 1);
-		parseCommaSeparatedList(patterns, [&](std::string_view pattern) {
+		size_t colonPos = text.find(':');
+		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
+		std::string_view patterns = text.substr(colonPos + 1);
+		parseCommaSeparatedListWithRanges(patterns, [&](std::string_view pattern, size_t start, size_t end) {
 			beforePatterns.push_back(std::string(pattern));
+			Range patternRange(line, text.substr(colonPos + 1 + start, end - start));
+			context.addSourceToken(
+				patternRange,
+				pattern == "default" ? ParseContext::SourceTokenKind::Keyword : ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Expression
+			);
+		}, [&](std::string_view /*separator*/, size_t start, size_t end) {
+			context.addSourceToken(
+				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Expression
+			);
 		});
 		line->resolved = true;
 		return true;
@@ -33,9 +51,22 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 
 	// Handle inline after: "after: $ + $, $ - $"
 	if (text.starts_with("after: ") || text.starts_with("after:")) {
-		std::string_view patterns = text.substr(text.find(':') + 1);
-		parseCommaSeparatedList(patterns, [&](std::string_view pattern) {
+		size_t colonPos = text.find(':');
+		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
+		std::string_view patterns = text.substr(colonPos + 1);
+		parseCommaSeparatedListWithRanges(patterns, [&](std::string_view pattern, size_t start, size_t end) {
 			afterPatterns.push_back(std::string(pattern));
+			Range patternRange(line, text.substr(colonPos + 1 + start, end - start));
+			context.addSourceToken(
+				patternRange,
+				pattern == "default" ? ParseContext::SourceTokenKind::Keyword : ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Expression
+			);
+		}, [&](std::string_view /*separator*/, size_t start, size_t end) {
+			context.addSourceToken(
+				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Expression
+			);
 		});
 		line->resolved = true;
 		return true;

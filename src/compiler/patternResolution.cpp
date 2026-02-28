@@ -647,24 +647,7 @@ bool resolvePatterns(ParseContext &context) {
 	{
 		// Resolve before:/after: signature strings to pattern definitions in the expression trie
 		auto resolveSignature = [&](const std::string &signature) -> PatternDefinition * {
-			std::string converted = signature;
-			for (char &c : converted) {
-				if (c == '$')
-					c = argumentChar;
-			}
-			auto elements = getPatternElements(converted);
-			PatternTreeNode *node = context.patternTrees[(int)SectionType::Expression];
-			for (const auto &elem : elements) {
-				if (!node)
-					return nullptr;
-				if (elem.type == PatternElement::Type::Variable) {
-					node = node->argumentChild;
-				} else {
-					auto it = node->literalChildren.find(elem.text);
-					node = (it != node->literalChildren.end()) ? it->second : nullptr;
-				}
-			}
-			return (node && !node->matchingDefinitions.empty()) ? node->matchingDefinitions[0] : nullptr;
+			return findDefinitionBySignature(context, SectionType::Expression, signature);
 		};
 
 		// Collect precedence edges: higher → lower (higher prec = evaluated first)

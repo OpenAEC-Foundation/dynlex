@@ -722,7 +722,13 @@ llvm::Value *generateIntrinsicCode(
 			return nullptr;
 		}
 		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-		assert(global && "Shader input global not declared — check --emit-spirv and --shader-stage");
+		if (!global) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, "Shader input '" + inputName + "' is unavailable in this compilation mode",
+				args[0]->range
+			));
+			return nullptr;
+		}
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 		return builder.CreateLoad(vec4Ty, global, inputName);
 	}
@@ -752,6 +758,8 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *g = generateExpressionCode(context, args[1]);
 		llvm::Value *b = generateExpressionCode(context, args[2]);
 		llvm::Value *a = generateExpressionCode(context, args[3]);
+		if (!r || !g || !b || !a)
+			return nullptr;
 
 		DataType rType = getEffectiveType(context, args[0]);
 		DataType gType = getEffectiveType(context, args[1]);
@@ -774,7 +782,13 @@ llvm::Value *generateIntrinsicCode(
 		std::string outName =
 			(context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
 		llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
-		assert(outGlobal && "Shader output global not declared — check --emit-spirv and --shader-stage");
+		if (!outGlobal) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, "Shader output is unavailable in this compilation mode",
+				Range(args[0]->range.line, args[0]->range.start(), args[3]->range.end())
+			));
+			return nullptr;
+		}
 		builder.CreateStore(color, outGlobal);
 		return nullptr;
 	}
@@ -782,10 +796,14 @@ llvm::Value *generateIntrinsicCode(
 	if (name == "extract element") {
 		// @intrinsic("extract element", vector, index) → extract scalar from vector
 		llvm::Value *vec = generateExpressionCode(context, args[0]);
+		if (!vec)
+			return nullptr;
 		if (auto *idxLit = std::get_if<double>(&args[1]->literalValue)) {
 			return builder.CreateExtractElement(vec, (uint64_t)*idxLit, "elem");
 		}
 		llvm::Value *idx = generateExpressionCode(context, args[1]);
+		if (!idx)
+			return nullptr;
 		return builder.CreateExtractElement(vec, idx, "elem");
 	}
 

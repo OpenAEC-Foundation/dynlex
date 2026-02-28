@@ -3,8 +3,10 @@
 #include "dap/dapServer.h"
 #include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
+#include "lsp/semanticTokenDebug.h"
 #include "lsp/stdioTransport.h"
 #include "parseContext.h"
+#include <filesystem>
 #include <iostream>
 #include <thread>
 #include <unistd.h>
@@ -26,6 +28,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool runDAP = false;
 	bool useStdio = false;
 	bool waitDebugger = false;
+	bool emitTokens = false;
 	std::string inputFile;
 
 	// Parse arguments
@@ -39,6 +42,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			runLSP = true;
 		} else if (arg == "--stdio") {
 			useStdio = true;
+		} else if (arg == "--emit-tokens") {
+			emitTokens = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
 		} else if (arg == "--emit-spirv") {
@@ -94,7 +99,10 @@ int main(int argumentCount, char *argumentValues[]) {
 	if (!inputFile.empty()) {
 		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		context.options.inputPath = inputFile;
-		if (compile(inputFile, context)) {
+		bool compileSucceeded = compile(inputFile, context);
+		if (emitTokens) {
+			std::cout << lsp::renderTaggedSemanticTokens(context, std::filesystem::absolute(inputFile).string(), false);
+		} else if (compileSucceeded) {
 			generateCode(context);
 		}
 		context.printDiagnostics();
@@ -104,7 +112,8 @@ int main(int argumentCount, char *argumentValues[]) {
 		if (hasErrors)
 			return 1;
 	} else {
-		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--shader-stage=vertex|fragment] [-O0|-O1|-O2|-O3] "
+		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-tokens] [--shader-stage=vertex|fragment] "
+					 "[-O0|-O1|-O2|-O3] "
 					 "[-o output] [-g] [--lsp] [--stdio] [--dap]"
 				  << std::endl;
 	}

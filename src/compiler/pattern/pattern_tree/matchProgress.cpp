@@ -107,6 +107,8 @@ std::vector<MatchProgress> MatchProgress::step() {
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
 				} else {
 					// argument
+					if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
+						return nextMatches;
 					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
 					substituteStep.sourceArgumentIndex++;
 				}

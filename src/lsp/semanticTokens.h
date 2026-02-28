@@ -17,13 +17,14 @@ enum class SemanticTokenType {
 	String = 7,
 	Intrinsic = 8,
 	Type = 9,
+	Keyword = 10,
 	Count
 };
 
 // Get the token type names for the legend
 inline std::vector<std::string> getSemanticTokenTypes() {
-	return {"expression",		 "effect", "section", "variable",  "comment",
-			"patternDefinition", "number", "string",  "intrinsic", "type"};
+	return {"expression", "effect", "section",	 "variable", "comment", "patternDefinition",
+			"number",	  "string", "intrinsic", "type",	 "keyword"};
 }
 
 // DynLex-specific semantic token modifiers

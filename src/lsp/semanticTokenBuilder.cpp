@@ -74,4 +74,6 @@ std::vector<int> SemanticTokenBuilder::build() {
 	return data;
 }
 
+const std::vector<std::vector<SemanticToken>> &SemanticTokenBuilder::tokenLines() const { return tokensByLine; }
+
 } // namespace lsp
