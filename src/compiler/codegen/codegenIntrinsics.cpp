@@ -19,6 +19,23 @@ std::string getStringLiteral(Expression *expr) {
 	return "";
 }
 
+static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *indexVal, DataType indexType) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Type *sizeTy = builder.getInt64Ty();
+
+	if (!indexVal)
+		return nullptr;
+	if (indexVal->getType() == sizeTy)
+		return indexVal;
+	if (indexType.kind == DataType::Kind::Float)
+		return builder.CreateFPToSI(indexVal, sizeTy, "idx_size");
+	if (indexType.kind == DataType::Kind::Bool)
+		return builder.CreateZExt(indexVal, sizeTy, "idx_size");
+	if (indexType.kind == DataType::Kind::Int)
+		return ensureType(context, indexVal, indexType, {DataType::Kind::Int, 8});
+	return indexVal;
+}
+
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
 llvm::Value *generateIntrinsicCode(
@@ -87,6 +104,12 @@ llvm::Value *generateIntrinsicCode(
 					auto &srcFields = valType.classDefinition
 										  ? valType.classDefinition->instantiations[valType.classInstIndex].fieldTypes
 										  : destFields;
+					llvm::Value *srcPtr = val;
+					if (srcPtr && !srcPtr->getType()->isPointerTy()) {
+						llvm::AllocaInst *tmpStruct = createEntryAlloca(context, "struct_src", valType);
+						builder.CreateAlignedStore(srcPtr, tmpStruct, llvm::Align(8));
+						srcPtr = tmpStruct;
+					}
 					bool sameLayout = (srcFields.size() == destFields.size());
 					if (sameLayout) {
 						for (size_t i = 0; i < srcFields.size(); i++) {
@@ -99,14 +122,14 @@ llvm::Value *generateIntrinsicCode(
 					if (sameLayout) {
 						// Same field types — direct struct copy
 						llvm::Type *structType = getLLVMType(context, destType);
-						llvm::Value *srcVal = builder.CreateAlignedLoad(structType, val, llvm::Align(8), "struct_load");
+						llvm::Value *srcVal = builder.CreateAlignedLoad(structType, srcPtr, llvm::Align(8), "struct_load");
 						builder.CreateAlignedStore(srcVal, ptr, llvm::Align(8));
 					} else {
 						// Different field types — element-wise copy with conversion
 						llvm::Type *srcStructType = getLLVMType(context, valType);
 						llvm::Type *destStructType = getLLVMType(context, destType);
 						for (size_t i = 0; i < destFields.size(); i++) {
-							llvm::Value *srcFieldPtr = builder.CreateStructGEP(srcStructType, val, i, "src_field");
+							llvm::Value *srcFieldPtr = builder.CreateStructGEP(srcStructType, srcPtr, i, "src_field");
 							llvm::Value *fieldVal =
 								builder.CreateLoad(srcFields[i].toLLVM(*context.llvmContext), srcFieldPtr, "field_val");
 							fieldVal = ensureType(context, fieldVal, srcFields[i], destFields[i]);
@@ -138,8 +161,10 @@ llvm::Value *generateIntrinsicCode(
 		if (isPointerArithmeticOperator(name) && (leftType.isPointer() || rightType.isPointer())) {
 			llvm::Value *ptrVal = leftType.isPointer() ? left : right;
 			llvm::Value *indexVal = leftType.isPointer() ? right : left;
+			DataType indexType = leftType.isPointer() ? rightType : leftType;
 			DataType ptrType = leftType.isPointer() ? leftType : rightType;
 			llvm::Type *elemType = ptrType.dereferenced().toLLVM(*context.llvmContext);
+			indexVal = coerceIndexToSizeT(context, indexVal, indexType);
 			if (name == "subtract" && leftType.isPointer())
 				indexVal = builder.CreateNeg(indexVal, "neg_idx");
 			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
@@ -340,6 +365,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *index = generateExpressionCode(context, args[1]);
 		llvm::Value *value = generateExpressionCode(context, args[2]);
 		assert(getEffectiveType(context, args[0]).isPointer() && "store at requires a pointer argument");
+		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[1]));
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
 		builder.CreateAlignedStore(value, elementPtr, llvm::Align(8));
 		return nullptr;
@@ -350,6 +376,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *index = generateExpressionCode(context, args[1]);
 		assert(getEffectiveType(context, args[0]).isPointer() && "load at requires a pointer argument");
 
+		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[1]));
 		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
 		return builder.CreateAlignedLoad(builder.getInt64Ty(), elementPtr, llvm::Align(8));
 	}
@@ -535,14 +562,29 @@ llvm::Value *generateIntrinsicCode(
 				callArgs.push_back(argVal);
 		}
 
-		// Get or create function declaration with proper return type
-		llvm::Function *func = context.llvmModule->getFunction(funcName);
-		if (!func) {
+		llvm::FunctionCallee callee;
+		if (library == "libc" && funcName == "malloc" && callArgs.size() == 1) {
+			callArgs[0] = coerceIndexToSizeT(context, callArgs[0], getEffectiveType(context, args[3]));
+			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getPtrTy(), {builder.getInt64Ty()}, false);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else if (library == "libc" && funcName == "memcpy" && callArgs.size() == 3) {
+			callArgs[2] = coerceIndexToSizeT(context, callArgs[2], getEffectiveType(context, args[5]));
+			llvm::FunctionType *funcType = llvm::FunctionType::get(
+				builder.getPtrTy(), {builder.getPtrTy(), builder.getPtrTy(), builder.getInt64Ty()}, false
+			);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else if (library == "libc" && funcName == "snprintf" && callArgs.size() >= 3) {
+			callArgs[1] = coerceIndexToSizeT(context, callArgs[1], getEffectiveType(context, args[4]));
+			llvm::FunctionType *funcType = llvm::FunctionType::get(
+				builder.getInt32Ty(), {builder.getPtrTy(), builder.getInt64Ty(), builder.getPtrTy()}, true
+			);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else {
 			llvm::FunctionType *funcType = llvm::FunctionType::get(returnLLVMType, {}, true);
-			func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, funcName, context.llvmModule);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 		}
 
-		llvm::Value *callResult = builder.CreateCall(func, callArgs);
+		llvm::Value *callResult = builder.CreateCall(callee, callArgs);
 		// If return type is void, return nullptr (no value to use)
 		if (returnType.kind == DataType::Kind::Void)
 			return nullptr;
@@ -585,11 +627,19 @@ llvm::Value *generateIntrinsicCode(
 	if (name == "construct") {
 		// Format: args[0]=type_pattern, args[1+]=field values
 		ClassDefinition *classDef = resultType.classDefinition;
-		ClassInstantiation &inst = classDef->instantiations[resultType.classInstIndex];
-		llvm::Type *structType = getLLVMType(context, resultType);
+		std::vector<DataType> fieldTypes;
+		fieldTypes.reserve(args.size() - 1);
+		for (size_t i = 1; i < args.size(); i++) {
+			fieldTypes.push_back(getEffectiveType(context, args[i]));
+		}
+		int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+		DataType concreteType = resultType;
+		concreteType.classInstIndex = instIndex;
+		ClassInstantiation &inst = classDef->instantiations[instIndex];
+		llvm::Type *structType = getLLVMType(context, concreteType);
 
 		// Allocate struct on stack
-		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", resultType);
+		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", concreteType);
 
 		// Store each field value
 		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
@@ -600,7 +650,7 @@ llvm::Value *generateIntrinsicCode(
 			builder.CreateStore(fieldVal, fieldPtr);
 		}
 
-		return alloca;
+		return builder.CreateAlignedLoad(structType, alloca, llvm::Align(8), "struct_load");
 	}
 
 	if (name == "property") {

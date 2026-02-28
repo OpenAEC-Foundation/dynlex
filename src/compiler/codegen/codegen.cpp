@@ -184,17 +184,6 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Determine this variable's type for loading
 		DataType varType = getEffectiveType(context, expr);
 
-		// Class types: return the pointer directly (structs are passed by pointer)
-		if (varType.kind == DataType::Kind::Class) {
-			auto bindingIt = context.patternBindings.find(varName);
-			if (bindingIt != context.patternBindings.end())
-				return bindingIt->second;
-			VariableReference *varRef = expr->variable;
-			VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-			if (definition->alloca)
-				return definition->alloca;
-		}
-
 		llvm::Type *loadType = getLLVMType(context, varType);
 
 		// Pattern parameter: load from function argument pointer
