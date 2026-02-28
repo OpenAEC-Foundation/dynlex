@@ -60,6 +60,7 @@ struct DataType {
 
 	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int) && pointerDepth == 0; }
 	bool isPointer() const { return pointerDepth > 0; }
+	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
 	// wether this type is a specific type and the type pattern has been resolved
 	bool isDeduced() const { return kind != Kind::Any && kind != Kind::Unresolved; }
 

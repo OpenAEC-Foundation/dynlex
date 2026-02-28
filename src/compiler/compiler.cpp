@@ -74,10 +74,204 @@ size_t findCommentStart(std::string_view line) {
 // regex for line terminators - matches each line including its terminator
 const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
 
+bool isInternalSourcePath(std::string_view path) {
+	if (path.empty())
+		return false;
+
+	std::string normalized(path);
+	std::replace(normalized.begin(), normalized.end(), '\\', '/');
+
+	const std::string projectLibPrefix = std::string(PROJECT_SOURCE_DIR) + "/lib/";
+	return normalized.starts_with("lib/") || normalized.starts_with("/usr/share/dynlex/lib/") ||
+		   normalized.starts_with(projectLibPrefix);
+}
+
+static DataType concretizeClassType(DataType type) {
+	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
+		!type.classDefinition->instantiations.empty()) {
+		type.classInstIndex = 0;
+	}
+	return type;
+}
+
+static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef) {
+	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
+		return false;
+
+	Expression *kindExpr = intrinsicExpr->arguments[1];
+	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
+	if (!kindStr)
+		return false;
+
+	DataType typeRef;
+	typeRef.kind = DataType::Kind::Type;
+	if (*kindStr == "int") {
+		typeRef.referencedKind = DataType::Kind::Int;
+		typeRef.numericSize = 4;
+	} else if (*kindStr == "float") {
+		typeRef.referencedKind = DataType::Kind::Float;
+		typeRef.numericSize = 8;
+	} else if (*kindStr == "bool") {
+		typeRef.referencedKind = DataType::Kind::Bool;
+	} else if (*kindStr == "void") {
+		typeRef.referencedKind = DataType::Kind::Void;
+	} else if (*kindStr == "string") {
+		typeRef.referencedKind = DataType::Kind::Int;
+		typeRef.numericSize = 1;
+		typeRef.pointerDepth = 1;
+	} else {
+		return false;
+	}
+
+	if (intrinsicExpr->arguments.size() >= 3) {
+		Expression *bitsExpr = intrinsicExpr->arguments[2];
+		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
+		if (!bits)
+			return false;
+		typeRef.numericSize = (int)*bits / 8;
+	}
+
+	outTypeRef = typeRef;
+	return true;
+}
+
+static bool resolveTypeReferenceExpression(
+	Expression *expr, const std::unordered_map<std::string, Expression *> &bindings, DataType &outTypeRef
+) {
+	if (!expr)
+		return false;
+
+	if (expr->kind == Expression::Kind::Variable && expr->variable) {
+		auto it = bindings.find(expr->variable->name);
+		if (it != bindings.end())
+			return resolveTypeReferenceExpression(it->second, bindings, outTypeRef);
+		if (expr->variable->name == "pointer") {
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Int;
+			outTypeRef.numericSize = 1;
+			outTypeRef.pointerDepth = 1;
+			return true;
+		}
+		DataType shorthandType = DataType::fromString(expr->variable->name);
+		if (shorthandType.isDeduced()) {
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = shorthandType.kind;
+			outTypeRef.numericSize = shorthandType.numericSize;
+			outTypeRef.pointerDepth = shorthandType.pointerDepth;
+			return true;
+		}
+		return false;
+	}
+
+	if (expr->kind == Expression::Kind::IntrinsicCall) {
+		if (tryParseIntrinsicTypeReference(expr, outTypeRef))
+			return true;
+		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
+			DataType innerTypeRef;
+			if (!resolveTypeReferenceExpression(expr->arguments[1], bindings, innerTypeRef) ||
+				innerTypeRef.kind != DataType::Kind::Type)
+				return false;
+			innerTypeRef.pointerDepth++;
+			outTypeRef = innerTypeRef;
+			return true;
+		}
+		return false;
+	}
+
+	if (expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return false;
+
+	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	if (defs.empty())
+		return false;
+
+	PatternDefinition *def = defs.front();
+	if (!def || !def->section)
+		return false;
+
+	if (!def->section->isMacro && def->section->type == SectionType::Class) {
+		auto *classSec = static_cast<ClassSection *>(def->section);
+		outTypeRef = {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
+		return true;
+	}
+
+	std::unordered_map<std::string, Expression *> innerBindings;
+	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	if (!bodyExpr)
+		return false;
+
+	std::unordered_map<std::string, Expression *> mergedBindings = bindings;
+	for (const auto &[name, argExpr] : innerBindings)
+		mergedBindings[name] = argExpr;
+	return resolveTypeReferenceExpression(bodyExpr, mergedBindings, outTypeRef);
+}
+
+static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
+	std::vector<ClassDefinition *> classDefinitions;
+	std::function<void(Section *)> collectClasses = [&](Section *section) {
+		if (section->type == SectionType::Class) {
+			auto *classSec = static_cast<ClassSection *>(section);
+			classDefinitions.push_back(classSec->classDefinition);
+		}
+		for (Section *child : section->children)
+			collectClasses(child);
+	};
+	collectClasses(context.mainSection);
+
+	bool madeProgress = true;
+	for (int iteration = 0; iteration < context.options.maxResolutionIterations && madeProgress; iteration++) {
+		madeProgress = false;
+
+		for (ClassDefinition *classDef : classDefinitions) {
+			for (FieldDefinition &field : classDef->fields) {
+				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeExpression) {
+					if (field.declaredType.typeExpression->kind == Expression::Kind::Pending && field.range.line &&
+						field.range.line->section) {
+						expandExpression(field.declaredType.typeExpression, field.range.line->section);
+					}
+					DataType typeRef;
+					if (resolveTypeReferenceExpression(field.declaredType.typeExpression, {}, typeRef) &&
+						typeRef.kind == DataType::Kind::Type) {
+						field.declaredType = concretizeClassType(typeRef.toReferencedType());
+						madeProgress = true;
+					}
+				} else if (field.declaredType.kind == DataType::Kind::Class && field.declaredType.classInstIndex < 0) {
+					DataType concretized = concretizeClassType(field.declaredType);
+					if (concretized != field.declaredType) {
+						field.declaredType = concretized;
+						madeProgress = true;
+					}
+				}
+			}
+		}
+
+		for (ClassDefinition *classDef : classDefinitions) {
+			if (classDef->fields.empty() || !classDef->instantiations.empty())
+				continue;
+
+			bool allDeclared = true;
+			std::vector<DataType> fieldTypes;
+			for (const FieldDefinition &field : classDef->fields) {
+				if (!field.declaredType.isDeduced()) {
+					allDeclared = false;
+					break;
+				}
+				fieldTypes.push_back(field.declaredType);
+			}
+			if (allDeclared) {
+				classDef->instantiations.push_back({fieldTypes});
+				madeProgress = true;
+			}
+		}
+	}
+
+	return true;
+}
+
 bool compile(const std::string &path, ParseContext &context) {
 	// first, read all source files
-	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) && validate(context) &&
-		   inferTypes(context);
+	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) &&
+		   resolveDeclaredClassFieldTypes(context) && validate(context) && inferTypes(context);
 }
 
 bool importSourceFile(const std::string &path, ParseContext &context) {

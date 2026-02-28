@@ -1,0 +1,8 @@
+import lib/std.dl
+
+expression toint {float:x}:
+    execute:
+        return x as a 32 bit integer
+
+set a to 4.0
+set a to toint a

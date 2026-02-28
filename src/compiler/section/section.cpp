@@ -243,6 +243,7 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 		);
 		if (!childExpr)
 			return false;
+		childExpr->isExplicitGroup = true;
 		expr->arguments.push_back(childExpr);
 		return true;
 	};

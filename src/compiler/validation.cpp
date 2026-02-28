@@ -4,6 +4,17 @@
 
 using Bindings = std::unordered_map<std::string, Expression *>;
 
+static bool isInternalSection(Section *section) {
+	if (!section)
+		return false;
+	for (CodeLine *line : section->codeLines) {
+		if (line && line->sourceFile && !line->sourceFile->uri.empty())
+			return isInternalSourcePath(line->sourceFile->uri);
+	}
+	return section->openingLine && section->openingLine->sourceFile &&
+		   isInternalSourcePath(section->openingLine->sourceFile->uri);
+}
+
 static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
@@ -111,6 +122,9 @@ static void collectVariableReferences(Section *section, const std::string &name,
 }
 
 static void validateSection(ParseContext &context, Section *section) {
+	if (isInternalSection(section))
+		return;
+
 	for (auto &[name, defRef] : section->variableDefinitions) {
 		bool isPatternArg = false;
 		if (!section->isMacro)

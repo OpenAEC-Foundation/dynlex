@@ -20,6 +20,20 @@
 // Get the LLVM type for a given DataType
 llvm::Type *getLLVMType(ParseContext &context, DataType type) { return type.toLLVM(*context.llvmContext); }
 
+static DataType concretizeClassType(DataType type) {
+	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
+		!type.classDefinition->instantiations.empty()) {
+		type.classInstIndex = 0;
+	}
+	return type;
+}
+
+static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName) {
+	if (fieldName == "data" && ownerType.isBytePointer())
+		return ownerType;
+	return {};
+}
+
 // Get the DWARF debug type for a given DataType
 llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (!context.diBuilder)
@@ -247,7 +261,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		if (expr->intrinsicName == "address of" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]).pointed();
 		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
-			return getEffectiveType(context, expr->arguments[1]).dereferenced();
+			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
 		if (expr->intrinsicName == "load at")
 			return {DataType::Kind::Int, 8};
 		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
@@ -261,20 +275,98 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			}
 			return {DataType::Kind::Int, 4};
 		}
-		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
+		if (expr->intrinsicName == "construct")
 			return expr->type; // DataType fully determined during inference
+		if (expr->intrinsicName == "property" && expr->arguments.size() >= 2) {
+			DataType ownerType = getEffectiveType(context, expr->arguments[0]);
+			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[1]));
+			DataType builtInPropertyType = resolveBuiltInPropertyType(ownerType, fieldName);
+			if (builtInPropertyType.isDeduced())
+				return builtInPropertyType;
+			return expr->type; // Class property type determined during inference
+		}
 		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
 			if (expr->type.kind == DataType::Kind::Class)
-				return expr->type;
+				return concretizeClassType(expr->type);
 			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);
 			if (typeArgType.kind == DataType::Kind::Type)
-				return typeArgType.toReferencedType();
+				return concretizeClassType(typeArgType.toReferencedType());
 		}
 		return expr->type;
 	}
 
-	case Expression::Kind::PatternCall:
+	case Expression::Kind::PatternCall: {
+		if (expr->type.isDeduced())
+			return concretizeClassType(expr->type);
+		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
+			return expr->type;
+
+		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+		if (defs.empty())
+			return expr->type;
+
+		std::vector<DataType> argTypesForOverload;
+		{
+			size_t argIndex = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				bool isParam = false;
+				for (auto *def : defs) {
+					if (node->parameterNames.contains(def)) {
+						isParam = true;
+						break;
+					}
+				}
+				if (isParam && argIndex < expr->arguments.size()) {
+					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[argIndex]));
+					argIndex++;
+				}
+			}
+		}
+
+		PatternDefinition *matchedDef =
+			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!matchedDef || !matchedDef->section)
+			return expr->type;
+
+		Section *matchedSection = matchedDef->section;
+		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+			auto *classSec = static_cast<ClassSection *>(matchedSection);
+			return {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
+		}
+
+		if (matchedSection->isMacro) {
+			std::unordered_map<std::string, Expression *> innerBindings;
+			Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+			if (!bodyExpr)
+				return expr->type;
+
+			auto savedBindings = context.macroExpressionBindings;
+			context.macroBindingStack.push(savedBindings);
+			context.macroExpressionBindings = std::move(innerBindings);
+			DataType result = getEffectiveType(context, bodyExpr);
+			context.macroExpressionBindings = context.macroBindingStack.top();
+			context.macroBindingStack.pop();
+			return concretizeClassType(result);
+		}
+
+		std::vector<DataType> argTypes;
+		size_t argIndex = 0;
+		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+			auto paramIt = node->parameterNames.find(matchedDef);
+			if (paramIt == node->parameterNames.end() || argIndex >= expr->arguments.size())
+				continue;
+			DataType argType = getEffectiveType(context, expr->arguments[argIndex++]);
+			if (!argType.isDeduced())
+				return expr->type;
+			argTypes.push_back(argType);
+		}
+
+		auto instIt = matchedSection->instantiations.find(argTypes);
+		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
+			return concretizeClassType(instIt->second.returnType);
+
 		return expr->type;
+	}
 
 	default:
 		return expr->type;

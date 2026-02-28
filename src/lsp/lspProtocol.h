@@ -65,6 +65,7 @@ struct Diagnostic {
 	std::string message;
 	std::optional<std::string> source;
 	std::vector<DiagnosticRelatedInformation> relatedInformation;
+	std::optional<Json> data;
 };
 
 inline void to_json(Json &j, const Diagnostic &d) {
@@ -77,6 +78,23 @@ inline void to_json(Json &j, const Diagnostic &d) {
 	}
 	if (!d.relatedInformation.empty()) {
 		j["relatedInformation"] = d.relatedInformation;
+	}
+	if (d.data) {
+		j["data"] = *d.data;
+	}
+}
+
+inline void from_json(const Json &j, Diagnostic &d) {
+	j.at("range").get_to(d.range);
+	j.at("message").get_to(d.message);
+	if (j.contains("severity") && !j.at("severity").is_null()) {
+		d.severity = static_cast<DiagnosticSeverity>(j.at("severity").get<int>());
+	}
+	if (j.contains("source") && !j.at("source").is_null()) {
+		d.source = j.at("source").get<std::string>();
+	}
+	if (j.contains("data") && !j.at("data").is_null()) {
+		d.data = j.at("data");
 	}
 }
 
@@ -227,6 +245,60 @@ struct DocumentSymbolParams {
 
 inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").get_to(p.textDocument); }
 
+struct TextEdit {
+	Range range;
+	std::string newText;
+};
+
+inline void to_json(Json &j, const TextEdit &e) { j = Json{{"range", e.range}, {"newText", e.newText}}; }
+
+struct WorkspaceEdit {
+	Json changes = Json::object();
+};
+
+inline void to_json(Json &j, const WorkspaceEdit &e) { j = Json{{"changes", e.changes}}; }
+
+struct CodeAction {
+	std::string title;
+	std::string kind = "quickfix";
+	std::optional<WorkspaceEdit> edit;
+	std::vector<Diagnostic> diagnostics;
+};
+
+inline void to_json(Json &j, const CodeAction &a) {
+	j = Json{{"title", a.title}, {"kind", a.kind}};
+	if (a.edit) {
+		j["edit"] = *a.edit;
+	}
+	if (!a.diagnostics.empty()) {
+		j["diagnostics"] = a.diagnostics;
+	}
+}
+
+struct CodeActionContext {
+	std::vector<Diagnostic> diagnostics;
+};
+
+inline void from_json(const Json &j, CodeActionContext &c) {
+	if (j.contains("diagnostics")) {
+		j.at("diagnostics").get_to(c.diagnostics);
+	}
+}
+
+struct CodeActionParams {
+	TextDocumentIdentifier textDocument;
+	Range range;
+	CodeActionContext context;
+};
+
+inline void from_json(const Json &j, CodeActionParams &p) {
+	j.at("textDocument").get_to(p.textDocument);
+	j.at("range").get_to(p.range);
+	if (j.contains("context")) {
+		j.at("context").get_to(p.context);
+	}
+}
+
 // Initialize params (simplified)
 struct InitializeParams {
 	std::optional<int> processId;
@@ -248,6 +320,7 @@ struct ServerCapabilities {
 	int textDocumentSync = 2;
 	bool definitionProvider = true;
 	bool documentSymbolProvider = false;
+	bool codeActionProvider = false;
 	struct {
 		bool full = true;
 		SemanticTokensLegend legend;
@@ -262,6 +335,9 @@ inline void to_json(Json &j, const ServerCapabilities &c) {
 	};
 	if (c.documentSymbolProvider) {
 		j["documentSymbolProvider"] = true;
+	}
+	if (c.codeActionProvider) {
+		j["codeActionProvider"] = true;
 	}
 }
 

@@ -45,6 +45,11 @@ struct Expression {
 	// True if this node was created from a subMatch in expandMatch.
 	// Only subMatch-originated PatternCalls participate in operand reordering.
 	bool isSubMatch = false;
+
+	// True if this expression came from explicit parentheses in the source.
+	// Grouped expressions are inferred independently and should not be flattened
+	// back into surrounding operator regrouping.
+	bool isExplicitGroup = false;
 };
 
 // Utility: Sort expression arguments by their source position

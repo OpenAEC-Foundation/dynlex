@@ -44,6 +44,13 @@ void generateSpecializedFunction(
 	auto it = section->instantiations.find(argTypes);
 	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
 	if (!it->second.returnType.isDeduced()) {
+		std::unordered_map<std::string, Expression *> callBindings;
+		for (const auto &[name, expr] : paramBindings)
+			callBindings[name] = expr;
+		ensureSectionInstantiationInferred(context, section, callBindings, argTypes);
+		it = section->instantiations.find(argTypes);
+	}
+	if (!it->second.returnType.isDeduced()) {
 		fprintf(
 			stderr, "UNDEDUCED: '%s' args=[",
 			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString).c_str()
@@ -104,10 +111,12 @@ void generateSpecializedFunction(
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
 	context.patternParamTypes.clear();
+	const std::vector<DataType> &parameterTypes =
+		inst.parameterTypes.size() == argTypes.size() ? inst.parameterTypes : argTypes;
 	argIdx = 0;
 	for (auto &arg : func->args()) {
 		context.patternBindings[varNames[argIdx]] = &arg;
-		context.patternParamTypes[varNames[argIdx]] = argTypes[argIdx];
+		context.patternParamTypes[varNames[argIdx]] = parameterTypes[argIdx];
 		argIdx++;
 	}
 

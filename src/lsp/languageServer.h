@@ -54,6 +54,9 @@ class LanguageServer {
 	// Called for document symbol request
 	virtual std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params);
 
+	// Called for code action request
+	virtual std::vector<CodeAction> onCodeAction(const CodeActionParams &params);
+
 	// Send a notification to the client (e.g., publishDiagnostics)
 	void sendNotification(const std::string &method, const Json &params);
 

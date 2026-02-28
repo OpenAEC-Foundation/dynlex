@@ -37,6 +37,7 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/)
 	result.capabilities.textDocumentSync = 2; // Incremental
 	result.capabilities.definitionProvider = true;
 	result.capabilities.documentSymbolProvider = true;
+	result.capabilities.codeActionProvider = true;
 	result.capabilities.semanticTokensProvider.full = true;
 	result.capabilities.semanticTokensProvider.legend.tokenTypes = getSemanticTokenTypes();
 	result.capabilities.semanticTokensProvider.legend.tokenModifiers = getSemanticTokenModifiers();
@@ -242,6 +243,18 @@ Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 		info.location.range = convertRange(related.range);
 		lspDiag.relatedInformation.push_back(std::move(info));
 	}
+	if (!diag.quickFixes.empty()) {
+		Json quickFixes = Json::array();
+		for (const auto &fix : diag.quickFixes) {
+			if (!fix.range.line)
+				continue;
+			quickFixes.push_back(
+				Json{{"title", fix.title}, {"replacement", fix.replacement}, {"range", convertRange(fix.range)}}
+			);
+		}
+		if (!quickFixes.empty())
+			lspDiag.data = Json{{"quickFixes", quickFixes}};
+	}
 
 	return lspDiag;
 }
@@ -403,6 +416,30 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 	std::vector<DocumentSymbol> result;
 	collectSymbols(context->mainSection, result);
 	return result;
+}
+
+std::vector<CodeAction> DynLexServer::onCodeAction(const CodeActionParams &params) {
+	std::vector<CodeAction> actions;
+	for (const Diagnostic &diag : params.context.diagnostics) {
+		if (!diag.data || !diag.data->contains("quickFixes"))
+			continue;
+		for (const Json &fix : (*diag.data)["quickFixes"]) {
+			if (!fix.contains("title") || !fix.contains("replacement") || !fix.contains("range"))
+				continue;
+			CodeAction action;
+			action.title = fix.at("title").get<std::string>();
+			action.kind = "quickfix";
+			action.diagnostics.push_back(diag);
+			WorkspaceEdit edit;
+			TextEdit textEdit;
+			textEdit.range = fix.at("range").get<Range>();
+			textEdit.newText = fix.at("replacement").get<std::string>();
+			edit.changes[params.textDocument.uri] = Json::array({textEdit});
+			action.edit = std::move(edit);
+			actions.push_back(std::move(action));
+		}
+	}
+	return actions;
 }
 
 SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &params) {

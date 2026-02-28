@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set a to 1
+add 0.5 to a

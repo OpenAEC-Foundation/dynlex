@@ -106,8 +106,8 @@ expression a loaded font from path at size s:
         @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10240, 9729)
 
         # Extract glyph slot pointer (stays the same across FT_Load_Char calls)
-        set face_class to @intrinsic("cast", face_raw, ft face)
-        set glyph_raw to the glyph of face_class
+        set face_ptr to face_raw as a pointer to ft face
+        set glyph_raw to the glyph of the value at face_ptr
 
         # Return font handle: [face, tex_id, glyph_slot]
         set new_font to allocate 3 items
@@ -129,7 +129,8 @@ expression render char code at px py using font and color r g b:
         @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
 
         # Cast glyph slot pointer to access bitmap data
-        set glyph to @intrinsic("cast", glyph_raw, ft glyph slot)
+        set glyph_ptr to glyph_raw as a pointer to ft glyph slot
+        set glyph to the value at glyph_ptr
 
         set bw to the bitmap_width of glyph
         set bh to the bitmap_rows of glyph
@@ -164,7 +165,7 @@ expression render char code at px py using font and color r g b:
         @intrinsic("call", "GL", "glEnd", void)
 
         # Return new cursor x (advance is in 26.6 fixed point, divide by 64)
-        return px + adv / 64
+        return px + adv / 64 as an integer
 
 # --- Text rendering helpers ---
 
@@ -193,15 +194,15 @@ expression draw number n at x y using font and color r g b:
         enable text rendering
         set cx to x
         if n < 10:
-            set cx to render char n + 48 at cx y using font and color r g b
+            set cx to render char (n + 48) at cx y using font and color r g b
         else if n < 100:
-            set cx to render char n / 10 + 48 at cx y using font and color r g b
-            set cx to render char n mod 10 + 48 at cx y using font and color r g b
+            set cx to render char (n / 10 + 48) at cx y using font and color r g b
+            set cx to render char (n mod 10 + 48) at cx y using font and color r g b
         else:
-            set cx to render char n / 100 + 48 at cx y using font and color r g b
+            set cx to render char (n / 100 + 48) at cx y using font and color r g b
             set remaining to n mod 100
-            set cx to render char remaining / 10 + 48 at cx y using font and color r g b
-            set cx to render char remaining mod 10 + 48 at cx y using font and color r g b
+            set cx to render char (remaining / 10 + 48) at cx y using font and color r g b
+            set cx to render char (remaining mod 10 + 48) at cx y using font and color r g b
         disable text rendering
 
 # --- Text rendering ---

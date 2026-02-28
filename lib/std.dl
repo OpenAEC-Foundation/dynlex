@@ -5,6 +5,7 @@ import lib/string.dl
 # --- Return ---
 
 macro expression return value:
+    after: default
     replacement:
         @intrinsic("return", value)
 
@@ -272,4 +273,3 @@ macro section [match|switch] [based|] [on|] value:
 macro section case value:
     replacement:
         @intrinsic("case", value)
-

@@ -655,13 +655,22 @@ llvm::Value *generateIntrinsicCode(
 
 	if (name == "property") {
 		// Format: args[0]=instance, args[1]=fieldname (string literal from {word:} capture)
-		Expression *instExpr = resolveVariableBinding(context, args[0]);
-		DataType instType = getEffectiveType(context, instExpr);
+		Expression *ownerExpr = args[0];
+		DataType instType = getEffectiveType(context, ownerExpr);
+		if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex < 0 &&
+			!instType.classDefinition->instantiations.empty()) {
+			instType.classInstIndex = 0;
+		}
 		ClassDefinition *classDef = instType.classDefinition;
 
 		// Get field name from string literal
 		Expression *propExpr = resolveVariableBinding(context, args[1]);
 		std::string fieldName = getStringLiteral(propExpr);
+
+		// C strings expose a synthetic "data" property so string-library macros can
+		// operate on both heap strings and string literals without duplicating logic.
+		if (fieldName == "data" && instType.isBytePointer())
+			return generateExpressionCode(context, ownerExpr);
 
 		if (!classDef) {
 			context.diagnostics.push_back(Diagnostic(
@@ -686,12 +695,17 @@ llvm::Value *generateIntrinsicCode(
 			return nullptr;
 		}
 
-		// Get instance pointer
-		llvm::Value *instPtr = getVariablePointer(context, instExpr);
-		llvm::Type *structType = getLLVMType(context, instType);
-		llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
 		DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
-		return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
+		if (llvm::Value *instPtr = getVariablePointer(context, ownerExpr)) {
+			llvm::Type *structType = getLLVMType(context, instType);
+			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, fieldIdx, "field_ptr");
+			return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
+		}
+
+		llvm::Value *instValue = generateExpressionCode(context, ownerExpr);
+		if (!instValue)
+			return nullptr;
+		return builder.CreateExtractValue(instValue, {static_cast<unsigned>(fieldIdx)}, fieldName + "_val");
 	}
 
 	// Shader I/O intrinsics (only available in --emit-spirv mode)

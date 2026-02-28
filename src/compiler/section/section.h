@@ -23,6 +23,7 @@ struct Expression;
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
 	DataType returnType{DataType::Kind::Any};
+	std::vector<DataType> parameterTypes;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
 	bool valid = true;

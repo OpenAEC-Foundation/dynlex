@@ -1,0 +1,1 @@
+Variable 'a' cannot change type from i32 to f64

@@ -1,5 +1,6 @@
 #include "parseContext.h"
 #include <string>
+#include <string_view>
 
 struct Variable;
 struct Section;
@@ -10,6 +11,11 @@ bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
+bool ensureSectionInstantiationInferred(
+	ParseContext &context, Section *section, const std::unordered_map<std::string, Expression *> &callBindings,
+	const std::vector<DataType> &argTypes
+);
+bool isInternalSourcePath(std::string_view path);
 void expandExpression(Expression *expr, Section *section);
 
 // Intrinsic operator checking utilities

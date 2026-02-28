@@ -9,6 +9,10 @@ class:
         data as pointer to byte
         length as i32
 
+macro expression cstring:
+    replacement:
+        @intrinsic("type", "string")
+
 macro expression new string from data ptr with length len:
     replacement:
         @intrinsic("construct", string, ptr, len)
@@ -45,6 +49,11 @@ expression {boolean:value} as a string:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
+
+expression {cstring:value} as a string:
+    execute:
+        set len to @intrinsic("call", "libc", "strlen", an integer, value)
+        return new string from data value with length len
 
 # --- Line suffix ---
 

@@ -184,6 +184,10 @@ void LanguageServer::handleRequest(const Json &message) {
 			DocumentSymbolParams p = params.get<DocumentSymbolParams>();
 			auto result = onDocumentSymbol(p);
 			sendResponse(id, result);
+		} else if (method == "textDocument/codeAction") {
+			CodeActionParams p = params.get<CodeActionParams>();
+			auto result = onCodeAction(p);
+			sendResponse(id, result);
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
@@ -273,5 +277,7 @@ std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionP
 SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams & /*params*/) { return SemanticTokens{}; }
 
 std::vector<DocumentSymbol> LanguageServer::onDocumentSymbol(const DocumentSymbolParams & /*params*/) { return {}; }
+
+std::vector<CodeAction> LanguageServer::onCodeAction(const CodeActionParams & /*params*/) { return {}; }
 
 } // namespace lsp

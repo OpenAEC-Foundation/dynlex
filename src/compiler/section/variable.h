@@ -9,6 +9,8 @@ struct Variable {
 		: name(name), definition(definition), isGlobal(isGlobal) {}
 	std::string name;
 	DataType type;
+	Range typeOriginRange;
+	std::string typeOriginFloatLiteralReplacement;
 	// the first reference to this variable (the definition point)
 	VariableReference *definition;
 	// whether this variable is global (module-level) or local (function-level)
