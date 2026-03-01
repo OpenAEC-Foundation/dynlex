@@ -41,7 +41,7 @@ bool ClassSection::processLine(ParseContext &context, CodeLine *line) {
 	}
 
 	context.diagnostics.push_back(
-		Diagnostic(Diagnostic::Level::Error, "unexpected line in class definition", Range(line, line->patternText))
+		Diagnostic(Diagnostic::Level::Error, syntax.messages.unexpectedClassLine, Range(line, line->patternText))
 	);
 	return false;
 }

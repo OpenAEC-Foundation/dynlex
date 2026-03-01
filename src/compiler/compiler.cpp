@@ -334,7 +334,10 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
 			// If this is the main file, report error
-			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "couldn't import main file: " + path, Range()));
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error,
+				renderSyntaxMessage(context.projectSyntax.messages.couldNotImportMainFile, {{"path", path}}), Range()
+			));
 		}
 		return false;
 	}
@@ -381,7 +384,8 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 			std::string importPath = resolveImportPath(std::string(*importPathView), importingDir, context.fileSystem.get());
 			if (!importSourceFile(importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, "failed to import source file: " + (std::string)importPath,
+					Diagnostic::Level::Error,
+					renderSyntaxMessage(syntax.messages.failedToImportSourceFile, {{"path", importPath}}),
 					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length())
 				));
 				return false;
@@ -425,8 +429,14 @@ bool analyzeSections(ParseContext &context) {
 			// check amount of indents
 			context.diagnostics.push_back(Diagnostic(
 				Diagnostic::Level::Error,
-				"Invalid indentation! expected " + std::to_string(data.indentString.length() * data.indentLevel) + " " +
-					charName(data.indentString[0]) + "s, but found " + std::to_string(indentString.length()),
+				renderSyntaxMessage(
+					syntax.messages.invalidIndentationAmount,
+					{
+						{"expected", std::to_string(data.indentString.length() * data.indentLevel) + " " +
+										 charName(data.indentString[0]) + "s"},
+						{"found", std::to_string(indentString.length())},
+					}
+				),
 				Range(line, 0, indentString.length())
 			));
 		}
@@ -438,8 +448,11 @@ bool analyzeSections(ParseContext &context) {
 			if (invalidCharIndex != std::string::npos) {
 				context.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error,
-					"Invalid indentation! expected only " + charName(expectedIndentChar) + "s, but found a " +
-						charName(indentString[invalidCharIndex]),
+					renderSyntaxMessage(
+						syntax.messages.invalidIndentationCharacter,
+						{{"expected", charName(expectedIndentChar) + "s"},
+						 {"found", "a " + charName(indentString[invalidCharIndex])}}
+					),
 					Range(line, invalidCharIndex, indentString.length())
 				));
 			} else {
@@ -456,8 +469,14 @@ bool analyzeSections(ParseContext &context) {
 				// cannot go up sections twice in a time
 				context.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error,
-					"Invalid indentation! expected at max " + std::to_string(data.indentString.length() * oldIndentLevel) +
-						" " + charName(data.indentString[0]) + "s, but found " + std::to_string(indentString.length()),
+					renderSyntaxMessage(
+						syntax.messages.invalidIndentationIncrease,
+						{
+							{"expected", std::to_string(data.indentString.length() * oldIndentLevel) + " " +
+											 charName(data.indentString[0]) + "s"},
+							{"found", std::to_string(indentString.length())},
+						}
+					),
 					Range(line, 0, indentString.length())
 				));
 

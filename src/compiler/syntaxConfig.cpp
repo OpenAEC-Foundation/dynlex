@@ -296,6 +296,84 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 		}
 		return true;
 	}
+	if (node.key == "messages") {
+		for (const auto &child : node.children) {
+			if (child->key == "could not import main file") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber,
+						"config entry 'messages.could not import main file' must define a value"
+					);
+					return false;
+				}
+				config.messages.couldNotImportMainFile = *child->value;
+			} else if (child->key == "failed to import source file") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber,
+						"config entry 'messages.failed to import source file' must define a value"
+					);
+					return false;
+				}
+				config.messages.failedToImportSourceFile = *child->value;
+			} else if (child->key == "invalid indentation amount") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber,
+						"config entry 'messages.invalid indentation amount' must define a value"
+					);
+					return false;
+				}
+				config.messages.invalidIndentationAmount = *child->value;
+			} else if (child->key == "invalid indentation character") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber,
+						"config entry 'messages.invalid indentation character' must define a value"
+					);
+					return false;
+				}
+				config.messages.invalidIndentationCharacter = *child->value;
+			} else if (child->key == "invalid indentation increase") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber,
+						"config entry 'messages.invalid indentation increase' must define a value"
+					);
+					return false;
+				}
+				config.messages.invalidIndentationIncrease = *child->value;
+			} else if (child->key == "missing body section") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber, "config entry 'messages.missing body section' must define a value"
+					);
+					return false;
+				}
+				config.messages.missingBodySection = *child->value;
+			} else if (child->key == "unknown section") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber, "config entry 'messages.unknown section' must define a value"
+					);
+					return false;
+				}
+				config.messages.unknownSection = *child->value;
+			} else if (child->key == "unexpected class line") {
+				if (!child->value) {
+					addConfigError(
+						context, path, child->lineNumber, "config entry 'messages.unexpected class line' must define a value"
+					);
+					return false;
+				}
+				config.messages.unexpectedClassLine = *child->value;
+			} else {
+				addConfigError(context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'messages'");
+				return false;
+			}
+		}
+		return true;
+	}
 	if (node.key == "child sections") {
 		for (const auto &child : node.children) {
 			if (child->key == "execute") {
@@ -449,3 +527,17 @@ extractInlineSettingValue(std::string_view text, std::string_view key, std::stri
 }
 
 bool matchesConfiguredKeyword(std::string_view text, std::string_view keyword) { return text == keyword; }
+
+std::string
+renderSyntaxMessage(std::string_view templ, std::initializer_list<std::pair<std::string_view, std::string_view>> replacements) {
+	std::string result(templ);
+	for (const auto &[key, value] : replacements) {
+		std::string needle = "{" + std::string(key) + "}";
+		size_t pos = 0;
+		while ((pos = result.find(needle, pos)) != std::string::npos) {
+			result.replace(pos, needle.size(), value);
+			pos += value.size();
+		}
+	}
+	return result;
+}

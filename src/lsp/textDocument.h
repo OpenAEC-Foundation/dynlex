@@ -25,6 +25,9 @@ class TextDocument : public SourceFile {
 	// Get the line at a given index (0-based)
 	std::string_view getLine(int lineIndex) const;
 
+	// Get the line including its trailing line terminator, if any.
+	std::string_view getLineWithTerminator(int lineIndex) const;
+
 	// Get the number of lines
 	int lineCount() const { return static_cast<int>(lineOffsets.size()); }
 

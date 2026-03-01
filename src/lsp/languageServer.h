@@ -45,6 +45,9 @@ class LanguageServer {
 	// Called when client saves a document
 	virtual void onDidSave(const DidSaveTextDocumentParams &params);
 
+	// Called for DynLex custom cursor tracking notifications.
+	virtual void onActiveCursorChanged(const ActiveCursorParams &params);
+
 	// Called for go-to-definition request
 	virtual std::optional<Location> onDefinition(const TextDocumentPositionParams &params);
 

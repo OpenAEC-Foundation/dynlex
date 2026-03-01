@@ -17645,8 +17645,8 @@ var require_main4 = __commonJS({
         }
       }
       createMessageTransports(encoding) {
-        function getEnvironment(env, fork) {
-          if (!env && !fork) {
+        function getEnvironment(env2, fork) {
+          if (!env2 && !fork) {
             return void 0;
           }
           const result = /* @__PURE__ */ Object.create(null);
@@ -17655,8 +17655,8 @@ var require_main4 = __commonJS({
             result["ELECTRON_RUN_AS_NODE"] = "1";
             result["ELECTRON_NO_ASAR"] = "1";
           }
-          if (env) {
-            Object.keys(env).forEach((key) => result[key] = env[key]);
+          if (env2) {
+            Object.keys(env2).forEach((key) => result[key] = env2[key]);
           }
           return result;
         }
@@ -18025,10 +18025,13 @@ var reconnectAttempts = 0;
 var reconnectTimeout;
 var isShuttingDown = false;
 var extensionPath;
+var cursorClientId = "";
+var lastSentCursorKey;
 var BASE_RECONNECT_DELAY = 5e3;
 var MAX_RECONNECT_DELAY = 6e4;
 function activate(context) {
   extensionPath = context.extensionPath;
+  cursorClientId = vscode.env.sessionId || `dynlex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   outputChannel = vscode.window.createOutputChannel("DynLex Language Server");
   context.subscriptions.push(outputChannel);
   log("DynLex extension activating...");
@@ -18080,6 +18083,26 @@ function activate(context) {
       log("Restarting language server...");
       reconnectAttempts = 0;
       stopLanguageServer().then(() => startLanguageServer(context));
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      void sendActiveCursorNotification(editor);
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      if (event.textEditor === vscode.window.activeTextEditor) {
+        void sendActiveCursorNotification(event.textEditor);
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && event.document === editor.document) {
+        void sendActiveCursorNotification(editor);
+      }
     })
   );
 }
@@ -18257,10 +18280,43 @@ async function connectToServer(port, context) {
     await client.start();
     log("Language client started successfully");
     context.subscriptions.push(client);
+    lastSentCursorKey = void 0;
+    await sendActiveCursorNotification(vscode.window.activeTextEditor);
   } catch (err) {
     logError(`Failed to start language client: ${err}`);
     throw err;
   }
+}
+async function sendActiveCursorNotification(editor) {
+  if (!client) {
+    return;
+  }
+  const document = editor?.document;
+  if (!editor || !document || document.languageId !== "dynlex") {
+    const key2 = `${cursorClientId}:none`;
+    if (lastSentCursorKey === key2) {
+      return;
+    }
+    lastSentCursorKey = key2;
+    await client.sendNotification("dynlex/activeCursorChanged", { clientId: cursorClientId });
+    return;
+  }
+  const position = editor.selection.active;
+  const payload = {
+    clientId: cursorClientId,
+    uri: document.uri.toString(),
+    version: document.version,
+    position: {
+      line: position.line,
+      character: position.character
+    }
+  };
+  const key = `${cursorClientId}:${payload.uri}:${payload.version}:${payload.position.line}:${payload.position.character}`;
+  if (lastSentCursorKey === key) {
+    return;
+  }
+  lastSentCursorKey = key;
+  await client.sendNotification("dynlex/activeCursorChanged", payload);
 }
 function scheduleReconnect(context) {
   if (isShuttingDown) {

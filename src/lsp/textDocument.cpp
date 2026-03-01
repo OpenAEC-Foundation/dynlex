@@ -86,4 +86,14 @@ std::string_view TextDocument::getLine(int lineIndex) const {
 	return std::string_view(content).substr(start, end - start);
 }
 
+std::string_view TextDocument::getLineWithTerminator(int lineIndex) const {
+	if (lineIndex < 0 || lineIndex >= static_cast<int>(lineOffsets.size())) {
+		return {};
+	}
+
+	size_t start = lineOffsets[lineIndex];
+	size_t end = (lineIndex + 1 < static_cast<int>(lineOffsets.size())) ? lineOffsets[lineIndex + 1] : content.size();
+	return std::string_view(content).substr(start, end - start);
+}
+
 } // namespace lsp

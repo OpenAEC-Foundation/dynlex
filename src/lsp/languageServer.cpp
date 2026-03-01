@@ -223,6 +223,9 @@ void LanguageServer::handleNotification(const Json &message) {
 		} else if (method == "textDocument/didSave") {
 			DidSaveTextDocumentParams p = params.get<DidSaveTextDocumentParams>();
 			onDidSave(p);
+		} else if (method == "dynlex/activeCursorChanged") {
+			ActiveCursorParams p = params.get<ActiveCursorParams>();
+			onActiveCursorChanged(p);
 		}
 	} catch (const std::exception &e) {
 		logError("Error handling notification " + method + ": " + e.what());
@@ -284,5 +287,7 @@ SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams &
 std::vector<DocumentSymbol> LanguageServer::onDocumentSymbol(const DocumentSymbolParams & /*params*/) { return {}; }
 
 std::vector<CodeAction> LanguageServer::onCodeAction(const CodeActionParams & /*params*/) { return {}; }
+
+void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
 
 } // namespace lsp

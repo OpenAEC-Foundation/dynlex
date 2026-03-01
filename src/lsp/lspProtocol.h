@@ -246,6 +246,28 @@ inline void from_json(const Json &j, DidSaveTextDocumentParams &p) {
 	}
 }
 
+// DynLex custom notification for the currently active cursor.
+// Empty params means the client currently has no active DynLex cursor.
+struct ActiveCursorParams {
+	std::string clientId;
+	std::optional<std::string> uri;
+	std::optional<int> version;
+	std::optional<Position> position;
+};
+
+inline void from_json(const Json &j, ActiveCursorParams &p) {
+	j.at("clientId").get_to(p.clientId);
+	if (j.contains("uri") && !j.at("uri").is_null()) {
+		p.uri = j.at("uri").get<std::string>();
+	}
+	if (j.contains("version") && !j.at("version").is_null()) {
+		p.version = j.at("version").get<int>();
+	}
+	if (j.contains("position") && !j.at("position").is_null()) {
+		p.position = j.at("position").get<Position>();
+	}
+}
+
 // Semantic tokens types
 struct SemanticTokensLegend {
 	std::vector<std::string> tokenTypes;

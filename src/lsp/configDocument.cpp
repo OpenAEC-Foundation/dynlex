@@ -1,4 +1,5 @@
 #include "configDocument.h"
+#include "completion.h"
 #include "semanticTokenBuilder.h"
 #include "semanticTokenDebug.h"
 #include "syntaxConfig.h"
@@ -6,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <memory>
+#include <set>
 #include <unordered_set>
 #include <vector>
 
@@ -48,6 +50,13 @@ void addDiagnostic(
 	diag.severity = severity;
 	diag.source = "dynlex";
 	diagnostics.push_back(std::move(diag));
+}
+
+TextEdit makeTextEdit(int line, int start, int end, std::string newText) {
+	TextEdit edit;
+	edit.range = makeRange(line, start, end);
+	edit.newText = std::move(newText);
+	return edit;
 }
 
 std::string_view trimView(std::string_view text) {
@@ -332,6 +341,35 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 			}
 			continue;
 		}
+		if (node.entry.key == "messages") {
+			static const std::unordered_set<std::string> allowed = {
+				"could not import main file",
+				"failed to import source file",
+				"invalid indentation amount",
+				"invalid indentation character",
+				"invalid indentation increase",
+				"missing body section",
+				"unknown section",
+				"unexpected class line",
+			};
+			for (const auto &grandChild : node.children) {
+				if (!allowed.contains(grandChild->entry.key)) {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"unknown config key '" + grandChild->entry.key + "' under 'messages'"
+					);
+					return false;
+				}
+				if (grandChild->entry.value.empty()) {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"config entry 'messages." + grandChild->entry.key + "' must define a value"
+					);
+					return false;
+				}
+			}
+			continue;
+		}
 		if (node.entry.key == "child sections") {
 			static const std::unordered_set<std::string> allowed = {"execute", "replacement", "patterns",
 																	"globals", "before",	  "after"};
@@ -379,6 +417,140 @@ std::vector<int> encodeConfigSemanticTokens(const TextDocument &document) {
 	for (int lineIndex = 0; lineIndex < document.lineCount(); ++lineIndex)
 		addConfigLineTokens(builder, lineIndex, document.getLine(lineIndex));
 	return encodeSemanticTokens(builder.tokenLines());
+}
+
+CompletionList collectConfigCompletions(const TextDocument &document, int line, int character) {
+	CompletionList result;
+	std::vector<CompletionItem> items;
+	std::set<std::string> seen;
+
+	auto addItem = [&](std::string label, std::string detail, std::string replacement) {
+		if (!seen.insert(label).second)
+			return;
+		CompletionItem item;
+		item.label = std::move(label);
+		item.kind = CompletionItemKind::Keyword;
+		item.detail = std::move(detail);
+		item.insertText = replacement;
+		item.sortText = "0_" + item.label;
+		item.textEdit = makeTextEdit(line, 0, character, std::move(replacement));
+		items.push_back(std::move(item));
+	};
+
+	std::string_view fullLine = document.getLine(line);
+	std::string_view linePrefixView = fullLine.substr(0, std::min<int>(character, static_cast<int>(fullLine.size())));
+	size_t commentPos = findCommentStart(linePrefixView, "#");
+	if (commentPos != std::string_view::npos)
+		linePrefixView = linePrefixView.substr(0, commentPos);
+
+	size_t indentLength = 0;
+	while (indentLength < linePrefixView.size() && std::isspace(static_cast<unsigned char>(linePrefixView[indentLength])))
+		indentLength++;
+	std::string indent(linePrefixView.substr(0, indentLength));
+	std::string trimmed = std::string(trimView(linePrefixView.substr(indentLength)));
+
+	struct StackEntry {
+		int indent = 0;
+		std::string key;
+	};
+	std::vector<StackEntry> stack;
+	for (int i = 0; i < line; ++i) {
+		std::string_view prevLine = document.getLine(i);
+		size_t prevCommentPos = findCommentStart(prevLine, "#");
+		if (prevCommentPos != std::string_view::npos)
+			prevLine = prevLine.substr(0, prevCommentPos);
+		prevLine = trimView(prevLine);
+		if (prevLine.empty())
+			continue;
+
+		size_t rawIndent = 0;
+		std::string_view fullLine = document.getLine(i);
+		while (rawIndent < fullLine.size() && std::isspace(static_cast<unsigned char>(fullLine[rawIndent])))
+			rawIndent++;
+		size_t colon = prevLine.find(':');
+		if (colon == std::string_view::npos)
+			continue;
+		std::string key = std::string(trimView(prevLine.substr(0, colon)));
+		std::string_view value = trimView(prevLine.substr(colon + 1));
+		while (!stack.empty() && stack.back().indent >= static_cast<int>(rawIndent))
+			stack.pop_back();
+		if (value.empty())
+			stack.push_back({static_cast<int>(rawIndent), std::move(key)});
+	}
+
+	std::string parent = stack.empty() ? "" : stack.back().key;
+	auto startsLike = [&](std::string_view candidate) {
+		return trimmed.empty() || candidate.starts_with(trimmed);
+	};
+
+	if (line == 0 || (parent.empty() && indent.empty())) {
+		if (startsLike("dynlex options:"))
+			addItem("dynlex options:", "root config section", "dynlex options:");
+		result.items = std::move(items);
+		return result;
+	}
+
+	if (parent == "dynlex options") {
+		const std::vector<std::pair<std::string, std::string>> suggestions = {
+			{"import: \"\"", "import keyword"},
+			{"comment: \"#\"", "comment prefix"},
+			{"open section: \":\"", "section opener"},
+			{"section: \"section\"", "section keyword"},
+			{"function: \"function\"", "function keyword"},
+			{"class:", "class settings"},
+			{"macro: \"macro\"", "macro keyword"},
+			{"local: \"local\"", "local keyword"},
+			{"child sections:", "child section keywords"},
+			{"messages:", "message overrides"},
+		};
+		for (const auto &[replacement, detail] : suggestions) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
+	} else if (parent == "class") {
+		const std::vector<std::pair<std::string, std::string>> suggestions = {
+			{"name: \"class\"", "class keyword"},
+			{"members: \"members\"", "members section keyword"},
+		};
+		for (const auto &[replacement, detail] : suggestions) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
+	} else if (parent == "child sections") {
+		const std::vector<std::pair<std::string, std::string>> suggestions = {
+			{"execute: \"execute\"", "execute section keyword"},
+			{"replacement: \"replacement\"", "replacement section keyword"},
+			{"patterns: \"patterns\"", "patterns section keyword"},
+			{"globals: \"globals\"", "globals section keyword"},
+			{"before: \"before\"", "before section keyword"},
+			{"after: \"after\"", "after section keyword"},
+		};
+		for (const auto &[replacement, detail] : suggestions) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
+	} else if (parent == "messages") {
+		const std::vector<std::pair<std::string, std::string>> suggestions = {
+			{"could not import main file: \"couldn't import main file: {path}\"", "main import failure message"},
+			{"failed to import source file: \"failed to import source file: {path}\"", "import failure message"},
+			{"invalid indentation amount: \"Invalid indentation! expected {expected}, but found {found}\"",
+			 "indentation size message"},
+			{"invalid indentation character: \"Invalid indentation! expected only {expected}, but found {found}\"",
+			 "indentation character message"},
+			{"invalid indentation increase: \"Invalid indentation! expected at max {expected}, but found {found}\"",
+			 "indentation increase message"},
+			{"missing body section: \"Code without body section\"", "missing body section message"},
+			{"unknown section: \"Unknown section: {section}\"", "unknown section message"},
+			{"unexpected class line: \"unexpected line in class definition\"", "class line message"},
+		};
+		for (const auto &[replacement, detail] : suggestions) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
+	}
+
+	result.items = std::move(items);
+	return result;
 }
 
 } // namespace lsp

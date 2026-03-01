@@ -1,0 +1,3 @@
+dynlex options:
+    messages:
+        unknown section: "Onbekende sectie: {section}"

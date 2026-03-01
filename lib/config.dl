@@ -16,3 +16,12 @@ dynlex options:
         globals: "globals"
         before: "before"
         after: "after"
+    messages:
+        could not import main file: "couldn't import main file: {path}"
+        failed to import source file: "failed to import source file: {path}"
+        invalid indentation amount: "Invalid indentation! expected {expected}, but found {found}"
+        invalid indentation character: "Invalid indentation! expected only {expected}, but found {found}"
+        invalid indentation increase: "Invalid indentation! expected at max {expected}, but found {found}"
+        missing body section: "Code without body section"
+        unknown section: "Unknown section: {section}"
+        unexpected class line: "unexpected line in class definition"

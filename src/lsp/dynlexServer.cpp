@@ -40,6 +40,32 @@ static bool hasCompilationStage(const ParseContext *context, ParseContext::Compi
 	return context && context->hasCompleted(stage);
 }
 
+static std::string lineTerminator(const TextDocument &document, int line) {
+	std::string_view withTerminator = document.getLineWithTerminator(line);
+	std::string_view withoutTerminator = document.getLine(line);
+	return std::string(withTerminator.substr(withoutTerminator.size()));
+}
+
+template <typename TLockedLines>
+static std::string rebuildDocumentContent(const TextDocument &document, const TLockedLines *lockedLines) {
+	std::string rebuilt;
+	rebuilt.reserve(document.content.size());
+	for (int line = 0; line < document.lineCount(); ++line) {
+		if (lockedLines) {
+			auto it = lockedLines->find(line);
+			if (it != lockedLines->end()) {
+				rebuilt += it->second.committedText;
+				rebuilt += lineTerminator(document, line);
+				continue;
+			}
+		}
+		{
+			rebuilt += document.getLineWithTerminator(line);
+		}
+	}
+	return rebuilt;
+}
+
 DynLexServer::DynLexServer(int port) : LanguageServer(port) {}
 
 DynLexServer::DynLexServer(std::unique_ptr<Transport> transport) : LanguageServer(std::move(transport)) {}
@@ -71,17 +97,12 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
 void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 	LanguageServer::onDidOpen(params);
 	const std::string &uri = params.textDocument.uri;
+	syncCompiledDocument(uri, true);
 	if (isConfigDocumentUri(uri)) {
 		auto docIt = documents.find(uri);
 		if (docIt != documents.end())
 			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
-		std::vector<std::string> dependentMainUris;
-		for (const auto &[mainUri, context] : parseContexts) {
-			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
-				dependentMainUris.push_back(mainUri);
-		}
-		for (const std::string &mainUri : dependentMainUris)
-			recompileMainDocument(mainUri);
+		recompileDependents(uri);
 		return;
 	}
 
@@ -97,40 +118,43 @@ void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 	LanguageServer::onDidChange(params);
 	const std::string &uri = params.textDocument.uri;
+	bool compiledChanged = false;
+
 	if (isConfigDocumentUri(uri)) {
+		compiledChanged = syncCompiledDocument(uri, true);
 		auto docIt = documents.find(uri);
 		if (docIt != documents.end())
 			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
-		std::vector<std::string> dependentMainUris;
-		for (const auto &[mainUri, context] : parseContexts) {
-			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
-				dependentMainUris.push_back(mainUri);
-		}
-		for (const std::string &mainUri : dependentMainUris)
-			recompileMainDocument(mainUri);
+		if (compiledChanged)
+			recompileDependents(uri);
 		return;
 	}
 
-	// If this file is a main document, recompile it
-	if (parseContexts.contains(uri)) {
-		recompileMainDocument(uri);
+	if (isStructuralEdit(params)) {
+		compiledChanged = syncCompiledDocument(uri, true);
+		refreshLockedLineBaselines(uri);
+	} else {
+		compiledChanged = syncCompiledDocument(uri, false);
 	}
 
-	// If this file is imported by main documents, recompile those too
-	auto it = importedBy.find(uri);
-	if (it != importedBy.end()) {
-		// Copy: recompilation may modify importedBy
-		auto mainUris = it->second;
-		for (const auto &mainUri : mainUris) {
-			recompileMainDocument(mainUri);
-		}
-	}
+	if (compiledChanged)
+		recompileDependents(uri);
 }
 
 void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	const std::string &uri = params.textDocument.uri;
 	if (isConfigDocumentUri(uri))
 		publishDiagnostics(uri, {});
+
+	compiledDocuments.erase(uri);
+	lockedLinesByUri.erase(uri);
+	for (auto cursorIt = activeCursors.begin(); cursorIt != activeCursors.end();) {
+		if (cursorIt->second.uri == uri) {
+			cursorIt = activeCursors.erase(cursorIt);
+		} else {
+			++cursorIt;
+		}
+	}
 
 	if (parseContexts.contains(uri)) {
 		// Collect file URIs this main document had diagnostics for
@@ -160,6 +184,19 @@ void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	LanguageServer::onDidClose(params);
 }
 
+void DynLexServer::onActiveCursorChanged(const ActiveCursorParams &params) {
+	std::optional<CursorState> nextCursor;
+	if (params.uri && params.position && params.version) {
+		auto docIt = documents.find(*params.uri);
+		if (docIt == documents.end() || docIt->second->version != *params.version)
+			return;
+		CursorState cursor{*params.uri, *params.version, *params.position};
+		nextCursor = cursor;
+	}
+
+	updateCursorLock(params.clientId, nextCursor);
+}
+
 ParseContext *DynLexServer::findContextFor(const std::string &uri) {
 	auto ctxIt = parseContexts.find(uri);
 	if (ctxIt != parseContexts.end()) {
@@ -180,9 +217,106 @@ ParseContext *DynLexServer::findContextFor(const std::string &uri) {
 	return nullptr;
 }
 
+bool DynLexServer::isStructuralEdit(const DidChangeTextDocumentParams &params) const {
+	if (params.contentChanges.size() != 1)
+		return true;
+	const TextDocumentContentChangeEvent &change = params.contentChanges.front();
+	if (!change.range)
+		return true;
+	return change.range->start.line != change.range->end.line || change.text.find_first_of("\r\n") != std::string::npos;
+}
+
+bool DynLexServer::syncCompiledDocument(const std::string &uri, bool ignoreLocks) {
+	auto liveIt = documents.find(uri);
+	if (liveIt == documents.end()) {
+		compiledDocuments.erase(uri);
+		return false;
+	}
+
+	const TextDocument &live = *liveIt->second;
+	std::string rebuilt =
+		ignoreLocks ? live.content
+					: rebuildDocumentContent(live, lockedLinesByUri.contains(uri) ? &lockedLinesByUri.at(uri) : nullptr);
+
+	auto compiledIt = compiledDocuments.find(uri);
+	if (compiledIt == compiledDocuments.end()) {
+		compiledDocuments[uri] = std::make_unique<TextDocument>(uri, rebuilt, live.version);
+		return true;
+	}
+
+	bool changed = compiledIt->second->content != rebuilt;
+	if (changed) {
+		compiledIt->second = std::make_unique<TextDocument>(uri, rebuilt, live.version);
+	}
+	return changed;
+}
+
+void DynLexServer::refreshLockedLineBaselines(const std::string &uri) {
+	auto locksIt = lockedLinesByUri.find(uri);
+	auto compiledIt = compiledDocuments.find(uri);
+	if (locksIt == lockedLinesByUri.end() || compiledIt == compiledDocuments.end())
+		return;
+
+	for (auto &[line, state] : locksIt->second) {
+		if (line >= 0 && line < compiledIt->second->lineCount())
+			state.committedText = std::string(compiledIt->second->getLine(line));
+	}
+}
+
+bool DynLexServer::updateCursorLock(const std::string &clientId, const std::optional<CursorState> &nextCursor) {
+	bool changed = false;
+	auto previousIt = activeCursors.find(clientId);
+	if (previousIt != activeCursors.end()) {
+		const CursorState &previous = previousIt->second;
+		if (nextCursor && previous.uri == nextCursor->uri && previous.position.line == nextCursor->position.line)
+			return false;
+
+		auto locksIt = lockedLinesByUri.find(previous.uri);
+		if (locksIt != lockedLinesByUri.end()) {
+			auto lineIt = locksIt->second.find(previous.position.line);
+			if (lineIt != locksIt->second.end()) {
+				lineIt->second.clients.erase(clientId);
+				if (lineIt->second.clients.empty()) {
+					locksIt->second.erase(lineIt);
+					changed = syncCompiledDocument(previous.uri, false) || changed;
+					recompileDependents(previous.uri);
+				}
+				if (locksIt->second.empty())
+					lockedLinesByUri.erase(locksIt);
+			}
+		}
+		activeCursors.erase(previousIt);
+	}
+
+	if (!nextCursor)
+		return changed;
+
+	activeCursors[clientId] = *nextCursor;
+	auto liveIt = documents.find(nextCursor->uri);
+	if (liveIt == documents.end())
+		return changed;
+
+	auto compiledIt = compiledDocuments.find(nextCursor->uri);
+	if (compiledIt == compiledDocuments.end())
+		syncCompiledDocument(nextCursor->uri, true);
+
+	auto &lineState = lockedLinesByUri[nextCursor->uri][nextCursor->position.line];
+	if (lineState.clients.empty()) {
+		auto baselineDocIt = compiledDocuments.find(nextCursor->uri);
+		const TextDocument *baselineDoc =
+			baselineDocIt != compiledDocuments.end() ? baselineDocIt->second.get() : liveIt->second.get();
+		if (nextCursor->position.line >= 0 && nextCursor->position.line < baselineDoc->lineCount())
+			lineState.committedText = std::string(baselineDoc->getLine(nextCursor->position.line));
+		else
+			lineState.committedText.clear();
+	}
+	lineState.clients.insert(clientId);
+	return changed;
+}
+
 void DynLexServer::recompileMainDocument(const std::string &uri) {
-	auto docIt = documents.find(uri);
-	if (docIt == documents.end()) {
+	auto docIt = compiledDocuments.find(uri);
+	if (docIt == compiledDocuments.end()) {
 		return;
 	}
 
@@ -202,7 +336,7 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 
 	// Create new parse context with LSP file system
 	auto context = std::make_unique<ParseContext>();
-	context->fileSystem = std::make_unique<LspFileSystem>(documents);
+	context->fileSystem = std::make_unique<LspFileSystem>(compiledDocuments);
 
 	// Use the compiler to parse and analyze
 	compile(uri, *context);
@@ -235,6 +369,30 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 
 	// Store context
 	parseContexts[uri] = std::move(context);
+}
+
+void DynLexServer::recompileDependents(const std::string &uri) {
+	if (isConfigDocumentUri(uri)) {
+		std::vector<std::string> dependentMainUris;
+		for (const auto &[mainUri, context] : parseContexts) {
+			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
+				dependentMainUris.push_back(mainUri);
+		}
+		for (const std::string &mainUri : dependentMainUris)
+			recompileMainDocument(mainUri);
+		return;
+	}
+
+	if (parseContexts.contains(uri))
+		recompileMainDocument(uri);
+
+	auto it = importedBy.find(uri);
+	if (it == importedBy.end())
+		return;
+
+	auto mainUris = it->second;
+	for (const auto &mainUri : mainUris)
+		recompileMainDocument(mainUri);
 }
 
 void DynLexServer::publishMergedDiagnostics(const std::string &fileUri) {
@@ -319,11 +477,12 @@ void DynLexServer::publishDiagnostics(const std::string &uri, const std::vector<
 }
 
 CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &params) {
-	if (isConfigDocumentUri(params.textDocument.uri))
-		return {};
 	auto docIt = documents.find(params.textDocument.uri);
 	if (docIt == documents.end()) {
 		return {};
+	}
+	if (isConfigDocumentUri(params.textDocument.uri)) {
+		return collectConfigCompletions(*docIt->second, params.position.line, params.position.character);
 	}
 
 	std::string_view line = docIt->second->getLine(params.position.line);
