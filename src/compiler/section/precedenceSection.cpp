@@ -11,11 +11,11 @@ bool PrecedenceSection::addItem(ParseContext &context, Range itemRange) {
 	if (itemStr == "default") {
 		context.addSourceToken(itemRange, ParseContext::SourceTokenKind::Keyword);
 	} else {
-		context.addSourceToken(itemRange, ParseContext::SourceTokenKind::PatternReference, SectionType::Expression);
+		context.addSourceToken(itemRange, ParseContext::SourceTokenKind::PatternReference, SectionType::Function);
 	}
 	return true;
 }
 
 void PrecedenceSection::addSeparator(ParseContext &context, Range separatorRange) {
-	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::PatternReference, SectionType::Expression);
+	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::PatternReference, SectionType::Function);
 }

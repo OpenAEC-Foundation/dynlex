@@ -1,6 +1,6 @@
 import lib/std.dl
 
-expression toint {float:x}:
+function toint {float:x}:
     execute:
         return x as a 32 bit integer
 

@@ -29,8 +29,7 @@ This extension contributes the following settings:
 
 The extension provides semantic highlighting for the following token types:
 
-- `expression` - Expression patterns
-- `effect` - Effect patterns
+- `function` - Function patterns
 - `section` - Section patterns
 - `variable` - Variables (with `definition` modifier for definitions)
 - `comment` - Comments

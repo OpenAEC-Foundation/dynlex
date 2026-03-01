@@ -1,0 +1,7 @@
+importeer std.dl
+
+functie verdubbel waarde:
+    doe:
+        return waarde + waarde
+
+print verdubbel 21

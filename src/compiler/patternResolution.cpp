@@ -1,6 +1,6 @@
 #include "classSection.h"
 #include "compiler.h"
-#include "expression.h"
+#include "function.h"
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "transformedPattern.h"
@@ -26,74 +26,74 @@ void addVariableReferencesFromMatch(ParseContext &context, PatternReference *ref
 	}
 }
 
-void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
+void expandMatch(Function *rootFunction, Function *expr, PatternMatch *match) {
 	expr->arguments = match->arguments;
 	// move arguments to the appropriate submatches
-	expr->kind = Expression::Kind::PatternCall;
+	expr->kind = Function::Kind::PatternCall;
 	expr->patternMatch = match;
 	for (const PatternMatch &subMatch : match->subMatches) {
-		Expression *arg = new Expression();
+		Function *arg = new Function();
 		arg->isSubMatch = true;
 		arg->range = Range(
-			expr->range.line, rootExpression->range.start() + subMatch.lineStartPos,
-			rootExpression->range.start() + subMatch.lineEndPos
+			expr->range.line, rootFunction->range.start() + subMatch.lineStartPos,
+			rootFunction->range.start() + subMatch.lineEndPos
 		);
-		expandMatch(rootExpression, arg, const_cast<PatternMatch *>(&subMatch));
+		expandMatch(rootFunction, arg, const_cast<PatternMatch *>(&subMatch));
 		expr->arguments.push_back(arg);
 	}
 
-	// Handle discoveredVariables - add Variable expressions using stored references
+	// Handle discoveredVariables - add Variable functions using stored references
 	for (const VariableMatch &varMatch : match->discoveredVariables) {
-		Expression *arg = new Expression();
-		arg->kind = Expression::Kind::Variable;
+		Function *arg = new Function();
+		arg->kind = Function::Kind::Variable;
 		arg->variable = varMatch.variableReference;
 		arg->range = varMatch.variableReference->range;
 		expr->arguments.push_back(arg);
 	}
 
-	// Handle discoveredWords - add string Literal expressions
+	// Handle discoveredWords - add string Literal functions
 	for (const WordMatch &wordMatch : match->discoveredWords) {
-		Expression *arg = new Expression();
-		arg->kind = Expression::Kind::Literal;
+		Function *arg = new Function();
+		arg->kind = Function::Kind::Literal;
 		arg->literalValue = wordMatch.text;
 		arg->range = Range(
-			rootExpression->range.line, rootExpression->range.start() + wordMatch.lineStartPos,
-			rootExpression->range.start() + wordMatch.lineEndPos
+			rootFunction->range.line, rootFunction->range.start() + wordMatch.lineStartPos,
+			rootFunction->range.start() + wordMatch.lineEndPos
 		);
 		expr->arguments.push_back(arg);
 	}
 }
 
-// Recursively expand pending expressions to their resolved forms
-void expandExpression(Expression *expr, Section *section) {
+// Recursively expand pending functions to their resolved forms
+void expandFunction(Function *expr, Section *section) {
 	if (!expr)
 		return;
 
 	// Expand children first
-	for (Expression *arg : expr->arguments) {
-		expandExpression(arg, section);
+	for (Function *arg : expr->arguments) {
+		expandFunction(arg, section);
 	}
 
-	// If this is a pending expression, resolve it
-	// we can assume that expr->patternReference is set, since pending expressions are only expanded after complete pattern
+	// If this is a pending function, resolve it
+	// we can assume that expr->patternReference is set, since pending functions are only expanded after complete pattern
 	// resolution
-	if (expr->kind == Expression::Kind::Pending) {
+	if (expr->kind == Function::Kind::Pending) {
 		PatternReference *ref = expr->patternReference;
 		if (ref->match) {
 			expandMatch(expr, expr, ref->match);
 		} else if (ref->patternElements.size() == 1 && ref->patternElements[0].type == PatternElement::Type::Variable) {
 			// Resolved to a variable reference
-			expr->kind = Expression::Kind::Variable;
+			expr->kind = Function::Kind::Variable;
 			// Find the variable reference in the section
 			std::string varName = ref->patternElements[0].text;
 			auto it = section->variableReferences.find(varName);
 			if (it != section->variableReferences.end() && !it->second.empty()) {
 				expr->variable = it->second.front();
 			}
-		} else if (expr->arguments.size() == 1 && expr->arguments[0]->kind == Expression::Kind::IntrinsicCall) {
+		} else if (expr->arguments.size() == 1 && expr->arguments[0]->kind == Function::Kind::IntrinsicCall) {
 			// If the pattern is just an argument placeholder and we have a single intrinsic call,
-			// promote the intrinsic to be this expression
-			Expression *intrinsic = expr->arguments[0];
+			// promote the intrinsic to be this function
+			Function *intrinsic = expr->arguments[0];
 			expr->kind = intrinsic->kind;
 			expr->intrinsicName = intrinsic->intrinsicName;
 			expr->arguments = intrinsic->arguments;
@@ -256,7 +256,7 @@ static void removeVariableReferencesFromMatch(
 						});
 						if (needsReResolution && def->resolved) {
 							// Remove from tree while elements still reflect the old path
-							SectionType treeType = sec->type == SectionType::Class ? SectionType::Expression : sec->type;
+							SectionType treeType = sec->type == SectionType::Class ? SectionType::Function : sec->type;
 							context.patternTrees[(size_t)treeType]->removePatternPart(def->patternElements, def);
 						}
 						// Now revert element types (only unconstrained — typed arguments stay Variable)
@@ -467,7 +467,7 @@ bool resolvePatterns(ParseContext &context) {
 						}
 					});
 					if (definition->resolved) {
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -479,7 +479,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -495,9 +495,9 @@ bool resolvePatterns(ParseContext &context) {
 
 		// Resolve type constraints on definition elements ({type:name} syntax).
 		// Walk all definitions and resolve typeConstraintName strings to DataTypes
-		// by looking up the type name in the expression pattern tree.
+		// by looking up the type name in the function pattern tree.
 		{
-			PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Expression];
+			PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Function];
 			std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
 				for (PatternDefinition *def : section->patternDefinitions) {
 					for (auto &elem : def->patternElements) {
@@ -524,9 +524,9 @@ bool resolvePatterns(ParseContext &context) {
 								// Macro type (e.g., integer, float, boolean) — evaluate the type intrinsic
 								for (Section *child : d->section->children) {
 									for (CodeLine *cl : child->codeLines) {
-										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
-											cl->expression->intrinsicName == "type") {
-											auto &args = cl->expression->arguments;
+										if (cl->function && cl->function->kind == Function::Kind::IntrinsicCall &&
+											cl->function->intrinsicName == "type") {
+											auto &args = cl->function->arguments;
 											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
 												if (*kindStr == "int") {
 													int bits = 32;
@@ -588,7 +588,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Expression : section->type;
+						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -645,9 +645,9 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
 	{
-		// Resolve before:/after: signature strings to pattern definitions in the expression trie
+		// Resolve before:/after: signature strings to pattern definitions in the function trie
 		auto resolveSignature = [&](const std::string &signature) -> PatternDefinition * {
-			return findDefinitionBySignature(context, SectionType::Expression, signature);
+			return findDefinitionBySignature(context, SectionType::Function, signature);
 		};
 
 		// Collect precedence edges: higher → lower (higher prec = evaluated first)
@@ -658,7 +658,7 @@ bool resolvePatterns(ParseContext &context) {
 		std::vector<PrecedenceEdge> edges;
 		std::unordered_set<PatternDefinition *> involvedDefs;
 
-		// Virtual sentinel for "default" precedence — expression patterns without explicit
+		// Virtual sentinel for "default" precedence — function patterns without explicit
 		// precedence get this level, which is below all operators that declare "before: default".
 		PatternDefinition defaultSentinel(Range(), nullptr);
 		bool hasDefaultPrecedence = false;
@@ -772,10 +772,10 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	}
 
-	// All patterns resolved — expand expressions and resolve variable references
+	// All patterns resolved — expand functions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
-		if (line->expression)
-			expandExpression(line->expression, line->section);
+		if (line->function)
+			expandFunction(line->function, line->section);
 	}
 	for (auto &[name, references] : context.unresolvedVariableReferences) {
 		bool isGlobal = context.declaredGlobalVariables.contains(name);
@@ -787,10 +787,10 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			Section *highest = sec;
 
-			// Find the enclosing function (Expression/Effect section)
+			// Find the enclosing function (Function/Effect section)
 			Section *functionScope = nullptr;
 			for (Section *a = sec; a; a = a->parent) {
-				if (a->type == SectionType::Expression && !a->isMacro) {
+				if (a->type == SectionType::Function && !a->isMacro) {
 					functionScope = a;
 					break;
 				}
@@ -831,7 +831,7 @@ bool resolvePatterns(ParseContext &context) {
 			if (isGlobal) {
 				groupIsGlobal = true;
 				for (Section *a = highestSection; a; a = a->parent) {
-					if (a->type == SectionType::Expression && !a->isMacro) {
+					if (a->type == SectionType::Function && !a->isMacro) {
 						groupIsGlobal = false;
 						break;
 					}

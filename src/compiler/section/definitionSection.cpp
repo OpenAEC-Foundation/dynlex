@@ -6,20 +6,23 @@
 #include "patternsSection.h"
 #include "precedenceSection.h"
 #include "replacementSection.h"
+#include "syntaxConfig.h"
 
 bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	// Handle inline globals: "globals: var1, var2, var3"
 	std::string_view text = line->patternText;
-	if (text.starts_with("globals: ") || text.starts_with("globals:")) {
-		size_t colonPos = text.find(':');
-		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
-		std::string_view vars = text.substr(colonPos + 1);
+	if (std::optional<std::string_view> varsMatch =
+			extractInlineSettingValue(text, syntax.globalsSectionName, syntax.sectionOpener)) {
+		std::string_view vars = *varsMatch;
+		size_t valueStart = text.size() - vars.size();
+		context.addSourceToken(Range(line, text.substr(0, valueStart)), ParseContext::SourceTokenKind::Keyword);
 		parseCommaSeparatedListWithRanges(vars, [&](std::string_view varName, size_t start, size_t end) {
 			std::string varNameStr(varName);
 			globalVariables.push_back(varNameStr);
 			context.declaredGlobalVariables.insert(varNameStr);
 			context.addSourceToken(
-				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::Variable
+				Range(line, text.substr(valueStart + start, end - start)), ParseContext::SourceTokenKind::Variable
 			);
 		});
 		line->resolved = true;
@@ -27,22 +30,24 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	}
 
 	// Handle inline before: "before: $ + $, $ - $"
-	if (text.starts_with("before: ") || text.starts_with("before:")) {
-		size_t colonPos = text.find(':');
-		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
-		std::string_view patterns = text.substr(colonPos + 1);
+	if (std::optional<std::string_view> patternsMatch =
+			extractInlineSettingValue(text, syntax.beforeSectionName, syntax.sectionOpener)) {
+		std::string_view patterns = *patternsMatch;
+		size_t valueStart = text.size() - patterns.size();
+		context.addSourceToken(Range(line, text.substr(0, valueStart)), ParseContext::SourceTokenKind::Keyword);
 		parseCommaSeparatedListWithRanges(patterns, [&](std::string_view pattern, size_t start, size_t end) {
 			beforePatterns.push_back(std::string(pattern));
-			Range patternRange(line, text.substr(colonPos + 1 + start, end - start));
+			Range patternRange(line, text.substr(valueStart + start, end - start));
 			context.addSourceToken(
 				patternRange,
-				pattern == "default" ? ParseContext::SourceTokenKind::Keyword : ParseContext::SourceTokenKind::PatternReference,
-				SectionType::Expression
+				pattern == syntax.precedenceDefaultName ? ParseContext::SourceTokenKind::Keyword
+														: ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Function
 			);
 		}, [&](std::string_view /*separator*/, size_t start, size_t end) {
 			context.addSourceToken(
-				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
-				SectionType::Expression
+				Range(line, text.substr(valueStart + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Function
 			);
 		});
 		line->resolved = true;
@@ -50,22 +55,24 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	}
 
 	// Handle inline after: "after: $ + $, $ - $"
-	if (text.starts_with("after: ") || text.starts_with("after:")) {
-		size_t colonPos = text.find(':');
-		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
-		std::string_view patterns = text.substr(colonPos + 1);
+	if (std::optional<std::string_view> patternsMatch =
+			extractInlineSettingValue(text, syntax.afterSectionName, syntax.sectionOpener)) {
+		std::string_view patterns = *patternsMatch;
+		size_t valueStart = text.size() - patterns.size();
+		context.addSourceToken(Range(line, text.substr(0, valueStart)), ParseContext::SourceTokenKind::Keyword);
 		parseCommaSeparatedListWithRanges(patterns, [&](std::string_view pattern, size_t start, size_t end) {
 			afterPatterns.push_back(std::string(pattern));
-			Range patternRange(line, text.substr(colonPos + 1 + start, end - start));
+			Range patternRange(line, text.substr(valueStart + start, end - start));
 			context.addSourceToken(
 				patternRange,
-				pattern == "default" ? ParseContext::SourceTokenKind::Keyword : ParseContext::SourceTokenKind::PatternReference,
-				SectionType::Expression
+				pattern == syntax.precedenceDefaultName ? ParseContext::SourceTokenKind::Keyword
+														: ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Function
 			);
 		}, [&](std::string_view /*separator*/, size_t start, size_t end) {
 			context.addSourceToken(
-				Range(line, text.substr(colonPos + 1 + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
-				SectionType::Expression
+				Range(line, text.substr(valueStart + start, end - start)), ParseContext::SourceTokenKind::PatternReference,
+				SectionType::Function
 			);
 		});
 		line->resolved = true;
@@ -79,20 +86,21 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 }
 
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	// Macros use "replacement", handled here in base class
-	if (isMacro && line->patternText == "replacement") {
+	if (isMacro && matchesConfiguredKeyword(line->patternText, syntax.replacementSectionName)) {
 		return executionSection = new ReplacementSection(this);
 	}
 
-	if (line->patternText == "execute") {
+	if (matchesConfiguredKeyword(line->patternText, syntax.executeSectionName)) {
 		return executionSection = new Section(SectionType::Get, this);
 	}
 
-	if (line->patternText == "patterns") {
+	if (matchesConfiguredKeyword(line->patternText, syntax.patternsSectionName)) {
 		return new PatternsSection(this);
 	}
 
-	if (line->patternText == "globals") {
+	if (matchesConfiguredKeyword(line->patternText, syntax.globalsSectionName)) {
 		return new GlobalsSection(this);
 	}
 

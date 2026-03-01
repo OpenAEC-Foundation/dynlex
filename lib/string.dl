@@ -9,19 +9,19 @@ class:
         data as pointer to byte
         length as i32
 
-macro expression cstring:
+macro function cstring:
     replacement:
         @intrinsic("type", "string")
 
-macro expression new string from data ptr with length len:
+macro function new string from data ptr with length len:
     replacement:
         @intrinsic("construct", string, ptr, len)
 
-macro expression character index of str:
+macro function character index of str:
     replacement:
         @intrinsic("dereference", the data of str + index)
 
-expression the length of str:
+function the length of str:
     execute:
         set len to 0
         set ch to character len of str
@@ -32,48 +32,48 @@ expression the length of str:
 
 # --- Conversions to string ---
 
-expression {integer:value} as a string:
+function {integer:value} as a string:
     execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 21)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 21, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
-expression {float:value} as a string:
+function {float:value} as a string:
     execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 32)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 32, "%g", value as a 64 bit float)
         return new string from data buf with length len
 
-expression {boolean:value} as a string:
+function {boolean:value} as a string:
     execute:
         set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
         set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
-expression {cstring:value} as a string:
+function {cstring:value} as a string:
     execute:
         set len to @intrinsic("call", "libc", "strlen", an integer, value)
         return new string from data value with length len
 
 # --- Line suffix ---
 
-expression value as [a|] line:
+function value as [a|] line:
     execute:
         return value as a string + new string from data "\n" with length 1
 
 # --- Output ---
 
-expression print {string:msg}:
+function print {string:msg}:
     execute:
         @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
 
-expression print msg:
+function print msg:
     execute:
         print msg as a string
 
 # --- Concatenation ---
 
-expression {string:left} + {string:right}:
+function {string:left} + {string:right}:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         set left_len to the length of left

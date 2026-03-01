@@ -39,12 +39,8 @@
     ],
     "semanticTokenTypes": [
       {
-        "id": "expression",
-        "description": "DynLex expression pattern"
-      },
-      {
-        "id": "effect",
-        "description": "DynLex effect pattern"
+        "id": "function",
+        "description": "DynLex function pattern"
       },
       {
         "id": "section",
@@ -61,17 +57,18 @@
       {
         "id": "type",
         "description": "DynLex type reference"
+      },
+      {
+        "id": "keyword",
+        "description": "DynLex keyword"
       }
     ],
     "semanticTokenScopes": [
       {
         "language": "dynlex",
         "scopes": {
-          "expression": [
+          "function": [
             "entity.name.function"
-          ],
-          "effect": [
-            "keyword.control"
           ],
           "section": [
             "storage.type"
@@ -96,6 +93,9 @@
           ],
           "type": [
             "support.type"
+          ],
+          "keyword": [
+            "keyword"
           ]
         }
       }
@@ -190,6 +190,8 @@
     }
   },
   "scripts": {
+    "sync:license": "node ./scripts/sync-license.mjs",
+    "prebundle": "npm run sync:license",
     "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",

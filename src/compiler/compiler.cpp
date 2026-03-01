@@ -1,12 +1,13 @@
 #include "compiler.h"
 #include "IndentData.h"
 #include "classSection.h"
-#include "expression.h"
+#include "function.h"
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pattern/pattern_tree/patternElement.h"
 #include "stringFunctions.h"
+#include "syntaxConfig.h"
 #include "type.h"
 #include <filesystem>
 #include <regex>
@@ -55,21 +56,6 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 	}
 
 	return path; // Return original path (will fail with proper error)
-}
-
-// Find the position of # that's not inside a string literal
-// Returns npos if no comment found
-size_t findCommentStart(std::string_view line) {
-	bool inString = false;
-	for (size_t i = 0; i < line.size(); i++) {
-		char c = line[i];
-		if (c == '"' && (i == 0 || line[i - 1] != '\\')) {
-			inString = !inString;
-		} else if (c == '#' && !inString) {
-			return i;
-		}
-	}
-	return std::string_view::npos;
 }
 
 // regex for line terminators - matches each line including its terminator
@@ -137,11 +123,11 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
-static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef) {
+static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
 	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
 		return false;
 
-	Expression *kindExpr = intrinsicExpr->arguments[1];
+	Function *kindExpr = intrinsicExpr->arguments[1];
 	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
 	if (!kindStr)
 		return false;
@@ -167,7 +153,7 @@ static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &
 	}
 
 	if (intrinsicExpr->arguments.size() >= 3) {
-		Expression *bitsExpr = intrinsicExpr->arguments[2];
+		Function *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)
 			return false;
@@ -178,16 +164,16 @@ static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &
 	return true;
 }
 
-static bool resolveTypeReferenceExpression(
-	Expression *expr, const std::unordered_map<std::string, Expression *> &bindings, DataType &outTypeRef
+static bool resolveTypeReferenceFunction(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
 ) {
 	if (!expr)
 		return false;
 
-	if (expr->kind == Expression::Kind::Variable && expr->variable) {
+	if (expr->kind == Function::Kind::Variable && expr->variable) {
 		auto it = bindings.find(expr->variable->name);
 		if (it != bindings.end())
-			return resolveTypeReferenceExpression(it->second, bindings, outTypeRef);
+			return resolveTypeReferenceFunction(it->second, bindings, outTypeRef);
 		if (expr->variable->name == "pointer") {
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Int;
@@ -206,12 +192,12 @@ static bool resolveTypeReferenceExpression(
 		return false;
 	}
 
-	if (expr->kind == Expression::Kind::IntrinsicCall) {
+	if (expr->kind == Function::Kind::IntrinsicCall) {
 		if (tryParseIntrinsicTypeReference(expr, outTypeRef))
 			return true;
 		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
 			DataType innerTypeRef;
-			if (!resolveTypeReferenceExpression(expr->arguments[1], bindings, innerTypeRef) ||
+			if (!resolveTypeReferenceFunction(expr->arguments[1], bindings, innerTypeRef) ||
 				innerTypeRef.kind != DataType::Kind::Type)
 				return false;
 			innerTypeRef.pointerDepth++;
@@ -221,7 +207,7 @@ static bool resolveTypeReferenceExpression(
 		return false;
 	}
 
-	if (expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+	if (expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return false;
 
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
@@ -238,15 +224,15 @@ static bool resolveTypeReferenceExpression(
 		return true;
 	}
 
-	std::unordered_map<std::string, Expression *> innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	std::unordered_map<std::string, Function *> innerBindings;
+	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (!bodyExpr)
 		return false;
 
-	std::unordered_map<std::string, Expression *> mergedBindings = bindings;
+	std::unordered_map<std::string, Function *> mergedBindings = bindings;
 	for (const auto &[name, argExpr] : innerBindings)
 		mergedBindings[name] = argExpr;
-	return resolveTypeReferenceExpression(bodyExpr, mergedBindings, outTypeRef);
+	return resolveTypeReferenceFunction(bodyExpr, mergedBindings, outTypeRef);
 }
 
 static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
@@ -267,13 +253,13 @@ static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
 
 		for (ClassDefinition *classDef : classDefinitions) {
 			for (FieldDefinition &field : classDef->fields) {
-				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeExpression) {
-					if (field.declaredType.typeExpression->kind == Expression::Kind::Pending && field.range.line &&
+				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeFunction) {
+					if (field.declaredType.typeFunction->kind == Function::Kind::Pending && field.range.line &&
 						field.range.line->section) {
-						expandExpression(field.declaredType.typeExpression, field.range.line->section);
+						expandFunction(field.declaredType.typeFunction, field.range.line->section);
 					}
 					DataType typeRef;
-					if (resolveTypeReferenceExpression(field.declaredType.typeExpression, {}, typeRef) &&
+					if (resolveTypeReferenceFunction(field.declaredType.typeFunction, {}, typeRef) &&
 						typeRef.kind == DataType::Kind::Type) {
 						field.declaredType = concretizeClassType(typeRef.toReferencedType());
 						madeProgress = true;
@@ -312,9 +298,35 @@ static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
 }
 
 bool compile(const std::string &path, ParseContext &context) {
-	// first, read all source files
-	return importSourceFile(path, context) && analyzeSections(context) && resolvePatterns(context) &&
-		   resolveDeclaredClassFieldTypes(context) && validate(context) && inferTypes(context);
+	context.compilationStage = ParseContext::CompilationStage::NotStarted;
+	if (!initializeSyntaxConfigs(context, path))
+		return false;
+
+	if (!importSourceFile(path, context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
+
+	if (!analyzeSections(context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::AnalyzedSections;
+
+	if (!resolvePatterns(context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
+
+	if (!resolveDeclaredClassFieldTypes(context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::ResolvedDeclaredTypes;
+
+	if (!validate(context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::Validated;
+
+	if (!inferTypes(context))
+		return false;
+	context.compilationStage = ParseContext::CompilationStage::InferredTypes;
+
+	return true;
 }
 
 bool importSourceFile(const std::string &path, ParseContext &context) {
@@ -340,6 +352,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 
 	// iterate over lines, each match includes the line terminator
 	std::string_view fileView{sourceFile->content};
+	const SyntaxConfig &syntax = syntaxConfigForSourcePath(context, sourceFile->uri.empty() ? path : sourceFile->uri);
 
 	std::cregex_iterator iter(fileView.begin(), fileView.end(), lineWithTerminatorRegex);
 	std::cregex_iterator end;
@@ -349,7 +362,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		CodeLine *line = new CodeLine(lineString, sourceFile);
 		line->sourceFileLineIndex = sourceFileLineIndex;
 		// first, remove comments and trim whitespace from the right
-		size_t commentPos = findCommentStart(lineString);
+		size_t commentPos = findCommentStart(lineString, syntax.commentPrefix);
 		std::string_view withoutComment =
 			(commentPos != std::string_view::npos) ? lineString.substr(0, commentPos) : lineString;
 
@@ -359,18 +372,17 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		line->rightTrimmedText = match.empty() ? withoutComment : withoutComment.substr(0, match.position());
 
 		// check if the line is an import statement
-		if (line->rightTrimmedText.starts_with("import ")) {
+		if (std::optional<std::string_view> importPathView =
+				extractDirectiveArgument(line->rightTrimmedText, syntax.importKeyword)) {
 			// recursively import the file, replacing this line with the imported content
 			std::string importingDir = std::filesystem::path(toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
 										   .parent_path()
 										   .string();
-			std::string importPath = resolveImportPath(
-				std::string(line->rightTrimmedText.substr("import "sv.length())), importingDir, context.fileSystem.get()
-			);
+			std::string importPath = resolveImportPath(std::string(*importPathView), importingDir, context.fileSystem.get());
 			if (!importSourceFile(importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(
 					Diagnostic::Level::Error, "failed to import source file: " + (std::string)importPath,
-					Range(line, "import "sv.length(), line->rightTrimmedText.length())
+					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length())
 				));
 				return false;
 			}
@@ -391,6 +403,7 @@ bool analyzeSections(ParseContext &context) {
 	// code from imported files. we assume that the indent level of the code of
 	// imported files and the import statements both match.
 	for (CodeLine *line : context.codeLines) {
+		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 		// skip empty lines (blank or comment-only) for indent tracking
 		if (line->rightTrimmedText.empty()) {
 			line->section = currentSection;
@@ -465,8 +478,8 @@ bool analyzeSections(ParseContext &context) {
 		std::string_view trimmedText = line->rightTrimmedText.substr(indentString.length());
 
 		// check if this line starts a section
-		if (trimmedText.ends_with(":")) {
-			line->patternText = trimmedText.substr(0, trimmedText.length() - 1);
+		if (trimmedText.ends_with(syntax.sectionOpener)) {
+			line->patternText = trimmedText.substr(0, trimmedText.length() - syntax.sectionOpener.length());
 
 			// set the current section to the new section for the next line
 			currentSection = currentSection->createSection(context, line);
@@ -478,9 +491,9 @@ bool analyzeSections(ParseContext &context) {
 			data.indentLevel++;
 		} else {
 			line->patternText = trimmedText;
-			if (line->patternText.starts_with("import ")) {
+			if (extractDirectiveArgument(line->patternText, syntax.importKeyword)) {
 				// Import lines are already processed during importSourceFile;
-				// tokenize "import" as effect and the path as string
+				// tokenize "import" as a keyword and the path as a string
 				line->resolved = true;
 			} else if (line->patternText.length()) {
 				currentSection->processLine(context, line);
@@ -536,7 +549,7 @@ bool isMathFunction(const std::string &name) {
 }
 
 PatternDefinition *selectOverload(
-	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Function *> & /*sortedArgs*/,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 ) {
 	if (definitions.size() <= 1)

@@ -9,7 +9,7 @@ multiply testVector by 4.5
 #classes should have a print function, which prints their name (first syntax) and members. classes can override it with a print: section
 print testVector
 
-expression test:
+function test:
 	execute:
 
 test

@@ -1,6 +1,6 @@
 #include "membersSection.h"
 #include "classSection.h"
-#include "expression.h"
+#include "function.h"
 #include "parseContext.h"
 #include "patternReference.h"
 
@@ -23,16 +23,16 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 
 		// Create a class pattern reference for the type text
 		Range typeRange(fieldRange.line, typeStr);
-		Expression *typeExpr = new Expression();
+		Function *typeExpr = new Function();
 		typeExpr->range = typeRange;
-		typeExpr->kind = Expression::Kind::Pending;
-		PatternReference *ref = new PatternReference(typeExpr, SectionType::Expression);
+		typeExpr->kind = Function::Kind::Pending;
+		PatternReference *ref = new PatternReference(typeExpr, SectionType::Function);
 		typeExpr->patternReference = ref;
 		section->addPatternReference(ref);
 
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;
-		type.typeExpression = typeExpr;
+		type.typeFunction = typeExpr;
 		fieldDefinition = {std::string(name), Range(fieldRange.line, fieldRange.line->patternText), type};
 	} else {
 		context.addSourceToken(fieldRange, ParseContext::SourceTokenKind::Variable);

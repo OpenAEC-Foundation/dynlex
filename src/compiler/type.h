@@ -8,7 +8,7 @@ class LLVMContext;
 } // namespace llvm
 
 struct ClassDefinition;
-struct Expression;
+struct Function;
 
 struct DataType {
 	enum class Kind {
@@ -32,7 +32,7 @@ struct DataType {
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
 	ClassDefinition *classDefinition = nullptr; // For Kind::Class and Kind::Type (class type refs)
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
-	Expression *typeExpression = nullptr;		// For Kind::Unresolved: class pattern reference to resolve
+	Function *typeFunction = nullptr;			// For Kind::Unresolved: class pattern reference to resolve
 	Kind referencedKind = Kind::Unresolved;		// For Kind::Type: the kind this type literal refers to
 
 	bool operator==(const DataType &other) const {

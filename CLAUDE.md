@@ -37,11 +37,11 @@ src/
 │   ├── compiler.cpp/h          # Import, section analysis, intrinsic classifiers
 │   ├── patternResolution.cpp   # Pattern matching and resolution
 │   ├── typeInference.cpp       # Type inference (execution-order, operand reordering)
-│   ├── section/                # Section types (expression, section, class)
+│   ├── section/                # Section types (function, section, class)
 │   ├── pattern/                # Pattern definitions and references
 │   ├── pattern/pattern_tree/   # Tree-based pattern matching
 │   └── codegen/                # LLVM code generation
-│       ├── codegen.cpp/h       # Expression codegen, specialized functions, driver
+│       ├── codegen.cpp/h       # Function codegen, specialized functions, driver
 │       ├── codegenInternal.h   # Shared declarations across codegen files
 │       ├── codegenTypes.cpp    # Type utilities, macro infrastructure, variables
 │       ├── codegenIntrinsics.cpp # Intrinsic code generation
@@ -62,14 +62,14 @@ tests/required/                 # Test cases with expected outputs
 **File extension:** `.dl`
 
 **Pattern types:**
-- `expression` - A function. Void-returning expressions are used for side effects.
+- `function` - A function. Void-returning functions are used for side effects.
 - `section` - The outermost pattern of a section opening (loop, if, etc.)
 
-Classes add their patterns to the expression tree since a type literal is an expression.
+Classes add their patterns to the function tree since a type literal is an function.
 
 **Example:**
 ```
-macro expression set var to val:
+macro function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
@@ -127,7 +127,7 @@ Tests can have `expected.txt` (output comparison) or `expected_error.txt` (expec
 - **Compilation target:** Native code via LLVM (outputs .ll, .spv, or executable based on flags)
 - **Type system:** Static typing with full inference (no annotations)
 - **Memory (DynLex language):** Automatic scope-based destruction (RAII-style)
-- **Memory (Compiler internals):** Arena-style allocation - objects allocated with `new` during compilation are not explicitly deleted. They're owned by ParseContext and cleaned up when compilation finishes. This includes: CodeLine, Section, Expression, Variable, PatternDefinition, PatternReference, VariableReference, MatchProgress. No smart pointers needed.
+- **Memory (Compiler internals):** Arena-style allocation - objects allocated with `new` during compilation are not explicitly deleted. They're owned by ParseContext and cleaned up when compilation finishes. This includes: CodeLine, Section, Function, Variable, PatternDefinition, PatternReference, VariableReference, MatchProgress. No smart pointers needed.
 - **Primitive types:** Sized numerics (i8/i16/i32/i64, f32/f64), bool, string
 - **Classes:** Data-only structs (no member functions), patterns operate on them
 - **Pattern ambiguity:** Compiler error if multiple patterns match

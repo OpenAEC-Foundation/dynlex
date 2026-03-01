@@ -8,7 +8,7 @@ struct PatternTreeNode : public PatternElement {
 	std::vector<PatternDefinition *> matchingDefinitions;
 	// these child nodes branch off based on their pattern strings
 	std::unordered_map<std::string, PatternTreeNode *> literalChildren{};
-	// this child node accepts a variable or the result of an expression
+	// this child node accepts a variable or the result of an function
 	PatternTreeNode *argumentChild{};
 	// this child node captures a single word as a string literal ({word:name} syntax)
 	PatternTreeNode *wordChild{};

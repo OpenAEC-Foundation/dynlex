@@ -45,7 +45,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		}
 
 		if (canBeSubmatch()) {
-			// Try extending as left operand of a new expression first (lower LIFO priority).
+			// Try extending as left operand of a new function first (lower LIFO priority).
 			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
 			if (canStartSubmatch() && rootNode->argumentChild) {
 				MatchProgress clone = *this;
@@ -53,16 +53,16 @@ std::vector<MatchProgress> MatchProgress::step() {
 				if (parent)
 					clone.parent = new MatchProgress(*parent);
 				clone.rootNode = rootNode;
-				// advance past the argument slot — the completed sub-expression occupies it
+				// advance past the argument slot — the completed sub-function occupies it
 				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};
 				clone.match.nodesPassed.push_back(clone.currentNode);
 
-				clone.type = SectionType::Expression;
+				clone.type = SectionType::Function;
 				stepUp(clone);
 			}
 			// Step up to parent match (higher LIFO priority — prefer returning to the
-			// parent over speculatively extending into a new expression).
+			// parent over speculatively extending into a new function).
 			if (parent) {
 				stepUp(*parent);
 			}
@@ -78,9 +78,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 				// substitute the following part of the pattern
 				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
 				MatchProgress subMatch = *this;
-				subMatch.currentNode = context->patternTrees[(int)SectionType::Expression];
+				subMatch.currentNode = context->patternTrees[(int)SectionType::Function];
 				subMatch.rootNode = subMatch.currentNode;
-				subMatch.type = SectionType::Expression;
+				subMatch.type = SectionType::Function;
 				subMatch.patternStartPos = patternPos;
 				subMatch.match = {};
 
@@ -107,9 +107,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
 				} else {
 					// argument
-					if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
+					if (!patternReference->function || sourceArgumentIndex >= patternReference->function->arguments.size())
 						return nextMatches;
-					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+					substituteStep.match.arguments.push_back(patternReference->function->arguments[sourceArgumentIndex]);
 					substituteStep.sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();
@@ -144,10 +144,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 bool MatchProgress::canStartSubmatch() const {
 	// prevent infinite recursion
-	return type != SectionType::Expression || currentNode != rootNode;
+	return type != SectionType::Function || currentNode != rootNode;
 }
 
-bool MatchProgress::canBeSubmatch() const { return type == SectionType::Expression; }
+bool MatchProgress::canBeSubmatch() const { return type == SectionType::Function; }
 
 void MatchProgress::addMatchData(PatternMatch &match) {
 	match.matchedEndNode = currentNode;

@@ -168,6 +168,9 @@ void LanguageServer::handleRequest(const Json &message) {
 			sendResponse(id, result);
 		} else if (method == "shutdown") {
 			sendResponse(id, nullptr);
+		} else if (method == "textDocument/completion") {
+			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
+			sendResponse(id, onCompletion(p));
 		} else if (method == "textDocument/definition") {
 			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
 			auto result = onDefinition(p);
@@ -273,6 +276,8 @@ void LanguageServer::onDidSave(const DidSaveTextDocumentParams & /*params*/) {
 }
 
 std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
+
+CompletionList LanguageServer::onCompletion(const TextDocumentPositionParams & /*params*/) { return {}; }
 
 SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams & /*params*/) { return SemanticTokens{}; }
 

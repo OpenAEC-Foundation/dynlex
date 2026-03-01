@@ -1,28 +1,28 @@
-macro expression return value:
+macro function return value:
 	replacement:
 		@intrinsic("return", value)
 
-macro expression set var to val:
+macro function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
-macro expression [an|a|] integer:
+macro function [an|a|] integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-macro expression value as [a|an|] bits bit integer:
+macro function value as [a|an|] bits bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-expression print msg as line:
+function print msg as line:
     execute:
         @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
 
-expression left < right:
+function left < right:
 	execute:
 		return @intrinsic("less than", left, right)
 
-macro expression left + right:
+macro function left + right:
     replacement:
         @intrinsic("add", left, right)
 

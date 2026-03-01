@@ -16,10 +16,16 @@ A natural-language-like programming language that compiles to native code via LL
 ./scripts/build.sh
 ```
 
-Requires C++23, Conan, and LLVM.
+Requires C++23, CMake, Ninja, `nlohmann_json`, and LLVM 20+.
 
 ## Usage
 
 ```bash
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
+
+## Ubuntu PPA Packaging
+
+Launchpad packaging lives in [`packaging/launchpad`](./packaging/launchpad). Use
+that directory for Debian metadata, source-package builds, and PPA publishing so
+the project root stays focused on the compiler itself.

@@ -1,0 +1,5 @@
+dynlex options:
+    import: "importeer"
+    function: "functie"
+    child sections:
+        execute: "doe"

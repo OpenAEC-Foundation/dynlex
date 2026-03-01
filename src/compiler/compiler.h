@@ -12,11 +12,11 @@ bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
 bool ensureSectionInstantiationInferred(
-	ParseContext &context, Section *section, const std::unordered_map<std::string, Expression *> &callBindings,
+	ParseContext &context, Section *section, const std::unordered_map<std::string, Function *> &callBindings,
 	const std::vector<DataType> &argTypes
 );
 bool isInternalSourcePath(std::string_view path);
-void expandExpression(Expression *expr, Section *section);
+void expandFunction(Function *expr, Section *section);
 
 // Intrinsic operator checking utilities
 bool isArithmeticOperator(const std::string &name);
@@ -29,6 +29,6 @@ PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType 
 // argTypes: the deduced types of the call-site arguments (in nodesPassed order).
 // Returns the best-matching definition, preferring type-constrained overloads over unconstrained ones.
 PatternDefinition *selectOverload(
-	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Function *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );

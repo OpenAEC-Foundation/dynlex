@@ -1,20 +1,20 @@
-macro expression [een|] bits bit integer:
+macro function [een|] bits bit integer:
 	replacement:
 		@intrinsic("type", "int", bits)
 
-macro expression waarde als bits bit integer:
+macro function waarde als bits bit integer:
 	replacement:
 		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
-expression zeg bericht:
+function zeg bericht:
 	execute:
 		@intrinsic("call", "libc", "printf", een 32 bit integer, "%s\n", bericht)
 
-expression toon getal:
+function toon getal:
 	execute:
 		@intrinsic("call", "libc", "printf", een 32 bit integer, "%ld\n", getal als 64 bit integer)
 
-macro expression maak variabele waarde:
+macro function maak variabele waarde:
 	replacement:
 		@intrinsic("store", variabele, waarde)
 

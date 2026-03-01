@@ -119,7 +119,7 @@ static void walkForLessSpecific(
 
 	auto advanceNode = [&](PatternTreeNode *node, bool isMainPath) {
 		// Check if this node is an argument/word node that can absorb multiple elements.
-		// An argument node in a less-specific pattern can match a sub-expression spanning
+		// An argument node in a less-specific pattern can match a sub-function spanning
 		// multiple elements. Keep such nodes in nextLess so they continue absorbing.
 		bool isAbsorbingArgNode =
 			!isMainPath && (node->type == PatternElement::Type::Variable || node->type == PatternElement::Type::Word);

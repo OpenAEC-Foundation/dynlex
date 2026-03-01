@@ -6,7 +6,7 @@ namespace lsp {
 struct SourceFile;
 }
 struct Section;
-struct Expression;
+struct Function;
 
 struct CodeLine {
 	CodeLine(std::string_view fullText, lsp::SourceFile *sourceFile) : sourceFile(sourceFile), fullText(fullText) {}
@@ -38,8 +38,8 @@ struct CodeLine {
 	// the elements of this code lines pattern
 	std::vector<PatternElement> patternElements;
 
-	// the expression tree for this code line (built during analysis)
-	Expression *expression{};
+	// the function tree for this code line (built during analysis)
+	Function *function{};
 
 	bool isPatternDefinition() const;
 	bool isPatternReference() const;

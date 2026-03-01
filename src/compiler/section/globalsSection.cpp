@@ -2,7 +2,7 @@
 #include "parseContext.h"
 
 bool GlobalsSection::addItem(ParseContext &context, Range itemRange) {
-	// Add to parent Expression/Effect section's globalVariables list
+	// Add to parent Function/Effect section's globalVariables list
 	std::string varNameStr(itemRange.subString);
 	parent->globalVariables.push_back(varNameStr);
 	context.declaredGlobalVariables.insert(varNameStr);

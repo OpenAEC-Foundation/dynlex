@@ -1,11 +1,11 @@
-macro expression [an|a|] integer:
+macro function [an|a|] integer:
 	replacement:
 		@intrinsic("type", "int", 32)
 
-expression test:
+function test:
 	execute:
 		@intrinsic("call", "libc", "printf", an integer, "1")
 
-expression te[st|]:
+function te[st|]:
 	execute:
 		@intrinsic("call", "libc", "printf", an integer, "2")

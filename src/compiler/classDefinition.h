@@ -11,7 +11,7 @@ class StructType;
 struct FieldDefinition {
 	std::string name;
 	Range range;
-	DataType declaredType; // Any if untyped, Unresolved (with typeExpression) if type specified
+	DataType declaredType; // Any if untyped, Unresolved (with typeFunction) if type specified
 };
 
 struct ClassInstantiation {

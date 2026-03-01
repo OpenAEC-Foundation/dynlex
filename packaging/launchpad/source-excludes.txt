@@ -1,0 +1,10 @@
+.git
+.github
+.cache
+.claude
+.vscode
+build
+packaging/launchpad/out
+vscode-extension/node_modules
+vscode-extension/dist
+vscode-extension/out

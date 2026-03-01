@@ -16,9 +16,6 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Copy LICENSE from project root
-cp "$SCRIPT_DIR/../LICENSE.md" .
-
 # Bundle
 echo "Bundling extension..."
 npm run bundle

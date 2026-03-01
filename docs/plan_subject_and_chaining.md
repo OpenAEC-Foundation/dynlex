@@ -3,19 +3,19 @@
 ## Overview
 
 Two new language features that work together:
-- **`it`** — an expression that resolves to the current subject variable
+- **`it`** — an function that resolves to the current subject variable
 - **`and`** — chains multiple statements on a single line
 
 Both are defined as patterns in std.dl, not hardcoded in the compiler.
 
-## Prerequisites: Unify Effects and Expressions
+## Prerequisites: Unify Effects and Functions
 
-Effects and expressions are nearly identical — effects are just expressions that return void. Unifying them enables effect sub-matches, which `and` requires.
+Effects and functions are nearly identical — effects are just functions that return void. Unifying them enables function sub-matches, which `and` requires.
 
 ### Changes
-- Merge the Effect and Expression pattern trees into one
+- Merge the Effect and Function pattern trees into one
 - Remove `SectionType::Effect` (or make it an alias)
-- Allow sub-matches to match effect-like patterns (patterns that return void)
+- Allow sub-matches to match function-like patterns (patterns that return void)
 - Update `MatchProgress::step()` — sub-matches search the unified tree
 - Update `resolveReferences`, `analyzeSections`, and codegen to work with one tree
 
@@ -26,13 +26,13 @@ Patterns like `left and right` can now take two statement-level arguments.
 
 ### std.dl definition
 ```
-macro effect left and right:
+macro function left and right:
     replacement:
         left
         right
 ```
 
-This executes `left`, then `right`. Since effects/expressions are unified, both arguments can be any statement.
+This executes `left`, then `right`. Since effects/functions are unified, both arguments can be any statement.
 
 ### Example
 ```
@@ -57,7 +57,7 @@ The subject persists across lines within a scope.
 
 ### std.dl definitions
 ```
-expression it:
+function it:
     replacement:
         @intrinsic("subject")
 ```
@@ -93,23 +93,23 @@ print it              # error: "what subject are you referring to?"
 ```
 
 ```
-x + 1                 # error: "unused expression result"
-                      # expression returns a value but is used at line-level
+x + 1                 # error: "unused function result"
+                      # function returns a value but is used at line-level
                       # (the result is discarded — likely a mistake)
 ```
 
-Line-level statements that return a non-void value are errors. The user probably forgot `set ... to` or `print`. This is checked after type inference — if a top-level line expression has a non-void return type, report *"unused expression result"*.
+Line-level statements that return a non-void value are errors. The user probably forgot `set ... to` or `print`. This is checked after type inference — if a top-level line function has a non-void return type, report *"unused function result"*.
 
 ## Implementation Steps
 
-### Step 1: Unify effects and expressions
+### Step 1: Unify effects and functions
 - Merge pattern trees
 - Update sub-match logic to allow matching against the unified tree
-- Update all references to `SectionType::Effect` / `SectionType::Expression`
+- Update all references to `SectionType::Effect` / `SectionType::Function`
 - Verify existing tests still pass
 
 ### Step 2: Implement `and` pattern
-- Add `macro effect left and right:` to std.dl
+- Add `macro function left and right:` to std.dl
 - Should work with no compiler changes beyond unification
 - Test: `set x to 5 and print x`
 
@@ -120,14 +120,14 @@ Line-level statements that return a non-void value are errors. The user probably
 - Implement `@intrinsic("subject")` — returns `currentSubject` or errors
 
 ### Step 4: Implement `it` pattern
-- Add `expression it:` to std.dl with `@intrinsic("subject")` replacement
+- Add `function it:` to std.dl with `@intrinsic("subject")` replacement
 - Test: `set x to 5`, `increment it`, `print it`
 
 ### Step 5: Combined tests
 - `set x to 5 and increment it`
 - Subject across lines
 - Ambiguous subject error
-- Subject in nested expressions
+- Subject in nested functions
 
 ## Design Notes
 

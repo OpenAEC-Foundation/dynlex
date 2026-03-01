@@ -1,0 +1,384 @@
+#include "configDocument.h"
+#include "semanticTokenBuilder.h"
+#include "semanticTokenDebug.h"
+#include "syntaxConfig.h"
+#include "textDocument.h"
+#include <algorithm>
+#include <cctype>
+#include <memory>
+#include <unordered_set>
+#include <vector>
+
+using namespace std::literals;
+
+namespace lsp {
+
+namespace {
+
+struct ConfigEntry {
+	int line = 0;
+	int indentLevel = 0;
+	int keyStart = 0;
+	int keyEnd = 0;
+	int lineEnd = 0;
+	int valueStart = -1;
+	int valueEnd = -1;
+	bool valueQuoted = false;
+	std::string key;
+	std::string value;
+};
+
+struct ConfigNode {
+	ConfigEntry entry;
+	ConfigNode *parent{};
+	std::vector<std::unique_ptr<ConfigNode>> children;
+};
+
+Position makePosition(int line, int character) { return {.line = line, .character = character}; }
+
+Range makeRange(int line, int start, int end) { return {.start = makePosition(line, start), .end = makePosition(line, end)}; }
+
+void addDiagnostic(
+	std::vector<Diagnostic> &diagnostics, int line, int start, int end, std::string message,
+	DiagnosticSeverity severity = DiagnosticSeverity::Error
+) {
+	Diagnostic diag;
+	diag.range = makeRange(line, start, std::max(start, end));
+	diag.message = std::move(message);
+	diag.severity = severity;
+	diag.source = "dynlex";
+	diagnostics.push_back(std::move(diag));
+}
+
+std::string_view trimView(std::string_view text) {
+	while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
+		text.remove_prefix(1);
+	while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+		text.remove_suffix(1);
+	return text;
+}
+
+bool hasWhitespace(std::string_view text) {
+	return std::any_of(text.begin(), text.end(), [](unsigned char c) {
+		return std::isspace(c);
+	});
+}
+
+void addConfigLineTokens(SemanticTokenBuilder &builder, int lineIndex, std::string_view line) {
+	size_t commentPos = findCommentStart(line, "#");
+	std::string_view code = commentPos == std::string_view::npos ? line : line.substr(0, commentPos);
+	size_t i = 0;
+	while (i < code.size()) {
+		if (std::isspace(static_cast<unsigned char>(code[i]))) {
+			i++;
+			continue;
+		}
+		if (code[i] == '"') {
+			size_t start = i++;
+			bool escaped = false;
+			while (i < code.size()) {
+				char c = code[i++];
+				if (!escaped && c == '"')
+					break;
+				escaped = (!escaped && c == '\\');
+				if (c != '\\')
+					escaped = false;
+			}
+			builder.add(
+				lineIndex, {static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
+			);
+			continue;
+		}
+		size_t start = i;
+		while (i < code.size() && !std::isspace(static_cast<unsigned char>(code[i])) && code[i] != '"')
+			i++;
+		builder.add(lineIndex, {static_cast<int>(start), static_cast<int>(i), SemanticTokenType::Keyword, 0});
+	}
+	if (commentPos != std::string_view::npos) {
+		builder.add(lineIndex, {static_cast<int>(commentPos), static_cast<int>(line.size()), SemanticTokenType::Comment, 0});
+	}
+}
+
+bool parseConfigDocument(
+	const TextDocument &document, std::vector<Diagnostic> &diagnostics, std::vector<std::unique_ptr<ConfigNode>> &roots
+) {
+	std::vector<ConfigNode *> stack;
+	std::string indentUnit;
+	int previousIndentLevel = 0;
+	ConfigNode *previousNode = nullptr;
+
+	for (int lineIndex = 0; lineIndex < document.lineCount(); ++lineIndex) {
+		std::string_view originalLine = document.getLine(lineIndex);
+		size_t commentPos = findCommentStart(originalLine, "#");
+		std::string_view code = commentPos == std::string_view::npos ? originalLine : originalLine.substr(0, commentPos);
+		size_t lineLen = code.size();
+		while (lineLen > 0 && std::isspace(static_cast<unsigned char>(code[lineLen - 1])))
+			lineLen--;
+		code = code.substr(0, lineLen);
+		if (trimView(code).empty())
+			continue;
+
+		size_t indentLength = 0;
+		while (indentLength < code.size() && std::isspace(static_cast<unsigned char>(code[indentLength])))
+			indentLength++;
+		std::string_view indent = code.substr(0, indentLength);
+		if (!indent.empty()) {
+			char indentChar = indent.front();
+			size_t invalidCharIndex = indent.find_first_not_of(indentChar);
+			if (invalidCharIndex != std::string_view::npos) {
+				addDiagnostic(
+					diagnostics, lineIndex, 0, static_cast<int>(indent.size()), "mixed indentation is not allowed in config.dl"
+				);
+				return false;
+			}
+			if (indentUnit.empty())
+				indentUnit = std::string(indent);
+			if (indent.size() % indentUnit.size() != 0) {
+				addDiagnostic(
+					diagnostics, lineIndex, 0, static_cast<int>(indent.size()),
+					"indentation does not match the earlier config.dl indentation"
+				);
+				return false;
+			}
+		}
+
+		int indentLevel = indent.empty() ? 0 : static_cast<int>(indent.size() / indentUnit.size());
+		if (indentLevel > previousIndentLevel + 1) {
+			addDiagnostic(
+				diagnostics, lineIndex, 0, static_cast<int>(indent.size()),
+				"indentation can only increase by one level at a time"
+			);
+			return false;
+		}
+		if (indentLevel > previousIndentLevel && !previousNode) {
+			addDiagnostic(
+				diagnostics, lineIndex, 0, static_cast<int>(indent.size()), "indented config entry must follow a parent entry"
+			);
+			return false;
+		}
+		if (indentLevel > previousIndentLevel) {
+			stack.push_back(previousNode);
+		} else if (indentLevel < previousIndentLevel) {
+			stack.resize(static_cast<size_t>(indentLevel));
+		}
+		previousIndentLevel = indentLevel;
+
+		std::string_view trimmed = code.substr(indentLength);
+		size_t colonPos = trimmed.find(':');
+		if (colonPos == std::string_view::npos) {
+			addDiagnostic(
+				diagnostics, lineIndex, static_cast<int>(indentLength), static_cast<int>(trimmed.size()),
+				"expected 'key: value' or 'key:'"
+			);
+			return false;
+		}
+
+		std::string_view keyView = trimView(trimmed.substr(0, colonPos));
+		if (keyView.empty()) {
+			addDiagnostic(
+				diagnostics, lineIndex, static_cast<int>(indentLength), static_cast<int>(indentLength + colonPos),
+				"config key cannot be empty"
+			);
+			return false;
+		}
+
+		ConfigEntry entry;
+		entry.line = lineIndex;
+		entry.indentLevel = indentLevel;
+		entry.keyStart = static_cast<int>(indentLength + trimmed.substr(0, colonPos).find_first_not_of(" \t"));
+		entry.keyEnd = entry.keyStart + static_cast<int>(keyView.size());
+		entry.lineEnd = static_cast<int>(code.size());
+		entry.key = std::string(keyView);
+
+		std::string_view valueView = trimView(trimmed.substr(colonPos + 1));
+		if (!valueView.empty()) {
+			entry.valueStart = static_cast<int>(trimmed.find(valueView) + indentLength);
+			entry.valueEnd = entry.valueStart + static_cast<int>(valueView.size());
+			if (valueView.front() == '"') {
+				entry.valueQuoted = true;
+				if (valueView.size() < 2 || valueView.back() != '"') {
+					addDiagnostic(diagnostics, lineIndex, entry.valueStart, entry.valueEnd, "unterminated string in config.dl");
+					return false;
+				}
+				entry.value = std::string(valueView.substr(1, valueView.size() - 2));
+			} else {
+				entry.value = std::string(valueView);
+			}
+		}
+
+		auto node = std::make_unique<ConfigNode>();
+		node->entry = std::move(entry);
+		ConfigNode *nodePtr = node.get();
+		if (stack.empty()) {
+			roots.push_back(std::move(node));
+		} else {
+			node->parent = stack.back();
+			stack.back()->children.push_back(std::move(node));
+		}
+		previousNode = nodePtr;
+	}
+
+	if (roots.empty()) {
+		addDiagnostic(diagnostics, 0, 0, 0, "config.dl is empty");
+		return false;
+	}
+	return true;
+}
+
+std::string nodePath(const ConfigNode &node) {
+	std::vector<std::string> parts;
+	for (const ConfigNode *current = &node; current; current = current->parent)
+		parts.push_back(current->entry.key);
+	std::reverse(parts.begin(), parts.end());
+	std::string result;
+	for (size_t i = 0; i < parts.size(); ++i) {
+		if (i)
+			result += ".";
+		result += parts[i];
+	}
+	return result;
+}
+
+const ConfigNode *findChild(const ConfigNode &node, std::string_view key) {
+	for (const auto &child : node.children) {
+		if (child->entry.key == key)
+			return child.get();
+	}
+	return nullptr;
+}
+
+bool validateNameNode(
+	const ConfigNode &node, std::vector<Diagnostic> &diagnostics, bool allowChildren = false, bool requireValue = true
+) {
+	const ConfigNode *nameChild = findChild(node, "name");
+	if (!node.entry.value.empty() && nameChild) {
+		addDiagnostic(
+			diagnostics, node.entry.line, node.entry.keyStart, node.entry.keyEnd,
+			"config entry '" + nodePath(node) + "' cannot define both a direct value and a nested name"
+		);
+		return false;
+	}
+
+	std::string_view value = !node.entry.value.empty()
+								 ? std::string_view(node.entry.value)
+								 : (nameChild ? std::string_view(nameChild->entry.value) : std::string_view{});
+	if (value.empty()) {
+		if (!requireValue)
+			return true;
+		addDiagnostic(
+			diagnostics, node.entry.line, node.entry.keyStart, node.entry.keyEnd,
+			"config entry '" + nodePath(node) + "' is missing a name"
+		);
+		return false;
+	}
+	if (hasWhitespace(value)) {
+		int start = !node.entry.value.empty() ? node.entry.valueStart : nameChild->entry.valueStart;
+		int end = !node.entry.value.empty() ? node.entry.valueEnd : nameChild->entry.valueEnd;
+		addDiagnostic(
+			diagnostics, !node.entry.value.empty() ? node.entry.line : nameChild->entry.line, start, end,
+			"config entry '" + nodePath(node) + "' must be a single token"
+		);
+		return false;
+	}
+	if (!allowChildren) {
+		for (const auto &child : node.children) {
+			if (child.get() != nameChild) {
+				addDiagnostic(
+					diagnostics, child->entry.line, child->entry.keyStart, child->entry.keyEnd,
+					"unknown nested config key '" + child->entry.key + "' under '" + nodePath(node) + "'"
+				);
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, std::vector<Diagnostic> &diagnostics) {
+	if (roots.size() != 1 || roots[0]->entry.key != "dynlex options") {
+		const ConfigNode &root = *roots[0];
+		addDiagnostic(
+			diagnostics, root.entry.line, root.entry.keyStart, root.entry.keyEnd, "config.dl must start with 'dynlex options:'"
+		);
+		return false;
+	}
+
+	for (const auto &child : roots[0]->children) {
+		const ConfigNode &node = *child;
+		if (node.entry.key == "import" || node.entry.key == "comment" || node.entry.key == "open section" ||
+			node.entry.key == "section" || node.entry.key == "function" || node.entry.key == "macro" ||
+			node.entry.key == "local") {
+			if (!validateNameNode(node, diagnostics))
+				return false;
+			continue;
+		}
+		if (node.entry.key == "class") {
+			if (!validateNameNode(node, diagnostics, true, false))
+				return false;
+			const ConfigNode *nameChild = findChild(node, "name");
+			for (const auto &grandChild : node.children) {
+				if (grandChild.get() == nameChild)
+					continue;
+				if (grandChild->entry.key == "members") {
+					if (!validateNameNode(*grandChild, diagnostics))
+						return false;
+					continue;
+				}
+				addDiagnostic(
+					diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+					"unknown config key '" + grandChild->entry.key + "' under 'class'"
+				);
+				return false;
+			}
+			continue;
+		}
+		if (node.entry.key == "child sections") {
+			static const std::unordered_set<std::string> allowed = {"execute", "replacement", "patterns",
+																	"globals", "before",	  "after"};
+			for (const auto &grandChild : node.children) {
+				if (!allowed.contains(grandChild->entry.key)) {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"unknown config key '" + grandChild->entry.key + "' under 'child sections'"
+					);
+					return false;
+				}
+				if (!validateNameNode(*grandChild, diagnostics))
+					return false;
+			}
+			continue;
+		}
+		addDiagnostic(
+			diagnostics, node.entry.line, node.entry.keyStart, node.entry.keyEnd, "unknown config key '" + node.entry.key + "'"
+		);
+		return false;
+	}
+
+	return true;
+}
+
+} // namespace
+
+bool isConfigDocumentUri(std::string_view uri) {
+	size_t slash = uri.find_last_of("/\\");
+	std::string_view name = slash == std::string_view::npos ? uri : uri.substr(slash + 1);
+	return name == "config.dl";
+}
+
+std::vector<Diagnostic> collectConfigDiagnostics(const TextDocument &document) {
+	std::vector<Diagnostic> diagnostics;
+	std::vector<std::unique_ptr<ConfigNode>> roots;
+	if (!parseConfigDocument(document, diagnostics, roots))
+		return diagnostics;
+	validateConfigTree(roots, diagnostics);
+	return diagnostics;
+}
+
+std::vector<int> encodeConfigSemanticTokens(const TextDocument &document) {
+	SemanticTokenBuilder builder(document.lineCount());
+	for (int lineIndex = 0; lineIndex < document.lineCount(); ++lineIndex)
+		addConfigLineTokens(builder, lineIndex, document.getLine(lineIndex));
+	return encodeSemanticTokens(builder.tokenLines());
+}
+
+} // namespace lsp

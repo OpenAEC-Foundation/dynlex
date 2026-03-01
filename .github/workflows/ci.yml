@@ -22,3 +22,16 @@ jobs:
 
       - name: Run tests
         run: ./scripts/run_tests.sh
+
+  launchpad-source-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Launchpad packaging dependencies
+        run: ./packaging/launchpad/scripts/install-build-deps.sh
+
+      - name: Build unsigned Launchpad source package
+        run: ./packaging/launchpad/scripts/build-source-package.sh --series noble --version 0.1.0+ci${{ github.run_number }}.g${GITHUB_SHA::7}

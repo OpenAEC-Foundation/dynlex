@@ -1,7 +1,9 @@
 #include "dynlexServer.h"
 #include "codeLine.h"
 #include "compiler.h"
-#include "expression.h"
+#include "completion.h"
+#include "configDocument.h"
+#include "function.h"
 #include "lspFileSystem.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
@@ -27,16 +29,37 @@ static std::string toAbsoluteUri(const std::string &uri) {
 	return "file://" + std::filesystem::absolute(uri).string();
 }
 
+static std::string toFilesystemPath(std::string_view uriOrPath) {
+	if (uriOrPath.starts_with("file://")) {
+		return std::string(uriOrPath.substr("file://"sv.size()));
+	}
+	return std::string(uriOrPath);
+}
+
+static bool hasCompilationStage(const ParseContext *context, ParseContext::CompilationStage stage) {
+	return context && context->hasCompleted(stage);
+}
+
 DynLexServer::DynLexServer(int port) : LanguageServer(port) {}
 
 DynLexServer::DynLexServer(std::unique_ptr<Transport> transport) : LanguageServer(std::move(transport)) {}
 
 DynLexServer::~DynLexServer() = default;
 
-InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/) {
+InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
+	if (params.rootUri) {
+		workspaceRootPath = toFilesystemPath(*params.rootUri);
+	} else {
+		workspaceRootPath = std::filesystem::current_path().string();
+	}
+
 	InitializeResult result;
 	result.capabilities.textDocumentSync = 2; // Incremental
 	result.capabilities.definitionProvider = true;
+	result.capabilities.completionProvider.supported = true;
+	result.capabilities.completionProvider.triggerCharacters = {" ", "/", ".", "_", "-", ":", "(", ")", "\"", "a", "b", "c",
+																"d", "e", "f", "g", "h", "i", "j", "k", "l",  "m", "n", "o",
+																"p", "q", "r", "s", "t", "u", "v", "w", "x",  "y", "z"};
 	result.capabilities.documentSymbolProvider = true;
 	result.capabilities.codeActionProvider = true;
 	result.capabilities.semanticTokensProvider.full = true;
@@ -48,6 +71,19 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams & /*params*/)
 void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 	LanguageServer::onDidOpen(params);
 	const std::string &uri = params.textDocument.uri;
+	if (isConfigDocumentUri(uri)) {
+		auto docIt = documents.find(uri);
+		if (docIt != documents.end())
+			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
+		std::vector<std::string> dependentMainUris;
+		for (const auto &[mainUri, context] : parseContexts) {
+			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
+				dependentMainUris.push_back(mainUri);
+		}
+		for (const std::string &mainUri : dependentMainUris)
+			recompileMainDocument(mainUri);
+		return;
+	}
 
 	// If this file is already compiled as an import of a main document, skip —
 	// diagnostics are already published from the main document's compilation.
@@ -61,6 +97,19 @@ void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 	LanguageServer::onDidChange(params);
 	const std::string &uri = params.textDocument.uri;
+	if (isConfigDocumentUri(uri)) {
+		auto docIt = documents.find(uri);
+		if (docIt != documents.end())
+			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
+		std::vector<std::string> dependentMainUris;
+		for (const auto &[mainUri, context] : parseContexts) {
+			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
+				dependentMainUris.push_back(mainUri);
+		}
+		for (const std::string &mainUri : dependentMainUris)
+			recompileMainDocument(mainUri);
+		return;
+	}
 
 	// If this file is a main document, recompile it
 	if (parseContexts.contains(uri)) {
@@ -80,6 +129,8 @@ void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 
 void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	const std::string &uri = params.textDocument.uri;
+	if (isConfigDocumentUri(uri))
+		publishDiagnostics(uri, {});
 
 	if (parseContexts.contains(uri)) {
 		// Collect file URIs this main document had diagnostics for
@@ -267,13 +318,35 @@ void DynLexServer::publishDiagnostics(const std::string &uri, const std::vector<
 	sendNotification("textDocument/publishDiagnostics", params);
 }
 
-// Find the deepest expression containing the cursor position.
-// Depth-first: children (subexpressions) take priority over parents,
+CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &params) {
+	if (isConfigDocumentUri(params.textDocument.uri))
+		return {};
+	auto docIt = documents.find(params.textDocument.uri);
+	if (docIt == documents.end()) {
+		return {};
+	}
+
+	std::string_view line = docIt->second->getLine(params.position.line);
+	size_t character = std::min<size_t>(params.position.character, line.size());
+	return collectCompletions(
+		CompletionContext{
+			.parseContext = findContextFor(params.textDocument.uri),
+			.uri = params.textDocument.uri,
+			.linePrefix = std::string(line.substr(0, character)),
+			.workspaceRootPath = workspaceRootPath,
+			.line = params.position.line,
+			.character = static_cast<int>(character),
+		}
+	);
+}
+
+// Find the deepest function containing the cursor position.
+// Depth-first: children (subfunctions) take priority over parents,
 // matching the semantic tokenizer's slicing behavior.
-static Expression *findDeepestExpression(Expression *expr, int character) {
-	for (Expression *arg : expr->arguments) {
+static Function *findDeepestFunction(Function *expr, int character) {
+	for (Function *arg : expr->arguments) {
 		if (arg->range.start() <= character && character < arg->range.end()) {
-			Expression *deeper = findDeepestExpression(arg, character);
+			Function *deeper = findDeepestFunction(arg, character);
 			if (deeper)
 				return deeper;
 		}
@@ -284,16 +357,16 @@ static Expression *findDeepestExpression(Expression *expr, int character) {
 	return nullptr;
 }
 
-// Get the definition location for an expression, following the same
+// Get the definition location for an function, following the same
 // semantic categories as the tokenizer (Variable, PatternCall, etc.)
-static std::optional<::Range> getDefinitionTarget(Expression *expr) {
+static std::optional<::Range> getDefinitionTarget(Function *expr) {
 	switch (expr->kind) {
-	case Expression::Kind::Variable:
+	case Function::Kind::Variable:
 		if (expr->variable && expr->variable->definition) {
 			return expr->variable->definition->range;
 		}
 		break;
-	case Expression::Kind::PatternCall:
+	case Function::Kind::PatternCall:
 		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
 			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
 			return expr->patternMatch->matchedEndNode->matchingDefinitions[0]->range;
@@ -306,8 +379,10 @@ static std::optional<::Range> getDefinitionTarget(Expression *expr) {
 }
 
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
+	if (isConfigDocumentUri(params.textDocument.uri))
+		return std::nullopt;
 	ParseContext *context = findContextFor(params.textDocument.uri);
-	if (!context) {
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::ResolvedPatterns)) {
 		return std::nullopt;
 	}
 
@@ -320,9 +395,9 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 			continue;
 		}
 
-		// Walk the expression tree to find the deepest expression at cursor
-		if (codeLine->expression) {
-			Expression *expr = findDeepestExpression(codeLine->expression, params.position.character);
+		// Walk the function tree to find the deepest function at cursor
+		if (codeLine->function) {
+			Function *expr = findDeepestFunction(codeLine->function, params.position.character);
 			if (expr) {
 				auto target = getDefinitionTarget(expr);
 				if (target) {
@@ -354,7 +429,7 @@ static std::string getPatternName(const PatternDefinition *def) {
 
 static SymbolKind symbolKindForSection(SectionType type) {
 	switch (type) {
-	case SectionType::Expression:
+	case SectionType::Function:
 		return SymbolKind::Function;
 	case SectionType::Class:
 		return SymbolKind::Class;
@@ -366,8 +441,10 @@ static SymbolKind symbolKindForSection(SectionType type) {
 }
 
 std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolParams &params) {
+	if (isConfigDocumentUri(params.textDocument.uri))
+		return {};
 	ParseContext *context = findContextFor(params.textDocument.uri);
-	if (!context) {
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
 		return {};
 	}
 
@@ -420,6 +497,8 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 }
 
 std::vector<CodeAction> DynLexServer::onCodeAction(const CodeActionParams &params) {
+	if (isConfigDocumentUri(params.textDocument.uri))
+		return {};
 	std::vector<CodeAction> actions;
 	for (const Diagnostic &diag : params.context.diagnostics) {
 		if (!diag.data || !diag.data->contains("quickFixes"))
@@ -450,8 +529,14 @@ SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &pa
 }
 
 std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
+	if (isConfigDocumentUri(uri)) {
+		auto docIt = documents.find(uri);
+		if (docIt == documents.end())
+			return {};
+		return encodeConfigSemanticTokens(*docIt->second);
+	}
 	ParseContext *context = findContextFor(uri);
-	if (!context) {
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
 		return {};
 	}
 	auto docIt = documents.find(uri);

@@ -2,11 +2,11 @@
 #include "matchProgress.h"
 #include <iostream>
 
-static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outType) {
+static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outType) {
 	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
 		return false;
 
-	Expression *kindExpr = intrinsicExpr->arguments[1];
+	Function *kindExpr = intrinsicExpr->arguments[1];
 	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
 	if (!kindStr)
 		return false;
@@ -28,7 +28,7 @@ static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outT
 	}
 
 	if (intrinsicExpr->arguments.size() >= 3) {
-		Expression *bitsExpr = intrinsicExpr->arguments[2];
+		Function *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)
 			return false;
@@ -60,7 +60,7 @@ PatternMatch *ParseContext::match(PatternReference *reference) {
 	return nullptr;
 }
 
-void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
+void ParseContext::processEncounteredIntrinsic(Function *intrinsicExpr) {
 	if (!intrinsicExpr)
 		return;
 
@@ -77,7 +77,7 @@ void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 		return;
 
 	Section *macroSection = replacementSection->parent;
-	if (!macroSection || !macroSection->isMacro || macroSection->type != SectionType::Expression ||
+	if (!macroSection || !macroSection->isMacro || macroSection->type != SectionType::Function ||
 		macroSection->patternDefinitions.empty())
 		return;
 

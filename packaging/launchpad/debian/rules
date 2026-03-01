@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+LLVM_VERSION ?= 20
+export CC := clang-$(LLVM_VERSION)
+export CXX := clang++-$(LLVM_VERSION)
+export DEB_BUILD_MAINT_OPTIONS := hardening=+all
+
+%:
+	dh $@ --buildsystem=cmake+ninja
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DDYNLEX_LLVM_VERSION=$(LLVM_VERSION)
+
+override_dh_auto_test:

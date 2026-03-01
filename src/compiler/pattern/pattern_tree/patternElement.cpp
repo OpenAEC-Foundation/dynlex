@@ -18,8 +18,8 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 									   : std::regex_match(""s + *it, std::regex("\\w")) ? PatternElement::Type::VariableLike
 																						: PatternElement::Type::Other;
 		// Split Other-type sequences at space boundaries so spaces are always separate elements.
-		// Without this, "% " would merge into one element, preventing sub-expression matching
-		// (e.g. "10%" where "%" is part of an expression pattern but followed by a space).
+		// Without this, "% " would merge into one element, preventing sub-function matching
+		// (e.g. "10%" where "%" is part of an function pattern but followed by a space).
 		bool splitAtSpace =
 			(newType == PatternElement::Type::Other && currentType == PatternElement::Type::Other &&
 			 ((*it == ' ') != (*currentStart == ' ')));

@@ -13,7 +13,7 @@ import lib/std.dl
 # GLFW_KEY_DOWN = 264
 # GLFW_KEY_UP = 265
 
-expression a new window with width w and height h:
+function a new window with width w and height h:
 	execute:
 		@intrinsic("call", "glfw", "glfwInit", an integer)
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
@@ -36,21 +36,21 @@ expression a new window with width w and height h:
 		@intrinsic("call", "GL", "glLoadIdentity", void)
 		return new_window
 
-expression clear [the|] screen:
+function clear [the|] screen:
 	execute:
 		@intrinsic("call", "GL", "glClear", void, 16384)
 
-expression [display|show] [the|] frame [of|in] window:
+function [display|show] [the|] frame [of|in] window:
 	execute:
 		@intrinsic("call", "glfw", "glfwSwapBuffers", void, window)
 		@intrinsic("call", "glfw", "glfwPollEvents", void)
 
-expression draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
+function draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
 	execute:
 		@intrinsic("call", "GL", "glColor3ub", void, r, g, b)
 		@intrinsic("call", "GL", "glRecti", void, x, y, x + w, y + h)
 
-expression [the|] [last|] pressed key [of|in] window:
+function [the|] [last|] pressed key [of|in] window:
 	execute:
 		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 265) = 1:
 			return 1
@@ -64,15 +64,15 @@ expression [the|] [last|] pressed key [of|in] window:
 			return 5
 		return 0
 
-expression [the|] window should close:
+function [the|] window should close:
 	execute:
 		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window)
 
-expression sleep [for|] ms milliseconds:
+function sleep [for|] ms milliseconds:
 	execute:
 		@intrinsic("call", "libc", "usleep", void, ms * 1000)
 
-expression close [the|] window:
+function close [the|] window:
 	execute:
 		@intrinsic("call", "glfw", "glfwDestroyWindow", void, window)
 		@intrinsic("call", "glfw", "glfwTerminate", void)
@@ -85,7 +85,7 @@ expression close [the|] window:
 # GL_COMPILE_STATUS = 0x8B81 = 35713
 # GL_LINK_STATUS = 0x8B82 = 35714
 
-expression [a|] fragment shader from path:
+function [a|] fragment shader from path:
 	execute:
 		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35632)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
@@ -100,7 +100,7 @@ expression [a|] fragment shader from path:
 		@intrinsic("call", "libc", "free", void, buf)
 		return new_shader
 
-expression [a|] vertex shader from path:
+function [a|] vertex shader from path:
 	execute:
 		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35633)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
@@ -115,7 +115,7 @@ expression [a|] vertex shader from path:
 		@intrinsic("call", "libc", "free", void, buf)
 		return new_shader
 
-expression [a|] shader program with vertex vert and fragment frag:
+function [a|] shader program with vertex vert and fragment frag:
 	execute:
 		set prog to @intrinsic("call", "GL", "glCreateProgram", an integer)
 		@intrinsic("call", "GL", "glAttachShader", void, prog, vert)
@@ -123,20 +123,20 @@ expression [a|] shader program with vertex vert and fragment frag:
 		@intrinsic("call", "GL", "glLinkProgram", void, prog)
 		return prog
 
-expression use shader program prog:
+function use shader program prog:
 	execute:
 		@intrinsic("call", "GL", "glUseProgram", void, prog)
 
-expression [the|] time since start:
+function [the|] time since start:
 	execute:
 		return @intrinsic("call", "glfw", "glfwGetTime", a float)
 
-expression set [the|] uniform name of prog to value:
+function set [the|] uniform name of prog to value:
 	execute:
 		set loc to @intrinsic("call", "GL", "glGetUniformLocation", an integer, prog, name)
 		@intrinsic("call", "GL", "glUniform1f", void, loc, value as a 32 bit float)
 
-expression set [the|] uniform at location to value:
+function set [the|] uniform at location to value:
 	execute:
 		@intrinsic("call", "GL", "glUniform1f", void, location, value as a 32 bit float)
 
@@ -144,7 +144,7 @@ expression set [the|] uniform at location to value:
 # GL_UNIFORM_BUFFER = 0x8A11 = 35345
 # GL_DYNAMIC_DRAW = 0x88E8 = 35048
 
-expression [a|] uniform buffer:
+function [a|] uniform buffer:
 	execute:
 		set buf to 0
 		@intrinsic("call", "GL", "glGenBuffers", void, 1, address of buf)
@@ -152,17 +152,17 @@ expression [a|] uniform buffer:
 		@intrinsic("call", "GL", "glBufferData", void, 35345, 4 as a 64 bit integer, 0 as a pointer to a byte, 35048)
 		return buf
 
-expression bind uniform buffer buf to binding:
+function bind uniform buffer buf to binding:
 	execute:
 		@intrinsic("call", "GL", "glBindBufferBase", void, 35345, binding, buf)
 
-expression update uniform buffer buf with value:
+function update uniform buffer buf with value:
 	execute:
 		set fval to value as a 32 bit float
 		@intrinsic("call", "GL", "glBindBuffer", void, 35345, buf)
 		@intrinsic("call", "GL", "glBufferSubData", void, 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, address of fval)
 
-expression draw [a|] fullscreen quad:
+function draw [a|] fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)
 		# GL_TRIANGLE_STRIP = 0x0005 = 5

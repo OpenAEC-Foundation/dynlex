@@ -1,5 +1,7 @@
 # Build output
 build/
+vscode-extension/out/
+vscode-extension/*.vsix
 
 # CMake user-specific presets
 CMakeUserPresets.json
@@ -17,3 +19,5 @@ tests/required/*/main
 
 node_modules
 .cache
+packaging/launchpad/out/
+vscode-extension/LICENSE.md

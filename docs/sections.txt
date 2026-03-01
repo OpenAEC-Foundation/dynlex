@@ -3,7 +3,7 @@ inline, local, global (default)
 
 compiling to code:
 
-new functions should be generated for every call, only if a signature of the specific effect doesn't exist yet.
+new functions should be generated for every call, only if a signature of the specific function doesn't exist yet.
 
 section: holds variables
 
@@ -23,12 +23,12 @@ exit some stacks:
 
 example:
 
-effect return value:
+function return value:
     @intrinsic("set_stack_variable", @intrinsic("get_stack", 1), "result", 1)
     #will return
     @intrinsic("exit_stack", 2)
 
-inline effect return value:
+inline function return value:
 	execute:
 		@intrinsic("return", value)
 
@@ -37,7 +37,7 @@ inline section loop number times:
 	
 	@intrinsic("loop")
 
-expression two:
+function two:
     return 2
 
 compiled:

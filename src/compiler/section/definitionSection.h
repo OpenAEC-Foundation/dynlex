@@ -1,7 +1,7 @@
 #pragma once
 #include "section.h"
 
-// Shared base class for EffectSection and ExpressionSection
+// Shared base class for EffectSection and FunctionSection
 struct DefinitionSection : public Section {
 	inline DefinitionSection(SectionType type, Section *parent = {}) : Section(type, parent) {}
 

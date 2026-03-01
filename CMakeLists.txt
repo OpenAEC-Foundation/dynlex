@@ -2,7 +2,9 @@
 # Specify minimum CMake version and project name
 #
 cmake_minimum_required (VERSION 3.21)
-project (dynlex)
+project (dynlex VERSION 0.1.0)
+
+include(GNUInstallDirs)
 
 #
 # Enable ccache if available
@@ -19,11 +21,54 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #find_package(imgui CONFIG REQUIRED)
-find_package(nlohmann_json REQUIRED)
-set(LLVM_DIR "/usr/lib/llvm-20/cmake" CACHE PATH "LLVM 20 cmake directory")
+find_package(nlohmann_json CONFIG)
+
+if(NOT nlohmann_json_FOUND)
+    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
+
+    if(NOT NLOHMANN_JSON_INCLUDE_DIR)
+        message(FATAL_ERROR "DynLex requires nlohmann_json. Install the development package for your platform or set nlohmann_json_DIR.")
+    endif()
+
+    add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+    set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+    )
+endif()
+
+set(DYNLEX_MIN_LLVM_VERSION 20)
+set(DYNLEX_LLVM_VERSION "" CACHE STRING "Preferred LLVM major version for DynLex")
+
+if(NOT DYNLEX_LLVM_VERSION)
+    set(DYNLEX_LLVM_VERSION "${DYNLEX_MIN_LLVM_VERSION}")
+endif()
+
+if(NOT LLVM_DIR)
+    find_program(DYNLEX_LLVM_CONFIG
+        NAMES llvm-config-${DYNLEX_LLVM_VERSION} llvm-config
+    )
+
+    if(DYNLEX_LLVM_CONFIG)
+        execute_process(
+            COMMAND ${DYNLEX_LLVM_CONFIG} --cmakedir
+            OUTPUT_VARIABLE DYNLEX_LLVM_CMAKE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if(EXISTS "${DYNLEX_LLVM_CMAKE_DIR}/LLVMConfig.cmake")
+            set(LLVM_DIR "${DYNLEX_LLVM_CMAKE_DIR}" CACHE PATH "LLVM CMake directory" FORCE)
+        endif()
+    endif()
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+if(LLVM_PACKAGE_VERSION VERSION_LESS "${DYNLEX_MIN_LLVM_VERSION}.0.0")
+    message(FATAL_ERROR "DynLex requires LLVM ${DYNLEX_MIN_LLVM_VERSION} or newer")
+endif()
+
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -122,17 +167,19 @@ set_target_properties (${PROJECT_NAME} PROPERTIES
 #
 # Install targets
 #
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION share/dynlex/lib FILES_MATCHING PATTERN "*.dl")
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
 
 #
 # CPack .deb packaging
 #
 set(CPACK_GENERATOR "DEB")
 set(CPACK_PACKAGE_NAME "dynlex")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DynLex — a natural-language-like programming language")
-set(CPACK_PACKAGE_CONTACT "DynLex maintainers")
+set(CPACK_PACKAGE_CONTACT "DynLex maintainers <maintainers@dynlex.org>")
+set(CPACK_PACKAGE_VENDOR "DynLex")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/johnheikens/DynLex")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, zlib1g, libzstd1")
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)

@@ -141,6 +141,60 @@ inline void from_json(const Json &j, TextDocumentPositionParams &p) {
 	j.at("position").get_to(p.position);
 }
 
+struct TextEdit {
+	Range range;
+	std::string newText;
+};
+
+inline void to_json(Json &j, const TextEdit &e) { j = Json{{"range", e.range}, {"newText", e.newText}}; }
+
+enum class CompletionItemKind {
+	Text = 1,
+	Method = 2,
+	Function = 3,
+	Module = 9,
+	Keyword = 14,
+	Snippet = 15,
+	File = 17,
+};
+
+struct CompletionItem {
+	std::string label;
+	std::optional<CompletionItemKind> kind;
+	std::optional<std::string> detail;
+	std::optional<std::string> insertText;
+	std::optional<std::string> sortText;
+	std::optional<TextEdit> textEdit;
+};
+
+inline void to_json(Json &j, const CompletionItem &item) {
+	j = Json{{"label", item.label}};
+	if (item.kind) {
+		j["kind"] = static_cast<int>(*item.kind);
+	}
+	if (item.detail) {
+		j["detail"] = *item.detail;
+	}
+	if (item.insertText) {
+		j["insertText"] = *item.insertText;
+	}
+	if (item.sortText) {
+		j["sortText"] = *item.sortText;
+	}
+	if (item.textEdit) {
+		j["textEdit"] = *item.textEdit;
+	}
+}
+
+struct CompletionList {
+	bool isIncomplete = false;
+	std::vector<CompletionItem> items;
+};
+
+inline void to_json(Json &j, const CompletionList &list) {
+	j = Json{{"isIncomplete", list.isIncomplete}, {"items", list.items}};
+}
+
 // Content change event for incremental sync
 struct TextDocumentContentChangeEvent {
 	std::optional<Range> range;
@@ -245,13 +299,6 @@ struct DocumentSymbolParams {
 
 inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").get_to(p.textDocument); }
 
-struct TextEdit {
-	Range range;
-	std::string newText;
-};
-
-inline void to_json(Json &j, const TextEdit &e) { j = Json{{"range", e.range}, {"newText", e.newText}}; }
-
 struct WorkspaceEdit {
 	Json changes = Json::object();
 };
@@ -319,6 +366,11 @@ struct ServerCapabilities {
 	// Text document sync kind: 0=None, 1=Full, 2=Incremental
 	int textDocumentSync = 2;
 	bool definitionProvider = true;
+	struct {
+		bool supported = false;
+		bool resolveProvider = false;
+		std::vector<std::string> triggerCharacters;
+	} completionProvider;
 	bool documentSymbolProvider = false;
 	bool codeActionProvider = false;
 	struct {
@@ -333,6 +385,12 @@ inline void to_json(Json &j, const ServerCapabilities &c) {
 		{"definitionProvider", c.definitionProvider},
 		{"semanticTokensProvider", Json{{"full", c.semanticTokensProvider.full}, {"legend", c.semanticTokensProvider.legend}}}
 	};
+	if (c.completionProvider.supported) {
+		j["completionProvider"] = Json{
+			{"resolveProvider", c.completionProvider.resolveProvider},
+			{"triggerCharacters", c.completionProvider.triggerCharacters}
+		};
+	}
 	if (c.documentSymbolProvider) {
 		j["documentSymbolProvider"] = true;
 	}

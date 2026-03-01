@@ -1,7 +1,7 @@
 #include "semanticTokenDebug.h"
 #include "codeLine.h"
 #include "compiler.h"
-#include "expression.h"
+#include "function.h"
 #include "pattern/patternReference.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
@@ -9,6 +9,7 @@
 #include "sectionType.h"
 #include "semanticTokens.h"
 #include "sourceFile.h"
+#include "syntaxConfig.h"
 #include <algorithm>
 #include <filesystem>
 #include <string_view>
@@ -23,19 +24,19 @@ static std::string toAbsoluteUri(const std::string &uri) {
 	return "file://" + std::filesystem::absolute(uri).string();
 }
 
-static SemanticTokenType classifyExpressionReturnType(const DataType &type) {
+static SemanticTokenType classifyFunctionReturnType(const DataType &type) {
 	if (type.kind == DataType::Kind::Type)
 		return SemanticTokenType::Type;
-	return SemanticTokenType::Expression;
+	return SemanticTokenType::Function;
 }
 
 static SemanticTokenType classifySectionCallTokenType(Section *section, const DataType &resolvedExprType = DataType{}) {
 	if (!section)
-		return SemanticTokenType::Effect;
+		return SemanticTokenType::Function;
 	if (section->type == SectionType::Class)
 		return SemanticTokenType::Type;
-	if (section->type != SectionType::Expression)
-		return SemanticTokenType::Effect;
+	if (section->type != SectionType::Function)
+		return SemanticTokenType::Section;
 
 	if (resolvedExprType.kind == DataType::Kind::Type)
 		return SemanticTokenType::Type;
@@ -43,31 +44,40 @@ static SemanticTokenType classifySectionCallTokenType(Section *section, const Da
 	if (!section->instantiations.empty()) {
 		const Instantiation &firstInstantiation = section->instantiations.begin()->second;
 		if (firstInstantiation.returnType.isDeduced())
-			return classifyExpressionReturnType(firstInstantiation.returnType);
+			return classifyFunctionReturnType(firstInstantiation.returnType);
 	}
 
-	return SemanticTokenType::Expression;
+	return SemanticTokenType::Function;
 }
 
 static SemanticTokenType getMatchedPatternTokenType(
-	const std::vector<PatternDefinition *> &defs, const std::vector<Expression *> &args,
+	const std::vector<PatternDefinition *> &defs, const std::vector<Function *> &args,
 	const std::vector<PatternTreeNode *> &nodesPassed, const DataType &resolvedExprType
 ) {
 	if (defs.empty())
-		return SemanticTokenType::Effect;
+		return SemanticTokenType::Function;
 
 	std::vector<DataType> argTypes;
 	argTypes.reserve(args.size());
-	for (const Expression *arg : args)
+	for (const Function *arg : args)
 		argTypes.push_back(arg ? arg->type : DataType{});
 
 	PatternDefinition *matchedDef = selectOverload(defs, args, nodesPassed, argTypes);
 	if (!matchedDef || !matchedDef->section)
 		matchedDef = defs.front();
 	if (!matchedDef || !matchedDef->section)
-		return SemanticTokenType::Effect;
+		return SemanticTokenType::Function;
 
 	return classifySectionCallTokenType(matchedDef->section, resolvedExprType);
+}
+
+static SemanticTokenType getPatternCallTokenType(const Function *expr) {
+	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return SemanticTokenType::Function;
+
+	return getMatchedPatternTokenType(
+		expr->patternMatch->matchedEndNode->matchingDefinitions, expr->arguments, expr->patternMatch->nodesPassed, expr->type
+	);
 }
 
 static void addPatternReferenceSignatureTokens(
@@ -76,7 +86,7 @@ static void addPatternReferenceSignatureTokens(
 ) {
 	PatternDefinition *targetDefinition = findDefinitionBySignature(context, patternType, range.subString);
 	SemanticTokenType signatureType =
-		targetDefinition ? classifySectionCallTokenType(targetDefinition->section) : SemanticTokenType::Expression;
+		targetDefinition ? classifySectionCallTokenType(targetDefinition->section) : SemanticTokenType::Function;
 
 	std::string converted(range.subString);
 	for (char &c : converted) {
@@ -97,8 +107,65 @@ static void addPatternReferenceSignatureTokens(
 	}
 }
 
+static void addTokenIfNonEmpty(
+	const Range &baseRange, size_t startOffset, size_t endOffset, SemanticTokenType type, bool isDefinition,
+	const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken
+) {
+	if (startOffset >= endOffset)
+		return;
+	addToken(
+		Range(
+			baseRange.line, baseRange.start() + static_cast<int>(startOffset), baseRange.start() + static_cast<int>(endOffset)
+		),
+		type, isDefinition
+	);
+}
+
+static void
+addPatternDefinitionTokens(const Range &range, const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken) {
+	std::string_view text = range.subString;
+	size_t pos = 0;
+
+	while (pos < text.size()) {
+		size_t open = text.find('{', pos);
+		if (open == std::string_view::npos) {
+			addTokenIfNonEmpty(range, pos, text.size(), SemanticTokenType::PatternDefinition, true, addToken);
+			return;
+		}
+
+		size_t close = text.find('}', open + 1);
+		if (close == std::string_view::npos) {
+			addTokenIfNonEmpty(range, pos, text.size(), SemanticTokenType::PatternDefinition, true, addToken);
+			return;
+		}
+
+		size_t colon = text.find(':', open + 1);
+		if (colon == std::string_view::npos || colon > close) {
+			addTokenIfNonEmpty(range, pos, close + 1, SemanticTokenType::PatternDefinition, true, addToken);
+			pos = close + 1;
+			continue;
+		}
+
+		std::string_view captureType = text.substr(open + 1, colon - open - 1);
+		bool isTypedCapture = !captureType.empty() && captureType != "word";
+
+		addTokenIfNonEmpty(range, pos, open + 1, SemanticTokenType::PatternDefinition, true, addToken);
+		if (isTypedCapture)
+			addTokenIfNonEmpty(range, open + 1, colon, SemanticTokenType::Type, false, addToken);
+		else
+			addTokenIfNonEmpty(range, open + 1, colon, SemanticTokenType::PatternDefinition, true, addToken);
+		addTokenIfNonEmpty(range, colon, colon + 1, SemanticTokenType::PatternDefinition, true, addToken);
+		addTokenIfNonEmpty(range, colon + 1, close, SemanticTokenType::Variable, false, addToken);
+		addTokenIfNonEmpty(range, close, close + 1, SemanticTokenType::PatternDefinition, true, addToken);
+		pos = close + 1;
+	}
+}
+
 std::vector<std::vector<SemanticToken>>
 collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors) {
+	if (!context.hasCompleted(ParseContext::CompilationStage::AnalyzedSections))
+		return {};
+
 	if (suppressOnFileErrors) {
 		bool hasErrors = std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [&uri](const ::Diagnostic &d) {
 			return d.level == ::Diagnostic::Level::Error && d.range.line && toAbsoluteUri(d.range.line->sourceFile->uri) == uri;
@@ -143,62 +210,48 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		}
 	}
 
-	std::function<void(const Expression *)> tokenizeExpression = [&](const Expression *expr) {
+	std::function<void(const Function *)> tokenizeFunction = [&](const Function *expr) {
 		if (!expr)
 			return;
-		for (const Expression *arg : expr->arguments)
-			tokenizeExpression(arg);
+		for (const Function *arg : expr->arguments)
+			tokenizeFunction(arg);
 		switch (expr->kind) {
-		case Expression::Kind::Literal:
+		case Function::Kind::Literal:
 			if (std::holds_alternative<std::string>(expr->literalValue))
 				addToken(expr->range, SemanticTokenType::String, false);
 			else if (std::holds_alternative<double>(expr->literalValue))
 				addToken(expr->range, SemanticTokenType::Number, false);
 			break;
-		case Expression::Kind::IntrinsicCall:
+		case Function::Kind::IntrinsicCall:
 			addToken(expr->range, SemanticTokenType::Intrinsic, false);
+			break;
+		case Function::Kind::PatternCall:
+			addToken(expr->range, getPatternCallTokenType(expr), false);
 			break;
 		default:
 			break;
 		}
 	};
 
-	std::function<void(Section *)> tokenizePatternReferences = [&](Section *section) {
-		for (PatternReference *reference : section->patternReferences) {
-			if (!reference || !reference->resolved || !reference->match || !reference->match->matchedEndNode)
-				continue;
-			addToken(
-				reference->range(),
-				getMatchedPatternTokenType(
-					reference->match->matchedEndNode->matchingDefinitions, reference->match->arguments,
-					reference->match->nodesPassed, reference->expression ? reference->expression->type : DataType{}
-				),
-				false
-			);
-		}
-		for (Section *child : section->children)
-			tokenizePatternReferences(child);
-	};
-	tokenizePatternReferences(context.mainSection);
-
 	for (CodeLine *line : context.codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
+		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->function)
 			continue;
-		tokenizeExpression(line->expression);
+		tokenizeFunction(line->function);
 	}
 
 	for (CodeLine *line : context.codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->patternText.starts_with("import "))
+		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
+		std::optional<std::string_view> importPath = extractDirectiveArgument(line->patternText, syntax.importKeyword);
+		if (toAbsoluteUri(line->sourceFile->uri) != uri || !importPath)
 			continue;
-		std::string_view importKeyword = line->patternText.substr(0, "import"sv.length());
-		std::string_view importPath = line->patternText.substr("import "sv.length());
-		addToken(::Range(line, importKeyword), SemanticTokenType::Effect, false);
-		addToken(::Range(line, importPath), SemanticTokenType::String, false);
+		std::string_view importKeyword = line->patternText.substr(0, syntax.importKeyword.length());
+		addToken(::Range(line, importKeyword), SemanticTokenType::Keyword, false);
+		addToken(::Range(line, *importPath), SemanticTokenType::String, false);
 	}
 
 	std::function<void(Section *)> tokenizePatternDefinitions = [&](Section *section) {
 		for (PatternDefinition *def : section->patternDefinitions)
-			addToken(def->range, SemanticTokenType::PatternDefinition, true);
+			addPatternDefinitionTokens(def->range, addToken);
 		for (Section *child : section->children)
 			tokenizePatternDefinitions(child);
 	};
@@ -213,7 +266,8 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	for (CodeLine *line : context.codeLines) {
 		if (toAbsoluteUri(line->sourceFile->uri) != uri)
 			continue;
-		size_t commentPos = line->fullText.find('#');
+		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
+		size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
 		if (commentPos == std::string_view::npos)
 			continue;
 		size_t endPos = line->fullText.find_first_of("\r\n", commentPos);
@@ -255,10 +309,8 @@ std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToke
 
 static std::string tokenTagName(SemanticTokenType type) {
 	switch (type) {
-	case SemanticTokenType::Expression:
-		return "expression";
-	case SemanticTokenType::Effect:
-		return "void";
+	case SemanticTokenType::Function:
+		return "function";
 	case SemanticTokenType::Section:
 		return "section";
 	case SemanticTokenType::Variable:

@@ -7,6 +7,20 @@
 			"command": "./scripts/build.sh"
 		},
 		{
+			"label": "compile extension",
+			"type": "shell",
+			"command": "npm run bundle",
+			"options": {
+				"cwd": "${workspaceFolder}/vscode-extension"
+			},
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
 			"label": "run tests",
 			"type": "shell",
 			"command": "./scripts/run_tests.sh",
@@ -18,7 +32,7 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "Build & Install Extension",
+			"label": "build and install extension",
 			"type": "shell",
 			"command": "./scripts/install_extension.sh",
 			"group": "build",

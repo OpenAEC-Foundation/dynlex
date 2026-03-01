@@ -1,0 +1,7 @@
+import lib/std.dl
+import lib/graphics.dl
+
+# SAMPLE GAME: the user can walk into mirrors of all sorts, controlling the environment.
+# when the user moves through a mirror, their direction is reflected and any effect the mirror has is applied to the scene.
+
+set window to a new fullscreen window

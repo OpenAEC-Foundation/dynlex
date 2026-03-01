@@ -1,7 +1,7 @@
 import lib/std.dl
 
 # test: recursive function (factorial)
-expression factorial of n:
+function factorial of n:
     execute:
         if n is less than or equal to 1:
             return 1
@@ -12,13 +12,13 @@ print factorial of 5 as line
 print factorial of 10 as line
 
 # test: mutual recursion (is even / is odd)
-expression n is even:
+function n is even:
     execute:
         if n = 0:
             return 1
         return n - 1 is odd
 
-expression n is odd:
+function n is odd:
     execute:
         if n = 0:
             return 0

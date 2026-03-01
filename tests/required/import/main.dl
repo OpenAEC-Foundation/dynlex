@@ -2,12 +2,12 @@
 import other.dl
 import std.dl
 
-expression first:
+function first:
 	execute:
 		print "printing from main.dl"
 
 # we call third, which calls second, which calls first, which prints the message.
-expression third:
+function third:
 	execute:
 		second
 

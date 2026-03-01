@@ -18,7 +18,7 @@ class BasicBlock;
 
 struct ParseContext;
 struct Variable;
-struct Expression;
+struct Function;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
@@ -78,8 +78,8 @@ struct Section {
 	);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
-	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
-	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
+	Function *detectPatterns(ParseContext &context, Range range, SectionType patternType);
+	Function *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void addPatternReference(PatternReference *reference);

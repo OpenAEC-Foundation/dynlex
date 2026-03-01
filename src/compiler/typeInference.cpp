@@ -2,7 +2,7 @@
 #include "classSection.h"
 #include "compiler.h"
 #include "definitionSection.h"
-#include "expression.h"
+#include "function.h"
 #include "intrinsicInfo.h"
 #include "type.h"
 #include "variable.h"
@@ -10,13 +10,13 @@
 #include <cmath>
 #include <unordered_set>
 
-// Resolve a Variable expression through macro bindings to find the bound expression.
-// Only follows Variable → Variable chains; stops at non-Variable expressions (PatternCall,
-// IntrinsicCall, Literal, etc.). The caller handles those expression kinds separately.
+// Resolve a Variable function through macro bindings to find the bound function.
+// Only follows Variable → Variable chains; stops at non-Variable functions (PatternCall,
+// IntrinsicCall, Literal, etc.). The caller handles those function kinds separately.
 // See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp) which additionally
 // expands macro PatternCalls and operates on the context's binding stack.
-static Expression *resolveThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
-	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
+static Function *resolveThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
+	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
 		return expr;
 	auto it = bindings.find(expr->variable->name);
 	if (it != bindings.end() && it->second != expr)
@@ -25,14 +25,14 @@ static Expression *resolveThroughBindings(Expression *expr, const std::unordered
 }
 
 // Like resolveThroughBindings, but also expands macro PatternCalls to find the
-// underlying expression. Outputs the final active bindings in outBindings so the
-// caller can resolve arguments of the returned expression. Use when inspecting
-// expression kind matters (e.g., detecting a property intrinsic inside a store
+// underlying function. Outputs the final active bindings in outBindings so the
+// caller can resolve arguments of the returned function. Use when inspecting
+// function kind matters (e.g., detecting a property intrinsic inside a store
 // destination). See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp)
 // for the codegen equivalent that uses the context's binding stack.
-static Expression *resolveThroughBindingsDeepImpl(
-	Expression *expr, const std::unordered_map<std::string, Expression *> &bindings,
-	std::unordered_map<std::string, Expression *> &outBindings, std::unordered_set<Expression *> &visited
+static Function *resolveThroughBindingsDeepImpl(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
+	std::unordered_map<std::string, Function *> &outBindings, std::unordered_set<Function *> &visited
 ) {
 	expr = resolveThroughBindings(expr, bindings);
 	outBindings = bindings;
@@ -41,15 +41,15 @@ static Expression *resolveThroughBindingsDeepImpl(
 	if (visited.contains(expr))
 		return expr;
 	visited.insert(expr);
-	std::unordered_map<std::string, Expression *> innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	std::unordered_map<std::string, Function *> innerBindings;
+	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (bodyExpr) {
-		std::unordered_map<std::string, Expression *> mergedBindings = bindings;
+		std::unordered_map<std::string, Function *> mergedBindings = bindings;
 		for (auto &[name, argExpr] : innerBindings) {
-			std::unordered_map<std::string, Expression *> ignoredBindings;
+			std::unordered_map<std::string, Function *> ignoredBindings;
 			mergedBindings[name] = resolveThroughBindingsDeepImpl(argExpr, bindings, ignoredBindings, visited);
 		}
-		Expression *resolved = resolveThroughBindingsDeepImpl(bodyExpr, mergedBindings, outBindings, visited);
+		Function *resolved = resolveThroughBindingsDeepImpl(bodyExpr, mergedBindings, outBindings, visited);
 		visited.erase(expr);
 		return resolved;
 	}
@@ -57,28 +57,28 @@ static Expression *resolveThroughBindingsDeepImpl(
 	return expr;
 }
 
-static Expression *resolveThroughBindingsDeep(
-	Expression *expr, const std::unordered_map<std::string, Expression *> &bindings,
-	std::unordered_map<std::string, Expression *> &outBindings
+static Function *resolveThroughBindingsDeep(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
+	std::unordered_map<std::string, Function *> &outBindings
 ) {
-	std::unordered_set<Expression *> visited;
+	std::unordered_set<Function *> visited;
 	return resolveThroughBindingsDeepImpl(expr, bindings, outBindings, visited);
 }
 
-// Convenience: resolve an expression through bindings, then return its type.
+// Convenience: resolve an function through bindings, then return its type.
 static DataType concretizeClassType(DataType type);
-static std::string extractFieldName(Expression *expr);
+static std::string extractFieldName(Function *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
-static DataType resolveTypeThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings);
+static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings);
 
-static DataType resolveTypeThroughBindings(Expression *expr, const std::unordered_map<std::string, Expression *> &bindings) {
-	std::unordered_map<std::string, Expression *> effectiveBindings;
-	Expression *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
+static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
+	std::unordered_map<std::string, Function *> effectiveBindings;
+	Function *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
 	if (!resolved)
 		return {};
 	if (resolved->type.isDeduced())
 		return concretizeClassType(resolved->type);
-	if (resolved->kind == Expression::Kind::Literal) {
+	if (resolved->kind == Function::Kind::Literal) {
 		if (std::holds_alternative<double>(resolved->literalValue)) {
 			double value = std::get<double>(resolved->literalValue);
 			std::string_view literalText = resolved->range.subString;
@@ -95,7 +95,7 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 			return strType;
 		}
 	}
-	if (resolved->kind == Expression::Kind::Variable && resolved->variable) {
+	if (resolved->kind == Function::Kind::Variable && resolved->variable) {
 		VariableReference *varRef = resolved->variable;
 		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
 		Section *sec = definition->range.line ? definition->range.line->section : nullptr;
@@ -106,10 +106,10 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 		if (var && var->type.isDeduced())
 			return concretizeClassType(var->type);
 	}
-	if (resolved->kind == Expression::Kind::IntrinsicCall) {
+	if (resolved->kind == Function::Kind::IntrinsicCall) {
 		if (resolved->intrinsicName == "property" && resolved->arguments.size() >= 3) {
 			DataType instType = concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings));
-			Expression *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
+			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 			std::string fieldName = extractFieldName(propExpr);
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 			if (builtInPropertyType.isDeduced())
@@ -134,7 +134,7 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 				return concretizeClassType(typeArgType.toReferencedType());
 		} else if (resolved->intrinsicName == "type") {
 			std::string kindStr;
-			Expression *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			Function *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
 				kindStr = *str;
 			if (!kindStr.empty()) {
@@ -156,7 +156,7 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 					typeRef.pointerDepth = 1;
 				}
 				if (resolved->arguments.size() >= 3) {
-					Expression *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
+					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = (int)*bits / 8;
 				}
@@ -170,12 +170,12 @@ static DataType resolveTypeThroughBindings(Expression *expr, const std::unordere
 			}
 		}
 	}
-	std::unordered_map<std::string, Expression *> innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
+	std::unordered_map<std::string, Function *> innerBindings;
+	Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 	if (bodyExpr) {
-		std::unordered_map<std::string, Expression *> mergedBindings = bindings;
+		std::unordered_map<std::string, Function *> mergedBindings = bindings;
 		for (auto &[name, argExpr] : innerBindings) {
-			std::unordered_map<std::string, Expression *> ignoredBindings;
+			std::unordered_map<std::string, Function *> ignoredBindings;
 			mergedBindings[name] = resolveThroughBindingsDeep(argExpr, bindings, ignoredBindings);
 		}
 		return resolveTypeThroughBindings(bodyExpr, mergedBindings);
@@ -190,8 +190,8 @@ static std::string typeToUserName(const DataType &type, ParseContext &parseConte
 	return type.toString();
 }
 
-static bool isWholeNumberLiteral(Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::Literal || !std::holds_alternative<double>(expr->literalValue))
+static bool isWholeNumberLiteral(Function *expr) {
+	if (!expr || expr->kind != Function::Kind::Literal || !std::holds_alternative<double>(expr->literalValue))
 		return false;
 	std::string_view literalText = expr->range.subString;
 	if (literalText.find('.') != std::string_view::npos || literalText.find('e') != std::string_view::npos ||
@@ -201,7 +201,7 @@ static bool isWholeNumberLiteral(Expression *expr) {
 	return std::trunc(value) == value;
 }
 
-static std::string makeFloatLiteralReplacement(Expression *expr) {
+static std::string makeFloatLiteralReplacement(Function *expr) {
 	if (!isWholeNumberLiteral(expr))
 		return {};
 	return (std::string)expr->range.subString + ".0";
@@ -233,17 +233,17 @@ static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std:
 
 static bool isLogicalOperandType(const DataType &type) { return type.kind == DataType::Kind::Bool || type.isNumeric(); }
 
-static std::string extractFieldName(Expression *expr) {
+static std::string extractFieldName(Function *expr) {
 	if (!expr)
 		return {};
 	if (auto *str = std::get_if<std::string>(&expr->literalValue))
 		return *str;
-	if (expr->kind == Expression::Kind::Variable && expr->variable)
+	if (expr->kind == Function::Kind::Variable && expr->variable)
 		return expr->variable->name;
 	return {};
 }
 
-static std::string diagnosticExpressionText(Expression *expr) {
+static std::string diagnosticFunctionText(Function *expr) {
 	if (!expr)
 		return {};
 
@@ -262,9 +262,9 @@ static std::string diagnosticExpressionText(Expression *expr) {
 	return (std::string)lineText;
 }
 
-static std::string buildTypeFailureDiagnostic(Expression *expr, const std::string &detail) {
+static std::string buildTypeFailureDiagnostic(Function *expr, const std::string &detail) {
 	std::string message =
-		"Expression '" + diagnosticExpressionText(expr) + "' parses successfully without types, but not with types";
+		"Function '" + diagnosticFunctionText(expr) + "' parses successfully without types, but not with types";
 	if (!detail.empty())
 		message += ": " + detail;
 	return message;
@@ -384,13 +384,15 @@ struct ScopedDiagnosticSuppression {
 	~ScopedDiagnosticSuppression() { context.suppressDiagnostics = previous; }
 };
 
-static void resetExpressionTypes(Expression *expr);
-static void resetSectionExpressionTypes(Section *section);
-static void recomputeRanges(Expression *expr);
+static void resetFunctionTypes(Function *expr);
+static void resetSectionFunctionTypes(Section *section);
+static void recomputeRanges(Function *expr);
+static bool startsWithArgument(Function *function);
+static bool endsWithArgument(Function *function);
 
 static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 	for (Section *section : journal.touchedSections)
-		resetSectionExpressionTypes(section);
+		resetSectionFunctionTypes(section);
 	for (auto it = journal.variableTypeUndo.rbegin(); it != journal.variableTypeUndo.rend(); ++it) {
 		it->variable->type = it->type;
 		it->variable->typeOriginRange = it->typeOriginRange;
@@ -406,35 +408,34 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 		it->first->instantiations.resize(it->second);
 }
 
-static Expression *cloneExpressionTree(Expression *expr) {
+static Function *cloneFunctionTree(Function *expr) {
 	if (!expr)
 		return nullptr;
-	Expression *clone = new Expression(*expr);
+	Function *clone = new Function(*expr);
 	clone->arguments.clear();
-	for (Expression *arg : expr->arguments)
-		clone->arguments.push_back(cloneExpressionTree(arg));
+	for (Function *arg : expr->arguments)
+		clone->arguments.push_back(cloneFunctionTree(arg));
 	return clone;
 }
 
-static bool inferExpression(
-	Expression *&expr, InferenceContext &context, bool alreadyOrdered,
-	const std::unordered_map<std::string, Expression *> &macroBindings
+static bool inferFunction(
+	Function *&expr, InferenceContext &context, bool alreadyOrdered,
+	const std::unordered_map<std::string, Function *> &macroBindings
 );
 static bool
-inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings);
-static DataType inferExpressionTypeWithoutSideEffects(
-	Expression *&expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings
+inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings);
+static DataType inferFunctionTypeWithoutSideEffects(
+	Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings
 );
-static DataType ensureExpressionType(
-	Expression *&expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings
-);
+static DataType
+ensureFunctionType(Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings);
 
-static void resetSectionExpressionTypes(Section *section) {
+static void resetSectionFunctionTypes(Section *section) {
 	if (!section)
 		return;
 	for (CodeLine *line : section->codeLines) {
-		if (line->expression)
-			resetExpressionTypes(line->expression);
+		if (line->function)
+			resetFunctionTypes(line->function);
 	}
 }
 
@@ -450,10 +451,9 @@ static void resetSectionLocalVariableTypes(Section *section) {
 	}
 }
 
-static DataType derivePatternCallType(
-	Expression *expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings
-) {
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+static DataType
+derivePatternCallType(Function *expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings) {
+	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return {};
 
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
@@ -461,15 +461,15 @@ static DataType derivePatternCallType(
 		return {};
 
 	std::vector<DataType> argTypesForOverload;
-	for (Expression *&arg : expr->arguments)
-		argTypesForOverload.push_back(inferExpressionTypeWithoutSideEffects(arg, context, bindings));
+	for (Function *&arg : expr->arguments)
+		argTypesForOverload.push_back(inferFunctionTypeWithoutSideEffects(arg, context, bindings));
 
 	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
 	if (!def || !def->section)
 		return {};
 
 	Section *matchedSection = def->section;
-	std::unordered_map<std::string, Expression *> callBindings;
+	std::unordered_map<std::string, Function *> callBindings;
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 		auto paramIt = node->parameterNames.find(def);
@@ -491,9 +491,9 @@ static DataType derivePatternCallType(
 		}
 		for (Section *child : matchedSection->children) {
 			for (CodeLine *line : child->codeLines) {
-				if (!line->expression)
+				if (!line->function)
 					continue;
-				DataType resolvedType = resolveTypeThroughBindings(line->expression, callBindings);
+				DataType resolvedType = resolveTypeThroughBindings(line->function, callBindings);
 				if (resolvedType.isDeduced())
 					return resolvedType;
 			}
@@ -506,8 +506,8 @@ static DataType derivePatternCallType(
 		auto paramIt = node->parameterNames.find(def);
 		if (paramIt == node->parameterNames.end())
 			continue;
-		Expression *&argExpr = callBindings[paramIt->second];
-		DataType argType = inferExpressionTypeWithoutSideEffects(argExpr, context, callBindings);
+		Function *&argExpr = callBindings[paramIt->second];
+		DataType argType = inferFunctionTypeWithoutSideEffects(argExpr, context, callBindings);
 		if (!argType.isDeduced())
 			return {};
 		argTypes.push_back(argType);
@@ -523,17 +523,17 @@ static DataType derivePatternCallType(
 	return {};
 }
 
-// Probe an expression's type without committing inference side effects or surfacing
+// Probe an function's type without committing inference side effects or surfacing
 // nested diagnostics. This is used by overload resolution and logical/operator
 // checks where we only need the resulting type.
-static DataType inferExpressionTypeWithoutSideEffects(
-	Expression *&expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings
+static DataType inferFunctionTypeWithoutSideEffects(
+	Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings
 ) {
-	static thread_local std::unordered_set<const Expression *> activeTypeProbes;
-	Expression *targetExpr = expr;
-	std::unordered_map<std::string, Expression *> targetBindings = bindings;
-	std::unordered_map<std::string, Expression *> effectiveBindings;
-	Expression *resolvedExpr = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
+	static thread_local std::unordered_set<const Function *> activeTypeProbes;
+	Function *targetExpr = expr;
+	std::unordered_map<std::string, Function *> targetBindings = bindings;
+	std::unordered_map<std::string, Function *> effectiveBindings;
+	Function *resolvedExpr = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
 	if (resolvedExpr) {
 		targetExpr = resolvedExpr;
 		targetBindings = std::move(effectiveBindings);
@@ -548,11 +548,10 @@ static DataType inferExpressionTypeWithoutSideEffects(
 		return type;
 
 	struct ActiveTypeProbeGuard {
-		std::unordered_set<const Expression *> &active;
-		const Expression *expr;
+		std::unordered_set<const Function *> &active;
+		const Function *expr;
 
-		ActiveTypeProbeGuard(std::unordered_set<const Expression *> &active, const Expression *expr)
-			: active(active), expr(expr) {
+		ActiveTypeProbeGuard(std::unordered_set<const Function *> &active, const Function *expr) : active(active), expr(expr) {
 			active.insert(expr);
 		}
 
@@ -564,7 +563,7 @@ static DataType inferExpressionTypeWithoutSideEffects(
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.trialJournal = &journal;
 
-	(void)inferExpression(targetExpr, trialContext, false, targetBindings);
+	(void)inferFunction(targetExpr, trialContext, false, targetBindings);
 	type = resolveTypeThroughBindings(targetExpr, targetBindings);
 	if (!type.isDeduced())
 		type = derivePatternCallType(targetExpr, trialContext, targetBindings);
@@ -577,13 +576,12 @@ static DataType inferExpressionTypeWithoutSideEffects(
 	return type;
 }
 
-static DataType ensureExpressionType(
-	Expression *&expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings
-) {
-	return inferExpressionTypeWithoutSideEffects(expr, context, bindings);
+static DataType
+ensureFunctionType(Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings) {
+	return inferFunctionTypeWithoutSideEffects(expr, context, bindings);
 }
 
-static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, const DataType &valueType) {
+static void commitVariableTypeFromValue(Variable *var, Function *valueExpr, const DataType &valueType) {
 	if (!var)
 		return;
 	var->type = concretizeClassType(valueType);
@@ -592,7 +590,7 @@ static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, co
 }
 
 static Diagnostic
-buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const DataType &valueType, ParseContext &parseContext) {
+buildVariableTypeChangeDiagnostic(Variable *var, Function *valueExpr, const DataType &valueType, ParseContext &parseContext) {
 	Range diagnosticRange = valueExpr ? valueExpr->range : (var && var->definition ? var->definition->range : Range());
 	Diagnostic diagnostic(
 		Diagnostic::Level::Error,
@@ -672,23 +670,23 @@ getOrCreateClassInstantiation(InferenceContext &context, ClassDefinition *classD
 
 // Infer types for a section's code lines with operand reordering. Returns false on failure.
 static bool
-inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings = {});
+inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings = {});
 
-// Infer the type of an expression bottom-up.
+// Infer the type of an function bottom-up.
 // Sets context.typesValid = false if types are invalid for this grouping.
-static void inferOrderedExpression(
-	Expression *expr, InferenceContext &context, const std::unordered_map<std::string, Expression *> &macroBindings = {}
+static void inferOrderedFunction(
+	Function *expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &macroBindings = {}
 ) {
 	context.typesValid = true;
 	// Recurse into arguments first (bottom-up)
-	for (Expression *arg : expr->arguments) {
-		inferOrderedExpression(arg, context, macroBindings);
+	for (Function *arg : expr->arguments) {
+		inferOrderedFunction(arg, context, macroBindings);
 		if (!context.typesValid)
 			return;
 	}
 
 	switch (expr->kind) {
-	case Expression::Kind::Literal: {
+	case Function::Kind::Literal: {
 		if (std::holds_alternative<double>(expr->literalValue)) {
 			double value = std::get<double>(expr->literalValue);
 			std::string_view literalText = expr->range.subString;
@@ -707,7 +705,7 @@ static void inferOrderedExpression(
 		break;
 	}
 
-	case Expression::Kind::Variable: {
+	case Function::Kind::Variable: {
 		if (expr->variable) {
 			std::string varName = expr->variable->name;
 			// Check macro bindings first
@@ -729,16 +727,16 @@ static void inferOrderedExpression(
 		break;
 	}
 
-	case Expression::Kind::IntrinsicCall: {
+	case Function::Kind::IntrinsicCall: {
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
 		if (info) {
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
 				if (info->argCount == 2) {
-					expr->type = ensureExpressionType(expr->arguments[1], context, macroBindings);
+					expr->type = ensureFunctionType(expr->arguments[1], context, macroBindings);
 				} else {
-					DataType leftType = ensureExpressionType(expr->arguments[1], context, macroBindings);
-					DataType rightType = ensureExpressionType(expr->arguments[2], context, macroBindings);
+					DataType leftType = ensureFunctionType(expr->arguments[1], context, macroBindings);
+					DataType rightType = ensureFunctionType(expr->arguments[2], context, macroBindings);
 					DataType result;
 					if (!DataType::promoteArithmetic(leftType, rightType, result)) {
 						context.setTypeFailure(
@@ -752,8 +750,8 @@ static void inferOrderedExpression(
 				break;
 			case IntrinsicReturnKind::Bool: {
 				if (expr->intrinsicName == "and" || expr->intrinsicName == "or") {
-					DataType leftType = ensureExpressionType(expr->arguments[1], context, macroBindings);
-					DataType rightType = ensureExpressionType(expr->arguments[2], context, macroBindings);
+					DataType leftType = ensureFunctionType(expr->arguments[1], context, macroBindings);
+					DataType rightType = ensureFunctionType(expr->arguments[2], context, macroBindings);
 					if (!isLogicalOperandType(leftType) || !isLogicalOperandType(rightType)) {
 						context.setTypeFailure(
 							"Logical operator '" + expr->intrinsicName + "' requires boolean or numeric operands, got '" +
@@ -763,7 +761,7 @@ static void inferOrderedExpression(
 						break;
 					}
 				} else if (expr->intrinsicName == "not") {
-					DataType valueType = ensureExpressionType(expr->arguments[1], context, macroBindings);
+					DataType valueType = ensureFunctionType(expr->arguments[1], context, macroBindings);
 					if (!isLogicalOperandType(valueType)) {
 						context.setTypeFailure(
 							"Logical operator 'not' requires a boolean or numeric operand, got '" +
@@ -772,8 +770,8 @@ static void inferOrderedExpression(
 						break;
 					}
 				} else {
-					DataType leftType = ensureExpressionType(expr->arguments[1], context, macroBindings);
-					DataType rightType = ensureExpressionType(expr->arguments[2], context, macroBindings);
+					DataType leftType = ensureFunctionType(expr->arguments[1], context, macroBindings);
+					DataType rightType = ensureFunctionType(expr->arguments[2], context, macroBindings);
 					DataType promoted;
 					if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
 						context.setTypeFailure(
@@ -789,12 +787,12 @@ static void inferOrderedExpression(
 			case IntrinsicReturnKind::Void:
 				// "store" has side effects on variable types beyond just being Void
 				if (expr->intrinsicName == "store") {
-					std::unordered_map<std::string, Expression *> destBindings;
-					Expression *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
-					std::unordered_map<std::string, Expression *> valueBindings;
-					Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindings, valueBindings);
-					DataType valType = ensureExpressionType(valueExpr, context, valueBindings);
-					if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
+					std::unordered_map<std::string, Function *> destBindings;
+					Function *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
+					std::unordered_map<std::string, Function *> valueBindings;
+					Function *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindings, valueBindings);
+					DataType valType = ensureFunctionType(valueExpr, context, valueBindings);
+					if (destExpr->kind == Function::Kind::Variable && destExpr->variable && valType.isDeduced()) {
 						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
 						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
 						if (var) {
@@ -821,18 +819,18 @@ static void inferOrderedExpression(
 								break;
 							}
 						}
-					} else if (destExpr->kind == Expression::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
+					} else if (destExpr->kind == Function::Kind::IntrinsicCall && destExpr->intrinsicName == "property" &&
 							   valType.isDeduced()) {
-						std::unordered_map<std::string, Expression *> resolvedBindings = macroBindings;
+						std::unordered_map<std::string, Function *> resolvedBindings = macroBindings;
 						for (const auto &[name, boundExpr] : destBindings)
 							resolvedBindings[name] = boundExpr;
-						std::unordered_map<std::string, Expression *> ignoredBindings;
-						Expression *ownerExpr =
+						std::unordered_map<std::string, Function *> ignoredBindings;
+						Function *ownerExpr =
 							resolveThroughBindingsDeep(destExpr->arguments[1], resolvedBindings, ignoredBindings);
 						DataType instType = ownerExpr ? concretizeClassType(ownerExpr->type) : DataType{};
 						if (instType.kind == DataType::Kind::Class && instType.classDefinition &&
 							instType.classInstIndex >= 0) {
-							Expression *propExpr = resolveThroughBindings(destExpr->arguments[2], resolvedBindings);
+							Function *propExpr = resolveThroughBindings(destExpr->arguments[2], resolvedBindings);
 							std::string fieldName;
 							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
 								fieldName = *str;
@@ -845,7 +843,7 @@ static void inferOrderedExpression(
 										);
 										if (refinedInstIndex < 0)
 											break;
-										if (ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable) {
+										if (ownerExpr && ownerExpr->kind == Function::Kind::Variable && ownerExpr->variable) {
 											Section *ownerSection =
 												ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
 											Variable *ownerVar =
@@ -915,7 +913,7 @@ static void inferOrderedExpression(
 				} else if (expr->intrinsicName == "type") {
 					// @intrinsic("type", kindString[, bits])
 					// Resolve kind string through macro bindings
-					Expression *kindExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
+					Function *kindExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
 					std::string kindStr;
 					if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
 						kindStr = *str;
@@ -940,7 +938,7 @@ static void inferOrderedExpression(
 						}
 						// Override byte size if bits argument provided
 						if (expr->arguments.size() >= 3) {
-							Expression *bitsExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
+							Function *bitsExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 							if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 								typeRef.numericSize = (int)*bits / 8;
 						}
@@ -971,7 +969,7 @@ static void inferOrderedExpression(
 					}
 				} else if (expr->intrinsicName == "property") {
 					DataType instType = concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindings));
-					Expression *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
+					Function *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 					std::string fieldName = extractFieldName(propExpr);
 					DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 					if (builtInPropertyType.isDeduced()) {
@@ -996,7 +994,7 @@ static void inferOrderedExpression(
 		break;
 	}
 
-	case Expression::Kind::PatternCall: {
+	case Function::Kind::PatternCall: {
 		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 
 		// Build argument types for overload selection.
@@ -1031,12 +1029,12 @@ static void inferOrderedExpression(
 		Section *matchedSection = def->section;
 
 		// Build parameter bindings from call-site arguments
-		std::unordered_map<std::string, Expression *> callBindings;
+		std::unordered_map<std::string, Function *> callBindings;
 		size_t argIndex = 0;
 		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 			auto paramIt = node->parameterNames.find(def);
 			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
-				Expression *actualArg = expr->arguments[argIndex++];
+				Function *actualArg = expr->arguments[argIndex++];
 				actualArg = resolveThroughBindings(actualArg, macroBindings);
 				callBindings[paramIt->second] = actualArg;
 			}
@@ -1046,7 +1044,7 @@ static void inferOrderedExpression(
 			auto *classSec = static_cast<ClassSection *>(matchedSection);
 			expr->type = {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
 		} else if (matchedSection->isMacro) {
-			// Code replacement: infer body, type = replacement expression type
+			// Code replacement: infer body, type = replacement function type
 			if (!matchedSection->inferring) {
 				matchedSection->inferring = true;
 				ScopedDiagnosticSuppression suppressDiagnostics(context);
@@ -1057,26 +1055,26 @@ static void inferOrderedExpression(
 				break;
 			for (Section *child : matchedSection->children) {
 				for (CodeLine *line : child->codeLines) {
-					if (!line->expression)
+					if (!line->function)
 						continue;
-					DataType resolvedType = resolveTypeThroughBindings(line->expression, callBindings);
+					DataType resolvedType = resolveTypeThroughBindings(line->function, callBindings);
 					if (resolvedType.isDeduced()) {
-						line->expression->type = resolvedType;
+						line->function->type = resolvedType;
 						expr->type = resolvedType;
-					} else if (line->expression->type.isDeduced()) {
-						expr->type = line->expression->type;
+					} else if (line->function->type.isDeduced()) {
+						expr->type = line->function->type;
 					}
 				}
 			}
 		} else {
 			// Non-macro function: infer body per-instantiation
 			// Build parameter bindings and argTypes in nodesPassed order (must match codegen's paramBindings order)
-			std::vector<std::pair<std::string, Expression *>> paramBindings;
+			std::vector<std::pair<std::string, Function *>> paramBindings;
 			std::vector<DataType> argTypes;
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 				auto paramIt = node->parameterNames.find(def);
 				if (paramIt != node->parameterNames.end()) {
-					Expression *argExpr = callBindings[paramIt->second];
+					Function *argExpr = callBindings[paramIt->second];
 					paramBindings.push_back({paramIt->second, argExpr});
 					argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
 				}
@@ -1129,8 +1127,8 @@ static void inferOrderedExpression(
 				const DataType &parameterType = inst.parameterTypes[i];
 				if (!parameterType.isDeduced() || parameterType == argTypes[i])
 					continue;
-				Expression *argExpr = resolveThroughBindings(paramBindings[i].second, macroBindings);
-				if (!argExpr || argExpr->kind != Expression::Kind::Variable || !argExpr->variable)
+				Function *argExpr = resolveThroughBindings(paramBindings[i].second, macroBindings);
+				if (!argExpr || argExpr->kind != Function::Kind::Variable || !argExpr->variable)
 					continue;
 				Section *argSection = argExpr->range.line ? argExpr->range.line->section : nullptr;
 				Variable *argVar = argSection ? argSection->findVariable(argExpr->variable->name) : nullptr;
@@ -1159,102 +1157,108 @@ static void inferOrderedExpression(
 		break;
 	}
 
-	case Expression::Kind::Pending:
+	case Function::Kind::Pending:
 		break;
 	}
 }
 
-// Recompute expression ranges bottom-up after reordering. After swapping parent-child
+// Recompute function ranges bottom-up after reordering. After swapping parent-child
 // relationships, the old root retains the full-line range even though it's now a child.
 // Fix by spanning each PatternCall's range from its first to last argument.
-static void recomputeRanges(Expression *expr) {
+static void recomputeRanges(Function *expr) {
 	if (!expr)
 		return;
-	for (Expression *arg : expr->arguments)
+	for (Function *arg : expr->arguments)
 		recomputeRanges(arg);
-	if (expr->kind == Expression::Kind::PatternCall && !expr->arguments.empty()) {
+	if (expr->kind == Function::Kind::PatternCall && !expr->arguments.empty()) {
+		int originalStart = expr->range.start();
+		int originalEnd = expr->range.end();
 		int minStart = expr->arguments.front()->range.start();
 		int maxEnd = expr->arguments.front()->range.end();
-		for (Expression *arg : expr->arguments) {
+		for (Function *arg : expr->arguments) {
 			minStart = std::min(minStart, arg->range.start());
 			maxEnd = std::max(maxEnd, arg->range.end());
 		}
+		if (!startsWithArgument(expr))
+			minStart = originalStart;
+		if (!endsWithArgument(expr))
+			maxEnd = originalEnd;
 		expr->range = Range(expr->range.line, minStart, maxEnd);
 	}
 }
 
-// Reset non-literal expression types in a subtree.
-static void resetExpressionTypes(Expression *expr) {
+// Reset non-literal function types in a subtree.
+static void resetFunctionTypes(Function *expr) {
 	if (!expr)
 		return;
-	if (expr->kind != Expression::Kind::Literal)
+	if (expr->kind != Function::Kind::Literal)
 		expr->type = {};
-	for (Expression *arg : expr->arguments)
-		resetExpressionTypes(arg);
+	for (Function *arg : expr->arguments)
+		resetFunctionTypes(arg);
 }
 
 // Sort arguments by source position recursively for all PatternCall nodes.
-static void sortArgumentsRecursive(Expression *expr) {
+static void sortArgumentsRecursive(Function *expr) {
 	if (!expr)
 		return;
-	for (Expression *arg : expr->arguments)
+	for (Function *arg : expr->arguments)
 		sortArgumentsRecursive(arg);
-	if (expr->kind == Expression::Kind::PatternCall)
+	if (expr->kind == Function::Kind::PatternCall)
 		expr->arguments = sortArgumentsByPosition(expr->arguments);
 }
 
-static bool startsWithArgument(Expression *expression) {
-	return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
+static bool startsWithArgument(Function *function) {
+	return function->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
 }
 
-static bool endsWithArgument(Expression *expression) {
-	return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
+static bool endsWithArgument(Function *function) {
+	return function->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
 }
 
-static bool expressionContainsExplicitReturn(Expression *expression) {
-	if (!expression)
+static bool functionContainsExplicitReturn(Function *function) {
+	if (!function)
 		return false;
-	if (expression->kind == Expression::Kind::IntrinsicCall && expression->intrinsicName == "return")
+	if (function->kind == Function::Kind::IntrinsicCall && function->intrinsicName == "return")
 		return true;
-	std::unordered_map<std::string, Expression *> ignoredBindings;
-	Expression *bodyExpr = expandMacroPatternCall(expression, ignoredBindings);
-	if (bodyExpr && expressionContainsExplicitReturn(bodyExpr))
+	std::unordered_map<std::string, Function *> ignoredBindings;
+	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
+	if (bodyExpr && functionContainsExplicitReturn(bodyExpr))
 		return true;
-	for (Expression *arg : expression->arguments) {
-		if (expressionContainsExplicitReturn(arg))
+	for (Function *arg : function->arguments) {
+		if (functionContainsExplicitReturn(arg))
 			return true;
 	}
 	return false;
 }
 
 static bool sectionDefaultsToVoid(Section *section) {
-	if (!section || section->type != SectionType::Expression)
+	if (!section || section->type != SectionType::Function)
 		return false;
 	for (Section *child : section->children) {
 		for (CodeLine *line : child->codeLines) {
-			if (expressionContainsExplicitReturn(line->expression))
+			if (functionContainsExplicitReturn(line->function))
 				return false;
 		}
 	}
 	return true;
 }
 
-static bool mustOwnEntireRange(Expression *expression) {
-	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
-		!expression->patternMatch->matchedEndNode)
+static bool mustOwnEntireRange(Function *function) {
+	if (!function || function->kind != Function::Kind::PatternCall || !function->patternMatch ||
+		!function->patternMatch->matchedEndNode)
 		return false;
 
 	bool sawCandidate = false;
-	for (PatternDefinition *def : expression->patternMatch->matchedEndNode->matchingDefinitions) {
+	for (PatternDefinition *def : function->patternMatch->matchedEndNode->matchingDefinitions) {
 		if (!def || !def->section)
 			continue;
 		sawCandidate = true;
 		if (def->section->isMacro) {
-			std::unordered_map<std::string, Expression *> ignoredBindings;
-			Expression *bodyExpr = expandMacroPatternCall(expression, ignoredBindings);
+			std::unordered_map<std::string, Function *> ignoredBindings;
+			Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
 			if (!bodyExpr)
 				return false;
-			if (bodyExpr->kind == Expression::Kind::IntrinsicCall) {
+			if (bodyExpr->kind == Function::Kind::IntrinsicCall) {
 				if (bodyExpr->intrinsicName == "return")
 					continue;
 				const IntrinsicInfo *info = findIntrinsic(bodyExpr->intrinsicName);
@@ -1271,10 +1275,9 @@ static bool mustOwnEntireRange(Expression *expression) {
 	return true;
 }
 
-static int expressionPrecedence(Expression *expression) {
-	if (!expression || expression->isExplicitGroup || expression->kind != Expression::Kind::PatternCall ||
-		!expression->patternMatch || !expression->patternMatch->matchedEndNode ||
-		expression->patternMatch->matchedEndNode->matchingDefinitions.empty())
+static int functionPrecedence(Function *function) {
+	if (!function || function->isExplicitGroup || function->kind != Function::Kind::PatternCall || !function->patternMatch ||
+		!function->patternMatch->matchedEndNode || function->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return 0;
 	auto countParameters = [](PatternDefinition *def) {
 		if (!def)
@@ -1287,8 +1290,8 @@ static int expressionPrecedence(Expression *expression) {
 		return count;
 	};
 	int precedence = 0;
-	for (PatternDefinition *def : expression->patternMatch->matchedEndNode->matchingDefinitions) {
-		if (!def || countParameters(def) != (int)expression->arguments.size())
+	for (PatternDefinition *def : function->patternMatch->matchedEndNode->matchingDefinitions) {
+		if (!def || countParameters(def) != (int)function->arguments.size())
 			continue;
 		if (def->precedence <= 0)
 			continue;
@@ -1298,26 +1301,26 @@ static int expressionPrecedence(Expression *expression) {
 	return precedence;
 }
 
-// Infer an expression's types, reordering operands if needed.
+// Infer an function's types, reordering operands if needed.
 // If alreadyOrdered is true, skips reordering and just resets types and infers.
 // Returns false on failure (no valid grouping found).
-static bool inferExpression(
-	Expression *&expr, InferenceContext &context, bool alreadyOrdered,
-	const std::unordered_map<std::string, Expression *> &macroBindings = {}
+static bool inferFunction(
+	Function *&expr, InferenceContext &context, bool alreadyOrdered,
+	const std::unordered_map<std::string, Function *> &macroBindings = {}
 ) {
 	recomputeRanges(expr);
 	sortArgumentsRecursive(expr);
-	Expression *originalExpr = cloneExpressionTree(expr);
-	auto inferNestedForGrouping = [&](Expression *&subExpr) -> bool {
-		auto isMacroPatternCall = [&](Expression *candidate) -> bool {
-			if (!candidate || candidate->kind != Expression::Kind::PatternCall || !candidate->patternMatch ||
+	Function *originalExpr = cloneFunctionTree(expr);
+	auto inferNestedForGrouping = [&](Function *&subExpr) -> bool {
+		auto isMacroPatternCall = [&](Function *candidate) -> bool {
+			if (!candidate || candidate->kind != Function::Kind::PatternCall || !candidate->patternMatch ||
 				!candidate->patternMatch->matchedEndNode)
 				return false;
 			auto &defs = candidate->patternMatch->matchedEndNode->matchingDefinitions;
 			if (defs.empty())
 				return false;
 			std::vector<DataType> argTypesForOverload;
-			for (Expression *arg : candidate->arguments)
+			for (Function *arg : candidate->arguments)
 				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, macroBindings));
 			PatternDefinition *def =
 				selectOverload(defs, candidate->arguments, candidate->patternMatch->nodesPassed, argTypesForOverload);
@@ -1328,11 +1331,11 @@ static bool inferExpression(
 		InferenceContext trialContext(context.parseContext, true);
 		trialContext.currentInstantiation = context.currentInstantiation;
 		trialContext.trialJournal = &journal;
-		bool ok = inferExpression(subExpr, trialContext, false, macroBindings);
+		bool ok = inferFunction(subExpr, trialContext, false, macroBindings);
 		if (!ok && context.typeFailureDetail.empty())
 			context.typeFailureDetail = trialContext.typeFailureDetail;
 		if (ok && isMacroPatternCall(subExpr)) {
-			DataType resolvedType = inferExpressionTypeWithoutSideEffects(subExpr, context, macroBindings);
+			DataType resolvedType = inferFunctionTypeWithoutSideEffects(subExpr, context, macroBindings);
 			ok = resolvedType.isDeduced();
 		}
 		rollbackTrialJournal(journal);
@@ -1341,7 +1344,7 @@ static bool inferExpression(
 
 	auto tryInfer = [&]() -> bool {
 		context.typeFailureDetail.clear();
-		inferOrderedExpression(expr, context, macroBindings);
+		inferOrderedFunction(expr, context, macroBindings);
 		return context.typesValid;
 	};
 
@@ -1356,10 +1359,10 @@ static bool inferExpression(
 		return true;
 	}
 	if (mustOwnEntireRange(expr)) {
-		for (Expression *&argument : expr->arguments) {
+		for (Function *&argument : expr->arguments) {
 			if (!inferNestedForGrouping(argument)) {
 				expr = originalExpr;
-				resetExpressionTypes(expr);
+				resetFunctionTypes(expr);
 				context.addDiagnostic(
 					{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail),
 					 originalExpr->range}
@@ -1369,7 +1372,7 @@ static bool inferExpression(
 		}
 		if (!tryInfer()) {
 			expr = originalExpr;
-			resetExpressionTypes(expr);
+			resetFunctionTypes(expr);
 			context.addDiagnostic(
 				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail),
 				 originalExpr->range}
@@ -1378,74 +1381,73 @@ static bool inferExpression(
 		}
 		return true;
 	}
-	// Flatten the expression tree into token order for reordering.
+	// Flatten the function tree into token order for reordering.
 	// Operators (PatternCalls starting/ending with an argument) are interleaved
 	// with their boundary arguments. Everything else is a leaf.
 	//
 	// Example: "print the x of p + the y of p as line" produces:
 	//   [print, the_x_of, p, +, the_y_of, p, as_line]
 	//    pfx    pfx      leaf inx pfx     leaf sfx
-	std::vector<Expression *> flatNodes;
+	std::vector<Function *> flatNodes;
 	size_t operatorCount = 0;
-	std::function<void(Expression *&, bool, bool)> collectFlatNodes = [&](Expression *&expression, bool isOnBoundary,
-																		  bool isRoot) {
+	std::function<void(Function *&, bool, bool)> collectFlatNodes = [&](Function *&function, bool isOnBoundary, bool isRoot) {
 		bool isPatternCall =
-			expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty() && !expression->isExplicitGroup;
+			function->kind == Function::Kind::PatternCall && !function->arguments.empty() && !function->isExplicitGroup;
 
 		if (!isPatternCall) {
-			flatNodes.push_back(expression);
+			flatNodes.push_back(function);
 			return;
 		}
 
-		// Explicitly grouped expressions and non-subMatch PatternCalls are independent
+		// Explicitly grouped functions and non-subMatch PatternCalls are independent
 		// groups. The root is always flattened regardless of grouping origin.
-		if (!isRoot && (expression->isExplicitGroup || !isOnBoundary || !expression->isSubMatch)) {
-			if (!inferNestedForGrouping(expression)) {
+		if (!isRoot && (function->isExplicitGroup || !isOnBoundary || !function->isSubMatch)) {
+			if (!inferNestedForGrouping(function)) {
 				context.typesValid = false;
 				return;
 			}
-			flatNodes.push_back(expression);
+			flatNodes.push_back(function);
 			return;
 		}
 
-		bool hasLeftEdge = startsWithArgument(expression);
-		bool hasRightEdge = endsWithArgument(expression);
+		bool hasLeftEdge = startsWithArgument(function);
+		bool hasRightEdge = endsWithArgument(function);
 
 		if (!hasLeftEdge && !hasRightEdge) {
 			// No boundary arguments (e.g. "draw $ lines") — leaf.
-			for (Expression *&argument : expression->arguments) {
+			for (Function *&argument : function->arguments) {
 				if (!inferNestedForGrouping(argument)) {
 					context.typesValid = false;
 					return;
 				}
 			}
-			flatNodes.push_back(expression);
+			flatNodes.push_back(function);
 			return;
 		}
 
 		// Operator: recurse into boundary args, add self in between (in-order).
 		if (hasLeftEdge)
-			collectFlatNodes(expression->arguments.front(), true, false);
+			collectFlatNodes(function->arguments.front(), true, false);
 
 		// Infer non-boundary arguments independently.
-		for (size_t i = (hasLeftEdge ? 1 : 0); i < expression->arguments.size() - (hasRightEdge ? 1 : 0); i++) {
-			if (!inferNestedForGrouping(expression->arguments[i])) {
+		for (size_t i = (hasLeftEdge ? 1 : 0); i < function->arguments.size() - (hasRightEdge ? 1 : 0); i++) {
+			if (!inferNestedForGrouping(function->arguments[i])) {
 				context.typesValid = false;
 				return;
 			}
 		}
 
 		operatorCount++;
-		flatNodes.push_back(expression);
+		flatNodes.push_back(function);
 
 		if (hasRightEdge)
-			collectFlatNodes(expression->arguments.back(), true, false);
+			collectFlatNodes(function->arguments.back(), true, false);
 	};
 
 	collectFlatNodes(expr, true, true);
 	if (!context.typesValid) {
 		expr = originalExpr;
-		resetExpressionTypes(expr);
+		resetFunctionTypes(expr);
 		context.addDiagnostic(
 			{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail), originalExpr->range}
 		);
@@ -1463,7 +1465,7 @@ static bool inferExpression(
 	}
 
 	size_t ambiguousOperatorCount = operatorCount;
-	if (expr && expr->kind == Expression::Kind::PatternCall && mustOwnEntireRange(expr) && ambiguousOperatorCount > 0)
+	if (expr && expr->kind == Function::Kind::PatternCall && mustOwnEntireRange(expr) && ambiguousOperatorCount > 0)
 		ambiguousOperatorCount--;
 	if (ambiguousOperatorCount > 8) {
 		context.addDiagnostic({Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range});
@@ -1491,49 +1493,49 @@ static bool inferExpression(
 	//
 	// Right-to-left iteration prefers left-to-right evaluation order.
 	// Returns true on first valid grouping (early exit propagates up).
-	std::function<bool(int, int, std::function<bool(Expression *)>)> tryGroupings =
-		[&](int start, int end, std::function<bool(Expression *)> onResult) -> bool {
+	std::function<bool(int, int, std::function<bool(Function *)>)> tryGroupings =
+		[&](int start, int end, std::function<bool(Function *)> onResult) -> bool {
 		if (start > end)
 			return onResult(nullptr);
 		if (start == end)
 			return onResult(flatNodes[start]);
 
-		Expression *mandatoryRoot = flatNodes[start];
-		bool rangeStartsWithMandatoryPrefix = mandatoryRoot->kind == Expression::Kind::PatternCall &&
+		Function *mandatoryRoot = flatNodes[start];
+		bool rangeStartsWithMandatoryPrefix = mandatoryRoot->kind == Function::Kind::PatternCall &&
 											  !mandatoryRoot->arguments.empty() && !mandatoryRoot->isExplicitGroup &&
 											  !startsWithArgument(mandatoryRoot) && endsWithArgument(mandatoryRoot) &&
 											  mustOwnEntireRange(mandatoryRoot);
 
 		for (int rootIndex = end; rootIndex >= start; rootIndex--) {
-			Expression *rootExpression = flatNodes[rootIndex];
+			Function *rootFunction = flatNodes[rootIndex];
 			if (rangeStartsWithMandatoryPrefix && rootIndex != start)
 				continue;
 
-			bool isPatternCall = rootExpression->kind == Expression::Kind::PatternCall && !rootExpression->arguments.empty() &&
-								 !rootExpression->isExplicitGroup;
+			bool isPatternCall = rootFunction->kind == Function::Kind::PatternCall && !rootFunction->arguments.empty() &&
+								 !rootFunction->isExplicitGroup;
 			if (!isPatternCall)
 				continue;
-			bool hasLeftEdge = startsWithArgument(rootExpression);
-			bool hasRightEdge = endsWithArgument(rootExpression);
+			bool hasLeftEdge = startsWithArgument(rootFunction);
+			bool hasRightEdge = endsWithArgument(rootFunction);
 			if (!hasLeftEdge && rootIndex > start)
 				continue;
 			if (!hasRightEdge && rootIndex < end)
 				continue;
 			if (hasLeftEdge && hasRightEdge && (rootIndex == start || rootIndex == end))
 				continue;
-			int rootPrecedence = expressionPrecedence(rootExpression);
+			int rootPrecedence = functionPrecedence(rootFunction);
 			if (rootPrecedence > 0 && hasLeftEdge && hasRightEdge) {
 				bool lowerPrecedenceExists = false;
 				for (int otherIndex = start; otherIndex <= end; otherIndex++) {
 					if (otherIndex == rootIndex)
 						continue;
-					Expression *otherExpression = flatNodes[otherIndex];
-					if (otherExpression->kind != Expression::Kind::PatternCall || otherExpression->arguments.empty() ||
-						otherExpression->isExplicitGroup)
+					Function *otherFunction = flatNodes[otherIndex];
+					if (otherFunction->kind != Function::Kind::PatternCall || otherFunction->arguments.empty() ||
+						otherFunction->isExplicitGroup)
 						continue;
-					if (!startsWithArgument(otherExpression) || !endsWithArgument(otherExpression))
+					if (!startsWithArgument(otherFunction) || !endsWithArgument(otherFunction))
 						continue;
-					int otherPrecedence = expressionPrecedence(otherExpression);
+					int otherPrecedence = functionPrecedence(otherFunction);
 					if (otherPrecedence > 0 && otherPrecedence < rootPrecedence) {
 						lowerPrecedenceExists = true;
 						break;
@@ -1543,37 +1545,37 @@ static bool inferExpression(
 					continue;
 			}
 
-			Expression *savedLeft = hasLeftEdge ? rootExpression->arguments.front() : nullptr;
-			Expression *savedRight = hasRightEdge ? rootExpression->arguments.back() : nullptr;
-			bool done = tryGroupings(start, rootIndex - 1, [&](Expression *leftResult) -> bool {
+			Function *savedLeft = hasLeftEdge ? rootFunction->arguments.front() : nullptr;
+			Function *savedRight = hasRightEdge ? rootFunction->arguments.back() : nullptr;
+			bool done = tryGroupings(start, rootIndex - 1, [&](Function *leftResult) -> bool {
 				if (hasLeftEdge)
-					rootExpression->arguments.front() = leftResult;
-				return tryGroupings(rootIndex + 1, end, [&](Expression *rightResult) -> bool {
+					rootFunction->arguments.front() = leftResult;
+				return tryGroupings(rootIndex + 1, end, [&](Function *rightResult) -> bool {
 					if (hasRightEdge)
-						rootExpression->arguments.back() = rightResult;
-					return onResult(rootExpression);
+						rootFunction->arguments.back() = rightResult;
+					return onResult(rootFunction);
 				});
 			});
 			if (done)
 				return true;
 			if (hasLeftEdge)
-				rootExpression->arguments.front() = savedLeft;
+				rootFunction->arguments.front() = savedLeft;
 			if (hasRightEdge)
-				rootExpression->arguments.back() = savedRight;
+				rootFunction->arguments.back() = savedRight;
 		}
 		return false;
 	};
 
 	int lastIndex = (int)flatNodes.size() - 1;
 	std::string trialFailureDetail;
-	bool found = tryGroupings(0, lastIndex, [&](Expression *rootExpression) -> bool {
-		expr = rootExpression;
-		resetExpressionTypes(expr);
+	bool found = tryGroupings(0, lastIndex, [&](Function *rootFunction) -> bool {
+		expr = rootFunction;
+		resetFunctionTypes(expr);
 		InferenceContext::TrialJournal journal;
 		InferenceContext trialContext(context.parseContext, true);
 		trialContext.currentInstantiation = context.currentInstantiation;
 		trialContext.trialJournal = &journal;
-		inferOrderedExpression(expr, trialContext, macroBindings);
+		inferOrderedFunction(expr, trialContext, macroBindings);
 		if (!trialContext.typesValid && trialFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
 			trialFailureDetail = trialContext.typeFailureDetail;
 		rollbackTrialJournal(journal);
@@ -1583,13 +1585,13 @@ static bool inferExpression(
 	if (found) {
 		recomputeRanges(expr);
 		sortArgumentsRecursive(expr);
-		resetExpressionTypes(expr);
-		inferOrderedExpression(expr, context, macroBindings);
+		resetFunctionTypes(expr);
+		inferOrderedFunction(expr, context, macroBindings);
 		return context.typesValid;
 	}
 
 	expr = originalExpr;
-	resetExpressionTypes(expr);
+	resetFunctionTypes(expr);
 	context.addDiagnostic(
 		{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, trialFailureDetail), originalExpr->range}
 	);
@@ -1598,18 +1600,18 @@ static bool inferExpression(
 
 // Returns false on failure (sets context.typesValid = false).
 static bool
-inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Expression *> &bindings) {
+inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings) {
 	// The first instantiation determines operand ordering; subsequent ones reuse it.
 	// size() > 1 because the current instantiation is already inserted before inferSection is called.
 	bool alreadyOrdered = section->instantiations.size() > 1;
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordTouchedSection(section);
-	resetSectionExpressionTypes(section);
+	resetSectionFunctionTypes(section);
 	resetSectionLocalVariableTypes(section);
 
 	for (CodeLine *line : section->codeLines) {
-		if (line->expression) {
-			if (!inferExpression(line->expression, context, alreadyOrdered, bindings)) {
+		if (line->function) {
+			if (!inferFunction(line->function, context, alreadyOrdered, bindings)) {
 				context.typesValid = false;
 				return false;
 			}
@@ -1650,9 +1652,9 @@ bool inferTypes(ParseContext &parseContext) {
 	};
 	validateVariables(parseContext.mainSection);
 
-	// Validate non-macro expression functions have deduced return types
+	// Validate non-macro function functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
-		if (section->type == SectionType::Expression && !section->isMacro && !section->patternDefinitions.empty()) {
+		if (section->type == SectionType::Function && !section->isMacro && !section->patternDefinitions.empty()) {
 			for (auto &[argTypes, inst] : section->instantiations) {
 				(void)argTypes;
 				if (!inst.valid)
@@ -1660,7 +1662,7 @@ bool inferTypes(ParseContext &parseContext) {
 				if (!inst.returnType.isDeduced()) {
 					parseContext.diagnostics.push_back(Diagnostic(
 						Diagnostic::Level::Error,
-						"Expression '" + (std::string)section->patternDefinitions.front()->range.subString +
+						"Function '" + (std::string)section->patternDefinitions.front()->range.subString +
 							"' has no deduced return type",
 						section->patternDefinitions.front()->range
 					));
@@ -1678,7 +1680,7 @@ bool inferTypes(ParseContext &parseContext) {
 }
 
 bool ensureSectionInstantiationInferred(
-	ParseContext &parseContext, Section *section, const std::unordered_map<std::string, Expression *> &callBindings,
+	ParseContext &parseContext, Section *section, const std::unordered_map<std::string, Function *> &callBindings,
 	const std::vector<DataType> &argTypes
 ) {
 	if (!section)

@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"dynlex.server.port": 5008,
+		"dynlex.server.useExternal": true,
+		"dynlex.server.path": "./build/dynlex"
+	}
+}

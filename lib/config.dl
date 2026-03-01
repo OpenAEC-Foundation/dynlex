@@ -1,0 +1,18 @@
+dynlex options:
+    import: "import"
+    comment: "#"
+    open section: ":"
+    section: "section"
+    function: "function"
+    class:
+        name: "class"
+        members: "members"
+    macro: "macro"
+    local: "local"
+    child sections:
+        execute: "execute"
+        replacement: "replacement"
+        patterns: "patterns"
+        globals: "globals"
+        before: "before"
+        after: "after"

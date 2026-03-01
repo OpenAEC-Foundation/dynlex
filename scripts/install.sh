@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+detect_install_llvm_version() {
+    if [ -n "${DYNLEX_LLVM_VERSION:-}" ]; then
+        echo "$DYNLEX_LLVM_VERSION"
+    else
+        echo "20"
+    fi
+}
+
 echo "Installing DynLex Compiler Dependencies..."
 echo "=========================================="
 
@@ -8,9 +16,9 @@ echo "=========================================="
 echo "Updating package list..."
 sudo apt update
 
-# LLVM version — LLVM 20 is required for the SPIR-V backend (official target since LLVM 20).
-# When changing this, also update CMakeLists.txt and build.sh.
-LLVM_VERSION=20
+# LLVM 20 is the minimum supported toolchain because DynLex relies on the
+# upstream SPIR-V backend introduced in LLVM 20.
+LLVM_VERSION="$(detect_install_llvm_version)"
 
 # Install LLVM/Clang toolchain (pinned to specific version)
 echo "Installing LLVM/Clang $LLVM_VERSION toolchain..."
@@ -30,23 +38,10 @@ sudo apt install -y \
     ninja-build \
     git \
     python3 \
-    pipx \
     nodejs \
     npm \
-    golang-go
-
-# Ensure pipx path
-pipx ensurepath
-
-# Install Conan via pipx
-echo "Installing Conan package manager..."
-pipx install conan
-
-# Initialize Conan profile if not exists
-if [ ! -f "$HOME/.conan2/profiles/default" ]; then
-    echo "Initializing Conan profile..."
-    conan profile detect --force
-fi
+    golang-go \
+    nlohmann-json3-dev
 
 # Install MCP language server
 echo "Installing MCP language server..."
@@ -66,7 +61,6 @@ clang-format-$LLVM_VERSION --version | head -n1
 clang-tidy-$LLVM_VERSION --version | head -n1
 cmake --version | head -n1
 ninja --version
-conan --version
 llvm-config-$LLVM_VERSION --version
 node --version
 npm --version

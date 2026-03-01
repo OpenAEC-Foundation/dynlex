@@ -21,6 +21,7 @@ class DynLexServer : public LanguageServer {
 	void onDidOpen(const DidOpenTextDocumentParams &params) override;
 	void onDidChange(const DidChangeTextDocumentParams &params) override;
 	void onDidClose(const DidCloseTextDocumentParams &params) override;
+	CompletionList onCompletion(const TextDocumentPositionParams &params) override;
 	std::optional<Location> onDefinition(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
@@ -29,6 +30,7 @@ class DynLexServer : public LanguageServer {
   private:
 	// ParseContext per main document URI
 	std::unordered_map<std::string, std::unique_ptr<ParseContext>> parseContexts;
+	std::string workspaceRootPath;
 
 	// Import graph: imported file URI → set of main URIs that import it
 	std::unordered_map<std::string, std::unordered_set<std::string>> importedBy;

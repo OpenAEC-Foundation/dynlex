@@ -1,5 +1,5 @@
 import main.dl
 
-expression second:
+function second:
 	execute:
 		first
