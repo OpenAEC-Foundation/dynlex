@@ -123,6 +123,8 @@ struct ParseContext {
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
 	// The main source file (the one passed on the command line)
 	lsp::SourceFile *mainSourceFile{};
+	// Owns transformed/imported logical lines used throughout compilation.
+	std::vector<std::unique_ptr<CodeLine>> ownedCodeLines;
 	// all code lines in 'chronological' order: imported code lines get put before the import statement
 	std::vector<CodeLine *> codeLines;
 	std::vector<Diagnostic> diagnostics;

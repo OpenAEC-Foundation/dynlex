@@ -13,6 +13,17 @@ import lib/std.dl
 # GLFW_KEY_DOWN = 264
 # GLFW_KEY_UP = 265
 
+class:
+	patterns:
+		glfw video mode
+	members:
+		width as i32
+		height as i32
+		red_bits as i32
+		green_bits as i32
+		blue_bits as i32
+		refresh_rate as i32
+
 function a new window with width w and height h:
 	execute:
 		@intrinsic("call", "glfw", "glfwInit", an integer)
@@ -25,6 +36,34 @@ function a new window with width w and height h:
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
+		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
+		set wf to w as a 64 bit float
+		set hf to h as a 64 bit float
+		set neg to 0.0 - 1.0
+		@intrinsic("call", "GL", "glOrtho", void, 0.0, wf, hf, 0.0, neg, 1.0)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5888)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
+		return new_window
+
+function a new fullscreen window:
+	execute:
+		@intrinsic("call", "glfw", "glfwInit", an integer)
+		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
+		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
+		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
+		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
+		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
+		set monitor to @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer to a byte)
+		set video_mode_ptr to @intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to a byte, monitor) as a pointer to glfw video mode
+		set video_mode to the value at video_mode_ptr
+		set w to the width of video_mode
+		set h to the height of video_mode
+		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", monitor, 0 as a pointer to a byte)
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
 		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
 		@intrinsic("call", "GL", "glLoadIdentity", void)

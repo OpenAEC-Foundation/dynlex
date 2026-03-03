@@ -61,6 +61,15 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 		int bits = type.numericSize * 8;
 		return context.diBuilder->createBasicType("i" + std::to_string(bits), bits, llvm::dwarf::DW_ATE_signed);
 	}
+	case DataType::Kind::Array: {
+		if (!type.arrayElementType)
+			return nullptr;
+		llvm::DIType *elementType = getDIType(context, *type.arrayElementType);
+		if (!elementType)
+			return nullptr;
+		auto subscripts = context.diBuilder->getOrCreateArray({context.diBuilder->getOrCreateSubrange(0, type.arraySize)});
+		return context.diBuilder->createArrayType(static_cast<uint64_t>(type.getByteSize()) * 8, 0, elementType, subscripts);
+	}
 	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
 			return nullptr;
@@ -205,6 +214,9 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 	case Function::Kind::Literal:
 		return expr->type; // Literal types are always set by inference
 
+	case Function::Kind::ArrayLiteral:
+		return expr->type;
+
 	case Function::Kind::Variable: {
 		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
@@ -262,8 +274,16 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			return getEffectiveType(context, expr->arguments[1]).pointed();
 		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
 			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
-		if (expr->intrinsicName == "load at")
+		if (expr->intrinsicName == "load at" && expr->arguments.size() >= 3) {
+			DataType ptrType = getEffectiveType(context, expr->arguments[1]);
+			if (ptrType.isPointer()) {
+				DataType pointedType = ptrType.dereferenced();
+				if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType)
+					return *pointedType.arrayElementType;
+				return pointedType;
+			}
 			return {DataType::Kind::Int, 8};
+		}
 		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
 			return getEffectiveType(context, expr->arguments[1]);
 		if (expr->intrinsicName == "call") {
@@ -277,6 +297,8 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		}
 		if (expr->intrinsicName == "construct")
 			return expr->type; // DataType fully determined during inference
+		if (expr->intrinsicName == "type of" || expr->intrinsicName == "array")
+			return expr->type;
 		if (expr->intrinsicName == "property" && expr->arguments.size() >= 2) {
 			DataType ownerType = getEffectiveType(context, expr->arguments[0]);
 			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[1]));

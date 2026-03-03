@@ -51,10 +51,12 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool waitDebugger = false;
 	bool emitTokens = false;
 	bool emitCompletions = false;
+	bool enableLspTrace = false;
 	int completionLine = 0;
 	int completionColumn = 0;
 	int lspPort = 5007;
 	std::string inputFile;
+	std::string lspTracePath;
 
 	// Parse arguments
 	for (size_t i = 0; i < args.size(); ++i) {
@@ -65,6 +67,11 @@ int main(int argumentCount, char *argumentValues[]) {
 			runDAP = true;
 		} else if (arg == "--lsp") {
 			runLSP = true;
+		} else if (arg == "--lsp-trace") {
+			enableLspTrace = true;
+		} else if (arg.starts_with("--lsp-trace=")) {
+			enableLspTrace = true;
+			lspTracePath = arg.substr(std::string("--lsp-trace=").size());
 		} else if (arg == "--port") {
 			if (i + 1 >= args.size()) {
 				std::cerr << "Missing value for --port" << std::endl;
@@ -141,9 +148,17 @@ int main(int argumentCount, char *argumentValues[]) {
 	if (runLSP || useStdio) {
 		if (useStdio) {
 			lsp::DynLexServer server(std::make_unique<lsp::StdioTransport>());
+			if (enableLspTrace && !server.enableTrace(lspTracePath)) {
+				std::cerr << "Failed to open LSP trace output: " << lspTracePath << std::endl;
+				return 1;
+			}
 			server.run();
 		} else {
 			lsp::DynLexServer server(lspPort);
+			if (enableLspTrace && !server.enableTrace(lspTracePath)) {
+				std::cerr << "Failed to open LSP trace output: " << lspTracePath << std::endl;
+				return 1;
+			}
 			server.run();
 		}
 		return 0;
@@ -172,7 +187,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-tokens] [--emit-completions line:column] "
 					 "[--shader-stage=vertex|fragment] "
 					 "[-O0|-O1|-O2|-O3] "
-					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap]"
+					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]]"
 				  << std::endl;
 	}
 

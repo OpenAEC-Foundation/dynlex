@@ -1,7 +1,10 @@
 #include "languageServer.h"
 #include "lspProtocol.h"
 #include "tcpTransport.h"
+#include <chrono>
 #include <cstring>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 
 namespace lsp {
@@ -11,6 +14,24 @@ LanguageServer::LanguageServer(int port) : port(port) {}
 LanguageServer::LanguageServer(std::unique_ptr<Transport> transport) : transport(std::move(transport)) {}
 
 LanguageServer::~LanguageServer() { shutdown(); }
+
+bool LanguageServer::enableTrace(const std::string &path) {
+	if (path.empty()) {
+		traceFile.reset();
+		traceStream = &std::cerr;
+		return true;
+	}
+
+	traceFile = std::make_unique<std::ofstream>(path, std::ios::out | std::ios::trunc);
+	if (!traceFile->is_open()) {
+		traceFile.reset();
+		traceStream = nullptr;
+		return false;
+	}
+
+	traceStream = traceFile.get();
+	return true;
+}
 
 void LanguageServer::run() {
 	running = true;
@@ -123,6 +144,7 @@ std::string LanguageServer::readMessage() {
 		totalRead += n;
 	}
 
+	traceMessage("recv", body);
 	return body;
 }
 
@@ -132,6 +154,7 @@ void LanguageServer::sendMessage(const Json &message) {
 	}
 
 	std::string body = message.dump();
+	traceMessage("send", body);
 	std::string header = "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n";
 	std::string fullMessage = header + body;
 
@@ -147,8 +170,10 @@ void LanguageServer::sendMessage(const Json &message) {
 }
 
 void LanguageServer::handleMessage(const Json &message) {
-	if (message.contains("id")) {
+	if (message.contains("id") && message.contains("method")) {
 		handleRequest(message);
+	} else if (message.contains("id")) {
+		handleResponse(message);
 	} else {
 		handleNotification(message);
 	}
@@ -247,9 +272,33 @@ void LanguageServer::sendNotification(const std::string &method, const Json &par
 	sendMessage(notification);
 }
 
+void LanguageServer::sendRequest(const std::string &method, const Json &params) {
+	Json request = {{"jsonrpc", "2.0"}, {"id", nextRequestId++}, {"method", method}, {"params", params}};
+	sendMessage(request);
+}
+
+void LanguageServer::handleResponse(const Json &message) { (void)message; }
+
 void LanguageServer::log(const std::string &message) { std::cerr << "[LSP] " << message << std::endl; }
 
 void LanguageServer::logError(const std::string &message) { std::cerr << "[LSP ERROR] " << message << std::endl; }
+
+void LanguageServer::traceMessage(std::string_view direction, const std::string &body) {
+	if (!traceStream)
+		return;
+
+	using namespace std::chrono;
+	auto now = system_clock::now();
+	auto nowTime = system_clock::to_time_t(now);
+	auto millis = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+	std::tm tm{};
+	localtime_r(&nowTime, &tm);
+
+	(*traceStream) << "[LSP TRACE " << direction << " " << std::put_time(&tm, "%F %T") << '.' << std::setw(3)
+				   << std::setfill('0') << millis.count() << "] " << body << '\n';
+	traceStream->flush();
+}
 
 // Default implementations of virtual methods
 

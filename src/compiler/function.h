@@ -14,6 +14,7 @@ struct VariableReference;
 struct Function {
 	enum class Kind {
 		Literal,
+		ArrayLiteral,
 		Variable,
 		PatternCall,
 		IntrinsicCall,

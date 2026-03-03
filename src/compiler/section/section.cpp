@@ -131,12 +131,25 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			push();
 			break;
 		}
+		case '[': {
+			push();
+			break;
+		}
 		case ')': {
 			if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
 				nodeStack.pop();
 			}
 			if (!tryPop('('))
+				return nullptr;
+			break;
+		}
+		case ']': {
+			if (nodeStack.top()->character == ',') {
+				nodeStack.top()->end = index;
+				nodeStack.pop();
+			}
+			if (!tryPop('['))
 				return nullptr;
 			break;
 		}
@@ -169,7 +182,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			break;
 		}
 		case ',': {
-			if (nodeStack.top()->character == '(') {
+			if (nodeStack.top()->character == '(' || nodeStack.top()->character == '[') {
 				// add the child, don't push
 				StringHierarchy *newChild = new StringHierarchy(character, nodeStack.top()->start);
 				// move all other children to this new child
@@ -222,6 +235,44 @@ static Function *createStringLiteral(Range range, StringHierarchy *strNode) {
 	strExpr->kind = Function::Kind::Literal;
 	strExpr->literalValue = processEscapeSequences(range.subString.substr(strNode->start, strNode->end - strNode->start));
 	return strExpr;
+}
+
+static Function *createArrayLiteral(Section *section, ParseContext &context, Range range, StringHierarchy *arrayNode) {
+	Function *arrayExpr = new Function();
+	arrayExpr->range = range.subRange(arrayNode->start - 1, arrayNode->end + 1);
+	arrayExpr->kind = Function::Kind::ArrayLiteral;
+
+	auto processElement = [&](StringHierarchy *elementNode) -> bool {
+		Function *elementExpr = nullptr;
+		if (elementNode->character == '"') {
+			elementExpr = createStringLiteral(range, elementNode);
+		} else {
+			elementExpr = section->detectPatternsRecursively(
+				context, range.subRange(elementNode->start, elementNode->end),
+				elementNode->cloneWithOffset(-elementNode->start), SectionType::Function
+			);
+		}
+		if (!elementExpr)
+			return false;
+		elementExpr->isExplicitGroup = true;
+		arrayExpr->arguments.push_back(elementExpr);
+		return true;
+	};
+
+	if (!arrayNode->children.empty()) {
+		if (arrayNode->children[0]->character == ',') {
+			for (StringHierarchy *child : arrayNode->children) {
+				if (!processElement(child))
+					return nullptr;
+			}
+		} else {
+			if (!processElement(arrayNode->children[0]))
+				return nullptr;
+		}
+	}
+
+	arrayExpr->arguments = sortArgumentsByPosition(arrayExpr->arguments);
+	return arrayExpr;
 }
 
 Function *
@@ -338,6 +389,12 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				}
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
+		} else if (child->character == '[') {
+			Function *arrayExpr = createArrayLiteral(this, context, range, child);
+			if (!arrayExpr)
+				return nullptr;
+			expr->arguments.push_back(arrayExpr);
+			reference->pattern.replaceLine(child->start - "["sv.length(), child->end + "]"sv.length());
 		} else if (child->character == '"') {
 			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());

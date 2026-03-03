@@ -177,6 +177,24 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		ASSERT_UNREACHABLE("Unknown literal type in codegen");
 	}
 
+	case Function::Kind::ArrayLiteral: {
+		DataType arrayType = getEffectiveType(context, expr);
+		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
+			return nullptr;
+		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
+		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
+		for (size_t i = 0; i < expr->arguments.size(); i++) {
+			llvm::Value *elementValue = generateFunctionCode(context, expr->arguments[i]);
+			DataType fromType = getEffectiveType(context, expr->arguments[i]);
+			elementValue = ensureType(context, elementValue, fromType, *arrayType.arrayElementType);
+			llvm::Value *elementPtr = builder.CreateGEP(
+				llvmArrayType, tempAlloca, {builder.getInt64(0), builder.getInt64(static_cast<int64_t>(i))}, "array_elem_ptr"
+			);
+			builder.CreateStore(elementValue, elementPtr);
+		}
+		return builder.CreateAlignedLoad(llvmArrayType, tempAlloca, llvm::Align(8), "array_literal_load");
+	}
+
 	case Function::Kind::Variable: {
 		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {

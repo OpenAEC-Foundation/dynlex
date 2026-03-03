@@ -7,9 +7,12 @@ class:
         x
         y
 
-macro function new point with x px and y py:
-    replacement:
-        @intrinsic("construct", point, px, py)
+function new point with x px and y py:
+    execute:
+        set result to @intrinsic("construct", point)
+        set the x of result to px
+        set the y of result to py
+        return result
 
 set p to new point with x 10 and y 20
 print the x of p as line

@@ -70,6 +70,7 @@ static DataType concretizeClassType(DataType type);
 static std::string extractFieldName(Function *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
 static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings);
+static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged);
 
 static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
 	std::unordered_map<std::string, Function *> effectiveBindings;
@@ -94,6 +95,24 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			strType.pointerDepth = 1;
 			return strType;
 		}
+	}
+	if (resolved->kind == Function::Kind::ArrayLiteral) {
+		if (resolved->arguments.empty())
+			return {};
+		DataType elementType = resolveTypeThroughBindings(resolved->arguments[0], effectiveBindings);
+		if (!elementType.isDeduced())
+			return {};
+		for (size_t i = 1; i < resolved->arguments.size(); i++) {
+			DataType nextType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+			DataType merged;
+			if (!mergeArrayElementType(elementType, nextType, merged))
+				return {};
+			elementType = merged;
+		}
+		DataType arrayType{DataType::Kind::Array};
+		arrayType.arraySize = static_cast<int>(resolved->arguments.size());
+		arrayType.arrayElementType = std::make_shared<DataType>(elementType);
+		return arrayType;
 	}
 	if (resolved->kind == Function::Kind::Variable && resolved->variable) {
 		VariableReference *varRef = resolved->variable;
@@ -159,6 +178,35 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = (int)*bits / 8;
+				}
+				return typeRef;
+			}
+		} else if (resolved->intrinsicName == "type of" && resolved->arguments.size() >= 2) {
+			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			if (valueType.isDeduced()) {
+				DataType typeRef;
+				typeRef.kind = DataType::Kind::Type;
+				typeRef.referencedKind = valueType.kind;
+				typeRef.numericSize = valueType.numericSize;
+				typeRef.pointerDepth = valueType.pointerDepth;
+				typeRef.classDefinition = valueType.classDefinition;
+				typeRef.classInstIndex = valueType.classInstIndex;
+				typeRef.arraySize = valueType.arraySize;
+				typeRef.arrayElementType =
+					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+				return typeRef;
+			}
+		} else if (resolved->intrinsicName == "array" && resolved->arguments.size() >= 2) {
+			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
+				DataType typeRef;
+				typeRef.kind = DataType::Kind::Type;
+				typeRef.referencedKind = DataType::Kind::Array;
+				typeRef.arraySize = static_cast<int>(*size);
+				if (resolved->arguments.size() >= 3) {
+					DataType elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
+					if (elemTypeRef.kind == DataType::Kind::Type)
+						typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 				}
 				return typeRef;
 			}
@@ -282,6 +330,18 @@ static bool isSupportedCastConversion(const DataType &fromType, const DataType &
 		return true;
 	if (fromType.kind == DataType::Kind::Bool && toType.isNumeric())
 		return true;
+	return false;
+}
+
+static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged) {
+	if (!current.isDeduced() || !next.isDeduced())
+		return false;
+	if (current == next) {
+		merged = current;
+		return true;
+	}
+	if (current.isNumeric() && next.isNumeric())
+		return DataType::promoteArithmetic(current, next, merged);
 	return false;
 }
 
@@ -652,22 +712,6 @@ static int getRefinedClassInstantiationIndex(
 	return existingIndex;
 }
 
-static int
-getOrCreateClassInstantiation(InferenceContext &context, ClassDefinition *classDef, const std::vector<DataType> &fieldTypes) {
-	if (!classDef)
-		return -1;
-	bool instantiationExists = false;
-	for (const auto &inst : classDef->instantiations) {
-		if (inst.fieldTypes == fieldTypes) {
-			instantiationExists = true;
-			break;
-		}
-	}
-	if (!instantiationExists && context.trial && context.trialJournal)
-		context.trialJournal->recordClassInstantiationAppend(classDef);
-	return classDef->getOrCreateInstantiation(fieldTypes);
-}
-
 // Infer types for a section's code lines with operand reordering. Returns false on failure.
 static bool
 inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings = {});
@@ -702,6 +746,28 @@ static void inferOrderedFunction(
 			expr->type = {DataType::Kind::Int, 1};
 			expr->type.pointerDepth = 1;
 		}
+		break;
+	}
+
+	case Function::Kind::ArrayLiteral: {
+		if (expr->arguments.empty())
+			break;
+		DataType elementType = resolveTypeThroughBindings(expr->arguments[0], macroBindings);
+		if (!elementType.isDeduced())
+			break;
+		for (size_t i = 1; i < expr->arguments.size(); i++) {
+			DataType nextType = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
+			DataType merged;
+			if (!mergeArrayElementType(elementType, nextType, merged)) {
+				context.typesValid = false;
+				context.setTypeFailure("Array literal elements must have matching or compatible numeric types");
+				return;
+			}
+			elementType = merged;
+		}
+		expr->type = DataType(DataType::Kind::Array);
+		expr->type.arraySize = static_cast<int>(expr->arguments.size());
+		expr->type.arrayElementType = std::make_shared<DataType>(elementType);
 		break;
 	}
 
@@ -877,7 +943,16 @@ static void inferOrderedFunction(
 					if (ptrType.isDeduced() && ptrType.isPointer())
 						expr->type = concretizeClassType(ptrType.dereferenced());
 				} else if (expr->intrinsicName == "load at") {
-					expr->type = {DataType::Kind::Int, 8};
+					DataType ptrType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (ptrType.isDeduced() && ptrType.isPointer()) {
+						DataType pointedType = ptrType.dereferenced();
+						if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType)
+							expr->type = *pointedType.arrayElementType;
+						else
+							expr->type = pointedType;
+					} else {
+						expr->type = {DataType::Kind::Int, 8};
+					}
 				} else if (expr->intrinsicName == "return") {
 					if (expr->arguments.size() >= 2) {
 						DataType retType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
@@ -944,6 +1019,31 @@ static void inferOrderedFunction(
 						}
 						expr->type = typeRef;
 					}
+				} else if (expr->intrinsicName == "type of") {
+					DataType valueType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (valueType.isDeduced()) {
+						expr->type.kind = DataType::Kind::Type;
+						expr->type.referencedKind = valueType.kind;
+						expr->type.numericSize = valueType.numericSize;
+						expr->type.pointerDepth = valueType.pointerDepth;
+						expr->type.classDefinition = valueType.classDefinition;
+						expr->type.classInstIndex = valueType.classInstIndex;
+						expr->type.arraySize = valueType.arraySize;
+						expr->type.arrayElementType =
+							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+					}
+				} else if (expr->intrinsicName == "array") {
+					Function *sizeExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
+					if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
+						expr->type.kind = DataType::Kind::Type;
+						expr->type.referencedKind = DataType::Kind::Array;
+						expr->type.arraySize = static_cast<int>(*size);
+						if (expr->arguments.size() >= 3) {
+							DataType elemTypeRef = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
+							if (elemTypeRef.kind == DataType::Kind::Type)
+								expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
+						}
+					}
 				} else if (expr->intrinsicName == "add pointer depth") {
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (typeArgType.kind == DataType::Kind::Type) {
@@ -952,20 +1052,16 @@ static void inferOrderedFunction(
 					}
 				} else if (expr->intrinsicName == "construct") {
 					DataType typeRefType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
-					if (typeRefType.kind == DataType::Kind::Type && typeRefType.classDefinition) {
-						ClassDefinition *classDef = typeRefType.classDefinition;
-						std::vector<DataType> fieldTypes;
-						bool allDeduced = true;
-						for (size_t i = 2; i < expr->arguments.size(); i++) {
-							DataType ft = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
-							if (!ft.isDeduced())
-								allDeduced = false;
-							fieldTypes.push_back(ft);
+					if (typeRefType.kind == DataType::Kind::Type && expr->arguments.size() == 2) {
+						DataType targetType = typeRefType.toReferencedType();
+						if (targetType.kind == DataType::Kind::Class && targetType.classDefinition &&
+							targetType.classInstIndex < 0) {
+							std::vector<DataType> fieldTypes;
+							for (const FieldDefinition &field : targetType.classDefinition->fields)
+								fieldTypes.push_back(field.declaredType);
+							targetType.classInstIndex = targetType.classDefinition->getOrCreateInstantiation(fieldTypes);
 						}
-						if (allDeduced) {
-							int instIdx = getOrCreateClassInstantiation(context, classDef, fieldTypes);
-							expr->type = {DataType::Kind::Class, 0, 0, classDef, instIdx};
-						}
+						expr->type = concretizeClassType(targetType);
 					}
 				} else if (expr->intrinsicName == "property") {
 					DataType instType = concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindings));

@@ -1,5 +1,6 @@
 #pragma once
 #include <cassert>
+#include <memory>
 #include <string>
 
 namespace llvm {
@@ -21,6 +22,7 @@ struct DataType {
 		Bool,
 		Float,
 		Int,
+		Array,
 		// a class with members. for example point
 		Class,
 		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
@@ -34,11 +36,38 @@ struct DataType {
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
 	Function *typeFunction = nullptr;			// For Kind::Unresolved: class pattern reference to resolve
 	Kind referencedKind = Kind::Unresolved;		// For Kind::Type: the kind this type literal refers to
+	int arraySize = 0;							// For Kind::Array and Type(Array)
+	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
+
+	DataType() = default;
+	DataType(Kind kind) : kind(kind) {}
+	DataType(Kind kind, int numericSize) : kind(kind), numericSize(numericSize) {}
+	DataType(
+		Kind kind, int numericSize, int pointerDepth, ClassDefinition *classDefinition = nullptr, int classInstIndex = -1,
+		Function *typeFunction = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
+		std::shared_ptr<DataType> arrayElementType = nullptr
+	)
+		: kind(kind), numericSize(numericSize), pointerDepth(pointerDepth), classDefinition(classDefinition),
+		  classInstIndex(classInstIndex), typeFunction(typeFunction), referencedKind(referencedKind), arraySize(arraySize),
+		  arrayElementType(std::move(arrayElementType)) {}
+
+	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
 
 	bool operator==(const DataType &other) const {
-		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize)
+		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
+			referencedKind != other.referencedKind || arraySize != other.arraySize)
 			return false;
+		if (hasArrayPayload()) {
+			bool hasElem = !!arrayElementType;
+			bool otherHasElem = !!other.arrayElementType;
+			if (hasElem != otherHasElem)
+				return false;
+			if (hasElem && *arrayElementType != *other.arrayElementType)
+				return false;
+		}
 		if (kind == Kind::Class)
+			return classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
+		if (kind == Kind::Type && referencedKind == Kind::Class)
 			return classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
 		return true; // Void, Bool, Int, Float, Type: kind+pointerDepth+numericSize suffice
 	}
@@ -50,7 +79,22 @@ struct DataType {
 			return pointerDepth < other.pointerDepth;
 		if (numericSize != other.numericSize)
 			return numericSize < other.numericSize;
+		if (referencedKind != other.referencedKind)
+			return referencedKind < other.referencedKind;
+		if (arraySize != other.arraySize)
+			return arraySize < other.arraySize;
+		if (hasArrayPayload()) {
+			if (!!arrayElementType != !!other.arrayElementType)
+				return !!arrayElementType < !!other.arrayElementType;
+			if (arrayElementType && *arrayElementType != *other.arrayElementType)
+				return *arrayElementType < *other.arrayElementType;
+		}
 		if (kind == Kind::Class) {
+			if (classDefinition != other.classDefinition)
+				return classDefinition < other.classDefinition;
+			return classInstIndex < other.classInstIndex;
+		}
+		if (kind == Kind::Type && referencedKind == Kind::Class) {
 			if (classDefinition != other.classDefinition)
 				return classDefinition < other.classDefinition;
 			return classInstIndex < other.classInstIndex;
@@ -121,6 +165,8 @@ struct DataType {
 		result.pointerDepth = pointerDepth;
 		result.classDefinition = classDefinition;
 		result.classInstIndex = classInstIndex;
+		result.arraySize = arraySize;
+		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
 		return result;
 	}
 

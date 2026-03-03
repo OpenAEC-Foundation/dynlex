@@ -6,9 +6,13 @@ class:
     members:
         x, y, z
 
-macro function a new vector with x vx, y vy and z vz:
-    replacement:
-        @intrinsic("construct", vector, vx, vy, vz)
+function a new vector with x vx, y vy and z vz:
+    execute:
+        set result to @intrinsic("construct", vector)
+        set the x of result to vx
+        set the y of result to vy
+        set the z of result to vz
+        return result
 
 function add value to {vector:target}:
     execute:

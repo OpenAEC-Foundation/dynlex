@@ -1,7 +1,10 @@
 import lib/std.dl
 import lib/graphics.dl
+import lib/matrix.dl
 
 # SAMPLE GAME: the user can walk into mirrors of all sorts, controlling the environment.
 # when the user moves through a mirror, their direction is reflected and any effect the mirror has is applied to the scene.
 
 set window to a new fullscreen window
+
+set transform to an identity matrix4x4

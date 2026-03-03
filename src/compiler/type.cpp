@@ -20,6 +20,11 @@ std::string DataType::toString() const {
 	case Kind::Float:
 		result = "f" + std::to_string(numericSize * 8);
 		break;
+	case Kind::Array:
+		result = "array[" + std::to_string(arraySize) + "]";
+		if (arrayElementType)
+			result += " of " + arrayElementType->toString();
+		break;
 	case Kind::Class:
 		result = (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
 		break;
@@ -44,6 +49,8 @@ int DataType::getByteSize() const {
 	case Kind::Int:
 	case Kind::Float:
 		return numericSize;
+	case Kind::Array:
+		return arrayElementType ? arrayElementType->getByteSize() * arraySize : 0;
 	case Kind::Class:
 		if (classDefinition && classInstIndex >= 0)
 			return classDefinition->instantiations[classInstIndex].byteSize;
@@ -85,6 +92,9 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		default:
 			ASSERT_UNREACHABLE("Integer type must have a valid numericSize (1/2/4/8) before codegen");
 		}
+	case Kind::Array:
+		assert(arrayElementType && arraySize >= 0 && "Array type must have element type and size");
+		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx), arraySize);
 	case Kind::Class: {
 		assert(classDefinition && classInstIndex >= 0 && "Class type must have classDefinition and instantiation index");
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];

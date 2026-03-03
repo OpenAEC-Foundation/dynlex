@@ -103,16 +103,19 @@ void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 		if (docIt != documents.end())
 			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
 		recompileDependents(uri);
+		requestSemanticTokensRefresh();
 		return;
 	}
 
 	// If this file is already compiled as an import of a main document, skip —
 	// diagnostics are already published from the main document's compilation.
 	if (importedBy.contains(uri) && !importedBy[uri].empty()) {
+		requestSemanticTokensRefresh();
 		return;
 	}
 
 	recompileMainDocument(uri);
+	requestSemanticTokensRefresh();
 }
 
 void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
@@ -127,18 +130,20 @@ void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
 		if (compiledChanged)
 			recompileDependents(uri);
+		requestSemanticTokensRefresh();
 		return;
 	}
 
+	// Compile against the live document content so diagnostics and semantic
+	// tokens reflect edits on the active line immediately.
+	compiledChanged = syncCompiledDocument(uri, true);
 	if (isStructuralEdit(params)) {
-		compiledChanged = syncCompiledDocument(uri, true);
 		refreshLockedLineBaselines(uri);
-	} else {
-		compiledChanged = syncCompiledDocument(uri, false);
 	}
 
 	if (compiledChanged)
 		recompileDependents(uri);
+	requestSemanticTokensRefresh();
 }
 
 void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
@@ -182,6 +187,7 @@ void DynLexServer::onDidClose(const DidCloseTextDocumentParams &params) {
 	}
 
 	LanguageServer::onDidClose(params);
+	requestSemanticTokensRefresh();
 }
 
 void DynLexServer::onActiveCursorChanged(const ActiveCursorParams &params) {
@@ -421,10 +427,12 @@ void DynLexServer::publishMergedDiagnostics(const std::string &fileUri) {
 
 Range DynLexServer::convertRange(const ::Range &range) const {
 	Range lspRange;
-	lspRange.start.line = range.line->sourceFileLineIndex;
-	lspRange.start.character = range.start();
-	lspRange.end.line = range.line->sourceFileLineIndex;
-	lspRange.end.character = range.end();
+	SourceLocation mappedStart = range.sourceStart();
+	SourceLocation mappedEnd = range.sourceEnd();
+	lspRange.start.line = mappedStart.sourceFileLineIndex;
+	lspRange.start.character = mappedStart.column;
+	lspRange.end.line = mappedEnd.sourceFileLineIndex;
+	lspRange.end.character = mappedEnd.column;
 	return lspRange;
 }
 
@@ -475,6 +483,8 @@ void DynLexServer::publishDiagnostics(const std::string &uri, const std::vector<
 	params.diagnostics = diagnostics;
 	sendNotification("textDocument/publishDiagnostics", params);
 }
+
+void DynLexServer::requestSemanticTokensRefresh() { sendRequest("workspace/semanticTokens/refresh", Json::object()); }
 
 CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &params) {
 	auto docIt = documents.find(params.textDocument.uri);
@@ -547,16 +557,14 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 
 	// Find the code line at the cursor position
 	for (CodeLine *codeLine : context->codeLines) {
-		if (codeLine->sourceFileLineIndex != params.position.line) {
+		if (!codeLine->containsSourceLocation(params.textDocument.uri, params.position.line, params.position.character)) {
 			continue;
 		}
-		if (toAbsoluteUri(codeLine->sourceFile->uri) != params.textDocument.uri) {
-			continue;
-		}
+		int localOffset = codeLine->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
 
 		// Walk the function tree to find the deepest function at cursor
 		if (codeLine->function) {
-			Function *expr = findDeepestFunction(codeLine->function, params.position.character);
+			Function *expr = findDeepestFunction(codeLine->function, localOffset);
 			if (expr) {
 				auto target = getDefinitionTarget(expr);
 				if (target) {

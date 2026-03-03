@@ -176,10 +176,16 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 
 	SemanticTokenBuilder builder(lineCount);
 	auto addToken = [&builder, &uri](const ::Range &range, SemanticTokenType type, bool isDefinition) {
-		if (toAbsoluteUri(range.line->sourceFile->uri) != uri)
+		SourceLocation mappedStart = range.sourceStart();
+		SourceLocation mappedEnd = range.sourceEnd();
+		if (!mappedStart.sourceFile || !mappedEnd.sourceFile)
+			return;
+		if (toAbsoluteUri(mappedStart.sourceFile->uri) != uri || toAbsoluteUri(mappedEnd.sourceFile->uri) != uri)
+			return;
+		if (mappedStart.sourceFileLineIndex != mappedEnd.sourceFileLineIndex)
 			return;
 		int modifiers = isDefinition ? (1 << static_cast<int>(SemanticTokenModifier::Definition)) : 0;
-		builder.add(range.line->sourceFileLineIndex, {range.start(), range.end(), type, modifiers});
+		builder.add(mappedStart.sourceFileLineIndex, {mappedStart.column, mappedEnd.column, type, modifiers});
 	};
 
 	std::function<void(Section *)> tokenizeVariables = [&](Section *section) {

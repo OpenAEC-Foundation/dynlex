@@ -364,9 +364,21 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *ptr = generateFunctionCode(context, args[0]);
 		llvm::Value *index = generateFunctionCode(context, args[1]);
 		llvm::Value *value = generateFunctionCode(context, args[2]);
-		assert(getEffectiveType(context, args[0]).isPointer() && "store at requires a pointer argument");
+		DataType ptrType = getEffectiveType(context, args[0]);
+		assert(ptrType.isPointer() && "store at requires a pointer argument");
 		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[1]));
-		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
+		DataType pointedType = ptrType.dereferenced();
+		DataType elementType = pointedType;
+		llvm::Value *elementPtr = nullptr;
+		if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType) {
+			elementType = *pointedType.arrayElementType;
+			llvm::Type *arrayType = getLLVMType(context, pointedType);
+			elementPtr = builder.CreateGEP(arrayType, ptr, {builder.getInt64(0), index}, "array_elem_ptr");
+		} else {
+			llvm::Type *elemLLVMType = getLLVMType(context, elementType);
+			elementPtr = builder.CreateGEP(elemLLVMType, ptr, index, "elem_ptr");
+		}
+		value = ensureType(context, value, getEffectiveType(context, args[2]), elementType);
 		builder.CreateAlignedStore(value, elementPtr, llvm::Align(8));
 		return nullptr;
 	}
@@ -374,11 +386,21 @@ llvm::Value *generateIntrinsicCode(
 	if (name == "load at") {
 		llvm::Value *ptr = generateFunctionCode(context, args[0]);
 		llvm::Value *index = generateFunctionCode(context, args[1]);
-		assert(getEffectiveType(context, args[0]).isPointer() && "load at requires a pointer argument");
-
+		DataType ptrType = getEffectiveType(context, args[0]);
+		assert(ptrType.isPointer() && "load at requires a pointer argument");
 		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[1]));
-		llvm::Value *elementPtr = builder.CreateGEP(builder.getInt64Ty(), ptr, index);
-		return builder.CreateAlignedLoad(builder.getInt64Ty(), elementPtr, llvm::Align(8));
+		DataType pointedType = ptrType.dereferenced();
+		DataType elementType = pointedType;
+		llvm::Value *elementPtr = nullptr;
+		if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType) {
+			elementType = *pointedType.arrayElementType;
+			llvm::Type *arrayType = getLLVMType(context, pointedType);
+			elementPtr = builder.CreateGEP(arrayType, ptr, {builder.getInt64(0), index}, "array_elem_ptr");
+		} else {
+			llvm::Type *elemLLVMType = getLLVMType(context, elementType);
+			elementPtr = builder.CreateGEP(elemLLVMType, ptr, index, "elem_ptr");
+		}
+		return builder.CreateAlignedLoad(getLLVMType(context, elementType), elementPtr, llvm::Align(8));
 	}
 
 	if (name == "loop while") {
@@ -619,38 +641,19 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
+	if (name == "type of" || name == "array") {
+		// Compile-time only — no runtime code
+		return nullptr;
+	}
+
 	if (name == "add pointer depth") {
 		// Compile-time only — modifies TypeReference, no runtime code
 		return nullptr;
 	}
 
 	if (name == "construct") {
-		// Format: args[0]=type_pattern, args[1+]=field values
-		ClassDefinition *classDef = resultType.classDefinition;
-		std::vector<DataType> fieldTypes;
-		fieldTypes.reserve(args.size() - 1);
-		for (size_t i = 1; i < args.size(); i++) {
-			fieldTypes.push_back(getEffectiveType(context, args[i]));
-		}
-		int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
-		DataType concreteType = resultType;
-		concreteType.classInstIndex = instIndex;
-		ClassInstantiation &inst = classDef->instantiations[instIndex];
-		llvm::Type *structType = getLLVMType(context, concreteType);
-
-		// Allocate struct on stack
-		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", concreteType);
-
-		// Store each field value
-		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-			llvm::Value *fieldVal = generateFunctionCode(context, args[i + 1]);
-			DataType fieldFromType = getEffectiveType(context, args[i + 1]);
-			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
-			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, i, "field_ptr");
-			builder.CreateStore(fieldVal, fieldPtr);
-		}
-
-		return builder.CreateAlignedLoad(structType, alloca, llvm::Align(8), "struct_load");
+		assert(args.size() == 1 && "construct expects exactly one type argument");
+		return llvm::Constant::getNullValue(getLLVMType(context, resultType));
 	}
 
 	if (name == "property") {

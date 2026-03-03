@@ -1,0 +1,40 @@
+import lib/std.dl
+
+class:
+	patterns:
+		matrix4x4
+		4 x 4 matrix
+	members:
+		m00 as float
+		m01 as float
+		m02 as float
+		m03 as float
+		m10 as float
+		m11 as float
+		m12 as float
+		m13 as float
+		m20 as float
+		m21 as float
+		m22 as float
+		m23 as float
+		m30 as float
+		m31 as float
+		m32 as float
+		m33 as float
+
+function [a|an|] identity matrix4x4:
+	execute:
+		set result to @intrinsic("construct", matrix4x4)
+		set the m00 of result to 1.0
+		set the m11 of result to 1.0
+		set the m22 of result to 1.0
+		set the m33 of result to 1.0
+		return result
+
+function [a|an|] identity 4 x 4 matrix:
+	execute:
+		return an identity matrix4x4
+
+function [a|an|] 4 x 4 identity matrix:
+	execute:
+		return an identity matrix4x4

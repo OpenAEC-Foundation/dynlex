@@ -9,6 +9,7 @@
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
+#include <cctype>
 #include <filesystem>
 #include <regex>
 using namespace std::literals;
@@ -60,6 +61,149 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 
 // regex for line terminators - matches each line including its terminator
 const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
+
+static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
+	size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
+	std::string_view withoutComment =
+		(commentPos != std::string_view::npos) ? line->fullText.substr(0, commentPos) : line->fullText;
+	std::cmatch match;
+	std::regex_search(withoutComment.begin(), withoutComment.end(), match, std::regex("[\\s]+$"));
+	line->rightTrimmedText = match.empty() ? withoutComment : withoutComment.substr(0, match.position());
+}
+
+static CodeLine *createMappedLine(
+	ParseContext &context, lsp::SourceFile *primarySourceFile, int primarySourceLineIndex, std::string text,
+	std::vector<SourceSlice> sourceSlices
+) {
+	auto line = std::make_unique<CodeLine>(std::string_view{}, primarySourceFile);
+	line->sourceFile = primarySourceFile;
+	line->sourceFileLineIndex = primarySourceLineIndex;
+	line->setOwnedText(std::move(text));
+	line->sourceSlices = std::move(sourceSlices);
+	CodeLine *result = line.get();
+	context.ownedCodeLines.push_back(std::move(line));
+	return result;
+}
+
+static CodeLine *
+createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text) {
+	CodeLine *line = createMappedLine(
+		context, sourceFile, sourceFileLineIndex, std::string(text),
+		{{0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0}}
+	);
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, sourceFile);
+	updateLineTrimming(line, syntax);
+	return line;
+}
+
+struct BracketContinuationState {
+	int parentheses = 0;
+	int brackets = 0;
+	bool inString = false;
+	bool escaped = false;
+};
+
+static void advanceContinuationState(std::string_view text, BracketContinuationState &state) {
+	for (char ch : text) {
+		if (state.inString) {
+			if (state.escaped) {
+				state.escaped = false;
+				continue;
+			}
+			if (ch == '\\') {
+				state.escaped = true;
+			} else if (ch == '"') {
+				state.inString = false;
+			}
+			continue;
+		}
+		if (ch == '"') {
+			state.inString = true;
+		} else if (ch == '(') {
+			state.parentheses++;
+		} else if (ch == ')' && state.parentheses > 0) {
+			state.parentheses--;
+		} else if (ch == '[') {
+			state.brackets++;
+		} else if (ch == ']' && state.brackets > 0) {
+			state.brackets--;
+		}
+	}
+}
+
+static bool needsContinuation(const BracketContinuationState &state) {
+	return state.inString || state.parentheses > 0 || state.brackets > 0;
+}
+
+static std::string_view trimLeadingWhitespace(std::string_view text) {
+	size_t first = text.find_first_not_of(" \t");
+	return first == std::string_view::npos ? std::string_view{} : text.substr(first);
+}
+
+static CodeLine *mergeContinuationLines(ParseContext &context, const std::vector<CodeLine *> &lines) {
+	if (lines.empty())
+		return nullptr;
+	if (lines.size() == 1)
+		return lines.front();
+
+	std::string mergedText;
+	std::vector<SourceSlice> slices;
+	for (size_t i = 0; i < lines.size(); i++) {
+		std::string_view piece = lines[i]->rightTrimmedText;
+		int sourceColumnStart = 0;
+		if (i > 0) {
+			piece = trimLeadingWhitespace(piece);
+			sourceColumnStart = static_cast<int>(piece.begin() - lines[i]->fullText.begin());
+			if (!mergedText.empty() && !std::isspace(static_cast<unsigned char>(mergedText.back())) && !piece.empty()) {
+				mergedText += ' ';
+			}
+		}
+		if (i == 0)
+			sourceColumnStart = static_cast<int>(piece.begin() - lines[i]->fullText.begin());
+		int transformedStart = static_cast<int>(mergedText.size());
+		mergedText += piece;
+		slices.push_back({
+			transformedStart,
+			static_cast<int>(mergedText.size()),
+			lines[i]->sourceFile,
+			lines[i]->sourceFileLineIndex,
+			sourceColumnStart,
+		});
+	}
+
+	CodeLine *merged = createMappedLine(
+		context, lines.front()->sourceFile, lines.front()->sourceFileLineIndex, std::move(mergedText), std::move(slices)
+	);
+	merged->rightTrimmedText = merged->fullText;
+	return merged;
+}
+
+static void applyBracketContinuations(ParseContext &context) {
+	std::vector<CodeLine *> transformedLines;
+	for (size_t i = 0; i < context.codeLines.size(); i++) {
+		CodeLine *line = context.codeLines[i];
+		if (line->rightTrimmedText.empty()) {
+			transformedLines.push_back(line);
+			continue;
+		}
+
+		BracketContinuationState state;
+		advanceContinuationState(line->rightTrimmedText, state);
+		if (!needsContinuation(state)) {
+			transformedLines.push_back(line);
+			continue;
+		}
+
+		std::vector<CodeLine *> mergedLines = {line};
+		while (needsContinuation(state) && i + 1 < context.codeLines.size()) {
+			CodeLine *next = context.codeLines[++i];
+			mergedLines.push_back(next);
+			advanceContinuationState(next->rightTrimmedText, state);
+		}
+		transformedLines.push_back(mergeContinuationLines(context, mergedLines));
+	}
+	context.codeLines = std::move(transformedLines);
+}
 
 static std::string toFilesystemPath(std::string_view path) {
 	if (path.starts_with("file://")) {
@@ -304,6 +448,7 @@ bool compile(const std::string &path, ParseContext &context) {
 
 	if (!importSourceFile(path, context))
 		return false;
+	applyBracketContinuations(context);
 	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
 
 	if (!analyzeSections(context))
@@ -362,17 +507,7 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	int sourceFileLineIndex = 0;
 	for (; iter != end; ++iter, ++sourceFileLineIndex) {
 		std::string_view lineString = fileView.substr(iter->position(), iter->length());
-		CodeLine *line = new CodeLine(lineString, sourceFile);
-		line->sourceFileLineIndex = sourceFileLineIndex;
-		// first, remove comments and trim whitespace from the right
-		size_t commentPos = findCommentStart(lineString, syntax.commentPrefix);
-		std::string_view withoutComment =
-			(commentPos != std::string_view::npos) ? lineString.substr(0, commentPos) : lineString;
-
-		// trim trailing whitespace
-		std::cmatch match;
-		std::regex_search(withoutComment.begin(), withoutComment.end(), match, std::regex("[\\s]+$"));
-		line->rightTrimmedText = match.empty() ? withoutComment : withoutComment.substr(0, match.position());
+		CodeLine *line = createSourceLine(context, sourceFile, sourceFileLineIndex, lineString);
 
 		// check if the line is an import statement
 		if (std::optional<std::string_view> importPathView =
@@ -407,6 +542,7 @@ bool analyzeSections(ParseContext &context) {
 	// code from imported files. we assume that the indent level of the code of
 	// imported files and the import statements both match.
 	for (CodeLine *line : context.codeLines) {
+		line->mergedLineIndex = compiledLineIndex;
 		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 		// skip empty lines (blank or comment-only) for indent tracking
 		if (line->rightTrimmedText.empty()) {
