@@ -67,6 +67,9 @@ class LanguageServer {
 	// Called for code action request
 	virtual std::vector<CodeAction> onCodeAction(const CodeActionParams &params);
 
+	// Called for DynLex debug request returning tagged semantic token output.
+	virtual std::string onRenderSemanticTokens(const TextDocumentIdentifier &params);
+
 	// Send a notification to the client (e.g., publishDiagnostics)
 	void sendNotification(const std::string &method, const Json &params);
 	void sendRequest(const std::string &method, const Json &params);

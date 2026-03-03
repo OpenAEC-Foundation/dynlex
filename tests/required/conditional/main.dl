@@ -1,0 +1,9 @@
+import lib/std.dl
+
+set platform_is_cpu to 1 if the build info "platform" = "cpu", else 0
+set shader_stage_is_empty to 1 if the build info "shader stage" = "", else 0
+set word_size to 64 if the build info "word size" = 64, else 32
+
+print platform_is_cpu as line
+print shader_stage_is_empty as line
+print word_size as line

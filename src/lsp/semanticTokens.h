@@ -27,9 +27,9 @@ inline std::vector<std::string> getSemanticTokenTypes() {
 }
 
 // DynLex-specific semantic token modifiers
-enum class SemanticTokenModifier { Definition = 0, Count };
+enum class SemanticTokenModifier { Definition = 0, Constant = 1, Count };
 
 // Get the token modifier names for the legend
-inline std::vector<std::string> getSemanticTokenModifiers() { return {"definition"}; }
+inline std::vector<std::string> getSemanticTokenModifiers() { return {"definition", "constant"}; }
 
 } // namespace lsp

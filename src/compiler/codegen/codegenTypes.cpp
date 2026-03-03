@@ -14,6 +14,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cmath>
 #include <filesystem>
 #include <unordered_map>
 
@@ -70,6 +71,9 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 		auto subscripts = context.diBuilder->getOrCreateArray({context.diBuilder->getOrCreateSubrange(0, type.arraySize)});
 		return context.diBuilder->createArrayType(static_cast<uint64_t>(type.getByteSize()) * 8, 0, elementType, subscripts);
 	}
+	case DataType::Kind::Vector:
+	case DataType::Kind::Matrix:
+		return nullptr;
 	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
 			return nullptr;
@@ -212,7 +216,24 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 
 	switch (expr->kind) {
 	case Function::Kind::Literal:
-		return expr->type; // Literal types are always set by inference
+		if (expr->type.isDeduced())
+			return expr->type;
+		if (std::holds_alternative<double>(expr->literalValue)) {
+			double value = std::get<double>(expr->literalValue);
+			std::string_view literalText = expr->range.subString;
+			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
+								   literalText.find('e') != std::string_view::npos ||
+								   literalText.find('E') != std::string_view::npos;
+			if (!explicitlyFloat && std::trunc(value) == value)
+				return {DataType::Kind::Int, 4};
+			return {DataType::Kind::Float, 8};
+		}
+		if (std::holds_alternative<std::string>(expr->literalValue)) {
+			DataType stringType{DataType::Kind::Int, 1};
+			stringType.pointerDepth = 1;
+			return stringType;
+		}
+		return expr->type;
 
 	case Function::Kind::ArrayLiteral:
 		return expr->type;
@@ -297,7 +318,46 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		}
 		if (expr->intrinsicName == "construct")
 			return expr->type; // DataType fully determined during inference
+		if (expr->intrinsicName == "type" && expr->arguments.size() >= 2) {
+			Function *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
+			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
+				DataType typeRef;
+				typeRef.kind = DataType::Kind::Type;
+				if (*kindStr == "int") {
+					typeRef.referencedKind = DataType::Kind::Int;
+					typeRef.numericSize = 4;
+				} else if (*kindStr == "float") {
+					typeRef.referencedKind = DataType::Kind::Float;
+					typeRef.numericSize = 8;
+				} else if (*kindStr == "bool") {
+					typeRef.referencedKind = DataType::Kind::Bool;
+				} else if (*kindStr == "void") {
+					typeRef.referencedKind = DataType::Kind::Void;
+				} else if (*kindStr == "string") {
+					typeRef.referencedKind = DataType::Kind::Int;
+					typeRef.numericSize = 1;
+					typeRef.pointerDepth = 1;
+				} else {
+					return expr->type;
+				}
+				if (expr->arguments.size() >= 3) {
+					Function *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
+					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
+						typeRef.numericSize = static_cast<int>(*bits) / 8;
+				}
+				return typeRef;
+			}
+		}
+		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
+			DataType innerType = getEffectiveType(context, expr->arguments[1]);
+			if (innerType.kind == DataType::Kind::Type) {
+				innerType.pointerDepth++;
+				return innerType;
+			}
+		}
 		if (expr->intrinsicName == "type of" || expr->intrinsicName == "array")
+			return expr->type;
+		if ((expr->intrinsicName == "vector" || expr->intrinsicName == "matrix") && expr->type.kind == DataType::Kind::Type)
 			return expr->type;
 		if (expr->intrinsicName == "property" && expr->arguments.size() >= 2) {
 			DataType ownerType = getEffectiveType(context, expr->arguments[0]);
@@ -528,6 +588,8 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	llvm::Type *targetLLVM = toType.toLLVM(*context.llvmContext);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
+	if (fromType.isPointer() && toType.isPointer())
+		return builder.CreateBitCast(val, targetLLVM, "ptop");
 	if (fromType.isPointer() && toType.kind == DataType::Kind::Int)
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
 	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
@@ -548,6 +610,25 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Float)
 			return builder.CreateSIToFP(val, targetLLVM, "itof");
 		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
+	}
+
+	if (toType.kind == DataType::Kind::Vector && fromType.isNumeric()) {
+		llvm::Value *scalar = ensureType(context, val, fromType, toType.vectorElementType());
+		llvm::Value *vectorValue = llvm::Constant::getNullValue(targetLLVM);
+		for (int i = 0; i < toType.vectorSize(); i++)
+			vectorValue = builder.CreateInsertElement(vectorValue, scalar, static_cast<uint64_t>(i), "splat");
+		return vectorValue;
+	}
+
+	if (fromType.kind == DataType::Kind::Vector && toType.kind == DataType::Kind::Vector &&
+		fromType.vectorSize() == toType.vectorSize()) {
+		llvm::Value *result = llvm::Constant::getNullValue(targetLLVM);
+		for (int i = 0; i < toType.vectorSize(); i++) {
+			llvm::Value *lane = builder.CreateExtractElement(val, static_cast<uint64_t>(i), "vec_lane");
+			lane = ensureType(context, lane, fromType.vectorElementType(), toType.vectorElementType());
+			result = builder.CreateInsertElement(result, lane, static_cast<uint64_t>(i), "vec_cast");
+		}
+		return result;
 	}
 
 	// Bool → Numeric

@@ -1,5 +1,7 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <memory>
 #include <string>
 
@@ -23,6 +25,8 @@ struct DataType {
 		Float,
 		Int,
 		Array,
+		Vector,
+		Matrix,
 		// a class with members. for example point
 		Class,
 		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
@@ -38,6 +42,7 @@ struct DataType {
 	Kind referencedKind = Kind::Unresolved;		// For Kind::Type: the kind this type literal refers to
 	int arraySize = 0;							// For Kind::Array and Type(Array)
 	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
+	int matrixRowCount = 0;						// For Kind::Matrix and Type(Matrix): row count, arraySize stores column count
 
 	DataType() = default;
 	DataType(Kind kind) : kind(kind) {}
@@ -52,12 +57,14 @@ struct DataType {
 		  arrayElementType(std::move(arrayElementType)) {}
 
 	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
+	bool hasVectorPayload() const { return kind == Kind::Vector || (kind == Kind::Type && referencedKind == Kind::Vector); }
+	bool hasMatrixPayload() const { return kind == Kind::Matrix || (kind == Kind::Type && referencedKind == Kind::Matrix); }
 
 	bool operator==(const DataType &other) const {
 		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
-			referencedKind != other.referencedKind || arraySize != other.arraySize)
+			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount)
 			return false;
-		if (hasArrayPayload()) {
+		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			bool hasElem = !!arrayElementType;
 			bool otherHasElem = !!other.arrayElementType;
 			if (hasElem != otherHasElem)
@@ -83,7 +90,9 @@ struct DataType {
 			return referencedKind < other.referencedKind;
 		if (arraySize != other.arraySize)
 			return arraySize < other.arraySize;
-		if (hasArrayPayload()) {
+		if (matrixRowCount != other.matrixRowCount)
+			return matrixRowCount < other.matrixRowCount;
+		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			if (!!arrayElementType != !!other.arrayElementType)
 				return !!arrayElementType < !!other.arrayElementType;
 			if (arrayElementType && *arrayElementType != *other.arrayElementType)
@@ -103,6 +112,19 @@ struct DataType {
 	}
 
 	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int) && pointerDepth == 0; }
+	bool isVector() const { return kind == Kind::Vector && pointerDepth == 0; }
+	bool isMatrix() const { return kind == Kind::Matrix && pointerDepth == 0; }
+	int vectorSize() const { return arraySize; }
+	int matrixColumns() const { return arraySize; }
+	int matrixRows() const { return matrixRowCount; }
+	DataType vectorElementType() const {
+		assert(hasVectorPayload() && arrayElementType && "Vector type must have element type");
+		return *arrayElementType;
+	}
+	DataType matrixElementType() const {
+		assert(hasMatrixPayload() && arrayElementType && "Matrix type must have element type");
+		return *arrayElementType;
+	}
 	bool isPointer() const { return pointerDepth > 0; }
 	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
 	// wether this type is a specific type and the type pattern has been resolved
@@ -147,6 +169,74 @@ struct DataType {
 			result = b;
 			return true;
 		}
+		if (a.isVector() && b.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b, elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (b.isVector() && a.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a, b.vectorElementType(), elem))
+				return false;
+			result = b;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isVector() && b.isVector() && a.vectorSize() == b.vectorSize()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b.vectorElementType(), elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b, elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (b.isMatrix() && a.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a, b.matrixElementType(), elem))
+				return false;
+			result = b;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isVector() && a.matrixColumns() == b.vectorSize()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b.vectorElementType(), elem))
+				return false;
+			result = {Kind::Vector};
+			result.arraySize = a.matrixRows();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isVector() && b.isMatrix() && a.vectorSize() == b.matrixRows()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b.matrixElementType(), elem))
+				return false;
+			result = {Kind::Vector};
+			result.arraySize = b.matrixColumns();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isMatrix() && a.matrixColumns() == b.matrixRows()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b.matrixElementType(), elem))
+				return false;
+			result = {Kind::Matrix};
+			result.matrixRowCount = a.matrixRows();
+			result.arraySize = b.matrixColumns();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
 		if (a.isNumeric() && b.isNumeric()) {
 			result = {};
 			result.kind = (a.kind == Kind::Float || b.kind == Kind::Float) ? Kind::Float : Kind::Int;
@@ -166,6 +256,7 @@ struct DataType {
 		result.classDefinition = classDefinition;
 		result.classInstIndex = classInstIndex;
 		result.arraySize = arraySize;
+		result.matrixRowCount = matrixRowCount;
 		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
 		return result;
 	}
@@ -176,9 +267,14 @@ struct DataType {
 			return {Kind::Void};
 		if (s == "bool")
 			return {Kind::Bool};
-		if (s.size() >= 2 && s[0] == 'i')
+		auto isBitSuffix = [&](char prefix) {
+			return s.size() >= 2 && s[0] == prefix && std::all_of(s.begin() + 1, s.end(), [](unsigned char ch) {
+				return std::isdigit(ch);
+			});
+		};
+		if (isBitSuffix('i'))
 			return {Kind::Int, std::stoi(s.substr(1)) / 8};
-		if (s.size() >= 2 && s[0] == 'f')
+		if (isBitSuffix('f'))
 			return {Kind::Float, std::stoi(s.substr(1)) / 8};
 		return {};
 	}

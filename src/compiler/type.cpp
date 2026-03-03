@@ -25,6 +25,16 @@ std::string DataType::toString() const {
 		if (arrayElementType)
 			result += " of " + arrayElementType->toString();
 		break;
+	case Kind::Vector:
+		result = "vector[" + std::to_string(arraySize) + "]";
+		if (arrayElementType)
+			result += " of " + arrayElementType->toString();
+		break;
+	case Kind::Matrix:
+		result = "matrix[" + std::to_string(matrixRowCount) + "x" + std::to_string(arraySize) + "]";
+		if (arrayElementType)
+			result += " of " + arrayElementType->toString();
+		break;
 	case Kind::Class:
 		result = (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
 		break;
@@ -51,6 +61,10 @@ int DataType::getByteSize() const {
 		return numericSize;
 	case Kind::Array:
 		return arrayElementType ? arrayElementType->getByteSize() * arraySize : 0;
+	case Kind::Vector:
+		return arrayElementType ? arrayElementType->getByteSize() * arraySize : 0;
+	case Kind::Matrix:
+		return arrayElementType ? arrayElementType->getByteSize() * arraySize * matrixRowCount : 0;
 	case Kind::Class:
 		if (classDefinition && classInstIndex >= 0)
 			return classDefinition->instantiations[classInstIndex].byteSize;
@@ -95,6 +109,14 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 	case Kind::Array:
 		assert(arrayElementType && arraySize >= 0 && "Array type must have element type and size");
 		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx), arraySize);
+	case Kind::Vector:
+		assert(arrayElementType && arraySize > 0 && "Vector type must have element type and size");
+		return llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
+	case Kind::Matrix: {
+		assert(arrayElementType && arraySize > 0 && matrixRowCount > 0 && "Matrix type must have element type and dimensions");
+		llvm::Type *rowVectorType = llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
+		return llvm::ArrayType::get(rowVectorType, matrixRowCount);
+	}
 	case Kind::Class: {
 		assert(classDefinition && classInstIndex >= 0 && "Class type must have classDefinition and instantiation index");
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];

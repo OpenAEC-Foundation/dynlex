@@ -9,18 +9,15 @@ class:
         data as pointer to byte
         length as i32
 
-macro function cstring:
+function cstring:
     replacement:
         @intrinsic("type", "string")
 
 function new string from data ptr with length len:
-    execute:
-        set result to @intrinsic("construct", string)
-        set the data of result to ptr
-        set the length of result to len
-        return result
+    replacement:
+        @intrinsic("construct", string, ptr, len)
 
-macro function character index of str:
+function character index of str:
     replacement:
         @intrinsic("dereference", the data of str + index)
 

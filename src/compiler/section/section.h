@@ -1,5 +1,6 @@
 #pragma once
 #include "codeLine.h"
+#include "compileTimeInfo.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionType.h"
@@ -9,6 +10,8 @@
 #include <list>
 #include <map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace llvm {
@@ -24,6 +27,8 @@ struct Function;
 struct Instantiation {
 	DataType returnType{DataType::Kind::Any};
 	std::vector<DataType> parameterTypes;
+	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
 	bool valid = true;

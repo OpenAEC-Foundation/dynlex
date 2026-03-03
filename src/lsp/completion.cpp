@@ -1,6 +1,7 @@
 #include "completion.h"
 #include "function.h"
 #include "parseContext.h"
+#include "pathUtils.h"
 #include "pattern/patternReference.h"
 #include "pattern/pattern_tree/matchProgress.h"
 #include "pattern/pattern_tree/patternElement.h"
@@ -18,20 +19,6 @@ using namespace std::literals;
 namespace lsp {
 
 namespace {
-
-std::string toFilesystemPath(std::string_view uriOrPath) {
-	if (uriOrPath.starts_with("file://")) {
-		return std::string(uriOrPath.substr("file://"sv.size()));
-	}
-	return std::string(uriOrPath);
-}
-
-std::string toAbsoluteUri(const std::string &uri) {
-	if (uri.starts_with("file://")) {
-		return uri;
-	}
-	return "file://" + std::filesystem::absolute(uri).string();
-}
 
 std::string trimLeft(std::string_view text) {
 	size_t index = 0;
@@ -386,7 +373,7 @@ CompletionList collectImportPathCompletions(const CompletionContext &context) {
 		context.parseContext ? syntaxConfigForSourcePath(*context.parseContext, context.uri) : SyntaxConfig{};
 	std::optional<std::string_view> requestedPrefixView = extractDirectiveArgument(trimmed, syntax.importKeyword);
 	std::string requestedPrefix = requestedPrefixView ? std::string(*requestedPrefixView) : "";
-	std::filesystem::path currentFile = toFilesystemPath(context.uri);
+	std::filesystem::path currentFile = pathutil::toFilesystemPath(context.uri);
 	std::filesystem::path currentDir = currentFile.parent_path();
 	std::filesystem::path workspaceRoot =
 		context.workspaceRootPath.empty() ? std::filesystem::current_path() : std::filesystem::path(context.workspaceRootPath);
@@ -394,7 +381,7 @@ CompletionList collectImportPathCompletions(const CompletionContext &context) {
 	if (context.parseContext) {
 		for (const auto &[path, sourceFile] : context.parseContext->importedFiles) {
 			std::filesystem::path importedPath =
-				toFilesystemPath(sourceFile && !sourceFile->uri.empty() ? sourceFile->uri : path);
+				pathutil::toFilesystemPath(sourceFile && !sourceFile->uri.empty() ? sourceFile->uri : path);
 			addImportPathCandidate(candidates, importedPath, currentDir, workspaceRoot);
 		}
 	}
@@ -708,7 +695,7 @@ std::string
 renderCompletionDebugReport(ParseContext &context, const std::string &path, int zeroBasedLine, int zeroBasedCharacter) {
 	CompletionContext completionContext{
 		.parseContext = &context,
-		.uri = toAbsoluteUri(path),
+		.uri = pathutil::toAbsoluteUri(path),
 		.linePrefix = getLinePrefixFromFile(path, zeroBasedLine, zeroBasedCharacter),
 		.workspaceRootPath = std::filesystem::current_path().string(),
 		.line = zeroBasedLine,

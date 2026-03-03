@@ -4,7 +4,6 @@
 #include "lsp/completion.h"
 #include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
-#include "lsp/semanticTokenDebug.h"
 #include "lsp/stdioTransport.h"
 #include "parseContext.h"
 #include <filesystem>
@@ -49,7 +48,6 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool runDAP = false;
 	bool useStdio = false;
 	bool waitDebugger = false;
-	bool emitTokens = false;
 	bool emitCompletions = false;
 	bool enableLspTrace = false;
 	int completionLine = 0;
@@ -89,8 +87,6 @@ int main(int argumentCount, char *argumentValues[]) {
 			}
 		} else if (arg == "--stdio") {
 			useStdio = true;
-		} else if (arg == "--emit-tokens") {
-			emitTokens = true;
 		} else if (arg.starts_with("--emit-completions")) {
 			std::string value;
 			if (arg.size() > std::string("--emit-completions").size() && arg[std::string("--emit-completions").size()] == '=') {
@@ -168,9 +164,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		context.options.inputPath = inputFile;
 		bool compileSucceeded = compile(inputFile, context);
-		if (emitTokens) {
-			std::cout << lsp::renderTaggedSemanticTokens(context, std::filesystem::absolute(inputFile).string(), false);
-		} else if (emitCompletions) {
+		if (emitCompletions) {
 			std::cout << lsp::renderCompletionDebugReport(
 				context, std::filesystem::absolute(inputFile).string(), completionLine - 1, completionColumn - 1
 			);
@@ -184,7 +178,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		if (hasErrors)
 			return 1;
 	} else {
-		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-tokens] [--emit-completions line:column] "
+		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-completions line:column] "
 					 "[--shader-stage=vertex|fragment] "
 					 "[-O0|-O1|-O2|-O3] "
 					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]]"

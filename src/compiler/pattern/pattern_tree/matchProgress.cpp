@@ -73,31 +73,15 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 		// less priority: arguments
 		if (currentNode->argumentChild) {
+			bool preferFunctionSubmatch =
+				elementToCompare.type == PatternElement::Type::VariableLike &&
+				context->patternTrees[(int)SectionType::Function] &&
+				context->patternTrees[(int)SectionType::Function]->literalChildren.contains(elementToCompare.text);
 
-			if (canStartSubmatch()) {
-				// substitute the following part of the pattern
-				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
-				MatchProgress subMatch = *this;
-				subMatch.currentNode = context->patternTrees[(int)SectionType::Function];
-				subMatch.rootNode = subMatch.currentNode;
-				subMatch.type = SectionType::Function;
-				subMatch.patternStartPos = patternPos;
-				subMatch.match = {};
-
-				// deleting null doesn't matter
-				delete subMatch.parent;
-				subMatch.parent = new MatchProgress(*this);
-				subMatch.parent->currentNode = currentNode->argumentChild;
-				subMatch.parent->match.nodesPassed.push_back(subMatch.parent->currentNode);
-				nextMatches.push_back(subMatch);
-			}
-
-			// use an element as argument
-			if (elementToCompare.type != PatternElement::Type::Other) {
-				// variable or potential variable
+			auto pushArgumentCapture = [&]() -> bool {
+				if (elementToCompare.type == PatternElement::Type::Other)
+					return true;
 				MatchProgress substituteStep = *this;
-				// we continue on the branch that takes an argument now
-
 				substituteStep.currentNode = currentNode->argumentChild;
 				substituteStep.match.nodesPassed.push_back(substituteStep.currentNode);
 				substituteStep.sourceElementIndex++;
@@ -106,14 +90,41 @@ std::vector<MatchProgress> MatchProgress::step() {
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
 				} else {
-					// argument
 					if (!patternReference->function || sourceArgumentIndex >= patternReference->function->arguments.size())
-						return nextMatches;
+						return false;
 					substituteStep.match.arguments.push_back(patternReference->function->arguments[sourceArgumentIndex]);
 					substituteStep.sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(substituteStep);
+				return true;
+			};
+
+			auto pushSubmatch = [&]() {
+				if (!canStartSubmatch())
+					return;
+				MatchProgress subMatch = *this;
+				subMatch.currentNode = context->patternTrees[(int)SectionType::Function];
+				subMatch.rootNode = subMatch.currentNode;
+				subMatch.type = SectionType::Function;
+				subMatch.patternStartPos = patternPos;
+				subMatch.match = {};
+
+				delete subMatch.parent;
+				subMatch.parent = new MatchProgress(*this);
+				subMatch.parent->currentNode = currentNode->argumentChild;
+				subMatch.parent->match.nodesPassed.push_back(subMatch.parent->currentNode);
+				nextMatches.push_back(subMatch);
+			};
+
+			if (preferFunctionSubmatch) {
+				if (!pushArgumentCapture())
+					return nextMatches;
+				pushSubmatch();
+			} else {
+				pushSubmatch();
+				if (!pushArgumentCapture())
+					return nextMatches;
 			}
 		}
 		// word capture: matches a single VariableLike token as a string literal

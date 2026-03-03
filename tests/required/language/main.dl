@@ -1,8 +1,8 @@
-macro function [een|] bits bit integer:
+function [een|] bits bit integer:
 	replacement:
 		@intrinsic("type", "int", bits)
 
-macro function waarde als bits bit integer:
+function waarde als bits bit integer:
 	replacement:
 		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
@@ -14,7 +14,7 @@ function toon getal:
 	execute:
 		@intrinsic("call", "libc", "printf", een 32 bit integer, "%ld\n", getal als 64 bit integer)
 
-macro function maak variabele waarde:
+function maak variabele waarde:
 	replacement:
 		@intrinsic("store", variabele, waarde)
 

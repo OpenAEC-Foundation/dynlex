@@ -87,8 +87,9 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
-	// Macros use "replacement", handled here in base class
-	if (isMacro && matchesConfiguredKeyword(line->patternText, syntax.replacementSectionName)) {
+	// replacement: implies macro semantics for this definition.
+	if (matchesConfiguredKeyword(line->patternText, syntax.replacementSectionName)) {
+		isMacro = true;
 		return executionSection = new ReplacementSection(this);
 	}
 

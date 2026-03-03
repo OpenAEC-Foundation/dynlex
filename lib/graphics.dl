@@ -49,18 +49,9 @@ function a new window with width w and height h:
 
 function a new fullscreen window:
 	execute:
-		@intrinsic("call", "glfw", "glfwInit", an integer)
-		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
-		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
-		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
-		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
-		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
-		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
-		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
-		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
-		set monitor to @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer to a byte)
-		set video_mode_ptr to @intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to a byte, monitor) as a pointer to glfw video mode
-		set video_mode to the value at video_mode_ptr
+		initialize fullscreen window hints
+		set monitor to the primary monitor
+		set video_mode to the primary video mode of monitor
 		set w to the width of video_mode
 		set h to the height of video_mode
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", monitor, 0 as a pointer to a byte)
@@ -74,6 +65,26 @@ function a new fullscreen window:
 		@intrinsic("call", "GL", "glMatrixMode", void, 5888)
 		@intrinsic("call", "GL", "glLoadIdentity", void)
 		return new_window
+
+function initialize fullscreen window hints:
+	execute:
+		@intrinsic("call", "glfw", "glfwInit", an integer)
+		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
+		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
+		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
+		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
+		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
+
+function [the|] primary monitor:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer to a byte)
+
+function [the|] primary video mode [of|] monitor:
+	replacement:
+		the value at (@intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to a byte, monitor) as a pointer to glfw video mode)
 
 function clear [the|] screen:
 	execute:

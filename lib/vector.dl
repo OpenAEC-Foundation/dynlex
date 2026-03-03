@@ -2,30 +2,38 @@ import std.dl
 
 class:
     patterns:
+        [a|] cpu vector
         vector
     members:
         x, y, z
 
+function [a|] gpu vector:
+    replacement:
+        @intrinsic("vector", 3)
+
+function [a|] vector type:
+    replacement:
+        a cpu vector if the build info "platform" = "cpu", else a gpu vector
+
 function a new vector with x vx, y vy and z vz:
-    execute:
-        set result to @intrinsic("construct", vector)
-        set the x of result to vx
-        set the y of result to vy
-        set the z of result to vz
-        return result
+    replacement:
+        @intrinsic("construct", a vector type, vx, vy, vz)
+
+function a new vector from x y z:
+    replacement:
+        @intrinsic("construct", a vector type, x, y, z)
 
 function add value to {vector:target}:
-    execute:
-        add value to the x of target
-        add value to the y of target
-        add value to the z of target
+    replacement:
+        @intrinsic("store", target, a new vector from the x of target + value the y of target + value the z of target + value)
 
 function multiply {vector:value} by factor:
-    execute:
-        multiply the x of value by factor
-        multiply the y of value by factor
-        multiply the z of value by factor
+    replacement:
+        @intrinsic("store", value, a new vector from the x of value * factor the y of value * factor the z of value * factor)
 
 function print {vector:msg}:
     execute:
-        @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g]\n", the x of msg as a float, the y of msg as a float, the z of msg as a float)
+        set vx to the x of msg
+        set vy to the y of msg
+        set vz to the z of msg
+        @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g]\n", vx as a float, vy as a float, vz as a float)

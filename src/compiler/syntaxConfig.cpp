@@ -1,6 +1,7 @@
 #include "syntaxConfig.h"
 #include "compiler.h"
 #include "parseContext.h"
+#include "pathUtils.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -18,12 +19,6 @@ struct ConfigNode {
 	ConfigNode *parent{};
 	std::vector<std::unique_ptr<ConfigNode>> children;
 };
-
-std::string toFilesystemPath(std::string_view path) {
-	if (path.starts_with("file://"))
-		return std::string(path.substr("file://"sv.size()));
-	return std::string(path);
-}
 
 std::string trim(std::string_view text) {
 	size_t start = 0;
@@ -433,7 +428,7 @@ bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, Syntax
 }
 
 std::string findProjectSyntaxConfigPath(ParseContext &context, const std::string &mainPath) {
-	std::filesystem::path current = std::filesystem::absolute(toFilesystemPath(mainPath)).parent_path();
+	std::filesystem::path current = std::filesystem::absolute(pathutil::toFilesystemPath(mainPath)).parent_path();
 	for (;;) {
 		std::filesystem::path candidate = current / "config.dl";
 		if (context.fileSystem->getFile(candidate.string()))

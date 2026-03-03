@@ -2,6 +2,7 @@
 #include "codeLine.h"
 #include "compiler.h"
 #include "function.h"
+#include "pathUtils.h"
 #include "pattern/patternReference.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
@@ -10,19 +11,15 @@
 #include "semanticTokens.h"
 #include "sourceFile.h"
 #include "syntaxConfig.h"
+#include "textDocument.h"
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <string_view>
 
 using namespace std::literals;
 
 namespace lsp {
-
-static std::string toAbsoluteUri(const std::string &uri) {
-	if (uri.starts_with("file://"))
-		return uri;
-	return "file://" + std::filesystem::absolute(uri).string();
-}
 
 static SemanticTokenType classifyFunctionReturnType(const DataType &type) {
 	if (type.kind == DataType::Kind::Type)
@@ -80,8 +77,37 @@ static SemanticTokenType getPatternCallTokenType(const Function *expr) {
 	);
 }
 
+static int semanticTokenModifiers(bool isDefinition, bool isConstant) {
+	int modifiers = 0;
+	if (isDefinition)
+		modifiers |= 1 << static_cast<int>(SemanticTokenModifier::Definition);
+	if (isConstant)
+		modifiers |= 1 << static_cast<int>(SemanticTokenModifier::Constant);
+	return modifiers;
+}
+
+static bool isCompileTimeVariableReference(const VariableReference *reference) {
+	if (!reference)
+		return false;
+	const VariableReference *definition = reference->definition ? reference->definition : reference;
+	if (!definition || !definition->range.line)
+		return false;
+	Section *definitionSection = definition->range.line->section;
+	if (!definitionSection)
+		return false;
+	if (definitionSection->isMacro || definitionSection->type == SectionType::Class)
+		return true;
+	for (const auto &[argTypes, inst] : definitionSection->instantiations) {
+		(void)argTypes;
+		if (inst.requiredCompileTimeParameters.contains(definition->name) ||
+			inst.constantParameterValues.contains(definition->name))
+			return true;
+	}
+	return false;
+}
+
 static void addPatternReferenceSignatureTokens(
-	ParseContext &context, const Range &range, SectionType patternType,
+	ParseContext &context, const ::Range &range, SectionType patternType,
 	const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken
 ) {
 	PatternDefinition *targetDefinition = findDefinitionBySignature(context, patternType, range.subString);
@@ -98,7 +124,7 @@ static void addPatternReferenceSignatureTokens(
 		SemanticTokenType elementType =
 			element.type == PatternElement::Type::Variable ? SemanticTokenType::Variable : signatureType;
 		addToken(
-			Range(
+			::Range(
 				range.line, range.start() + static_cast<int>(element.startPos),
 				range.start() + static_cast<int>(element.startPos + element.text.size())
 			),
@@ -108,21 +134,22 @@ static void addPatternReferenceSignatureTokens(
 }
 
 static void addTokenIfNonEmpty(
-	const Range &baseRange, size_t startOffset, size_t endOffset, SemanticTokenType type, bool isDefinition,
+	const ::Range &baseRange, size_t startOffset, size_t endOffset, SemanticTokenType type, bool isDefinition,
 	const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken
 ) {
 	if (startOffset >= endOffset)
 		return;
 	addToken(
-		Range(
+		::Range(
 			baseRange.line, baseRange.start() + static_cast<int>(startOffset), baseRange.start() + static_cast<int>(endOffset)
 		),
 		type, isDefinition
 	);
 }
 
-static void
-addPatternDefinitionTokens(const Range &range, const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken) {
+static void addPatternDefinitionTokens(
+	const ::Range &range, const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken
+) {
 	std::string_view text = range.subString;
 	size_t pos = 0;
 
@@ -161,6 +188,103 @@ addPatternDefinitionTokens(const Range &range, const std::function<void(const ::
 	}
 }
 
+static size_t trimRightIndex(std::string_view text) {
+	size_t end = text.size();
+	while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])))
+		--end;
+	return end;
+}
+
+std::vector<SemanticToken> collectLiveLineSemanticTokens(
+	const ParseContext *context, const TextDocument &document, const std::string &uri, int lineIndex
+) {
+	std::vector<SemanticToken> tokens;
+	if (lineIndex < 0 || lineIndex >= document.lineCount())
+		return tokens;
+
+	const SyntaxConfig &syntax = context ? syntaxConfigForSourcePath(*context, uri) : SyntaxConfig{};
+	std::string_view line = document.getLine(lineIndex);
+	size_t trimmedEnd = trimRightIndex(line);
+	std::string_view code = line.substr(0, trimmedEnd);
+	size_t commentPos = findCommentStart(code, syntax.commentPrefix);
+	if (commentPos != std::string_view::npos)
+		code = code.substr(0, commentPos);
+
+	size_t indent = 0;
+	while (indent < code.size() && std::isspace(static_cast<unsigned char>(code[indent])))
+		++indent;
+	std::string_view trimmed = code.substr(indent);
+
+	if (context && context->hasCompleted(ParseContext::CompilationStage::ImportedFiles)) {
+		if (std::optional<std::string_view> importPath = extractDirectiveArgument(trimmed, syntax.importKeyword)) {
+			tokens.push_back(
+				{static_cast<int>(indent), static_cast<int>(indent + syntax.importKeyword.size()), SemanticTokenType::Keyword,
+				 0}
+			);
+			size_t importStart = indent + static_cast<size_t>(importPath->data() - trimmed.data());
+			tokens.push_back(
+				{static_cast<int>(importStart), static_cast<int>(importStart + importPath->size()), SemanticTokenType::String,
+				 0}
+			);
+		}
+	}
+
+	SemanticTokenType wordType = SemanticTokenType::Function;
+	if (context && context->hasCompleted(ParseContext::CompilationStage::AnalyzedSections) &&
+		trimmed.ends_with(syntax.sectionOpener)) {
+		wordType = SemanticTokenType::Section;
+	}
+
+	size_t i = 0;
+	while (i < code.size()) {
+		if (std::isspace(static_cast<unsigned char>(code[i]))) {
+			++i;
+			continue;
+		}
+		if (code[i] == '"') {
+			size_t start = i++;
+			bool escaped = false;
+			while (i < code.size()) {
+				char c = code[i++];
+				if (!escaped && c == '"')
+					break;
+				if (!escaped && c == '\\') {
+					escaped = true;
+				} else {
+					escaped = false;
+				}
+			}
+			tokens.push_back({static_cast<int>(start), static_cast<int>(std::min(i, code.size())), SemanticTokenType::String, 0}
+			);
+			continue;
+		}
+		if (std::isdigit(static_cast<unsigned char>(code[i]))) {
+			size_t start = i++;
+			while (i < code.size() && (std::isdigit(static_cast<unsigned char>(code[i])) || code[i] == '.'))
+				++i;
+			tokens.push_back({static_cast<int>(start), static_cast<int>(i), SemanticTokenType::Number, 0});
+			continue;
+		}
+		if (std::isalpha(static_cast<unsigned char>(code[i])) || code[i] == '_') {
+			size_t start = i++;
+			while (i < code.size() && (std::isalnum(static_cast<unsigned char>(code[i])) || code[i] == '_' || code[i] == '-'))
+				++i;
+			if (!(context && context->hasCompleted(ParseContext::CompilationStage::ImportedFiles) &&
+				  code.substr(start).starts_with(syntax.importKeyword) && i - start == syntax.importKeyword.size())) {
+				tokens.push_back({static_cast<int>(start), static_cast<int>(i), wordType, 0});
+			}
+			continue;
+		}
+		++i;
+	}
+
+	if (commentPos != std::string_view::npos) {
+		tokens.push_back({static_cast<int>(commentPos), static_cast<int>(line.size()), SemanticTokenType::Comment, 0});
+	}
+
+	return tokens;
+}
+
 std::vector<std::vector<SemanticToken>>
 collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors) {
 	if (!context.hasCompleted(ParseContext::CompilationStage::AnalyzedSections))
@@ -168,31 +292,38 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 
 	if (suppressOnFileErrors) {
 		bool hasErrors = std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [&uri](const ::Diagnostic &d) {
-			return d.level == ::Diagnostic::Level::Error && d.range.line && toAbsoluteUri(d.range.line->sourceFile->uri) == uri;
+			return d.level == ::Diagnostic::Level::Error && d.range.line &&
+				   pathutil::toAbsoluteUri(d.range.line->sourceFile->uri) == uri;
 		});
 		if (hasErrors)
 			return {};
 	}
 
 	SemanticTokenBuilder builder(lineCount);
-	auto addToken = [&builder, &uri](const ::Range &range, SemanticTokenType type, bool isDefinition) {
+	auto addTokenWithModifiers = [&builder, &uri](const ::Range &range, SemanticTokenType type, int modifiers) {
 		SourceLocation mappedStart = range.sourceStart();
 		SourceLocation mappedEnd = range.sourceEnd();
 		if (!mappedStart.sourceFile || !mappedEnd.sourceFile)
 			return;
-		if (toAbsoluteUri(mappedStart.sourceFile->uri) != uri || toAbsoluteUri(mappedEnd.sourceFile->uri) != uri)
+		if (pathutil::toAbsoluteUri(mappedStart.sourceFile->uri) != uri ||
+			pathutil::toAbsoluteUri(mappedEnd.sourceFile->uri) != uri)
 			return;
 		if (mappedStart.sourceFileLineIndex != mappedEnd.sourceFileLineIndex)
 			return;
-		int modifiers = isDefinition ? (1 << static_cast<int>(SemanticTokenModifier::Definition)) : 0;
 		builder.add(mappedStart.sourceFileLineIndex, {mappedStart.column, mappedEnd.column, type, modifiers});
+	};
+	auto addToken = [&addTokenWithModifiers](const ::Range &range, SemanticTokenType type, bool isDefinition) {
+		addTokenWithModifiers(range, type, semanticTokenModifiers(isDefinition, false));
 	};
 
 	std::function<void(Section *)> tokenizeVariables = [&](Section *section) {
 		for (auto &[name, refs] : section->variableReferences) {
 			(void)name;
 			for (VariableReference *ref : refs)
-				addToken(ref->range, SemanticTokenType::Variable, ref->isDefinition());
+				addTokenWithModifiers(
+					ref->range, SemanticTokenType::Variable,
+					semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(ref))
+				);
 		}
 		for (Section *child : section->children)
 			tokenizeVariables(child);
@@ -234,13 +365,21 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		case Function::Kind::PatternCall:
 			addToken(expr->range, getPatternCallTokenType(expr), false);
 			break;
+		case Function::Kind::Variable:
+			if (expr->variable) {
+				addTokenWithModifiers(
+					expr->range, SemanticTokenType::Variable,
+					semanticTokenModifiers(expr->variable->isDefinition(), isCompileTimeVariableReference(expr->variable))
+				);
+			}
+			break;
 		default:
 			break;
 		}
 	};
 
 	for (CodeLine *line : context.codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->function)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->function)
 			continue;
 		tokenizeFunction(line->function);
 	}
@@ -248,7 +387,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	for (CodeLine *line : context.codeLines) {
 		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 		std::optional<std::string_view> importPath = extractDirectiveArgument(line->patternText, syntax.importKeyword);
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !importPath)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !importPath)
 			continue;
 		std::string_view importKeyword = line->patternText.substr(0, syntax.importKeyword.length());
 		addToken(::Range(line, importKeyword), SemanticTokenType::Keyword, false);
@@ -264,13 +403,13 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	tokenizePatternDefinitions(context.mainSection);
 
 	for (CodeLine *line : context.codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)
 			continue;
 		addToken(::Range(line, line->rightTrimmedText), SemanticTokenType::Section, false);
 	}
 
 	for (CodeLine *line : context.codeLines) {
-		if (toAbsoluteUri(line->sourceFile->uri) != uri)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri)
 			continue;
 		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 		size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
@@ -383,14 +522,25 @@ static std::vector<std::string_view> splitLines(std::string_view text) {
 	return lines;
 }
 
-std::string renderTaggedSemanticTokens(ParseContext &context, const std::string &path, bool suppressOnFileErrors) {
-	lsp::SourceFile *sourceFile = context.fileSystem ? context.fileSystem->getFile(path) : nullptr;
-	if (!sourceFile)
-		return {};
+std::string renderTaggedSemanticTokensFromData(std::string_view text, const std::vector<int> &data) {
+	std::vector<std::string_view> lines = splitLines(text);
+	std::vector<std::vector<SemanticToken>> tokensByLine(lines.size());
+	int line = 0;
+	int prevChar = 0;
 
-	std::vector<std::string_view> lines = splitLines(sourceFile->content);
-	std::vector<std::vector<SemanticToken>> tokensByLine =
-		collectSemanticTokens(context, toAbsoluteUri(path), static_cast<int>(lines.size()), suppressOnFileErrors);
+	for (size_t i = 0; i + 4 < data.size(); i += 5) {
+		int deltaLine = data[i];
+		int deltaChar = data[i + 1];
+		int length = data[i + 2];
+		int tokenType = data[i + 3];
+		int modifiers = data[i + 4];
+		line += deltaLine;
+		int start = deltaLine == 0 ? prevChar + deltaChar : deltaChar;
+		prevChar = start;
+		if (line < 0 || line >= static_cast<int>(tokensByLine.size()))
+			continue;
+		tokensByLine[line].push_back({start, start + length, static_cast<SemanticTokenType>(tokenType), modifiers});
+	}
 
 	std::string out;
 	for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
@@ -398,8 +548,7 @@ std::string renderTaggedSemanticTokens(ParseContext &context, const std::string 
 		size_t bodyEnd = fullLine.find_last_not_of("\r\n");
 		std::string_view body = bodyEnd == std::string_view::npos ? std::string_view{} : fullLine.substr(0, bodyEnd + 1);
 		std::string_view ending = bodyEnd == std::string_view::npos ? fullLine : fullLine.substr(bodyEnd + 1);
-		std::vector<SemanticToken> lineTokens =
-			lineIndex < tokensByLine.size() ? tokensByLine[lineIndex] : std::vector<SemanticToken>{};
+		std::vector<SemanticToken> lineTokens = tokensByLine[lineIndex];
 		std::sort(lineTokens.begin(), lineTokens.end(), [](const SemanticToken &a, const SemanticToken &b) {
 			return a.start < b.start;
 		});
@@ -422,6 +571,17 @@ std::string renderTaggedSemanticTokens(ParseContext &context, const std::string 
 	}
 
 	return out;
+}
+
+std::string renderTaggedSemanticTokens(ParseContext &context, const std::string &path, bool suppressOnFileErrors) {
+	lsp::SourceFile *sourceFile = context.fileSystem ? context.fileSystem->getFile(path) : nullptr;
+	if (!sourceFile)
+		return {};
+
+	std::vector<std::string_view> lines = splitLines(sourceFile->content);
+	std::vector<std::vector<SemanticToken>> tokensByLine =
+		collectSemanticTokens(context, pathutil::toAbsoluteUri(path), static_cast<int>(lines.size()), suppressOnFileErrors);
+	return renderTaggedSemanticTokensFromData(sourceFile->content, encodeSemanticTokens(tokensByLine));
 }
 
 } // namespace lsp

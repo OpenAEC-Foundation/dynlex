@@ -1,47 +1,10 @@
 #!/bin/bash
 set -e
 
-detect_llvm_version() {
-    if [ -n "${DYNLEX_LLVM_VERSION:-}" ]; then
-        echo "$DYNLEX_LLVM_VERSION"
-        return 0
-    fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/llvm_version.sh"
 
-    for version in 22 21 20; do
-        if command -v "llvm-config-$version" >/dev/null 2>&1 && command -v "clang-$version" >/dev/null 2>&1; then
-            echo "$version"
-            return 0
-        fi
-    done
-
-    if command -v llvm-config >/dev/null 2>&1 && command -v clang >/dev/null 2>&1; then
-        local llvm_version
-        local clang_version
-
-        llvm_version="$(llvm-config --version | cut -d. -f1)"
-        clang_version="$(clang --version | sed -n '1 s/.*clang version \([0-9][0-9]*\).*/\1/p')"
-
-        if [ "${llvm_version:-0}" -ge 20 ] && [ "$clang_version" = "$llvm_version" ]; then
-            echo "$llvm_version"
-            return 0
-        fi
-    fi
-
-    return 1
-}
-
-resolve_tool() {
-    local base_name="$1"
-    local version="$2"
-
-    if command -v "${base_name}-${version}" >/dev/null 2>&1; then
-        echo "${base_name}-${version}"
-    else
-        echo "${base_name}"
-    fi
-}
-
-LLVM_VERSION="$(detect_llvm_version || true)"
+LLVM_VERSION="$(dynlex_detect_installed_llvm_version || true)"
 
 if [ -z "$LLVM_VERSION" ]; then
     echo "Error: DynLex requires LLVM/Clang 20 or newer."
@@ -49,10 +12,10 @@ if [ -z "$LLVM_VERSION" ]; then
     exit 1
 fi
 
-CLANG="$(resolve_tool clang "$LLVM_VERSION")"
-CLANGXX="$(resolve_tool clang++ "$LLVM_VERSION")"
-CLANG_FORMAT="$(resolve_tool clang-format "$LLVM_VERSION")"
-CLANG_TIDY="$(resolve_tool clang-tidy "$LLVM_VERSION")"
+CLANG="$(dynlex_resolve_tool clang "$LLVM_VERSION")"
+CLANGXX="$(dynlex_resolve_tool clang++ "$LLVM_VERSION")"
+CLANG_FORMAT="$(dynlex_resolve_tool clang-format "$LLVM_VERSION")"
+CLANG_TIDY="$(dynlex_resolve_tool clang-tidy "$LLVM_VERSION")"
 
 # Parse arguments
 LINT=true
@@ -80,7 +43,7 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     echo "Would you like to install missing dependencies? (y/n)"
     read -r response
     if [[ "$response" =~ ^[Yy]$ ]]; then
-        ./scripts/install.sh
+        "$SCRIPT_DIR/install.sh"
         echo ""
         echo "Dependencies installed. Re-running build..."
         exec "$0" "$@"

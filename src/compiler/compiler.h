@@ -4,6 +4,7 @@
 
 struct Variable;
 struct Section;
+struct Instantiation;
 
 bool compile(const std::string &path, ParseContext &context);
 bool importSourceFile(const std::string &path, ParseContext &context);
@@ -13,7 +14,7 @@ bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
 bool ensureSectionInstantiationInferred(
 	ParseContext &context, Section *section, const std::unordered_map<std::string, Function *> &callBindings,
-	const std::vector<DataType> &argTypes
+	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation = nullptr
 );
 bool isInternalSourcePath(std::string_view path);
 void expandFunction(Function *expr, Section *section);

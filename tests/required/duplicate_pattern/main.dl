@@ -1,4 +1,4 @@
-macro function [an|a|] integer:
+function [an|a|] integer:
 	replacement:
 		@intrinsic("type", "int", 32)
 

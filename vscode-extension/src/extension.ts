@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('dynlex.restartServer', () => {
             log('Restarting language server...');
             reconnectAttempts = 0;
-            stopLanguageServer().then(() => startLanguageServer(context));
+            void stopLanguageServer().then(() => startLanguageServer(context));
         })
     );
 
@@ -230,7 +230,7 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
     } else {
         const serverPath = getServerPath();
         const extraFlags = getServerFlags();
-        const args = ['--lsp', ...extraFlags];
+        const args = ['--lsp', '--port', String(port), ...extraFlags];
 
         log(`Server path resolved to: ${serverPath}`);
         log(`Starting language server: ${serverPath} ${args.join(' ')} on port ${port}`);

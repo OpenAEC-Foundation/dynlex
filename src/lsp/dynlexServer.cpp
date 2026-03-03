@@ -5,6 +5,7 @@
 #include "configDocument.h"
 #include "function.h"
 #include "lspFileSystem.h"
+#include "pathUtils.h"
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "section.h"
@@ -18,23 +19,6 @@
 using namespace std::literals;
 
 namespace lsp {
-
-// Ensure a URI is an absolute file:// URI.
-// Imported files may have relative paths (e.g. "lib/random.dl") that need
-// to be resolved to absolute file:// URIs for the LSP client.
-static std::string toAbsoluteUri(const std::string &uri) {
-	if (uri.starts_with("file://")) {
-		return uri;
-	}
-	return "file://" + std::filesystem::absolute(uri).string();
-}
-
-static std::string toFilesystemPath(std::string_view uriOrPath) {
-	if (uriOrPath.starts_with("file://")) {
-		return std::string(uriOrPath.substr("file://"sv.size()));
-	}
-	return std::string(uriOrPath);
-}
 
 static bool hasCompilationStage(const ParseContext *context, ParseContext::CompilationStage stage) {
 	return context && context->hasCompleted(stage);
@@ -74,7 +58,7 @@ DynLexServer::~DynLexServer() = default;
 
 InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
 	if (params.rootUri) {
-		workspaceRootPath = toFilesystemPath(*params.rootUri);
+		workspaceRootPath = pathutil::toFilesystemPath(*params.rootUri);
 	} else {
 		workspaceRootPath = std::filesystem::current_path().string();
 	}
@@ -121,10 +105,13 @@ void DynLexServer::onDidOpen(const DidOpenTextDocumentParams &params) {
 void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 	LanguageServer::onDidChange(params);
 	const std::string &uri = params.textDocument.uri;
+	const bool structuralEdit = isStructuralEdit(params);
 	bool compiledChanged = false;
 
 	if (isConfigDocumentUri(uri)) {
-		compiledChanged = syncCompiledDocument(uri, true);
+		compiledChanged = syncCompiledDocument(uri, structuralEdit);
+		if (structuralEdit)
+			refreshLockedLineBaselines(uri);
 		auto docIt = documents.find(uri);
 		if (docIt != documents.end())
 			publishDiagnostics(uri, collectConfigDiagnostics(*docIt->second));
@@ -134,10 +121,11 @@ void DynLexServer::onDidChange(const DidChangeTextDocumentParams &params) {
 		return;
 	}
 
-	// Compile against the live document content so diagnostics and semantic
-	// tokens reflect edits on the active line immediately.
-	compiledChanged = syncCompiledDocument(uri, true);
-	if (isStructuralEdit(params)) {
+	// Single-line edits on locked lines keep compiling against the committed
+	// shadow document. Structural edits bypass locks and update the full
+	// compiled view immediately.
+	compiledChanged = syncCompiledDocument(uri, structuralEdit);
+	if (structuralEdit) {
 		refreshLockedLineBaselines(uri);
 	}
 
@@ -349,7 +337,7 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 
 	// Update import graph
 	for (const auto &[path, sourceFile] : context->importedFiles) {
-		std::string importedUri = toAbsoluteUri(sourceFile->uri);
+		std::string importedUri = pathutil::toAbsoluteUri(sourceFile->uri);
 		if (importedUri != uri) {
 			importedBy[importedUri].insert(uri);
 		}
@@ -360,7 +348,7 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 	diagsForMain.clear();
 	diagsForMain[uri]; // always include main file so it gets cleared
 	for (const auto &diag : context->diagnostics) {
-		std::string fileUri = diag.range.line ? toAbsoluteUri(diag.range.line->sourceFile->uri) : uri;
+		std::string fileUri = diag.range.line ? pathutil::toAbsoluteUri(diag.range.line->sourceFile->uri) : uri;
 		diagsForMain[fileUri].push_back(convertDiagnostic(diag));
 	}
 
@@ -381,7 +369,7 @@ void DynLexServer::recompileDependents(const std::string &uri) {
 	if (isConfigDocumentUri(uri)) {
 		std::vector<std::string> dependentMainUris;
 		for (const auto &[mainUri, context] : parseContexts) {
-			if (!context->projectSyntaxConfigPath.empty() && toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
+			if (!context->projectSyntaxConfigPath.empty() && pathutil::toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
 				dependentMainUris.push_back(mainUri);
 		}
 		for (const std::string &mainUri : dependentMainUris)
@@ -457,7 +445,7 @@ Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	for (const auto &related : diag.relatedInfo) {
 		DiagnosticRelatedInformation info;
 		info.message = related.message;
-		info.location.uri = toAbsoluteUri(related.range.line->sourceFile->uri);
+		info.location.uri = pathutil::toAbsoluteUri(related.range.line->sourceFile->uri);
 		info.location.range = convertRange(related.range);
 		lspDiag.relatedInformation.push_back(std::move(info));
 	}
@@ -569,7 +557,7 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 				auto target = getDefinitionTarget(expr);
 				if (target) {
 					Location loc;
-					loc.uri = toAbsoluteUri(target->line->sourceFile->uri);
+					loc.uri = pathutil::toAbsoluteUri(target->line->sourceFile->uri);
 					loc.range = convertRange(*target);
 					return loc;
 				}
@@ -618,7 +606,7 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 	std::function<void(Section *, std::vector<DocumentSymbol> &)> collectSymbols = [&](Section *section,
 																					   std::vector<DocumentSymbol> &out) {
 		for (PatternDefinition *def : section->patternDefinitions) {
-			if (!def->range.line || toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
+			if (!def->range.line || pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
 				continue;
 			}
 
@@ -633,7 +621,7 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 			sym.range = sym.selectionRange;
 			if (!section->codeLines.empty()) {
 				CodeLine *last = section->codeLines.back();
-				if (toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
+				if (pathutil::toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
 					(last->sourceFileLineIndex > sym.range.end.line ||
 					 (last->sourceFileLineIndex == sym.range.end.line &&
 					  static_cast<int>(last->rightTrimmedText.size()) > sym.range.end.character))) {
@@ -695,6 +683,13 @@ SemanticTokens DynLexServer::onSemanticTokensFull(const SemanticTokensParams &pa
 	return result;
 }
 
+std::string DynLexServer::onRenderSemanticTokens(const TextDocumentIdentifier &params) {
+	auto docIt = documents.find(params.uri);
+	if (docIt == documents.end())
+		return {};
+	return renderTaggedSemanticTokensFromData(docIt->second->content, generateSemanticTokens(params.uri));
+}
+
 std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	if (isConfigDocumentUri(uri)) {
 		auto docIt = documents.find(uri);
@@ -703,14 +698,28 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 		return encodeConfigSemanticTokens(*docIt->second);
 	}
 	ParseContext *context = findContextFor(uri);
-	if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
-		return {};
-	}
 	auto docIt = documents.find(uri);
 	if (docIt == documents.end()) {
 		return {};
 	}
-	return encodeSemanticTokens(collectSemanticTokens(*context, uri, docIt->second->lineCount(), true));
+
+	std::vector<std::vector<SemanticToken>> tokensByLine(docIt->second->lineCount());
+	if (hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
+		tokensByLine = collectSemanticTokens(*context, uri, docIt->second->lineCount(), true);
+		if (tokensByLine.size() < static_cast<size_t>(docIt->second->lineCount()))
+			tokensByLine.resize(docIt->second->lineCount());
+	}
+
+	auto lockedIt = lockedLinesByUri.find(uri);
+	if (lockedIt != lockedLinesByUri.end()) {
+		for (const auto &[lineIndex, _] : lockedIt->second) {
+			if (lineIndex < 0 || lineIndex >= docIt->second->lineCount())
+				continue;
+			tokensByLine[lineIndex] = collectLiveLineSemanticTokens(context, *docIt->second, uri, lineIndex);
+		}
+	}
+
+	return encodeSemanticTokens(tokensByLine);
 }
 
 } // namespace lsp

@@ -1,13 +1,8 @@
 #!/bin/bash
 set -e
 
-detect_install_llvm_version() {
-    if [ -n "${DYNLEX_LLVM_VERSION:-}" ]; then
-        echo "$DYNLEX_LLVM_VERSION"
-    else
-        echo "20"
-    fi
-}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/llvm_version.sh"
 
 echo "Installing DynLex Compiler Dependencies..."
 echo "=========================================="
@@ -18,7 +13,7 @@ sudo apt update
 
 # LLVM 20 is the minimum supported toolchain because DynLex relies on the
 # upstream SPIR-V backend introduced in LLVM 20.
-LLVM_VERSION="$(detect_install_llvm_version)"
+LLVM_VERSION="$(dynlex_install_llvm_version)"
 
 # Install LLVM/Clang toolchain (pinned to specific version)
 echo "Installing LLVM/Clang $LLVM_VERSION toolchain..."

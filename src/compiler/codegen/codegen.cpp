@@ -21,6 +21,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <unordered_map>
@@ -143,6 +144,12 @@ void generateSpecializedFunction(
 	}
 }
 
+static bool expandsToSelectIntrinsic(Function *function) {
+	std::unordered_map<std::string, Function *> ignoredBindings;
+	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
+	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall && bodyExpr->intrinsicName == "select";
+}
+
 // Generate code for an function
 llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 	if (!expr)
@@ -240,7 +247,7 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 
 		// Build argument types for overload selection
 		std::vector<DataType> argTypesForOverload;
-		{
+		if (!expandsToSelectIntrinsic(expr)) {
 			size_t ai = 0;
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 				bool isParam = false;
@@ -411,7 +418,14 @@ bool generateCode(ParseContext &context) {
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 	if (context.options.emitSPIRV) {
-		context.llvmModule->setTargetTriple("spirv-unknown-vulkan1.3");
+		std::string error;
+		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
+		if (!targetMachine) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range())
+			);
+			return false;
+		}
+		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 	} else {
 		context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 	}

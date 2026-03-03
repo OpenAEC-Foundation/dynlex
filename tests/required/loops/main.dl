@@ -1,16 +1,16 @@
-macro function return value:
+function return value:
 	replacement:
 		@intrinsic("return", value)
 
-macro function set var to val:
+function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
-macro function [an|a|] integer:
+function [an|a|] integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-macro function value as [a|an|] bits bit integer:
+function value as [a|an|] bits bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
@@ -22,7 +22,7 @@ function left < right:
 	execute:
 		return @intrinsic("less than", left, right)
 
-macro function left + right:
+function left + right:
     replacement:
         @intrinsic("add", left, right)
 

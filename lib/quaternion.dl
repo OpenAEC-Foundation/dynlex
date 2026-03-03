@@ -8,13 +8,8 @@ class:
         w, x, y, z
 
 function a new quaternion with w vw, x vx, y vy and z vz:
-    execute:
-        set result to @intrinsic("construct", quaternion)
-        set the w of result to vw
-        set the x of result to vx
-        set the y of result to vy
-        set the z of result to vz
-        return result
+    replacement:
+        @intrinsic("construct", quaternion, vw, vx, vy, vz)
 
 function add value to {quaternion:target}:
     execute:

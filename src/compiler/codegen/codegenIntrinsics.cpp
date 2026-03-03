@@ -1,5 +1,6 @@
 #include "classDefinition.h"
 #include "codegenInternal.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
@@ -34,6 +35,136 @@ static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *index
 	if (indexType.kind == DataType::Kind::Int)
 		return ensureType(context, indexVal, indexType, {DataType::Kind::Int, 8});
 	return indexVal;
+}
+
+static llvm::Value *
+buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<Function *> &args, size_t startIndex) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Type *llvmVectorType = getLLVMType(context, vectorType);
+	llvm::Value *vectorValue = llvm::Constant::getNullValue(llvmVectorType);
+	DataType elementType = vectorType.vectorElementType();
+	for (int i = 0; i < vectorType.vectorSize(); i++) {
+		llvm::Value *elementValue = generateFunctionCode(context, args[startIndex + i]);
+		DataType fromType = getEffectiveType(context, args[startIndex + i]);
+		elementValue = ensureType(context, elementValue, fromType, elementType);
+		vectorValue = builder.CreateInsertElement(vectorValue, elementValue, static_cast<uint64_t>(i), "vec_ins");
+	}
+	return vectorValue;
+}
+
+static llvm::Value *buildMatrixFromFlatArray(ParseContext &context, DataType matrixType, Function *sourceExpr) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	DataType sourceType = getEffectiveType(context, sourceExpr);
+	if (sourceType.kind != DataType::Kind::Array || !sourceType.arrayElementType)
+		return nullptr;
+	if (sourceType.arraySize != matrixType.matrixRows() * matrixType.matrixColumns())
+		return nullptr;
+
+	llvm::Value *flatArrayValue = generateFunctionCode(context, sourceExpr);
+	llvm::Type *llvmFlatArrayType = getLLVMType(context, sourceType);
+	llvm::AllocaInst *flatAlloca = createEntryAlloca(context, "matrix_flat", sourceType);
+	builder.CreateAlignedStore(flatArrayValue, flatAlloca, llvm::Align(8));
+
+	llvm::Type *llvmMatrixType = getLLVMType(context, matrixType);
+	llvm::Value *matrixValue = llvm::Constant::getNullValue(llvmMatrixType);
+	DataType elementType = matrixType.matrixElementType();
+	DataType rowVectorType{DataType::Kind::Vector};
+	rowVectorType.arraySize = matrixType.matrixColumns();
+	rowVectorType.arrayElementType = std::make_shared<DataType>(elementType);
+
+	for (int row = 0; row < matrixType.matrixRows(); row++) {
+		llvm::Value *rowValue = llvm::Constant::getNullValue(getLLVMType(context, rowVectorType));
+		for (int column = 0; column < matrixType.matrixColumns(); column++) {
+			int flatIndex = row * matrixType.matrixColumns() + column;
+			llvm::Value *elementPtr = builder.CreateGEP(
+				llvmFlatArrayType, flatAlloca, {builder.getInt64(0), builder.getInt64(flatIndex)}, "mat_elem_ptr"
+			);
+			llvm::Value *elementValue =
+				builder.CreateLoad(sourceType.arrayElementType->toLLVM(*context.llvmContext), elementPtr);
+			elementValue = ensureType(context, elementValue, *sourceType.arrayElementType, elementType);
+			rowValue = builder.CreateInsertElement(rowValue, elementValue, static_cast<uint64_t>(column), "mat_row_ins");
+		}
+		matrixValue = builder.CreateInsertValue(matrixValue, rowValue, {static_cast<unsigned>(row)}, "mat_ins");
+	}
+
+	return matrixValue;
+}
+
+static llvm::Value *
+buildMatrixFromScalarArgs(ParseContext &context, DataType matrixType, const std::vector<Function *> &args, size_t startIndex) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Value *matrixValue = llvm::Constant::getNullValue(getLLVMType(context, matrixType));
+	DataType elementType = matrixType.matrixElementType();
+	DataType rowVectorType{DataType::Kind::Vector};
+	rowVectorType.arraySize = matrixType.matrixColumns();
+	rowVectorType.arrayElementType = std::make_shared<DataType>(elementType);
+	size_t argIndex = startIndex;
+	for (int row = 0; row < matrixType.matrixRows(); row++) {
+		llvm::Value *rowValue = llvm::Constant::getNullValue(getLLVMType(context, rowVectorType));
+		for (int column = 0; column < matrixType.matrixColumns(); column++) {
+			llvm::Value *elementValue = generateFunctionCode(context, args[argIndex]);
+			DataType fromType = getEffectiveType(context, args[argIndex]);
+			elementValue = ensureType(context, elementValue, fromType, elementType);
+			rowValue = builder.CreateInsertElement(rowValue, elementValue, static_cast<uint64_t>(column), "mat_row_ins");
+			argIndex++;
+		}
+		matrixValue = builder.CreateInsertValue(matrixValue, rowValue, {static_cast<unsigned>(row)}, "mat_ins");
+	}
+	return matrixValue;
+}
+
+static llvm::Value *generateMatrixVectorMultiply(
+	ParseContext &context, llvm::Value *matrixValue, DataType matrixType, llvm::Value *vectorValue, DataType /*vectorType*/
+) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	DataType resultType{DataType::Kind::Vector};
+	resultType.arraySize = matrixType.matrixRows();
+	resultType.arrayElementType = std::make_shared<DataType>(matrixType.matrixElementType());
+	llvm::Value *resultValue = llvm::Constant::getNullValue(getLLVMType(context, resultType));
+	DataType elementType = matrixType.matrixElementType();
+	for (int row = 0; row < matrixType.matrixRows(); row++) {
+		llvm::Value *rowVector = builder.CreateExtractValue(matrixValue, {static_cast<unsigned>(row)}, "mat_row");
+		llvm::Value *product = builder.CreateFMul(rowVector, vectorValue, "mat_vec_mul");
+		llvm::Value *sum = llvm::ConstantFP::get(getLLVMType(context, elementType), 0.0);
+		for (int column = 0; column < matrixType.matrixColumns(); column++) {
+			llvm::Value *lane = builder.CreateExtractElement(product, static_cast<uint64_t>(column), "mat_vec_lane");
+			sum = builder.CreateFAdd(sum, lane, "mat_vec_sum");
+		}
+		resultValue = builder.CreateInsertElement(resultValue, sum, static_cast<uint64_t>(row), "mat_vec_res");
+	}
+	return resultValue;
+}
+
+static llvm::Value *generateMatrixMatrixMultiply(
+	ParseContext &context, llvm::Value *leftValue, DataType leftType, llvm::Value *rightValue, DataType rightType
+) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	DataType resultType{DataType::Kind::Matrix};
+	resultType.matrixRowCount = leftType.matrixRows();
+	resultType.arraySize = rightType.matrixColumns();
+	resultType.arrayElementType = std::make_shared<DataType>(leftType.matrixElementType());
+	llvm::Value *resultValue = llvm::Constant::getNullValue(getLLVMType(context, resultType));
+	DataType elementType = resultType.matrixElementType();
+	DataType rowVectorType{DataType::Kind::Vector};
+	rowVectorType.arraySize = resultType.matrixColumns();
+	rowVectorType.arrayElementType = std::make_shared<DataType>(elementType);
+	for (int row = 0; row < resultType.matrixRows(); row++) {
+		llvm::Value *resultRow = llvm::Constant::getNullValue(getLLVMType(context, rowVectorType));
+		llvm::Value *leftRow = builder.CreateExtractValue(leftValue, {static_cast<unsigned>(row)}, "mat_left_row");
+		for (int column = 0; column < resultType.matrixColumns(); column++) {
+			llvm::Value *sum = llvm::ConstantFP::get(getLLVMType(context, elementType), 0.0);
+			for (int inner = 0; inner < leftType.matrixColumns(); inner++) {
+				llvm::Value *leftLane = builder.CreateExtractElement(leftRow, static_cast<uint64_t>(inner), "mat_mul_left");
+				llvm::Value *rightRow =
+					builder.CreateExtractValue(rightValue, {static_cast<unsigned>(inner)}, "mat_mul_right_row");
+				llvm::Value *rightLane = builder.CreateExtractElement(rightRow, static_cast<uint64_t>(column), "mat_mul_right");
+				sum = builder.CreateFAdd(sum, builder.CreateFMul(leftLane, rightLane), "mat_mul_sum");
+			}
+			resultRow = builder.CreateInsertElement(resultRow, sum, static_cast<uint64_t>(column), "mat_mul_row_ins");
+		}
+		resultValue = builder.CreateInsertValue(resultValue, resultRow, {static_cast<unsigned>(row)}, "mat_mul_ins");
+	}
+	return resultValue;
 }
 
 // Generate code for an intrinsic call.
@@ -170,9 +301,28 @@ llvm::Value *generateIntrinsicCode(
 			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
 		}
 
+		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Vector && name == "multiply")
+			return generateMatrixVectorMultiply(context, left, leftType, right, rightType);
+		if (leftType.kind == DataType::Kind::Vector && rightType.kind == DataType::Kind::Matrix && name == "multiply") {
+			// Treat row-vector * matrix as transpose-compatible multiply by transposing the operand order.
+			return generateMatrixVectorMultiply(context, right, rightType, left, leftType);
+		}
+		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Matrix && name == "multiply")
+			return generateMatrixMatrixMultiply(context, left, leftType, right, rightType);
+
 		left = ensureType(context, left, leftType, resultType);
 		right = ensureType(context, right, rightType, resultType);
 
+		if (resultType.kind == DataType::Kind::Vector) {
+			if (name == "add")
+				return builder.CreateFAdd(left, right, "vadd");
+			if (name == "subtract")
+				return builder.CreateFSub(left, right, "vsub");
+			if (name == "multiply")
+				return builder.CreateFMul(left, right, "vmul");
+			if (name == "divide")
+				return builder.CreateFDiv(left, right, "vdiv");
+		}
 		if (resultType.kind == DataType::Kind::Float) {
 			if (name == "add")
 				return builder.CreateFAdd(left, right, "fadd");
@@ -205,6 +355,15 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *right = generateFunctionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
+		if ((name == "equal" || name == "not equal") && leftType.isPointer() && rightType.isPointer() &&
+			leftType == rightType) {
+			llvm::Value *cmp =
+				name == "equal" ? builder.CreateICmpEQ(left, right, "peq") : builder.CreateICmpNE(left, right, "pne");
+			assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
+			if (resultType.kind == DataType::Kind::Bool)
+				return cmp;
+			return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
+		}
 		DataType promoted;
 		DataType::promoteArithmetic(leftType, rightType, promoted);
 
@@ -534,6 +693,9 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *caseValue = generateFunctionCode(context, args[0]);
 		llvm::ConstantInt *caseConst = llvm::dyn_cast<llvm::ConstantInt>(caseValue);
 		assert(caseConst && "case value must be a constant integer");
+		llvm::Type *switchType = context.currentSwitchInst->getCondition()->getType();
+		if (caseConst->getType() != switchType)
+			caseConst = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(switchType, caseConst->getSExtValue(), true));
 
 		llvm::BasicBlock *caseBlock = llvm::BasicBlock::Create(*context.llvmContext, "case", func);
 		context.currentSwitchInst->addCase(caseConst, caseBlock);
@@ -641,9 +803,21 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "type of" || name == "array") {
+	if (name == "type of" || name == "array" || name == "build info") {
 		// Compile-time only — no runtime code
 		return nullptr;
+	}
+
+	if (name == "select") {
+		CompileTimeValue conditionValue = evaluateCompileTimeValue(args[0], context, context.macroFunctionBindings);
+		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
+		if (!condition.has_value()) {
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "select condition must be compile-time known", args[0]->range)
+			);
+			return nullptr;
+		}
+		return generateFunctionCode(context, args[*condition ? 1 : 2]);
 	}
 
 	if (name == "add pointer depth") {
@@ -652,8 +826,65 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (name == "construct") {
-		assert(args.size() == 1 && "construct expects exactly one type argument");
-		return llvm::Constant::getNullValue(getLLVMType(context, resultType));
+		if (resultType.kind == DataType::Kind::Array) {
+			llvm::Type *arrayType = getLLVMType(context, resultType);
+			llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
+			DataType elementType = *resultType.arrayElementType;
+			for (size_t i = 1; i < args.size(); i++) {
+				llvm::Value *elementVal = generateFunctionCode(context, args[i]);
+				DataType fromType = getEffectiveType(context, args[i]);
+				elementVal = ensureType(context, elementVal, fromType, elementType);
+				llvm::Value *elementPtr =
+					builder.CreateGEP(arrayType, alloca, {builder.getInt64(0), builder.getInt64(i - 1)}, "array_elem_ptr");
+				builder.CreateStore(elementVal, elementPtr);
+			}
+			return builder.CreateAlignedLoad(arrayType, alloca, llvm::Align(8), "array_load");
+		}
+
+		if (resultType.kind == DataType::Kind::Vector) {
+			assert(static_cast<int>(args.size()) - 1 == resultType.vectorSize() && "vector construct arity mismatch");
+			return buildVectorValue(context, resultType, args, 1);
+		}
+
+		if (resultType.kind == DataType::Kind::Matrix) {
+			if (args.size() == 2)
+				return buildMatrixFromFlatArray(context, resultType, args[1]);
+			assert(
+				static_cast<int>(args.size()) - 1 == resultType.matrixRows() * resultType.matrixColumns() &&
+				"matrix construct arity mismatch"
+			);
+			return buildMatrixFromScalarArgs(context, resultType, args, 1);
+		}
+
+		if (resultType.kind != DataType::Kind::Class) {
+			assert(args.size() == 2 && "construct for non-aggregate types expects exactly one value");
+			llvm::Value *val = generateFunctionCode(context, args[1]);
+			DataType fromType = getEffectiveType(context, args[1]);
+			return ensureType(context, val, fromType, resultType);
+		}
+
+		ClassDefinition *classDef = resultType.classDefinition;
+		std::vector<DataType> fieldTypes;
+		fieldTypes.reserve(args.size() - 1);
+		for (size_t i = 1; i < args.size(); i++)
+			fieldTypes.push_back(getEffectiveType(context, args[i]));
+		int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+		DataType concreteType = resultType;
+		concreteType.classInstIndex = instIndex;
+		ClassInstantiation &inst = classDef->instantiations[instIndex];
+		llvm::Type *structType = getLLVMType(context, concreteType);
+
+		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", concreteType);
+
+		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
+			llvm::Value *fieldVal = generateFunctionCode(context, args[i + 1]);
+			DataType fieldFromType = getEffectiveType(context, args[i + 1]);
+			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
+			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, i, "field_ptr");
+			builder.CreateStore(fieldVal, fieldPtr);
+		}
+
+		return builder.CreateAlignedLoad(structType, alloca, llvm::Align(8), "struct_load");
 	}
 
 	if (name == "property") {

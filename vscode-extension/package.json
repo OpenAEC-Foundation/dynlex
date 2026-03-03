@@ -15,6 +15,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "dynlex.restartServer",
+        "title": "DynLex: Restart Language Server"
+      }
+    ],
     "breakpoints": [
       {
         "language": "dynlex"
@@ -156,7 +162,7 @@
               "type": "dynlex",
               "request": "launch",
               "name": "Debug DynLex Program",
-              "program": "^\"\\${file}\""
+              "program": "${file}"
             }
           }
         ]

@@ -41,7 +41,7 @@ def emit_tokens(root: pathlib.Path, file_path: pathlib.Path) -> tuple[bool, str]
     relative_path = str(file_path.relative_to(root))
     try:
         proc = subprocess.run(
-            ["./build/dynlex", relative_path, "--emit-tokens"],
+            ["python3", "scripts/lsp_tokens.py", relative_path, "--tokens-after-open"],
             cwd=root,
             text=True,
             capture_output=True,
@@ -50,6 +50,10 @@ def emit_tokens(root: pathlib.Path, file_path: pathlib.Path) -> tuple[bool, str]
     except OSError as exc:
         return False, f"failed to start ./build/dynlex: {exc}"
     output = proc.stdout if proc.stdout else proc.stderr
+    if not proc.returncode:
+        output_lines = output.splitlines()
+        if output_lines and output_lines[0].startswith("== "):
+            output = "\n".join(output_lines[1:])
     return proc.returncode == 0, output
 
 

@@ -1,11 +1,14 @@
 #include "compiler.h"
 #include "IndentData.h"
 #include "classSection.h"
+#include "compileTimeValue.h"
 #include "function.h"
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
+#include "pathUtils.h"
 #include "pattern/pattern_tree/patternElement.h"
+#include "pattern/pattern_tree/patternTreeNode.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
@@ -205,15 +208,8 @@ static void applyBracketContinuations(ParseContext &context) {
 	context.codeLines = std::move(transformedLines);
 }
 
-static std::string toFilesystemPath(std::string_view path) {
-	if (path.starts_with("file://")) {
-		return std::string(path.substr("file://"sv.size()));
-	}
-	return std::string(path);
-}
-
 static std::string canonicalSourceKey(std::string_view path) {
-	std::filesystem::path fsPath = toFilesystemPath(path);
+	std::filesystem::path fsPath = pathutil::toFilesystemPath(path);
 	std::error_code ec;
 	std::filesystem::path canonical = std::filesystem::weakly_canonical(fsPath, ec);
 	if (ec) {
@@ -267,6 +263,31 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
+static bool evaluateCompileTimeInteger(
+	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, int &outValue
+) {
+	CompileTimeValue value = evaluateCompileTimeValue(expr, context, bindings);
+	auto *number = std::get_if<double>(&value);
+	if (!number)
+		return false;
+	outValue = static_cast<int>(*number);
+	return *number == static_cast<double>(outValue);
+}
+
+static void appendPatternCallBindings(
+	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
+) {
+	if (!expr || !definition || !expr->patternMatch)
+		return;
+	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	size_t argIndex = 0;
+	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+		auto paramIt = node->parameterNames.find(definition);
+		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size())
+			bindings[paramIt->second] = sortedArgs[argIndex++];
+	}
+}
+
 static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
 	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
 		return false;
@@ -309,7 +330,51 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 }
 
 static bool resolveTypeReferenceFunction(
-	Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
+	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
+);
+
+static bool instantiateClassTypeReference(
+	ParseContext &context, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings,
+	DataType &outTypeRef
+) {
+	if (!classDef)
+		return false;
+
+	std::vector<DataType> fieldTypes;
+	fieldTypes.reserve(classDef->fields.size());
+	for (FieldDefinition &field : classDef->fields) {
+		DataType fieldType = field.declaredType;
+		if (fieldType.kind == DataType::Kind::Any) {
+			outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+			return true;
+		}
+		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeFunction) {
+			if (fieldType.typeFunction->kind == Function::Kind::Pending && field.range.line && field.range.line->section)
+				expandFunction(fieldType.typeFunction, field.range.line->section);
+
+			DataType fieldTypeRef;
+			if (!resolveTypeReferenceFunction(context, fieldType.typeFunction, bindings, fieldTypeRef) ||
+				fieldTypeRef.kind != DataType::Kind::Type)
+				return false;
+			fieldType = concretizeClassType(fieldTypeRef.toReferencedType());
+		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
+			fieldType = concretizeClassType(fieldType);
+		}
+
+		if (!fieldType.isDeduced()) {
+			outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+			return true;
+		}
+		fieldTypes.push_back(fieldType);
+	}
+
+	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	outTypeRef = {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
+	return true;
+}
+
+static bool resolveTypeReferenceFunction(
+	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
 ) {
 	if (!expr)
 		return false;
@@ -317,7 +382,7 @@ static bool resolveTypeReferenceFunction(
 	if (expr->kind == Function::Kind::Variable && expr->variable) {
 		auto it = bindings.find(expr->variable->name);
 		if (it != bindings.end())
-			return resolveTypeReferenceFunction(it->second, bindings, outTypeRef);
+			return resolveTypeReferenceFunction(context, it->second, bindings, outTypeRef);
 		if (expr->variable->name == "pointer") {
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Int;
@@ -341,11 +406,27 @@ static bool resolveTypeReferenceFunction(
 			return true;
 		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
 			DataType innerTypeRef;
-			if (!resolveTypeReferenceFunction(expr->arguments[1], bindings, innerTypeRef) ||
+			if (!resolveTypeReferenceFunction(context, expr->arguments[1], bindings, innerTypeRef) ||
 				innerTypeRef.kind != DataType::Kind::Type)
 				return false;
 			innerTypeRef.pointerDepth++;
 			outTypeRef = innerTypeRef;
+			return true;
+		}
+		if (expr->intrinsicName == "array" && expr->arguments.size() >= 2) {
+			int arraySize = 0;
+			if (!evaluateCompileTimeInteger(context, expr->arguments[1], bindings, arraySize))
+				return false;
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Array;
+			outTypeRef.arraySize = arraySize;
+			if (expr->arguments.size() >= 3) {
+				DataType elementTypeRef;
+				if (!resolveTypeReferenceFunction(context, expr->arguments[2], bindings, elementTypeRef) ||
+					elementTypeRef.kind != DataType::Kind::Type)
+					return false;
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
+			}
 			return true;
 		}
 		return false;
@@ -364,8 +445,9 @@ static bool resolveTypeReferenceFunction(
 
 	if (!def->section->isMacro && def->section->type == SectionType::Class) {
 		auto *classSec = static_cast<ClassSection *>(def->section);
-		outTypeRef = {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
-		return true;
+		std::unordered_map<std::string, Function *> classBindings = bindings;
+		appendPatternCallBindings(expr, def, classBindings);
+		return instantiateClassTypeReference(context, classSec->classDefinition, classBindings, outTypeRef);
 	}
 
 	std::unordered_map<std::string, Function *> innerBindings;
@@ -376,7 +458,7 @@ static bool resolveTypeReferenceFunction(
 	std::unordered_map<std::string, Function *> mergedBindings = bindings;
 	for (const auto &[name, argExpr] : innerBindings)
 		mergedBindings[name] = argExpr;
-	return resolveTypeReferenceFunction(bodyExpr, mergedBindings, outTypeRef);
+	return resolveTypeReferenceFunction(context, bodyExpr, mergedBindings, outTypeRef);
 }
 
 static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
@@ -403,7 +485,7 @@ static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
 						expandFunction(field.declaredType.typeFunction, field.range.line->section);
 					}
 					DataType typeRef;
-					if (resolveTypeReferenceFunction(field.declaredType.typeFunction, {}, typeRef) &&
+					if (resolveTypeReferenceFunction(context, field.declaredType.typeFunction, {}, typeRef) &&
 						typeRef.kind == DataType::Kind::Type) {
 						field.declaredType = concretizeClassType(typeRef.toReferencedType());
 						madeProgress = true;
@@ -513,9 +595,10 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		if (std::optional<std::string_view> importPathView =
 				extractDirectiveArgument(line->rightTrimmedText, syntax.importKeyword)) {
 			// recursively import the file, replacing this line with the imported content
-			std::string importingDir = std::filesystem::path(toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
-										   .parent_path()
-										   .string();
+			std::string importingDir =
+				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
+					.parent_path()
+					.string();
 			std::string importPath = resolveImportPath(std::string(*importPathView), importingDir, context.fileSystem.get());
 			if (!importSourceFile(importPath, context)) {
 				context.diagnostics.push_back(Diagnostic(

@@ -7,4 +7,5 @@ import lib/matrix.dl
 
 set window to a new fullscreen window
 
-set transform to an identity matrix4x4
+set transform to an identity 4 x 4 matrix
+

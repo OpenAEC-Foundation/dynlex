@@ -39,16 +39,27 @@ endif()
 set(DYNLEX_MIN_LLVM_VERSION 20)
 set(DYNLEX_LLVM_VERSION "" CACHE STRING "Preferred LLVM major version for DynLex")
 
-if(NOT DYNLEX_LLVM_VERSION)
-    set(DYNLEX_LLVM_VERSION "${DYNLEX_MIN_LLVM_VERSION}")
-endif()
-
 if(NOT LLVM_DIR)
-    find_program(DYNLEX_LLVM_CONFIG
-        NAMES llvm-config-${DYNLEX_LLVM_VERSION} llvm-config
-    )
+    if(DYNLEX_LLVM_VERSION)
+        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config-${DYNLEX_LLVM_VERSION} llvm-config)
+    else()
+        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config)
+    endif()
 
     if(DYNLEX_LLVM_CONFIG)
+        execute_process(
+            COMMAND ${DYNLEX_LLVM_CONFIG} --version
+            OUTPUT_VARIABLE DYNLEX_LLVM_CONFIG_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        string(REGEX MATCH "^[0-9]+" DYNLEX_FOUND_LLVM_MAJOR "${DYNLEX_LLVM_CONFIG_VERSION}")
+        if(DYNLEX_LLVM_VERSION AND NOT DYNLEX_FOUND_LLVM_MAJOR STREQUAL DYNLEX_LLVM_VERSION)
+            message(FATAL_ERROR
+                "Requested LLVM ${DYNLEX_LLVM_VERSION}, but ${DYNLEX_LLVM_CONFIG} resolves to LLVM ${DYNLEX_FOUND_LLVM_MAJOR}"
+            )
+        endif()
+
         execute_process(
             COMMAND ${DYNLEX_LLVM_CONFIG} --cmakedir
             OUTPUT_VARIABLE DYNLEX_LLVM_CMAKE_DIR

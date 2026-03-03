@@ -7,7 +7,8 @@ struct DefinitionSection : public Section {
 
 	virtual bool processLine(ParseContext &context, CodeLine *line) override;
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
-	// the replacement: or execute: section that should run when this pattern is called
+	// The replacement: or execute: section that should run when this pattern is called.
+	// A definition becomes a macro automatically once it has a replacement section.
 	Section *executionSection{};
 
 	std::string toString() const override {

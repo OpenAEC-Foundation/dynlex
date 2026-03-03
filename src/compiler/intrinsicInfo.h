@@ -75,14 +75,18 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 		{"address of",             {2, IntrinsicReturnKind::Custom}},     // @intrinsic("address of", var)
 		{"dereference",            {2, IntrinsicReturnKind::Custom}},     // @intrinsic("dereference", ptr)
 		{"load at",                {3, IntrinsicReturnKind::Custom}},     // @intrinsic("load at", ptr, index)
-		{"construct",              {2, IntrinsicReturnKind::Custom}},     // @intrinsic("construct", type)
+		{"construct",              {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("construct", type, fields...)
 		{"property",               {3, IntrinsicReturnKind::Custom}},     // @intrinsic("property", instance, fieldname)
 		{"return",                 {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("return"[, val])
 		{"call",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("call", lib, func, rettype, args...)
 		{"cast",                   {3, IntrinsicReturnKind::Custom}},     // @intrinsic("cast", val, type)
 		{"type",                   {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("type", kind[, bits])
 		{"type of",                {2, IntrinsicReturnKind::Custom}},     // @intrinsic("type of", value)
+		{"build info",             {2, IntrinsicReturnKind::Custom}},     // @intrinsic("build info", key)
+		{"select",                 {4, IntrinsicReturnKind::Custom}},     // @intrinsic("select", condition, when_true, when_false)
 		{"array",                  {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("array", size[, type])
+		{"vector",                 {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("vector", size[, type])
+		{"matrix",                 {-1, IntrinsicReturnKind::Custom}},    // @intrinsic("matrix", rows, cols[, type])
 		{"add pointer depth",      {2, IntrinsicReturnKind::Custom}},     // @intrinsic("add pointer depth", type)
 	};
 	return registry;
@@ -92,4 +96,24 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 inline const IntrinsicInfo *findIntrinsic(const std::string &name) {
 	auto it = intrinsicRegistry().find(name);
 	return it != intrinsicRegistry().end() ? &it->second : nullptr;
+}
+
+inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {
+	if (name == "construct")
+		return argIndex == 1;
+	if (name == "cast")
+		return argIndex == 2;
+	if (name == "type")
+		return argIndex >= 1;
+	if (name == "array")
+		return argIndex >= 1;
+	if (name == "vector")
+		return argIndex >= 1;
+	if (name == "matrix")
+		return argIndex >= 1;
+	if (name == "add pointer depth")
+		return argIndex == 1;
+	if (name == "call")
+		return argIndex == 3;
+	return false;
 }

@@ -216,6 +216,9 @@ void LanguageServer::handleRequest(const Json &message) {
 			CodeActionParams p = params.get<CodeActionParams>();
 			auto result = onCodeAction(p);
 			sendResponse(id, result);
+		} else if (method == "dynlex/renderSemanticTokens") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			sendResponse(id, onRenderSemanticTokens(p));
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
@@ -336,6 +339,8 @@ SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams &
 std::vector<DocumentSymbol> LanguageServer::onDocumentSymbol(const DocumentSymbolParams & /*params*/) { return {}; }
 
 std::vector<CodeAction> LanguageServer::onCodeAction(const CodeActionParams & /*params*/) { return {}; }
+
+std::string LanguageServer::onRenderSemanticTokens(const TextDocumentIdentifier & /*params*/) { return {}; }
 
 void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
 

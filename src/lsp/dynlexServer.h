@@ -25,6 +25,7 @@ class DynLexServer : public LanguageServer {
 	CompletionList onCompletion(const TextDocumentPositionParams &params) override;
 	std::optional<Location> onDefinition(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
+	std::string onRenderSemanticTokens(const TextDocumentIdentifier &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
 	std::vector<CodeAction> onCodeAction(const CodeActionParams &params) override;
 
