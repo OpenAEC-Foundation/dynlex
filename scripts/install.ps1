@@ -6,10 +6,11 @@ param(
     [switch]$Minimal
 )
 
-function Require-Winget {
+function Test-Winget {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
+        return $false
     }
+    return $true
 }
 
 function Install-WithWinget {
@@ -44,7 +45,13 @@ function Resolve-LlvmBin {
     return $null
 }
 
-Require-Winget
+if (-not (Test-Winget)) {
+    if ($env:CI -eq "true") {
+        Write-Warning "winget is unavailable in this CI environment; skipping dependency installation."
+        exit 0
+    }
+    throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
+}
 
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
 
