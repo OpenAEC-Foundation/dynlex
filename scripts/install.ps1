@@ -57,7 +57,10 @@ function Find-LlvmConfig {
 
     $searchRoots = @(
         (Join-Path ${env:ProgramFiles} "LLVM"),
-        (Join-Path ${env:ProgramData} "chocolatey\lib")
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM"),
+        (Join-Path ${env:LOCALAPPDATA} "Microsoft\WinGet\Packages")
     )
 
     foreach ($root in $searchRoots) {
@@ -65,6 +68,14 @@ function Find-LlvmConfig {
             continue
         }
         $config = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($config) {
+            return $config
+        }
+    }
+
+    if ($env:CI -eq "true") {
+        # Last resort in CI: broad scan to accommodate runner image layout changes.
+        $config = Get-ChildItem -Path "C:\" -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($config) {
             return $config
         }

@@ -415,6 +415,7 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
+	bool staleInvalidationOccurred = false;
 
 	// Helper: after adding a definition to the tree, find less-specific definitions
 	// and unresolve any references that matched them so they can re-match the more specific one.
@@ -429,6 +430,7 @@ bool resolvePatterns(ParseContext &context) {
 			for (PatternReference *ref : refs) {
 				if (!ref->resolved)
 					continue;
+				staleInvalidationOccurred = true;
 				auto affectedSections = unresolveReference(context, ref, definitionToReferences);
 				bodyReferences.push_back(ref);
 				// If any ancestor definitions had VL→Variable reverted, re-add their sections
@@ -457,6 +459,7 @@ bool resolvePatterns(ParseContext &context) {
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 
 		bool madeProgress = false;
+		staleInvalidationOccurred = false;
 		size_t sectionsBefore = unResolvedSections.size();
 
 		// each iteration, we go over all sections first
@@ -499,6 +502,8 @@ bool resolvePatterns(ParseContext &context) {
 		});
 
 		if (unResolvedSections.size() < sectionsBefore)
+			madeProgress = true;
+		if (staleInvalidationOccurred)
 			madeProgress = true;
 
 		if (resolveReferences(context, bodyReferences, true, &definitionToReferences))
