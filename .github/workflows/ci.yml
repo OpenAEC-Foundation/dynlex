@@ -7,54 +7,53 @@ on:
     branches: [master]
 
 jobs:
-  build-and-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            install_cmd: ./scripts/install.sh
-            build_cmd: ./scripts/build.sh --lint=false
-            test_cmd: ./scripts/run_tests.sh
-            shell: bash
-          - os: macos-14
-            install_cmd: ./scripts/install.sh
-            build_cmd: ./scripts/build.sh --lint=false
-            test_cmd: ./scripts/run_tests.sh
-            shell: bash
-          - os: windows-2022
-            shell: pwsh
-    runs-on: ${{ matrix.os }}
+  build-and-test-linux:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Install dependencies (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: ${{ matrix.install_cmd }}
-        shell: ${{ matrix.shell }}
+      - name: Install dependencies
+        run: ./scripts/install.sh
 
-      - name: Configure LLVM in PATH (macOS)
-        if: runner.os == 'macOS'
-        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
-        shell: bash
-
-      - name: Build and test (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Build and test
         run: |
-          ${{ matrix.build_cmd }}
+          ./scripts/build.sh --lint=false
           chmod +x ./build/dynlex
-          ${{ matrix.test_cmd }}
-        shell: ${{ matrix.shell }}
+          ./scripts/run_tests.sh
 
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
+  build-and-test-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: ./scripts/install.sh
+
+      - name: Configure LLVM in PATH
+        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Build and test
+        run: |
+          ./scripts/build.sh --lint=false
+          chmod +x ./build/dynlex
+          ./scripts/run_tests.sh
+
+  build-and-test-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
         run: ./scripts/install.ps1
         shell: pwsh
 
-      - name: Build and smoke test (Windows)
-        if: runner.os == 'Windows'
+      - name: Build and smoke test
         run: |
           $clangPath = (Get-Command clang).Source
           $llvmBin = Split-Path -Parent $clangPath
