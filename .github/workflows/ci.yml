@@ -34,16 +34,17 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Configure LLVM in PATH
+        id: macos_llvm
         run: |
           if brew info llvm@20 >/dev/null 2>&1; then
-            echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
+            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
           else
-            echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
           fi
 
       - name: Build and test
         run: |
-          ./scripts/build.sh --lint=false
+          LLVM_DIR="$LLVM_DIR" DYNLEX_LLVM_VERSION=20 ./scripts/build.sh --lint=false
           chmod +x ./build/dynlex
           ./scripts/run_tests.sh
 
@@ -60,11 +61,22 @@ jobs:
 
       - name: Build and smoke test
         run: |
-          $clangPath = (Get-Command clang).Source
-          $llvmBin = Split-Path -Parent $clangPath
-          $llvmRoot = Split-Path -Parent $llvmBin
-          $env:PATH = "$llvmBin;$env:PATH"
-          $env:LLVM_DIR = "$llvmRoot\lib\cmake\llvm"
+          $roots = @("C:\Program Files\LLVM", "C:\ProgramData\chocolatey\lib")
+          $llvmConfig = $null
+          foreach ($root in $roots) {
+            if (Test-Path $root) {
+              $llvmConfig = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($llvmConfig) { break }
+            }
+          }
+          if (-not $llvmConfig) {
+            throw "Could not locate LLVMConfig.cmake after dependency installation."
+          }
+
+          $env:LLVM_DIR = Split-Path -Parent $llvmConfig.FullName
+          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmConfig.FullName))
+          $env:PATH = "$llvmRoot\bin;$env:PATH"
+
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_DIR="$env:LLVM_DIR"
           cmake --build build --parallel
           & .\build\dynlex.exe tests\required\simple\main.dl -o tests\required\simple\main_test.exe

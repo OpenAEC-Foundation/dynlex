@@ -46,7 +46,12 @@ function Resolve-LlvmBin {
 
 if (-not (Test-Winget)) {
     if ($env:CI -eq "true") {
-        Write-Warning "winget is unavailable in this CI environment; skipping dependency installation."
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            Write-Warning "winget unavailable in CI; falling back to Chocolatey for build dependencies."
+            choco install llvm cmake ninja git -y --no-progress
+            exit 0
+        }
+        Write-Warning "winget is unavailable in this CI environment and Chocolatey is not present; skipping dependency installation."
         exit 0
     }
     throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
