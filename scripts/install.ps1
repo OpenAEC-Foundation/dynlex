@@ -115,20 +115,6 @@ function Find-LlvmConfig {
         return $visualStudioLlvm
     }
 
-    $llvmConfigExe = Get-Command llvm-config -ErrorAction SilentlyContinue
-    if ($llvmConfigExe) {
-        try {
-            $cmakeDir = (& $llvmConfigExe.Source --cmakedir).Trim()
-            if ($cmakeDir) {
-                $configPath = Join-Path $cmakeDir "LLVMConfig.cmake"
-                if (Test-Path $configPath) {
-                    return (Get-Item $configPath)
-                }
-            }
-        } catch {
-        }
-    }
-
     $searchRoots = @(
         (Join-Path ${env:ProgramFiles} "LLVM"),
         (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
@@ -144,6 +130,20 @@ function Find-LlvmConfig {
         $config = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($config) {
             return $config
+        }
+    }
+
+    $llvmConfigExe = Get-Command llvm-config -ErrorAction SilentlyContinue
+    if ($llvmConfigExe) {
+        try {
+            $cmakeDir = (& $llvmConfigExe.Source --cmakedir).Trim()
+            if ($cmakeDir) {
+                $configPath = Join-Path $cmakeDir "LLVMConfig.cmake"
+                if (Test-Path $configPath) {
+                    return (Get-Item $configPath)
+                }
+            }
+        } catch {
         }
     }
 
