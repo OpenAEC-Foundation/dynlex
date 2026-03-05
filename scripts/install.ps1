@@ -40,7 +40,61 @@ function Resolve-LlvmBin {
     return $null
 }
 
+function Find-Vswhere {
+    $vswhereCmd = Get-Command vswhere -ErrorAction SilentlyContinue
+    if ($vswhereCmd) {
+        return $vswhereCmd.Source
+    }
+
+    $installerPath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $installerPath) {
+        return $installerPath
+    }
+
+    return $null
+}
+
+function Find-LlvmConfigInVisualStudio {
+    $vswhere = Find-Vswhere
+    if (-not $vswhere) {
+        return $null
+    }
+
+    $installRoots = @()
+    try {
+        $instances = & $vswhere -all -products * -property installationPath 2>$null
+        if ($instances) {
+            $installRoots += $instances
+        }
+    } catch {
+    }
+
+    foreach ($root in $installRoots) {
+        if (-not $root) {
+            continue
+        }
+
+        $candidateCmakeDirs = @(
+            (Join-Path $root "VC\Tools\Llvm\x64\lib\cmake\llvm"),
+            (Join-Path $root "VC\Tools\Llvm\arm64\lib\cmake\llvm")
+        )
+        foreach ($cmakeDir in $candidateCmakeDirs) {
+            $configPath = Join-Path $cmakeDir "LLVMConfig.cmake"
+            if (Test-Path $configPath) {
+                return (Get-Item $configPath)
+            }
+        }
+    }
+
+    return $null
+}
+
 function Find-LlvmConfig {
+    $visualStudioLlvm = Find-LlvmConfigInVisualStudio
+    if ($visualStudioLlvm) {
+        return $visualStudioLlvm
+    }
+
     $llvmConfigExe = Get-Command llvm-config -ErrorAction SilentlyContinue
     if ($llvmConfigExe) {
         try {
