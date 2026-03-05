@@ -29,7 +29,7 @@ esac
 KNOWN_FAILURES=""
 
 normalize_output() {
-    printf "%s" "$1" | tr -d '\r'
+    LC_ALL=C printf "%s" "$1" | LC_ALL=C tr -d '\r'
 }
 
 run_with_timeout() {

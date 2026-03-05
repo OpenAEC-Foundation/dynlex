@@ -81,7 +81,8 @@ if ($llvmBin) {
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Go\bin")
 
     if ($env:GITHUB_ENV) {
-        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmake"
+        $llvmCmakeUnix = $llvmCmake -replace '\\', '/'
+        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmakeUnix"
         Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_VERSION=20"
     }
 
