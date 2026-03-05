@@ -1,10 +1,10 @@
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
 [CmdletBinding()]
 param(
     [switch]$Minimal
 )
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
 function Test-Winget {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
