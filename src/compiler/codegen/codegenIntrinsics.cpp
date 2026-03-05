@@ -749,6 +749,10 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		llvm::FunctionCallee callee;
+		std::vector<llvm::Type *> argTypes;
+		argTypes.reserve(callArgs.size());
+		for (llvm::Value *arg : callArgs)
+			argTypes.push_back(arg->getType());
 		if (library == "libc" && funcName == "malloc" && callArgs.size() == 1) {
 			callArgs[0] = coerceIndexToSizeT(context, callArgs[0], getEffectiveType(context, args[3]));
 			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getPtrTy(), {builder.getInt64Ty()}, false);
@@ -765,8 +769,17 @@ llvm::Value *generateIntrinsicCode(
 				builder.getInt32Ty(), {builder.getPtrTy(), builder.getInt64Ty(), builder.getPtrTy()}, true
 			);
 			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else if (library == "libc" && funcName == "printf" && callArgs.size() >= 1) {
+			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getInt32Ty(), {builder.getPtrTy()}, true);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else if (library == "libc" && funcName == "strlen" && callArgs.size() == 1) {
+			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getInt64Ty(), {builder.getPtrTy()}, false);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		} else if (library == "libc" && funcName == "free" && callArgs.size() == 1) {
+			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getVoidTy(), {builder.getPtrTy()}, false);
+			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 		} else {
-			llvm::FunctionType *funcType = llvm::FunctionType::get(returnLLVMType, {}, true);
+			llvm::FunctionType *funcType = llvm::FunctionType::get(returnLLVMType, argTypes, false);
 			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 		}
 

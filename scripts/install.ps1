@@ -72,7 +72,11 @@ Install-WithWinget "GoLang.Go"
 $llvmBin = Resolve-LlvmBin
 if ($llvmBin) {
     $llvmRoot = Split-Path -Parent $llvmBin
-    $llvmCmake = Join-Path $llvmRoot "lib\cmake\llvm"
+    $llvmConfig = Get-ChildItem -Path $llvmRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $llvmConfig) {
+        throw "LLVMConfig.cmake was not found under $llvmRoot."
+    }
+    $llvmCmake = Split-Path -Parent $llvmConfig.FullName
 
     Add-GitHubPathIfPresent -PathValue $llvmBin
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
