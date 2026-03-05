@@ -174,6 +174,25 @@ static void trackMatchDefinitions(
 	}
 }
 
+// Recursively remove a reference from all definition tracking buckets represented in this match tree.
+static void untrackMatchDefinitions(
+	PatternMatch &match, PatternReference *reference,
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
+) {
+	if (match.matchedEndNode && !match.matchedEndNode->matchingDefinitions.empty()) {
+		for (auto *def : match.matchedEndNode->matchingDefinitions) {
+			auto it = defToRefs.find(def);
+			if (it == defToRefs.end())
+				continue;
+			auto &vec = it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
+		}
+	}
+	for (PatternMatch &subMatch : match.subMatches) {
+		untrackMatchDefinitions(subMatch, reference, defToRefs);
+	}
+}
+
 // Inverse of decrementVariableLikeCounts — re-increment VL counts for a reference being un-resolved
 static void incrementVariableLikeCounts(PatternReference *reference) {
 	Section *sec = reference->range().section();
@@ -300,16 +319,8 @@ static std::unordered_set<Section *> unresolveReference(
 	// Re-increment VL counts (inverse of decrementVariableLikeCounts done during resolve)
 	incrementVariableLikeCounts(reference);
 
-	// Remove from defToRefs tracking
-	if (reference->match->matchedEndNode && !reference->match->matchedEndNode->matchingDefinitions.empty()) {
-		for (auto *def : reference->match->matchedEndNode->matchingDefinitions) {
-			auto it = defToRefs.find(def);
-			if (it != defToRefs.end()) {
-				auto &vec = it->second;
-				vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
-			}
-		}
-	}
+	// Remove from defToRefs tracking (including submatches)
+	untrackMatchDefinitions(*reference->match, reference, defToRefs);
 
 	// Clear match and mark unresolved
 	reference->match = nullptr;

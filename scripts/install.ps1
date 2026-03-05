@@ -40,6 +40,39 @@ function Resolve-LlvmBin {
     return $null
 }
 
+function Find-LlvmConfig {
+    $llvmConfigExe = Get-Command llvm-config -ErrorAction SilentlyContinue
+    if ($llvmConfigExe) {
+        try {
+            $cmakeDir = (& $llvmConfigExe.Source --cmakedir).Trim()
+            if ($cmakeDir) {
+                $configPath = Join-Path $cmakeDir "LLVMConfig.cmake"
+                if (Test-Path $configPath) {
+                    return (Get-Item $configPath)
+                }
+            }
+        } catch {
+        }
+    }
+
+    $searchRoots = @(
+        (Join-Path ${env:ProgramFiles} "LLVM"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib")
+    )
+
+    foreach ($root in $searchRoots) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+        $config = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($config) {
+            return $config
+        }
+    }
+
+    return $null
+}
+
 function Add-GitHubPathIfPresent {
     param([string]$PathValue)
 
@@ -61,7 +94,12 @@ if (-not (Test-Winget)) {
     throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
 }
 
-Install-WithWinget "LLVM.LLVM"
+$llvmConfig = Find-LlvmConfig
+if (-not $llvmConfig) {
+    Install-WithWinget "LLVM.LLVM"
+    $llvmConfig = Find-LlvmConfig
+}
+
 Install-WithWinget "Kitware.CMake"
 Install-WithWinget "Ninja-build.Ninja"
 Install-WithWinget "Git.Git"
@@ -69,12 +107,23 @@ Install-WithWinget "Python.Python.3"
 Install-WithWinget "OpenJS.NodeJS.LTS"
 Install-WithWinget "GoLang.Go"
 
-$llvmBin = Resolve-LlvmBin
+$llvmBin = $null
+if ($llvmConfig) {
+    $llvmCmake = Split-Path -Parent $llvmConfig.FullName
+    $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmConfig.FullName))
+    $candidateBin = Join-Path $llvmRoot "bin"
+    if (Test-Path $candidateBin) {
+        $llvmBin = $candidateBin
+    }
+}
+
+if (-not $llvmBin) {
+    $llvmBin = Resolve-LlvmBin
+}
+
 if ($llvmBin) {
-    $llvmRoot = Split-Path -Parent $llvmBin
-    $llvmConfig = Get-ChildItem -Path $llvmRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $llvmConfig) {
-        throw "LLVMConfig.cmake was not found under $llvmRoot."
+        throw "LLVMConfig.cmake was not found under the known LLVM install roots."
     }
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
 
