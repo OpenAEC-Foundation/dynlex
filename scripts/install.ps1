@@ -60,6 +60,37 @@ function Resolve-LlvmBin {
     return $null
 }
 
+function Get-LlvmRootFromConfig {
+    param([System.IO.FileInfo]$ConfigFile)
+
+    if (-not $ConfigFile) {
+        return $null
+    }
+
+    return Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ConfigFile.FullName))
+}
+
+function Resolve-LlvmConfigFromBin {
+    param([string]$LlvmBinPath)
+
+    if (-not $LlvmBinPath) {
+        return $null
+    }
+
+    $llvmRoot = Split-Path -Parent $LlvmBinPath
+    $candidates = @(
+        (Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path $llvmRoot "lib64\cmake\llvm\LLVMConfig.cmake")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return (Get-Item $candidate)
+        }
+    }
+
+    return $null
+}
+
 function Find-Vswhere {
     $vswhereCmd = Get-Command vswhere -ErrorAction SilentlyContinue
     if ($vswhereCmd) {
@@ -195,7 +226,7 @@ Ensure-Package "GoLang.Go" "go"
 $llvmBin = $null
 if ($llvmConfig) {
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
-    $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmConfig.FullName))
+    $llvmRoot = Get-LlvmRootFromConfig $llvmConfig
     $candidateBin = Join-Path $llvmRoot "bin"
     if (Test-Path $candidateBin) {
         $llvmBin = $candidateBin
@@ -204,6 +235,25 @@ if ($llvmConfig) {
 
 if (-not $llvmBin) {
     $llvmBin = Resolve-LlvmBin
+    if ($llvmBin) {
+        $configFromBin = Resolve-LlvmConfigFromBin $llvmBin
+        if ($configFromBin) {
+            $llvmConfig = $configFromBin
+        }
+    }
+}
+
+if ($llvmConfig -and $llvmBin) {
+    $configRoot = Get-LlvmRootFromConfig $llvmConfig
+    $binRoot = Split-Path -Parent $llvmBin
+    if ($configRoot -ne $binRoot) {
+        $configFromBin = Resolve-LlvmConfigFromBin $llvmBin
+        if ($configFromBin) {
+            $llvmConfig = $configFromBin
+        } else {
+            throw "Detected mismatched LLVM tools ($llvmBin) and LLVMConfig ($($llvmConfig.FullName)), and no matching LLVMConfig.cmake exists for the selected LLVM tools."
+        }
+    }
 }
 
 if ($llvmBin) {
