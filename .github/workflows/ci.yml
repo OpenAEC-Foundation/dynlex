@@ -43,7 +43,7 @@ jobs:
           ./scripts/run_tests.sh
 
   build-and-test-windows:
-    runs-on: windows-2022
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:

@@ -130,4 +130,14 @@ if [ "$LINT" = "true" ]; then
     fi
 fi
 
-ninja -j$(nproc)
+if command -v nproc >/dev/null 2>&1; then
+    JOBS="$(nproc)"
+elif command -v getconf >/dev/null 2>&1; then
+    JOBS="$(getconf _NPROCESSORS_ONLN)"
+elif command -v sysctl >/dev/null 2>&1; then
+    JOBS="$(sysctl -n hw.ncpu)"
+else
+    JOBS=1
+fi
+
+ninja -j"$JOBS"
