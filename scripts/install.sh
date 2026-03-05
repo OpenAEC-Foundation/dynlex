@@ -39,8 +39,7 @@ install_linux_deps() {
             python3 \
             nodejs \
             npm \
-            golang-go \
-            spirv-tools
+            golang-go
         return
     fi
 
@@ -57,8 +56,7 @@ install_linux_deps() {
             python3 \
             nodejs \
             npm \
-            golang \
-            spirv-tools
+            golang
         return
     fi
 
@@ -73,8 +71,7 @@ install_linux_deps() {
             python \
             nodejs \
             npm \
-            go \
-            spirv-tools
+            go
         return
     fi
 
@@ -92,8 +89,7 @@ install_linux_deps() {
             python3 \
             nodejs \
             npm \
-            go \
-            spirv-tools
+            go
         return
     fi
 
@@ -109,10 +105,10 @@ install_macos_deps() {
 
     brew update
     if brew info llvm@20 >/dev/null 2>&1; then
-        brew install llvm@20 cmake ninja git node go spirv-tools
+        brew install llvm@20 cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
     else
-        brew install llvm cmake ninja git node go spirv-tools
+        brew install llvm cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm)"
     fi
 

@@ -41,18 +41,8 @@ fi
 
 if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     echo "Error: Missing required dependencies: ${MISSING_DEPS[*]}"
-    echo ""
-    echo "Would you like to install missing dependencies? (y/n)"
-    read -r response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        "$SCRIPT_DIR/install.sh"
-        echo ""
-        echo "Dependencies installed. Re-running build..."
-        exec "$0" "$@"
-    else
-        echo "Please install missing dependencies manually or run: ./scripts/install.sh"
-        exit 1
-    fi
+    echo "Please install missing dependencies manually or run: ./scripts/install.sh"
+    exit 1
 fi
 
 # Use the newest supported clang toolchain that is installed.

@@ -1,7 +1,3 @@
-param(
-    [switch]$Minimal
-)
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -44,41 +40,58 @@ function Resolve-LlvmBin {
     return $null
 }
 
-if (-not (Test-Winget)) {
-    if ($env:CI -eq "true") {
-        if (Get-Command choco -ErrorAction SilentlyContinue) {
-            Write-Warning "winget unavailable in CI; falling back to Chocolatey for build dependencies."
-            choco install llvm cmake ninja git -y --no-progress
-            exit 0
-        }
-        Write-Warning "winget is unavailable in this CI environment and Chocolatey is not present; skipping dependency installation."
-        exit 0
+function Add-GitHubPathIfPresent {
+    param([string]$PathValue)
+
+    if (-not $PathValue) {
+        return
     }
-    throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
+    if (-not (Test-Path $PathValue)) {
+        return
+    }
+
+    if ($env:GITHUB_PATH) {
+        Add-Content -Path $env:GITHUB_PATH -Value $PathValue
+    }
 }
 
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
+
+if (-not (Test-Winget)) {
+    throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
+}
 
 Install-WithWinget "LLVM.LLVM"
 Install-WithWinget "Kitware.CMake"
 Install-WithWinget "Ninja-build.Ninja"
 Install-WithWinget "Git.Git"
-if (-not $Minimal) {
-    Install-WithWinget "Python.Python.3"
-    Install-WithWinget "OpenJS.NodeJS.LTS"
-    Install-WithWinget "GoLang.Go"
-}
+Install-WithWinget "Python.Python.3"
+Install-WithWinget "OpenJS.NodeJS.LTS"
+Install-WithWinget "GoLang.Go"
 
 $llvmBin = Resolve-LlvmBin
 if ($llvmBin) {
     $llvmRoot = Split-Path -Parent $llvmBin
+    $llvmCmake = Join-Path $llvmRoot "lib\cmake\llvm"
+
+    Add-GitHubPathIfPresent -PathValue $llvmBin
+    Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
+    Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Git\bin")
+    Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "nodejs")
+    Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Go\bin")
+
+    if ($env:GITHUB_ENV) {
+        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmake"
+        Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_VERSION=20"
+    }
+
     Write-Host ""
     Write-Host "LLVM tools installed at: $llvmBin" -ForegroundColor Green
     Write-Host "Use these environment variables when building in this shell:"
     Write-Host ('$env:PATH="' + $llvmBin + ';$env:PATH"')
-    Write-Host ('$env:LLVM_DIR="' + $llvmRoot + '\lib\cmake\llvm"')
+    Write-Host ('$env:LLVM_DIR="' + $llvmCmake + '"')
 } else {
-    Write-Warning "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
+    throw "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
 }
 
 Write-Host ""

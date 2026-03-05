@@ -37,16 +37,19 @@ jobs:
         id: macos_llvm
         run: |
           if brew info llvm@20 >/dev/null 2>&1; then
+            echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
             echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
           else
+            echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
             echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
           fi
+          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
 
-      - name: Build
+      - name: Build and test
         run: |
           LLVM_DIR="$LLVM_DIR" DYNLEX_LLVM_VERSION=20 ./scripts/build.sh --lint=false
           chmod +x ./build/dynlex
-          ./build/dynlex --help >/dev/null
+          ./scripts/run_tests.sh
 
   build-and-test-windows:
     runs-on: windows-latest
@@ -56,40 +59,14 @@ jobs:
           submodules: true
 
       - name: Install dependencies
-        run: ./scripts/install.ps1 -Minimal
+        run: ./scripts/install.ps1
         shell: pwsh
 
-      - name: Build and smoke test
+      - name: Build and test
         run: |
-          $roots = @("C:\Program Files\LLVM", "C:\ProgramData\chocolatey\lib")
-          $llvmConfig = $null
-          foreach ($root in $roots) {
-            if (Test-Path $root) {
-              $llvmConfig = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($llvmConfig) { break }
-            }
-          }
-          if (-not $llvmConfig) {
-            Write-Warning "Could not locate LLVMConfig.cmake; skipping Windows compile smoke test on this runner image."
-            clang --version
-            cmake --version
-            ninja --version
-            exit 0
-          }
-
-          $env:LLVM_DIR = Split-Path -Parent $llvmConfig.FullName
-          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmConfig.FullName))
-          $env:PATH = "$llvmRoot\bin;$env:PATH"
-
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_DIR="$env:LLVM_DIR"
-          cmake --build build --parallel
-          & .\build\dynlex.exe tests\required\simple\main.dl -o tests\required\simple\main_test.exe
-          $actual = (& .\tests\required\simple\main_test.exe) -join "`n"
-          $expected = (Get-Content tests\required\simple\expected.txt -Raw).TrimEnd("`r", "`n")
-          if ($actual.TrimEnd("`r", "`n") -ne $expected) {
-            throw "Windows smoke test output mismatch."
-          }
-        shell: pwsh
+          ./scripts/build.sh --lint=false
+          ./scripts/run_tests.sh
+        shell: bash
 
   launchpad-source-package:
     runs-on: ubuntu-24.04
