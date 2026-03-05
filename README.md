@@ -33,10 +33,11 @@ macOS (Homebrew):
 export PATH="$(brew --prefix llvm)/bin:$PATH"
 ```
 
-Windows (Chocolatey, run in elevated PowerShell):
+Windows (winget):
 
 ```powershell
 .\scripts\install.ps1
+# if clang is not on PATH after install, set LLVM path manually:
 $env:PATH="$env:ProgramFiles\LLVM\bin;$env:PATH"
 $env:LLVM_DIR="$env:ProgramFiles\LLVM\lib\cmake\llvm"
 ```

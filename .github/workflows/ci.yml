@@ -56,8 +56,11 @@ jobs:
       - name: Build and smoke test (Windows)
         if: runner.os == 'Windows'
         run: |
-          $env:PATH = "$env:ProgramFiles\LLVM\bin;$env:PATH"
-          $env:LLVM_DIR = "$env:ProgramFiles\LLVM\lib\cmake\llvm"
+          $clangPath = (Get-Command clang).Source
+          $llvmBin = Split-Path -Parent $clangPath
+          $llvmRoot = Split-Path -Parent $llvmBin
+          $env:PATH = "$llvmBin;$env:PATH"
+          $env:LLVM_DIR = "$llvmRoot\lib\cmake\llvm"
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_DIR="$env:LLVM_DIR"
           cmake --build build --parallel
           & .\build\dynlex.exe tests\required\simple\main.dl -o tests\required\simple\main_test.exe

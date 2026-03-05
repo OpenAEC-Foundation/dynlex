@@ -1,51 +1,68 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Require-Admin {
-    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw "Please run this script in an elevated PowerShell session (Run as Administrator)."
+function Require-Winget {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
     }
 }
 
-function Install-With-Choco {
-    param([string]$PackageName, [string]$Params = "")
-    if ([string]::IsNullOrWhiteSpace($Params)) {
-        choco install $PackageName -y --no-progress
-        return
+function Install-WithWinget {
+    param([string]$PackageId)
+
+    winget install `
+        --id $PackageId `
+        --exact `
+        --silent `
+        --accept-source-agreements `
+        --accept-package-agreements
+}
+
+function Resolve-LlvmBin {
+    $llvmConfig = Get-Command llvm-config -ErrorAction SilentlyContinue
+    if ($llvmConfig) {
+        return Split-Path -Parent $llvmConfig.Source
     }
 
-    choco install $PackageName -y --no-progress --package-parameters $Params
+    $clang = Get-Command clang -ErrorAction SilentlyContinue
+    if ($clang) {
+        return Split-Path -Parent $clang.Source
+    }
+
+    $defaultLlvmBin = Join-Path ${env:ProgramFiles} "LLVM\bin"
+    if (Test-Path $defaultLlvmBin) {
+        return $defaultLlvmBin
+    }
+
+    return $null
 }
 
-if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-    throw "Chocolatey is required. Install it first: https://chocolatey.org/install"
-}
-
-Require-Admin
+Require-Winget
 
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
 
-Install-With-Choco llvm
-Install-With-Choco cmake
-Install-With-Choco ninja
-Install-With-Choco git
-Install-With-Choco python
-Install-With-Choco nodejs-lts
-Install-With-Choco golang
+Install-WithWinget "LLVM.LLVM"
+Install-WithWinget "Kitware.CMake"
+Install-WithWinget "Ninja-build.Ninja"
+Install-WithWinget "Git.Git"
+Install-WithWinget "Python.Python.3"
+Install-WithWinget "OpenJS.NodeJS.LTS"
+Install-WithWinget "GoLang.Go"
 
-$llvmDir = Join-Path ${env:ProgramFiles} "LLVM\bin"
-if (Test-Path $llvmDir) {
+$llvmBin = Resolve-LlvmBin
+if ($llvmBin) {
+    $llvmRoot = Split-Path -Parent $llvmBin
     Write-Host ""
-    Write-Host "LLVM tools installed at: $llvmDir" -ForegroundColor Green
+    Write-Host "LLVM tools installed at: $llvmBin" -ForegroundColor Green
     Write-Host "Use these environment variables when building in this shell:"
-    Write-Host '$env:PATH="'$llvmDir';$env:PATH"'
-    Write-Host '$env:LLVM_DIR="'${env:ProgramFiles}'\LLVM\lib\cmake\llvm"'
+    Write-Host ('$env:PATH="' + $llvmBin + ';$env:PATH"')
+    Write-Host ('$env:LLVM_DIR="' + $llvmRoot + '\lib\cmake\llvm"')
+} else {
+    Write-Warning "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
 }
 
 Write-Host ""
 Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "Build with CMake (example):"
-Write-Host '  cmake -S . -B build -G Ninja -DLLVM_DIR="$env:ProgramFiles\LLVM\lib\cmake\llvm"'
+Write-Host '  cmake -S . -B build -G Ninja -DLLVM_DIR="$env:LLVM_DIR"'
 Write-Host "  cmake --build build --parallel"
