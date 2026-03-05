@@ -1254,9 +1254,9 @@ static void inferOrderedFunction(
 			if (skippedArgumentIndices.contains(i))
 				continue;
 			Function *arg = expr->arguments[i];
-			inferOrderedFunction(arg, context, macroBindings);
-			if (!context.typesValid)
+			if (!inferFunction(arg, context, false, macroBindings))
 				return;
+			expr->arguments[i] = arg;
 		}
 	}
 
@@ -2017,6 +2017,94 @@ static bool endsWithArgument(Function *function) {
 	return function->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
 }
 
+static size_t countLeadingBoundaryArguments(Function *function);
+static size_t countTrailingBoundaryArguments(Function *function);
+
+// When an operator is parsed outside a call with multiple adjacent boundary
+// arguments, allow reassociating that operator into the nearest boundary slot.
+// This lets expressions like:
+//   a new vector from the x of v + n the y of v + n the z of v + n
+// keep the trailing `+ n` inside the third adjacent argument instead of
+// becoming `(a new vector from ... the z of v) + n`.
+static bool absorbOperatorIntoBoundaryArgument(Function *&expr) {
+	if (!expr)
+		return false;
+
+	bool changed = false;
+	for (Function *&arg : expr->arguments)
+		changed = absorbOperatorIntoBoundaryArgument(arg) || changed;
+
+	if (expr->kind != Function::Kind::PatternCall || expr->arguments.empty() || expr->isExplicitGroup)
+		return changed;
+
+	bool hasLeftEdge = startsWithArgument(expr);
+	bool hasRightEdge = endsWithArgument(expr);
+	if (!hasLeftEdge && !hasRightEdge)
+		return changed;
+
+	auto isPatternCallWithBoundary = [](Function *candidate) {
+		return candidate && candidate->kind == Function::Kind::PatternCall && !candidate->arguments.empty() &&
+			   !candidate->isExplicitGroup;
+	};
+
+	bool localChange = true;
+	while (localChange) {
+		localChange = false;
+
+		// Prefix operator: op rhs  =>  f(op a, b, ...)
+		if (!hasLeftEdge && hasRightEdge) {
+			Function *right = expr->arguments.back();
+			if (isPatternCallWithBoundary(right) && countLeadingBoundaryArguments(right) > 1) {
+				Function *inner = cloneFunctionTree(expr);
+				inner->arguments.back() = right->arguments.front();
+				right->arguments.front() = inner;
+				expr = right;
+				changed = true;
+				localChange = true;
+			}
+		}
+
+		// Suffix operator: lhs op  =>  f(..., b, op z)
+		if (!localChange && hasLeftEdge && !hasRightEdge) {
+			Function *left = expr->arguments.front();
+			if (isPatternCallWithBoundary(left) && countTrailingBoundaryArguments(left) > 1) {
+				Function *inner = cloneFunctionTree(expr);
+				inner->arguments.front() = left->arguments.back();
+				left->arguments.back() = inner;
+				expr = left;
+				changed = true;
+				localChange = true;
+			}
+		}
+
+		// Infix operator: lhs op rhs  =>  f(..., (tail op rhs)) or f((lhs op head), ...)
+		if (!localChange && hasLeftEdge && hasRightEdge) {
+			Function *left = expr->arguments.front();
+			Function *right = expr->arguments.back();
+
+			if (isPatternCallWithBoundary(left) && countTrailingBoundaryArguments(left) > 1) {
+				Function *inner = cloneFunctionTree(expr);
+				inner->arguments.front() = left->arguments.back();
+				inner->arguments.back() = right;
+				left->arguments.back() = inner;
+				expr = left;
+				changed = true;
+				localChange = true;
+			} else if (isPatternCallWithBoundary(right) && countLeadingBoundaryArguments(right) > 1) {
+				Function *inner = cloneFunctionTree(expr);
+				inner->arguments.front() = left;
+				inner->arguments.back() = right->arguments.front();
+				right->arguments.front() = inner;
+				expr = right;
+				changed = true;
+				localChange = true;
+			}
+		}
+	}
+
+	return changed;
+}
+
 static size_t countLeadingBoundaryArguments(Function *function) {
 	if (!function || function->kind != Function::Kind::PatternCall || !function->patternMatch ||
 		!function->patternMatch->matchedEndNode)
@@ -2027,8 +2115,8 @@ static size_t countLeadingBoundaryArguments(Function *function) {
 		if (!def)
 			continue;
 		size_t leadingCount = 0;
-		for (PatternTreeNode *node : function->patternMatch->nodesPassed) {
-			if (!node->parameterNames.contains(def))
+		for (const PatternElement &elem : def->patternElements) {
+			if (elem.type != PatternElement::Type::Variable)
 				break;
 			leadingCount++;
 		}
@@ -2047,8 +2135,8 @@ static size_t countTrailingBoundaryArguments(Function *function) {
 		if (!def)
 			continue;
 		size_t trailingCount = 0;
-		for (auto it = function->patternMatch->nodesPassed.rbegin(); it != function->patternMatch->nodesPassed.rend(); ++it) {
-			if (!(*it)->parameterNames.contains(def))
+		for (auto it = def->patternElements.rbegin(); it != def->patternElements.rend(); ++it) {
+			if (it->type != PatternElement::Type::Variable)
 				break;
 			trailingCount++;
 		}
@@ -2160,6 +2248,9 @@ static bool inferFunction(
 	Function *&expr, InferenceContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Function *> &macroBindings = {}
 ) {
+	recomputeRanges(expr);
+	sortArgumentsRecursive(expr);
+	absorbOperatorIntoBoundaryArgument(expr);
 	recomputeRanges(expr);
 	sortArgumentsRecursive(expr);
 	Function *originalExpr = cloneFunctionTree(expr);
@@ -2448,6 +2539,9 @@ static bool inferFunction(
 	std::string trialFailureDetail;
 	bool found = tryGroupings(0, lastIndex, [&](Function *rootFunction) -> bool {
 		expr = rootFunction;
+		absorbOperatorIntoBoundaryArgument(expr);
+		recomputeRanges(expr);
+		sortArgumentsRecursive(expr);
 		resetFunctionTypes(expr);
 		InferenceContext::TrialJournal journal;
 		InferenceContext trialContext(context.parseContext, true);
