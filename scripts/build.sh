@@ -32,10 +32,12 @@ done
 MISSING_DEPS=()
 
 command -v "$CLANG" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG")
-command -v "$CLANG_FORMAT" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_FORMAT")
-command -v "$CLANG_TIDY" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_TIDY")
 command -v cmake >/dev/null 2>&1 || MISSING_DEPS+=("cmake")
 command -v ninja >/dev/null 2>&1 || MISSING_DEPS+=("ninja")
+if [ "$LINT" = "true" ]; then
+    command -v "$CLANG_FORMAT" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_FORMAT")
+    command -v "$CLANG_TIDY" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_TIDY")
+fi
 
 if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     echo "Error: Missing required dependencies: ${MISSING_DEPS[*]}"
@@ -57,8 +59,10 @@ fi
 export CC="$CLANG"
 export CXX="$CLANGXX"
 
-# Format source files
-find src -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.inl' | xargs "$CLANG_FORMAT" -i
+if [ "$LINT" = "true" ]; then
+    # Format source files
+    find src -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.inl' | xargs "$CLANG_FORMAT" -i
+fi
 
 mkdir -p build
 if [ -f build/CMakeCache.txt ] && rg -q "conan_toolchain\.cmake" build/CMakeCache.txt; then
