@@ -737,7 +737,9 @@ llvm::Value *generateIntrinsicCode(
 						*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
 					);
 					context.stringConstants[*str] = strGlobal;
-					callArgs.push_back(strGlobal);
+					callArgs.push_back(builder.CreateInBoundsGEP(
+						strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+					));
 					continue;
 				}
 			}

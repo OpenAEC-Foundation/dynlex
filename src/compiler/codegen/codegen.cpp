@@ -170,15 +170,21 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 			// TODO: strings are currently just i8* pointers to constant data.
 			// String operations (concatenation, slicing, etc.) need runtime support.
 			auto it = context.stringConstants.find(*strVal);
-			if (it != context.stringConstants.end())
-				return it->second;
+			if (it != context.stringConstants.end()) {
+				llvm::GlobalVariable *strGlobal = it->second;
+				return builder.CreateInBoundsGEP(
+					strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+				);
+			}
 			std::string globalName = ".str." + std::to_string(context.stringConstants.size());
 			llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, *strVal, true);
 			llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
 				*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
 			);
 			context.stringConstants[*strVal] = strGlobal;
-			return strGlobal;
+			return builder.CreateInBoundsGEP(
+				strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+			);
 		}
 		// Unknown literal variant type - should never reach here after type inference
 		ASSERT_UNREACHABLE("Unknown literal type in codegen");
