@@ -21,6 +21,40 @@ test_output=""
 # Known failing tests — these don't count as unexpected failures
 KNOWN_FAILURES=""
 
+run_with_timeout() {
+    local seconds="$1"
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$seconds" "$@"
+        return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$seconds" "$@"
+        return $?
+    fi
+    python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = int(sys.argv[1])
+cmd = sys.argv[2:]
+
+try:
+    completed = subprocess.run(cmd, timeout=timeout_seconds, capture_output=True, text=True)
+except subprocess.TimeoutExpired as exc:
+    stderr = exc.stderr or ""
+    if stderr:
+        print(stderr, end="", file=sys.stderr)
+    sys.exit(124)
+
+if completed.stdout:
+    print(completed.stdout, end="")
+if completed.stderr:
+    print(completed.stderr, end="", file=sys.stderr)
+sys.exit(completed.returncode)
+PY
+}
+
 if [[ ! -x "$COMPILER" ]]; then
     echo -e "${YELLOW}Compiler not found, building...${NC}"
     "$SCRIPT_DIR/build.sh"
@@ -48,7 +82,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Compile (5 second timeout)
-    compile_output=$(timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+    compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
         test_output+="${RED}FAIL${NC} $test_name (compilation timed out)\n"
@@ -88,7 +122,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Run (5 second timeout)
-    actual_output=$(timeout 5 "$output_binary" 2>&1)
+    actual_output=$(run_with_timeout 5 "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
         test_output+="${RED}FAIL${NC} $test_name (execution timed out)\n"

@@ -1,6 +1,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+[CmdletBinding()]
+param(
+    [switch]$Minimal
+)
+
 function Require-Winget {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
@@ -14,6 +19,8 @@ function Install-WithWinget {
         --id $PackageId `
         --exact `
         --silent `
+        --disable-interactivity `
+        --source winget `
         --accept-source-agreements `
         --accept-package-agreements
 }
@@ -45,9 +52,11 @@ Install-WithWinget "LLVM.LLVM"
 Install-WithWinget "Kitware.CMake"
 Install-WithWinget "Ninja-build.Ninja"
 Install-WithWinget "Git.Git"
-Install-WithWinget "Python.Python.3"
-Install-WithWinget "OpenJS.NodeJS.LTS"
-Install-WithWinget "GoLang.Go"
+if (-not $Minimal) {
+    Install-WithWinget "Python.Python.3"
+    Install-WithWinget "OpenJS.NodeJS.LTS"
+    Install-WithWinget "GoLang.Go"
+}
 
 $llvmBin = Resolve-LlvmBin
 if ($llvmBin) {

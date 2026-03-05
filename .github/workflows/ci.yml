@@ -50,7 +50,7 @@ jobs:
           submodules: true
 
       - name: Install dependencies
-        run: ./scripts/install.ps1
+        run: ./scripts/install.ps1 -Minimal
         shell: pwsh
 
       - name: Build and smoke test
