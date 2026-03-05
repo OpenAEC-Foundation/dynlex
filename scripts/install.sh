@@ -108,9 +108,14 @@ install_macos_deps() {
     fi
 
     brew update
-    brew install llvm cmake ninja git node go spirv-tools
+    if brew info llvm@20 >/dev/null 2>&1; then
+        brew install llvm@20 cmake ninja git node go spirv-tools
+        BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
+    else
+        brew install llvm cmake ninja git node go spirv-tools
+        BREW_LLVM_PREFIX="$(brew --prefix llvm)"
+    fi
 
-    BREW_LLVM_PREFIX="$(brew --prefix llvm)"
     echo ""
     echo "Add LLVM tools to PATH for this shell before building:"
     echo "  export PATH=\"$BREW_LLVM_PREFIX/bin:\$PATH\""

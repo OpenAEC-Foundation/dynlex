@@ -34,7 +34,12 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Configure LLVM in PATH
-        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+        run: |
+          if brew info llvm@20 >/dev/null 2>&1; then
+            echo "$(brew --prefix llvm@20)/bin" >> "$GITHUB_PATH"
+          else
+            echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          fi
 
       - name: Build and test
         run: |

@@ -1,4 +1,3 @@
-[CmdletBinding()]
 param(
     [switch]$Minimal
 )

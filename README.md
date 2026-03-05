@@ -30,7 +30,11 @@ macOS (Homebrew):
 
 ```bash
 ./scripts/install.sh
-export PATH="$(brew --prefix llvm)/bin:$PATH"
+if brew info llvm@20 >/dev/null 2>&1; then
+  export PATH="$(brew --prefix llvm@20)/bin:$PATH"
+else
+  export PATH="$(brew --prefix llvm)/bin:$PATH"
+fi
 ```
 
 Windows (winget):
