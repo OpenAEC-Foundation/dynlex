@@ -58,7 +58,7 @@ export CC="$CLANG"
 export CXX="$CLANGXX"
 
 # Format source files
-find src -name '*.cpp' -o -name '*.hpp' -o -name '*.h' | xargs "$CLANG_FORMAT" -i
+find src -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.inl' | xargs "$CLANG_FORMAT" -i
 
 mkdir -p build
 if [ -f build/CMakeCache.txt ] && rg -q "conan_toolchain\.cmake" build/CMakeCache.txt; then
@@ -106,11 +106,12 @@ cd build
 # Run clang-tidy if enabled (only on files changed since last lint)
 if [ "$LINT" = "true" ]; then
     LINT_TIMESTAMP=".lint_timestamp"
+    FIND_CHANGED_CPP=(find ../src -name '*.cpp')
     if [ -f "$LINT_TIMESTAMP" ]; then
-        CHANGED_FILES=$(find ../src -name '*.cpp' -newer "$LINT_TIMESTAMP" 2>/dev/null || true)
+        CHANGED_FILES=$("${FIND_CHANGED_CPP[@]}" -newer "$LINT_TIMESTAMP" 2>/dev/null || true)
         FILE_MSG="changed files"
     else
-        CHANGED_FILES=$(find ../src -name '*.cpp' 2>/dev/null || true)
+        CHANGED_FILES=$("${FIND_CHANGED_CPP[@]}" 2>/dev/null || true)
         FILE_MSG="all files (first run)"
     fi
 
