@@ -21,6 +21,26 @@ function Install-WithWinget {
         --accept-package-agreements
 }
 
+function Test-CommandAvailable {
+    param([string]$CommandName)
+
+    return [bool](Get-Command $CommandName -ErrorAction SilentlyContinue)
+}
+
+function Ensure-Package {
+    param(
+        [string]$PackageId,
+        [string]$CommandName
+    )
+
+    if ($CommandName -and (Test-CommandAvailable $CommandName)) {
+        Write-Host "Using existing $CommandName; skipping $PackageId." -ForegroundColor DarkGray
+        return
+    }
+
+    Install-WithWinget $PackageId
+}
+
 function Resolve-LlvmBin {
     $llvmConfig = Get-Command llvm-config -ErrorAction SilentlyContinue
     if ($llvmConfig) {
@@ -165,12 +185,12 @@ if (-not $llvmConfig) {
     $llvmConfig = Find-LlvmConfig
 }
 
-Install-WithWinget "Kitware.CMake"
-Install-WithWinget "Ninja-build.Ninja"
-Install-WithWinget "Git.Git"
-Install-WithWinget "Python.Python.3"
-Install-WithWinget "OpenJS.NodeJS.LTS"
-Install-WithWinget "GoLang.Go"
+Ensure-Package "Kitware.CMake" "cmake"
+Ensure-Package "Ninja-build.Ninja" "ninja"
+Ensure-Package "Git.Git" "git"
+Ensure-Package "Python.Python.3" "python"
+Ensure-Package "OpenJS.NodeJS.LTS" "node"
+Ensure-Package "GoLang.Go" "go"
 
 $llvmBin = $null
 if ($llvmConfig) {
