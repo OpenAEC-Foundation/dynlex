@@ -67,7 +67,17 @@ function Get-LlvmRootFromConfig {
         return $null
     }
 
-    return Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ConfigFile.FullName))
+    # Typical layout: <root>/lib/cmake/llvm/LLVMConfig.cmake
+    # Also supports <root>/lib64/cmake/llvm/LLVMConfig.cmake.
+    $llvmDir = Split-Path -Parent $ConfigFile.FullName
+    $cmakeDir = Split-Path -Parent $llvmDir
+    $libDir = Split-Path -Parent $cmakeDir
+    $libLeaf = (Split-Path -Leaf $libDir).ToLowerInvariant()
+    if ($libLeaf -eq "lib" -or $libLeaf -eq "lib64") {
+        return Split-Path -Parent $libDir
+    }
+
+    return Split-Path -Parent $libDir
 }
 
 function Resolve-LlvmConfigFromBin {
