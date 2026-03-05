@@ -135,6 +135,14 @@ function Find-LlvmConfigInVisualStudio {
                 return (Get-Item $configPath)
             }
         }
+
+        $llvmToolsRoot = Join-Path $root "VC\Tools\Llvm"
+        if (Test-Path $llvmToolsRoot) {
+            $config = Get-ChildItem -Path $llvmToolsRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($config) {
+                return $config
+            }
+        }
     }
 
     return $null
