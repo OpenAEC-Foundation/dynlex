@@ -87,13 +87,23 @@ if [ -f build/conan_toolchain.cmake ]; then
         build/nlohmann_jsonTargets.cmake
 fi
 
-cmake -S . -B build -G Ninja \
-    -U CMAKE_TOOLCHAIN_FILE \
-    -U nlohmann_json_DIR \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_C_COMPILER="$CLANG" \
-    -DCMAKE_CXX_COMPILER="$CLANGXX" \
+CMAKE_ARGS=(
+    -S .
+    -B build
+    -G Ninja
+    -U CMAKE_TOOLCHAIN_FILE
+    -U nlohmann_json_DIR
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    -DCMAKE_C_COMPILER="$CLANG"
+    -DCMAKE_CXX_COMPILER="$CLANGXX"
     -DDYNLEX_LLVM_VERSION="$LLVM_VERSION"
+)
+
+if [ -n "${LLVM_DIR:-}" ]; then
+    CMAKE_ARGS+=("-DLLVM_DIR=$LLVM_DIR")
+fi
+
+cmake "${CMAKE_ARGS[@]}"
 
 cd build
 
