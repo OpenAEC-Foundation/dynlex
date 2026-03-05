@@ -26,14 +26,19 @@ find_package(nlohmann_json CONFIG)
 if(NOT nlohmann_json_FOUND)
     find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
 
-    if(NOT NLOHMANN_JSON_INCLUDE_DIR)
-        message(FATAL_ERROR "DynLex requires nlohmann_json. Install the development package for your platform or set nlohmann_json_DIR.")
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+        set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+        )
+    else()
+        include(FetchContent)
+        FetchContent_Declare(
+            nlohmann_json
+            URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+        )
+        FetchContent_MakeAvailable(nlohmann_json)
     endif()
-
-    add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
-    set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
-    )
 endif()
 
 set(DYNLEX_MIN_LLVM_VERSION 20)
