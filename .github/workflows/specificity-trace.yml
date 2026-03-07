@@ -126,7 +126,6 @@ jobs:
               sys.exit(1)
 
           names = ["linux", "macos", "windows"]
-          baseline = traces[names[0]]
           max_len = max(len(traces[n]) for n in names)
           mismatch = None
           for i in range(max_len):

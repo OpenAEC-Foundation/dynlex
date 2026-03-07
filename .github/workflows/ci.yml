@@ -31,7 +31,6 @@ jobs:
       - name: Build and test
         run: |
           ./scripts/build.sh --lint=false
-          chmod +x ./build/dynlex
           ./scripts/run_tests.sh
 
       - name: ccache stats
@@ -67,7 +66,6 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Configure LLVM
-        id: macos_llvm
         run: |
           if brew info llvm@20 >/dev/null 2>&1; then
             echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
@@ -78,8 +76,7 @@ jobs:
 
       - name: Build and test
         run: |
-          LLVM_DIR="$LLVM_DIR" DYNLEX_LLVM_VERSION=20 ./scripts/build.sh --lint=false
-          chmod +x ./build/dynlex
+          ./scripts/build.sh --lint=false
           ./scripts/run_tests.sh
 
       - name: ccache stats
