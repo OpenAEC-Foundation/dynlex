@@ -167,6 +167,25 @@ function Find-LlvmConfigInKnownLayouts {
     return $null
 }
 
+function Find-LlvmConfigByWhereScan {
+    Write-Warning "Running fallback where.exe scan for LLVMConfig.cmake on C:\\"
+    try {
+        $raw = & where.exe /r C:\ LLVMConfig.cmake 2>$null
+        if (-not $raw) {
+            return $null
+        }
+        $matches = @($raw | Sort-Object -Unique)
+        foreach ($candidate in $matches) {
+            if ($candidate -and (Test-Path $candidate)) {
+                return Get-Item $candidate
+            }
+        }
+    } catch {
+        Write-Warning ("where.exe fallback scan failed: {0}" -f $_.Exception.Message)
+    }
+    return $null
+}
+
 function Write-LlvmDiscoveryDiagnostics {
     Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
 
@@ -202,7 +221,19 @@ function Write-LlvmDiscoveryDiagnostics {
         Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
     }
 
-    Write-Host "Skipping full-drive fallback scan to keep CI fast and deterministic." -ForegroundColor DarkYellow
+    $whereMatch = Find-LlvmConfigByWhereScan
+    if ($whereMatch) {
+        Write-Host ("where.exe fallback found: {0}" -f $whereMatch.FullName) -ForegroundColor DarkYellow
+    } else {
+        Write-Host "where.exe fallback scan did not find LLVMConfig.cmake." -ForegroundColor DarkYellow
+    }
+
+    $llvmRoot = Join-Path ${env:ProgramFiles} "LLVM"
+    Write-Host ("Program Files LLVM root exists: {0}" -f (Test-Path $llvmRoot)) -ForegroundColor DarkYellow
+    $llvmLib = Join-Path $llvmRoot "lib"
+    Write-Host ("Program Files LLVM lib exists: {0}" -f (Test-Path $llvmLib)) -ForegroundColor DarkYellow
+    $llvmCmake = Join-Path $llvmLib "cmake\llvm"
+    Write-Host ("Program Files LLVM cmake dir exists: {0}" -f (Test-Path $llvmCmake)) -ForegroundColor DarkYellow
 }
 
 function Find-LlvmConfigInVisualStudio {
@@ -309,6 +340,11 @@ function Find-LlvmConfig {
     $diagnosticConfigs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($diagnosticConfigs.Count -gt 0) {
         return Get-Item $diagnosticConfigs[0]
+    }
+
+    $whereConfig = Find-LlvmConfigByWhereScan
+    if ($whereConfig) {
+        return $whereConfig
     }
 
     return $null
