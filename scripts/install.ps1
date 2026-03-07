@@ -149,6 +149,27 @@ function Find-LlvmConfigsInRoots {
     return $results | Sort-Object -Unique
 }
 
+function Find-LlvmConfigInKnownLayouts {
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles} "LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles} "LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib64\cmake\llvm\LLVMConfig.cmake")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return Get-Item $candidate
+        }
+    }
+
+    return $null
+}
+
 function Write-LlvmDiscoveryDiagnostics {
     Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
 
@@ -228,6 +249,11 @@ function Find-LlvmConfigInVisualStudio {
 }
 
 function Find-LlvmConfig {
+    $knownLayoutConfig = Find-LlvmConfigInKnownLayouts
+    if ($knownLayoutConfig) {
+        return $knownLayoutConfig
+    }
+
     $visualStudioLlvm = Find-LlvmConfigInVisualStudio
     if ($visualStudioLlvm) {
         return $visualStudioLlvm
