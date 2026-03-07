@@ -130,12 +130,32 @@ function Find-FirstFileByFilter {
         Select-Object -First 1
 }
 
+function Find-FirstLlvmConfigInRoot {
+    param([string]$Root)
+
+    $candidates = @()
+    $firstUpper = Find-FirstFileByFilter -Root $Root -Filter "LLVMConfig.cmake"
+    if ($firstUpper) {
+        $candidates += $firstUpper
+    }
+    $firstLower = Find-FirstFileByFilter -Root $Root -Filter "llvm-config.cmake"
+    if ($firstLower) {
+        $candidates += $firstLower
+    }
+
+    if (@($candidates).Count -eq 0) {
+        return $null
+    }
+
+    return @($candidates | Sort-Object FullName)[0]
+}
+
 function Find-LlvmConfigsInRoots {
     param([string[]]$Roots)
 
     $results = @()
     foreach ($root in $Roots) {
-        $config = Find-FirstFileByFilter -Root $root -Filter "LLVMConfig.cmake"
+        $config = Find-FirstLlvmConfigInRoot -Root $root
         if ($config) {
             $results += $config.FullName
         }
@@ -147,15 +167,25 @@ function Find-LlvmConfigsInRoots {
 function Find-LlvmConfigInKnownLayouts {
     $candidates = @(
         (Join-Path ${env:ProgramFiles} "LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles} "LLVM\lib\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:ProgramFiles} "LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles} "LLVM\lib64\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM\lib64\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib64\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib64\cmake\llvm\llvm-config.cmake"),
         (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib\cmake\llvm\LLVMConfig.cmake"),
-        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib64\cmake\llvm\LLVMConfig.cmake")
+        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib\cmake\llvm\llvm-config.cmake"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib64\cmake\llvm\llvm-config.cmake")
     )
 
     foreach ($candidate in $candidates) {
@@ -194,12 +224,12 @@ function Write-LlvmDiscoveryDiagnostics {
 
     $configs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($configs.Count -gt 0) {
-        Write-Host "Discovered LLVMConfig.cmake candidates:" -ForegroundColor DarkYellow
+        Write-Host "Discovered LLVM CMake config candidates:" -ForegroundColor DarkYellow
         foreach ($path in $configs) {
             Write-Host ("  - {0}" -f $path) -ForegroundColor DarkYellow
         }
     } else {
-        Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
+        Write-Host "No LLVM CMake config file found in diagnostic roots." -ForegroundColor DarkYellow
     }
 
     Write-Host "Skipping full-drive fallback scan to keep CI responsive." -ForegroundColor DarkYellow
@@ -236,6 +266,13 @@ function Find-LlvmConfigInVisualStudio {
                 return Get-Item $first
             }
         }
+        $foundLower = & $vswhere -all -products * -find '**\llvm-config.cmake' 2>$null
+        if ($foundLower) {
+            $firstLower = @($foundLower | Sort-Object)[0]
+            if ($firstLower -and (Test-Path $firstLower)) {
+                return Get-Item $firstLower
+            }
+        }
     } catch {
         Write-Warning ("vswhere -find for LLVMConfig.cmake failed: {0}" -f $_.Exception.Message)
     }
@@ -254,10 +291,14 @@ function Find-LlvmConfigInVisualStudio {
             if (Test-Path $configPath) {
                 return (Get-Item $configPath)
             }
+            $lowerConfigPath = Join-Path $cmakeDir "llvm-config.cmake"
+            if (Test-Path $lowerConfigPath) {
+                return (Get-Item $lowerConfigPath)
+            }
         }
 
         $llvmToolsRoot = Join-Path $root "VC\Tools\Llvm"
-        $config = Find-FirstFileByFilter -Root $llvmToolsRoot -Filter "LLVMConfig.cmake"
+        $config = Find-FirstLlvmConfigInRoot -Root $llvmToolsRoot
         if ($config) {
             return $config
         }
@@ -287,7 +328,7 @@ function Find-LlvmConfig {
     )
 
     foreach ($root in $searchRoots) {
-        $config = Find-FirstFileByFilter -Root $root -Filter "LLVMConfig.cmake"
+        $config = Find-FirstLlvmConfigInRoot -Root $root
         if ($config) {
             return $config
         }
@@ -301,6 +342,10 @@ function Find-LlvmConfig {
                 $configPath = Join-Path $cmakeDir "LLVMConfig.cmake"
                 if (Test-Path $configPath) {
                     return (Get-Item $configPath)
+                }
+                $lowerConfigPath = Join-Path $cmakeDir "llvm-config.cmake"
+                if (Test-Path $lowerConfigPath) {
+                    return (Get-Item $lowerConfigPath)
                 }
             }
         } catch {
