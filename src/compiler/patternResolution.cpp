@@ -95,6 +95,18 @@ static std::string referenceTraceId(const PatternReference *reference) {
 	return out.str();
 }
 
+static std::string sectionTraceId(const Section *section) {
+	if (!section)
+		return "sec:<null>";
+	std::ostringstream out;
+	out << "sec:" << section->toString();
+	if (section->openingLine)
+		out << "@L" << section->openingLine->mergedLineIndex;
+	else
+		out << "@L?";
+	return out.str();
+}
+
 static void traceResolution(const std::string &message) {
 	if (!resolutionTraceEnabled())
 		return;
@@ -583,6 +595,15 @@ bool resolvePatterns(ParseContext &context) {
 			"iter " + std::to_string(resolutionIteration) + " begin sections=" + std::to_string(unResolvedSections.size()) +
 			" body_refs=" + std::to_string(bodyReferences.size())
 		);
+		if (resolutionTraceEnabled()) {
+			std::vector<Section *> debugSections(unResolvedSections.begin(), unResolvedSections.end());
+			std::sort(debugSections.begin(), debugSections.end(), sectionComesBefore);
+			std::ostringstream sectionList;
+			sectionList << "iter " << resolutionIteration << " section-list";
+			for (Section *section : debugSections)
+				sectionList << " | " << sectionTraceId(section);
+			traceResolution(sectionList.str());
+		}
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&](Section *section) {
