@@ -571,9 +571,6 @@ std::string DapServer::findSelfPath() const {
 	if (!executablePath.empty()) {
 		if (std::filesystem::path(executablePath).is_absolute())
 			return executablePath;
-		auto resolved = llvm::sys::findProgramByName(executablePath);
-		if (resolved)
-			return *resolved;
 		return std::filesystem::absolute(executablePath).string();
 	}
 	return "";
