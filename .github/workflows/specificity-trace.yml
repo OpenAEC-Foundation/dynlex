@@ -1,0 +1,125 @@
+name: Specificity Trace
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  trace-specificity:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux
+          - os: macos-14
+            label: macos
+          - os: windows-latest
+            label: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/install.sh
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: ./scripts/install.ps1
+        shell: pwsh
+
+      - name: Build compiler
+        run: ./scripts/build.sh --lint=false
+        shell: bash
+
+      - name: Run specificity trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p trace
+          COMPILER=./build/dynlex
+          if [ -x ./build/dynlex.exe ]; then
+            COMPILER=./build/dynlex.exe
+          fi
+
+          set +e
+          DYNLEX_TRACE_RESOLUTION=1 "$COMPILER" tests/required/specificity/main.dl -o trace/specificity.out >trace/stdout.log 2>trace/stderr.log
+          status=$?
+          set -e
+          echo "$status" > trace/exit_code.txt
+
+          awk '/^\[res\]/ { print }' trace/stderr.log > trace/resolution.log || true
+
+      - name: Upload trace artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: specificity-trace-${{ matrix.label }}
+          path: trace/*
+
+  compare-traces:
+    needs: trace-specificity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: traces
+
+      - name: Compare traces
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          root = pathlib.Path("traces")
+          targets = {
+              "linux": root / "specificity-trace-linux",
+              "macos": root / "specificity-trace-macos",
+              "windows": root / "specificity-trace-windows",
+          }
+
+          missing = [name for name, d in targets.items() if not d.exists()]
+          if missing:
+              print("Missing artifacts:", ", ".join(missing))
+              sys.exit(1)
+
+          exit_codes = {}
+          traces = {}
+          for name, d in targets.items():
+              exit_codes[name] = (d / "exit_code.txt").read_text(encoding="utf-8").strip()
+              traces[name] = (d / "resolution.log").read_text(encoding="utf-8").splitlines()
+
+          print("Exit codes:", exit_codes)
+          code_set = set(exit_codes.values())
+          if len(code_set) != 1:
+              print("Exit code mismatch across platforms.")
+              sys.exit(1)
+
+          names = ["linux", "macos", "windows"]
+          baseline = traces[names[0]]
+          max_len = max(len(traces[n]) for n in names)
+          mismatch = None
+          for i in range(max_len):
+              row = []
+              for n in names:
+                  t = traces[n]
+                  row.append(t[i] if i < len(t) else "<EOF>")
+              if row.count(row[0]) != len(row):
+                  mismatch = (i, row)
+                  break
+
+          if mismatch:
+              i, row = mismatch
+              print(f"First trace divergence at line {i + 1}:")
+              for n, val in zip(names, row):
+                  print(f"  {n}: {val}")
+              sys.exit(1)
+
+          print("No cross-platform trace divergence detected for specificity.")
+          PY

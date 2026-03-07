@@ -8,8 +8,11 @@
 #include "variable.h"
 #include <algorithm>
 #include <climits>
+#include <cstdlib>
+#include <iostream>
 #include <list>
 #include <ranges>
+#include <sstream>
 #include <tuple>
 #include <unordered_set>
 
@@ -55,6 +58,47 @@ static std::tuple<int, int, int, std::string> referenceSortKey(const PatternRefe
 
 static bool referenceComesBefore(const PatternReference *a, const PatternReference *b) {
 	return referenceSortKey(a) < referenceSortKey(b);
+}
+
+static bool resolutionTraceEnabled() {
+	static const bool enabled = []() {
+		const char *env = std::getenv("DYNLEX_TRACE_RESOLUTION");
+		if (!env)
+			return false;
+		std::string value(env);
+		return value == "1" || value == "true" || value == "TRUE" || value == "yes" || value == "YES";
+	}();
+	return enabled;
+}
+
+static std::string definitionTraceId(const PatternDefinition *def) {
+	if (!def)
+		return "def:<null>";
+	std::ostringstream out;
+	out << "def:" << def->toString();
+	if (def->range.line)
+		out << "@L" << def->range.line->mergedLineIndex;
+	else
+		out << "@L?";
+	return out.str();
+}
+
+static std::string referenceTraceId(const PatternReference *reference) {
+	if (!reference)
+		return "ref:<null>";
+	std::ostringstream out;
+	out << "ref:" << reference->pattern.text;
+	if (reference->range().line)
+		out << "@L" << reference->range().line->mergedLineIndex;
+	else
+		out << "@L?";
+	return out.str();
+}
+
+static void traceResolution(const std::string &message) {
+	if (!resolutionTraceEnabled())
+		return;
+	std::cerr << "[res] " << message << '\n';
 }
 
 static void appendUniqueSection(std::vector<Section *> &sections, Section *section) {
@@ -386,6 +430,7 @@ static std::vector<Section *> unresolveReference(
 	reference->match = nullptr;
 	reference->resolved = false;
 	reference->range().section()->incrementUnresolved();
+	traceResolution("unresolve " + referenceTraceId(reference));
 
 	return affectedSections;
 }
@@ -393,9 +438,10 @@ static std::vector<Section *> unresolveReference(
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts,
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr
+	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr,
+	const char *phase = "body"
 ) {
-	return std::erase_if(references, [&context, decrementCounts, defToRefs](PatternReference *reference) {
+	return std::erase_if(references, [&context, decrementCounts, defToRefs, phase](PatternReference *reference) {
 		PatternMatch *match = context.match(reference);
 		if (match) {
 			// Multi-word reference matched a pattern in the tree
@@ -405,6 +451,7 @@ static bool resolveReferences(
 				decrementVariableLikeCounts(reference);
 			if (defToRefs)
 				trackMatchDefinitions(*match, reference, *defToRefs);
+			traceResolution(std::string(phase) + " resolved " + referenceTraceId(reference));
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			// Single-word reference that didn't match any pattern — must be a variable.
@@ -431,6 +478,7 @@ static bool resolveReferences(
 			);
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
+			traceResolution(std::string(phase) + " resolved-as-variable " + referenceTraceId(reference));
 		}
 		return reference->resolved;
 	}) > 0;
@@ -442,6 +490,10 @@ bool resolvePatterns(ParseContext &context) {
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
+	traceResolution(
+		"start sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" + std::to_string(bodyReferences.size()) +
+		" global_refs=" + std::to_string(globalReferences.size())
+	);
 	bool hadPatternParseError = false;
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
@@ -482,6 +534,7 @@ bool resolvePatterns(ParseContext &context) {
 	auto invalidateStaleMatches = [&](PatternDefinition *definition, SectionType treeType) {
 		auto lessSpecific = context.patternTrees[(size_t)treeType]->findLessSpecificDefinitions(definition->patternElements);
 		std::sort(lessSpecific.begin(), lessSpecific.end(), definitionComesBefore);
+		traceResolution("invalidate base=" + definitionTraceId(definition) + " candidates=" + std::to_string(lessSpecific.size()));
 		for (PatternDefinition *lessDef : lessSpecific) {
 			auto it = definitionToReferences.find(lessDef);
 			if (it == definitionToReferences.end())
@@ -511,10 +564,12 @@ bool resolvePatterns(ParseContext &context) {
 	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
 		PatternDefinition *existing =
 			context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
+		traceResolution("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
 		if (existing) {
 			Diagnostic diag(Diagnostic::Level::Error, "Duplicate pattern definition", definition->range);
 			diag.relatedInfo.push_back({"Conflicts with this definition", existing->range});
 			context.diagnostics.push_back(std::move(diag));
+			traceResolution("duplicate " + definitionTraceId(definition) + " vs " + definitionTraceId(existing));
 		}
 		invalidateStaleMatches(definition, treeType);
 	};
@@ -524,6 +579,10 @@ bool resolvePatterns(ParseContext &context) {
 		bool madeProgress = false;
 		staleInvalidationOccurred = false;
 		size_t sectionsBefore = unResolvedSections.size();
+		traceResolution(
+			"iter " + std::to_string(resolutionIteration) + " begin sections=" + std::to_string(unResolvedSections.size()) +
+			" body_refs=" + std::to_string(bodyReferences.size())
+		);
 
 		// each iteration, we go over all sections first
 		std::erase_if(unResolvedSections, [&](Section *section) {
@@ -569,7 +628,7 @@ bool resolvePatterns(ParseContext &context) {
 		if (staleInvalidationOccurred)
 			madeProgress = true;
 
-		if (resolveReferences(context, bodyReferences, true, &definitionToReferences))
+		if (resolveReferences(context, bodyReferences, true, &definitionToReferences, "body"))
 			madeProgress = true;
 
 		// Resolve type constraints on definition elements ({type:name} syntax).
@@ -655,6 +714,7 @@ bool resolvePatterns(ParseContext &context) {
 		// The cyclic body references will then resolve against the newly-added definitions
 		// in the next iteration.
 		if (!madeProgress) {
+			traceResolution("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
 			if (unResolvedSections.empty())
 				break; // no sections to force-resolve and no progress — truly stuck
 			// Force-resolve all remaining sections by adding their definitions as-is.
@@ -706,12 +766,16 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 2: resolve global references (all definitions are now in the tree)
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
-		resolveReferences(context, globalReferences, false);
+		resolveReferences(context, globalReferences, false, nullptr, "global");
 		if (globalReferences.empty())
 			break;
 	}
 
 	if (!unResolvedSections.empty() || !bodyReferences.empty() || !globalReferences.empty()) {
+		traceResolution(
+			"failed sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" +
+			std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
+		);
 		for (Section *sec : unResolvedSections) {
 			for (PatternDefinition *def : sec->patternDefinitions) {
 				context.diagnostics.push_back(Diagnostic(
