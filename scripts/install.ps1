@@ -210,29 +210,7 @@ function Write-LlvmDiscoveryDiagnostics {
         }
     }
 
-    $diagnosticRoots = @(
-        (Join-Path ${env:ProgramFiles} "LLVM"),
-        (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
-        (Join-Path ${env:USERPROFILE} "Documents\LLVM"),
-        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
-        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
-        (Join-Path ${env:ProgramData} "chocolatey\lib"),
-        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM"),
-        (Join-Path ${env:LOCALAPPDATA} "Microsoft\WinGet\Packages"),
-        "C:\hostedtoolcache"
-    )
-
-    $configs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
-    if ($configs.Count -gt 0) {
-        Write-Host "Discovered LLVM CMake config candidates:" -ForegroundColor DarkYellow
-        foreach ($path in $configs) {
-            Write-Host ("  - {0}" -f $path) -ForegroundColor DarkYellow
-        }
-    } else {
-        Write-Host "No LLVM CMake config file found in diagnostic roots." -ForegroundColor DarkYellow
-    }
-
-    Write-Host "Skipping full-drive fallback scan to keep CI responsive." -ForegroundColor DarkYellow
+    Write-Host "Skipping recursive root scans during diagnostics to keep CI responsive." -ForegroundColor DarkYellow
 
     $llvmRoot = Join-Path ${env:ProgramFiles} "LLVM"
     Write-Host ("Program Files LLVM root exists: {0}" -f (Test-Path $llvmRoot)) -ForegroundColor DarkYellow
@@ -240,6 +218,12 @@ function Write-LlvmDiscoveryDiagnostics {
     Write-Host ("Program Files LLVM lib exists: {0}" -f (Test-Path $llvmLib)) -ForegroundColor DarkYellow
     $llvmCmake = Join-Path $llvmLib "cmake\llvm"
     Write-Host ("Program Files LLVM cmake dir exists: {0}" -f (Test-Path $llvmCmake)) -ForegroundColor DarkYellow
+    if (Test-Path $llvmCmake) {
+        Write-Host "Program Files LLVM cmake dir entries:" -ForegroundColor DarkYellow
+        Get-ChildItem -Path $llvmCmake -File -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
+            Write-Host ("  - {0}" -f $_.Name) -ForegroundColor DarkYellow
+        }
+    }
 }
 
 function Find-LlvmConfigInVisualStudio {
@@ -318,22 +302,6 @@ function Find-LlvmConfig {
         return $visualStudioLlvm
     }
 
-    $searchRoots = @(
-        (Join-Path ${env:ProgramFiles} "LLVM"),
-        (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
-        (Join-Path ${env:USERPROFILE} "Documents\LLVM"),
-        (Join-Path ${env:ProgramData} "chocolatey\lib"),
-        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM"),
-        (Join-Path ${env:LOCALAPPDATA} "Microsoft\WinGet\Packages")
-    )
-
-    foreach ($root in $searchRoots) {
-        $config = Find-FirstLlvmConfigInRoot -Root $root
-        if ($config) {
-            return $config
-        }
-    }
-
     $llvmConfigExe = Get-Command llvm-config -ErrorAction SilentlyContinue
     if ($llvmConfigExe) {
         try {
@@ -351,16 +319,6 @@ function Find-LlvmConfig {
         } catch {
             Write-Warning ("llvm-config --cmakedir failed: {0}" -f $_.Exception.Message)
         }
-    }
-
-    $diagnosticRoots = @(
-        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
-        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
-        "C:\hostedtoolcache"
-    )
-    $diagnosticConfigs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
-    if ($diagnosticConfigs.Count -gt 0) {
-        return Get-Item $diagnosticConfigs[0]
     }
 
     return $null
