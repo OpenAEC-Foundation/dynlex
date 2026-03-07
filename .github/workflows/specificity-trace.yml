@@ -1,14 +1,21 @@
-name: Specificity Trace
+name: Cross-Platform Trace Compare
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
   workflow_dispatch:
+    inputs:
+      source_file:
+        description: Source file to compile for trace comparison
+        required: true
+        default: tests/required/specificity/main.dl
+        type: string
+      trace_env:
+        description: Trace env var assignment (empty to disable)
+        required: false
+        default: DYNLEX_TRACE_RESOLUTION=1
+        type: string
 
 jobs:
-  trace-specificity:
+  trace-compile:
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +55,7 @@ jobs:
         run: ./scripts/build.sh --lint=false
         shell: bash
 
-      - name: Run specificity trace
+      - name: Run traced compile
         shell: bash
         run: |
           set -euo pipefail
@@ -58,8 +65,15 @@ jobs:
             COMPILER=./build/dynlex.exe
           fi
 
+          SOURCE_FILE="${{ inputs.source_file }}"
+          TRACE_ENV="${{ inputs.trace_env }}"
+
           set +e
-          DYNLEX_TRACE_RESOLUTION=1 "$COMPILER" tests/required/specificity/main.dl -o trace/specificity.out >trace/stdout.log 2>trace/stderr.log
+          if [ -n "$TRACE_ENV" ]; then
+            env "$TRACE_ENV" "$COMPILER" "$SOURCE_FILE" -o trace/compiled.out >trace/stdout.log 2>trace/stderr.log
+          else
+            "$COMPILER" "$SOURCE_FILE" -o trace/compiled.out >trace/stdout.log 2>trace/stderr.log
+          fi
           status=$?
           set -e
           echo "$status" > trace/exit_code.txt
@@ -69,11 +83,11 @@ jobs:
       - name: Upload trace artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: specificity-trace-${{ matrix.label }}
+          name: trace-${{ matrix.label }}
           path: trace/*
 
   compare-traces:
-    needs: trace-specificity
+    needs: trace-compile
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -89,9 +103,9 @@ jobs:
 
           root = pathlib.Path("traces")
           targets = {
-              "linux": root / "specificity-trace-linux",
-              "macos": root / "specificity-trace-macos",
-              "windows": root / "specificity-trace-windows",
+              "linux": root / "trace-linux",
+              "macos": root / "trace-macos",
+              "windows": root / "trace-windows",
           }
 
           missing = [name for name, d in targets.items() if not d.exists()]

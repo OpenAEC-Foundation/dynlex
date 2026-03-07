@@ -8,34 +8,9 @@
 #include "sectionSection.h"
 #include "stringHierarchy.h"
 #include "syntaxConfig.h"
-#include <cstdlib>
 #include <iostream>
 #include <stack>
 using namespace std::literals;
-
-namespace {
-bool resolutionTraceEnabled() {
-	static const bool enabled = []() {
-		const char *env = std::getenv("DYNLEX_TRACE_RESOLUTION");
-		if (!env)
-			return false;
-		std::string value(env);
-		return value == "1" || value == "true" || value == "TRUE" || value == "yes" || value == "YES";
-	}();
-	return enabled;
-}
-
-void traceUnresolvedCounter(const Section *section, const char *op, int before, int after) {
-	if (!resolutionTraceEnabled())
-		return;
-	std::cerr << "[res] unresolved " << op << " sec:" << (section ? section->toString() : "<null>");
-	if (section && section->openingLine)
-		std::cerr << "@L" << section->openingLine->mergedLineIndex;
-	else
-		std::cerr << "@L?";
-	std::cerr << " " << before << "->" << after << '\n';
-}
-} // namespace
 
 // Process escape sequences in a string literal
 static std::string processEscapeSequences(std::string_view input) {
@@ -591,18 +566,14 @@ void Section::addPatternReference(PatternReference *reference) {
 }
 
 void Section::incrementUnresolved() {
-	int before = unresolvedCount;
 	if (unresolvedCount == 0 && parent) {
 		parent->incrementUnresolved();
 	}
 	unresolvedCount++;
-	traceUnresolvedCounter(this, "++", before, unresolvedCount);
 }
 
 void Section::decrementUnresolved() {
-	int before = unresolvedCount;
 	unresolvedCount--;
-	traceUnresolvedCounter(this, "--", before, unresolvedCount);
 	if (unresolvedCount == 0 && parent) {
 		parent->decrementUnresolved();
 	}
