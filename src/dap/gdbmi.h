@@ -1,4 +1,5 @@
 #pragma once
+#include "miRecord.h"
 #include <atomic>
 #include <condition_variable>
 #include <functional>
@@ -11,26 +12,6 @@
 namespace dap {
 
 using Json = nlohmann::json;
-
-// Parsed GDB MI output record
-struct MiRecord {
-	enum Type {
-		Result,		   // ^done, ^running, ^error, etc.
-		ExecAsync,	   // *stopped, *running
-		StatusAsync,   // +download, etc.
-		NotifyAsync,   // =thread-group-added, etc.
-		ConsoleStream, // ~"text"
-		TargetStream,  // @"text"
-		LogStream,	   // &"text"
-		Prompt		   // (gdb)
-	};
-
-	Type type = Prompt;
-	int token = -1;			 // command token (-1 if none)
-	std::string recordClass; // e.g. "done", "stopped", "error"
-	Json values;			 // parsed key=value pairs as JSON
-	std::string streamText;	 // for stream records
-};
 
 // Manages a GDB subprocess communicating via MI protocol
 class GdbMI {

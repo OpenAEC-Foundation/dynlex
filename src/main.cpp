@@ -136,7 +136,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	}
 
 	if (runDAP) {
-		dap::DapServer server(std::make_unique<lsp::StdioTransport>());
+		dap::DapServer server(std::make_unique<lsp::StdioTransport>(), argumentValues[0]);
 		server.run();
 		return 0;
 	}
