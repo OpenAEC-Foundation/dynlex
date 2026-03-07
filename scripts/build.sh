@@ -104,7 +104,11 @@ if [ -n "${LLVM_DIR:-}" ]; then
 fi
 
 if command -v ccache >/dev/null 2>&1; then
-    export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+    CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+    case "$CCACHE_DIR" in
+        "~/"*) CCACHE_DIR="$HOME/${CCACHE_DIR#~/}" ;;
+    esac
+    export CCACHE_DIR
     mkdir -p "$CCACHE_DIR"
     CMAKE_ARGS+=(
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
