@@ -165,6 +165,7 @@ function Write-LlvmDiscoveryDiagnostics {
     $diagnosticRoots = @(
         (Join-Path ${env:ProgramFiles} "LLVM"),
         (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM"),
         (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
         (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
         (Join-Path ${env:ProgramData} "chocolatey\lib"),
@@ -235,6 +236,7 @@ function Find-LlvmConfig {
     $searchRoots = @(
         (Join-Path ${env:ProgramFiles} "LLVM"),
         (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
+        (Join-Path ${env:USERPROFILE} "Documents\LLVM"),
         (Join-Path ${env:ProgramData} "chocolatey\lib"),
         (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM"),
         (Join-Path ${env:LOCALAPPDATA} "Microsoft\WinGet\Packages")
