@@ -170,6 +170,23 @@ function Find-LlvmConfigInKnownLayouts {
     return $null
 }
 
+function Find-LlvmConfigByDriveScan {
+    param([string]$DriveRoot = "C:\")
+
+    Write-Warning ("Running fallback recursive LLVMConfig.cmake scan in {0}. This is slower." -f $DriveRoot)
+    try {
+        $results = Get-ChildItem -Path $DriveRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction Stop |
+            Sort-Object FullName
+        if ($results) {
+            return $results[0]
+        }
+    } catch {
+        Write-Warning ("Fallback drive scan failed in '{0}': {1}" -f $DriveRoot, $_.Exception.Message)
+    }
+
+    return $null
+}
+
 function Write-LlvmDiscoveryDiagnostics {
     Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
 
@@ -203,6 +220,13 @@ function Write-LlvmDiscoveryDiagnostics {
         }
     } else {
         Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
+    }
+
+    $driveFallback = Find-LlvmConfigByDriveScan -DriveRoot "C:\"
+    if ($driveFallback) {
+        Write-Host ("Fallback drive scan found: {0}" -f $driveFallback.FullName) -ForegroundColor DarkYellow
+    } else {
+        Write-Host "Fallback drive scan did not find LLVMConfig.cmake." -ForegroundColor DarkYellow
     }
 }
 
@@ -298,6 +322,11 @@ function Find-LlvmConfig {
     $diagnosticConfigs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($diagnosticConfigs.Count -gt 0) {
         return Get-Item $diagnosticConfigs[0]
+    }
+
+    $driveConfig = Find-LlvmConfigByDriveScan -DriveRoot "C:\"
+    if ($driveConfig) {
+        return $driveConfig
     }
 
     return $null
