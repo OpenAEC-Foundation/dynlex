@@ -167,25 +167,6 @@ function Find-LlvmConfigInKnownLayouts {
     return $null
 }
 
-function Find-LlvmConfigByWhereScan {
-    Write-Warning "Running fallback where.exe scan for LLVMConfig.cmake on C:\\"
-    try {
-        $raw = & where.exe /r C:\ LLVMConfig.cmake 2>$null
-        if (-not $raw) {
-            return $null
-        }
-        $matches = @($raw | Sort-Object -Unique)
-        foreach ($candidate in $matches) {
-            if ($candidate -and (Test-Path $candidate)) {
-                return Get-Item $candidate
-            }
-        }
-    } catch {
-        Write-Warning ("where.exe fallback scan failed: {0}" -f $_.Exception.Message)
-    }
-    return $null
-}
-
 function Write-LlvmDiscoveryDiagnostics {
     Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
 
@@ -221,12 +202,7 @@ function Write-LlvmDiscoveryDiagnostics {
         Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
     }
 
-    $whereMatch = Find-LlvmConfigByWhereScan
-    if ($whereMatch) {
-        Write-Host ("where.exe fallback found: {0}" -f $whereMatch.FullName) -ForegroundColor DarkYellow
-    } else {
-        Write-Host "where.exe fallback scan did not find LLVMConfig.cmake." -ForegroundColor DarkYellow
-    }
+    Write-Host "Skipping full-drive fallback scan to keep CI responsive." -ForegroundColor DarkYellow
 
     $llvmRoot = Join-Path ${env:ProgramFiles} "LLVM"
     Write-Host ("Program Files LLVM root exists: {0}" -f (Test-Path $llvmRoot)) -ForegroundColor DarkYellow
@@ -342,11 +318,6 @@ function Find-LlvmConfig {
         return Get-Item $diagnosticConfigs[0]
     }
 
-    $whereConfig = Find-LlvmConfigByWhereScan
-    if ($whereConfig) {
-        return $whereConfig
-    }
-
     return $null
 }
 
@@ -418,21 +389,25 @@ if ($llvmConfig -and $llvmBin) {
 }
 
 if ($llvmBin) {
-    if (-not $llvmConfig) {
-        Write-LlvmDiscoveryDiagnostics
-        throw "LLVMConfig.cmake was not found under the known LLVM install roots."
-    }
-    $llvmCmake = Split-Path -Parent $llvmConfig.FullName
-
     Add-GitHubPathIfPresent -PathValue $llvmBin
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Git\bin")
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "nodejs")
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Go\bin")
 
+    if (-not $llvmConfig) {
+        Write-LlvmDiscoveryDiagnostics
+        Write-Warning "Proceeding without LLVM_DIR. CMake will attempt automatic LLVM package discovery."
+    } else {
+        $llvmCmake = Split-Path -Parent $llvmConfig.FullName
+        if ($env:GITHUB_ENV) {
+            $llvmCmakeUnix = $llvmCmake -replace '\\', '/'
+            Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmakeUnix"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_VERSION=20"
+        }
+    }
+
     if ($env:GITHUB_ENV) {
-        $llvmCmakeUnix = $llvmCmake -replace '\\', '/'
-        Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmakeUnix"
         Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_VERSION=20"
     }
 
@@ -440,7 +415,11 @@ if ($llvmBin) {
     Write-Host "LLVM tools installed at: $llvmBin" -ForegroundColor Green
     Write-Host "Use these environment variables when building in this shell:"
     Write-Host ('$env:PATH="' + $llvmBin + ';$env:PATH"')
-    Write-Host ('$env:LLVM_DIR="' + $llvmCmake + '"')
+    if ($llvmConfig) {
+        Write-Host ('$env:LLVM_DIR="' + $llvmCmake + '"')
+    } else {
+        Write-Host '$env:LLVM_DIR should be set manually if CMake cannot auto-discover LLVM.'
+    }
 } else {
     throw "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
 }
