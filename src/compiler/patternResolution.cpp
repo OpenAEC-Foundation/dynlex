@@ -8,9 +8,7 @@
 #include "variable.h"
 #include <algorithm>
 #include <climits>
-#include <cstdint>
 #include <list>
-#include <queue>
 #include <ranges>
 #include <tuple>
 #include <unordered_set>
@@ -28,26 +26,31 @@ static bool definitionComesBefore(const PatternDefinition *a, const PatternDefin
 	return definitionSortKey(a) < definitionSortKey(b);
 }
 
-static std::tuple<int, int, uintptr_t> sectionSortKey(const Section *section) {
+static std::tuple<int, int, int, std::string> sectionSortKey(const Section *section) {
 	if (!section)
-		return {INT_MAX, INT_MAX, 0};
+		return {INT_MAX, INT_MAX, INT_MAX, ""};
 
-	int lineIndex = INT_MAX;
-	if (section->openingLine)
-		lineIndex = section->openingLine->mergedLineIndex;
+	int mergedLineIndex = INT_MAX - 1;
+	int sourceLineIndex = INT_MAX - 1;
+	std::string sectionText = section->toString();
+	if (section->openingLine) {
+		mergedLineIndex = section->openingLine->mergedLineIndex;
+		sourceLineIndex = section->openingLine->sourceFileLineIndex;
+		sectionText = std::string(section->openingLine->patternText);
+	}
 
-	return {lineIndex, static_cast<int>(section->type), reinterpret_cast<uintptr_t>(section)};
+	return {mergedLineIndex, sourceLineIndex, static_cast<int>(section->type), sectionText};
 }
 
 static bool sectionComesBefore(const Section *a, const Section *b) { return sectionSortKey(a) < sectionSortKey(b); }
 
-static std::tuple<int, int, uintptr_t> referenceSortKey(const PatternReference *reference) {
+static std::tuple<int, int, int, std::string> referenceSortKey(const PatternReference *reference) {
 	if (!reference)
-		return {INT_MAX, INT_MAX, 0};
+		return {INT_MAX, INT_MAX, INT_MAX, ""};
 	const Range &r = reference->range();
 	if (!r.line)
-		return {INT_MAX - 1, r.start(), reinterpret_cast<uintptr_t>(reference)};
-	return {r.line->mergedLineIndex, r.start(), reinterpret_cast<uintptr_t>(reference)};
+		return {INT_MAX - 1, r.start(), r.end(), reference->pattern.text};
+	return {r.line->mergedLineIndex, r.start(), r.end(), reference->pattern.text};
 }
 
 static bool referenceComesBefore(const PatternReference *a, const PatternReference *b) {
@@ -800,7 +803,6 @@ bool resolvePatterns(ParseContext &context) {
 				inDegree[edge.lower]++;
 			}
 
-			std::queue<PatternDefinition *> topoQueue;
 			std::vector<PatternDefinition *> zeroInDegree;
 			zeroInDegree.reserve(inDegree.size());
 			for (auto &[def, deg] : inDegree) {
@@ -809,26 +811,26 @@ bool resolvePatterns(ParseContext &context) {
 				}
 			}
 			std::sort(zeroInDegree.begin(), zeroInDegree.end(), definitionComesBefore);
-			for (PatternDefinition *def : zeroInDegree)
-				topoQueue.push(def);
 
 			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
 			// This ensures operators like * and / (no edge between them) share the same level,
 			// enforcing left-to-right associativity for same-precedence operators.
 			size_t processedCount = 0;
 			int currentLevel = (int)involvedDefs.size();
-			while (!topoQueue.empty()) {
-				size_t waveSize = topoQueue.size();
-				for (size_t i = 0; i < waveSize; i++) {
-					PatternDefinition *def = topoQueue.front();
-					topoQueue.pop();
+			std::vector<PatternDefinition *> currentWave = zeroInDegree;
+			while (!currentWave.empty()) {
+				std::vector<PatternDefinition *> nextWave;
+				for (PatternDefinition *def : currentWave) {
 					def->precedence = currentLevel;
 					processedCount++;
 					for (PatternDefinition *lower : adjList[def]) {
 						if (--inDegree[lower] == 0)
-							topoQueue.push(lower);
+							nextWave.push_back(lower);
 					}
 				}
+				std::sort(nextWave.begin(), nextWave.end(), definitionComesBefore);
+				nextWave.erase(std::unique(nextWave.begin(), nextWave.end()), nextWave.end());
+				currentWave = std::move(nextWave);
 				currentLevel--;
 			}
 
