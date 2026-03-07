@@ -673,6 +673,34 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	}
 
+	// If we exhausted iterations but still have unresolved definition sections,
+	// do one deterministic force-resolve sweep and rematch body references.
+	// This avoids platform-dependent oscillation where stale invalidations keep
+	// progress non-zero while never reaching a fixed point.
+	if (!unResolvedSections.empty()) {
+		std::vector<Section *> remainingSections(unResolvedSections.begin(), unResolvedSections.end());
+		std::sort(remainingSections.begin(), remainingSections.end(), sectionComesBefore);
+		unResolvedSections.clear();
+
+		for (Section *section : remainingSections) {
+			section->patternDefinitionsResolved = true;
+			for (PatternDefinition *definition : section->patternDefinitions) {
+				if (!definition->resolved) {
+					definition->resolved = true;
+					SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+					addDefinitionToTree(definition, treeType);
+				}
+			}
+		}
+
+		for (int rematchIteration = 0; rematchIteration < context.options.maxResolutionIterations; rematchIteration++) {
+			if (!resolveReferences(context, bodyReferences, true, &definitionToReferences))
+				break;
+			if (bodyReferences.empty())
+				break;
+		}
+	}
+
 	// Phase 2: resolve global references (all definitions are now in the tree)
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 		resolveReferences(context, globalReferences, false);
