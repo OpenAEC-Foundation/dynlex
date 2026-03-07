@@ -40,6 +40,26 @@ static std::tuple<int, int, uintptr_t> sectionSortKey(const Section *section) {
 }
 
 static bool sectionComesBefore(const Section *a, const Section *b) { return sectionSortKey(a) < sectionSortKey(b); }
+
+static std::tuple<int, int, uintptr_t> referenceSortKey(const PatternReference *reference) {
+	if (!reference)
+		return {INT_MAX, INT_MAX, 0};
+	const Range &r = reference->range();
+	if (!r.line)
+		return {INT_MAX - 1, r.start(), reinterpret_cast<uintptr_t>(reference)};
+	return {r.line->mergedLineIndex, r.start(), reinterpret_cast<uintptr_t>(reference)};
+}
+
+static bool referenceComesBefore(const PatternReference *a, const PatternReference *b) {
+	return referenceSortKey(a) < referenceSortKey(b);
+}
+
+static void appendUniqueSection(std::vector<Section *> &sections, Section *section) {
+	if (!section)
+		return;
+	if (std::find(sections.begin(), sections.end(), section) == sections.end())
+		sections.push_back(section);
+}
 } // namespace
 
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
@@ -243,7 +263,7 @@ static void incrementVariableLikeCounts(PatternReference *reference) {
 // Remove VariableReferences created from a match, undoing addVariableReferencesFromMatch and searchParentPatterns effects.
 // If any ancestor definitions had VL→Variable promotions reverted, their sections are added to affectedSections.
 static void removeVariableReferencesFromMatch(
-	ParseContext &context, PatternReference *reference, PatternMatch &match, std::unordered_set<Section *> &affectedSections
+	ParseContext &context, PatternReference *reference, PatternMatch &match, std::vector<Section *> &affectedSections
 ) {
 	Section *refSection = reference->range().section();
 	for (VariableMatch &varMatch : match.discoveredVariables) {
@@ -317,7 +337,7 @@ static void removeVariableReferencesFromMatch(
 								element.type = PatternElement::Type::VariableLike;
 								def->resolved = false;
 								sec->patternDefinitionsResolved = false;
-								affectedSections.insert(sec);
+								appendUniqueSection(affectedSections, sec);
 							}
 						});
 					}
@@ -338,11 +358,11 @@ static void removeVariableReferencesFromMatch(
 
 // Un-resolve a reference: undo all effects and prepare it for re-matching.
 // Returns the set of definition sections that had their VL classification affected.
-static std::unordered_set<Section *> unresolveReference(
+static std::vector<Section *> unresolveReference(
 	ParseContext &context, PatternReference *reference,
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
 ) {
-	std::unordered_set<Section *> affectedSections;
+	std::vector<Section *> affectedSections;
 	if (!reference->resolved || !reference->match)
 		return affectedSections;
 
@@ -455,17 +475,20 @@ bool resolvePatterns(ParseContext &context) {
 	// and unresolve any references that matched them so they can re-match the more specific one.
 	auto invalidateStaleMatches = [&](PatternDefinition *definition, SectionType treeType) {
 		auto lessSpecific = context.patternTrees[(size_t)treeType]->findLessSpecificDefinitions(definition->patternElements);
+		std::sort(lessSpecific.begin(), lessSpecific.end(), definitionComesBefore);
 		for (PatternDefinition *lessDef : lessSpecific) {
 			auto it = definitionToReferences.find(lessDef);
 			if (it == definitionToReferences.end())
 				continue;
 			// Copy the vector since unresolveReference modifies it
 			std::vector<PatternReference *> refs = it->second;
+			std::sort(refs.begin(), refs.end(), referenceComesBefore);
 			for (PatternReference *ref : refs) {
 				if (!ref->resolved)
 					continue;
 				staleInvalidationOccurred = true;
 				auto affectedSections = unresolveReference(context, ref, definitionToReferences);
+				std::sort(affectedSections.begin(), affectedSections.end(), sectionComesBefore);
 				bodyReferences.push_back(ref);
 				// If any ancestor definitions had VL→Variable reverted, re-add their sections
 				// for re-resolution so they can re-classify correctly

@@ -1,7 +1,23 @@
 #include "patternTreeNode.h"
 #include "patternDefinition.h"
 #include <algorithm>
+#include <climits>
+#include <tuple>
 #include <unordered_set>
+
+namespace {
+static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
+	if (!def)
+		return {INT_MAX, INT_MAX, INT_MAX, ""};
+	if (!def->range.line)
+		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
+	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
+}
+
+static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
+	return definitionSortKey(a) < definitionSortKey(b);
+}
+} // namespace
 
 // Link all parent nodes to a shared child for the given element.
 // Reuses existing children where possible; creates one shared new child for parents that lack one.
@@ -240,6 +256,7 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 		),
 		result.end()
 	);
+	std::sort(result.begin(), result.end(), definitionComesBefore);
 	return result;
 }
 
