@@ -125,14 +125,9 @@ function Find-FirstFileByFilter {
         return $null
     }
 
-    try {
-        return Get-ChildItem -Path $Root -Recurse -Filter $Filter -ErrorAction Stop |
-            Sort-Object FullName |
-            Select-Object -First 1
-    } catch {
-        Write-Warning ("Failed to search '{0}' for '{1}': {2}" -f $Root, $Filter, $_.Exception.Message)
-        return $null
-    }
+    return Get-ChildItem -Path $Root -Recurse -Filter $Filter -ErrorAction SilentlyContinue |
+        Sort-Object FullName |
+        Select-Object -First 1
 }
 
 function Find-LlvmConfigsInRoots {
@@ -158,30 +153,15 @@ function Find-LlvmConfigInKnownLayouts {
         (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
         (Join-Path ${env:USERPROFILE} "Documents\LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
         (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib\cmake\llvm\LLVMConfig.cmake"),
-        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib64\cmake\llvm\LLVMConfig.cmake")
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM\lib64\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib\cmake\llvm\LLVMConfig.cmake"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib\llvm\tools\llvm\lib64\cmake\llvm\LLVMConfig.cmake")
     )
 
     foreach ($candidate in $candidates) {
         if (Test-Path $candidate) {
             return Get-Item $candidate
         }
-    }
-
-    return $null
-}
-
-function Find-LlvmConfigByDriveScan {
-    param([string]$DriveRoot = "C:\")
-
-    Write-Warning ("Running fallback recursive LLVMConfig.cmake scan in {0}. This is slower." -f $DriveRoot)
-    try {
-        $results = Get-ChildItem -Path $DriveRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction Stop |
-            Sort-Object FullName
-        if ($results) {
-            return $results[0]
-        }
-    } catch {
-        Write-Warning ("Fallback drive scan failed in '{0}': {1}" -f $DriveRoot, $_.Exception.Message)
     }
 
     return $null
@@ -222,12 +202,7 @@ function Write-LlvmDiscoveryDiagnostics {
         Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
     }
 
-    $driveFallback = Find-LlvmConfigByDriveScan -DriveRoot "C:\"
-    if ($driveFallback) {
-        Write-Host ("Fallback drive scan found: {0}" -f $driveFallback.FullName) -ForegroundColor DarkYellow
-    } else {
-        Write-Host "Fallback drive scan did not find LLVMConfig.cmake." -ForegroundColor DarkYellow
-    }
+    Write-Host "Skipping full-drive fallback scan to keep CI fast and deterministic." -ForegroundColor DarkYellow
 }
 
 function Find-LlvmConfigInVisualStudio {
@@ -244,6 +219,18 @@ function Find-LlvmConfigInVisualStudio {
         }
     } catch {
         Write-Warning ("vswhere query failed: {0}" -f $_.Exception.Message)
+    }
+
+    try {
+        $found = & $vswhere -all -products * -find '**\LLVMConfig.cmake' 2>$null
+        if ($found) {
+            $first = @($found | Sort-Object)[0]
+            if ($first -and (Test-Path $first)) {
+                return Get-Item $first
+            }
+        }
+    } catch {
+        Write-Warning ("vswhere -find for LLVMConfig.cmake failed: {0}" -f $_.Exception.Message)
     }
 
     foreach ($root in $installRoots) {
@@ -322,11 +309,6 @@ function Find-LlvmConfig {
     $diagnosticConfigs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($diagnosticConfigs.Count -gt 0) {
         return Get-Item $diagnosticConfigs[0]
-    }
-
-    $driveConfig = Find-LlvmConfigByDriveScan -DriveRoot "C:\"
-    if ($driveConfig) {
-        return $driveConfig
     }
 
     return $null
