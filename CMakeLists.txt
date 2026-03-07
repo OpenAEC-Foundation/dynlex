@@ -77,6 +77,37 @@ if(NOT LLVM_DIR)
     endif()
 endif()
 
+if(WIN32 AND NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB QUIET)
+
+    if(NOT TARGET ZLIB::ZLIB)
+        set(DYNLEX_ZLIB_HINTS "")
+        if(LLVM_DIR)
+            get_filename_component(DYNLEX_LLVM_LIB_DIR "${LLVM_DIR}/../.." ABSOLUTE)
+            get_filename_component(DYNLEX_LLVM_ROOT_DIR "${DYNLEX_LLVM_LIB_DIR}/.." ABSOLUTE)
+            list(APPEND DYNLEX_ZLIB_HINTS "${DYNLEX_LLVM_LIB_DIR}" "${DYNLEX_LLVM_ROOT_DIR}/lib")
+        endif()
+
+        find_library(DYNLEX_ZLIB_LIBRARY
+            NAMES zlibstatic zlib libz z
+            HINTS ${DYNLEX_ZLIB_HINTS}
+        )
+        find_path(DYNLEX_ZLIB_INCLUDE_DIR
+            NAMES zlib.h
+            HINTS ${DYNLEX_ZLIB_HINTS} "${DYNLEX_LLVM_ROOT_DIR}/include"
+        )
+
+        if(DYNLEX_ZLIB_LIBRARY)
+            add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+            set_target_properties(ZLIB::ZLIB PROPERTIES IMPORTED_LOCATION "${DYNLEX_ZLIB_LIBRARY}")
+            if(DYNLEX_ZLIB_INCLUDE_DIR)
+                set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_ZLIB_INCLUDE_DIR}")
+            endif()
+            message(STATUS "Using fallback ZLIB::ZLIB target: ${DYNLEX_ZLIB_LIBRARY}")
+        endif()
+    endif()
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
