@@ -197,6 +197,24 @@ function Find-LlvmConfigInKnownLayouts {
     return $null
 }
 
+function Find-LlvmConfigInGhcup {
+    $patterns = @(
+        "C:\ghcup\ghc\*\mingw\lib\cmake\llvm\LLVMConfig.cmake",
+        "C:\ghcup\ghc\*\mingw\lib\cmake\llvm\llvm-config.cmake"
+    )
+
+    $matches = @()
+    foreach ($pattern in $patterns) {
+        $matches += Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
+    }
+
+    if (@($matches).Count -eq 0) {
+        return $null
+    }
+
+    return @($matches | Sort-Object FullName)[-1]
+}
+
 function Write-LlvmDiscoveryDiagnostics {
     Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
 
@@ -301,6 +319,11 @@ function Find-LlvmConfigInVisualStudio {
 }
 
 function Find-LlvmConfig {
+    $ghcupConfig = Find-LlvmConfigInGhcup
+    if ($ghcupConfig) {
+        return $ghcupConfig
+    }
+
     $knownLayoutConfig = Find-LlvmConfigInKnownLayouts
     if ($knownLayoutConfig) {
         return $knownLayoutConfig
