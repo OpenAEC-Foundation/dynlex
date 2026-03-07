@@ -343,9 +343,11 @@ if (-not (Test-Winget)) {
 }
 
 $llvmConfig = Find-LlvmConfig
-if (-not $llvmConfig) {
+$llvmBin = Resolve-LlvmBin
+if (-not $llvmConfig -and -not $llvmBin) {
     Install-WithWinget "LLVM.LLVM"
     $llvmConfig = Find-LlvmConfig
+    $llvmBin = Resolve-LlvmBin
 }
 
 Ensure-Package "Kitware.CMake" "cmake"
@@ -355,7 +357,6 @@ Ensure-Package "Python.Python.3" "python"
 Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
 
-$llvmBin = $null
 if ($llvmConfig) {
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
     $llvmRoot = Get-LlvmRootFromConfig $llvmConfig
