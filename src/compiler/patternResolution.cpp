@@ -7,10 +7,40 @@
 #include "type.h"
 #include "variable.h"
 #include <algorithm>
+#include <climits>
+#include <cstdint>
 #include <list>
 #include <queue>
 #include <ranges>
+#include <tuple>
 #include <unordered_set>
+
+namespace {
+static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
+	if (!def)
+		return {INT_MAX, INT_MAX, INT_MAX, ""};
+	if (!def->range.line)
+		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
+	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
+}
+
+static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
+	return definitionSortKey(a) < definitionSortKey(b);
+}
+
+static std::tuple<int, int, uintptr_t> sectionSortKey(const Section *section) {
+	if (!section)
+		return {INT_MAX, INT_MAX, 0};
+
+	int lineIndex = INT_MAX;
+	if (section->openingLine)
+		lineIndex = section->openingLine->mergedLineIndex;
+
+	return {lineIndex, static_cast<int>(section->type), reinterpret_cast<uintptr_t>(section)};
+}
+
+static bool sectionComesBefore(const Section *a, const Section *b) { return sectionSortKey(a) < sectionSortKey(b); }
+} // namespace
 
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
 	int offset = reference->range().start();
@@ -748,10 +778,16 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			std::queue<PatternDefinition *> topoQueue;
+			std::vector<PatternDefinition *> zeroInDegree;
+			zeroInDegree.reserve(inDegree.size());
 			for (auto &[def, deg] : inDegree) {
-				if (deg == 0)
-					topoQueue.push(def);
+				if (deg == 0) {
+					zeroInDegree.push_back(def);
+				}
 			}
+			std::sort(zeroInDegree.begin(), zeroInDegree.end(), definitionComesBefore);
+			for (PatternDefinition *def : zeroInDegree)
+				topoQueue.push(def);
 
 			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
 			// This ensures operators like * and / (no edge between them) share the same level,
@@ -797,7 +833,17 @@ bool resolvePatterns(ParseContext &context) {
 		if (line->function)
 			expandFunction(line->function, line->section);
 	}
-	for (auto &[name, references] : context.unresolvedVariableReferences) {
+	std::vector<std::string> unresolvedNames;
+	unresolvedNames.reserve(context.unresolvedVariableReferences.size());
+	for (auto &[name, _] : context.unresolvedVariableReferences)
+		unresolvedNames.push_back(name);
+	std::sort(unresolvedNames.begin(), unresolvedNames.end());
+
+	for (const std::string &name : unresolvedNames) {
+		auto refsIt = context.unresolvedVariableReferences.find(name);
+		if (refsIt == context.unresolvedVariableReferences.end())
+			continue;
+		auto &references = refsIt->second;
 		bool isGlobal = context.declaredGlobalVariables.contains(name);
 
 		std::unordered_map<Section *, Section *> sectionToHighest;
@@ -840,7 +886,17 @@ bool resolvePatterns(ParseContext &context) {
 		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
 		for (VariableReference *ref : references)
 			groups[sectionToHighest[ref->range.section()]].push_back(ref);
-		for (auto &[highestSection, groupRefs] : groups) {
+		std::vector<Section *> orderedGroupSections;
+		orderedGroupSections.reserve(groups.size());
+		for (auto &[highestSection, _] : groups)
+			orderedGroupSections.push_back(highestSection);
+		std::sort(orderedGroupSections.begin(), orderedGroupSections.end(), sectionComesBefore);
+
+		for (Section *highestSection : orderedGroupSections) {
+			auto groupIt = groups.find(highestSection);
+			if (groupIt == groups.end())
+				continue;
+			auto &groupRefs = groupIt->second;
 			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
 				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
 			});
