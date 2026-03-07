@@ -1,10 +1,16 @@
 #include "tcpTransport.h"
-#include <arpa/inet.h>
 #include <cstring>
 #include <iostream>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 namespace lsp {
 
@@ -30,7 +36,11 @@ bool TcpTransport::isConnected() const { return socket >= 0; }
 
 void TcpTransport::close() {
 	if (socket >= 0) {
+#ifdef _WIN32
+		closesocket(socket);
+#else
 		::close(socket);
+#endif
 		socket = -1;
 	}
 }
@@ -42,6 +52,14 @@ TcpServer::TcpServer(int port) : port(port) {}
 TcpServer::~TcpServer() { shutdown(); }
 
 bool TcpServer::setup() {
+#ifdef _WIN32
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cerr << "[LSP ERROR] Failed to initialize Winsock" << std::endl;
+		return false;
+	}
+#endif
+
 	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (serverSocket < 0) {
 		std::cerr << "[LSP ERROR] Failed to create socket: " << strerror(errno) << std::endl;
@@ -50,7 +68,11 @@ bool TcpServer::setup() {
 
 	// Allow socket reuse
 	int opt = 1;
+#ifdef _WIN32
+	if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) {
+#else
 	if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+#endif
 		std::cerr << "[LSP ERROR] Failed to set socket options: " << strerror(errno) << std::endl;
 		return false;
 	}
@@ -88,7 +110,12 @@ std::unique_ptr<TcpTransport> TcpServer::acceptConnection() {
 
 void TcpServer::shutdown() {
 	if (serverSocket >= 0) {
+#ifdef _WIN32
+		closesocket(serverSocket);
+		WSACleanup();
+#else
 		::close(serverSocket);
+#endif
 		serverSocket = -1;
 	}
 }

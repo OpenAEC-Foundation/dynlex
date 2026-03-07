@@ -296,7 +296,11 @@ void LanguageServer::traceMessage(std::string_view direction, const std::string 
 	auto millis = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
 
 	std::tm tm{};
+#ifdef _WIN32
+	localtime_s(&tm, &nowTime);
+#else
 	localtime_r(&nowTime, &tm);
+#endif
 
 	(*traceStream) << "[LSP TRACE " << direction << " " << std::put_time(&tm, "%F %T") << '.' << std::setw(3)
 				   << std::setfill('0') << millis.count() << "] " << body << '\n';
