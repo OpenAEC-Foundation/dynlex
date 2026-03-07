@@ -195,7 +195,7 @@ function Write-LlvmDiscoveryDiagnostics {
         "C:\hostedtoolcache"
     )
 
-    $configs = Find-LlvmConfigsInRoots -Roots $diagnosticRoots
+    $configs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($configs.Count -gt 0) {
         Write-Host "Discovered LLVMConfig.cmake candidates:" -ForegroundColor DarkYellow
         foreach ($path in $configs) {
@@ -295,7 +295,7 @@ function Find-LlvmConfig {
         (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
         "C:\hostedtoolcache"
     )
-    $diagnosticConfigs = Find-LlvmConfigsInRoots -Roots $diagnosticRoots
+    $diagnosticConfigs = @(Find-LlvmConfigsInRoots -Roots $diagnosticRoots)
     if ($diagnosticConfigs.Count -gt 0) {
         return Get-Item $diagnosticConfigs[0]
     }
