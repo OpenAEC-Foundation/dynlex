@@ -115,6 +115,26 @@ function Find-Vswhere {
     return $null
 }
 
+function Find-FirstFileByFilter {
+    param(
+        [string]$Root,
+        [string]$Filter
+    )
+
+    if (-not (Test-Path $Root)) {
+        return $null
+    }
+
+    try {
+        return Get-ChildItem -Path $Root -Recurse -Filter $Filter -ErrorAction Stop |
+            Sort-Object FullName |
+            Select-Object -First 1
+    } catch {
+        Write-Warning ("Failed to search '{0}' for '{1}': {2}" -f $Root, $Filter, $_.Exception.Message)
+        return $null
+    }
+}
+
 function Find-LlvmConfigInVisualStudio {
     $vswhere = Find-Vswhere
     if (-not $vswhere) {
@@ -128,6 +148,7 @@ function Find-LlvmConfigInVisualStudio {
             $installRoots += $instances
         }
     } catch {
+        Write-Warning ("vswhere query failed: {0}" -f $_.Exception.Message)
     }
 
     foreach ($root in $installRoots) {
@@ -147,11 +168,9 @@ function Find-LlvmConfigInVisualStudio {
         }
 
         $llvmToolsRoot = Join-Path $root "VC\Tools\Llvm"
-        if (Test-Path $llvmToolsRoot) {
-            $config = Get-ChildItem -Path $llvmToolsRoot -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($config) {
-                return $config
-            }
+        $config = Find-FirstFileByFilter -Root $llvmToolsRoot -Filter "LLVMConfig.cmake"
+        if ($config) {
+            return $config
         }
     }
 
@@ -173,10 +192,7 @@ function Find-LlvmConfig {
     )
 
     foreach ($root in $searchRoots) {
-        if (-not (Test-Path $root)) {
-            continue
-        }
-        $config = Get-ChildItem -Path $root -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
+        $config = Find-FirstFileByFilter -Root $root -Filter "LLVMConfig.cmake"
         if ($config) {
             return $config
         }
@@ -193,14 +209,7 @@ function Find-LlvmConfig {
                 }
             }
         } catch {
-        }
-    }
-
-    if ($env:CI -eq "true") {
-        # Last resort in CI: broad scan to accommodate runner image layout changes.
-        $config = Get-ChildItem -Path "C:\" -Recurse -Filter LLVMConfig.cmake -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($config) {
-            return $config
+            Write-Warning ("llvm-config --cmakedir failed: {0}" -f $_.Exception.Message)
         }
     }
 
