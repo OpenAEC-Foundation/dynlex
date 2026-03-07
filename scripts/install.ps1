@@ -216,6 +216,15 @@ function Write-LlvmDiscoveryDiagnostics {
     Write-Host ("Program Files LLVM root exists: {0}" -f (Test-Path $llvmRoot)) -ForegroundColor DarkYellow
     $llvmLib = Join-Path $llvmRoot "lib"
     Write-Host ("Program Files LLVM lib exists: {0}" -f (Test-Path $llvmLib)) -ForegroundColor DarkYellow
+    if (Test-Path $llvmLib) {
+        Write-Host "Program Files LLVM .lib entries (first 40):" -ForegroundColor DarkYellow
+        Get-ChildItem -Path $llvmLib -Filter *.lib -File -ErrorAction SilentlyContinue |
+            Sort-Object Name |
+            Select-Object -First 40 |
+            ForEach-Object {
+                Write-Host ("  - {0}" -f $_.Name) -ForegroundColor DarkYellow
+            }
+    }
     $llvmCmake = Join-Path $llvmLib "cmake\llvm"
     Write-Host ("Program Files LLVM cmake dir exists: {0}" -f (Test-Path $llvmCmake)) -ForegroundColor DarkYellow
     if (Test-Path $llvmCmake) {
