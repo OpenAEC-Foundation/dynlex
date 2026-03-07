@@ -135,6 +135,55 @@ function Find-FirstFileByFilter {
     }
 }
 
+function Find-LlvmConfigsInRoots {
+    param([string[]]$Roots)
+
+    $results = @()
+    foreach ($root in $Roots) {
+        $config = Find-FirstFileByFilter -Root $root -Filter "LLVMConfig.cmake"
+        if ($config) {
+            $results += $config.FullName
+        }
+    }
+
+    return $results | Sort-Object -Unique
+}
+
+function Write-LlvmDiscoveryDiagnostics {
+    Write-Warning "LLVM auto-discovery failed. Emitting diagnostic scan results."
+
+    $commands = @("clang", "clang++", "llvm-config")
+    foreach ($cmd in $commands) {
+        $entry = Get-Command $cmd -ErrorAction SilentlyContinue
+        if ($entry) {
+            Write-Host ("Found command {0}: {1}" -f $cmd, $entry.Source) -ForegroundColor DarkYellow
+        } else {
+            Write-Host ("Command not found on PATH: {0}" -f $cmd) -ForegroundColor DarkYellow
+        }
+    }
+
+    $diagnosticRoots = @(
+        (Join-Path ${env:ProgramFiles} "LLVM"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM"),
+        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramData} "chocolatey\lib"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\LLVM"),
+        (Join-Path ${env:LOCALAPPDATA} "Microsoft\WinGet\Packages"),
+        "C:\hostedtoolcache"
+    )
+
+    $configs = Find-LlvmConfigsInRoots -Roots $diagnosticRoots
+    if ($configs.Count -gt 0) {
+        Write-Host "Discovered LLVMConfig.cmake candidates:" -ForegroundColor DarkYellow
+        foreach ($path in $configs) {
+            Write-Host ("  - {0}" -f $path) -ForegroundColor DarkYellow
+        }
+    } else {
+        Write-Host "No LLVMConfig.cmake found in diagnostic roots." -ForegroundColor DarkYellow
+    }
+}
+
 function Find-LlvmConfigInVisualStudio {
     $vswhere = Find-Vswhere
     if (-not $vswhere) {
@@ -213,6 +262,16 @@ function Find-LlvmConfig {
         }
     }
 
+    $diagnosticRoots = @(
+        (Join-Path ${env:ProgramFiles} "Microsoft Visual Studio"),
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio"),
+        "C:\hostedtoolcache"
+    )
+    $diagnosticConfigs = Find-LlvmConfigsInRoots -Roots $diagnosticRoots
+    if ($diagnosticConfigs.Count -gt 0) {
+        return Get-Item $diagnosticConfigs[0]
+    }
+
     return $null
 }
 
@@ -285,6 +344,7 @@ if ($llvmConfig -and $llvmBin) {
 
 if ($llvmBin) {
     if (-not $llvmConfig) {
+        Write-LlvmDiscoveryDiagnostics
         throw "LLVMConfig.cmake was not found under the known LLVM install roots."
     }
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
