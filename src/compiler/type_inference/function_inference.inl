@@ -37,6 +37,14 @@ static Function *cloneFunctionTree(Function *expr) {
 	return clone;
 }
 
+static void deleteFunctionTree(Function *expr) {
+	if (!expr)
+		return;
+	for (Function *arg : expr->arguments)
+		deleteFunctionTree(arg);
+	delete expr;
+}
+
 static bool inferFunction(
 	Function *&expr, InferenceContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Function *> &macroBindings

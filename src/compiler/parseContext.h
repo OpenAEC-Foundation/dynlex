@@ -151,6 +151,7 @@ struct ParseContext {
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
 	ParseContext() {}
+	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});

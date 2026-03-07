@@ -11,11 +11,72 @@ MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternRef
 }
 
 MatchProgress::MatchProgress(const MatchProgress &other) {
-	// use implicit copy assignment to shallow copy all members,
-	// then deep copy parent. this avoids maintaining a member list.
-	*this = other;
-	if (other.parent)
-		parent = new MatchProgress(*other.parent);
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = other.match;
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
+}
+
+MatchProgress::MatchProgress(MatchProgress &&other) noexcept
+	: parent(other.parent), context(other.context), rootNode(other.rootNode), currentNode(other.currentNode),
+	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type),
+	  sourceElementIndex(other.sourceElementIndex), sourceCharIndex(other.sourceCharIndex),
+	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex) {
+	other.parent = nullptr;
+}
+
+MatchProgress &MatchProgress::operator=(const MatchProgress &other) {
+	if (this == &other)
+		return *this;
+
+	delete parent;
+	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = other.match;
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	return *this;
+}
+
+MatchProgress &MatchProgress::operator=(MatchProgress &&other) noexcept {
+	if (this == &other)
+		return *this;
+
+	delete parent;
+	parent = other.parent;
+	other.parent = nullptr;
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = std::move(other.match);
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	return *this;
+}
+
+MatchProgress::~MatchProgress() {
+	delete parent;
+	parent = nullptr;
 }
 
 bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr; }
@@ -47,12 +108,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 		if (canBeSubmatch()) {
 			// Try extending as left operand of a new function first (lower LIFO priority).
 			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
-			if (canStartSubmatch() && rootNode->argumentChild) {
-				MatchProgress clone = *this;
-				// the old parent progress becomes 'grandparent'
-				if (parent)
-					clone.parent = new MatchProgress(*parent);
-				clone.rootNode = rootNode;
+				if (canStartSubmatch() && rootNode->argumentChild) {
+					MatchProgress clone = *this;
+					clone.rootNode = rootNode;
 				// advance past the argument slot — the completed sub-function occupies it
 				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};

@@ -267,6 +267,10 @@ static bool inferFunction(
 	recomputeRanges(expr);
 	sortArgumentsRecursive(expr);
 	Function *originalExpr = cloneFunctionTree(expr);
+	auto releaseOriginalExpr = [&]() {
+		deleteFunctionTree(originalExpr);
+		originalExpr = nullptr;
+	};
 	auto inferNestedForGrouping = [&](Function *&subExpr) -> bool {
 		auto isMacroPatternCall = [&](Function *candidate) -> bool {
 			if (!candidate || candidate->kind != Function::Kind::PatternCall || !candidate->patternMatch ||
@@ -310,8 +314,10 @@ static bool inferFunction(
 				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail),
 				 originalExpr->range}
 			);
+			releaseOriginalExpr();
 			return false;
 		}
+		releaseOriginalExpr();
 		return true;
 	}
 	if (expandsToSelectIntrinsic(expr)) {
@@ -320,8 +326,10 @@ static bool inferFunction(
 				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail),
 				 originalExpr->range}
 			);
+			releaseOriginalExpr();
 			return false;
 		}
+		releaseOriginalExpr();
 		return true;
 	}
 	if (mustOwnEntireRange(expr)) {
@@ -345,6 +353,7 @@ static bool inferFunction(
 			);
 			return false;
 		}
+		releaseOriginalExpr();
 		return true;
 	}
 	std::vector<Function *> flatNodes;
@@ -425,8 +434,10 @@ static bool inferFunction(
 				{Diagnostic::Level::Error, buildTypeFailureDiagnostic(originalExpr, context.typeFailureDetail),
 				 originalExpr->range}
 			);
+			releaseOriginalExpr();
 			return false;
 		}
+		releaseOriginalExpr();
 		return true;
 	}
 
@@ -435,6 +446,7 @@ static bool inferFunction(
 		ambiguousOperatorCount--;
 	if (ambiguousOperatorCount > 8) {
 		context.addDiagnostic({Diagnostic::Level::Error, "Too many ambiguous operand groupings", expr->range});
+		releaseOriginalExpr();
 		return false;
 	}
 
@@ -535,6 +547,7 @@ static bool inferFunction(
 		sortArgumentsRecursive(expr);
 		resetFunctionTypes(expr);
 		inferOrderedFunction(expr, context, macroBindings);
+		releaseOriginalExpr();
 		return context.typesValid;
 	}
 

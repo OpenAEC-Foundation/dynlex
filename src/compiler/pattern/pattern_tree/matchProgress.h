@@ -9,9 +9,11 @@ struct PatternReference;
 //  (which way should we search first? should we substitute a literal as variable or not?)
 struct MatchProgress {
 	MatchProgress(ParseContext *context, PatternReference *patternReference);
-	// copy constructor, for cloning matchprogresses
 	MatchProgress(const MatchProgress &other);
-	MatchProgress &operator=(const MatchProgress &) = default;
+	MatchProgress(MatchProgress &&other) noexcept;
+	MatchProgress &operator=(const MatchProgress &other);
+	MatchProgress &operator=(MatchProgress &&other) noexcept;
+	~MatchProgress();
 	// the parent match we continue matching when this match is finished (can be promoted to grandparent)
 	// we don't need child nodes, since the youngest node is always the matching once.
 	MatchProgress *parent{};

@@ -1,6 +1,39 @@
 #include "parseContext.h"
+#include "function.h"
 #include "matchProgress.h"
+#include "patternDefinition.h"
+#include "patternReference.h"
+#include "patternTreeNode.h"
+#include "section/classSection.h"
+#include "section/variable.h"
+#include "variableReference.h"
+#include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Support/ManagedStatic.h"
 #include <iostream>
+#include <unordered_set>
+
+namespace {
+void deleteFunctionTree(Function *function, std::unordered_set<Function *> &visited) {
+	if (!function || !visited.insert(function).second)
+		return;
+	for (Function *argument : function->arguments)
+		deleteFunctionTree(argument, visited);
+	delete function;
+}
+
+void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode *> &visited) {
+	if (!node || !visited.insert(node).second)
+		return;
+	for (auto &[_, child] : node->literalChildren)
+		deletePatternTree(child, visited);
+	deletePatternTree(node->argumentChild, visited);
+	deletePatternTree(node->wordChild, visited);
+	delete node;
+}
+} // namespace
 
 static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outType) {
 	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
@@ -91,4 +124,97 @@ void ParseContext::processEncounteredIntrinsic(Function *intrinsicExpr) {
 	std::string aliasName = (std::string)macroSection->patternDefinitions.front()->range.subString;
 	if (!aliasName.empty())
 		typeAliasNames.emplace(aliasType, std::move(aliasName));
+}
+
+ParseContext::~ParseContext() {
+	std::unordered_set<Function *> visitedFunctions;
+	for (auto &line : ownedCodeLines) {
+		if (line && line->function)
+			deleteFunctionTree(line->function, visitedFunctions);
+	}
+
+	std::unordered_set<Section *> visitedSections;
+	std::unordered_set<PatternDefinition *> visitedDefinitions;
+	std::unordered_set<PatternReference *> visitedReferences;
+	std::unordered_set<VariableReference *> visitedVarRefs;
+	std::unordered_set<Variable *> visitedVars;
+	std::vector<Section *> sectionStack;
+	if (mainSection)
+		sectionStack.push_back(mainSection);
+
+	while (!sectionStack.empty()) {
+		Section *section = sectionStack.back();
+		sectionStack.pop_back();
+		if (!section || !visitedSections.insert(section).second)
+			continue;
+		for (Section *child : section->children)
+			sectionStack.push_back(child);
+
+		for (PatternDefinition *definition : section->patternDefinitions) {
+			if (definition && visitedDefinitions.insert(definition).second)
+				delete definition;
+		}
+		for (PatternReference *reference : section->patternReferences) {
+			if (!reference || !visitedReferences.insert(reference).second)
+				continue;
+			if (reference->function)
+				deleteFunctionTree(reference->function, visitedFunctions);
+			delete reference->match;
+			reference->match = nullptr;
+			delete reference;
+		}
+		for (auto &[_, refs] : section->variableReferences) {
+			for (VariableReference *reference : refs) {
+				if (reference && visitedVarRefs.insert(reference).second)
+					delete reference;
+			}
+		}
+		for (auto &[_, reference] : section->variableDefinitions) {
+			if (reference && visitedVarRefs.insert(reference).second)
+				delete reference;
+		}
+		for (auto &[_, variable] : section->variables) {
+			if (variable && visitedVars.insert(variable).second)
+				delete variable;
+		}
+		if (section->type == SectionType::Class) {
+			auto *classSection = static_cast<ClassSection *>(section);
+			if (classSection->classDefinition) {
+				for (FieldDefinition &field : classSection->classDefinition->fields) {
+					if (field.declaredType.typeFunction)
+						deleteFunctionTree(field.declaredType.typeFunction, visitedFunctions);
+					field.declaredType.typeFunction = nullptr;
+				}
+				delete classSection->classDefinition;
+				classSection->classDefinition = nullptr;
+			}
+		}
+	}
+
+	for (auto &[_, refs] : unresolvedVariableReferences) {
+		for (VariableReference *reference : refs) {
+			if (reference && visitedVarRefs.insert(reference).second)
+				delete reference;
+		}
+	}
+
+	for (Section *section : visitedSections)
+		delete section;
+	mainSection = nullptr;
+
+	std::unordered_set<PatternTreeNode *> visitedPatternNodes;
+	for (PatternTreeNode *&tree : patternTrees) {
+		deletePatternTree(tree, visitedPatternNodes);
+		tree = nullptr;
+	}
+
+	delete diBuilder;
+	diBuilder = nullptr;
+	delete static_cast<llvm::IRBuilder<> *>(llvmBuilder);
+	llvmBuilder = nullptr;
+	delete llvmModule;
+	llvmModule = nullptr;
+	delete llvmContext;
+	llvmContext = nullptr;
+	llvm::llvm_shutdown();
 }

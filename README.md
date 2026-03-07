@@ -52,6 +52,17 @@ $env:LLVM_DIR="$env:ProgramFiles\LLVM\lib\cmake\llvm"
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
 
+## ASan Leak Check (With Third-Party Suppressions)
+
+For sanitizer leak checks that ignore known process-lifetime allocations from
+third-party libraries (for example LLVM internals), use:
+
+```bash
+./scripts/run_asan_leak_check.sh
+```
+
+By default this runs `build-asan/dynlex` with `scripts/lsan.supp`.
+
 ## Performance Snapshot (vs Python)
 
 From repository benchmarks:

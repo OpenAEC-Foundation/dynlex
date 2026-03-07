@@ -249,18 +249,20 @@ static void removeVariableReferencesFromMatch(
 				// Walk up parent sections to find the definition that was modified
 				for (Section *sec = refSection; sec; sec = sec->parent) {
 					// Remove variableDefinitions entry if it was created by searchParentPatterns
-					auto defIt = sec->variableDefinitions.find(name);
-					if (defIt != sec->variableDefinitions.end()) {
-						// Remove the definition VarRef from variableReferences too
-						auto vit = sec->variableReferences.find(name);
-						if (vit != sec->variableReferences.end()) {
-							auto &vec = vit->second;
-							vec.erase(std::remove(vec.begin(), vec.end(), defIt->second), vec.end());
-							if (vec.empty())
-								sec->variableReferences.erase(vit);
+						auto defIt = sec->variableDefinitions.find(name);
+						if (defIt != sec->variableDefinitions.end()) {
+							VariableReference *definitionRef = defIt->second;
+							// Remove the definition VarRef from variableReferences too
+							auto vit = sec->variableReferences.find(name);
+							if (vit != sec->variableReferences.end()) {
+								auto &vec = vit->second;
+								vec.erase(std::remove(vec.begin(), vec.end(), definitionRef), vec.end());
+								if (vec.empty())
+									sec->variableReferences.erase(vit);
+							}
+							sec->variableDefinitions.erase(defIt);
+							delete definitionRef;
 						}
-						sec->variableDefinitions.erase(defIt);
-					}
 
 					// Revert Variable→VariableLike in pattern definitions and mark for re-resolution.
 					// Must remove from tree BEFORE changing element types (tree was built with old types).
@@ -296,7 +298,8 @@ static void removeVariableReferencesFromMatch(
 			}
 		}
 
-		varMatch.variableReference = nullptr;
+			delete varMatch.variableReference;
+			varMatch.variableReference = nullptr;
 	}
 	for (PatternMatch &subMatch : match.subMatches) {
 		removeVariableReferencesFromMatch(context, reference, subMatch, affectedSections);
@@ -323,6 +326,7 @@ static std::unordered_set<Section *> unresolveReference(
 	untrackMatchDefinitions(*reference->match, reference, defToRefs);
 
 	// Clear match and mark unresolved
+	delete reference->match;
 	reference->match = nullptr;
 	reference->resolved = false;
 	reference->range().section()->incrementUnresolved();
@@ -854,8 +858,21 @@ bool resolvePatterns(ParseContext &context) {
 				}
 			}
 
-			highestSection->variableDefinitions[name] = definition;
-			highestSection->variables[name] = new Variable(name, definition, groupIsGlobal);
+				auto existingDefinition = highestSection->variableDefinitions.find(name);
+				if (existingDefinition != highestSection->variableDefinitions.end() &&
+					existingDefinition->second != definition) {
+					VariableReference *oldDefinition = existingDefinition->second;
+					auto refsIt = highestSection->variableReferences.find(name);
+					if (refsIt != highestSection->variableReferences.end()) {
+						auto &refs = refsIt->second;
+						refs.erase(std::remove(refs.begin(), refs.end(), oldDefinition), refs.end());
+						if (refs.empty())
+							highestSection->variableReferences.erase(refsIt);
+					}
+					delete oldDefinition;
+				}
+				highestSection->variableDefinitions[name] = definition;
+				highestSection->variables[name] = new Variable(name, definition, groupIsGlobal);
 			for (VariableReference *ref : groupRefs) {
 				if (ref != definition)
 					ref->definition = definition;

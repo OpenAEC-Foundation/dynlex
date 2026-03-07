@@ -247,10 +247,11 @@ static Function *createArrayLiteral(Section *section, ParseContext &context, Ran
 		if (elementNode->character == '"') {
 			elementExpr = createStringLiteral(range, elementNode);
 		} else {
+			StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
 			elementExpr = section->detectPatternsRecursively(
-				context, range.subRange(elementNode->start, elementNode->end),
-				elementNode->cloneWithOffset(-elementNode->start), SectionType::Function
+				context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function
 			);
+			delete clonedNode;
 		}
 		if (!elementExpr)
 			return false;
@@ -290,10 +291,11 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 	// Process children to find arguments
 	auto delegate = [this, &context, &range, &expr](StringHierarchy *childNode) -> bool {
+		StringHierarchy *clonedNode = childNode->cloneWithOffset(-childNode->start);
 		Function *childExpr = detectPatternsRecursively(
-			context, range.subRange(childNode->start, childNode->end), childNode->cloneWithOffset(-childNode->start),
-			SectionType::Function
+			context, range.subRange(childNode->start, childNode->end), clonedNode, SectionType::Function
 		);
+		delete clonedNode;
 		if (!childExpr)
 			return false;
 		childExpr->isExplicitGroup = true;
@@ -319,16 +321,17 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				intrinsicExpr->kind = Function::Kind::IntrinsicCall;
 
 				// Process arguments - first argument is the intrinsic name
-				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
-					Function *argExpr;
-					if (argNode->character == '"') {
-						argExpr = createStringLiteral(range, argNode);
-					} else {
-						argExpr = detectPatternsRecursively(
-							context, range.subRange(argNode->start, argNode->end), argNode->cloneWithOffset(-argNode->start),
-							SectionType::Function
-						);
-					}
+					auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
+						Function *argExpr;
+						if (argNode->character == '"') {
+							argExpr = createStringLiteral(range, argNode);
+						} else {
+							StringHierarchy *clonedNode = argNode->cloneWithOffset(-argNode->start);
+							argExpr = detectPatternsRecursively(
+								context, range.subRange(argNode->start, argNode->end), clonedNode, SectionType::Function
+							);
+							delete clonedNode;
+						}
 					if (!argExpr)
 						return false;
 
@@ -513,23 +516,28 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
 		forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
-			if (element.text != reference->name)
-				return;
-			auto markFound = [&] {
-				if (!found) {
-					VariableReference *varRef = new VariableReference(
-						Range(
-							definition->range.line, definition->range.start() + element.startPos,
-							definition->range.start() + element.startPos + element.text.length()
-						),
-						element.text
-					);
-					variableDefinitions[element.text] = varRef;
-					variableReferences[element.text].push_back(varRef);
-					reference->definition = varRef;
-				}
-				found = true;
-			};
+				if (element.text != reference->name)
+					return;
+				auto markFound = [&] {
+					if (!found) {
+						auto existing = variableDefinitions.find(element.text);
+						if (existing != variableDefinitions.end()) {
+							reference->definition = existing->second;
+						} else {
+							VariableReference *varRef = new VariableReference(
+								Range(
+									definition->range.line, definition->range.start() + element.startPos,
+									definition->range.start() + element.startPos + element.text.length()
+								),
+								element.text
+							);
+							variableDefinitions[element.text] = varRef;
+							variableReferences[element.text].push_back(varRef);
+							reference->definition = varRef;
+						}
+					}
+					found = true;
+				};
 			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
 				if (element.type != PatternElement::Type::Variable)
 					element.type = PatternElement::Type::Variable;

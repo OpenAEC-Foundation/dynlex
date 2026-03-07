@@ -40,6 +40,7 @@ struct Section {
 			parent->children.push_back(this);
 		}
 	}
+	virtual ~Section() = default;
 	SectionType type;
 	Section *parent{};
 	std::vector<PatternDefinition *> patternDefinitions;
