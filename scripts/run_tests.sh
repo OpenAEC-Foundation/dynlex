@@ -27,9 +27,6 @@ esac
 
 # Known failing tests — these don't count as unexpected failures
 KNOWN_FAILURES=""
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    KNOWN_FAILURES="specificity"
-fi
 
 normalize_output() {
     printf "%s" "$1" | tr -d '\r'
