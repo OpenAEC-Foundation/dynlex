@@ -219,8 +219,11 @@ static void trackMatchDefinitions(
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
 ) {
 	if (match.matchedEndNode && !match.matchedEndNode->matchingDefinitions.empty()) {
-		for (auto *def : match.matchedEndNode->matchingDefinitions)
-			defToRefs[def].push_back(reference);
+		for (auto *def : match.matchedEndNode->matchingDefinitions) {
+			auto &refs = defToRefs[def];
+			if (std::find(refs.begin(), refs.end(), reference) == refs.end())
+				refs.push_back(reference);
+		}
 	}
 	for (PatternMatch &subMatch : match.subMatches) {
 		trackMatchDefinitions(subMatch, reference, defToRefs);
