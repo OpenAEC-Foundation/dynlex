@@ -10,10 +10,20 @@ on:
 jobs:
   build-and-test-linux:
     runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ~/.cache/ccache
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: linux-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            linux-ccache-${{ runner.os }}-
 
       - name: Install dependencies
         run: ./scripts/install.sh
@@ -24,12 +34,34 @@ jobs:
           chmod +x ./build/dynlex
           ./scripts/run_tests.sh
 
+      - name: ccache stats
+        if: always()
+        run: ccache -s || true
+
   build-and-test-macos:
     runs-on: macos-14
+    env:
+      CCACHE_DIR: ~/.cache/ccache
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Restore Homebrew downloads cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: macos-brew-${{ runner.os }}-${{ hashFiles('scripts/install.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            macos-brew-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: macos-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            macos-ccache-${{ runner.os }}-
 
       - name: Install dependencies
         run: ./scripts/install.sh
@@ -49,6 +81,10 @@ jobs:
           LLVM_DIR="$LLVM_DIR" DYNLEX_LLVM_VERSION=20 ./scripts/build.sh --lint=false
           chmod +x ./build/dynlex
           ./scripts/run_tests.sh
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s || true
 
   build-and-test-windows:
     runs-on: windows-latest

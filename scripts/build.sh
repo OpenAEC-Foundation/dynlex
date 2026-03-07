@@ -103,6 +103,15 @@ if [ -n "${LLVM_DIR:-}" ]; then
     CMAKE_ARGS+=("-DLLVM_DIR=$LLVM_DIR")
 fi
 
+if command -v ccache >/dev/null 2>&1; then
+    export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+    mkdir -p "$CCACHE_DIR"
+    CMAKE_ARGS+=(
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    )
+fi
+
 cmake "${CMAKE_ARGS[@]}"
 
 cd build

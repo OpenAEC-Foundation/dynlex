@@ -33,6 +33,7 @@ install_linux_deps() {
             "clang-tidy-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION-dev" \
+            ccache \
             cmake \
             ninja-build \
             git \
@@ -50,6 +51,7 @@ install_linux_deps() {
             clang-tools-extra \
             llvm \
             llvm-devel \
+            ccache \
             cmake \
             ninja-build \
             git \
@@ -65,6 +67,7 @@ install_linux_deps() {
         sudo pacman -Sy --noconfirm \
             clang \
             llvm \
+            ccache \
             cmake \
             ninja \
             git \
@@ -83,6 +86,7 @@ install_linux_deps() {
             clang-tools \
             llvm \
             llvm-devel \
+            ccache \
             cmake \
             ninja \
             git \
@@ -105,10 +109,10 @@ install_macos_deps() {
 
     brew update
     if brew info llvm@20 >/dev/null 2>&1; then
-        brew install llvm@20 cmake ninja git node go
+        brew install llvm@20 ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
     else
-        brew install llvm cmake ninja git node go
+        brew install llvm ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm)"
     fi
 
