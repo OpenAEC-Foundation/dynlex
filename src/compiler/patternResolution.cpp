@@ -540,6 +540,7 @@ bool resolvePatterns(ParseContext &context) {
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
 	bool staleInvalidationOccurred = false;
+	std::vector<Section *> pendingRequeueSections;
 
 	// Helper: after adding a definition to the tree, find less-specific definitions
 	// and unresolve any references that matched them so they can re-match the more specific one.
@@ -564,9 +565,7 @@ bool resolvePatterns(ParseContext &context) {
 				// If any ancestor definitions had VL→Variable reverted, re-add their sections
 				// for re-resolution so they can re-classify correctly
 				for (Section *sec : affectedSections) {
-					if (std::find(unResolvedSections.begin(), unResolvedSections.end(), sec) == unResolvedSections.end()) {
-						unResolvedSections.push_back(sec);
-					}
+					appendUniqueSection(pendingRequeueSections, sec);
 				}
 			}
 		}
@@ -643,6 +642,14 @@ bool resolvePatterns(ParseContext &context) {
 			}
 			return section->patternDefinitionsResolved;
 		});
+		if (!pendingRequeueSections.empty()) {
+			std::sort(pendingRequeueSections.begin(), pendingRequeueSections.end(), sectionComesBefore);
+			for (Section *sec : pendingRequeueSections) {
+				if (std::find(unResolvedSections.begin(), unResolvedSections.end(), sec) == unResolvedSections.end())
+					unResolvedSections.push_back(sec);
+			}
+			pendingRequeueSections.clear();
+		}
 
 		if (unResolvedSections.size() < sectionsBefore)
 			madeProgress = true;
