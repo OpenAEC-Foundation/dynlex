@@ -289,7 +289,8 @@ static void appendPatternCallBindings(
 }
 
 static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
-	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
+	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
+		intrinsicExpr->arguments.size() < 2)
 		return false;
 
 	Function *kindExpr = intrinsicExpr->arguments[1];
@@ -317,7 +318,7 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 		return false;
 	}
 
-	if (intrinsicExpr->arguments.size() >= 3) {
+	if (intrinsicExpr->arguments.size() > 2) {
 		Function *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)
@@ -402,9 +403,10 @@ static bool resolveTypeReferenceFunction(
 	}
 
 	if (expr->kind == Function::Kind::IntrinsicCall) {
+		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 		if (tryParseIntrinsicTypeReference(expr, outTypeRef))
 			return true;
-		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
+		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
 			if (!resolveTypeReferenceFunction(context, expr->arguments[1], bindings, innerTypeRef) ||
 				innerTypeRef.kind != DataType::Kind::Type)
@@ -413,14 +415,14 @@ static bool resolveTypeReferenceFunction(
 			outTypeRef = innerTypeRef;
 			return true;
 		}
-		if (expr->intrinsicName == "array" && expr->arguments.size() >= 2) {
+		if (kind == IntrinsicKind::Array) {
 			int arraySize = 0;
 			if (!evaluateCompileTimeInteger(context, expr->arguments[1], bindings, arraySize))
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Array;
 			outTypeRef.arraySize = arraySize;
-			if (expr->arguments.size() >= 3) {
+			if (expr->arguments.size() > 2) {
 				DataType elementTypeRef;
 				if (!resolveTypeReferenceFunction(context, expr->arguments[2], bindings, elementTypeRef) ||
 					elementTypeRef.kind != DataType::Kind::Type)
@@ -771,19 +773,21 @@ bool analyzeSections(ParseContext &context) {
 }
 
 bool isArithmeticOperator(const std::string &name) {
-	return name == "add" || name == "subtract" || name == "multiply" || name == "divide" || name == "modulo";
+	return isArithmeticIntrinsic(arithmeticIntrinsicKind(name));
 }
 
-bool isPointerArithmeticOperator(const std::string &name) { return name == "add" || name == "subtract"; }
+bool isPointerArithmeticOperator(const std::string &name) {
+	return isPointerArithmeticIntrinsic(arithmeticIntrinsicKind(name));
+}
 
 bool isComparisonOperator(const std::string &name) {
-	const IntrinsicInfo *info = findIntrinsic(name);
-	return info && info->returnKind == IntrinsicReturnKind::Bool && name != "and" && name != "or" && name != "not";
+	return isComparisonIntrinsicKind(intrinsicKind(name));
 }
 
 bool isMathFunction(const std::string &name) {
 	const IntrinsicInfo *info = findIntrinsic(name);
-	return info && info->returnKind == IntrinsicReturnKind::SameAsArgs && !isArithmeticOperator(name) && name != "negate";
+	return info && info->returnKind == IntrinsicReturnKind::SameAsArgs && !isArithmeticOperator(name) &&
+		   intrinsicKind(name) != IntrinsicKind::Negate;
 }
 
 PatternDefinition *selectOverload(

@@ -168,7 +168,8 @@ static bool hasMultipleBoundaryArguments(Function *function) {
 static bool functionContainsExplicitReturn(Function *function) {
 	if (!function)
 		return false;
-	if (function->kind == Function::Kind::IntrinsicCall && function->intrinsicName == "return")
+	if (function->kind == Function::Kind::IntrinsicCall &&
+		intrinsicKind(function->intrinsicName) == IntrinsicKind::Return)
 		return true;
 	std::unordered_map<std::string, Function *> ignoredBindings;
 	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
@@ -184,7 +185,8 @@ static bool functionContainsExplicitReturn(Function *function) {
 static bool expandsToSelectIntrinsic(Function *function) {
 	std::unordered_map<std::string, Function *> ignoredBindings;
 	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
-	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall && bodyExpr->intrinsicName == "select";
+	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall &&
+		   intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Select;
 }
 
 static bool sectionDefaultsToVoid(Section *section) {
@@ -210,19 +212,19 @@ static bool mustOwnEntireRange(Function *function) {
 			continue;
 		sawCandidate = true;
 		if (def->section->isMacro) {
-			std::unordered_map<std::string, Function *> ignoredBindings;
-			Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
-			if (!bodyExpr)
+				std::unordered_map<std::string, Function *> ignoredBindings;
+				Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
+				if (!bodyExpr)
+					return false;
+				if (bodyExpr->kind == Function::Kind::IntrinsicCall) {
+					if (intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Return)
+						continue;
+					const IntrinsicInfo *info = findIntrinsic(bodyExpr->intrinsicName);
+					if (info && info->returnKind == IntrinsicReturnKind::Void)
+						continue;
+				}
 				return false;
-			if (bodyExpr->kind == Function::Kind::IntrinsicCall) {
-				if (bodyExpr->intrinsicName == "return")
-					continue;
-				const IntrinsicInfo *info = findIntrinsic(bodyExpr->intrinsicName);
-				if (info && info->returnKind == IntrinsicReturnKind::Void)
-					continue;
 			}
-			return false;
-		}
 		if (!sectionDefaultsToVoid(def->section))
 			return false;
 	}

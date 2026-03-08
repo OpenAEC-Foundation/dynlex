@@ -9,7 +9,6 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include <unordered_map>
 
 // Helper to extract string literal from function
 std::string getStringLiteral(Function *expr) {
@@ -167,20 +166,102 @@ static llvm::Value *generateMatrixMatrixMultiply(
 	return resultValue;
 }
 
+static llvm::Value *generateScalarOrVectorArithmetic(
+	ParseContext &context, ArithmeticIntrinsicKind op, llvm::Value *left, llvm::Value *right, DataType resultType
+) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	if (resultType.kind == DataType::Kind::Vector) {
+		switch (op) {
+		case ArithmeticIntrinsicKind::Add:
+			return builder.CreateFAdd(left, right, "vadd");
+		case ArithmeticIntrinsicKind::Subtract:
+			return builder.CreateFSub(left, right, "vsub");
+		case ArithmeticIntrinsicKind::Multiply:
+			return builder.CreateFMul(left, right, "vmul");
+		case ArithmeticIntrinsicKind::Divide:
+			return builder.CreateFDiv(left, right, "vdiv");
+		default:
+			return nullptr;
+		}
+	}
+	if (resultType.kind == DataType::Kind::Float) {
+		switch (op) {
+		case ArithmeticIntrinsicKind::Add:
+			return builder.CreateFAdd(left, right, "fadd");
+		case ArithmeticIntrinsicKind::Subtract:
+			return builder.CreateFSub(left, right, "fsub");
+		case ArithmeticIntrinsicKind::Multiply:
+			return builder.CreateFMul(left, right, "fmul");
+		case ArithmeticIntrinsicKind::Divide:
+			return builder.CreateFDiv(left, right, "fdiv");
+		case ArithmeticIntrinsicKind::Modulo:
+			return builder.CreateFRem(left, right, "fmod");
+		default:
+			return nullptr;
+		}
+	}
+	switch (op) {
+	case ArithmeticIntrinsicKind::Add:
+		return builder.CreateAdd(left, right, "add");
+	case ArithmeticIntrinsicKind::Subtract:
+		return builder.CreateSub(left, right, "sub");
+	case ArithmeticIntrinsicKind::Multiply:
+		return builder.CreateMul(left, right, "mul");
+	case ArithmeticIntrinsicKind::Divide:
+		return builder.CreateSDiv(left, right, "div");
+	case ArithmeticIntrinsicKind::Modulo:
+		return builder.CreateSRem(left, right, "mod");
+	default:
+		return nullptr;
+	}
+}
+
+static llvm::Intrinsic::ID mathIntrinsicId(IntrinsicKind kind) {
+	switch (kind) {
+	case IntrinsicKind::Sin:
+		return llvm::Intrinsic::sin;
+	case IntrinsicKind::Cos:
+		return llvm::Intrinsic::cos;
+	case IntrinsicKind::Sqrt:
+		return llvm::Intrinsic::sqrt;
+	case IntrinsicKind::Abs:
+		return llvm::Intrinsic::fabs;
+	case IntrinsicKind::Floor:
+		return llvm::Intrinsic::floor;
+	case IntrinsicKind::Ceil:
+		return llvm::Intrinsic::ceil;
+	case IntrinsicKind::Round:
+		return llvm::Intrinsic::round;
+	case IntrinsicKind::Exp:
+		return llvm::Intrinsic::exp;
+	case IntrinsicKind::Log:
+		return llvm::Intrinsic::log;
+	case IntrinsicKind::Pow:
+		return llvm::Intrinsic::pow;
+	case IntrinsicKind::Min:
+		return llvm::Intrinsic::minnum;
+	case IntrinsicKind::Max:
+		return llvm::Intrinsic::maxnum;
+	default:
+		return llvm::Intrinsic::not_intrinsic;
+	}
+}
+
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
 llvm::Value *generateIntrinsicCode(
 	ParseContext &context, const std::string &name, const std::vector<Function *> &args, DataType resultType
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	IntrinsicKind kind = intrinsicKind(name);
 
-	if (name == "discard") {
+	if (kind == IntrinsicKind::Discard) {
 		// Evaluate the argument for side effects and discard the result
 		generateFunctionCode(context, args[0]);
 		return nullptr;
 	}
 
-	if (name == "store") {
+	if (kind == IntrinsicKind::Store) {
 		// Generate the value in the current (original) macro scope first,
 		// before resolving the destination which may cross scope boundaries.
 		DataType valType = getEffectiveType(context, args[1]);
@@ -198,7 +279,8 @@ llvm::Value *generateIntrinsicCode(
 		Function *destExpr = args[0];
 		resolveThroughMacroLayers(context, destExpr);
 
-		if (destExpr->kind == Function::Kind::IntrinsicCall && destExpr->intrinsicName == "property") {
+			if (destExpr->kind == Function::Kind::IntrinsicCall &&
+				intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
 			// Storing to a class field: generate GEP + store
 			Function *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
 			DataType instType = getEffectiveType(context, instExpr);
@@ -281,84 +363,56 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
+	ArithmeticIntrinsicKind arithmeticOp = arithmeticIntrinsicKind(name);
+
 	// Arithmetic intrinsics
-	if (isArithmeticOperator(name)) {
+	if (isArithmeticIntrinsic(arithmeticOp)) {
 		llvm::Value *left = generateFunctionCode(context, args[0]);
 		llvm::Value *right = generateFunctionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
 
 		// Pointer arithmetic: ptr +/- integer → GEP
-		if (isPointerArithmeticOperator(name) && (leftType.isPointer() || rightType.isPointer())) {
+		if (isPointerArithmeticIntrinsic(arithmeticOp) && (leftType.isPointer() || rightType.isPointer())) {
 			llvm::Value *ptrVal = leftType.isPointer() ? left : right;
 			llvm::Value *indexVal = leftType.isPointer() ? right : left;
 			DataType indexType = leftType.isPointer() ? rightType : leftType;
 			DataType ptrType = leftType.isPointer() ? leftType : rightType;
 			llvm::Type *elemType = ptrType.dereferenced().toLLVM(*context.llvmContext);
 			indexVal = coerceIndexToSizeT(context, indexVal, indexType);
-			if (name == "subtract" && leftType.isPointer())
+			if (arithmeticOp == ArithmeticIntrinsicKind::Subtract && leftType.isPointer())
 				indexVal = builder.CreateNeg(indexVal, "neg_idx");
 			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
 		}
 
-		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Vector && name == "multiply")
+		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Vector &&
+			arithmeticOp == ArithmeticIntrinsicKind::Multiply)
 			return generateMatrixVectorMultiply(context, left, leftType, right, rightType);
-		if (leftType.kind == DataType::Kind::Vector && rightType.kind == DataType::Kind::Matrix && name == "multiply") {
+		if (leftType.kind == DataType::Kind::Vector && rightType.kind == DataType::Kind::Matrix &&
+			arithmeticOp == ArithmeticIntrinsicKind::Multiply) {
 			// Treat row-vector * matrix as transpose-compatible multiply by transposing the operand order.
 			return generateMatrixVectorMultiply(context, right, rightType, left, leftType);
 		}
-		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Matrix && name == "multiply")
+		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Matrix &&
+			arithmeticOp == ArithmeticIntrinsicKind::Multiply)
 			return generateMatrixMatrixMultiply(context, left, leftType, right, rightType);
 
 		left = ensureType(context, left, leftType, resultType);
 		right = ensureType(context, right, rightType, resultType);
-
-		if (resultType.kind == DataType::Kind::Vector) {
-			if (name == "add")
-				return builder.CreateFAdd(left, right, "vadd");
-			if (name == "subtract")
-				return builder.CreateFSub(left, right, "vsub");
-			if (name == "multiply")
-				return builder.CreateFMul(left, right, "vmul");
-			if (name == "divide")
-				return builder.CreateFDiv(left, right, "vdiv");
-		}
-		if (resultType.kind == DataType::Kind::Float) {
-			if (name == "add")
-				return builder.CreateFAdd(left, right, "fadd");
-			if (name == "subtract")
-				return builder.CreateFSub(left, right, "fsub");
-			if (name == "multiply")
-				return builder.CreateFMul(left, right, "fmul");
-			if (name == "divide")
-				return builder.CreateFDiv(left, right, "fdiv");
-			if (name == "modulo")
-				return builder.CreateFRem(left, right, "fmod");
-		} else {
-			if (name == "add")
-				return builder.CreateAdd(left, right, "add");
-			if (name == "subtract")
-				return builder.CreateSub(left, right, "sub");
-			if (name == "multiply")
-				return builder.CreateMul(left, right, "mul");
-			if (name == "divide")
-				return builder.CreateSDiv(left, right, "div");
-			if (name == "modulo")
-				return builder.CreateSRem(left, right, "mod");
-		}
-		return nullptr;
+		return generateScalarOrVectorArithmetic(context, arithmeticOp, left, right, resultType);
 	}
 
 	// Comparison intrinsics
-	if (isComparisonOperator(name)) {
+	if (isComparisonIntrinsicKind(kind)) {
 		llvm::Value *left = generateFunctionCode(context, args[0]);
 		llvm::Value *right = generateFunctionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
-		if ((name == "equal" || name == "not equal") && leftType.isPointer() && rightType.isPointer() &&
-			leftType == rightType) {
-			llvm::Value *cmp =
-				name == "equal" ? builder.CreateICmpEQ(left, right, "peq") : builder.CreateICmpNE(left, right, "pne");
+			if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
+				rightType.isPointer() &&
+				leftType == rightType) {
+				llvm::Value *cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
+																: builder.CreateICmpNE(left, right, "pne");
 			assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
 			if (resultType.kind == DataType::Kind::Bool)
 				return cmp;
@@ -372,32 +426,32 @@ llvm::Value *generateIntrinsicCode(
 
 		llvm::Value *cmp;
 		if (promoted.kind == DataType::Kind::Float) {
-			if (name == "less than")
-				cmp = builder.CreateFCmpOLT(left, right, "flt");
-			else if (name == "less than or equal")
-				cmp = builder.CreateFCmpOLE(left, right, "fle");
-			else if (name == "greater than")
-				cmp = builder.CreateFCmpOGT(left, right, "fgt");
-			else if (name == "greater than or equal")
-				cmp = builder.CreateFCmpOGE(left, right, "fge");
-			else if (name == "equal")
-				cmp = builder.CreateFCmpOEQ(left, right, "feq");
-			else
-				cmp = builder.CreateFCmpONE(left, right, "fne");
-		} else {
-			if (name == "less than")
-				cmp = builder.CreateICmpSLT(left, right, "lt");
-			else if (name == "less than or equal")
-				cmp = builder.CreateICmpSLE(left, right, "le");
-			else if (name == "greater than")
-				cmp = builder.CreateICmpSGT(left, right, "gt");
-			else if (name == "greater than or equal")
-				cmp = builder.CreateICmpSGE(left, right, "ge");
-			else if (name == "equal")
-				cmp = builder.CreateICmpEQ(left, right, "eq");
-			else
-				cmp = builder.CreateICmpNE(left, right, "ne");
-		}
+				if (kind == IntrinsicKind::LessThan)
+					cmp = builder.CreateFCmpOLT(left, right, "flt");
+				else if (kind == IntrinsicKind::LessThanOrEqual)
+					cmp = builder.CreateFCmpOLE(left, right, "fle");
+				else if (kind == IntrinsicKind::GreaterThan)
+					cmp = builder.CreateFCmpOGT(left, right, "fgt");
+				else if (kind == IntrinsicKind::GreaterThanOrEqual)
+					cmp = builder.CreateFCmpOGE(left, right, "fge");
+				else if (kind == IntrinsicKind::Equal)
+					cmp = builder.CreateFCmpOEQ(left, right, "feq");
+				else
+					cmp = builder.CreateFCmpONE(left, right, "fne");
+			} else {
+				if (kind == IntrinsicKind::LessThan)
+					cmp = builder.CreateICmpSLT(left, right, "lt");
+				else if (kind == IntrinsicKind::LessThanOrEqual)
+					cmp = builder.CreateICmpSLE(left, right, "le");
+				else if (kind == IntrinsicKind::GreaterThan)
+					cmp = builder.CreateICmpSGT(left, right, "gt");
+				else if (kind == IntrinsicKind::GreaterThanOrEqual)
+					cmp = builder.CreateICmpSGE(left, right, "ge");
+				else if (kind == IntrinsicKind::Equal)
+					cmp = builder.CreateICmpEQ(left, right, "eq");
+				else
+					cmp = builder.CreateICmpNE(left, right, "ne");
+			}
 
 		assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
 		if (resultType.kind == DataType::Kind::Bool)
@@ -406,7 +460,7 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	// Logical operators
-	if (name == "and" || name == "or") {
+	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		llvm::Value *left = generateFunctionCode(context, args[0]);
 		llvm::Value *right = generateFunctionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
@@ -415,13 +469,13 @@ llvm::Value *generateIntrinsicCode(
 		left = convertConditionToBool(context, left, leftType, "tobool");
 		right = convertConditionToBool(context, right, rightType, "tobool");
 
-		if (name == "and")
+		if (kind == IntrinsicKind::And)
 			return builder.CreateAnd(left, right, "and");
 		else
 			return builder.CreateOr(left, right, "or");
 	}
 
-	if (name == "not") {
+	if (kind == IntrinsicKind::Not) {
 		llvm::Value *val = generateFunctionCode(context, args[0]);
 		DataType valType = getEffectiveType(context, args[0]);
 
@@ -431,7 +485,7 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	// Negate
-	if (name == "negate") {
+	if (kind == IntrinsicKind::Negate) {
 		llvm::Value *val = generateFunctionCode(context, args[0]);
 		DataType valType = getEffectiveType(context, args[0]);
 		if (valType.kind == DataType::Kind::Float)
@@ -442,16 +496,8 @@ llvm::Value *generateIntrinsicCode(
 	// Math functions (sin, cos, sqrt, abs, floor, ceil, round, exp, log, pow, atan2, min, max)
 	if (isMathFunction(name)) {
 		context.requiredLibraries.insert("m");
-		// Map intrinsic names to LLVM intrinsic IDs
-		static const std::unordered_map<std::string, llvm::Intrinsic::ID> floatIntrinsics = {
-			{"sin", llvm::Intrinsic::sin},	   {"cos", llvm::Intrinsic::cos},	  {"sqrt", llvm::Intrinsic::sqrt},
-			{"abs", llvm::Intrinsic::fabs},	   {"floor", llvm::Intrinsic::floor}, {"ceil", llvm::Intrinsic::ceil},
-			{"round", llvm::Intrinsic::round}, {"exp", llvm::Intrinsic::exp},	  {"log", llvm::Intrinsic::log},
-			{"pow", llvm::Intrinsic::pow},	   {"min", llvm::Intrinsic::minnum},  {"max", llvm::Intrinsic::maxnum},
-		};
-
-		auto it = floatIntrinsics.find(name);
-		if (it != floatIntrinsics.end()) {
+		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
+		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
 			// Use f32 for SPIR-V targets, f64 for native targets.
 			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
@@ -461,7 +507,7 @@ llvm::Value *generateIntrinsicCode(
 				DataType valType = getEffectiveType(context, args[0]);
 				if (valType.kind != DataType::Kind::Float || valType.numericSize != mathFloatBytes)
 					val = ensureType(context, val, valType, mathFloat);
-				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {val->getType()});
+				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {val->getType()});
 				llvm::Value *result = builder.CreateCall(fn, {val}, name);
 				// Convert back to f64 for SPIR-V so the rest of the computation stays consistent
 				if (context.options.emitSPIRV)
@@ -474,7 +520,7 @@ llvm::Value *generateIntrinsicCode(
 			DataType rightType = getEffectiveType(context, args[1]);
 			left = ensureType(context, left, leftType, mathFloat);
 			right = ensureType(context, right, rightType, mathFloat);
-			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, it->second, {left->getType()});
+			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
 			llvm::Value *result = builder.CreateCall(fn, {left, right}, name);
 			if (context.options.emitSPIRV)
 				result = builder.CreateFPExt(result, llvm::Type::getDoubleTy(*context.llvmContext));
@@ -482,7 +528,7 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		// atan2: no LLVM intrinsic, call libm
-		if (name == "atan2") {
+			if (kind == IntrinsicKind::Atan2) {
 			llvm::Value *y = generateFunctionCode(context, args[0]);
 			llvm::Value *x = generateFunctionCode(context, args[1]);
 			DataType yType = getEffectiveType(context, args[0]);
@@ -504,13 +550,13 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	// Pointer intrinsics
-	if (name == "address of") {
+	if (kind == IntrinsicKind::AddressOf) {
 		llvm::Value *ptr = getVariablePointer(context, args[0]);
 		assert(ptr && "address of requires a variable");
 		return ptr;
 	}
 
-	if (name == "dereference") {
+	if (kind == IntrinsicKind::Dereference) {
 		llvm::Value *ptrVal = generateFunctionCode(context, args[0]);
 		DataType ptrType = getEffectiveType(context, args[0]);
 		DataType elemType = ptrType.dereferenced();
@@ -519,7 +565,7 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	// Array/pointer intrinsics
-	if (name == "store at") {
+	if (kind == IntrinsicKind::StoreAt) {
 		llvm::Value *ptr = generateFunctionCode(context, args[0]);
 		llvm::Value *index = generateFunctionCode(context, args[1]);
 		llvm::Value *value = generateFunctionCode(context, args[2]);
@@ -542,7 +588,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "load at") {
+	if (kind == IntrinsicKind::LoadAt) {
 		llvm::Value *ptr = generateFunctionCode(context, args[0]);
 		llvm::Value *index = generateFunctionCode(context, args[1]);
 		DataType ptrType = getEffectiveType(context, args[0]);
@@ -562,7 +608,7 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateAlignedLoad(getLLVMType(context, elementType), elementPtr, llvm::Align(8));
 	}
 
-	if (name == "loop while") {
+	if (kind == IntrinsicKind::LoopWhile) {
 		Section *bodySection = context.currentBodySection;
 		assert(bodySection && "loop while requires a body section");
 
@@ -587,7 +633,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "if") {
+	if (kind == IntrinsicKind::If) {
 		Section *bodySection = context.currentBodySection;
 		assert(bodySection && "if requires a body section");
 
@@ -608,7 +654,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "else" || name == "else if") {
+	if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 		Section *bodySection = context.currentBodySection;
 		assert(bodySection && "else/else if requires a body section");
 
@@ -632,7 +678,7 @@ llvm::Value *generateIntrinsicCode(
 			pred->getTerminator()->replaceUsesOfWith(currentBlock, newExitBlock);
 		}
 
-		if (name == "else if") {
+			if (kind == IntrinsicKind::ElseIf) {
 			llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
 			llvm::Value *condValue = generateFunctionCode(context, args[0]);
@@ -649,7 +695,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "switch") {
+	if (kind == IntrinsicKind::Switch) {
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
 		llvm::Value *switchValue = generateFunctionCode(context, args[0]);
@@ -681,7 +727,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "case") {
+	if (kind == IntrinsicKind::Case) {
 		Section *bodySection = context.currentBodySection;
 		assert(bodySection && "case requires a body section");
 
@@ -707,15 +753,13 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "return") {
-		if (args.size() >= 1) {
-			llvm::Value *returnValue = generateFunctionCode(context, args[0]);
-			builder.CreateRet(returnValue);
-		}
+	if (kind == IntrinsicKind::Return) {
+		llvm::Value *returnValue = generateFunctionCode(context, args[0]);
+		builder.CreateRet(returnValue);
 		return nullptr;
 	}
 
-	if (name == "call") {
+	if (kind == IntrinsicKind::Call) {
 		// Format: args[0]="library", args[1]="function", args[2]="return type", args[3+]=actual args
 		std::string library = getStringLiteral(args[0]);
 		std::string funcName = getStringLiteral(args[1]);
@@ -790,7 +834,7 @@ llvm::Value *generateIntrinsicCode(
 		return callResult;
 	}
 
-	if (name == "cast") {
+	if (kind == IntrinsicKind::Cast) {
 		// Format: args[0]=value, args[1]=type (TypeReference)
 		// Class cast: reinterpret as pointer to the class struct
 		if (resultType.kind == DataType::Kind::Class) {
@@ -813,17 +857,17 @@ llvm::Value *generateIntrinsicCode(
 		return ensureType(context, val, fromType, toType);
 	}
 
-	if (name == "type") {
+	if (kind == IntrinsicKind::Type) {
 		// Types are compile-time only — no runtime code
 		return nullptr;
 	}
 
-	if (name == "type of" || name == "array" || name == "build info") {
+	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array || kind == IntrinsicKind::BuildInfo) {
 		// Compile-time only — no runtime code
 		return nullptr;
 	}
 
-	if (name == "select") {
+	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue =
 			evaluateCompileTimeValue(args[0], context, context.macroFunctionBindings, context.currentCodegenInstantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
@@ -836,12 +880,12 @@ llvm::Value *generateIntrinsicCode(
 		return generateFunctionCode(context, args[*condition ? 1 : 2]);
 	}
 
-	if (name == "add pointer depth") {
+	if (kind == IntrinsicKind::AddPointerDepth) {
 		// Compile-time only — modifies TypeReference, no runtime code
 		return nullptr;
 	}
 
-	if (name == "construct") {
+		if (kind == IntrinsicKind::Construct) {
 		if (resultType.kind == DataType::Kind::Array) {
 			llvm::Type *arrayType = getLLVMType(context, resultType);
 			llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
@@ -857,24 +901,18 @@ llvm::Value *generateIntrinsicCode(
 			return builder.CreateAlignedLoad(arrayType, alloca, llvm::Align(8), "array_load");
 		}
 
-		if (resultType.kind == DataType::Kind::Vector) {
-			assert(static_cast<int>(args.size()) - 1 == resultType.vectorSize() && "vector construct arity mismatch");
-			return buildVectorValue(context, resultType, args, 1);
-		}
+			if (resultType.kind == DataType::Kind::Vector) {
+				return buildVectorValue(context, resultType, args, 1);
+			}
 
 		if (resultType.kind == DataType::Kind::Matrix) {
-			if (args.size() == 2)
-				return buildMatrixFromFlatArray(context, resultType, args[1]);
-			assert(
-				static_cast<int>(args.size()) - 1 == resultType.matrixRows() * resultType.matrixColumns() &&
-				"matrix construct arity mismatch"
-			);
-			return buildMatrixFromScalarArgs(context, resultType, args, 1);
-		}
+				if (args.size() == 2)
+					return buildMatrixFromFlatArray(context, resultType, args[1]);
+				return buildMatrixFromScalarArgs(context, resultType, args, 1);
+			}
 
-		if (resultType.kind != DataType::Kind::Class) {
-			assert(args.size() == 2 && "construct for non-aggregate types expects exactly one value");
-			llvm::Value *val = generateFunctionCode(context, args[1]);
+			if (resultType.kind != DataType::Kind::Class) {
+				llvm::Value *val = generateFunctionCode(context, args[1]);
 			DataType fromType = getEffectiveType(context, args[1]);
 			return ensureType(context, val, fromType, resultType);
 		}
@@ -903,7 +941,7 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateAlignedLoad(structType, alloca, llvm::Align(8), "struct_load");
 	}
 
-	if (name == "property") {
+	if (kind == IntrinsicKind::Property) {
 		// Format: args[0]=instance, args[1]=fieldname (string literal from {word:} capture)
 		Function *ownerExpr = args[0];
 		DataType instType = getEffectiveType(context, ownerExpr);
@@ -959,7 +997,7 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	// Shader I/O intrinsics (only available in --emit-spirv mode)
-	if (name == "shader input") {
+	if (kind == IntrinsicKind::ShaderInput) {
 		// @intrinsic("shader input", globalName) → load vec4 from named shader input global
 		std::string inputName = getStringLiteral(args[0]);
 		std::string globalName;
@@ -983,7 +1021,7 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateLoad(vec4Ty, global, inputName);
 	}
 
-	if (name == "shader uniform") {
+	if (kind == IntrinsicKind::ShaderUniform) {
 		// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
 		// The SPIR-V patcher wraps this in a UBO struct with proper decorations
 		std::string uniformName = getStringLiteral(args[0]);
@@ -1002,7 +1040,7 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
 	}
 
-	if (name == "shader output") {
+	if (kind == IntrinsicKind::ShaderOutput) {
 		// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
 		llvm::Value *r = generateFunctionCode(context, args[0]);
 		llvm::Value *g = generateFunctionCode(context, args[1]);
@@ -1043,7 +1081,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-	if (name == "extract element") {
+	if (kind == IntrinsicKind::ExtractElement) {
 		// @intrinsic("extract element", vector, index) → extract scalar from vector
 		llvm::Value *vec = generateFunctionCode(context, args[0]);
 		if (!vec)

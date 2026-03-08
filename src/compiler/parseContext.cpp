@@ -4,6 +4,7 @@
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "patternTreeNode.h"
+#include "intrinsicInfo.h"
 #include "section/classSection.h"
 #include "section/variable.h"
 #include "variableReference.h"
@@ -36,7 +37,8 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 } // namespace
 
 static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outType) {
-	if (!intrinsicExpr || intrinsicExpr->intrinsicName != "type" || intrinsicExpr->arguments.size() < 2)
+	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
+		intrinsicExpr->arguments.size() < 2)
 		return false;
 
 	Function *kindExpr = intrinsicExpr->arguments[1];
@@ -60,7 +62,7 @@ static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outTyp
 		return false;
 	}
 
-	if (intrinsicExpr->arguments.size() >= 3) {
+	if (intrinsicExpr->arguments.size() > 2) {
 		Function *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)

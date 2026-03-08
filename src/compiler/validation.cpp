@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "function.h"
+#include "intrinsicInfo.h"
 #include <algorithm>
 
 using Bindings = std::unordered_map<std::string, Function *>;
@@ -58,7 +59,7 @@ static VarUsage analyzeVariableUsage(
 
 	switch (expr->kind) {
 	case Function::Kind::IntrinsicCall:
-		if (expr->intrinsicName == "store") {
+		if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Store) {
 			Function *dest = resolveVar(expr->arguments[1], bindings);
 			if (dest && dest->kind == Function::Kind::Variable && dest->variable && dest->variable->name == varName)
 				usage.writes = true;

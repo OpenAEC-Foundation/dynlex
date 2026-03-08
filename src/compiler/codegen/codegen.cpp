@@ -151,7 +151,8 @@ void generateSpecializedFunction(
 static bool expandsToSelectIntrinsic(Function *function) {
 	std::unordered_map<std::string, Function *> ignoredBindings;
 	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
-	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall && bodyExpr->intrinsicName == "select";
+	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall &&
+		   intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Select;
 }
 
 // Generate code for an function

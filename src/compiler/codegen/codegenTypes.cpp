@@ -269,10 +269,10 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		// For intrinsics in non-macro function bodies, expr->type may be Undeduced.
 		// Compute the type dynamically from the resolved argument types.
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
-		if (info) {
+			if (info) {
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
-				if (info->argCount == 2) {
+				if (expr->arguments.size() == 2) {
 					return getEffectiveType(context, expr->arguments[1]);
 				} else {
 					DataType leftType = getEffectiveType(context, expr->arguments[1]);
@@ -289,13 +289,14 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return {DataType::Kind::Float, 4};
 			case IntrinsicReturnKind::Custom:
 				break;
+				}
 			}
-		}
-		if (expr->intrinsicName == "address of")
-			return getEffectiveType(context, expr->arguments[1]).pointed();
-		if (expr->intrinsicName == "dereference")
-			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
-		if (expr->intrinsicName == "load at") {
+			IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+			if (kind == IntrinsicKind::AddressOf)
+				return getEffectiveType(context, expr->arguments[1]).pointed();
+			if (kind == IntrinsicKind::Dereference)
+				return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
+			if (kind == IntrinsicKind::LoadAt) {
 			DataType ptrType = getEffectiveType(context, expr->arguments[1]);
 			if (ptrType.isPointer()) {
 				DataType pointedType = ptrType.dereferenced();
@@ -305,18 +306,18 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			}
 			return {DataType::Kind::Int, 8};
 		}
-		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
-			return getEffectiveType(context, expr->arguments[1]);
-		if (expr->intrinsicName == "call") {
+			if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
+				return getEffectiveType(context, expr->arguments[1]);
+			if (kind == IntrinsicKind::Call) {
 			// Format: @intrinsic("call", "library", "function", type_ref, args...)
 			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
 			if (retTypeRef.kind == DataType::Kind::Type)
 				return retTypeRef.toReferencedType();
 			return {DataType::Kind::Int, 4};
 		}
-		if (expr->intrinsicName == "construct")
-			return expr->type; // DataType fully determined during inference
-		if (expr->intrinsicName == "type") {
+			if (kind == IntrinsicKind::Construct)
+				return expr->type; // DataType fully determined during inference
+			if (kind == IntrinsicKind::Type) {
 			Function *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
 			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
 				DataType typeRef;
@@ -338,7 +339,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				} else {
 					return expr->type;
 				}
-				if (expr->arguments.size() >= 3) {
+				if (expr->arguments.size() > 2) {
 					Function *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = static_cast<int>(*bits) / 8;
@@ -346,18 +347,19 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return typeRef;
 			}
 		}
-		if (expr->intrinsicName == "add pointer depth") {
+			if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerType = getEffectiveType(context, expr->arguments[1]);
 			if (innerType.kind == DataType::Kind::Type) {
 				innerType.pointerDepth++;
 				return innerType;
 			}
 		}
-		if (expr->intrinsicName == "type of" || expr->intrinsicName == "array")
-			return expr->type;
-		if ((expr->intrinsicName == "vector" || expr->intrinsicName == "matrix") && expr->type.kind == DataType::Kind::Type)
-			return expr->type;
-		if (expr->intrinsicName == "property") {
+			if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array)
+				return expr->type;
+			if ((kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix) &&
+				expr->type.kind == DataType::Kind::Type)
+				return expr->type;
+			if (kind == IntrinsicKind::Property) {
 			DataType ownerType = getEffectiveType(context, expr->arguments[1]);
 			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[2]));
 			DataType builtInPropertyType = resolveBuiltInPropertyType(ownerType, fieldName);
@@ -365,7 +367,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return builtInPropertyType;
 			return expr->type; // Class property type determined during inference
 		}
-		if (expr->intrinsicName == "cast") {
+			if (kind == IntrinsicKind::Cast) {
 			if (expr->type.kind == DataType::Kind::Class)
 				return concretizeClassType(expr->type);
 			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);

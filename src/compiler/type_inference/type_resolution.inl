@@ -100,7 +100,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 		}
 	}
 	if (resolved->kind == Function::Kind::IntrinsicCall) {
-		if (resolved->intrinsicName == "property" && resolved->arguments.size() >= 3) {
+		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
+		if (kind == IntrinsicKind::Property) {
 			DataType instType = concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings));
 			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 			std::string fieldName = extractFieldName(propExpr);
@@ -113,19 +114,19 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 						return instType.classDefinition->instantiations[instType.classInstIndex].fieldTypes[i];
 				}
 			}
-		} else if (resolved->intrinsicName == "dereference" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::Dereference) {
 			DataType ptrType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (ptrType.isDeduced() && ptrType.isPointer())
 				return concretizeClassType(ptrType.dereferenced());
-		} else if (resolved->intrinsicName == "address of" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::AddressOf) {
 			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (valueType.isDeduced())
 				return valueType.pointed();
-		} else if (resolved->intrinsicName == "cast" && resolved->arguments.size() >= 3) {
+		} else if (kind == IntrinsicKind::Cast) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
 			if (typeArgType.kind == DataType::Kind::Type)
 				return concretizeClassType(typeArgType.toReferencedType());
-		} else if (resolved->intrinsicName == "type") {
+		} else if (kind == IntrinsicKind::Type) {
 			std::string kindStr;
 			Function *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
@@ -148,14 +149,14 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.numericSize = 1;
 					typeRef.pointerDepth = 1;
 				}
-				if (resolved->arguments.size() >= 3) {
+				if (resolved->arguments.size() > 2) {
 					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = (int)*bits / 8;
 				}
 				return typeRef;
 			}
-		} else if (resolved->intrinsicName == "type of" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::TypeOf) {
 			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (valueType.isDeduced()) {
 				DataType typeRef;
@@ -170,7 +171,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
 				return typeRef;
 			}
-		} else if (resolved->intrinsicName == "build info" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::BuildInfo) {
 			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
 				if (*key == "word size" || *key == "optimization level") {
@@ -178,26 +179,26 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				}
 				return {DataType::Kind::Int, 1, 1};
 			}
-		} else if (resolved->intrinsicName == "select" && resolved->arguments.size() >= 4 && activeTypeResolutionParseContext) {
+		} else if (kind == IntrinsicKind::Select && activeTypeResolutionParseContext) {
 			Function *selectedBranch =
 				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindings);
 			if (selectedBranch)
 				return resolveTypeThroughBindings(selectedBranch, effectiveBindings);
-		} else if (resolved->intrinsicName == "array" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::Array) {
 			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
 				typeRef.referencedKind = DataType::Kind::Array;
 				typeRef.arraySize = static_cast<int>(*size);
-				if (resolved->arguments.size() >= 3) {
+				if (resolved->arguments.size() > 2) {
 					DataType elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (elemTypeRef.kind == DataType::Kind::Type)
 						typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 				}
 				return typeRef;
 			}
-		} else if (resolved->intrinsicName == "vector" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::Vector) {
 			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			auto *size = std::get_if<double>(&sizeExpr->literalValue);
 			if (!size)
@@ -210,7 +211,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			typeRef.referencedKind = DataType::Kind::Vector;
 			typeRef.arraySize = vectorSize;
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-			if (resolved->arguments.size() >= 3) {
+			if (resolved->arguments.size() > 2) {
 				DataType elemTypeRef;
 				if (resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings).kind == DataType::Kind::Type)
 					elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings).toReferencedType();
@@ -218,7 +219,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
 			return typeRef;
-		} else if (resolved->intrinsicName == "matrix" && resolved->arguments.size() >= 3) {
+		} else if (kind == IntrinsicKind::Matrix) {
 			Function *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			Function *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 			auto *rowsValue = std::get_if<double>(&rowsExpr->literalValue);
@@ -237,7 +238,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			typeRef.matrixRowCount = rows;
 			typeRef.arraySize = columns;
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-			if (resolved->arguments.size() >= 4) {
+			if (resolved->arguments.size() > 3) {
 				DataType elemTypeRef;
 				if (resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings).kind == DataType::Kind::Type)
 					elemTypeRef = resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings).toReferencedType();
@@ -245,13 +246,13 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
 			return typeRef;
-		} else if (resolved->intrinsicName == "add pointer depth" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (typeArgType.kind == DataType::Kind::Type) {
 				typeArgType.pointerDepth++;
 				return typeArgType;
 			}
-		} else if (resolved->intrinsicName == "construct" && resolved->arguments.size() >= 2) {
+		} else if (kind == IntrinsicKind::Construct) {
 			DataType typeRefType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
 				DataType arrayType = typeRefType.toReferencedType();
@@ -365,14 +366,15 @@ static bool resolveCompileTimeTypeReference(
 	}
 
 	if (resolved->kind == Function::Kind::IntrinsicCall) {
-		if (resolved->intrinsicName == "type") {
+		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
+		if (kind == IntrinsicKind::Type) {
 			DataType resolvedType = resolveTypeThroughBindings(resolved, effectiveBindings);
 			if (resolvedType.kind == DataType::Kind::Type) {
 				outTypeRef = resolvedType;
 				return true;
 			}
 		}
-		if (resolved->intrinsicName == "add pointer depth" && resolved->arguments.size() >= 2) {
+		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
 			if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[1], effectiveBindings, innerTypeRef) ||
 				innerTypeRef.kind != DataType::Kind::Type)
@@ -381,14 +383,14 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef = innerTypeRef;
 			return true;
 		}
-		if (resolved->intrinsicName == "array" && resolved->arguments.size() >= 2) {
+		if (kind == IntrinsicKind::Array) {
 			int arraySize = 0;
 			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, arraySize))
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Array;
 			outTypeRef.arraySize = arraySize;
-			if (resolved->arguments.size() >= 3) {
+			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[2], effectiveBindings, elementTypeRef) ||
 					elementTypeRef.kind != DataType::Kind::Type)
@@ -397,7 +399,7 @@ static bool resolveCompileTimeTypeReference(
 			}
 			return true;
 		}
-		if (resolved->intrinsicName == "vector" && resolved->arguments.size() >= 2) {
+		if (kind == IntrinsicKind::Vector) {
 			int vectorSize = 0;
 			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, vectorSize) ||
 				vectorSize < 1)
@@ -406,7 +408,7 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef.referencedKind = DataType::Kind::Vector;
 			outTypeRef.arraySize = vectorSize;
 			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-			if (resolved->arguments.size() >= 3) {
+			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[2], effectiveBindings, elementTypeRef) ||
 					elementTypeRef.kind != DataType::Kind::Type)
@@ -415,7 +417,7 @@ static bool resolveCompileTimeTypeReference(
 			}
 			return true;
 		}
-		if (resolved->intrinsicName == "matrix" && resolved->arguments.size() >= 3) {
+		if (kind == IntrinsicKind::Matrix) {
 			int rows = 0;
 			int columns = 0;
 			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, rows) ||
@@ -427,7 +429,7 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef.matrixRowCount = rows;
 			outTypeRef.arraySize = columns;
 			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-			if (resolved->arguments.size() >= 4) {
+			if (resolved->arguments.size() > 3) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[3], effectiveBindings, elementTypeRef) ||
 					elementTypeRef.kind != DataType::Kind::Type)
@@ -436,7 +438,7 @@ static bool resolveCompileTimeTypeReference(
 			}
 			return true;
 		}
-		if (resolved->intrinsicName == "select" && resolved->arguments.size() >= 4) {
+		if (kind == IntrinsicKind::Select) {
 			Function *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindings);
 			if (selectedBranch)
 				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindings, outTypeRef);

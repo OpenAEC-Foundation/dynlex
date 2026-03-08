@@ -64,8 +64,8 @@ static CompileTimeValue evaluateIntrinsic(
 	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
 	const Instantiation *instantiation
 ) {
-	const std::string &name = expr->intrinsicName;
-	if (name == "build info" && expr->arguments.size() >= 2) {
+	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+	if (kind == IntrinsicKind::BuildInfo) {
 		CompileTimeValue keyValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
 		if (auto *key = std::get_if<std::string>(&keyValue)) {
 			if (std::optional<double> number = currentBuildInfoNumber(context, *key))
@@ -77,7 +77,7 @@ static CompileTimeValue evaluateIntrinsic(
 		return {};
 	}
 
-	if (name == "select" && expr->arguments.size() >= 4) {
+	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 		if (!condition.has_value())
@@ -85,7 +85,7 @@ static CompileTimeValue evaluateIntrinsic(
 		return evaluateCompileTimeValueImpl(expr->arguments[*condition ? 2 : 3], context, bindings, instantiation);
 	}
 
-	if (name == "return" && expr->arguments.size() >= 2)
+	if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
 		return evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
 
 	auto lhs = [&]() -> CompileTimeValue {
@@ -97,16 +97,16 @@ static CompileTimeValue evaluateIntrinsic(
 										   : CompileTimeValue{};
 	};
 
-	if (name == "not") {
+	if (kind == IntrinsicKind::Not) {
 		std::optional<bool> value = compileTimeTruthiness(lhs());
 		return value.has_value() ? CompileTimeValue(!*value) : CompileTimeValue{};
 	}
-	if (name == "and" || name == "or") {
+	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		std::optional<bool> left = compileTimeTruthiness(lhs());
 		std::optional<bool> right = compileTimeTruthiness(rhs());
 		if (!left.has_value() || !right.has_value())
 			return {};
-		return name == "and" ? CompileTimeValue(*left && *right) : CompileTimeValue(*left || *right);
+		return kind == IntrinsicKind::And ? CompileTimeValue(*left && *right) : CompileTimeValue(*left || *right);
 	}
 
 	CompileTimeValue leftValue = lhs();
@@ -114,7 +114,7 @@ static CompileTimeValue evaluateIntrinsic(
 	if (!isCompileTimeKnown(leftValue) || (expr->arguments.size() >= 3 && !isCompileTimeKnown(rightValue)))
 		return {};
 
-	if (name == "equal" || name == "not equal") {
+	if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
 		bool result = false;
 		if (auto *leftText = std::get_if<std::string>(&leftValue)) {
 			if (auto *rightText = std::get_if<std::string>(&rightValue))
@@ -133,35 +133,35 @@ static CompileTimeValue evaluateIntrinsic(
 				return {};
 			result = *leftNumber == *rightNumber;
 		}
-		return name == "equal" ? CompileTimeValue(result) : CompileTimeValue(!result);
+		return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
 	}
 
 	auto *leftNumber = std::get_if<double>(&leftValue);
 	if (!leftNumber)
 		return {};
-	if (name == "negate")
+	if (kind == IntrinsicKind::Negate)
 		return -*leftNumber;
 	auto *rightNumber = std::get_if<double>(&rightValue);
 	if (!rightNumber)
 		return {};
 
-	if (name == "add")
+	if (kind == IntrinsicKind::Add)
 		return *leftNumber + *rightNumber;
-	if (name == "subtract")
+	if (kind == IntrinsicKind::Subtract)
 		return *leftNumber - *rightNumber;
-	if (name == "multiply")
+	if (kind == IntrinsicKind::Multiply)
 		return *leftNumber * *rightNumber;
-	if (name == "divide")
+	if (kind == IntrinsicKind::Divide)
 		return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(*leftNumber / *rightNumber);
-	if (name == "modulo")
+	if (kind == IntrinsicKind::Modulo)
 		return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(std::fmod(*leftNumber, *rightNumber));
-	if (name == "less than")
+	if (kind == IntrinsicKind::LessThan)
 		return *leftNumber < *rightNumber;
-	if (name == "greater than")
+	if (kind == IntrinsicKind::GreaterThan)
 		return *leftNumber > *rightNumber;
-	if (name == "less than or equal")
+	if (kind == IntrinsicKind::LessThanOrEqual)
 		return *leftNumber <= *rightNumber;
-	if (name == "greater than or equal")
+	if (kind == IntrinsicKind::GreaterThanOrEqual)
 		return *leftNumber >= *rightNumber;
 	return {};
 }

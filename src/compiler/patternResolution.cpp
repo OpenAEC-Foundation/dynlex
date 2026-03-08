@@ -1,6 +1,7 @@
 #include "classSection.h"
 #include "compiler.h"
 #include "function.h"
+#include "intrinsicInfo.h"
 #include "patternElement.h"
 #include "patternTreeNode.h"
 #include "transformedPattern.h"
@@ -691,7 +692,7 @@ bool resolvePatterns(ParseContext &context) {
 								for (Section *child : d->section->children) {
 									for (CodeLine *cl : child->codeLines) {
 										if (cl->function && cl->function->kind == Function::Kind::IntrinsicCall &&
-											cl->function->intrinsicName == "type") {
+											intrinsicKind(cl->function->intrinsicName) == IntrinsicKind::Type) {
 											auto &args = cl->function->arguments;
 											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
 												if (*kindStr == "int") {

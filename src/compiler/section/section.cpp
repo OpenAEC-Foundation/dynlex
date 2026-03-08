@@ -366,21 +366,21 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 							return nullptr;
 						}
 						int argCount = (int)intrinsicExpr->arguments.size();
-						if (info->argCount >= 0 && argCount != info->argCount) {
+						bool belowMin = argCount < info->minArgCount;
+						bool aboveMax = info->maxArgCount >= 0 && argCount > info->maxArgCount;
+						if (belowMin || aboveMax) {
+							std::string expected;
+							if (info->maxArgCount < 0)
+								expected = "at least " + std::to_string(info->minArgCount - 1);
+							else if (info->minArgCount == info->maxArgCount)
+								expected = std::to_string(info->minArgCount - 1);
+							else
+								expected = std::to_string(info->minArgCount - 1) + " to " +
+										   std::to_string(info->maxArgCount - 1);
 							context.diagnostics.push_back(Diagnostic(
 								Diagnostic::Level::Error,
-								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + std::to_string(info->argCount - 1) +
+								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + expected +
 									" argument(s), got " + std::to_string(argCount - 1),
-								intrinsicExpr->range
-							));
-							return nullptr;
-						}
-						int minArgCount = intrinsicMinimumArgCount(intrinsicExpr->intrinsicName);
-						if (argCount < minArgCount) {
-							context.diagnostics.push_back(Diagnostic(
-								Diagnostic::Level::Error,
-								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects at least " +
-									std::to_string(minArgCount - 1) + " argument(s), got " + std::to_string(argCount - 1),
 								intrinsicExpr->range
 							));
 							return nullptr;
