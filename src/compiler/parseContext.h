@@ -135,7 +135,7 @@ struct ParseContext {
 	// for each section type, we store a tree with patterns, leading to sections.
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
-	PatternTreeNode *patternTrees[(int)SectionType::Count];
+	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
 	// Precedence level assigned to function patterns not in the explicit precedence system.
 	// Default-level patterns should not propagate minRightPrecedence constraints.
 	int defaultPrecedenceLevel = 0;
@@ -152,7 +152,7 @@ struct ParseContext {
 	std::string projectSyntaxConfigPath;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
-	ParseContext() {}
+	ParseContext() = default;
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {

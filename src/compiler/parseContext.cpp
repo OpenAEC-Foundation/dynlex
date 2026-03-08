@@ -204,10 +204,12 @@ ParseContext::~ParseContext() {
 		delete section;
 	mainSection = nullptr;
 
-	std::unordered_set<PatternTreeNode *> visitedPatternNodes;
-	for (PatternTreeNode *&tree : patternTrees) {
-		deletePatternTree(tree, visitedPatternNodes);
-		tree = nullptr;
+	if (hasCompleted(CompilationStage::ResolvedPatterns)) {
+		std::unordered_set<PatternTreeNode *> visitedPatternNodes;
+		for (PatternTreeNode *&tree : patternTrees) {
+			deletePatternTree(tree, visitedPatternNodes);
+			tree = nullptr;
+		}
 	}
 
 	delete diBuilder;
