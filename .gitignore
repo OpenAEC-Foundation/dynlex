@@ -1,5 +1,6 @@
 # Build output
 build/
+build-*/
 vscode-extension/out/
 vscode-extension/*.vsix
 

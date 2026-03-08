@@ -291,11 +291,11 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				break;
 			}
 		}
-		if (expr->intrinsicName == "address of" && expr->arguments.size() >= 2)
+		if (expr->intrinsicName == "address of")
 			return getEffectiveType(context, expr->arguments[1]).pointed();
-		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
+		if (expr->intrinsicName == "dereference")
 			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
-		if (expr->intrinsicName == "load at" && expr->arguments.size() >= 3) {
+		if (expr->intrinsicName == "load at") {
 			DataType ptrType = getEffectiveType(context, expr->arguments[1]);
 			if (ptrType.isPointer()) {
 				DataType pointedType = ptrType.dereferenced();
@@ -309,16 +309,14 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			return getEffectiveType(context, expr->arguments[1]);
 		if (expr->intrinsicName == "call") {
 			// Format: @intrinsic("call", "library", "function", type_ref, args...)
-			if (expr->arguments.size() >= 4) {
-				DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
-				if (retTypeRef.kind == DataType::Kind::Type)
-					return retTypeRef.toReferencedType();
-			}
+			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
+			if (retTypeRef.kind == DataType::Kind::Type)
+				return retTypeRef.toReferencedType();
 			return {DataType::Kind::Int, 4};
 		}
 		if (expr->intrinsicName == "construct")
 			return expr->type; // DataType fully determined during inference
-		if (expr->intrinsicName == "type" && expr->arguments.size() >= 2) {
+		if (expr->intrinsicName == "type") {
 			Function *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
 			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
 				DataType typeRef;
@@ -348,7 +346,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return typeRef;
 			}
 		}
-		if (expr->intrinsicName == "add pointer depth" && expr->arguments.size() >= 2) {
+		if (expr->intrinsicName == "add pointer depth") {
 			DataType innerType = getEffectiveType(context, expr->arguments[1]);
 			if (innerType.kind == DataType::Kind::Type) {
 				innerType.pointerDepth++;
@@ -359,15 +357,15 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			return expr->type;
 		if ((expr->intrinsicName == "vector" || expr->intrinsicName == "matrix") && expr->type.kind == DataType::Kind::Type)
 			return expr->type;
-		if (expr->intrinsicName == "property" && expr->arguments.size() >= 2) {
-			DataType ownerType = getEffectiveType(context, expr->arguments[0]);
-			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[1]));
+		if (expr->intrinsicName == "property") {
+			DataType ownerType = getEffectiveType(context, expr->arguments[1]);
+			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[2]));
 			DataType builtInPropertyType = resolveBuiltInPropertyType(ownerType, fieldName);
 			if (builtInPropertyType.isDeduced())
 				return builtInPropertyType;
 			return expr->type; // Class property type determined during inference
 		}
-		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
+		if (expr->intrinsicName == "cast") {
 			if (expr->type.kind == DataType::Kind::Class)
 				return concretizeClassType(expr->type);
 			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);

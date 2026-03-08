@@ -18,6 +18,9 @@ struct IntrinsicInfo {
 
 // Central registry of all intrinsic signatures.
 // argCount includes the name argument (e.g. @intrinsic("add", a, b) → argCount=3).
+// Intrinsic argument indexing is always:
+//   arguments[0] = intrinsic name literal (e.g. "add")
+//   arguments[1..] = user-supplied arguments
 // Adding a new math function: add here + add LLVM mapping in codegen.cpp.
 // clang-format off
 inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry() {
@@ -98,6 +101,29 @@ inline const IntrinsicInfo *findIntrinsic(const std::string &name) {
 	return it != intrinsicRegistry().end() ? &it->second : nullptr;
 }
 
+inline int intrinsicMinimumArgCount(const std::string &name) {
+	const IntrinsicInfo *info = findIntrinsic(name);
+	if (!info)
+		return -1;
+	if (info->argCount >= 0)
+		return info->argCount;
+	if (name == "call")
+		return 4; // @intrinsic("call", lib, fn, rettype[, args...])
+	if (name == "construct")
+		return 2; // @intrinsic("construct", type[, values...])
+	if (name == "type")
+		return 2; // @intrinsic("type", kind[, bits])
+	if (name == "array")
+		return 2; // @intrinsic("array", size[, elem_type])
+	if (name == "vector")
+		return 2; // @intrinsic("vector", size[, elem_type])
+	if (name == "matrix")
+		return 3; // @intrinsic("matrix", rows, cols[, elem_type])
+	if (name == "return")
+		return 1; // @intrinsic("return"[, value])
+	return 1;
+}
+
 inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {
 	if (name == "construct")
 		return argIndex == 1;
@@ -115,5 +141,7 @@ inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argI
 		return argIndex == 1;
 	if (name == "call")
 		return argIndex == 3;
+	if (name == "property")
+		return argIndex == 2; // field name token
 	return false;
 }

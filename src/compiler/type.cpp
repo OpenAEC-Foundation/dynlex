@@ -88,11 +88,11 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		switch (numericSize) {
 		case 4:
 			return llvm::Type::getFloatTy(ctx);
-		case 8:
-			return llvm::Type::getDoubleTy(ctx);
-		default:
-			ASSERT_UNREACHABLE("Float type must have a valid numericSize (4/8) before codegen");
-		}
+			case 8:
+				return llvm::Type::getDoubleTy(ctx);
+			default:
+				crashCompilerBug("Float type must have a valid numericSize (4/8) before codegen");
+			}
 	case Kind::Int:
 		switch (numericSize) {
 		case 1:
@@ -101,11 +101,11 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 			return llvm::Type::getInt16Ty(ctx);
 		case 4:
 			return llvm::Type::getInt32Ty(ctx);
-		case 8:
-			return llvm::Type::getInt64Ty(ctx);
-		default:
-			ASSERT_UNREACHABLE("Integer type must have a valid numericSize (1/2/4/8) before codegen");
-		}
+			case 8:
+				return llvm::Type::getInt64Ty(ctx);
+			default:
+				crashCompilerBug("Integer type must have a valid numericSize (1/2/4/8) before codegen");
+			}
 	case Kind::Array:
 		assert(arrayElementType && arraySize >= 0 && "Array type must have element type and size");
 		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx), arraySize);
@@ -145,12 +145,12 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		}
 		return inst.llvmStructType;
 	}
-	case Kind::Type:
-		ASSERT_UNREACHABLE("Type is compile-time only, cannot be converted to LLVM type");
-	case Kind::Unresolved:
-		ASSERT_UNREACHABLE("Unresolved type must be resolved before codegen");
-	case Kind::Any:
-		ASSERT_UNREACHABLE("Any type must be resolved before codegen");
+		case Kind::Type:
+			crashCompilerBug("Type is compile-time only, cannot be converted to LLVM type");
+		case Kind::Unresolved:
+			crashCompilerBug("Unresolved type must be resolved before codegen");
+		case Kind::Any:
+			crashCompilerBug("Any type must be resolved before codegen");
+		}
+		crashCompilerBug("Unknown type kind");
 	}
-	ASSERT_UNREACHABLE("Unknown type kind");
-}

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "compilerUtils.h"
 #include "const_evaluation.inl"
 #include "type_resolution.inl"
 
@@ -96,12 +97,12 @@ derivePatternCallType(Function *expr, InferenceContext &context, const std::unor
 		return {};
 
 	Section *matchedSection = def->section;
-	std::unordered_map<std::string, Function *> callBindings;
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size())
-			callBindings[paramIt->second] = expr->arguments[argIndex++];
+	std::unordered_map<std::string, Function *> callBindings = bindings;
+	appendPatternCallBindings(expr, def, callBindings);
+	for (auto &[name, boundExpr] : callBindings) {
+		Function *resolvedExpr = resolveThroughBindings(boundExpr, bindings);
+		if (resolvedExpr)
+			boundExpr = resolvedExpr;
 	}
 
 	if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
@@ -232,6 +233,15 @@ static void commitVariableTypeFromValue(Variable *var, Function *valueExpr, cons
 	var->type = concretizeClassType(valueType);
 	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
 	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
+}
+
+static bool isVariableAssignmentCompatible(const DataType &targetType, const DataType &valueType) {
+	if (!targetType.isDeduced() || !valueType.isDeduced())
+		return false;
+	if (targetType == valueType)
+		return true;
+	return targetType.kind == DataType::Kind::Int && valueType.kind == DataType::Kind::Int &&
+		   targetType.pointerDepth == 0 && valueType.pointerDepth == 0;
 }
 
 #include "variable_flow.inl"
@@ -404,31 +414,90 @@ static void inferOrderedFunction(
 			case IntrinsicReturnKind::Void:
 				// "store" has side effects on variable types beyond just being Void
 				if (expr->intrinsicName == "store") {
-					std::unordered_map<std::string, Function *> destBindings;
-					Function *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
-					std::unordered_map<std::string, Function *> valueBindings;
-					Function *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindings, valueBindings);
-					DataType valType = ensureFunctionType(valueExpr, context, valueBindings);
-					if (destExpr->kind == Function::Kind::Variable && destExpr->variable && valType.isDeduced()) {
-						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
-						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
-						if (var) {
-							if (!var->type.isDeduced() || var->type == valType) {
+						std::unordered_map<std::string, Function *> destBindings;
+						Function *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
+						std::unordered_map<std::string, Function *> valueBindings;
+						Function *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindings, valueBindings);
+						DataType valType = ensureFunctionType(valueExpr, context, valueBindings);
+						auto applyCastTargetType = [&](Function *castExpr, const std::unordered_map<std::string, Function *> &castBindings) {
+							if (!castExpr || castExpr->kind != Function::Kind::IntrinsicCall || castExpr->intrinsicName != "cast" ||
+								castExpr->arguments.size() < 3)
+								return;
+							std::unordered_map<std::string, Function *> resolvedTypeBindings;
+							Function *resolvedTypeExpr =
+								resolveThroughBindingsDeep(castExpr->arguments[2], castBindings, resolvedTypeBindings);
+							if (!resolvedTypeExpr)
+								resolvedTypeExpr = castExpr->arguments[2];
+							const auto &typeBindingsForResolution =
+								resolvedTypeBindings.empty() ? castBindings : resolvedTypeBindings;
+							DataType castTypeArg = resolveTypeThroughBindings(resolvedTypeExpr, typeBindingsForResolution);
+							if (!(castTypeArg.kind == DataType::Kind::Type &&
+								  castTypeArg.referencedKind != DataType::Kind::Unresolved)) {
+								auto valIt = castBindings.find("val");
+								if (valIt != castBindings.end() && valIt->second &&
+									valIt->second->kind == Function::Kind::PatternCall &&
+									valIt->second->arguments.size() >= 2) {
+									Function *rawTypeExpr = valIt->second->arguments[1];
+									DataType recoveredTypeArg;
+									if (rawTypeExpr && rawTypeExpr->type.kind == DataType::Kind::Type) {
+										recoveredTypeArg = rawTypeExpr->type;
+									} else if (resolveCompileTimeTypeReference(
+												   context.parseContext, rawTypeExpr, castBindings, recoveredTypeArg
+											   ) &&
+											   recoveredTypeArg.kind == DataType::Kind::Type) {
+										castTypeArg = recoveredTypeArg;
+									}
+									if (recoveredTypeArg.kind == DataType::Kind::Type)
+										castTypeArg = recoveredTypeArg;
+								}
+							}
+							if (castTypeArg.kind == DataType::Kind::Type)
+								valType = concretizeClassType(castTypeArg.toReferencedType());
+						};
+						applyCastTargetType(valueExpr, valueBindings);
+						if (valueExpr && valueExpr->kind == Function::Kind::PatternCall) {
+							std::unordered_map<std::string, Function *> castBindings = valueBindings;
+							std::unordered_map<std::string, Function *> innerBindings;
+							Function *bodyExpr = expandMacroPatternCall(valueExpr, innerBindings);
+							if (bodyExpr) {
+								for (const auto &[name, argExpr] : innerBindings) {
+									Function *resolvedArg = resolveThroughBindings(argExpr, castBindings);
+									castBindings[name] = resolvedArg ? resolvedArg : argExpr;
+								}
+								applyCastTargetType(bodyExpr, castBindings);
+							}
+						}
+						// If the original syntax is "value as type", recover the cast target type directly
+						// from the raw PatternCall argument to avoid stale template types.
+						Function *rawValueExpr = expr->arguments[2];
+						if (rawValueExpr && rawValueExpr->kind == Function::Kind::PatternCall &&
+							rawValueExpr->arguments.size() >= 2 &&
+							rawValueExpr->range.subString.find(" as ") != std::string_view::npos) {
+							DataType rawTypeArg = resolveTypeThroughBindings(rawValueExpr->arguments[1], macroBindings);
+							if (rawTypeArg.kind == DataType::Kind::Type)
+								valType = concretizeClassType(rawTypeArg.toReferencedType());
+						}
+						if (destExpr->kind == Function::Kind::Variable && destExpr->variable && valType.isDeduced()) {
+							Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
+							Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
+							if (var) {
+							if (!var->type.isDeduced() || isVariableAssignmentCompatible(var->type, valType)) {
 								if (context.trial && context.trialJournal)
 									context.trialJournal->recordVariableWrite(var);
-								commitVariableTypeFromValue(var, valueExpr, valType);
+								if (!var->type.isDeduced() || var->type == valType)
+									commitVariableTypeFromValue(var, valueExpr, valType);
 							} else if (context.trial) {
 								context.setTypeFailure(
 									"Variable '" + var->name + "' cannot change type from " +
-									typeToUserName(var->type, context.parseContext) + " to " +
-									typeToUserName(valType, context.parseContext)
+										typeToUserName(var->type, context.parseContext) + " to " +
+										typeToUserName(valType, context.parseContext)
 								);
 								break;
 							} else {
 								context.setTypeFailure(
 									"Variable '" + var->name + "' cannot change type from " +
-									typeToUserName(var->type, context.parseContext) + " to " +
-									typeToUserName(valType, context.parseContext)
+										typeToUserName(var->type, context.parseContext) + " to " +
+										typeToUserName(valType, context.parseContext)
 								);
 								context.addDiagnostic(
 									buildVariableTypeChangeDiagnostic(var, valueExpr, valType, context.parseContext)
@@ -738,7 +807,8 @@ static void inferOrderedFunction(
 
 						DataType instantiatedTypeRef;
 						if (allArgumentsDeduced && instantiateClassFromArgumentTypes(
-													   typeRefType.classDefinition, argumentTypes, instantiatedTypeRef
+													   typeRefType.classDefinition, argumentTypes, instantiatedTypeRef,
+													   typeRefType.classInstIndex
 												   )) {
 							expr->type = instantiatedTypeRef.toReferencedType();
 						} else {
@@ -762,11 +832,11 @@ static void inferOrderedFunction(
 						if (valueType.isDeduced())
 							expr->type = targetType;
 					}
-				} else if (expr->intrinsicName == "property") {
-					DataType instType = concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindings));
-					Function *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
-					std::string fieldName = extractFieldName(propExpr);
-					DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
+					} else if (expr->intrinsicName == "property") {
+						DataType instType = concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindings));
+						Function *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
+						std::string fieldName = extractFieldName(propExpr);
+						DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 					if (builtInPropertyType.isDeduced()) {
 						expr->type = builtInPropertyType;
 						break;
@@ -780,11 +850,16 @@ static void inferOrderedFunction(
 									break;
 								}
 							}
+							}
 						}
+					} else {
+						std::string uri =
+							(expr && expr->range.line && expr->range.line->sourceFile) ? expr->range.line->sourceFile->uri : "";
+						int line = (expr && expr->range.line) ? expr->range.line->sourceFileLineIndex + 1 : -1;
+						crashUnimplementedIntrinsic("type inference", expr->intrinsicName, uri, line);
 					}
+					break;
 				}
-				break;
-			}
 		}
 		break;
 	}
@@ -843,47 +918,42 @@ static void inferOrderedFunction(
 			break;
 		}
 
-		Section *matchedSection = def->section;
+			Section *matchedSection = def->section;
 
-		// Build parameter bindings from call-site arguments
-		std::unordered_map<std::string, Function *> callBindings;
-		size_t argIndex = 0;
-		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-			auto paramIt = node->parameterNames.find(def);
-			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
-				Function *actualArg = expr->arguments[argIndex++];
-				actualArg = resolveThroughBindings(actualArg, macroBindings);
-				callBindings[paramIt->second] = actualArg;
+			// Build parameter bindings from call-site arguments
+			std::unordered_map<std::string, Function *> callBindings = macroBindings;
+			appendPatternCallBindings(expr, def, callBindings);
+			for (auto &[name, boundExpr] : callBindings) {
+				Function *resolvedExpr = resolveThroughBindings(boundExpr, macroBindings);
+				if (resolvedExpr)
+					boundExpr = resolvedExpr;
 			}
-		}
 
-		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
-			auto *classSec = static_cast<ClassSection *>(matchedSection);
-			expr->type = instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindings);
-		} else if (matchedSection->isMacro) {
-			// Code replacement: infer body, type = replacement function type
-			if (!matchedSection->inferring) {
-				matchedSection->inferring = true;
-				ScopedDiagnosticSuppression suppressDiagnostics(context);
-				inferSection(matchedSection, context, callBindings);
-				matchedSection->inferring = false;
-			}
-			if (!context.typesValid)
-				break;
-			for (Section *child : matchedSection->children) {
-				for (CodeLine *line : child->codeLines) {
-					if (!line->function)
-						continue;
-					DataType resolvedType = resolveTypeThroughBindings(line->function, callBindings);
-					if (resolvedType.isDeduced()) {
-						line->function->type = resolvedType;
-						expr->type = resolvedType;
-					} else if (line->function->type.isDeduced()) {
-						expr->type = line->function->type;
+			if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+				auto *classSec = static_cast<ClassSection *>(matchedSection);
+				expr->type = instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindings);
+			} else if (matchedSection->isMacro) {
+				// Code replacement: infer body, type = replacement function type
+				if (!matchedSection->inferring) {
+					matchedSection->inferring = true;
+					ScopedDiagnosticSuppression suppressDiagnostics(context);
+					inferSection(matchedSection, context, callBindings);
+					matchedSection->inferring = false;
+				}
+				if (!context.typesValid)
+					break;
+				for (Section *child : matchedSection->children) {
+					for (CodeLine *line : child->codeLines) {
+						if (!line->function)
+							continue;
+						DataType resolvedType = resolveTypeThroughBindings(line->function, callBindings);
+						if (resolvedType.isDeduced()) {
+							line->function->type = resolvedType;
+							expr->type = resolvedType;
+						}
 					}
 				}
-			}
-		} else {
+			} else {
 			// Non-macro function: infer body per-instantiation
 			// Build parameter bindings and argTypes in nodesPassed order (must match codegen's paramBindings order)
 			std::vector<std::pair<std::string, Function *>> paramBindings;

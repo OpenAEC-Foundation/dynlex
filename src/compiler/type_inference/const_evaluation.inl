@@ -28,6 +28,33 @@ static Function *resolveThroughBindings(Function *expr, const std::unordered_map
 	return expr;
 }
 
+static Function *resolveThroughBindingsDeep(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
+	std::unordered_map<std::string, Function *> &outBindings
+);
+
+static bool expressionReferencesAnyBindingName(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindingNames, std::unordered_set<Function *> &visited
+) {
+	if (!expr || visited.contains(expr))
+		return false;
+	visited.insert(expr);
+	if (expr->kind == Function::Kind::Variable && expr->variable && bindingNames.contains(expr->variable->name))
+		return true;
+	for (Function *arg : expr->arguments) {
+		if (expressionReferencesAnyBindingName(arg, bindingNames, visited))
+			return true;
+	}
+	return false;
+}
+
+static bool expressionReferencesAnyBindingName(
+	Function *expr, const std::unordered_map<std::string, Function *> &bindingNames
+) {
+	std::unordered_set<Function *> visited;
+	return expressionReferencesAnyBindingName(expr, bindingNames, visited);
+}
+
 // Like resolveThroughBindings, but also expands macro PatternCalls to find the
 // underlying function. Outputs the final active bindings in outBindings so the
 // caller can resolve arguments of the returned function. Use when inspecting
@@ -48,10 +75,27 @@ static Function *resolveThroughBindingsDeepImpl(
 	std::unordered_map<std::string, Function *> innerBindings;
 	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (bodyExpr) {
-		std::unordered_map<std::string, Function *> mergedBindings = bindings;
-		for (auto &[name, argExpr] : innerBindings) {
-			std::unordered_map<std::string, Function *> ignoredBindings;
-			mergedBindings[name] = resolveThroughBindingsDeepImpl(argExpr, bindings, ignoredBindings, visited);
+			std::unordered_map<std::string, Function *> mergedBindings = bindings;
+			for (auto &[name, argExpr] : innerBindings) {
+				std::unordered_map<std::string, Function *> argBindings;
+				Function *resolvedArg = resolveThroughBindingsDeepImpl(argExpr, bindings, argBindings, visited);
+				Function *directArg = resolveThroughBindings(argExpr, bindings);
+					if (resolvedArg && !argBindings.empty()) {
+						for (const auto &[depName, depExpr] : argBindings) {
+							// Keep nested dependency propagation, but never leak names that are
+							// parameters of the current macro call scope.
+							if (innerBindings.contains(depName))
+								continue;
+							if (!mergedBindings.contains(depName)) {
+								Function *resolvedDep = resolveThroughBindings(depExpr, bindings);
+								mergedBindings[depName] = resolvedDep ? resolvedDep : depExpr;
+							}
+						}
+					}
+			Function *bindingArg = resolvedArg ? resolvedArg : argExpr;
+			if (bindingArg && expressionReferencesAnyBindingName(bindingArg, innerBindings))
+				bindingArg = directArg ? directArg : argExpr;
+			mergedBindings[name] = bindingArg;
 		}
 		Function *resolved = resolveThroughBindingsDeepImpl(bodyExpr, mergedBindings, outBindings, visited);
 		visited.erase(expr);
@@ -91,7 +135,9 @@ static DataType instantiateBoundClassType(
 	ParseContext &parseContext, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings
 );
 static bool
-instantiateClassFromArgumentTypes(ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef);
+instantiateClassFromArgumentTypes(
+	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex = -1
+);
 
 static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
 static thread_local std::unordered_set<const Function *> activeTypeResolutionFunctions;
@@ -115,8 +161,10 @@ static void appendPatternCallBindings(
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 		auto paramIt = node->parameterNames.find(definition);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size())
-			bindings[paramIt->second] = sortedArgs[argIndex++];
+		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+			Function *argExpr = sortedArgs[argIndex++];
+			bindings[paramIt->second] = argExpr;
+		}
 	}
 }
 
@@ -181,8 +229,12 @@ static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Function *expr)
 	for (Function *arg : expr->arguments)
 		argTypesForOverload.push_back(resolveTypeThroughBindings(arg, {}));
 	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-	if (!def)
-		return indices;
+	if (!def) {
+		if (defs.size() == 1)
+			def = defs.front();
+		else
+			return indices;
+	}
 
 	if (!def->section || !def->section->isMacro)
 		return indices;

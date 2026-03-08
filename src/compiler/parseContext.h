@@ -104,6 +104,8 @@ struct ParseContext {
 	std::stack<std::unordered_map<std::string, Function *>> macroBindingStack;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
+	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
+	const Instantiation *currentCodegenInstantiation{};
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};

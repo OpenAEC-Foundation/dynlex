@@ -23,19 +23,124 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
 	}
 
-	for (CodeLine *line : section->codeLines) {
+	auto controlHeaderInfo = [&](CodeLine *line)
+		-> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+		if (!line || !line->function)
+			return std::nullopt;
+
+		Function *header = line->function;
+		std::unordered_map<std::string, Function *> headerBindings = bindings;
+		if (header->kind == Function::Kind::PatternCall) {
+			std::unordered_map<std::string, Function *> innerBindings;
+			Function *expanded = expandMacroPatternCall(header, innerBindings);
+			if (expanded) {
+				header = expanded;
+				for (const auto &[name, argExpr] : innerBindings)
+					headerBindings[name] = resolveThroughBindings(argExpr, bindings);
+			}
+		}
+		if (!header || header->kind != Function::Kind::IntrinsicCall)
+			return std::nullopt;
+		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
+			return std::nullopt;
+		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindings)));
+	};
+
+	auto inferOpenedSection = [&](CodeLine *line) {
+		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
+			return true;
+		if (!inferSection(line->sectionOpening, context, bindings)) {
+			context.typesValid = false;
+			return false;
+		}
+		return true;
+	};
+
+	for (size_t i = 0; i < section->codeLines.size(); i++) {
+		CodeLine *line = section->codeLines[i];
+		auto headerInfo = controlHeaderInfo(line);
+		if (headerInfo && std::get<0>(*headerInfo) == "if") {
+			size_t chainEnd = i;
+			while (chainEnd + 1 < section->codeLines.size()) {
+				CodeLine *next = section->codeLines[chainEnd + 1];
+				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
+					break;
+				auto nextInfo = controlHeaderInfo(next);
+				if (!nextInfo)
+					break;
+				const std::string &nextKind = std::get<0>(*nextInfo);
+				if (nextKind != "else if" && nextKind != "else")
+					break;
+				chainEnd++;
+			}
+
+			for (size_t k = i; k <= chainEnd; k++) {
+				CodeLine *header = section->codeLines[k];
+				if (!header->function)
+					continue;
+				if (!inferFunction(header->function, context, alreadyOrdered, bindings)) {
+					context.typesValid = false;
+					return false;
+				}
+			}
+
+			std::optional<size_t> selectedBranch;
+			bool branchKnown = true;
+			for (size_t k = i; k <= chainEnd; k++) {
+				auto branchInfo = controlHeaderInfo(section->codeLines[k]);
+				if (!branchInfo) {
+					branchKnown = false;
+					break;
+				}
+				const std::string &branchKind = std::get<0>(*branchInfo);
+				Function *header = std::get<1>(*branchInfo);
+				const auto &headerBindings = std::get<2>(*branchInfo);
+				if (branchKind == "else") {
+					if (!selectedBranch.has_value())
+						selectedBranch = k;
+					break;
+				}
+				if (header->arguments.size() < 2) {
+					branchKnown = false;
+					break;
+				}
+				markCompileTimeParameterRequirements(header->arguments[1], headerBindings, context.currentInstantiation);
+				CompileTimeValue conditionValue = evaluateCompileTimeValue(
+					header->arguments[1], context.parseContext, headerBindings, context.currentInstantiation
+				);
+				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
+				if (!condition.has_value()) {
+					branchKnown = false;
+					break;
+				}
+				if (*condition) {
+					selectedBranch = k;
+					break;
+				}
+			}
+
+			if (branchKnown && selectedBranch.has_value()) {
+				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
+					return false;
+			} else {
+				for (size_t k = i; k <= chainEnd; k++) {
+					if (!inferOpenedSection(section->codeLines[k]))
+						return false;
+				}
+			}
+
+			i = chainEnd;
+			continue;
+		}
+
 		if (line->function) {
 			if (!inferFunction(line->function, context, alreadyOrdered, bindings)) {
 				context.typesValid = false;
 				return false;
 			}
 		}
-		if (line->sectionOpening && !dynamic_cast<DefinitionSection *>(line->sectionOpening)) {
-			if (!inferSection(line->sectionOpening, context, bindings)) {
-				context.typesValid = false;
-				return false;
-			}
-		}
+		if (!inferOpenedSection(line))
+			return false;
 	}
 	context.typesValid = true;
 	return true;

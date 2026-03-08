@@ -4,6 +4,7 @@
 #include "codegenInternal.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "compileTimeValue.h"
 #include "function.h"
 #include "intrinsicInfo.h"
 #include "native.h"
@@ -103,6 +104,7 @@ void generateSpecializedFunction(
 	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
+	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	// Push macro bindings — function bodies must not see caller's macro bindings
 	context.macroBindingStack.push(context.macroFunctionBindings);
 	context.macroFunctionBindings.clear();
@@ -120,6 +122,7 @@ void generateSpecializedFunction(
 		context.patternParamTypes[varNames[argIdx]] = parameterTypes[argIdx];
 		argIdx++;
 	}
+	context.currentCodegenInstantiation = &inst;
 
 	// Generate function body
 	for (Section *child : section->children) {
@@ -136,6 +139,7 @@ void generateSpecializedFunction(
 	context.macroBindingStack.pop();
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
+	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
 
 	if (savedBlock) {
@@ -185,10 +189,10 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 			return builder.CreateInBoundsGEP(
 				strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
 			);
+			}
+			// Unknown literal variant type - should never reach here after type inference
+			crashCompilerBug("Unknown literal type in codegen");
 		}
-		// Unknown literal variant type - should never reach here after type inference
-		ASSERT_UNREACHABLE("Unknown literal type in codegen");
-	}
 
 	case Function::Kind::ArrayLiteral: {
 		DataType arrayType = getEffectiveType(context, expr);
@@ -398,7 +402,88 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
-	for (CodeLine *line : section->codeLines) {
+	auto controlHeaderInfo = [&](CodeLine *line)
+		-> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+		if (!line || !line->function)
+			return std::nullopt;
+
+		Function *header = line->function;
+		std::unordered_map<std::string, Function *> headerBindings = context.macroFunctionBindings;
+		if (header->kind == Function::Kind::PatternCall) {
+			std::unordered_map<std::string, Function *> innerBindings;
+			Function *expanded = expandMacroPatternCall(header, innerBindings);
+			if (expanded) {
+				header = expanded;
+				for (const auto &[name, argExpr] : innerBindings)
+					headerBindings[name] = argExpr;
+			}
+		}
+		if (!header || header->kind != Function::Kind::IntrinsicCall)
+			return std::nullopt;
+		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
+			return std::nullopt;
+		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindings)));
+	};
+
+	for (size_t i = 0; i < section->codeLines.size(); i++) {
+		CodeLine *line = section->codeLines[i];
+		auto headerInfo = controlHeaderInfo(line);
+		if (headerInfo && std::get<0>(*headerInfo) == "if") {
+			size_t chainEnd = i;
+			while (chainEnd + 1 < section->codeLines.size()) {
+				CodeLine *next = section->codeLines[chainEnd + 1];
+				auto nextInfo = controlHeaderInfo(next);
+				if (!nextInfo)
+					break;
+				const std::string &nextKind = std::get<0>(*nextInfo);
+				if (nextKind != "else if" && nextKind != "else")
+					break;
+				chainEnd++;
+			}
+
+			std::optional<size_t> selectedBranch;
+			bool branchKnown = true;
+			for (size_t k = i; k <= chainEnd; k++) {
+				auto branchInfo = controlHeaderInfo(section->codeLines[k]);
+				if (!branchInfo) {
+					branchKnown = false;
+					break;
+				}
+				const std::string &branchKind = std::get<0>(*branchInfo);
+				Function *header = std::get<1>(*branchInfo);
+				const auto &headerBindings = std::get<2>(*branchInfo);
+				if (branchKind == "else") {
+					if (!selectedBranch.has_value())
+						selectedBranch = k;
+					break;
+				}
+				if (header->arguments.size() < 2) {
+					branchKnown = false;
+					break;
+				}
+				CompileTimeValue conditionValue = evaluateCompileTimeValue(
+					header->arguments[1], context, headerBindings, context.currentCodegenInstantiation
+				);
+				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
+				if (!condition.has_value()) {
+					branchKnown = false;
+					break;
+				}
+				if (*condition) {
+					selectedBranch = k;
+					break;
+				}
+			}
+
+			if (branchKnown && selectedBranch.has_value()) {
+				CodeLine *selectedLine = section->codeLines[*selectedBranch];
+				if (selectedLine->sectionOpening)
+					generateSectionCode(context, selectedLine->sectionOpening);
+				i = chainEnd;
+				continue;
+			}
+		}
+
 		if (line->function) {
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);

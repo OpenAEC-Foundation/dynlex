@@ -261,6 +261,7 @@ static bool inferFunction(
 	Function *&expr, InferenceContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Function *> &macroBindings = {}
 ) {
+	static bool traceNestedMacroType = std::getenv("DYNLEX_TRACE_NESTED_MACRO_TYPE") != nullptr;
 	recomputeRanges(expr);
 	sortArgumentsRecursive(expr);
 	absorbOperatorIntoBoundaryArgument(expr);
@@ -296,6 +297,17 @@ static bool inferFunction(
 			context.typeFailureDetail = trialContext.typeFailureDetail;
 		if (ok && isMacroPatternCall(subExpr)) {
 			DataType resolvedType = inferFunctionTypeWithoutSideEffects(subExpr, context, macroBindings);
+			if (traceNestedMacroType && !resolvedType.isDeduced()) {
+				std::cerr << "[nested-macro-type] unresolved expr='" << std::string(subExpr->range.subString) << "' bindings={";
+				bool first = true;
+				for (const auto &[name, value] : macroBindings) {
+					if (!first)
+						std::cerr << ", ";
+					first = false;
+					std::cerr << name << "='" << (value ? std::string(value->range.subString) : "<null>") << "'";
+				}
+				std::cerr << "}\n";
+			}
 			ok = resolvedType.isDeduced();
 		}
 		rollbackTrialJournal(journal);

@@ -355,26 +355,37 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 						return nullptr;
 				}
 
-				// Validate argument count against intrinsic registry
-				if (!intrinsicExpr->intrinsicName.empty()) {
-					const IntrinsicInfo *info = findIntrinsic(intrinsicExpr->intrinsicName);
-					if (!info) {
+					// Validate argument count against intrinsic registry
+					if (!intrinsicExpr->intrinsicName.empty()) {
+						const IntrinsicInfo *info = findIntrinsic(intrinsicExpr->intrinsicName);
+						if (!info) {
 						context.diagnostics.push_back(Diagnostic(
 							Diagnostic::Level::Error, "unknown intrinsic: \"" + intrinsicExpr->intrinsicName + "\"",
 							intrinsicExpr->range
-						));
-						return nullptr;
+							));
+							return nullptr;
+						}
+						int argCount = (int)intrinsicExpr->arguments.size();
+						if (info->argCount >= 0 && argCount != info->argCount) {
+							context.diagnostics.push_back(Diagnostic(
+								Diagnostic::Level::Error,
+								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + std::to_string(info->argCount - 1) +
+									" argument(s), got " + std::to_string(argCount - 1),
+								intrinsicExpr->range
+							));
+							return nullptr;
+						}
+						int minArgCount = intrinsicMinimumArgCount(intrinsicExpr->intrinsicName);
+						if (argCount < minArgCount) {
+							context.diagnostics.push_back(Diagnostic(
+								Diagnostic::Level::Error,
+								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects at least " +
+									std::to_string(minArgCount - 1) + " argument(s), got " + std::to_string(argCount - 1),
+								intrinsicExpr->range
+							));
+							return nullptr;
+						}
 					}
-					if (info->argCount >= 0 && (int)intrinsicExpr->arguments.size() != info->argCount) {
-						context.diagnostics.push_back(Diagnostic(
-							Diagnostic::Level::Error,
-							"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + std::to_string(info->argCount - 1) +
-								" argument(s), got " + std::to_string(intrinsicExpr->arguments.size() - 1),
-							intrinsicExpr->range
-						));
-						return nullptr;
-					}
-				}
 
 				context.processEncounteredIntrinsic(intrinsicExpr);
 				expr->arguments.push_back(intrinsicExpr);

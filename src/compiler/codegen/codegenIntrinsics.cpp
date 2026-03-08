@@ -824,7 +824,8 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (name == "select") {
-		CompileTimeValue conditionValue = evaluateCompileTimeValue(args[0], context, context.macroFunctionBindings);
+		CompileTimeValue conditionValue =
+			evaluateCompileTimeValue(args[0], context, context.macroFunctionBindings, context.currentCodegenInstantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 		if (!condition.has_value()) {
 			context.diagnostics.push_back(
@@ -1056,5 +1057,9 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateExtractElement(vec, idx, "elem");
 	}
 
-	ASSERT_UNREACHABLE("Unknown intrinsic: validated at parse time");
+	std::string uri = (!args.empty() && args[0] && args[0]->range.line && args[0]->range.line->sourceFile)
+						  ? args[0]->range.line->sourceFile->uri
+						  : "";
+	int line = (!args.empty() && args[0] && args[0]->range.line) ? args[0]->range.line->sourceFileLineIndex + 1 : -1;
+	crashUnimplementedIntrinsic("codegen", name, uri, line);
 }
