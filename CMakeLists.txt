@@ -218,9 +218,15 @@ install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
 
 #
-# CPack .deb packaging
+# CPack packaging
 #
-set(CPACK_GENERATOR "DEB")
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+elseif(APPLE)
+    set(CPACK_GENERATOR "TGZ")
+else()
+    set(CPACK_GENERATOR "DEB;TGZ")
+endif()
 set(CPACK_PACKAGE_NAME "dynlex")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DynLex — a natural-language-like programming language")

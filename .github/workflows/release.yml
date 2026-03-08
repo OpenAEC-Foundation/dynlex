@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - '*.*.*'
 
 permissions:
   contents: write
@@ -26,7 +27,11 @@ jobs:
         run: ./scripts/run_tests.sh
 
       - name: Package .deb
-        run: cd build && cpack
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          cd build
+          cpack -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
 
       - name: Determine release type
         id: release_type
@@ -41,6 +46,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/dynlex-*.deb
+          files: |
+            build/dynlex-*.deb
+            build/dynlex-*.tar.gz
+            build/dynlex-*.zip
           prerelease: ${{ steps.release_type.outputs.prerelease }}
           generate_release_notes: true
