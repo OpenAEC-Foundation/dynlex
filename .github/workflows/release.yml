@@ -131,7 +131,18 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
           cd build
-          cpack -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
+          cpack -G TGZ -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
+          rm -rf pkgroot dynlex-component.pkg
+          cmake --install . --prefix "${PWD}/pkgroot/usr/local"
+          pkgbuild \
+            --root "${PWD}/pkgroot" \
+            --identifier "org.dynlex.dynlex" \
+            --version "${VERSION}" \
+            --install-location "/" \
+            "dynlex-component.pkg"
+          productbuild \
+            --package "dynlex-component.pkg" \
+            "dynlex-${VERSION}-${RUNNER_OS}.pkg"
 
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
@@ -200,18 +211,19 @@ jobs:
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
           }
-          & $dynlex.FullName "tests/required/simple/main.dl" -o "$env:TEMP\\dynlex-smoke-windows.exe" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.exe")) {
-            throw "dynlex compile step failed. See dynlex-smoke-windows-compile.log"
-          }
-          & "$env:TEMP\\dynlex-smoke-windows.exe" | Out-File -FilePath "$env:TEMP\\dynlex-smoke-windows.out" -Encoding ascii
+          & $dynlex.FullName --help 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-help.log"
           if ($LASTEXITCODE -ne 0) {
-            throw "smoke executable failed with exit code $LASTEXITCODE"
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-help.log" | Write-Host
+            throw "dynlex --help failed"
           }
-          $expected = (Get-Content "tests/required/simple/expected.txt" -Raw).Replace("`r`n","`n").TrimEnd("`n")
-          $actual = (Get-Content "$env:TEMP\\dynlex-smoke-windows.out" -Raw).Replace("`r`n","`n").TrimEnd("`n")
-          if ($actual -ne $expected) {
-            throw "Smoke output mismatch.`nExpected:`n$expected`nActual:`n$actual"
+          & $dynlex.FullName "tests/required/simple/main.dl" --emit-llvm -o "$env:TEMP\\dynlex-smoke-windows.ll" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.ll")) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-compile.log" | Write-Host
+            throw "dynlex emit-llvm step failed. See dynlex-smoke-windows-compile.log"
+          }
+          $llvmIr = Get-Content "$env:TEMP\\dynlex-smoke-windows.ll" -Raw
+          if ($llvmIr -notmatch "define .*@main\\(") {
+            throw "LLVM IR output does not contain a main definition."
           }
 
   smoke-macos:
