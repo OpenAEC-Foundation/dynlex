@@ -125,7 +125,7 @@ static void appendUniqueSection(std::vector<Section *> &sections, Section *secti
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
 	int offset = reference->range().start();
 	for (VariableMatch &varMatch : match.discoveredVariables) {
-		VariableReference *varRef = new VariableReference(
+		VariableReference *varRef = context.createVariableReference(
 			Range(reference->range().line, offset + varMatch.lineStartPos, offset + varMatch.lineEndPos), varMatch.name
 		);
 		varMatch.variableReference = varRef;
@@ -374,7 +374,6 @@ static void removeVariableReferencesFromMatch(
 									sec->variableReferences.erase(vit);
 							}
 							sec->variableDefinitions.erase(defIt);
-							delete definitionRef;
 						}
 
 					// Revert Variable→VariableLike in pattern definitions and mark for re-resolution.
@@ -411,7 +410,6 @@ static void removeVariableReferencesFromMatch(
 			}
 		}
 
-			delete varMatch.variableReference;
 			varMatch.variableReference = nullptr;
 	}
 	for (PatternMatch &subMatch : match.subMatches) {
@@ -487,7 +485,7 @@ static bool resolveReferences(
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
 			reference->range().section()->addVariableReference(
-				context, new VariableReference(reference->range(), reference->patternElements[0].text)
+				context, context.createVariableReference(reference->range(), reference->patternElements[0].text)
 			);
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
@@ -1074,7 +1072,6 @@ bool resolvePatterns(ParseContext &context) {
 						if (refs.empty())
 							highestSection->variableReferences.erase(refsIt);
 					}
-					delete oldDefinition;
 				}
 				highestSection->variableDefinitions[name] = definition;
 				highestSection->variables[name] = new Variable(name, definition, groupIsGlobal);

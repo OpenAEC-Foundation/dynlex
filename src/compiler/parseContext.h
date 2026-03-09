@@ -141,6 +141,9 @@ struct ParseContext {
 	int defaultPrecedenceLevel = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
+	// Owns all VariableReference instances for this compilation.
+	// Other structures keep non-owning raw pointers into this arena.
+	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
@@ -161,6 +164,7 @@ struct ParseContext {
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
 	void processEncounteredIntrinsic(Function *intrinsicExpr);
+	VariableReference *createVariableReference(Range range, const std::string &name);
 };
 
 // Extract the body function and parameter bindings from a macro PatternCall.

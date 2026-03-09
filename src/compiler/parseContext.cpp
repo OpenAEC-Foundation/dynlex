@@ -128,6 +128,11 @@ void ParseContext::processEncounteredIntrinsic(Function *intrinsicExpr) {
 		typeAliasNames.emplace(aliasType, std::move(aliasName));
 }
 
+VariableReference *ParseContext::createVariableReference(Range range, const std::string &name) {
+	ownedVariableReferences.push_back(std::make_unique<VariableReference>(std::move(range), name));
+	return ownedVariableReferences.back().get();
+}
+
 ParseContext::~ParseContext() {
 	std::unordered_set<Function *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
@@ -138,7 +143,6 @@ ParseContext::~ParseContext() {
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;
 	std::unordered_set<PatternReference *> visitedReferences;
-	std::unordered_set<VariableReference *> visitedVarRefs;
 	std::unordered_set<Variable *> visitedVars;
 	std::vector<Section *> sectionStack;
 	if (mainSection)
@@ -165,16 +169,6 @@ ParseContext::~ParseContext() {
 			reference->match = nullptr;
 			delete reference;
 		}
-		for (auto &[_, refs] : section->variableReferences) {
-			for (VariableReference *reference : refs) {
-				if (reference && visitedVarRefs.insert(reference).second)
-					delete reference;
-			}
-		}
-		for (auto &[_, reference] : section->variableDefinitions) {
-			if (reference && visitedVarRefs.insert(reference).second)
-				delete reference;
-		}
 		for (auto &[_, variable] : section->variables) {
 			if (variable && visitedVars.insert(variable).second)
 				delete variable;
@@ -190,13 +184,6 @@ ParseContext::~ParseContext() {
 				delete classSection->classDefinition;
 				classSection->classDefinition = nullptr;
 			}
-		}
-	}
-
-	for (auto &[_, refs] : unresolvedVariableReferences) {
-		for (VariableReference *reference : refs) {
-			if (reference && visitedVarRefs.insert(reference).second)
-				delete reference;
 		}
 	}
 

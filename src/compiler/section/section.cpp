@@ -535,7 +535,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 						if (existing != variableDefinitions.end()) {
 							reference->definition = existing->second;
 						} else {
-							VariableReference *varRef = new VariableReference(
+							VariableReference *varRef = context.createVariableReference(
 								Range(
 									definition->range.line, definition->range.start() + element.startPos,
 									definition->range.start() + element.startPos + element.text.length()
