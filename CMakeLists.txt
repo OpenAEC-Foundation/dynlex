@@ -219,6 +219,26 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/
 if(WIN32)
     # Bundle runtime DLLs (LLVM/MSVC deps) so the MSI installation is self-contained.
     install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+    set(DYNLEX_LLVM_BIN_HINTS "")
+    if(DEFINED LLVM_TOOLS_BINARY_DIR AND LLVM_TOOLS_BINARY_DIR)
+        list(APPEND DYNLEX_LLVM_BIN_HINTS "${LLVM_TOOLS_BINARY_DIR}")
+    endif()
+    if(DEFINED LLVM_DIR AND LLVM_DIR)
+        get_filename_component(DYNLEX_LLVM_LIB_DIR_FOR_DLLS "${LLVM_DIR}/../.." ABSOLUTE)
+        get_filename_component(DYNLEX_LLVM_ROOT_DIR_FOR_DLLS "${DYNLEX_LLVM_LIB_DIR_FOR_DLLS}/.." ABSOLUTE)
+        list(APPEND DYNLEX_LLVM_BIN_HINTS "${DYNLEX_LLVM_ROOT_DIR_FOR_DLLS}/bin")
+    endif()
+
+    foreach(DYNLEX_REQUIRED_DLL IN ITEMS libc++.dll zlib1.dll)
+        unset(DYNLEX_REQUIRED_DLL_PATH CACHE)
+        find_file(DYNLEX_REQUIRED_DLL_PATH NAMES "${DYNLEX_REQUIRED_DLL}" HINTS ${DYNLEX_LLVM_BIN_HINTS})
+        if(DYNLEX_REQUIRED_DLL_PATH)
+            install(FILES "${DYNLEX_REQUIRED_DLL_PATH}" DESTINATION ${CMAKE_INSTALL_BINDIR})
+        else()
+            message(WARNING "Could not locate required runtime DLL '${DYNLEX_REQUIRED_DLL}' for packaging.")
+        endif()
+    endforeach()
 endif()
 
 #
