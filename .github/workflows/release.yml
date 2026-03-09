@@ -232,7 +232,7 @@ jobs:
             throw "dynlex emit-llvm step failed. See dynlex-smoke-windows-compile.log"
           }
           $llvmIr = Get-Content "$env:TEMP\\dynlex-smoke-windows.ll" -Raw
-          if ($llvmIr -notmatch "define .*@main\\(") {
+          if ($llvmIr -notmatch "define .*@main\(") {
             throw "LLVM IR output does not contain a main definition."
           }
 
