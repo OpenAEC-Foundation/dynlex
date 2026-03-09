@@ -124,7 +124,6 @@ jobs:
 
       - name: Build (Release)
         run: |
-          export PATH="$LLVM_BIN:$PATH"
           ./scripts/build.sh --release
 
       - name: Package TGZ + PKG
@@ -188,17 +187,27 @@ jobs:
       - name: Install MSI and validate
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path "release-artifacts/windows" -Filter *.msi | Select-Object -First 1
+          Get-ChildItem -Path "release-artifacts/windows" -Recurse | Select-Object FullName
+          $msi = Get-ChildItem -Path "release-artifacts/windows" -Recurse -Filter *.msi | Select-Object -First 1
           if (-not $msi) {
             throw "No MSI artifact found."
           }
           Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart" -Wait -NoNewWindow
-          $dynlex = Get-ChildItem "C:\Program Files" -Filter dynlex.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          $dynlex = Get-Item "C:\Program Files\dynlex\bin\dynlex.exe" -ErrorAction SilentlyContinue
+          if (-not $dynlex) {
+            $dynlex = Get-ChildItem "C:\Program Files" -Filter dynlex.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
           }
-          & $dynlex.FullName "tests/required/simple/main.dl" -o "$env:TEMP\\dynlex-smoke-windows.exe"
+          & $dynlex.FullName "tests/required/simple/main.dl" -o "$env:TEMP\\dynlex-smoke-windows.exe" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.exe")) {
+            throw "dynlex compile step failed. See dynlex-smoke-windows-compile.log"
+          }
           & "$env:TEMP\\dynlex-smoke-windows.exe" | Out-File -FilePath "$env:TEMP\\dynlex-smoke-windows.out" -Encoding ascii
+          if ($LASTEXITCODE -ne 0) {
+            throw "smoke executable failed with exit code $LASTEXITCODE"
+          }
           $expected = (Get-Content "tests/required/simple/expected.txt" -Raw).Replace("`r`n","`n").TrimEnd("`n")
           $actual = (Get-Content "$env:TEMP\\dynlex-smoke-windows.out" -Raw).Replace("`r`n","`n").TrimEnd("`n")
           if ($actual -ne $expected) {

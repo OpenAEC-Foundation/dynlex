@@ -170,6 +170,15 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 				context.currentKnownConstants = constantsBeforeChain;
 				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
 					return false;
+				auto selectedState = context.currentKnownConstants;
+				for (size_t k = i; k <= chainEnd; ++k) {
+					if (k == *selectedBranch)
+						continue;
+					context.currentKnownConstants = constantsBeforeChain;
+					if (!inferOpenedSection(section->codeLines[k]))
+						return false;
+				}
+				context.currentKnownConstants = std::move(selectedState);
 			} else {
 				std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchStates;
 				bool hasElseBranch = false;
