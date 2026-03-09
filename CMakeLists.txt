@@ -216,6 +216,10 @@ set_target_properties (${PROJECT_NAME} PROPERTIES
 #
 install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
+if(WIN32)
+    # Bundle runtime DLLs (LLVM/MSVC deps) so the MSI installation is self-contained.
+    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 #
 # CPack packaging

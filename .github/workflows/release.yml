@@ -211,10 +211,20 @@ jobs:
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
           }
-          & $dynlex.FullName --help 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-help.log"
-          if ($LASTEXITCODE -ne 0) {
-            Get-Content "$env:TEMP\\dynlex-smoke-windows-help.log" | Write-Host
-            throw "dynlex --help failed"
+          $helpStdout = "$env:TEMP\\dynlex-smoke-windows-help.stdout.log"
+          $helpStderr = "$env:TEMP\\dynlex-smoke-windows-help.stderr.log"
+          $helpExit = -1
+          try {
+            $helpProc = Start-Process -FilePath $dynlex.FullName -ArgumentList "--help" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $helpStdout -RedirectStandardError $helpStderr
+            $helpExit = $helpProc.ExitCode
+          } catch {
+            Write-Host $_
+            throw "dynlex --help launch failed"
+          }
+          if (Test-Path $helpStdout) { Get-Content $helpStdout | Write-Host }
+          if (Test-Path $helpStderr) { Get-Content $helpStderr | Write-Host }
+          if ($helpExit -ne 0) {
+            throw "dynlex --help failed with exit code $helpExit"
           }
           & $dynlex.FullName "tests/required/simple/main.dl" --emit-llvm -o "$env:TEMP\\dynlex-smoke-windows.ll" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.ll")) {
