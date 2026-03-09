@@ -540,9 +540,8 @@ bool DapServer::compileDlFile(const std::string &dlFile, const std::string &outp
 
 	std::string executeError;
 	bool executionFailed = false;
-	int exitCode = llvm::sys::ExecuteAndWait(
-		selfPath, commandArgs, std::nullopt, redirects, 0, 0, &executeError, &executionFailed
-	);
+	int exitCode =
+		llvm::sys::ExecuteAndWait(selfPath, commandArgs, std::nullopt, redirects, 0, 0, &executeError, &executionFailed);
 
 	auto readFile = [](const std::string &path) {
 		std::ifstream file(path, std::ios::in | std::ios::binary);

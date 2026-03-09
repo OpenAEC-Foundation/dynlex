@@ -204,6 +204,14 @@ void LanguageServer::handleRequest(const Json &message) {
 			} else {
 				sendResponse(id, nullptr);
 			}
+		} else if (method == "textDocument/hover") {
+			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
+			auto result = onHover(p);
+			if (result) {
+				sendResponse(id, *result);
+			} else {
+				sendResponse(id, nullptr);
+			}
 		} else if (method == "textDocument/semanticTokens/full") {
 			SemanticTokensParams p = params.get<SemanticTokensParams>();
 			SemanticTokens result = onSemanticTokensFull(p);
@@ -335,6 +343,8 @@ void LanguageServer::onDidSave(const DidSaveTextDocumentParams & /*params*/) {
 }
 
 std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
+
+std::optional<Hover> LanguageServer::onHover(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
 
 CompletionList LanguageServer::onCompletion(const TextDocumentPositionParams & /*params*/) { return {}; }
 

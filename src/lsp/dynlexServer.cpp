@@ -1,5 +1,6 @@
 #include "dynlexServer.h"
 #include "codeLine.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "completion.h"
 #include "configDocument.h"
@@ -13,9 +14,12 @@
 #include "semanticTokenBuilder.h"
 #include "semanticTokenDebug.h"
 #include "sourceFile.h"
+#include "variable.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <regex>
+#include <sstream>
 using namespace std::literals;
 
 namespace lsp {
@@ -66,6 +70,7 @@ InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
 	InitializeResult result;
 	result.capabilities.textDocumentSync = 2; // Incremental
 	result.capabilities.definitionProvider = true;
+	result.capabilities.hoverProvider = true;
 	result.capabilities.completionProvider.supported = true;
 	result.capabilities.completionProvider.triggerCharacters = {" ", "/", ".", "_", "-", ":", "(", ")", "\"", "a", "b", "c",
 																"d", "e", "f", "g", "h", "i", "j", "k", "l",  "m", "n", "o",
@@ -535,6 +540,83 @@ static std::optional<::Range> getDefinitionTarget(Function *expr) {
 	return std::nullopt;
 }
 
+static Section *findOwningVariableSection(Section *fromSection, VariableReference *targetDefinition, const std::string &name) {
+	for (Section *section = fromSection; section; section = section->parent) {
+		auto it = section->variables.find(name);
+		if (it != section->variables.end() && it->second && it->second->definition == targetDefinition)
+			return section;
+	}
+	return nullptr;
+}
+
+static bool rangeContainsSource(const ::Range &range, const std::string &uri, int line, int character) {
+	if (!range.line)
+		return false;
+	SourceLocation start = range.sourceStart();
+	SourceLocation end = range.sourceEnd();
+	if (!start.sourceFile || !end.sourceFile)
+		return false;
+	if (pathutil::toAbsoluteUri(start.sourceFile->uri) != uri || start.sourceFileLineIndex != line ||
+		end.sourceFileLineIndex != line) {
+		return false;
+	}
+	return character >= start.column && character < end.column;
+}
+
+static VariableReference *findVariableReferenceAt(Section *fromSection, const std::string &uri, int line, int character) {
+	for (Section *section = fromSection; section; section = section->parent) {
+		for (const auto &[_, refs] : section->variableReferences) {
+			for (VariableReference *reference : refs) {
+				if (!reference)
+					continue;
+				if (rangeContainsSource(reference->range, uri, line, character))
+					return reference;
+			}
+		}
+	}
+	return nullptr;
+}
+
+static std::string formatCompileTimeValue(const CompileTimeValue &value) {
+	if (const auto *number = std::get_if<double>(&value)) {
+		if (std::isfinite(*number)) {
+			double rounded = std::round(*number);
+			if (std::abs(*number - rounded) < 1e-9) {
+				std::ostringstream asInteger;
+				asInteger << static_cast<long long>(rounded);
+				return asInteger.str();
+			}
+		}
+		std::ostringstream asFloat;
+		asFloat << *number;
+		return asFloat.str();
+	}
+	if (const auto *text = std::get_if<std::string>(&value))
+		return "\"" + *text + "\"";
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? "true" : "false";
+	return "?";
+}
+
+static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr) {
+	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return nullptr;
+
+	const std::vector<PatternDefinition *> &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	if (defs.empty())
+		return nullptr;
+
+	std::vector<DataType> argTypes;
+	argTypes.reserve(expr->arguments.size());
+	for (const Function *arg : expr->arguments)
+		argTypes.push_back(arg ? arg->type : DataType{});
+
+	PatternDefinition *matched = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypes);
+	if (!matched)
+		matched = defs.front();
+	return matched;
+}
+
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
@@ -564,6 +646,94 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 			}
 		}
 		break;
+	}
+
+	return std::nullopt;
+}
+
+std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &params) {
+	if (isConfigDocumentUri(params.textDocument.uri))
+		return std::nullopt;
+
+	ParseContext *context = findContextFor(params.textDocument.uri);
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
+		return std::nullopt;
+
+	for (const ParseContext::SourceTokenAnnotation &annotation : context->sourceTokenAnnotations) {
+		if (annotation.kind != ParseContext::SourceTokenKind::PatternReference)
+			continue;
+		if (!rangeContainsSource(annotation.range, params.textDocument.uri, params.position.line, params.position.character))
+			continue;
+		PatternDefinition *definition =
+			findDefinitionBySignature(*context, annotation.referencedPatternType, annotation.range.subString);
+		if (!definition)
+			return std::nullopt;
+		Hover hover;
+		hover.contents = definition->toString();
+		hover.range = convertRange(annotation.range);
+		return hover;
+	}
+
+	for (CodeLine *codeLine : context->codeLines) {
+		if (!codeLine->containsSourceLocation(params.textDocument.uri, params.position.line, params.position.character))
+			continue;
+
+		int localOffset = codeLine->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
+		if (!codeLine->function)
+			return std::nullopt;
+
+		Function *expr = findDeepestFunction(codeLine->function, localOffset);
+		if (PatternDefinition *matchedPattern = matchedPatternDefinitionForHover(expr)) {
+			Hover hover;
+			hover.contents = matchedPattern->toString();
+			hover.range = convertRange(expr->range);
+			return hover;
+		}
+		std::string variableName;
+		VariableReference *referenceAtHover = nullptr;
+		VariableReference *variableDefinition = nullptr;
+		if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
+			variableName = expr->variable->name;
+			referenceAtHover = expr->variable;
+			variableDefinition = expr->variable->definition ? expr->variable->definition : expr->variable;
+		} else {
+			VariableReference *reference = findVariableReferenceAt(
+				codeLine->section, params.textDocument.uri, params.position.line, params.position.character
+			);
+			if (!reference)
+				return std::nullopt;
+			variableName = reference->name;
+			referenceAtHover = reference;
+			variableDefinition = reference->definition ? reference->definition : reference;
+		}
+
+		Section *ownerSection = findOwningVariableSection(codeLine->section, variableDefinition, variableName);
+		if (!ownerSection || !referenceAtHover)
+			return std::nullopt;
+
+		// Multi-instantiation functions are ambiguous without an instantiation picker.
+		if (ownerSection->instantiations.size() > 1)
+			return std::nullopt;
+
+		std::optional<CompileTimeValue> value;
+		if (ownerSection->instantiations.size() == 1) {
+			const Instantiation &inst = ownerSection->instantiations.begin()->second;
+			auto valueIt = inst.constantValuesByReference.find(referenceAtHover);
+			if (valueIt != inst.constantValuesByReference.end())
+				value = valueIt->second;
+		} else {
+			auto valueIt = context->constantValuesByReference.find(referenceAtHover);
+			if (valueIt != context->constantValuesByReference.end())
+				value = valueIt->second;
+		}
+		if (!value.has_value() || !isCompileTimeKnown(*value))
+			return std::nullopt;
+
+		Hover hover;
+		hover.contents = "value: " + formatCompileTimeValue(*value);
+		if (expr)
+			hover.range = convertRange(expr->range);
+		return hover;
 	}
 
 	return std::nullopt;
@@ -712,8 +882,13 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 
 	auto lockedIt = lockedLinesByUri.find(uri);
 	if (lockedIt != lockedLinesByUri.end()) {
-		for (const auto &[lineIndex, _] : lockedIt->second) {
+		for (const auto &[lineIndex, state] : lockedIt->second) {
 			if (lineIndex < 0 || lineIndex >= docIt->second->lineCount())
+				continue;
+			// Keep compiler semantic tokens when the locked line still matches
+			// the last compiled baseline; only fall back to live lexing for
+			// actively edited (diverged) lines.
+			if (std::string(docIt->second->getLine(lineIndex)) == state.committedText)
 				continue;
 			tokensByLine[lineIndex] = collectLiveLineSemanticTokens(context, *docIt->second, uri, lineIndex);
 		}

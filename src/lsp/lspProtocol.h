@@ -141,6 +141,18 @@ inline void from_json(const Json &j, TextDocumentPositionParams &p) {
 	j.at("position").get_to(p.position);
 }
 
+struct Hover {
+	Json contents;
+	std::optional<Range> range;
+};
+
+inline void to_json(Json &j, const Hover &h) {
+	j = Json{{"contents", h.contents}};
+	if (h.range) {
+		j["range"] = *h.range;
+	}
+}
+
 struct TextEdit {
 	Range range;
 	std::string newText;
@@ -388,6 +400,7 @@ struct ServerCapabilities {
 	// Text document sync kind: 0=None, 1=Full, 2=Incremental
 	int textDocumentSync = 2;
 	bool definitionProvider = true;
+	bool hoverProvider = false;
 	struct {
 		bool supported = false;
 		bool resolveProvider = false;
@@ -405,6 +418,7 @@ inline void to_json(Json &j, const ServerCapabilities &c) {
 	j = Json{
 		{"textDocumentSync", c.textDocumentSync},
 		{"definitionProvider", c.definitionProvider},
+		{"hoverProvider", c.hoverProvider},
 		{"semanticTokensProvider", Json{{"full", c.semanticTokensProvider.full}, {"legend", c.semanticTokensProvider.legend}}}
 	};
 	if (c.completionProvider.supported) {

@@ -2,9 +2,9 @@
 #include "classDefinition.h"
 #include "classSection.h"
 #include "codegenInternal.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
-#include "compileTimeValue.h"
 #include "function.h"
 #include "intrinsicInfo.h"
 #include "native.h"
@@ -190,10 +190,10 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 			return builder.CreateInBoundsGEP(
 				strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
 			);
-			}
-			// Unknown literal variant type - should never reach here after type inference
-			crashCompilerBug("Unknown literal type in codegen");
 		}
+		// Unknown literal variant type - should never reach here after type inference
+		crashCompilerBug("Unknown literal type in codegen");
+	}
 
 	case Function::Kind::ArrayLiteral: {
 		DataType arrayType = getEffectiveType(context, expr);
@@ -403,8 +403,8 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
-	auto controlHeaderInfo = [&](CodeLine *line)
-		-> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+	auto controlHeaderInfo =
+		[&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
 		if (!line || !line->function)
 			return std::nullopt;
 

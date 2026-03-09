@@ -221,9 +221,9 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/
 # CPack packaging
 #
 if(WIN32)
-    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_GENERATOR "WIX;ZIP")
 elseif(APPLE)
-    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_GENERATOR "productbuild;TGZ")
 else()
     set(CPACK_GENERATOR "DEB;TGZ")
 endif()

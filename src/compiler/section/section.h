@@ -28,6 +28,7 @@ struct Instantiation {
 	DataType returnType{DataType::Kind::Any};
 	std::vector<DataType> parameterTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;

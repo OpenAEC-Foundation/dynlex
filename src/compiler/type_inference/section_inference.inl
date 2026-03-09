@@ -2,6 +2,20 @@
 
 #include "operand_reordering.inl"
 
+static bool isLoopSectionOpening(CodeLine *line) {
+	if (!line || !line->function)
+		return false;
+	Function *header = line->function;
+	if (header->kind == Function::Kind::PatternCall) {
+		std::unordered_map<std::string, Function *> innerBindings;
+		Function *expanded = expandMacroPatternCall(header, innerBindings);
+		if (expanded)
+			header = expanded;
+	}
+	return header && header->kind == Function::Kind::IntrinsicCall &&
+		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
+}
+
 static bool
 inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings) {
 	// The first instantiation determines operand ordering; subsequent ones reuse it.
@@ -21,10 +35,43 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		if (context.trial && context.trialJournal)
 			context.trialJournal->recordVariableWrite(boundVar);
 		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
+		CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindings);
+		context.setKnownConstant(boundVar->definition, boundValue);
+		context.snapshotReferenceConstant(boundVar->definition);
 	}
 
-	auto controlHeaderInfo = [&](CodeLine *line)
-		-> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+	if (context.currentInstantiation) {
+		for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
+			Variable *var = section->findVariable(name);
+			if (var)
+				context.setKnownConstant(var->definition, value);
+		}
+	}
+
+	bool loopSection = isLoopSectionOpening(section->openingLine);
+	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
+	if (loopSection) {
+		constantsAtLoopEntry = context.currentKnownConstants;
+		context.pushLoopMutationScope();
+	}
+	struct LoopMutationScopeGuard {
+		InferenceContext &context;
+		bool active;
+		explicit LoopMutationScopeGuard(InferenceContext &context, bool active) : context(context), active(active) {}
+		std::unordered_set<VariableReference *> finish() {
+			if (!active)
+				return {};
+			active = false;
+			return context.popLoopMutationScope();
+		}
+		~LoopMutationScopeGuard() {
+			if (active)
+				context.popLoopMutationScope();
+		}
+	} loopMutationScope(context, loopSection);
+
+	auto controlHeaderInfo =
+		[&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
 		if (!line || !line->function)
 			return std::nullopt;
 
@@ -60,6 +107,7 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		CodeLine *line = section->codeLines[i];
 		auto headerInfo = controlHeaderInfo(line);
 		if (headerInfo && std::get<0>(*headerInfo) == "if") {
+			auto constantsBeforeChain = context.currentKnownConstants;
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
@@ -105,9 +153,8 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 					break;
 				}
 				markCompileTimeParameterRequirements(header->arguments[1], headerBindings, context.currentInstantiation);
-				CompileTimeValue conditionValue = evaluateCompileTimeValue(
-					header->arguments[1], context.parseContext, headerBindings, context.currentInstantiation
-				);
+				CompileTimeValue conditionValue =
+					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindings);
 				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 				if (!condition.has_value()) {
 					branchKnown = false;
@@ -120,13 +167,37 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 			}
 
 			if (branchKnown && selectedBranch.has_value()) {
+				context.currentKnownConstants = constantsBeforeChain;
 				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
 					return false;
 			} else {
+				std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchStates;
+				bool hasElseBranch = false;
 				for (size_t k = i; k <= chainEnd; k++) {
+					auto branchInfo = controlHeaderInfo(section->codeLines[k]);
+					if (branchInfo && std::get<0>(*branchInfo) == "else")
+						hasElseBranch = true;
+					context.currentKnownConstants = constantsBeforeChain;
 					if (!inferOpenedSection(section->codeLines[k]))
 						return false;
+					branchStates.push_back(context.currentKnownConstants);
 				}
+				if (!hasElseBranch)
+					branchStates.push_back(constantsBeforeChain);
+				std::unordered_map<VariableReference *, CompileTimeValue> mergedConstants =
+					branchStates.empty() ? constantsBeforeChain : branchStates.front();
+				for (size_t idx = 1; idx < branchStates.size(); ++idx) {
+					const auto &other = branchStates[idx];
+					for (auto it = mergedConstants.begin(); it != mergedConstants.end();) {
+						auto otherIt = other.find(it->first);
+						if (otherIt == other.end() || otherIt->second != it->second) {
+							it = mergedConstants.erase(it);
+						} else {
+							++it;
+						}
+					}
+				}
+				context.currentKnownConstants = std::move(mergedConstants);
 			}
 
 			i = chainEnd;
@@ -142,6 +213,22 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		if (!inferOpenedSection(line))
 			return false;
 	}
+	if (loopSection) {
+		std::unordered_set<VariableReference *> loopMutations = loopMutationScope.finish();
+		bool needsLoopReinference = false;
+		for (VariableReference *ref : loopMutations) {
+			if (constantsAtLoopEntry.contains(ref)) {
+				needsLoopReinference = true;
+				break;
+			}
+		}
+		if (needsLoopReinference) {
+			context.currentKnownConstants = constantsAtLoopEntry;
+			for (VariableReference *ref : loopMutations)
+				context.setKnownConstant(ref, {});
+			return inferSection(section, context, bindings);
+		}
+	}
 	context.typesValid = true;
 	return true;
 }
@@ -149,6 +236,8 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	InferenceContext context(parseContext);
+	parseContext.constantValuesByReference.clear();
+	context.currentKnownConstants.clear();
 	if (!inferSection(parseContext.mainSection, context))
 		return false;
 
@@ -220,9 +309,16 @@ bool ensureSectionInstantiationInferred(
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 
+	inst.constantValuesByReference.clear();
 	InferenceContext context(parseContext);
 	inst.inferring = true;
 	Instantiation *savedInst = context.currentInstantiation;
+	context.currentKnownConstants.clear();
+	for (const auto &[name, value] : inst.constantParameterValues) {
+		Variable *var = section->findVariable(name);
+		if (var)
+			context.setKnownConstant(var->definition, value);
+	}
 	context.currentInstantiation = &inst;
 	bool inferenceSucceeded = inferSection(section, context, callBindings);
 	context.currentInstantiation = savedInst;

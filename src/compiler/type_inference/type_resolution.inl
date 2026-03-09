@@ -290,12 +290,12 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				}
 
 				DataType instantiatedTypeRef;
-					if (allArgumentsDeduced && instantiateClassFromArgumentTypes(
-												   typeRefType.classDefinition, argumentTypes, instantiatedTypeRef,
-												   typeRefType.classInstIndex
-											   )) {
-						return instantiatedTypeRef.toReferencedType();
-					}
+				if (allArgumentsDeduced &&
+					instantiateClassFromArgumentTypes(
+						typeRefType.classDefinition, argumentTypes, instantiatedTypeRef, typeRefType.classInstIndex
+					)) {
+					return instantiatedTypeRef.toReferencedType();
+				}
 
 				DataType targetType = concretizeClassType(typeRefType.toReferencedType());
 				if (resolved->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
@@ -466,16 +466,16 @@ static bool resolveCompileTimeTypeReference(
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
 
-			std::unordered_map<std::string, Function *> innerBindings;
-			Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
-			if (!bodyExpr)
-				return false;
-			for (const auto &[name, argExpr] : innerBindings) {
-				Function *resolvedArg = resolveThroughBindings(argExpr, callBindings);
-				callBindings[name] = resolvedArg ? resolvedArg : argExpr;
-			}
-			return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindings, outTypeRef);
+		std::unordered_map<std::string, Function *> innerBindings;
+		Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
+		if (!bodyExpr)
+			return false;
+		for (const auto &[name, argExpr] : innerBindings) {
+			Function *resolvedArg = resolveThroughBindings(argExpr, callBindings);
+			callBindings[name] = resolvedArg ? resolvedArg : argExpr;
 		}
+		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindings, outTypeRef);
+	}
 	return false;
 }
 
@@ -510,8 +510,7 @@ static DataType instantiateBoundClassType(
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
 }
 
-static bool
-instantiateClassFromArgumentTypes(
+static bool instantiateClassFromArgumentTypes(
 	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex
 ) {
 	if (!classDef || classDef->fields.size() != argumentTypes.size())
@@ -724,6 +723,8 @@ struct InferenceContext {
 
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
+	std::unordered_map<VariableReference *, CompileTimeValue> currentKnownConstants;
+	std::vector<std::unordered_set<VariableReference *>> loopMutationStack;
 	bool typesValid = true;
 	bool trial = false;
 	bool suppressDiagnostics = false;
@@ -742,6 +743,65 @@ struct InferenceContext {
 		typesValid = false;
 		if (typeFailureDetail.empty())
 			typeFailureDetail = std::move(detail);
+	}
+
+	VariableReference *normalizeReference(VariableReference *reference) const {
+		if (!reference)
+			return nullptr;
+		return reference->definition ? reference->definition : reference;
+	}
+
+	CompileTimeValue lookupKnownConstant(VariableReference *reference) const {
+		VariableReference *key = normalizeReference(reference);
+		if (!key)
+			return {};
+		auto it = currentKnownConstants.find(key);
+		return it != currentKnownConstants.end() ? it->second : CompileTimeValue{};
+	}
+
+	void setKnownConstant(VariableReference *reference, const CompileTimeValue &value) {
+		VariableReference *key = normalizeReference(reference);
+		if (!key)
+			return;
+		if (isCompileTimeKnown(value))
+			currentKnownConstants[key] = value;
+		else
+			currentKnownConstants.erase(key);
+	}
+
+	void snapshotReferenceConstant(VariableReference *reference) {
+		if (trial || !reference)
+			return;
+		CompileTimeValue value = lookupKnownConstant(reference);
+		auto &target =
+			currentInstantiation ? currentInstantiation->constantValuesByReference : parseContext.constantValuesByReference;
+		if (isCompileTimeKnown(value))
+			target[reference] = value;
+		else
+			target.erase(reference);
+	}
+
+	void pushLoopMutationScope() { loopMutationStack.emplace_back(); }
+
+	std::unordered_set<VariableReference *> popLoopMutationScope() {
+		if (loopMutationStack.empty())
+			return {};
+		std::unordered_set<VariableReference *> mutations = std::move(loopMutationStack.back());
+		loopMutationStack.pop_back();
+		if (!loopMutationStack.empty())
+			loopMutationStack.back().insert(mutations.begin(), mutations.end());
+		return mutations;
+	}
+
+	bool inLoopMutationScope() const { return !loopMutationStack.empty(); }
+
+	void noteLoopMutation(VariableReference *reference) {
+		if (loopMutationStack.empty())
+			return;
+		VariableReference *normalized = normalizeReference(reference);
+		if (!normalized)
+			return;
+		loopMutationStack.back().insert(normalized);
 	}
 };
 

@@ -170,6 +170,22 @@ function getServerPort(): number {
     return config.get<number>('server.port') || 5007;
 }
 
+function getServerHost(): string {
+    const config = vscode.workspace.getConfiguration('dynlex');
+    const host = (config.get<string>('server.host') || '').trim();
+    return host.length > 0 ? host : '127.0.0.1';
+}
+
+function getServerHosts(): string[] {
+    const configured = getServerHost();
+    const hosts = [configured];
+    // For local development/debugging, try both loopback families in case one is unavailable.
+    if (configured === '127.0.0.1' || configured === '::1' || configured === 'localhost') {
+        hosts.push('127.0.0.1', '::1', 'localhost');
+    }
+    return Array.from(new Set(hosts));
+}
+
 function getServerFlags(): string[] {
     const config = vscode.workspace.getConfiguration('dynlex');
     const flags = config.get<string>('server.flags') || '';
@@ -181,7 +197,7 @@ function useExternalServer(): boolean {
     return config.get<boolean>('server.useExternal') || false;
 }
 
-async function waitForPort(port: number, timeoutMs: number = 30000): Promise<boolean> {
+async function waitForPort(port: number, hosts: string[], timeoutMs: number = 30000): Promise<string | undefined> {
     const startTime = Date.now();
     let attempt = 0;
     while (Date.now() - startTime < timeoutMs) {
@@ -189,43 +205,48 @@ async function waitForPort(port: number, timeoutMs: number = 30000): Promise<boo
             return false;
         }
         attempt++;
-        const connected = await new Promise<boolean>(resolve => {
-            const socket = new net.Socket();
-            socket.setTimeout(500);
-            socket.on('connect', () => {
-                socket.destroy();
-                resolve(true);
+        for (const host of hosts) {
+            const connected = await new Promise<boolean>(resolve => {
+                const socket = new net.Socket();
+                socket.setTimeout(500);
+                socket.on('connect', () => {
+                    socket.destroy();
+                    resolve(true);
+                });
+                socket.on('error', () => {
+                    socket.destroy();
+                    resolve(false);
+                });
+                socket.on('timeout', () => {
+                    socket.destroy();
+                    resolve(false);
+                });
+                socket.connect(port, host);
             });
-            socket.on('error', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            socket.on('timeout', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            socket.connect(port, '127.0.0.1');
-        });
-        if (connected) {
-            return true;
+            if (connected) {
+                return host;
+            }
         }
         log(`Connection attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 200));
     }
-    return false;
+    return undefined;
 }
 
 async function startLanguageServer(context: vscode.ExtensionContext) {
     const port = getServerPort();
+    const hosts = getServerHosts();
+    let activeHost = hosts[0];
 
     if (useExternalServer()) {
-        log(`Waiting for external server on port ${port}...`);
-        const ready = await waitForPort(port);
-        if (!ready) {
-            logError(`Timed out waiting for external server on port ${port}`);
-            vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on port ${port}`);
+        log(`Waiting for external server on ${hosts.join(', ')}:${port}...`);
+        const readyHost = await waitForPort(port, hosts);
+        if (!readyHost) {
+            logError(`Timed out waiting for external server on ${hosts.join(', ')}:${port}`);
+            vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on ${hosts.join(', ')}:${port}`);
             return;
         }
+        activeHost = readyHost;
         log(`External server is ready`);
     } else {
         const serverPath = getServerPath();
@@ -269,7 +290,7 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
 
     // Connect to the server via TCP
     try {
-        await connectToServer(port, context);
+        await connectToServer(port, activeHost, context);
         reconnectAttempts = 0;
     } catch (err) {
         logError(`Error connecting to server: ${err}`);
@@ -277,15 +298,18 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
     }
 }
 
-async function connectToServer(port: number, context: vscode.ExtensionContext) {
-    log(`Connecting to language server on port ${port}...`);
+async function connectToServer(port: number, host: string, context: vscode.ExtensionContext) {
+    log(`Connecting to language server on ${host}:${port}...`);
 
     const serverOptions = (): Promise<StreamInfo> => {
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
+            socket.setTimeout(2000);
 
             socket.on('connect', () => {
-                log('Connected to language server');
+                // Disable idle timeout after connect; this socket stays open for the full LSP session.
+                socket.setTimeout(0);
+                log(`Connected to language server at ${host}:${port}`);
                 resolve({
                     reader: socket,
                     writer: socket
@@ -293,19 +317,19 @@ async function connectToServer(port: number, context: vscode.ExtensionContext) {
             });
 
             socket.on('error', (err) => {
-                logError(`Socket error: ${err.message}`);
-                reject(err);
+                reject(new Error(`Unable to connect to ${host}:${port} (${err.message})`));
+            });
+
+            socket.on('timeout', () => {
+                socket.destroy();
+                reject(new Error(`Unable to connect to ${host}:${port} (timeout)`));
             });
 
             socket.on('close', () => {
                 log('Socket closed');
-                if (!isShuttingDown && client) {
-                    vscode.window.showErrorMessage('Connection to DynLex language server lost.');
-                    scheduleReconnect(context);
-                }
             });
 
-            socket.connect(port, '127.0.0.1');
+            socket.connect(port, host);
         });
     };
 

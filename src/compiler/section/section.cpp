@@ -321,17 +321,17 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				intrinsicExpr->kind = Function::Kind::IntrinsicCall;
 
 				// Process arguments - first argument is the intrinsic name
-					auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
-						Function *argExpr;
-						if (argNode->character == '"') {
-							argExpr = createStringLiteral(range, argNode);
-						} else {
-							StringHierarchy *clonedNode = argNode->cloneWithOffset(-argNode->start);
-							argExpr = detectPatternsRecursively(
-								context, range.subRange(argNode->start, argNode->end), clonedNode, SectionType::Function
-							);
-							delete clonedNode;
-						}
+				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
+					Function *argExpr;
+					if (argNode->character == '"') {
+						argExpr = createStringLiteral(range, argNode);
+					} else {
+						StringHierarchy *clonedNode = argNode->cloneWithOffset(-argNode->start);
+						argExpr = detectPatternsRecursively(
+							context, range.subRange(argNode->start, argNode->end), clonedNode, SectionType::Function
+						);
+						delete clonedNode;
+					}
 					if (!argExpr)
 						return false;
 
@@ -355,37 +355,36 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 						return nullptr;
 				}
 
-					// Validate argument count against intrinsic registry
-					if (!intrinsicExpr->intrinsicName.empty()) {
-						const IntrinsicInfo *info = findIntrinsic(intrinsicExpr->intrinsicName);
-						if (!info) {
+				// Validate argument count against intrinsic registry
+				if (!intrinsicExpr->intrinsicName.empty()) {
+					const IntrinsicInfo *info = findIntrinsic(intrinsicExpr->intrinsicName);
+					if (!info) {
 						context.diagnostics.push_back(Diagnostic(
 							Diagnostic::Level::Error, "unknown intrinsic: \"" + intrinsicExpr->intrinsicName + "\"",
 							intrinsicExpr->range
-							));
-							return nullptr;
-						}
-						int argCount = (int)intrinsicExpr->arguments.size();
-						bool belowMin = argCount < info->minArgCount;
-						bool aboveMax = info->maxArgCount >= 0 && argCount > info->maxArgCount;
-						if (belowMin || aboveMax) {
-							std::string expected;
-							if (info->maxArgCount < 0)
-								expected = "at least " + std::to_string(info->minArgCount - 1);
-							else if (info->minArgCount == info->maxArgCount)
-								expected = std::to_string(info->minArgCount - 1);
-							else
-								expected = std::to_string(info->minArgCount - 1) + " to " +
-										   std::to_string(info->maxArgCount - 1);
-							context.diagnostics.push_back(Diagnostic(
-								Diagnostic::Level::Error,
-								"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + expected +
-									" argument(s), got " + std::to_string(argCount - 1),
-								intrinsicExpr->range
-							));
-							return nullptr;
-						}
+						));
+						return nullptr;
 					}
+					int argCount = (int)intrinsicExpr->arguments.size();
+					bool belowMin = argCount < info->minArgCount;
+					bool aboveMax = info->maxArgCount >= 0 && argCount > info->maxArgCount;
+					if (belowMin || aboveMax) {
+						std::string expected;
+						if (info->maxArgCount < 0)
+							expected = "at least " + std::to_string(info->minArgCount - 1);
+						else if (info->minArgCount == info->maxArgCount)
+							expected = std::to_string(info->minArgCount - 1);
+						else
+							expected = std::to_string(info->minArgCount - 1) + " to " + std::to_string(info->maxArgCount - 1);
+						context.diagnostics.push_back(Diagnostic(
+							Diagnostic::Level::Error,
+							"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + expected + " argument(s), got " +
+								std::to_string(argCount - 1),
+							intrinsicExpr->range
+						));
+						return nullptr;
+					}
+				}
 
 				context.processEncounteredIntrinsic(intrinsicExpr);
 				expr->arguments.push_back(intrinsicExpr);
@@ -527,28 +526,28 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
 		forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
-				if (element.text != reference->name)
-					return;
-				auto markFound = [&] {
-					if (!found) {
-						auto existing = variableDefinitions.find(element.text);
-						if (existing != variableDefinitions.end()) {
-							reference->definition = existing->second;
-						} else {
-							VariableReference *varRef = context.createVariableReference(
-								Range(
-									definition->range.line, definition->range.start() + element.startPos,
-									definition->range.start() + element.startPos + element.text.length()
-								),
-								element.text
-							);
-							variableDefinitions[element.text] = varRef;
-							variableReferences[element.text].push_back(varRef);
-							reference->definition = varRef;
-						}
+			if (element.text != reference->name)
+				return;
+			auto markFound = [&] {
+				if (!found) {
+					auto existing = variableDefinitions.find(element.text);
+					if (existing != variableDefinitions.end()) {
+						reference->definition = existing->second;
+					} else {
+						VariableReference *varRef = context.createVariableReference(
+							Range(
+								definition->range.line, definition->range.start() + element.startPos,
+								definition->range.start() + element.startPos + element.text.length()
+							),
+							element.text
+						);
+						variableDefinitions[element.text] = varRef;
+						variableReferences[element.text].push_back(varRef);
+						reference->definition = varRef;
 					}
-					found = true;
-				};
+				}
+				found = true;
+			};
 			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
 				if (element.type != PatternElement::Type::Variable)
 					element.type = PatternElement::Type::Variable;

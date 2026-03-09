@@ -1,7 +1,7 @@
 #pragma once
-#include "debuggerAdapter.h"
 #include "../lsp/transport.h"
 #include "dapProtocol.h"
+#include "debuggerAdapter.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -20,7 +20,7 @@ class DapServer {
 	// Run the server (blocks until disconnect)
 	void run();
 
- private:
+  private:
 	std::unique_ptr<lsp::Transport> transport;
 	std::unique_ptr<DebuggerAdapter> debugger;
 	std::atomic<bool> running{false};

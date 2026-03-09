@@ -6,6 +6,7 @@
 	],
 	"settings": {
 		"dynlex.server.port": 5008,
+		"dynlex.server.host": "localhost",
 		"dynlex.server.useExternal": true,
 		"dynlex.server.path": "./build/dynlex",
 		"dynlex.server.flags": "--lsp-trace=/tmp/dynlex-lsp-trace.log"

@@ -108,9 +108,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 		if (canBeSubmatch()) {
 			// Try extending as left operand of a new function first (lower LIFO priority).
 			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
-				if (canStartSubmatch() && rootNode->argumentChild) {
-					MatchProgress clone = *this;
-					clone.rootNode = rootNode;
+			if (canStartSubmatch() && rootNode->argumentChild) {
+				MatchProgress clone = *this;
+				clone.rootNode = rootNode;
 				// advance past the argument slot — the completed sub-function occupies it
 				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};

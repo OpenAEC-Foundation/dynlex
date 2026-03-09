@@ -55,6 +55,9 @@ class LanguageServer {
 	// Called for go-to-definition request
 	virtual std::optional<Location> onDefinition(const TextDocumentPositionParams &params);
 
+	// Called for hover requests
+	virtual std::optional<Hover> onHover(const TextDocumentPositionParams &params);
+
 	// Called for completion requests
 	virtual CompletionList onCompletion(const TextDocumentPositionParams &params);
 

@@ -86,24 +86,25 @@ static int semanticTokenModifiers(bool isDefinition, bool isConstant) {
 	return modifiers;
 }
 
-static bool isCompileTimeVariableReference(const VariableReference *reference) {
+static bool hasStoredConstantValue(const ParseContext &context, const VariableReference *reference) {
 	if (!reference)
 		return false;
-	const VariableReference *definition = reference->definition ? reference->definition : reference;
-	if (!definition || !definition->range.line)
-		return false;
-	Section *definitionSection = definition->range.line->section;
-	if (!definitionSection)
-		return false;
-	if (definitionSection->isMacro || definitionSection->type == SectionType::Class)
+	if (context.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
 		return true;
-	for (const auto &[argTypes, inst] : definitionSection->instantiations) {
+
+	Section *section = reference->range.line ? reference->range.line->section : nullptr;
+	if (!section)
+		return false;
+	for (const auto &[argTypes, inst] : section->instantiations) {
 		(void)argTypes;
-		if (inst.requiredCompileTimeParameters.contains(definition->name) ||
-			inst.constantParameterValues.contains(definition->name))
+		if (inst.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
 			return true;
 	}
 	return false;
+}
+
+static bool isCompileTimeVariableReference(const ParseContext &context, const VariableReference *reference) {
+	return hasStoredConstantValue(context, reference);
 }
 
 static void addPatternReferenceSignatureTokens(
@@ -322,7 +323,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 			for (VariableReference *ref : refs)
 				addTokenWithModifiers(
 					ref->range, SemanticTokenType::Variable,
-					semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(ref))
+					semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
 				);
 		}
 		for (Section *child : section->children)
@@ -369,7 +370,9 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 			if (expr->variable) {
 				addTokenWithModifiers(
 					expr->range, SemanticTokenType::Variable,
-					semanticTokenModifiers(expr->variable->isDefinition(), isCompileTimeVariableReference(expr->variable))
+					semanticTokenModifiers(
+						expr->variable->isDefinition(), isCompileTimeVariableReference(context, expr->variable)
+					)
 				);
 			}
 			break;

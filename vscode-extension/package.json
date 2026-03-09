@@ -2,8 +2,8 @@
   "name": "dynlex-language",
   "displayName": "DynLex Language",
   "description": "Language support for the DynLex programming language",
-  "version": "0.1.0",
-  "publisher": "dynlex",
+  "version": "0.0.1",
+  "publisher": "impertio",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -11,8 +11,7 @@
     "Programming Languages",
     "Debuggers"
   ],
-  "activationEvents": [
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -82,6 +81,10 @@
           "variable": [
             "variable"
           ],
+          "variable.constant": [
+            "variable.other.constant",
+            "constant.other"
+          ],
           "comment": [
             "comment"
           ],
@@ -114,6 +117,10 @@
           },
           "variable.definition": {
             "bold": true
+          },
+          "variable.constant": {
+            "fontStyle": "",
+            "foreground": "#7FA9C6"
           }
         }
       }
@@ -122,10 +129,14 @@
       {
         "type": "dynlex",
         "label": "DynLex Debug",
-        "languages": ["dynlex"],
+        "languages": [
+          "dynlex"
+        ],
         "configurationAttributes": {
           "launch": {
-            "required": ["program"],
+            "required": [
+              "program"
+            ],
             "properties": {
               "program": {
                 "type": "string",
@@ -176,6 +187,11 @@
           "type": "number",
           "default": 5007,
           "description": "Port for the DynLex language server"
+        },
+        "dynlex.server.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host for the DynLex language server when connecting over TCP"
         },
         "dynlex.server.path": {
           "type": "string",

@@ -48,9 +48,8 @@ static bool expressionReferencesAnyBindingName(
 	return false;
 }
 
-static bool expressionReferencesAnyBindingName(
-	Function *expr, const std::unordered_map<std::string, Function *> &bindingNames
-) {
+static bool
+expressionReferencesAnyBindingName(Function *expr, const std::unordered_map<std::string, Function *> &bindingNames) {
 	std::unordered_set<Function *> visited;
 	return expressionReferencesAnyBindingName(expr, bindingNames, visited);
 }
@@ -75,23 +74,23 @@ static Function *resolveThroughBindingsDeepImpl(
 	std::unordered_map<std::string, Function *> innerBindings;
 	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (bodyExpr) {
-			std::unordered_map<std::string, Function *> mergedBindings = bindings;
-			for (auto &[name, argExpr] : innerBindings) {
-				std::unordered_map<std::string, Function *> argBindings;
-				Function *resolvedArg = resolveThroughBindingsDeepImpl(argExpr, bindings, argBindings, visited);
-				Function *directArg = resolveThroughBindings(argExpr, bindings);
-					if (resolvedArg && !argBindings.empty()) {
-						for (const auto &[depName, depExpr] : argBindings) {
-							// Keep nested dependency propagation, but never leak names that are
-							// parameters of the current macro call scope.
-							if (innerBindings.contains(depName))
-								continue;
-							if (!mergedBindings.contains(depName)) {
-								Function *resolvedDep = resolveThroughBindings(depExpr, bindings);
-								mergedBindings[depName] = resolvedDep ? resolvedDep : depExpr;
-							}
-						}
+		std::unordered_map<std::string, Function *> mergedBindings = bindings;
+		for (auto &[name, argExpr] : innerBindings) {
+			std::unordered_map<std::string, Function *> argBindings;
+			Function *resolvedArg = resolveThroughBindingsDeepImpl(argExpr, bindings, argBindings, visited);
+			Function *directArg = resolveThroughBindings(argExpr, bindings);
+			if (resolvedArg && !argBindings.empty()) {
+				for (const auto &[depName, depExpr] : argBindings) {
+					// Keep nested dependency propagation, but never leak names that are
+					// parameters of the current macro call scope.
+					if (innerBindings.contains(depName))
+						continue;
+					if (!mergedBindings.contains(depName)) {
+						Function *resolvedDep = resolveThroughBindings(depExpr, bindings);
+						mergedBindings[depName] = resolvedDep ? resolvedDep : depExpr;
 					}
+				}
+			}
 			Function *bindingArg = resolvedArg ? resolvedArg : argExpr;
 			if (bindingArg && expressionReferencesAnyBindingName(bindingArg, innerBindings))
 				bindingArg = directArg ? directArg : argExpr;
@@ -134,8 +133,7 @@ static bool expandsToSelectIntrinsic(Function *function);
 static DataType instantiateBoundClassType(
 	ParseContext &parseContext, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings
 );
-static bool
-instantiateClassFromArgumentTypes(
+static bool instantiateClassFromArgumentTypes(
 	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex = -1
 );
 

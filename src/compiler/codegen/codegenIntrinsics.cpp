@@ -279,8 +279,8 @@ llvm::Value *generateIntrinsicCode(
 		Function *destExpr = args[0];
 		resolveThroughMacroLayers(context, destExpr);
 
-			if (destExpr->kind == Function::Kind::IntrinsicCall &&
-				intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
+		if (destExpr->kind == Function::Kind::IntrinsicCall &&
+			intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
 			// Storing to a class field: generate GEP + store
 			Function *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
 			DataType instType = getEffectiveType(context, instExpr);
@@ -408,11 +408,10 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *right = generateFunctionCode(context, args[1]);
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
-			if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-				rightType.isPointer() &&
-				leftType == rightType) {
-				llvm::Value *cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
-																: builder.CreateICmpNE(left, right, "pne");
+		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
+			rightType.isPointer() && leftType == rightType) {
+			llvm::Value *cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
+															: builder.CreateICmpNE(left, right, "pne");
 			assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
 			if (resultType.kind == DataType::Kind::Bool)
 				return cmp;
@@ -426,32 +425,32 @@ llvm::Value *generateIntrinsicCode(
 
 		llvm::Value *cmp;
 		if (promoted.kind == DataType::Kind::Float) {
-				if (kind == IntrinsicKind::LessThan)
-					cmp = builder.CreateFCmpOLT(left, right, "flt");
-				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = builder.CreateFCmpOLE(left, right, "fle");
-				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = builder.CreateFCmpOGT(left, right, "fgt");
-				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = builder.CreateFCmpOGE(left, right, "fge");
-				else if (kind == IntrinsicKind::Equal)
-					cmp = builder.CreateFCmpOEQ(left, right, "feq");
-				else
-					cmp = builder.CreateFCmpONE(left, right, "fne");
-			} else {
-				if (kind == IntrinsicKind::LessThan)
-					cmp = builder.CreateICmpSLT(left, right, "lt");
-				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = builder.CreateICmpSLE(left, right, "le");
-				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = builder.CreateICmpSGT(left, right, "gt");
-				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = builder.CreateICmpSGE(left, right, "ge");
-				else if (kind == IntrinsicKind::Equal)
-					cmp = builder.CreateICmpEQ(left, right, "eq");
-				else
-					cmp = builder.CreateICmpNE(left, right, "ne");
-			}
+			if (kind == IntrinsicKind::LessThan)
+				cmp = builder.CreateFCmpOLT(left, right, "flt");
+			else if (kind == IntrinsicKind::LessThanOrEqual)
+				cmp = builder.CreateFCmpOLE(left, right, "fle");
+			else if (kind == IntrinsicKind::GreaterThan)
+				cmp = builder.CreateFCmpOGT(left, right, "fgt");
+			else if (kind == IntrinsicKind::GreaterThanOrEqual)
+				cmp = builder.CreateFCmpOGE(left, right, "fge");
+			else if (kind == IntrinsicKind::Equal)
+				cmp = builder.CreateFCmpOEQ(left, right, "feq");
+			else
+				cmp = builder.CreateFCmpONE(left, right, "fne");
+		} else {
+			if (kind == IntrinsicKind::LessThan)
+				cmp = builder.CreateICmpSLT(left, right, "lt");
+			else if (kind == IntrinsicKind::LessThanOrEqual)
+				cmp = builder.CreateICmpSLE(left, right, "le");
+			else if (kind == IntrinsicKind::GreaterThan)
+				cmp = builder.CreateICmpSGT(left, right, "gt");
+			else if (kind == IntrinsicKind::GreaterThanOrEqual)
+				cmp = builder.CreateICmpSGE(left, right, "ge");
+			else if (kind == IntrinsicKind::Equal)
+				cmp = builder.CreateICmpEQ(left, right, "eq");
+			else
+				cmp = builder.CreateICmpNE(left, right, "ne");
+		}
 
 		assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
 		if (resultType.kind == DataType::Kind::Bool)
@@ -528,7 +527,7 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		// atan2: no LLVM intrinsic, call libm
-			if (kind == IntrinsicKind::Atan2) {
+		if (kind == IntrinsicKind::Atan2) {
 			llvm::Value *y = generateFunctionCode(context, args[0]);
 			llvm::Value *x = generateFunctionCode(context, args[1]);
 			DataType yType = getEffectiveType(context, args[0]);
@@ -678,7 +677,7 @@ llvm::Value *generateIntrinsicCode(
 			pred->getTerminator()->replaceUsesOfWith(currentBlock, newExitBlock);
 		}
 
-			if (kind == IntrinsicKind::ElseIf) {
+		if (kind == IntrinsicKind::ElseIf) {
 			llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
 			llvm::Value *condValue = generateFunctionCode(context, args[0]);
@@ -885,7 +884,7 @@ llvm::Value *generateIntrinsicCode(
 		return nullptr;
 	}
 
-		if (kind == IntrinsicKind::Construct) {
+	if (kind == IntrinsicKind::Construct) {
 		if (resultType.kind == DataType::Kind::Array) {
 			llvm::Type *arrayType = getLLVMType(context, resultType);
 			llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
@@ -901,18 +900,18 @@ llvm::Value *generateIntrinsicCode(
 			return builder.CreateAlignedLoad(arrayType, alloca, llvm::Align(8), "array_load");
 		}
 
-			if (resultType.kind == DataType::Kind::Vector) {
-				return buildVectorValue(context, resultType, args, 1);
-			}
+		if (resultType.kind == DataType::Kind::Vector) {
+			return buildVectorValue(context, resultType, args, 1);
+		}
 
 		if (resultType.kind == DataType::Kind::Matrix) {
-				if (args.size() == 2)
-					return buildMatrixFromFlatArray(context, resultType, args[1]);
-				return buildMatrixFromScalarArgs(context, resultType, args, 1);
-			}
+			if (args.size() == 2)
+				return buildMatrixFromFlatArray(context, resultType, args[1]);
+			return buildMatrixFromScalarArgs(context, resultType, args, 1);
+		}
 
-			if (resultType.kind != DataType::Kind::Class) {
-				llvm::Value *val = generateFunctionCode(context, args[1]);
+		if (resultType.kind != DataType::Kind::Class) {
+			llvm::Value *val = generateFunctionCode(context, args[1]);
 			DataType fromType = getEffectiveType(context, args[1]);
 			return ensureType(context, val, fromType, resultType);
 		}

@@ -144,6 +144,8 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
+	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).

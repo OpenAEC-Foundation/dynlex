@@ -8,9 +8,8 @@
 	std::abort();
 }
 
-[[noreturn]] inline void crashUnimplementedIntrinsic(
-	const char *subsystem, const std::string &name, const std::string &uri = "", int line = -1
-) {
+[[noreturn]] inline void
+crashUnimplementedIntrinsic(const char *subsystem, const std::string &name, const std::string &uri = "", int line = -1) {
 	std::string message = "unimplemented intrinsic in ";
 	message += subsystem;
 	message += ": \"";

@@ -772,17 +772,13 @@ bool analyzeSections(ParseContext &context) {
 	return true;
 }
 
-bool isArithmeticOperator(const std::string &name) {
-	return isArithmeticIntrinsic(arithmeticIntrinsicKind(name));
-}
+bool isArithmeticOperator(const std::string &name) { return isArithmeticIntrinsic(arithmeticIntrinsicKind(name)); }
 
 bool isPointerArithmeticOperator(const std::string &name) {
 	return isPointerArithmeticIntrinsic(arithmeticIntrinsicKind(name));
 }
 
-bool isComparisonOperator(const std::string &name) {
-	return isComparisonIntrinsicKind(intrinsicKind(name));
-}
+bool isComparisonOperator(const std::string &name) { return isComparisonIntrinsicKind(intrinsicKind(name)); }
 
 bool isMathFunction(const std::string &name) {
 	const IntrinsicInfo *info = findIntrinsic(name);
