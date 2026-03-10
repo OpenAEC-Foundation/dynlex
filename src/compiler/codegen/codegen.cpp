@@ -352,12 +352,21 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 
 		// Non-macro pattern: monomorphized function call.
 		// Compute argument types at this call site for specialization.
-		std::vector<DataType> argTypes;
-		for (const auto &[paramName, argExpr] : paramBindings) {
-			DataType t = getEffectiveType(context, argExpr);
-			assert(t.isDeduced() && "Undeduced argument type at codegen");
-			argTypes.push_back(t);
-		}
+			std::vector<DataType> argTypes;
+			for (const auto &[paramName, argExpr] : paramBindings) {
+				DataType t = getEffectiveType(context, argExpr);
+				if (!t.isDeduced() && matchedDef) {
+					for (const auto &elem : matchedDef->patternElements) {
+						if (elem.type == PatternElement::Type::Variable && elem.text == paramName &&
+							elem.resolvedTypeConstraint.isDeduced()) {
+							t = elem.resolvedTypeConstraint;
+							break;
+						}
+					}
+				}
+				assert(t.isDeduced() && "Undeduced argument type at codegen");
+				argTypes.push_back(t);
+			}
 
 		// Look up or generate the specialized function
 		Instantiation &inst = matchedSection->instantiations[argTypes];

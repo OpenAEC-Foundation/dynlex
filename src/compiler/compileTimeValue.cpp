@@ -76,6 +76,15 @@ static CompileTimeValue evaluateIntrinsic(
 		}
 		return {};
 	}
+	if (kind == IntrinsicKind::SizeOf) {
+		Function *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindings);
+		if (!typeExpr)
+			return {};
+		DataType typeRef = typeExpr->type;
+		if (typeRef.kind != DataType::Kind::Type)
+			return {};
+		return static_cast<double>(typeRef.toReferencedType().getByteSize());
+	}
 
 	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);

@@ -21,8 +21,8 @@ set window to a new window with width window_size and height window_size
 set font to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
 
 # Snake body arrays
-set snake_x to allocate max_length items
-set snake_y to allocate max_length items
+set snake_x to allocate max_length slots of an integer
+set snake_y to allocate max_length slots of an integer
 
 # Initialize snake at center, moving right
 set snake_length to 3

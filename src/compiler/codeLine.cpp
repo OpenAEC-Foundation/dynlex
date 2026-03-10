@@ -1,10 +1,13 @@
 #include "codeLine.h"
+#include "pathUtils.h"
 #include "section.h"
 #include "sourceFile.h"
 #include <algorithm>
 
 static bool uriMatches(const std::string &storedUri, const std::string &queryUri) {
-	return storedUri == queryUri || ("file://" + storedUri) == queryUri;
+	if (storedUri == queryUri || ("file://" + storedUri) == queryUri)
+		return true;
+	return pathutil::toAbsoluteUri(storedUri) == pathutil::toAbsoluteUri(queryUri);
 }
 
 bool CodeLine::isPatternDefinition() const { return sectionOpening && sectionOpening->type != SectionType::Custom; }

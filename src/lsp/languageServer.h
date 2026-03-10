@@ -73,6 +73,12 @@ class LanguageServer {
 	// Called for DynLex debug request returning tagged semantic token output.
 	virtual std::string onRenderSemanticTokens(const TextDocumentIdentifier &params);
 
+	// Called for DynLex request returning instantiation choices for a document.
+	virtual Json onInstantiationsInDocument(const TextDocumentIdentifier &params);
+
+	// Called for DynLex notification selecting an instantiation choice.
+	virtual void onSelectInstantiation(const Json &params);
+
 	// Send a notification to the client (e.g., publishDiagnostics)
 	void sendNotification(const std::string &method, const Json &params);
 	void sendRequest(const std::string &method, const Json &params);

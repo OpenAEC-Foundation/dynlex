@@ -14,6 +14,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cassert>
 #include <cmath>
 #include <filesystem>
 #include <unordered_map>
@@ -336,6 +337,8 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 					typeRef.referencedKind = DataType::Kind::Int;
 					typeRef.numericSize = 1;
 					typeRef.pointerDepth = 1;
+				} else if (*kindStr == "type") {
+					typeRef.referencedKind = DataType::Kind::Type;
 				} else {
 					return expr->type;
 				}
@@ -354,8 +357,27 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return innerType;
 			}
 		}
-		if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array)
-			return expr->type;
+			if (kind == IntrinsicKind::SizeOf)
+				return {DataType::Kind::Int, 8};
+			if (kind == IntrinsicKind::TypeOf) {
+				DataType valueType = getEffectiveType(context, expr->arguments[1]);
+				if (valueType.isDeduced()) {
+					DataType typeRef;
+					typeRef.kind = DataType::Kind::Type;
+					typeRef.referencedKind = valueType.kind;
+					typeRef.numericSize = valueType.numericSize;
+					typeRef.pointerDepth = valueType.pointerDepth;
+					typeRef.classDefinition = valueType.classDefinition;
+					typeRef.classInstIndex = valueType.classInstIndex;
+					typeRef.arraySize = valueType.arraySize;
+					typeRef.matrixRowCount = valueType.matrixRowCount;
+					typeRef.arrayElementType =
+						valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+					return typeRef;
+				}
+			}
+			if (kind == IntrinsicKind::Array)
+				return expr->type;
 		if ((kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix) && expr->type.kind == DataType::Kind::Type)
 			return expr->type;
 		if (kind == IntrinsicKind::Property) {
@@ -479,10 +501,9 @@ std::string getPatternFunctionName(Section *section) {
 // Allocate all variables for a section at its start
 void allocateSectionVariables(ParseContext &context, Section *section) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
-		DataType varType = {DataType::Kind::Float, 8}; // fallback
 		Variable *var = section->findVariable(name);
-		if (var)
-			varType = var->type;
+		assert(var && "Internal compiler error: variableDefinitions contains a name missing from section variable metadata");
+		DataType varType = var->type;
 		if (!varType.isDeduced())
 			continue;
 

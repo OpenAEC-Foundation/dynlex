@@ -2,7 +2,16 @@
 # Specify minimum CMake version and project name
 #
 cmake_minimum_required (VERSION 3.21)
-project (dynlex VERSION 0.1.0)
+set(DYNLEX_VERSION_FILE "${CMAKE_SOURCE_DIR}/metadata/VERSION")
+if(NOT EXISTS "${DYNLEX_VERSION_FILE}")
+    message(FATAL_ERROR "Missing VERSION file at ${DYNLEX_VERSION_FILE}")
+endif()
+file(READ "${DYNLEX_VERSION_FILE}" DYNLEX_VERSION_RAW)
+string(STRIP "${DYNLEX_VERSION_RAW}" DYNLEX_VERSION)
+if(NOT DYNLEX_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "Invalid version in VERSION file: '${DYNLEX_VERSION}'")
+endif()
+project (dynlex VERSION ${DYNLEX_VERSION})
 
 include(GNUInstallDirs)
 
@@ -210,6 +219,7 @@ set_target_properties (${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
 
 #
 # Install targets

@@ -64,7 +64,7 @@ class:
         advance_x as i64
         advance_y as i64
         format as i32
-        padding: 8
+        bitmap_align_pad as i32
         bitmap_rows as i32
         bitmap_width as i32
         bitmap_pitch as i32
@@ -82,12 +82,12 @@ class:
 function a loaded font from path at size s:
     execute:
         # Initialize FreeType
-        set lib_ptr to allocate 1 items
+        set lib_ptr to allocate 1 slots of a pointer to a byte
         @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, lib_ptr)
         set library to item 0 of lib_ptr
 
         # Load font face
-        set face_out to allocate 1 items
+        set face_out to allocate 1 slots of a pointer to a byte
         @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a 64 bit integer, face_out)
         set face_raw to item 0 of face_out
 
@@ -98,22 +98,17 @@ function a loaded font from path at size s:
         @intrinsic("call", "GL", "glPixelStorei", void, 3317, 1)
 
         # Create GL texture
-        set tex_out to allocate 1 items
+        set tex_out to allocate 1 slots of a 32 bit integer
         @intrinsic("call", "GL", "glGenTextures", void, 1, tex_out)
         set tex_id to item 0 of tex_out
         @intrinsic("call", "GL", "glBindTexture", void, 3553, tex_id as a 32 bit integer)
         @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10241, 9729)
         @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10240, 9729)
 
-        # Extract glyph slot pointer (stays the same across FT_Load_Char calls)
-        set face_ptr to face_raw as a pointer to ft face
-        set glyph_raw to the glyph of the value at face_ptr
-
-        # Return font handle: [face, tex_id, glyph_slot]
-        set new_font to allocate 3 items
+        # Return font handle: [face, tex_id]
+        set new_font to allocate 2 slots of a 64 bit integer
         store face_raw into new_font at 0
         store tex_id into new_font at 1
-        store glyph_raw into new_font at 2
         return new_font
 
 # --- Character rendering ---
@@ -121,23 +116,25 @@ function a loaded font from path at size s:
 
 function render char code at px py using font and color r g b:
     execute:
-        set face_raw to item 0 of font
-        set tex_id to item 1 of font
-        set glyph_raw to item 2 of font
+        set face_raw to item 0 of font as a pointer to a byte
+        set tex_id to item 1 of font as a 32 bit integer
 
         # Load and render the glyph
         @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
 
+        # Read glyph slot from the face after loading the character
+        set face_ptr to face_raw as a pointer to ft face
+        set glyph_raw to the glyph of face_ptr
+
         # Cast glyph slot pointer to access bitmap data
         set glyph_ptr to glyph_raw as a pointer to ft glyph slot
-        set glyph to the value at glyph_ptr
 
-        set bw to the bitmap_width of glyph
-        set bh to the bitmap_rows of glyph
-        set buf to the bitmap_buffer of glyph
-        set left to the bitmap_left of glyph
-        set top to the bitmap_top of glyph
-        set adv to the advance_x of glyph
+        set bw to the bitmap_width of glyph_ptr
+        set bh to the bitmap_rows of glyph_ptr
+        set buf to the bitmap_buffer of glyph_ptr
+        set left to the bitmap_left of glyph_ptr
+        set top to the bitmap_top of glyph_ptr
+        set adv to the advance_x of glyph_ptr
 
         # Upload bitmap to GL texture
         @intrinsic("call", "GL", "glBindTexture", void, 3553, tex_id as a 32 bit integer)
@@ -184,7 +181,7 @@ function disable text rendering:
 # Set font pixel size (call before rendering at a new size)
 function set font pixel size to sz:
     execute:
-        set face_raw to item 0 of font
+        set face_raw to item 0 of font as a pointer to a byte
         @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
 
 # --- Number rendering ---

@@ -103,6 +103,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Property) {
 			DataType instType = concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings));
+			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
+				instType = concretizeClassType(instType.dereferenced());
 			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 			std::string fieldName = extractFieldName(propExpr);
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
@@ -144,11 +146,13 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.referencedKind = DataType::Kind::Bool;
 				} else if (kindStr == "void") {
 					typeRef.referencedKind = DataType::Kind::Void;
-				} else if (kindStr == "string") {
-					typeRef.referencedKind = DataType::Kind::Int;
-					typeRef.numericSize = 1;
-					typeRef.pointerDepth = 1;
-				}
+					} else if (kindStr == "string") {
+						typeRef.referencedKind = DataType::Kind::Int;
+						typeRef.numericSize = 1;
+						typeRef.pointerDepth = 1;
+					} else if (kindStr == "type") {
+						typeRef.referencedKind = DataType::Kind::Type;
+					}
 				if (resolved->arguments.size() > 2) {
 					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
@@ -171,6 +175,10 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
 				return typeRef;
 			}
+		} else if (kind == IntrinsicKind::SizeOf) {
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			if (typeArgType.kind == DataType::Kind::Type)
+				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
 			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
@@ -332,6 +340,16 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 }
 
 static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
+	if (type.pointerDepth == 0) {
+		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
+		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit float";
+		if (type.kind == DataType::Kind::Bool)
+			return "a boolean";
+		if (type.kind == DataType::Kind::Void)
+			return "nothing";
+	}
 	auto it = parseContext.typeAliasNames.find(type);
 	if (it != parseContext.typeAliasNames.end())
 		return it->second;

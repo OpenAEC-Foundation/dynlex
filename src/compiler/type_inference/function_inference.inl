@@ -91,6 +91,15 @@ static DataType inferFunctionTypeWithoutSideEffects(
 static DataType
 ensureFunctionType(Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings);
 
+static void snapshotFunctionVariableReferences(Function *expr, InferenceContext &context) {
+	if (!expr)
+		return;
+	for (Function *arg : expr->arguments)
+		snapshotFunctionVariableReferences(arg, context);
+	if (expr->kind == Function::Kind::Variable && expr->variable)
+		context.snapshotReferenceConstant(expr->variable);
+}
+
 static void resetSectionFunctionTypes(Section *section) {
 	if (!section)
 		return;
@@ -672,6 +681,8 @@ static void inferOrderedFunction(
 							typeRef.referencedKind = DataType::Kind::Int;
 							typeRef.numericSize = 1;
 							typeRef.pointerDepth = 1;
+						} else if (kindStr == "type") {
+							typeRef.referencedKind = DataType::Kind::Type;
 						}
 						// Override byte size if bits argument provided
 						if (expr->arguments.size() > 2) {
@@ -693,6 +704,11 @@ static void inferOrderedFunction(
 						expr->type.arraySize = valueType.arraySize;
 						expr->type.arrayElementType =
 							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+					}
+				} else if (kind == IntrinsicKind::SizeOf) {
+					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeArgType.kind == DataType::Kind::Type) {
+						expr->type = {DataType::Kind::Int, 8};
 					}
 				} else if (kind == IntrinsicKind::BuildInfo) {
 					Function *keyExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
@@ -876,6 +892,8 @@ static void inferOrderedFunction(
 					}
 				} else if (kind == IntrinsicKind::Property) {
 					DataType instType = concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindings));
+					if (instType.isPointer() && instType.kind == DataType::Kind::Class)
+						instType = concretizeClassType(instType.dereferenced());
 					Function *propExpr = resolveThroughBindings(expr->arguments[2], macroBindings);
 					std::string fieldName = extractFieldName(propExpr);
 					DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);

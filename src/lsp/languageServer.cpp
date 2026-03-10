@@ -227,6 +227,9 @@ void LanguageServer::handleRequest(const Json &message) {
 		} else if (method == "dynlex/renderSemanticTokens") {
 			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
 			sendResponse(id, onRenderSemanticTokens(p));
+		} else if (method == "dynlex/instantiationsInDocument") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			sendResponse(id, onInstantiationsInDocument(p));
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
@@ -262,6 +265,8 @@ void LanguageServer::handleNotification(const Json &message) {
 		} else if (method == "dynlex/activeCursorChanged") {
 			ActiveCursorParams p = params.get<ActiveCursorParams>();
 			onActiveCursorChanged(p);
+		} else if (method == "dynlex/selectInstantiation") {
+			onSelectInstantiation(params);
 		}
 	} catch (const std::exception &e) {
 		logError("Error handling notification " + method + ": " + e.what());
@@ -357,5 +362,9 @@ std::vector<CodeAction> LanguageServer::onCodeAction(const CodeActionParams & /*
 std::string LanguageServer::onRenderSemanticTokens(const TextDocumentIdentifier & /*params*/) { return {}; }
 
 void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
+
+Json LanguageServer::onInstantiationsInDocument(const TextDocumentIdentifier & /*params*/) { return Json::array(); }
+
+void LanguageServer::onSelectInstantiation(const Json & /*params*/) {}
 
 } // namespace lsp

@@ -58,6 +58,8 @@ static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outTyp
 	} else if (*kindStr == "string") {
 		aliasType = {DataType::Kind::Int, 1};
 		aliasType.pointerDepth = 1;
+	} else if (*kindStr == "type") {
+		aliasType = {DataType::Kind::Type};
 	} else {
 		return false;
 	}

@@ -59,6 +59,7 @@ enum class IntrinsicReturnKind {
 	X(Property, "property", 3, IntrinsicReturnKind::Custom)                                                                    \
 	X(Cast, "cast", 3, IntrinsicReturnKind::Custom)                                                                            \
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom)                                                                       \
+	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom)                                                                       \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom)                                                                 \
 	X(Select, "select", 4, IntrinsicReturnKind::Custom)                                                                        \
 	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom)
@@ -175,6 +176,8 @@ inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argI
 		return argIndex == 2;
 	case IntrinsicKind::Type:
 		return argIndex >= 1;
+	case IntrinsicKind::SizeOf:
+		return argIndex == 1;
 	case IntrinsicKind::Array:
 		return argIndex >= 1;
 	case IntrinsicKind::Vector:

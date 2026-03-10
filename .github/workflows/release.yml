@@ -10,8 +10,25 @@ permissions:
   contents: write
 
 jobs:
+  verify-version-tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches metadata/VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          TAG_VERSION="${TAG#v}"
+          FILE_VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
+          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
+            echo "Tag version ($TAG_VERSION) does not match metadata/VERSION ($FILE_VERSION)." >&2
+            exit 1
+          fi
+
   build-linux:
     runs-on: ubuntu-24.04
+    needs: [verify-version-tag]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,10 +45,8 @@ jobs:
 
       - name: Package release artifacts
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
           cd build
-          cpack -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
+          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
 
       - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
@@ -40,11 +55,11 @@ jobs:
           path: |
             build/*.deb
             build/*.tar.gz
-            build/*.zip
           if-no-files-found: error
 
   build-windows:
     runs-on: windows-latest
+    needs: [verify-version-tag]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,13 +99,11 @@ jobs:
         shell: pwsh
         run: cmake --build build --parallel
 
-      - name: Package ZIP + MSI
+      - name: Package MSI
         shell: bash
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
           cd build
-          cpack -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
+          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
@@ -98,11 +111,11 @@ jobs:
           name: release-windows
           path: |
             build/*.msi
-            build/*.zip
           if-no-files-found: error
 
   build-macos:
     runs-on: macos-14
+    needs: [verify-version-tag]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,12 +139,11 @@ jobs:
         run: |
           ./scripts/build.sh --release
 
-      - name: Package TGZ + PKG
+      - name: Package PKG
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
           cd build
-          cpack -G TGZ -D CPACK_PACKAGE_VERSION="${VERSION}" -D CPACK_PACKAGE_FILE_NAME="dynlex-${VERSION}-${RUNNER_OS}"
           rm -rf pkgroot dynlex-component.pkg
           cmake --install . --prefix "${PWD}/pkgroot/usr/local"
           pkgbuild \
@@ -142,7 +154,7 @@ jobs:
             "dynlex-component.pkg"
           productbuild \
             --package "dynlex-component.pkg" \
-            "dynlex-${VERSION}-${RUNNER_OS}.pkg"
+            "dynlex.pkg"
 
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
@@ -150,7 +162,6 @@ jobs:
           name: release-macos
           path: |
             build/*.pkg
-            build/*.tar.gz
           if-no-files-found: error
 
   smoke-linux:
@@ -294,7 +305,6 @@ jobs:
           files: |
             release-artifacts/**/*.deb
             release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.zip
             release-artifacts/**/*.msi
             release-artifacts/**/*.pkg
           prerelease: ${{ steps.release_type.outputs.prerelease }}

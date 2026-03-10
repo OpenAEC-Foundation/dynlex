@@ -1,5 +1,6 @@
 #include "semanticTokenDebug.h"
 #include "codeLine.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "function.h"
 #include "pathUtils.h"
@@ -12,6 +13,7 @@
 #include "sourceFile.h"
 #include "syntaxConfig.h"
 #include "textDocument.h"
+#include "variable.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -86,25 +88,82 @@ static int semanticTokenModifiers(bool isDefinition, bool isConstant) {
 	return modifiers;
 }
 
+static Section *findOwningVariableSection(Section *fromSection, VariableReference *targetDefinition, const std::string &name) {
+	for (Section *section = fromSection; section; section = section->parent) {
+		auto it = section->variables.find(name);
+		if (it != section->variables.end() && it->second && it->second->definition == targetDefinition)
+			return section;
+	}
+	for (Section *section = fromSection; section; section = section->parent) {
+		auto it = section->variables.find(name);
+		if (it != section->variables.end() && it->second)
+			return section;
+	}
+	return nullptr;
+}
+
 static bool hasStoredConstantValue(const ParseContext &context, const VariableReference *reference) {
 	if (!reference)
 		return false;
 	if (context.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
 		return true;
+	VariableReference *definition = reference->definition ? reference->definition : const_cast<VariableReference *>(reference);
+	if (context.constantValuesByReference.contains(definition))
+		return true;
 
-	Section *section = reference->range.line ? reference->range.line->section : nullptr;
+	Section *startSection = reference->range.line ? reference->range.line->section : nullptr;
+	Section *ownerSection = findOwningVariableSection(startSection, definition, reference->name);
+	Section *section = ownerSection ? ownerSection : startSection;
 	if (!section)
 		return false;
+	bool matchesOwnedDefinition = false;
+	if (ownerSection) {
+		auto variableIt = ownerSection->variables.find(reference->name);
+		matchesOwnedDefinition = variableIt != ownerSection->variables.end() && variableIt->second;
+	}
 	for (const auto &[argTypes, inst] : section->instantiations) {
 		(void)argTypes;
 		if (inst.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
 			return true;
+		if (inst.constantValuesByReference.contains(definition))
+			return true;
+		if (matchesOwnedDefinition) {
+			auto paramIt = inst.constantParameterValues.find(reference->name);
+			if (paramIt != inst.constantParameterValues.end() && isCompileTimeKnown(paramIt->second))
+				return true;
+		}
 	}
 	return false;
 }
 
 static bool isCompileTimeVariableReference(const ParseContext &context, const VariableReference *reference) {
 	return hasStoredConstantValue(context, reference);
+}
+
+static bool isCompileTimeVariableByName(const ParseContext &context, const ::Range &range) {
+	if (!range.line || !range.line->section)
+		return false;
+	const std::string name = std::string(range.subString);
+	Section *owner = findOwningVariableSection(range.line->section, nullptr, name);
+	if (!owner)
+		return false;
+	auto variableIt = owner->variables.find(name);
+	if (variableIt == owner->variables.end() || !variableIt->second)
+		return false;
+	VariableReference *definition = variableIt->second->definition;
+	if (!definition)
+		return false;
+	if (context.constantValuesByReference.contains(definition))
+		return true;
+	for (const auto &[argTypes, inst] : owner->instantiations) {
+		(void)argTypes;
+		if (inst.constantValuesByReference.contains(definition))
+			return true;
+		auto paramIt = inst.constantParameterValues.find(name);
+		if (paramIt != inst.constantParameterValues.end() && isCompileTimeKnown(paramIt->second))
+			return true;
+	}
+	return false;
 }
 
 static void addPatternReferenceSignatureTokens(
@@ -337,7 +396,10 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 			addToken(annotation.range, SemanticTokenType::Keyword, false);
 			break;
 		case ParseContext::SourceTokenKind::Variable:
-			addToken(annotation.range, SemanticTokenType::Variable, false);
+			addTokenWithModifiers(
+				annotation.range, SemanticTokenType::Variable,
+				semanticTokenModifiers(false, isCompileTimeVariableByName(context, annotation.range))
+			);
 			break;
 		case ParseContext::SourceTokenKind::Number:
 			addToken(annotation.range, SemanticTokenType::Number, false);

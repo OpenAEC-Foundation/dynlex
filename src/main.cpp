@@ -8,9 +8,14 @@
 #include "parseContext.h"
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 #include <thread>
 #include <unistd.h>
 #include <vector>
+
+#ifndef DYNLEX_VERSION
+#define DYNLEX_VERSION "dev"
+#endif
 
 static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &outColumn) {
 	size_t colon = text.find(':');
@@ -40,6 +45,7 @@ static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &ou
 // --lsp flag starts the language server on TCP port 5007 by default
 // --stdio flag starts the language server on stdin/stdout (for MCP integration)
 // --emit-llvm outputs .ll file instead of executable
+// --version prints DynLex version and exits
 int main(int argumentCount, char *argumentValues[]) {
 	std::vector<std::string> args(argumentValues + 1, argumentValues + argumentCount);
 
@@ -70,6 +76,9 @@ int main(int argumentCount, char *argumentValues[]) {
 		} else if (arg.starts_with("--lsp-trace=")) {
 			enableLspTrace = true;
 			lspTracePath = arg.substr(std::string("--lsp-trace=").size());
+		} else if (arg == "--version") {
+			std::cout << DYNLEX_VERSION << std::endl;
+			return 0;
 		} else if (arg == "--port") {
 			if (i + 1 >= args.size()) {
 				std::cerr << "Missing value for --port" << std::endl;
@@ -181,7 +190,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-completions line:column] "
 					 "[--shader-stage=vertex|fragment] "
 					 "[-O0|-O1|-O2|-O3] "
-					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]]"
+					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]] [--version]"
 				  << std::endl;
 	}
 

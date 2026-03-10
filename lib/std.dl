@@ -81,6 +81,10 @@ function [the|] build info key:
     replacement:
         @intrinsic("build info", key)
 
+function [the|] size of type:
+    replacement:
+        @intrinsic("size of", type)
+
 function [the|] build platform:
     replacement:
         the build info "platform"

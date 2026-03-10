@@ -52,6 +52,16 @@ $env:LLVM_DIR="$env:ProgramFiles\LLVM\lib\cmake\llvm"
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
 
+## Release
+
+Compiler/release version source of truth is [`metadata/VERSION`](./metadata/VERSION).
+
+Create and push a release tag with automatic version bump:
+
+```bash
+./scripts/release.sh patch   # or: minor, major, set X.Y.Z
+```
+
 ## ASan Leak Check (With Third-Party Suppressions)
 
 For sanitizer leak checks that ignore known process-lifetime allocations from

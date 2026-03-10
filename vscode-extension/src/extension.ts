@@ -18,9 +18,87 @@ let isShuttingDown = false;
 let extensionPath: string;
 let cursorClientId = '';
 let lastSentCursorKey: string | undefined;
+let instantiationHoverProvider: DynLexInstantiationHoverProvider | undefined;
 
 const BASE_RECONNECT_DELAY = 5000; // 5 seconds
 const MAX_RECONNECT_DELAY = 60000; // 1 minute
+
+interface DynLexInstantiationOption {
+    key: string;
+    label: string;
+}
+
+interface DynLexInstantiationLensEntry {
+    selectionKey: string;
+    currentKey: string;
+    range: vscode.Range;
+    options: DynLexInstantiationOption[];
+}
+
+class DynLexInstantiationHoverProvider implements vscode.HoverProvider {
+    async provideHover(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Hover | undefined> {
+        if (!client || document.languageId !== 'dynlex') {
+            return undefined;
+        }
+
+        try {
+            const response = await client.sendRequest('dynlex/instantiationsInDocument', {
+                uri: document.uri.toString()
+            }) as unknown;
+            if (!Array.isArray(response)) {
+                return undefined;
+            }
+
+            const entries: DynLexInstantiationLensEntry[] = [];
+            for (const raw of response) {
+                if (!raw || typeof raw !== 'object') {
+                    continue;
+                }
+                const r = (raw as any).range;
+                const start = r?.start;
+                const end = r?.end;
+                if (!start || !end) {
+                    continue;
+                }
+                const optionsRaw = (raw as any).options;
+                if (!Array.isArray(optionsRaw) || optionsRaw.length === 0) {
+                    continue;
+                }
+                const options: DynLexInstantiationOption[] = optionsRaw
+                    .filter((option: any) => option && typeof option.key === 'string' && typeof option.label === 'string')
+                    .map((option: any) => ({ key: option.key as string, label: option.label as string }));
+                entries.push({
+                    selectionKey: String((raw as any).selectionKey || ''),
+                    currentKey: String((raw as any).currentKey || ''),
+                    range: new vscode.Range(
+                        new vscode.Position(start.line, start.character),
+                        new vscode.Position(end.line, end.character),
+                    ),
+                    options,
+                });
+            }
+
+            const entry = entries.find(item => item.range.contains(position));
+            if (!entry || !entry.selectionKey) {
+                return undefined;
+            }
+
+            const markdown = new vscode.MarkdownString('', true);
+            markdown.isTrusted = { enabledCommands: ['dynlex.selectInstantiationPath'] };
+            markdown.appendMarkdown('pick an instance:\n\n');
+            for (const option of entry.options) {
+                const selectedPrefix = option.key === entry.currentKey ? 'current: ' : '';
+                const commandArgs = encodeURIComponent(JSON.stringify([entry.selectionKey, option.key]));
+                markdown.appendMarkdown(`[${selectedPrefix}${option.label}](command:dynlex.selectInstantiationPath?${commandArgs})  \n`);
+            }
+
+            return new vscode.Hover(markdown, entry.range);
+        } catch (err) {
+            logError(`Failed to fetch DynLex hover paths: ${err}`);
+            return undefined;
+        }
+    }
+}
 
 export function activate(context: vscode.ExtensionContext) {
     extensionPath = context.extensionPath;
@@ -91,6 +169,23 @@ export function activate(context: vscode.ExtensionContext) {
             log('Restarting language server...');
             reconnectAttempts = 0;
             void stopLanguageServer().then(() => startLanguageServer(context));
+        })
+    );
+
+    instantiationHoverProvider = new DynLexInstantiationHoverProvider();
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider({ language: 'dynlex', scheme: 'file' }, instantiationHoverProvider)
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dynlex.selectInstantiationPath', async (selectionKey: string, instantiationKey: string) => {
+            if (!client || !selectionKey || !instantiationKey) {
+                return;
+            }
+            await client.sendNotification('dynlex/selectInstantiation', {
+                selectionKey,
+                instantiationKey,
+            });
+            await vscode.commands.executeCommand('editor.action.showHover');
         })
     );
 
@@ -202,7 +297,7 @@ async function waitForPort(port: number, hosts: string[], timeoutMs: number = 30
     let attempt = 0;
     while (Date.now() - startTime < timeoutMs) {
         if (isShuttingDown) {
-            return false;
+            return undefined;
         }
         attempt++;
         for (const host of hosts) {

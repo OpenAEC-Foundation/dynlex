@@ -27,8 +27,10 @@ class DynLexServer : public LanguageServer {
 	std::optional<Hover> onHover(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
 	std::string onRenderSemanticTokens(const TextDocumentIdentifier &params) override;
+	Json onInstantiationsInDocument(const TextDocumentIdentifier &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
 	std::vector<CodeAction> onCodeAction(const CodeActionParams &params) override;
+	void onSelectInstantiation(const Json &params) override;
 
   private:
 	struct CursorState {
@@ -54,6 +56,7 @@ class DynLexServer : public LanguageServer {
 
 	// Cached LSP diagnostics per main document, grouped by source file URI
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Diagnostic>>> diagnosticsPerMain;
+	std::unordered_map<std::string, std::string> selectedInstantiationBySelectionKey;
 
 	// Compile a main document and update all tracking state
 	void recompileMainDocument(const std::string &uri);

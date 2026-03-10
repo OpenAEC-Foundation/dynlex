@@ -318,6 +318,8 @@ static bool inferFunction(
 	auto tryInfer = [&]() -> bool {
 		context.typeFailureDetail.clear();
 		inferOrderedFunction(expr, context, macroBindings);
+		if (context.typesValid)
+			snapshotFunctionVariableReferences(expr, context);
 		return context.typesValid;
 	};
 
@@ -560,6 +562,8 @@ static bool inferFunction(
 		sortArgumentsRecursive(expr);
 		resetFunctionTypes(expr);
 		inferOrderedFunction(expr, context, macroBindings);
+		if (context.typesValid)
+			snapshotFunctionVariableReferences(expr, context);
 		releaseOriginalExpr();
 		return context.typesValid;
 	}

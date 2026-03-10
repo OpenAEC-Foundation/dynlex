@@ -314,6 +314,8 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 		typeRef.referencedKind = DataType::Kind::Int;
 		typeRef.numericSize = 1;
 		typeRef.pointerDepth = 1;
+	} else if (*kindStr == "type") {
+		typeRef.referencedKind = DataType::Kind::Type;
 	} else {
 		return false;
 	}

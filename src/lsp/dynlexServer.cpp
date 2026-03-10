@@ -197,23 +197,85 @@ void DynLexServer::onActiveCursorChanged(const ActiveCursorParams &params) {
 }
 
 ParseContext *DynLexServer::findContextFor(const std::string &uri) {
-	auto ctxIt = parseContexts.find(uri);
-	if (ctxIt != parseContexts.end()) {
-		return ctxIt->second.get();
-	}
+	struct Candidate {
+		ParseContext *context{};
+		bool fromImporter = false;
+		int score = -1;
+	};
 
-	// Check if this file is imported by a main document
+	auto scoreContextForUri = [&](ParseContext *context) -> int {
+		if (!context || !context->mainSection)
+			return -1;
+		int score = 0;
+		std::vector<Section *> stack{context->mainSection};
+		while (!stack.empty()) {
+			Section *section = stack.back();
+			stack.pop_back();
+			if (!section)
+				continue;
+			for (Section *child : section->children) {
+				if (child)
+					stack.push_back(child);
+			}
+
+			bool hasDefinitionInUri = false;
+			for (PatternDefinition *def : section->patternDefinitions) {
+				if (!def || !def->range.line || !def->range.line->sourceFile)
+					continue;
+				if (pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) == uri) {
+					hasDefinitionInUri = true;
+					break;
+				}
+			}
+			if (!hasDefinitionInUri)
+				continue;
+
+			int instCount = static_cast<int>(section->instantiations.size());
+			if (instCount > 1)
+				score += 1000 + instCount;
+			else if (instCount == 1)
+				score += 10;
+		}
+		return score;
+	};
+
+	std::vector<Candidate> candidates;
+	auto addCandidate = [&](ParseContext *context, bool fromImporter) {
+		if (!context)
+			return;
+		for (const Candidate &existing : candidates) {
+			if (existing.context == context)
+				return;
+		}
+		candidates.push_back({context, fromImporter, scoreContextForUri(context)});
+	};
+
+	auto ownIt = parseContexts.find(uri);
+	if (ownIt != parseContexts.end())
+		addCandidate(ownIt->second.get(), false);
+
 	auto importIt = importedBy.find(uri);
 	if (importIt != importedBy.end()) {
 		for (const auto &mainUri : importIt->second) {
 			auto mainCtxIt = parseContexts.find(mainUri);
-			if (mainCtxIt != parseContexts.end()) {
-				return mainCtxIt->second.get();
-			}
+			if (mainCtxIt != parseContexts.end())
+				addCandidate(mainCtxIt->second.get(), true);
 		}
 	}
 
-	return nullptr;
+	if (candidates.empty())
+		return nullptr;
+
+	auto better = [](const Candidate &a, const Candidate &b) {
+		if (a.score != b.score)
+			return a.score > b.score;
+		if (a.fromImporter != b.fromImporter)
+			return a.fromImporter;
+		return a.context < b.context;
+	};
+	return std::max_element(candidates.begin(), candidates.end(), [&](const Candidate &lhs, const Candidate &rhs) {
+		return better(rhs, lhs);
+	})->context;
 }
 
 bool DynLexServer::isStructuralEdit(const DidChangeTextDocumentParams &params) const {
@@ -519,6 +581,25 @@ static Function *findDeepestFunction(Function *expr, int character) {
 	return nullptr;
 }
 
+static Function *findVariableArgumentAtOffset(Function *expr, int character) {
+	if (!expr)
+		return nullptr;
+	if (expr->kind == Function::Kind::PatternCall) {
+		std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+		for (Function *arg : sortedArgs) {
+			if (!arg)
+				continue;
+			if (arg->range.start() <= character && character < arg->range.end()) {
+				if (arg->kind == Function::Kind::Variable && arg->variable)
+					return arg;
+				if (Function *nested = findVariableArgumentAtOffset(arg, character))
+					return nested;
+			}
+		}
+	}
+	return nullptr;
+}
+
 // Get the definition location for an function, following the same
 // semantic categories as the tokenizer (Variable, PatternCall, etc.)
 static std::optional<::Range> getDefinitionTarget(Function *expr) {
@@ -546,7 +627,329 @@ static Section *findOwningVariableSection(Section *fromSection, VariableReferenc
 		if (it != section->variables.end() && it->second && it->second->definition == targetDefinition)
 			return section;
 	}
+	for (Section *section = fromSection; section; section = section->parent) {
+		auto it = section->variables.find(name);
+		if (it != section->variables.end() && it->second)
+			return section;
+	}
 	return nullptr;
+}
+
+static Section *findOwningVariableSectionAtSource(
+	ParseContext &context, const std::string &uri, int line, int character, VariableReference *targetDefinition,
+	const std::string &name
+) {
+	for (CodeLine *codeLine : context.codeLines) {
+		if (!codeLine || !codeLine->containsSourceLocation(uri, line, character))
+			continue;
+		Section *owner = findOwningVariableSection(codeLine->section, targetDefinition, name);
+		if (owner)
+			return owner;
+	}
+	return nullptr;
+}
+
+static bool sameSourceLocation(const SourceLocation &a, const SourceLocation &b) {
+	if (!a.sourceFile || !b.sourceFile)
+		return false;
+	return pathutil::toAbsoluteUri(a.sourceFile->uri) == pathutil::toAbsoluteUri(b.sourceFile->uri) &&
+		   a.sourceFileLineIndex == b.sourceFileLineIndex && a.column == b.column;
+}
+
+static bool sameVariableDefinitionSource(VariableReference *a, VariableReference *b) {
+	if (!a || !b || !a->range.line || !b->range.line)
+		return false;
+	return sameSourceLocation(a->range.sourceStart(), b->range.sourceStart()) &&
+		   sameSourceLocation(a->range.sourceEnd(), b->range.sourceEnd());
+}
+
+static Section *
+findInstantiatedOwnerSectionForDefinition(ParseContext &context, VariableReference *definition, const std::string &name) {
+	if (!definition)
+		return nullptr;
+	Section *best = nullptr;
+	size_t bestInstantiationCount = 0;
+	SourceLocation definitionStart = definition->range.sourceStart();
+	std::vector<Section *> stack{context.mainSection};
+	while (!stack.empty()) {
+		Section *section = stack.back();
+		stack.pop_back();
+		if (!section)
+			continue;
+		for (Section *child : section->children) {
+			if (child)
+				stack.push_back(child);
+		}
+		auto variableIt = section->variables.find(name);
+		bool matchesDefinition = false;
+		if (variableIt != section->variables.end() && variableIt->second && variableIt->second->definition &&
+			sameVariableDefinitionSource(variableIt->second->definition, definition)) {
+			matchesDefinition = true;
+		}
+		if (!matchesDefinition) {
+			bool sameDefinitionSection = false;
+			for (PatternDefinition *patternDef : section->patternDefinitions) {
+				if (!patternDef || !patternDef->range.line)
+					continue;
+				SourceLocation patternStart = patternDef->range.sourceStart();
+				if (!patternStart.sourceFile || !definitionStart.sourceFile)
+					continue;
+				if (pathutil::toAbsoluteUri(patternStart.sourceFile->uri) !=
+						pathutil::toAbsoluteUri(definitionStart.sourceFile->uri) ||
+					patternStart.sourceFileLineIndex != definitionStart.sourceFileLineIndex) {
+					continue;
+				}
+				sameDefinitionSection = true;
+				break;
+			}
+			if (!sameDefinitionSection)
+				continue;
+		}
+		size_t instCount = section->instantiations.size();
+		if (!best || instCount > bestInstantiationCount) {
+			best = section;
+			bestInstantiationCount = instCount;
+		}
+	}
+	return best;
+}
+
+static Section *findBestSectionForVariableLookup(
+	ParseContext &context, Section *ownerSection, VariableReference *definition, const std::string &name
+) {
+	Section *best = ownerSection;
+	size_t bestInstantiationCount = ownerSection ? ownerSection->instantiations.size() : 0;
+
+	std::vector<Section *> stack{context.mainSection};
+	while (!stack.empty()) {
+		Section *section = stack.back();
+		stack.pop_back();
+		if (!section)
+			continue;
+		for (Section *child : section->children) {
+			if (child)
+				stack.push_back(child);
+		}
+
+		Variable *candidateVariable = section->findVariable(name);
+		if (!candidateVariable || !candidateVariable->definition)
+			continue;
+		if (definition && !sameVariableDefinitionSource(candidateVariable->definition, definition))
+			continue;
+
+		size_t instantiationCount = section->instantiations.size();
+		if (!best || instantiationCount > bestInstantiationCount) {
+			best = section;
+			bestInstantiationCount = instantiationCount;
+		}
+	}
+	return best;
+}
+
+static std::string makeSelectionKey(const ::Range &range) {
+	if (!range.line)
+		return {};
+	SourceLocation start = range.sourceStart();
+	SourceLocation end = range.sourceEnd();
+	if (!start.sourceFile || !end.sourceFile)
+		return {};
+	std::ostringstream key;
+	key << pathutil::toAbsoluteUri(start.sourceFile->uri) << ':' << start.sourceFileLineIndex << ':' << start.column << '-'
+		<< end.sourceFileLineIndex << ':' << end.column;
+	return key.str();
+}
+
+static std::string makeInstantiationSignature(const std::vector<DataType> &types) {
+	if (types.empty())
+		return "()";
+	std::ostringstream out;
+	out << '(';
+	for (size_t i = 0; i < types.size(); ++i) {
+		if (i > 0)
+			out << ", ";
+		out << types[i].toString();
+	}
+	out << ')';
+	return out.str();
+}
+
+static std::string typeToUserPatternName(const ParseContext &parseContext, const DataType &type) {
+	if (type.pointerDepth == 0) {
+		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
+		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit float";
+		if (type.kind == DataType::Kind::Bool)
+			return "a boolean";
+		if (type.kind == DataType::Kind::Void)
+			return "nothing";
+	}
+	auto it = parseContext.typeAliasNames.find(type);
+	if (it != parseContext.typeAliasNames.end())
+		return it->second;
+	return type.toString();
+}
+
+struct PatternParameterInfo {
+	std::string name;
+	std::string typeConstraintName;
+};
+
+static void collectPatternParameters(
+	const std::vector<DefinitionPatternElement> &elements, std::vector<PatternParameterInfo> &outParameters
+) {
+	for (const auto &elem : elements) {
+		if (elem.type == PatternElement::Type::Choice) {
+			if (!elem.alternatives.empty())
+				collectPatternParameters(elem.alternatives[0], outParameters);
+			continue;
+		}
+		if (elem.type != PatternElement::Type::Variable)
+			continue;
+		auto it = std::find_if(outParameters.begin(), outParameters.end(), [&](const PatternParameterInfo &existing) {
+			return existing.name == elem.text;
+		});
+		if (it == outParameters.end())
+			outParameters.push_back({elem.text, elem.typeConstraintName});
+	}
+}
+
+static std::string formatInstancePattern(
+	ParseContext &parseContext, const PatternDefinition *definition, const std::vector<DataType> &signatureTypes,
+	const Instantiation &instantiation
+) {
+	if (!definition)
+		return {};
+
+	std::vector<PatternParameterInfo> parameters;
+	collectPatternParameters(definition->patternElements, parameters);
+	std::unordered_map<std::string, size_t> parameterIndexByName;
+	for (size_t i = 0; i < parameters.size(); ++i)
+		parameterIndexByName[parameters[i].name] = i;
+
+	auto formatValue = [](const CompileTimeValue &value) -> std::string {
+		if (const auto *number = std::get_if<double>(&value)) {
+			if (std::isfinite(*number)) {
+				double rounded = std::round(*number);
+				if (std::abs(*number - rounded) < 1e-9) {
+					std::ostringstream asInteger;
+					asInteger << static_cast<long long>(rounded);
+					return asInteger.str();
+				}
+			}
+			std::ostringstream asFloat;
+			asFloat << *number;
+			return asFloat.str();
+		}
+		if (const auto *text = std::get_if<std::string>(&value))
+			return *text;
+		if (const auto *boolean = std::get_if<bool>(&value))
+			return *boolean ? "true" : "false";
+		return "?";
+	};
+
+	std::function<void(const std::vector<DefinitionPatternElement> &, std::string &)> appendPatternText =
+		[&](const std::vector<DefinitionPatternElement> &elements, std::string &result) {
+		for (const auto &elem : elements) {
+			if (elem.type == PatternElement::Type::Choice) {
+				if (!elem.alternatives.empty())
+					appendPatternText(elem.alternatives[0], result);
+				continue;
+			}
+			if (elem.type != PatternElement::Type::Variable) {
+				result += elem.text;
+				continue;
+			}
+
+			const std::string &name = elem.text;
+			auto indexIt = parameterIndexByName.find(name);
+			std::optional<CompileTimeValue> constantValue;
+			auto constIt = instantiation.constantParameterValues.find(name);
+			if (constIt != instantiation.constantParameterValues.end() && isCompileTimeKnown(constIt->second))
+				constantValue = constIt->second;
+
+			std::string typeName = elem.typeConstraintName;
+			if (typeName.empty() && indexIt != parameterIndexByName.end()) {
+				size_t index = indexIt->second;
+				if (index < signatureTypes.size() && signatureTypes[index].isDeduced())
+					typeName = typeToUserPatternName(parseContext, signatureTypes[index]);
+			}
+
+			if (!elem.typeConstraintName.empty()) {
+				if (constantValue.has_value())
+					result += "{" + typeName + ":" + formatValue(*constantValue) + "}";
+				else
+					result += "{" + typeName + ":" + name + "}";
+			} else if (constantValue.has_value()) {
+				result += formatValue(*constantValue);
+			} else {
+				result += name;
+			}
+		}
+	};
+
+	std::string rendered;
+	appendPatternText(definition->patternElements, rendered);
+	return rendered;
+}
+
+static Json buildInstantiationOptions(ParseContext &parseContext, const Section *ownerSection) {
+	Json options = Json::array();
+	const PatternDefinition *primaryDefinition =
+		(ownerSection && !ownerSection->patternDefinitions.empty()) ? ownerSection->patternDefinitions.front() : nullptr;
+	int index = 1;
+	for (const auto &[signatureTypes, inst] : ownerSection->instantiations) {
+		std::string signature = makeInstantiationSignature(signatureTypes);
+		std::string label = formatInstancePattern(parseContext, primaryDefinition, signatureTypes, inst);
+		if (label.empty())
+			label = "DynLex path " + std::to_string(index) + " " + signature;
+		options.push_back({{"key", signature}, {"label", label}});
+		index++;
+	}
+	return options;
+}
+
+static std::vector<DataType> argumentTypesForDefinition(const Function *expr, PatternDefinition *definition) {
+	std::vector<DataType> argTypes;
+	if (!expr || !definition || expr->kind != Function::Kind::PatternCall || !expr->patternMatch)
+		return argTypes;
+
+	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	size_t argIndex = 0;
+	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+		auto paramIt = node->parameterNames.find(definition);
+		if (paramIt == node->parameterNames.end())
+			continue;
+		if (argIndex >= sortedArgs.size())
+			break;
+		Function *argExpr = sortedArgs[argIndex++];
+		argTypes.push_back(argExpr ? argExpr->type : DataType{});
+	}
+	return argTypes;
+}
+
+static void storeInstantiationSelectionForSection(
+	std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey, Section *section,
+	const std::string &instantiationKey
+) {
+	if (!section || instantiationKey.empty())
+		return;
+	for (PatternDefinition *definition : section->patternDefinitions) {
+		if (!definition)
+			continue;
+		std::string key = makeSelectionKey(definition->range);
+		if (!key.empty())
+			selectedInstantiationBySelectionKey[key] = instantiationKey;
+	}
+	for (const auto &[_, refs] : section->variableReferences) {
+		for (VariableReference *reference : refs) {
+			if (!reference)
+				continue;
+			std::string key = makeSelectionKey(reference->range);
+			if (!key.empty())
+				selectedInstantiationBySelectionKey[key] = instantiationKey;
+		}
+	}
 }
 
 static bool rangeContainsSource(const ::Range &range, const std::string &uri, int line, int character) {
@@ -563,6 +966,14 @@ static bool rangeContainsSource(const ::Range &range, const std::string &uri, in
 	return character >= start.column && character < end.column;
 }
 
+static bool rangeContainsSourceForHover(const ::Range &range, const std::string &uri, int line, int character) {
+	if (rangeContainsSource(range, uri, line, character))
+		return true;
+	if (character > 0 && rangeContainsSource(range, uri, line, character - 1))
+		return true;
+	return false;
+}
+
 static VariableReference *findVariableReferenceAt(Section *fromSection, const std::string &uri, int line, int character) {
 	for (Section *section = fromSection; section; section = section->parent) {
 		for (const auto &[_, refs] : section->variableReferences) {
@@ -574,6 +985,55 @@ static VariableReference *findVariableReferenceAt(Section *fromSection, const st
 			}
 		}
 	}
+	return nullptr;
+}
+
+static VariableReference *findVariableReferenceInDocument(
+	Section *rootSection, const std::string &uri, int line, int character, Section **outReferenceSection = nullptr
+) {
+	if (outReferenceSection)
+		*outReferenceSection = nullptr;
+	if (!rootSection)
+		return nullptr;
+
+	std::vector<Section *> stack{rootSection};
+	while (!stack.empty()) {
+		Section *section = stack.back();
+		stack.pop_back();
+		if (!section)
+			continue;
+
+		for (Section *child : section->children) {
+			if (child)
+				stack.push_back(child);
+		}
+
+		for (const auto &[_, refs] : section->variableReferences) {
+			for (VariableReference *reference : refs) {
+				if (!reference)
+					continue;
+				if (!rangeContainsSource(reference->range, uri, line, character))
+					continue;
+				if (outReferenceSection)
+					*outReferenceSection = section;
+				return reference;
+			}
+		}
+	}
+	return nullptr;
+}
+
+static Function *findVariableFunctionAtSource(Function *expr, const std::string &uri, int line, int character) {
+	if (!expr)
+		return nullptr;
+	for (Function *arg : expr->arguments) {
+		if (!arg)
+			continue;
+		if (Function *nested = findVariableFunctionAtSource(arg, uri, line, character))
+			return nested;
+	}
+	if (expr->kind == Function::Kind::Variable && rangeContainsSource(expr->range, uri, line, character))
+		return expr;
 	return nullptr;
 }
 
@@ -598,6 +1058,93 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 	return "?";
 }
 
+static Json makeVariableHoverContents(const std::string &typeText, const std::optional<CompileTimeValue> &value) {
+	std::ostringstream markdown;
+	if (!typeText.empty()) {
+		markdown << "type:\n\n```dynlex\n" << typeText << "\n```";
+	}
+	bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
+	if (hasKnownValue) {
+		if (!typeText.empty())
+			markdown << "\n\n";
+		markdown << "value: `" << formatCompileTimeValue(*value) << "`";
+	}
+	return Json{{"kind", "markdown"}, {"value", markdown.str()}};
+}
+
+static std::optional<CompileTimeValue> lookupConstantValueInInstantiation(
+	Section *ownerSection, const Instantiation &instantiation, VariableReference *referenceAtHover,
+	VariableReference *variableDefinition, const std::string &variableName
+) {
+	if (referenceAtHover) {
+		auto valueIt = instantiation.constantValuesByReference.find(referenceAtHover);
+		if (valueIt != instantiation.constantValuesByReference.end())
+			return valueIt->second;
+	}
+	if (variableDefinition) {
+		auto defIt = instantiation.constantValuesByReference.find(variableDefinition);
+		if (defIt != instantiation.constantValuesByReference.end())
+			return defIt->second;
+	}
+	auto parameterIt = instantiation.constantParameterValues.find(variableName);
+	if (parameterIt == instantiation.constantParameterValues.end() && variableDefinition &&
+		variableDefinition->name != variableName) {
+		parameterIt = instantiation.constantParameterValues.find(variableDefinition->name);
+	}
+	if (parameterIt != instantiation.constantParameterValues.end() && isCompileTimeKnown(parameterIt->second))
+		return parameterIt->second;
+	(void)ownerSection;
+	return std::nullopt;
+}
+
+static std::optional<CompileTimeValue> lookupHoverConstantValue(
+	const ParseContext &parseContext, Section *ownerSection, VariableReference *referenceAtHover,
+	VariableReference *variableDefinition, const std::string &variableName, const std::string &selectionKey,
+	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
+) {
+	if (ownerSection && ownerSection->instantiations.size() == 1) {
+		const Instantiation &inst = ownerSection->instantiations.begin()->second;
+		return lookupConstantValueInInstantiation(ownerSection, inst, referenceAtHover, variableDefinition, variableName);
+	}
+
+	if (ownerSection && ownerSection->instantiations.size() > 1) {
+		auto selectedIt = selectedInstantiationBySelectionKey.find(selectionKey);
+		std::string selectedKey;
+		if (selectedIt != selectedInstantiationBySelectionKey.end())
+			selectedKey = selectedIt->second;
+		else if (!ownerSection->instantiations.empty())
+			selectedKey = makeInstantiationSignature(ownerSection->instantiations.begin()->first);
+		for (const auto &[signatureTypes, inst] : ownerSection->instantiations) {
+			if (makeInstantiationSignature(signatureTypes) != selectedKey)
+				continue;
+			return lookupConstantValueInInstantiation(ownerSection, inst, referenceAtHover, variableDefinition, variableName);
+		}
+		return std::nullopt;
+	}
+
+	if (referenceAtHover) {
+		auto valueIt = parseContext.constantValuesByReference.find(referenceAtHover);
+		if (valueIt != parseContext.constantValuesByReference.end())
+			return valueIt->second;
+	}
+	if (variableDefinition) {
+		auto defIt = parseContext.constantValuesByReference.find(variableDefinition);
+		if (defIt != parseContext.constantValuesByReference.end())
+			return defIt->second;
+	}
+
+	return std::nullopt;
+}
+
+static std::optional<CompileTimeValue> lookupConstantValueByNameInOwnerSection(
+	const ParseContext &parseContext, Section *ownerSection, VariableReference *definition, const std::string &name,
+	const std::string &selectionKey, const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
+) {
+	return lookupHoverConstantValue(
+		parseContext, ownerSection, nullptr, definition, name, selectionKey, selectedInstantiationBySelectionKey
+	);
+}
+
 static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr) {
 	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
@@ -617,6 +1164,53 @@ static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr)
 	return matched;
 }
 
+struct CursorResolution {
+	CodeLine *codeLine{};
+	int localOffset = -1;
+	Function *expr{};
+	PatternDefinition *matchedPattern{};
+	VariableReference *referenceAtCursor{};
+	VariableReference *definitionAtCursor{};
+	std::string variableName;
+};
+
+static std::optional<CursorResolution>
+resolveCursorData(ParseContext &context, const std::string &uri, int line, int character) {
+	for (CodeLine *codeLine : context.codeLines) {
+		if (!codeLine || !codeLine->containsSourceLocation(uri, line, character) || !codeLine->function)
+			continue;
+		int localOffset = codeLine->mapSourceToOffset(uri, line, character);
+		if (localOffset < 0)
+			continue;
+
+		Function *expr = findDeepestFunction(codeLine->function, localOffset);
+		if (Function *sourceVariable = findVariableArgumentAtOffset(codeLine->function, localOffset))
+			expr = sourceVariable;
+		else if (Function *sourceVariable = findVariableFunctionAtSource(codeLine->function, uri, line, character))
+			expr = sourceVariable;
+
+		CursorResolution resolved;
+		resolved.codeLine = codeLine;
+		resolved.localOffset = localOffset;
+		resolved.expr = expr;
+		resolved.matchedPattern = matchedPatternDefinitionForHover(expr);
+		if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
+			resolved.referenceAtCursor = expr->variable;
+			resolved.definitionAtCursor = expr->variable->definition ? expr->variable->definition : expr->variable;
+			resolved.variableName = expr->variable->name;
+		} else {
+			VariableReference *reference = findVariableReferenceAt(codeLine->section, uri, line, character);
+			if (reference) {
+				resolved.referenceAtCursor = reference;
+				resolved.definitionAtCursor = reference->definition ? reference->definition : reference;
+				resolved.variableName = reference->name;
+			}
+		}
+		return resolved;
+	}
+	return std::nullopt;
+}
+
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
@@ -625,27 +1219,27 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 		return std::nullopt;
 	}
 
-	// Find the code line at the cursor position
-	for (CodeLine *codeLine : context->codeLines) {
-		if (!codeLine->containsSourceLocation(params.textDocument.uri, params.position.line, params.position.character)) {
-			continue;
+	std::optional<CursorResolution> resolved =
+		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
+	if (!resolved.has_value())
+		return std::nullopt;
+	if (resolved->expr && resolved->expr->kind == Function::Kind::PatternCall && resolved->matchedPattern) {
+		Section *targetSection = resolved->matchedPattern->section;
+		if (targetSection && targetSection->instantiations.size() > 1) {
+			std::vector<DataType> callArgTypes = argumentTypesForDefinition(resolved->expr, resolved->matchedPattern);
+			std::string key = makeInstantiationSignature(callArgTypes);
+			if (targetSection->instantiations.contains(callArgTypes))
+				storeInstantiationSelectionForSection(selectedInstantiationBySelectionKey, targetSection, key);
 		}
-		int localOffset = codeLine->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
-
-		// Walk the function tree to find the deepest function at cursor
-		if (codeLine->function) {
-			Function *expr = findDeepestFunction(codeLine->function, localOffset);
-			if (expr) {
-				auto target = getDefinitionTarget(expr);
-				if (target) {
-					Location loc;
-					loc.uri = pathutil::toAbsoluteUri(target->line->sourceFile->uri);
-					loc.range = convertRange(*target);
-					return loc;
-				}
-			}
+	}
+	if (resolved->expr) {
+		auto target = getDefinitionTarget(resolved->expr);
+		if (target) {
+			Location loc;
+			loc.uri = pathutil::toAbsoluteUri(target->line->sourceFile->uri);
+			loc.range = convertRange(*target);
+			return loc;
 		}
-		break;
 	}
 
 	return std::nullopt;
@@ -660,9 +1254,52 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 		return std::nullopt;
 
 	for (const ParseContext::SourceTokenAnnotation &annotation : context->sourceTokenAnnotations) {
+		if (annotation.kind != ParseContext::SourceTokenKind::Variable)
+			continue;
+		if (!rangeContainsSourceForHover(
+				annotation.range, params.textDocument.uri, params.position.line, params.position.character
+			))
+			continue;
+		if (!annotation.range.line || !annotation.range.line->section)
+			continue;
+		const std::string variableName = std::string(annotation.range.subString);
+		Variable *resolvedVariable = annotation.range.line->section->findVariable(variableName);
+		if (!resolvedVariable)
+			continue;
+		Section *ownerSection = (resolvedVariable->definition && resolvedVariable->definition->range.line)
+									? resolvedVariable->definition->range.line->section
+									: annotation.range.line->section;
+		if (!ownerSection)
+			continue;
+		Variable *ownedVariable = resolvedVariable;
+		if (ownedVariable->definition) {
+			if (Section *instantiatedOwner =
+					findInstantiatedOwnerSectionForDefinition(*context, ownedVariable->definition, variableName)) {
+				ownerSection = instantiatedOwner;
+			}
+		}
+		ownerSection = findBestSectionForVariableLookup(*context, ownerSection, ownedVariable->definition, variableName);
+		std::string selectionKey = makeSelectionKey(annotation.range);
+		std::optional<CompileTimeValue> value = lookupConstantValueByNameInOwnerSection(
+			*context, ownerSection, ownedVariable->definition, variableName, selectionKey, selectedInstantiationBySelectionKey
+		);
+		bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
+		std::string typeText = typeToUserPatternName(*context, ownedVariable->type);
+		if (typeText.empty() && !hasKnownValue)
+			continue;
+
+		Hover hover;
+		hover.contents = makeVariableHoverContents(typeText, value);
+		hover.range = convertRange(annotation.range);
+		return hover;
+	}
+
+	for (const ParseContext::SourceTokenAnnotation &annotation : context->sourceTokenAnnotations) {
 		if (annotation.kind != ParseContext::SourceTokenKind::PatternReference)
 			continue;
-		if (!rangeContainsSource(annotation.range, params.textDocument.uri, params.position.line, params.position.character))
+		if (!rangeContainsSourceForHover(
+				annotation.range, params.textDocument.uri, params.position.line, params.position.character
+			))
 			continue;
 		PatternDefinition *definition =
 			findDefinitionBySignature(*context, annotation.referencedPatternType, annotation.range.subString);
@@ -674,69 +1311,272 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 		return hover;
 	}
 
-	for (CodeLine *codeLine : context->codeLines) {
-		if (!codeLine->containsSourceLocation(params.textDocument.uri, params.position.line, params.position.character))
-			continue;
-
-		int localOffset = codeLine->mapSourceToOffset(params.textDocument.uri, params.position.line, params.position.character);
-		if (!codeLine->function)
-			return std::nullopt;
-
-		Function *expr = findDeepestFunction(codeLine->function, localOffset);
-		if (PatternDefinition *matchedPattern = matchedPatternDefinitionForHover(expr)) {
-			Hover hover;
-			hover.contents = matchedPattern->toString();
-			hover.range = convertRange(expr->range);
-			return hover;
+	std::optional<Hover> definitionHover;
+	{
+		std::vector<Section *> stack{context->mainSection};
+		while (!stack.empty()) {
+			Section *section = stack.back();
+			stack.pop_back();
+			if (!section)
+				continue;
+			for (Section *child : section->children) {
+				if (child)
+					stack.push_back(child);
+			}
+			for (PatternDefinition *definition : section->patternDefinitions) {
+				if (!definition)
+					continue;
+				if (!rangeContainsSource(
+						definition->range, params.textDocument.uri, params.position.line, params.position.character
+					))
+					continue;
+				Hover hover;
+				hover.contents = definition->toString();
+				hover.range = convertRange(definition->range);
+				definitionHover = std::move(hover);
+				stack.clear();
+				break;
+			}
 		}
-		std::string variableName;
-		VariableReference *referenceAtHover = nullptr;
-		VariableReference *variableDefinition = nullptr;
-		if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-			variableName = expr->variable->name;
-			referenceAtHover = expr->variable;
-			variableDefinition = expr->variable->definition ? expr->variable->definition : expr->variable;
-		} else {
-			VariableReference *reference = findVariableReferenceAt(
-				codeLine->section, params.textDocument.uri, params.position.line, params.position.character
-			);
-			if (!reference)
-				return std::nullopt;
-			variableName = reference->name;
-			referenceAtHover = reference;
-			variableDefinition = reference->definition ? reference->definition : reference;
-		}
-
-		Section *ownerSection = findOwningVariableSection(codeLine->section, variableDefinition, variableName);
-		if (!ownerSection || !referenceAtHover)
-			return std::nullopt;
-
-		// Multi-instantiation functions are ambiguous without an instantiation picker.
-		if (ownerSection->instantiations.size() > 1)
-			return std::nullopt;
-
-		std::optional<CompileTimeValue> value;
-		if (ownerSection->instantiations.size() == 1) {
-			const Instantiation &inst = ownerSection->instantiations.begin()->second;
-			auto valueIt = inst.constantValuesByReference.find(referenceAtHover);
-			if (valueIt != inst.constantValuesByReference.end())
-				value = valueIt->second;
-		} else {
-			auto valueIt = context->constantValuesByReference.find(referenceAtHover);
-			if (valueIt != context->constantValuesByReference.end())
-				value = valueIt->second;
-		}
-		if (!value.has_value() || !isCompileTimeKnown(*value))
-			return std::nullopt;
-
-		Hover hover;
-		hover.contents = "value: " + formatCompileTimeValue(*value);
-		if (expr)
-			hover.range = convertRange(expr->range);
-		return hover;
 	}
 
-	return std::nullopt;
+	std::optional<CursorResolution> resolved =
+		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
+	if (!resolved.has_value() && params.position.character > 0) {
+		resolved = resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
+	} else if (resolved.has_value() && !resolved->referenceAtCursor && params.position.character > 0) {
+		std::optional<CursorResolution> previousCharResolved =
+			resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character - 1);
+		if (previousCharResolved.has_value() && previousCharResolved->referenceAtCursor)
+			resolved = std::move(previousCharResolved);
+	}
+	if (resolved.has_value()) {
+		Function *expr = resolved->expr;
+		PatternDefinition *matchedPattern = resolved->matchedPattern;
+		VariableReference *referenceAtHover = resolved->referenceAtCursor;
+		VariableReference *variableDefinition = resolved->definitionAtCursor;
+		std::string variableName = resolved->variableName;
+		if (!referenceAtHover || !variableDefinition) {
+			if (matchedPattern) {
+				Hover hover;
+				hover.contents = matchedPattern->toString();
+				hover.range = convertRange(expr->range);
+				return hover;
+			}
+		} else {
+			Section *ownerSection = nullptr;
+			if (variableDefinition && variableDefinition->range.line && variableDefinition->range.line->section)
+				ownerSection = variableDefinition->range.line->section;
+			if (!ownerSection && referenceAtHover->range.line && referenceAtHover->range.line->section)
+				ownerSection =
+					findOwningVariableSection(referenceAtHover->range.line->section, variableDefinition, variableName);
+			if (!ownerSection) {
+				ownerSection = findOwningVariableSectionAtSource(
+					*context, params.textDocument.uri, params.position.line, params.position.character, variableDefinition,
+					variableName
+				);
+			}
+			if (Section *instantiatedOwner =
+					findInstantiatedOwnerSectionForDefinition(*context, variableDefinition, variableName)) {
+				ownerSection = instantiatedOwner;
+			}
+			ownerSection = findBestSectionForVariableLookup(*context, ownerSection, variableDefinition, variableName);
+			if (ownerSection) {
+				std::string selectionKey = makeSelectionKey(referenceAtHover->range);
+
+				Variable *ownedVariable = nullptr;
+				auto variableIt = ownerSection->variables.find(variableName);
+				if (variableIt != ownerSection->variables.end())
+					ownedVariable = variableIt->second;
+				if (!ownedVariable)
+					ownedVariable = ownerSection->findVariable(variableName);
+
+				std::string typeText;
+				if (ownedVariable)
+					typeText = typeToUserPatternName(*context, ownedVariable->type);
+				else if (expr && expr->kind == Function::Kind::Variable)
+					typeText = typeToUserPatternName(*context, expr->type);
+
+				std::optional<CompileTimeValue> value = lookupHoverConstantValue(
+					*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+					selectedInstantiationBySelectionKey
+				);
+				bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
+				if (typeText.empty() && !hasKnownValue)
+					return std::nullopt;
+
+				Hover hover;
+				hover.contents = makeVariableHoverContents(typeText, value);
+				if (expr)
+					hover.range = convertRange(expr->range);
+				return hover;
+			}
+			if (matchedPattern) {
+				Hover hover;
+				hover.contents = matchedPattern->toString();
+				hover.range = convertRange(expr->range);
+				return hover;
+			}
+		}
+	}
+
+	Section *referenceSection = nullptr;
+	VariableReference *referenceAtHover = findVariableReferenceInDocument(
+		context->mainSection, params.textDocument.uri, params.position.line, params.position.character, &referenceSection
+	);
+	if (!referenceAtHover) {
+		if (definitionHover.has_value())
+			return definitionHover;
+		return std::nullopt;
+	}
+
+	std::string variableName = referenceAtHover->name;
+	VariableReference *variableDefinition = referenceAtHover->definition ? referenceAtHover->definition : referenceAtHover;
+	Section *ownerSection = findOwningVariableSectionAtSource(
+		*context, params.textDocument.uri, params.position.line, params.position.character, variableDefinition, variableName
+	);
+	if (!ownerSection) {
+		if (definitionHover.has_value())
+			return definitionHover;
+		return std::nullopt;
+	}
+	std::string selectionKey = makeSelectionKey(referenceAtHover->range);
+
+	Variable *ownedVariable = nullptr;
+	auto variableIt = ownerSection->variables.find(variableName);
+	if (variableIt != ownerSection->variables.end())
+		ownedVariable = variableIt->second;
+
+	std::string typeText;
+	if (ownedVariable)
+		typeText = typeToUserPatternName(*context, ownedVariable->type);
+
+	std::optional<CompileTimeValue> value = lookupHoverConstantValue(
+		*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
+		selectedInstantiationBySelectionKey
+	);
+	bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
+	if (typeText.empty() && !hasKnownValue) {
+		if (definitionHover.has_value())
+			return definitionHover;
+		return std::nullopt;
+	}
+
+	Hover hover;
+	hover.contents = makeVariableHoverContents(typeText, value);
+	hover.range = convertRange(referenceAtHover->range);
+	return hover;
+}
+
+Json DynLexServer::onInstantiationsInDocument(const TextDocumentIdentifier &params) {
+	if (isConfigDocumentUri(params.uri))
+		return Json::array();
+
+	ParseContext *context = findContextFor(params.uri);
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
+		return Json::array();
+
+	Json entries = Json::array();
+	std::unordered_set<std::string> seenSelectionKeys;
+	std::vector<Section *> stack{context->mainSection};
+	while (!stack.empty()) {
+		Section *section = stack.back();
+		stack.pop_back();
+		if (!section)
+			continue;
+		for (Section *child : section->children) {
+			if (child)
+				stack.push_back(child);
+		}
+		for (const auto &[_, refs] : section->variableReferences) {
+			for (VariableReference *referenceAtHover : refs) {
+				if (!referenceAtHover || !referenceAtHover->range.line || !referenceAtHover->range.line->sourceFile)
+					continue;
+				if (pathutil::toAbsoluteUri(referenceAtHover->range.line->sourceFile->uri) != params.uri)
+					continue;
+
+				std::string variableName = referenceAtHover->name;
+				VariableReference *variableDefinition =
+					referenceAtHover->definition ? referenceAtHover->definition : referenceAtHover;
+				Section *ownerSection = findOwningVariableSection(section, variableDefinition, variableName);
+				if (!ownerSection || ownerSection->instantiations.empty())
+					continue;
+
+				std::string selectionKey = makeSelectionKey(referenceAtHover->range);
+				if (selectionKey.empty() || seenSelectionKeys.contains(selectionKey))
+					continue;
+				seenSelectionKeys.insert(selectionKey);
+
+				Json options = buildInstantiationOptions(*context, ownerSection);
+				if (options.empty())
+					continue;
+
+				std::string currentKey;
+				auto selectedIt = selectedInstantiationBySelectionKey.find(selectionKey);
+				if (selectedIt != selectedInstantiationBySelectionKey.end())
+					currentKey = selectedIt->second;
+				if (currentKey.empty())
+					currentKey = options[0].at("key").get<std::string>();
+
+				entries.push_back({
+					{"selectionKey", selectionKey},
+					{"currentKey", currentKey},
+					{"range", convertRange(referenceAtHover->range)},
+					{"options", options},
+				});
+			}
+		}
+
+		if (!section->instantiations.empty()) {
+			Json options = buildInstantiationOptions(*context, section);
+			if (!options.empty()) {
+				for (PatternDefinition *definition : section->patternDefinitions) {
+					if (!definition || !definition->range.line || !definition->range.line->sourceFile)
+						continue;
+					if (pathutil::toAbsoluteUri(definition->range.line->sourceFile->uri) != params.uri)
+						continue;
+					std::string selectionKey = makeSelectionKey(definition->range);
+					if (selectionKey.empty() || seenSelectionKeys.contains(selectionKey))
+						continue;
+					seenSelectionKeys.insert(selectionKey);
+
+					std::string currentKey;
+					auto selectedIt = selectedInstantiationBySelectionKey.find(selectionKey);
+					if (selectedIt != selectedInstantiationBySelectionKey.end())
+						currentKey = selectedIt->second;
+					if (currentKey.empty())
+						currentKey = options[0].at("key").get<std::string>();
+
+					entries.push_back({
+						{"selectionKey", selectionKey},
+						{"currentKey", currentKey},
+						{"range", convertRange(definition->range)},
+						{"options", options},
+					});
+				}
+			}
+		}
+	}
+	return entries;
+}
+
+void DynLexServer::onSelectInstantiation(const Json &params) {
+	if (!params.is_object())
+		return;
+	if (!params.contains("selectionKey") || !params.contains("instantiationKey"))
+		return;
+	if (!params.at("selectionKey").is_string() || !params.at("instantiationKey").is_string())
+		return;
+
+	std::string selectionKey = params.at("selectionKey").get<std::string>();
+	std::string instantiationKey = params.at("instantiationKey").get<std::string>();
+	if (selectionKey.empty())
+		return;
+	if (instantiationKey.empty()) {
+		selectedInstantiationBySelectionKey.erase(selectionKey);
+		return;
+	}
+	selectedInstantiationBySelectionKey[selectionKey] = instantiationKey;
 }
 
 // Reconstruct pattern name from definition elements

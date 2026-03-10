@@ -711,6 +711,8 @@ bool resolvePatterns(ParseContext &context) {
 												} else if (*kindStr == "string") {
 													elem.resolvedTypeConstraint = {DataType::Kind::Int, 1};
 													elem.resolvedTypeConstraint.pointerDepth = 1;
+												} else if (*kindStr == "type") {
+													elem.resolvedTypeConstraint = {DataType::Kind::Type};
 												}
 											}
 											break;
