@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include "gdbmi.h"
 #include <cassert>
 #include <cerrno>
@@ -366,3 +367,4 @@ void GdbMI::terminate() {
 }
 
 } // namespace dap
+#endif

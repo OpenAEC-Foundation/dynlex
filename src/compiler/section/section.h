@@ -1,5 +1,6 @@
 #pragma once
 #include "codeLine.h"
+#include "compileTimeInfo.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionType.h"
@@ -9,6 +10,8 @@
 #include <list>
 #include <map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace llvm {
@@ -18,13 +21,18 @@ class BasicBlock;
 
 struct ParseContext;
 struct Variable;
-struct Expression;
+struct Function;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
-	DataType returnType;
+	DataType returnType{DataType::Kind::Any};
+	std::vector<DataType> parameterTypes;
+	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
+	bool valid = true;
 };
 
 struct Section {
@@ -33,6 +41,7 @@ struct Section {
 			parent->children.push_back(this);
 		}
 	}
+	virtual ~Section() = default;
 	SectionType type;
 	Section *parent{};
 	std::vector<PatternDefinition *> patternDefinitions;
@@ -76,8 +85,8 @@ struct Section {
 	);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
-	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
-	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
+	Function *detectPatterns(ParseContext &context, Range range, SectionType patternType);
+	Function *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void addPatternReference(PatternReference *reference);
@@ -89,4 +98,9 @@ struct Section {
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);
+
+	// The line that opens this section (e.g. "loop 10 times:")
+	CodeLine *openingLine{};
+
+	virtual std::string toString() const { return openingLine ? std::string(openingLine->patternText) : "main"; }
 };

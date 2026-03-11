@@ -11,12 +11,19 @@ struct RelatedInfo {
 	Range range;
 };
 
+struct DiagnosticFix {
+	std::string title;
+	Range range;
+	std::string replacement;
+};
+
 struct Diagnostic {
 	enum class Level { Info, Warning, Error };
 	Level level;
 	std::string message;
 	Range range;
 	std::vector<RelatedInfo> relatedInfo;
+	std::vector<DiagnosticFix> quickFixes;
 	Diagnostic(Level level, const std::string &message, Range range) : level(level), message(message), range(range) {}
 	std::string toString() const;
 };

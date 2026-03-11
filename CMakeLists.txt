@@ -2,7 +2,18 @@
 # Specify minimum CMake version and project name
 #
 cmake_minimum_required (VERSION 3.21)
-project (dynlex)
+set(DYNLEX_VERSION_FILE "${CMAKE_SOURCE_DIR}/metadata/VERSION")
+if(NOT EXISTS "${DYNLEX_VERSION_FILE}")
+    message(FATAL_ERROR "Missing VERSION file at ${DYNLEX_VERSION_FILE}")
+endif()
+file(READ "${DYNLEX_VERSION_FILE}" DYNLEX_VERSION_RAW)
+string(STRIP "${DYNLEX_VERSION_RAW}" DYNLEX_VERSION)
+if(NOT DYNLEX_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "Invalid version in VERSION file: '${DYNLEX_VERSION}'")
+endif()
+project (dynlex VERSION ${DYNLEX_VERSION})
+
+include(GNUInstallDirs)
 
 #
 # Enable ccache if available
@@ -19,11 +30,101 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #find_package(imgui CONFIG REQUIRED)
-find_package(nlohmann_json REQUIRED)
-set(LLVM_DIR "/usr/lib/llvm-20/cmake" CACHE PATH "LLVM 20 cmake directory")
+find_package(nlohmann_json CONFIG)
+
+if(NOT nlohmann_json_FOUND)
+    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
+
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
+        set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+        )
+    else()
+        include(FetchContent)
+        FetchContent_Declare(
+            nlohmann_json
+            URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+        )
+        FetchContent_MakeAvailable(nlohmann_json)
+    endif()
+endif()
+
+set(DYNLEX_MIN_LLVM_VERSION 20)
+set(DYNLEX_LLVM_VERSION "" CACHE STRING "Preferred LLVM major version for DynLex")
+
+if(NOT LLVM_DIR)
+    if(DYNLEX_LLVM_VERSION)
+        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config-${DYNLEX_LLVM_VERSION} llvm-config)
+    else()
+        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config)
+    endif()
+
+    if(DYNLEX_LLVM_CONFIG)
+        execute_process(
+            COMMAND ${DYNLEX_LLVM_CONFIG} --version
+            OUTPUT_VARIABLE DYNLEX_LLVM_CONFIG_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        string(REGEX MATCH "^[0-9]+" DYNLEX_FOUND_LLVM_MAJOR "${DYNLEX_LLVM_CONFIG_VERSION}")
+        if(DYNLEX_LLVM_VERSION AND NOT DYNLEX_FOUND_LLVM_MAJOR STREQUAL DYNLEX_LLVM_VERSION)
+            message(FATAL_ERROR
+                "Requested LLVM ${DYNLEX_LLVM_VERSION}, but ${DYNLEX_LLVM_CONFIG} resolves to LLVM ${DYNLEX_FOUND_LLVM_MAJOR}"
+            )
+        endif()
+
+        execute_process(
+            COMMAND ${DYNLEX_LLVM_CONFIG} --cmakedir
+            OUTPUT_VARIABLE DYNLEX_LLVM_CMAKE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if(EXISTS "${DYNLEX_LLVM_CMAKE_DIR}/LLVMConfig.cmake")
+            set(LLVM_DIR "${DYNLEX_LLVM_CMAKE_DIR}" CACHE PATH "LLVM CMake directory" FORCE)
+        endif()
+    endif()
+endif()
+
+if(WIN32 AND NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB QUIET)
+
+    if(NOT TARGET ZLIB::ZLIB)
+        set(DYNLEX_ZLIB_HINTS "")
+        if(LLVM_DIR)
+            get_filename_component(DYNLEX_LLVM_LIB_DIR "${LLVM_DIR}/../.." ABSOLUTE)
+            get_filename_component(DYNLEX_LLVM_ROOT_DIR "${DYNLEX_LLVM_LIB_DIR}/.." ABSOLUTE)
+            list(APPEND DYNLEX_ZLIB_HINTS "${DYNLEX_LLVM_LIB_DIR}" "${DYNLEX_LLVM_ROOT_DIR}/lib")
+        endif()
+
+        find_library(DYNLEX_ZLIB_LIBRARY
+            NAMES zlibstatic zlib libz z
+            HINTS ${DYNLEX_ZLIB_HINTS}
+        )
+        find_path(DYNLEX_ZLIB_INCLUDE_DIR
+            NAMES zlib.h
+            HINTS ${DYNLEX_ZLIB_HINTS} "${DYNLEX_LLVM_ROOT_DIR}/include"
+        )
+
+        if(DYNLEX_ZLIB_LIBRARY)
+            add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+            set_target_properties(ZLIB::ZLIB PROPERTIES IMPORTED_LOCATION "${DYNLEX_ZLIB_LIBRARY}")
+            if(DYNLEX_ZLIB_INCLUDE_DIR)
+                set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_ZLIB_INCLUDE_DIR}")
+            endif()
+            message(STATUS "Using fallback ZLIB::ZLIB target: ${DYNLEX_ZLIB_LIBRARY}")
+        endif()
+    endif()
+endif()
+
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+if(LLVM_PACKAGE_VERSION VERSION_LESS "${DYNLEX_MIN_LLVM_VERSION}.0.0")
+    message(FATAL_ERROR "DynLex requires LLVM ${DYNLEX_MIN_LLVM_VERSION} or newer")
+endif()
+
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -118,21 +219,54 @@ set_target_properties (${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
 
 #
 # Install targets
 #
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION share/dynlex/lib FILES_MATCHING PATTERN "*.dl")
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
+if(WIN32)
+    # Bundle runtime DLLs (LLVM/MSVC deps) so the MSI installation is self-contained.
+    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+    set(DYNLEX_LLVM_BIN_HINTS "")
+    if(DEFINED LLVM_TOOLS_BINARY_DIR AND LLVM_TOOLS_BINARY_DIR)
+        list(APPEND DYNLEX_LLVM_BIN_HINTS "${LLVM_TOOLS_BINARY_DIR}")
+    endif()
+    if(DEFINED LLVM_DIR AND LLVM_DIR)
+        get_filename_component(DYNLEX_LLVM_LIB_DIR_FOR_DLLS "${LLVM_DIR}/../.." ABSOLUTE)
+        get_filename_component(DYNLEX_LLVM_ROOT_DIR_FOR_DLLS "${DYNLEX_LLVM_LIB_DIR_FOR_DLLS}/.." ABSOLUTE)
+        list(APPEND DYNLEX_LLVM_BIN_HINTS "${DYNLEX_LLVM_ROOT_DIR_FOR_DLLS}/bin")
+    endif()
+
+    foreach(DYNLEX_REQUIRED_DLL IN ITEMS libc++.dll zlib1.dll)
+        unset(DYNLEX_REQUIRED_DLL_PATH CACHE)
+        find_file(DYNLEX_REQUIRED_DLL_PATH NAMES "${DYNLEX_REQUIRED_DLL}" HINTS ${DYNLEX_LLVM_BIN_HINTS})
+        if(DYNLEX_REQUIRED_DLL_PATH)
+            install(FILES "${DYNLEX_REQUIRED_DLL_PATH}" DESTINATION ${CMAKE_INSTALL_BINDIR})
+        else()
+            message(WARNING "Could not locate required runtime DLL '${DYNLEX_REQUIRED_DLL}' for packaging.")
+        endif()
+    endforeach()
+endif()
 
 #
-# CPack .deb packaging
+# CPack packaging
 #
-set(CPACK_GENERATOR "DEB")
+if(WIN32)
+    set(CPACK_GENERATOR "WIX;ZIP")
+elseif(APPLE)
+    set(CPACK_GENERATOR "productbuild;TGZ")
+else()
+    set(CPACK_GENERATOR "DEB;TGZ")
+endif()
 set(CPACK_PACKAGE_NAME "dynlex")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DynLex — a natural-language-like programming language")
-set(CPACK_PACKAGE_CONTACT "DynLex maintainers")
+set(CPACK_PACKAGE_CONTACT "DynLex maintainers <maintainers@dynlex.org>")
+set(CPACK_PACKAGE_VENDOR "DynLex")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/johnheikens/DynLex")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, zlib1g, libzstd1")
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)

@@ -5,20 +5,110 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build-and-test-linux:
     runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: linux-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            linux-ccache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: ./scripts/install.sh
+
+      - name: Build and test
+        run: |
+          ./scripts/build.sh --lint=false
+          ./scripts/run_tests.sh
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s || true
+
+  build-and-test-macos:
+    runs-on: macos-14
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Restore Homebrew downloads cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: macos-brew-${{ runner.os }}-${{ hashFiles('scripts/install.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            macos-brew-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: macos-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            macos-ccache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: ./scripts/install.sh
+
+      - name: Configure LLVM
+        run: |
+          if brew info llvm@20 >/dev/null 2>&1; then
+            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
+          else
+            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
+          fi
+          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
+
+      - name: Build and test
+        run: |
+          ./scripts/build.sh --lint=false
+          ./scripts/run_tests.sh
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s || true
+
+  build-and-test-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
       - name: Install dependencies
-        run: ./scripts/install.sh
+        run: ./scripts/install.ps1
+        shell: pwsh
 
-      - name: Build
-        run: ./scripts/build.sh --lint=false
+      - name: Build and test
+        run: |
+          ./scripts/build.sh --lint=false
+          ./scripts/run_tests.sh
+        shell: bash
 
-      - name: Run tests
-        run: ./scripts/run_tests.sh
+  launchpad-source-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Launchpad packaging dependencies
+        run: ./packaging/launchpad/scripts/install-build-deps.sh
+
+      - name: Build unsigned Launchpad source package
+        run: ./packaging/launchpad/scripts/build-source-package.sh --series noble --version 0.1.0+ci${{ github.run_number }}.g${GITHUB_SHA::7}

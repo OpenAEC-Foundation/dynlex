@@ -4,6 +4,9 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 COMPILER="$PROJECT_DIR/build/dynlex"
+if [[ ! -x "$COMPILER" && -x "$PROJECT_DIR/build/dynlex.exe" ]]; then
+    COMPILER="$PROJECT_DIR/build/dynlex.exe"
+fi
 TESTS_DIR="$PROJECT_DIR/tests/required"
 
 # Colors
@@ -17,9 +20,51 @@ failed=0
 skipped=0
 failures=()
 test_output=""
+is_windows=false
+case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+    *mingw*|*msys*|*cygwin*) is_windows=true ;;
+esac
 
 # Known failing tests — these don't count as unexpected failures
 KNOWN_FAILURES=""
+
+normalize_output() {
+    printf "%s" "$1" | tr -d '\r'
+}
+
+run_with_timeout() {
+    local seconds="$1"
+    shift
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$seconds" "$@"
+        return $?
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$seconds" "$@"
+        return $?
+    fi
+    python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = int(sys.argv[1])
+cmd = sys.argv[2:]
+
+try:
+    completed = subprocess.run(cmd, timeout=timeout_seconds, capture_output=True)
+except subprocess.TimeoutExpired as exc:
+    stderr = exc.stderr or b""
+    if stderr:
+        sys.stderr.buffer.write(stderr)
+    sys.exit(124)
+
+if completed.stdout:
+    sys.stdout.buffer.write(completed.stdout)
+if completed.stderr:
+    sys.stderr.buffer.write(completed.stderr)
+sys.exit(completed.returncode)
+PY
+}
 
 if [[ ! -x "$COMPILER" ]]; then
     echo -e "${YELLOW}Compiler not found, building...${NC}"
@@ -32,6 +77,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
     output_binary="$test_dir/main.out"
+    if [[ "$is_windows" == "true" ]]; then
+        output_binary="$test_dir/main.exe"
+    fi
 
     if [[ ! -f "$source_file" ]]; then
         test_output+="${YELLOW}SKIP${NC} $test_name (no main.dl)\n"
@@ -48,7 +96,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Compile (5 second timeout)
-    compile_output=$(timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+    compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
         test_output+="${RED}FAIL${NC} $test_name (compilation timed out)\n"
@@ -56,7 +104,15 @@ for test_dir in "$TESTS_DIR"/*/; do
         failures+=("$test_name")
         continue
     fi
-    if [[ $compile_exit -ne 0 || ! -f "$output_binary" || ! -x "$output_binary" ]]; then
+    output_binary_exists=false
+    if [[ -f "$output_binary" ]]; then
+        output_binary_exists=true
+    fi
+    if [[ "$is_windows" != "true" && ! -x "$output_binary" ]]; then
+        output_binary_exists=false
+    fi
+
+    if [[ $compile_exit -ne 0 || "$output_binary_exists" != "true" ]]; then
         # Compilation failed — check if this was expected
         if [[ -f "$expected_error_file" ]]; then
             expected_error=$(<"$expected_error_file")
@@ -88,7 +144,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Run (5 second timeout)
-    actual_output=$(timeout 5 "$output_binary" 2>&1)
+    actual_output=$(run_with_timeout 5 "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
         test_output+="${RED}FAIL${NC} $test_name (execution timed out)\n"
@@ -105,8 +161,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Compare
-    expected_output=$(<"$expected_file")
-    if [[ "$actual_output" == "$expected_output" ]]; then
+    expected_output=$(normalize_output "$(cat "$expected_file")")
+    normalized_actual_output=$(normalize_output "$actual_output")
+    if [[ "$normalized_actual_output" == "$expected_output" ]]; then
         test_output+="${GREEN}PASS${NC} $test_name\n"
         ((passed++))
     else

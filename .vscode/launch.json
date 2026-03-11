@@ -63,7 +63,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/build/dynlex",
-			"args": ["--lsp"],
+			"args": ["--lsp", "--port", "5008", "--lsp-trace=/tmp/dynlex-lsp-trace.log"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],
@@ -97,12 +97,12 @@
 			"request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
-				"${workspaceFolder}/tests"
+				"${workspaceFolder}/.vscode/lsp-debug.code-workspace"
 			],
 			"outFiles": [
-				"${workspaceFolder}/vscode-extension/out/**/*.js"
+				"${workspaceFolder}/vscode-extension/dist/**/*.js"
 			],
-			"preLaunchTask": "compile-extension"
+			"preLaunchTask": "compile extension"
 		}
 	],
 	"compounds": [

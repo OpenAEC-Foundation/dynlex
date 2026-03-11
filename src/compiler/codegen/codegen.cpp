@@ -2,9 +2,10 @@
 #include "classDefinition.h"
 #include "classSection.h"
 #include "codegenInternal.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
-#include "expression.h"
+#include "function.h"
 #include "intrinsicInfo.h"
 #include "native.h"
 #include "patternDefinition.h"
@@ -21,6 +22,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <unordered_map>
@@ -28,7 +30,7 @@
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 void generateSpecializedFunction(
-	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Function *>> &paramBindings,
 	const std::vector<DataType> &argTypes, Instantiation &inst
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -41,16 +43,27 @@ void generateSpecializedFunction(
 	// All parameters are opaque pointers
 	std::vector<llvm::Type *> paramTypes(varNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
 
-	// Return type: void for effects, per-instantiation for expressions
-	llvm::Type *returnType;
-	if (section->type == SectionType::Effect) {
-		returnType = builder.getVoidTy();
-	} else {
-		auto it = section->instantiations.find(argTypes);
-		assert(it != section->instantiations.end() && "Missing instantiation for arg types");
-		assert(it->second.returnType.isDeduced() && "Return type must be deduced before codegen");
-		returnType = getLLVMType(context, it->second.returnType);
+	auto it = section->instantiations.find(argTypes);
+	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
+	if (!it->second.returnType.isDeduced()) {
+		std::unordered_map<std::string, Function *> callBindings;
+		for (const auto &[name, expr] : paramBindings)
+			callBindings[name] = expr;
+		ensureSectionInstantiationInferred(context, section, callBindings, argTypes);
+		it = section->instantiations.find(argTypes);
 	}
+	if (!it->second.returnType.isDeduced()) {
+		fprintf(
+			stderr, "UNDEDUCED: '%s' args=[",
+			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString).c_str()
+		);
+		for (auto &t : argTypes)
+			fprintf(stderr, "%s ", t.toString().c_str());
+		fprintf(stderr, "]\n");
+		fflush(stderr);
+		assert(false && "Return type must be deduced before codegen");
+	}
+	llvm::Type *returnType = getLLVMType(context, it->second.returnType);
 
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
@@ -91,37 +104,42 @@ void generateSpecializedFunction(
 	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
+	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	// Push macro bindings — function bodies must not see caller's macro bindings
-	context.macroBindingStack.push(context.macroExpressionBindings);
-	context.macroExpressionBindings.clear();
+	context.macroBindingStack.push(context.macroFunctionBindings);
+	context.macroFunctionBindings.clear();
 
 	builder.SetInsertPoint(entry);
 
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
 	context.patternParamTypes.clear();
+	const std::vector<DataType> &parameterTypes =
+		inst.parameterTypes.size() == argTypes.size() ? inst.parameterTypes : argTypes;
 	argIdx = 0;
 	for (auto &arg : func->args()) {
 		context.patternBindings[varNames[argIdx]] = &arg;
-		context.patternParamTypes[varNames[argIdx]] = argTypes[argIdx];
+		context.patternParamTypes[varNames[argIdx]] = parameterTypes[argIdx];
 		argIdx++;
 	}
+	context.currentCodegenInstantiation = &inst;
 
 	// Generate function body
 	for (Section *child : section->children) {
 		generateSectionCode(context, child);
 	}
 
-	// Add return for effects (expression functions use @intrinsic("return"))
-	if (section->type == SectionType::Effect) {
+	// Add implicit void return if the function returns void
+	if (inst.returnType.kind == DataType::Kind::Void) {
 		builder.CreateRetVoid();
 	}
 
 	// Restore all codegen state
-	context.macroExpressionBindings = context.macroBindingStack.top();
+	context.macroFunctionBindings = context.macroBindingStack.top();
 	context.macroBindingStack.pop();
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
+	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
 
 	if (savedBlock) {
@@ -130,35 +148,38 @@ void generateSpecializedFunction(
 	}
 }
 
-// Generate code for an expression
-bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value *&result) {
-	result = nullptr;
+static bool expandsToSelectIntrinsic(Function *function) {
+	std::unordered_map<std::string, Function *> ignoredBindings;
+	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
+	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall &&
+		   intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Select;
+}
+
+// Generate code for an function
+llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 	if (!expr)
-		return true;
+		return nullptr;
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	switch (expr->kind) {
-	case Expression::Kind::Literal: {
-		if (auto *intVal = std::get_if<int64_t>(&expr->literalValue)) {
-			DataType intType = getEffectiveType(context, expr);
-			llvm::Type *llvmIntType = intType.toLLVM(*context.llvmContext);
-			result = llvm::ConstantInt::get(llvmIntType, *intVal, true);
-			return true;
-		}
+	case Function::Kind::Literal: {
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
-			DataType floatType = getEffectiveType(context, expr);
-			llvm::Type *llvmFloatType = floatType.toLLVM(*context.llvmContext);
-			result = llvm::ConstantFP::get(llvmFloatType, *doubleVal);
-			return true;
+			DataType numType = getEffectiveType(context, expr);
+			llvm::Type *llvmType = numType.toLLVM(*context.llvmContext);
+			if (numType.kind == DataType::Kind::Int)
+				return llvm::ConstantInt::get(llvmType, (int64_t)*doubleVal, true);
+			return llvm::ConstantFP::get(llvmType, *doubleVal);
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
 			// TODO: strings are currently just i8* pointers to constant data.
 			// String operations (concatenation, slicing, etc.) need runtime support.
 			auto it = context.stringConstants.find(*strVal);
 			if (it != context.stringConstants.end()) {
-				result = it->second;
-				return true;
+				llvm::GlobalVariable *strGlobal = it->second;
+				return builder.CreateInBoundsGEP(
+					strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+				);
 			}
 			std::string globalName = ".str." + std::to_string(context.stringConstants.size());
 			llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, *strVal, true);
@@ -166,80 +187,78 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 				*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
 			);
 			context.stringConstants[*strVal] = strGlobal;
-			result = strGlobal;
-			return true;
+			return builder.CreateInBoundsGEP(
+				strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+			);
 		}
 		// Unknown literal variant type - should never reach here after type inference
-		ASSERT_UNREACHABLE("Unknown literal type in codegen");
+		crashCompilerBug("Unknown literal type in codegen");
 	}
 
-	case Expression::Kind::Variable: {
-		Expression *resolved = resolveVariableBinding(context, expr);
+	case Function::Kind::ArrayLiteral: {
+		DataType arrayType = getEffectiveType(context, expr);
+		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
+			return nullptr;
+		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
+		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
+		for (size_t i = 0; i < expr->arguments.size(); i++) {
+			llvm::Value *elementValue = generateFunctionCode(context, expr->arguments[i]);
+			DataType fromType = getEffectiveType(context, expr->arguments[i]);
+			elementValue = ensureType(context, elementValue, fromType, *arrayType.arrayElementType);
+			llvm::Value *elementPtr = builder.CreateGEP(
+				llvmArrayType, tempAlloca, {builder.getInt64(0), builder.getInt64(static_cast<int64_t>(i))}, "array_elem_ptr"
+			);
+			builder.CreateStore(elementValue, elementPtr);
+		}
+		return builder.CreateAlignedLoad(llvmArrayType, tempAlloca, llvm::Align(8), "array_literal_load");
+	}
+
+	case Function::Kind::Variable: {
+		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (!context.macroBindingStack.empty())
 				guard.popToCallerScope();
-			return generateExpressionCode(context, resolved, result);
+			return generateFunctionCode(context, resolved);
 		}
 
 		if (!expr->variable)
-			return true;
+			return nullptr;
 		std::string varName = expr->variable->name;
 
 		// Determine this variable's type for loading
 		DataType varType = getEffectiveType(context, expr);
 
-		// Class types: return the pointer directly (structs are passed by pointer)
-		if (varType.kind == DataType::Kind::Class) {
-			auto bindingIt = context.patternBindings.find(varName);
-			if (bindingIt != context.patternBindings.end()) {
-				result = bindingIt->second;
-				return true;
-			}
-			VariableReference *varRef = expr->variable;
-			VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-			if (definition->alloca) {
-				result = definition->alloca;
-				return true;
-			}
-		}
-
 		llvm::Type *loadType = getLLVMType(context, varType);
 
 		// Pattern parameter: load from function argument pointer
 		auto bindingIt = context.patternBindings.find(varName);
-		if (bindingIt != context.patternBindings.end()) {
-			result = builder.CreateAlignedLoad(loadType, bindingIt->second, llvm::Align(8), varName + "_val");
-			return true;
-		}
+		if (bindingIt != context.patternBindings.end())
+			return builder.CreateAlignedLoad(loadType, bindingIt->second, llvm::Align(8), varName + "_val");
 
 		// Local variable: load from alloca
 		VariableReference *varRef = expr->variable;
 		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-		if (definition->alloca) {
-			result = builder.CreateAlignedLoad(loadType, definition->alloca, llvm::Align(8), varName + "_val");
-			return true;
-		}
+		if (definition->alloca)
+			return builder.CreateAlignedLoad(loadType, definition->alloca, llvm::Align(8), varName + "_val");
 
 		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown variable: " + varName, expr->range));
-		return false;
+		return nullptr;
 	}
 
-	case Expression::Kind::PatternCall: {
+	case Function::Kind::PatternCall: {
 		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
-			return true;
+			return nullptr;
 
 		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 		if (defs.empty())
-			return true;
+			return nullptr;
 
-		// Sort arguments by source position (expandMatch appends submatches/variables/words
-		// after direct args, so they may not be in text order)
-		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+		// Arguments are already sorted by source position (type inference sorts in-place)
 
 		// Build argument types for overload selection
 		std::vector<DataType> argTypesForOverload;
-		{
+		if (!expandsToSelectIntrinsic(expr)) {
 			size_t ai = 0;
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 				bool isParam = false;
@@ -249,51 +268,55 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 						break;
 					}
 				}
-				if (isParam && ai < sortedArgs.size()) {
-					argTypesForOverload.push_back(getEffectiveType(context, sortedArgs[ai]));
+				if (isParam && ai < expr->arguments.size()) {
+					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[ai]));
 					ai++;
 				}
 			}
 		}
 
 		// Select the best overload based on argument types
-		PatternDefinition *matchedDef = selectOverload(defs, sortedArgs, expr->patternMatch->nodesPassed, argTypesForOverload);
-		if (!matchedDef)
-			matchedDef = defs[0];
+		PatternDefinition *matchedDef =
+			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!matchedDef) {
+			context.diagnostics.push_back(
+				Diagnostic(Diagnostic::Level::Error, "No overload matches argument types", expr->range)
+			);
+			return nullptr;
+		}
 
 		Section *matchedSection = matchedDef->section;
 		if (!matchedSection)
-			return true;
+			return nullptr;
 
 		// Non-macro class type references are compile-time only — no runtime code.
 		// Macro class sections (primitive type definitions) fall through to macro expansion.
 		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro)
-			return true;
+			return nullptr;
 
-		// Build parameter name → argument expression mapping
-		std::vector<std::pair<std::string, Expression *>> paramBindings;
+		// Build parameter name → argument function mapping
+		std::vector<std::pair<std::string, Function *>> paramBindings;
 		size_t argIndex = 0;
 		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 			auto paramIt = node->parameterNames.find(matchedDef);
-			if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-				paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
+			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
+				paramBindings.push_back({paramIt->second, expr->arguments[argIndex++]});
 			}
 		}
-
 		if (matchedSection->isMacro) {
-			// Macro: inline the body with expression substitution.
+			// Macro: inline the body with function substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
-			context.macroBindingStack.push(context.macroExpressionBindings);
-			context.macroExpressionBindings.clear();
+			context.macroBindingStack.push(context.macroFunctionBindings);
+			context.macroFunctionBindings.clear();
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
-				context.macroExpressionBindings[paramName] = argExpr;
+				context.macroFunctionBindings[paramName] = argExpr;
 			}
 
 			// Only section-type macros (like "if condition:", "loop while condition:")
 			// should pick up and process the body section opened by this line.
-			// Expression/effect macros (like "not value:", "a + b") must NOT process
+			// Function macros (like "not value:", "a + b") must NOT process
 			// the body section, even if they appear on a line that opens one.
 			Section *bodySection = nullptr;
 			if (matchedSection->type == SectionType::Section) {
@@ -301,24 +324,17 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 				context.currentBodySection = bodySection;
 			}
 
-			bool ok = true;
+			llvm::Value *result = nullptr;
 			for (Section *child : matchedSection->children) {
 				for (CodeLine *line : child->codeLines) {
-					if (line->expression) {
-						if (!generateExpressionCode(context, line->expression, result)) {
-							ok = false;
-							break;
-						}
-					}
+					if (line->function)
+						result = generateFunctionCode(context, line->function);
 				}
-				if (!ok)
-					break;
 			}
 
-			if (ok && bodySection) {
-				if (!generateSectionCode(context, bodySection))
-					ok = false;
-				if (ok && bodySection->exitBlock) {
+			if (bodySection) {
+				generateSectionCode(context, bodySection);
+				if (bodySection->exitBlock) {
 					if (!builder.GetInsertBlock()->getTerminator()) {
 						llvm::BasicBlock *target =
 							bodySection->branchBackBlock ? bodySection->branchBackBlock : bodySection->exitBlock;
@@ -328,18 +344,29 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 				}
 			}
 
-			context.macroExpressionBindings = context.macroBindingStack.top();
+			context.macroFunctionBindings = context.macroBindingStack.top();
 			context.macroBindingStack.pop();
 			context.currentBodySection = savedBodySection;
-			return ok;
+			return result;
 		}
 
 		// Non-macro pattern: monomorphized function call.
 		// Compute argument types at this call site for specialization.
-		std::vector<DataType> argTypes;
-		for (const auto &[paramName, argExpr] : paramBindings) {
-			argTypes.push_back(getEffectiveType(context, argExpr));
-		}
+			std::vector<DataType> argTypes;
+			for (const auto &[paramName, argExpr] : paramBindings) {
+				DataType t = getEffectiveType(context, argExpr);
+				if (!t.isDeduced() && matchedDef) {
+					for (const auto &elem : matchedDef->patternElements) {
+						if (elem.type == PatternElement::Type::Variable && elem.text == paramName &&
+							elem.resolvedTypeConstraint.isDeduced()) {
+							t = elem.resolvedTypeConstraint;
+							break;
+						}
+					}
+				}
+				assert(t.isDeduced() && "Undeduced argument type at codegen");
+				argTypes.push_back(t);
+			}
 
 		// Look up or generate the specialized function
 		Instantiation &inst = matchedSection->instantiations[argTypes];
@@ -351,14 +378,12 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 		// Build call arguments: pass variable pointers or temp allocas
 		std::vector<llvm::Value *> args;
 		for (size_t i = 0; i < paramBindings.size(); i++) {
-			Expression *argExpr = paramBindings[i].second;
+			Function *argExpr = paramBindings[i].second;
 			llvm::Value *ptr = getVariablePointer(context, argExpr);
 			if (ptr) {
 				args.push_back(ptr);
 			} else {
-				llvm::Value *argVal;
-				if (!generateExpressionCode(context, argExpr, argVal))
-					return false;
+				llvm::Value *argVal = generateFunctionCode(context, argExpr);
 				if (argVal) {
 					llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[i]);
 					builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
@@ -367,29 +392,109 @@ bool generateExpressionCode(ParseContext &context, Expression *expr, llvm::Value
 			}
 		}
 
-		result = builder.CreateCall(func, args);
-		return true;
+		return builder.CreateCall(func, args);
 	}
 
-	case Expression::Kind::IntrinsicCall: {
-		std::vector<Expression *> args(expr->arguments.begin() + 1, expr->arguments.end());
-		return generateIntrinsicCode(context, expr->intrinsicName, args, getEffectiveType(context, expr), result);
+	case Function::Kind::IntrinsicCall: {
+		std::vector<Function *> args(expr->arguments.begin() + 1, expr->arguments.end());
+		return generateIntrinsicCode(context, expr->intrinsicName, args, getEffectiveType(context, expr));
 	}
 
-	case Expression::Kind::Pending:
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unresolved pending expression", expr->range));
-		return false;
+	case Function::Kind::Pending:
+		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unresolved pending function", expr->range));
+		return nullptr;
 	}
 
-	return false;
+	return nullptr;
 }
 
 // Generate code for a section (process pattern references)
 bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
-	for (CodeLine *line : section->codeLines) {
-		if (line->expression) {
+	auto controlHeaderInfo =
+		[&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+		if (!line || !line->function)
+			return std::nullopt;
+
+		Function *header = line->function;
+		std::unordered_map<std::string, Function *> headerBindings = context.macroFunctionBindings;
+		if (header->kind == Function::Kind::PatternCall) {
+			std::unordered_map<std::string, Function *> innerBindings;
+			Function *expanded = expandMacroPatternCall(header, innerBindings);
+			if (expanded) {
+				header = expanded;
+				for (const auto &[name, argExpr] : innerBindings)
+					headerBindings[name] = argExpr;
+			}
+		}
+		if (!header || header->kind != Function::Kind::IntrinsicCall)
+			return std::nullopt;
+		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
+			return std::nullopt;
+		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindings)));
+	};
+
+	for (size_t i = 0; i < section->codeLines.size(); i++) {
+		CodeLine *line = section->codeLines[i];
+		auto headerInfo = controlHeaderInfo(line);
+		if (headerInfo && std::get<0>(*headerInfo) == "if") {
+			size_t chainEnd = i;
+			while (chainEnd + 1 < section->codeLines.size()) {
+				CodeLine *next = section->codeLines[chainEnd + 1];
+				auto nextInfo = controlHeaderInfo(next);
+				if (!nextInfo)
+					break;
+				const std::string &nextKind = std::get<0>(*nextInfo);
+				if (nextKind != "else if" && nextKind != "else")
+					break;
+				chainEnd++;
+			}
+
+			std::optional<size_t> selectedBranch;
+			bool branchKnown = true;
+			for (size_t k = i; k <= chainEnd; k++) {
+				auto branchInfo = controlHeaderInfo(section->codeLines[k]);
+				if (!branchInfo) {
+					branchKnown = false;
+					break;
+				}
+				const std::string &branchKind = std::get<0>(*branchInfo);
+				Function *header = std::get<1>(*branchInfo);
+				const auto &headerBindings = std::get<2>(*branchInfo);
+				if (branchKind == "else") {
+					if (!selectedBranch.has_value())
+						selectedBranch = k;
+					break;
+				}
+				if (header->arguments.size() < 2) {
+					branchKnown = false;
+					break;
+				}
+				CompileTimeValue conditionValue = evaluateCompileTimeValue(
+					header->arguments[1], context, headerBindings, context.currentCodegenInstantiation
+				);
+				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
+				if (!condition.has_value()) {
+					branchKnown = false;
+					break;
+				}
+				if (*condition) {
+					selectedBranch = k;
+					break;
+				}
+			}
+
+			if (branchKnown && selectedBranch.has_value()) {
+				CodeLine *selectedLine = section->codeLines[*selectedBranch];
+				if (selectedLine->sectionOpening)
+					generateSectionCode(context, selectedLine->sectionOpening);
+				i = chainEnd;
+				continue;
+			}
+		}
+
+		if (line->function) {
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 				// Use a DILexicalBlockFile scope when the code line's source file
@@ -402,9 +507,7 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
-			llvm::Value *unused;
-			if (!generateExpressionCode(context, line->expression, unused))
-				return false;
+			generateFunctionCode(context, line->function);
 		}
 	}
 
@@ -416,7 +519,14 @@ bool generateCode(ParseContext &context) {
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 	if (context.options.emitSPIRV) {
-		context.llvmModule->setTargetTriple("spirv-unknown-vulkan1.3");
+		std::string error;
+		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
+		if (!targetMachine) {
+			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range())
+			);
+			return false;
+		}
+		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 	} else {
 		context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 	}

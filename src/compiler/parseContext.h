@@ -5,7 +5,9 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "section.h"
+#include "syntaxConfig.h"
 #include <list>
+#include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,6 +29,36 @@ class DIScope;
 
 struct ParseContext {
 	enum class ShaderStage { Fragment, Vertex };
+	// Highest compilation phase that completed successfully.
+	// Guarantees by stage:
+	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.
+	// - ImportedFiles: importedFiles, mainSourceFile, codeLines, and diagnostics gathered during file loading are valid.
+	// - AnalyzedSections: mainSection exists and the section tree / CodeLine.section assignments are valid.
+	// - ResolvedPatterns: patternTrees, pattern definitions, variable references, and pattern matches are valid.
+	// - ResolvedDeclaredTypes: declared class field types and declared class instantiations are resolved.
+	// - Validated: validation diagnostics that depend on resolved symbols have been emitted.
+	// - InferredTypes: inferred expression / variable / return types are valid for the compiled program.
+	enum class CompilationStage {
+		NotStarted,
+		ImportedFiles,
+		AnalyzedSections,
+		ResolvedPatterns,
+		ResolvedDeclaredTypes,
+		Validated,
+		InferredTypes,
+	};
+	enum class SourceTokenKind {
+		Keyword,
+		Variable,
+		Number,
+		PatternReference,
+	};
+
+	struct SourceTokenAnnotation {
+		Range range;
+		SourceTokenKind kind;
+		SectionType referencedPatternType = SectionType::Function;
+	};
 
 	struct Options {
 		std::string inputPath;
@@ -64,16 +96,16 @@ struct ParseContext {
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
 	std::unordered_map<std::string, DataType> patternParamTypes;
-	// Macro expression bindings: maps variable name to Expression* (for macro expansion)
+	// Macro function bindings: maps variable name to Function* (for macro expansion)
 	// Only contains the CURRENT macro's parameter bindings (scoped, not inherited).
-	std::unordered_map<std::string, Expression *> macroExpressionBindings;
+	std::unordered_map<std::string, Function *> macroFunctionBindings;
 	// Stack of caller macro bindings (pushed when entering a macro, popped when exiting).
-	// Used to restore caller scope when generating resolved argument expressions.
-	std::stack<std::unordered_map<std::string, Expression *>> macroBindingStack;
+	// Used to restore caller scope when generating resolved argument functions.
+	std::stack<std::unordered_map<std::string, Function *>> macroBindingStack;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
-	// Current instantiation being inferred (set during non-macro function body inference)
-	Instantiation *currentInstantiation{};
+	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
+	const Instantiation *currentCodegenInstantiation{};
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
@@ -93,50 +125,72 @@ struct ParseContext {
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
 	// The main source file (the one passed on the command line)
 	lsp::SourceFile *mainSourceFile{};
+	// Owns transformed/imported logical lines used throughout compilation.
+	std::vector<std::unique_ptr<CodeLine>> ownedCodeLines;
 	// all code lines in 'chronological' order: imported code lines get put before the import statement
 	std::vector<CodeLine *> codeLines;
 	std::vector<Diagnostic> diagnostics;
+	CompilationStage compilationStage = CompilationStage::NotStarted;
 	Section *mainSection{};
 	// for each section type, we store a tree with patterns, leading to sections.
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
-	PatternTreeNode *patternTrees[(int)SectionType::Count];
-	// Precedence level assigned to expression patterns not in the explicit precedence system.
+	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
+	// Precedence level assigned to function patterns not in the explicit precedence system.
 	// Default-level patterns should not propagate minRightPrecedence constraints.
 	int defaultPrecedenceLevel = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
+	// Owns all VariableReference instances for this compilation.
+	// Other structures keep non-owning raw pointers into this arena.
+	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
+	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
+	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
+	std::map<DataType, std::string> typeAliasNames;
+	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
+	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
+	SyntaxConfig builtinSyntax;
+	SyntaxConfig projectSyntax;
+	std::string projectSyntaxConfigPath;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
-	ParseContext() {}
+	ParseContext() = default;
+	~ParseContext();
+	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
+	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
+		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
+	}
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
+	void processEncounteredIntrinsic(Function *intrinsicExpr);
+	VariableReference *createVariableReference(Range range, const std::string &name);
 };
 
-// Extract the body expression and parameter bindings from a macro PatternCall.
-// If expr is a PatternCall to a macro section, returns the macro body's last expression
-// and fills outBindings with parameter name → call-site argument expression.
+// Extract the body function and parameter bindings from a macro PatternCall.
+// If expr is a PatternCall to a macro section, returns the macro body's last function
+// and fills outBindings with parameter name → call-site argument function.
 // Returns nullptr if expr is not a macro PatternCall. Does not modify any binding stack —
 // the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
-inline Expression *expandMacroPatternCall(Expression *expr, std::unordered_map<std::string, Expression *> &outBindings) {
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::string, Function *> &outBindings) {
+	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	PatternDefinition *def = defs.empty() ? nullptr : defs[0];
 	if (!def || !def->section || !def->section->isMacro)
 		return nullptr;
-	Expression *bodyExpr = nullptr;
+	Function *bodyExpr = nullptr;
 	for (Section *child : def->section->children) {
 		for (CodeLine *line : child->codeLines) {
-			if (line->expression)
-				bodyExpr = line->expression;
+			if (line->function)
+				bodyExpr = line->function;
 		}
 	}
 	if (!bodyExpr)
 		return nullptr;
-	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 		auto paramIt = node->parameterNames.find(def);

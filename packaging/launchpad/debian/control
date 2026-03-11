@@ -1,0 +1,27 @@
+Source: dynlex
+Section: devel
+Priority: optional
+Maintainer: DynLex maintainers <maintainers@dynlex.org>
+Build-Depends:
+ debhelper-compat (= 13),
+ clang-20,
+ cmake,
+ llvm-20-dev,
+ ninja-build,
+ nlohmann-json3-dev,
+ zlib1g-dev,
+ libzstd-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/johnheikens/DynLex
+Vcs-Browser: https://github.com/johnheikens/DynLex
+Vcs-Git: https://github.com/johnheikens/DynLex.git
+
+Package: dynlex
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends}
+Description: natural-language-like programming language compiler
+ DynLex is a compiled programming language with a natural-language-like syntax,
+ static typing, full type inference, and an integrated standard library.

@@ -7,7 +7,7 @@ class:
         x
         y
 
-macro expression new point with x px and y py:
+function new point with x px and y py:
     replacement:
         @intrinsic("construct", point, px, py)
 

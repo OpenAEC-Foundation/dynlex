@@ -65,6 +65,7 @@ struct Diagnostic {
 	std::string message;
 	std::optional<std::string> source;
 	std::vector<DiagnosticRelatedInformation> relatedInformation;
+	std::optional<Json> data;
 };
 
 inline void to_json(Json &j, const Diagnostic &d) {
@@ -77,6 +78,23 @@ inline void to_json(Json &j, const Diagnostic &d) {
 	}
 	if (!d.relatedInformation.empty()) {
 		j["relatedInformation"] = d.relatedInformation;
+	}
+	if (d.data) {
+		j["data"] = *d.data;
+	}
+}
+
+inline void from_json(const Json &j, Diagnostic &d) {
+	j.at("range").get_to(d.range);
+	j.at("message").get_to(d.message);
+	if (j.contains("severity") && !j.at("severity").is_null()) {
+		d.severity = static_cast<DiagnosticSeverity>(j.at("severity").get<int>());
+	}
+	if (j.contains("source") && !j.at("source").is_null()) {
+		d.source = j.at("source").get<std::string>();
+	}
+	if (j.contains("data") && !j.at("data").is_null()) {
+		d.data = j.at("data");
 	}
 }
 
@@ -121,6 +139,72 @@ struct TextDocumentPositionParams {
 inline void from_json(const Json &j, TextDocumentPositionParams &p) {
 	j.at("textDocument").get_to(p.textDocument);
 	j.at("position").get_to(p.position);
+}
+
+struct Hover {
+	Json contents;
+	std::optional<Range> range;
+};
+
+inline void to_json(Json &j, const Hover &h) {
+	j = Json{{"contents", h.contents}};
+	if (h.range) {
+		j["range"] = *h.range;
+	}
+}
+
+struct TextEdit {
+	Range range;
+	std::string newText;
+};
+
+inline void to_json(Json &j, const TextEdit &e) { j = Json{{"range", e.range}, {"newText", e.newText}}; }
+
+enum class CompletionItemKind {
+	Text = 1,
+	Method = 2,
+	Function = 3,
+	Module = 9,
+	Keyword = 14,
+	Snippet = 15,
+	File = 17,
+};
+
+struct CompletionItem {
+	std::string label;
+	std::optional<CompletionItemKind> kind;
+	std::optional<std::string> detail;
+	std::optional<std::string> insertText;
+	std::optional<std::string> sortText;
+	std::optional<TextEdit> textEdit;
+};
+
+inline void to_json(Json &j, const CompletionItem &item) {
+	j = Json{{"label", item.label}};
+	if (item.kind) {
+		j["kind"] = static_cast<int>(*item.kind);
+	}
+	if (item.detail) {
+		j["detail"] = *item.detail;
+	}
+	if (item.insertText) {
+		j["insertText"] = *item.insertText;
+	}
+	if (item.sortText) {
+		j["sortText"] = *item.sortText;
+	}
+	if (item.textEdit) {
+		j["textEdit"] = *item.textEdit;
+	}
+}
+
+struct CompletionList {
+	bool isIncomplete = false;
+	std::vector<CompletionItem> items;
+};
+
+inline void to_json(Json &j, const CompletionList &list) {
+	j = Json{{"isIncomplete", list.isIncomplete}, {"items", list.items}};
 }
 
 // Content change event for incremental sync
@@ -171,6 +255,28 @@ inline void from_json(const Json &j, DidSaveTextDocumentParams &p) {
 	j.at("textDocument").get_to(p.textDocument);
 	if (j.contains("text")) {
 		p.text = j.at("text").get<std::string>();
+	}
+}
+
+// DynLex custom notification for the currently active cursor.
+// Empty params means the client currently has no active DynLex cursor.
+struct ActiveCursorParams {
+	std::string clientId;
+	std::optional<std::string> uri;
+	std::optional<int> version;
+	std::optional<Position> position;
+};
+
+inline void from_json(const Json &j, ActiveCursorParams &p) {
+	j.at("clientId").get_to(p.clientId);
+	if (j.contains("uri") && !j.at("uri").is_null()) {
+		p.uri = j.at("uri").get<std::string>();
+	}
+	if (j.contains("version") && !j.at("version").is_null()) {
+		p.version = j.at("version").get<int>();
+	}
+	if (j.contains("position") && !j.at("position").is_null()) {
+		p.position = j.at("position").get<Position>();
 	}
 }
 
@@ -227,6 +333,53 @@ struct DocumentSymbolParams {
 
 inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").get_to(p.textDocument); }
 
+struct WorkspaceEdit {
+	Json changes = Json::object();
+};
+
+inline void to_json(Json &j, const WorkspaceEdit &e) { j = Json{{"changes", e.changes}}; }
+
+struct CodeAction {
+	std::string title;
+	std::string kind = "quickfix";
+	std::optional<WorkspaceEdit> edit;
+	std::vector<Diagnostic> diagnostics;
+};
+
+inline void to_json(Json &j, const CodeAction &a) {
+	j = Json{{"title", a.title}, {"kind", a.kind}};
+	if (a.edit) {
+		j["edit"] = *a.edit;
+	}
+	if (!a.diagnostics.empty()) {
+		j["diagnostics"] = a.diagnostics;
+	}
+}
+
+struct CodeActionContext {
+	std::vector<Diagnostic> diagnostics;
+};
+
+inline void from_json(const Json &j, CodeActionContext &c) {
+	if (j.contains("diagnostics")) {
+		j.at("diagnostics").get_to(c.diagnostics);
+	}
+}
+
+struct CodeActionParams {
+	TextDocumentIdentifier textDocument;
+	Range range;
+	CodeActionContext context;
+};
+
+inline void from_json(const Json &j, CodeActionParams &p) {
+	j.at("textDocument").get_to(p.textDocument);
+	j.at("range").get_to(p.range);
+	if (j.contains("context")) {
+		j.at("context").get_to(p.context);
+	}
+}
+
 // Initialize params (simplified)
 struct InitializeParams {
 	std::optional<int> processId;
@@ -247,7 +400,14 @@ struct ServerCapabilities {
 	// Text document sync kind: 0=None, 1=Full, 2=Incremental
 	int textDocumentSync = 2;
 	bool definitionProvider = true;
+	bool hoverProvider = false;
+	struct {
+		bool supported = false;
+		bool resolveProvider = false;
+		std::vector<std::string> triggerCharacters;
+	} completionProvider;
 	bool documentSymbolProvider = false;
+	bool codeActionProvider = false;
 	struct {
 		bool full = true;
 		SemanticTokensLegend legend;
@@ -258,10 +418,20 @@ inline void to_json(Json &j, const ServerCapabilities &c) {
 	j = Json{
 		{"textDocumentSync", c.textDocumentSync},
 		{"definitionProvider", c.definitionProvider},
+		{"hoverProvider", c.hoverProvider},
 		{"semanticTokensProvider", Json{{"full", c.semanticTokensProvider.full}, {"legend", c.semanticTokensProvider.legend}}}
 	};
+	if (c.completionProvider.supported) {
+		j["completionProvider"] = Json{
+			{"resolveProvider", c.completionProvider.resolveProvider},
+			{"triggerCharacters", c.completionProvider.triggerCharacters}
+		};
+	}
 	if (c.documentSymbolProvider) {
 		j["documentSymbolProvider"] = true;
+	}
+	if (c.codeActionProvider) {
+		j["codeActionProvider"] = true;
 	}
 }
 

@@ -3,14 +3,28 @@
         {
             "name": "Linux",
             "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/compiler",
+                "${workspaceFolder}/src/compiler/section",
+                "${workspaceFolder}/src/backend",
                 "${workspaceFolder}/src/**",
-                "~/.conan2/**/include/**"
+                "${env:HOME}/.conan2/**/include/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
+            "compilerPath": "/usr/bin/g++",
             "cStandard": "gnu23",
             "cppStandard": "gnu++23",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/src/compiler",
+                    "${workspaceFolder}/src/compiler/section",
+                    "${workspaceFolder}/src/backend"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

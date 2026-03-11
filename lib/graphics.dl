@@ -13,69 +13,119 @@ import lib/std.dl
 # GLFW_KEY_DOWN = 264
 # GLFW_KEY_UP = 265
 
-expression a new window with width w and height h:
-	get:
-		@intrinsic("call", "glfw", "glfwInit", "i32")
+class:
+	patterns:
+		glfw video mode
+	members:
+		width as i32
+		height as i32
+		red_bits as i32
+		green_bits as i32
+		blue_bits as i32
+		refresh_rate as i32
+
+function a new window with width w and height h:
+	execute:
+		@intrinsic("call", "glfw", "glfwInit", an integer)
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
 		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
 		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
 		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
 		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
-		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139266, 4)
-		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139267, 6)
-		@intrinsic("call", "glfw", "glfwWindowHint", "void", 139272, 204802)
-		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", "pointer", w, h, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
-		@intrinsic("call", "glfw", "glfwMakeContextCurrent", "void", new_window)
-		@intrinsic("call", "GL", "glMatrixMode", "void", 5889)
-		@intrinsic("call", "GL", "glLoadIdentity", "void")
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
+		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
+		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
 		set wf to w as a 64 bit float
 		set hf to h as a 64 bit float
 		set neg to 0.0 - 1.0
-		@intrinsic("call", "GL", "glOrtho", "void", 0.0, wf, hf, 0.0, neg, 1.0)
-		@intrinsic("call", "GL", "glMatrixMode", "void", 5888)
-		@intrinsic("call", "GL", "glLoadIdentity", "void")
+		@intrinsic("call", "GL", "glOrtho", void, 0.0, wf, hf, 0.0, neg, 1.0)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5888)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
 		return new_window
 
-effect clear [the|] screen:
+function a new fullscreen window:
 	execute:
-		@intrinsic("call", "GL", "glClear", "void", 16384)
+		initialize fullscreen window hints
+		set monitor to the primary monitor
+		set video_mode to the primary video mode of monitor
+		set w to the width of video_mode
+		set h to the height of video_mode
+		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", monitor, 0 as a pointer to a byte)
+		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
+		set wf to w as a 64 bit float
+		set hf to h as a 64 bit float
+		set neg to 0.0 - 1.0
+		@intrinsic("call", "GL", "glOrtho", void, 0.0, wf, hf, 0.0, neg, 1.0)
+		@intrinsic("call", "GL", "glMatrixMode", void, 5888)
+		@intrinsic("call", "GL", "glLoadIdentity", void)
+		return new_window
 
-effect [display|show] [the|] frame [of|in] window:
+function initialize fullscreen window hints:
 	execute:
-		@intrinsic("call", "glfw", "glfwSwapBuffers", "void", window)
-		@intrinsic("call", "glfw", "glfwPollEvents", "void")
+		@intrinsic("call", "glfw", "glfwInit", an integer)
+		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
+		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
+		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
+		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
+		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
 
-effect draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
+function [the|] primary monitor:
 	execute:
-		@intrinsic("call", "GL", "glColor3ub", "void", r, g, b)
-		@intrinsic("call", "GL", "glRecti", "void", x, y, x + w, y + h)
+		return @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer to a byte)
 
-expression [the|] [last|] pressed key [of|in] window:
-	get:
-		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 265) = 1:
+function [the|] primary video mode [of|] monitor:
+	replacement:
+		the value at (@intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to a byte, monitor) as a pointer to glfw video mode)
+
+function clear [the|] screen:
+	execute:
+		@intrinsic("call", "GL", "glClear", void, 16384)
+
+function [display|show] [the|] frame [of|in] window:
+	execute:
+		@intrinsic("call", "glfw", "glfwSwapBuffers", void, window)
+		@intrinsic("call", "glfw", "glfwPollEvents", void)
+
+function draw [a|] rectangle at x y [with|] size w h [and|in|with] color r g b:
+	execute:
+		@intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+		@intrinsic("call", "GL", "glRecti", void, x, y, x + w, y + h)
+
+function [the|] [last|] pressed key [of|in] window:
+	execute:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 265) = 1:
 			return 1
-		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 262) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
 			return 2
-		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 264) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 264) = 1:
 			return 3
-		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 263) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
 			return 4
-		if @intrinsic("call", "glfw", "glfwGetKey", "i32", window, 256) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 256) = 1:
 			return 5
 		return 0
 
-expression [the|] window should close:
-	get:
-		return @intrinsic("call", "glfw", "glfwWindowShouldClose", "i32", window)
-
-effect sleep [for|] ms milliseconds:
+function [the|] window should close:
 	execute:
-		@intrinsic("call", "libc", "usleep", "void", ms * 1000)
+		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window)
 
-effect close [the|] window:
+function sleep [for|] ms milliseconds:
 	execute:
-		@intrinsic("call", "glfw", "glfwDestroyWindow", "void", window)
-		@intrinsic("call", "glfw", "glfwTerminate", "void")
+		@intrinsic("call", "libc", "usleep", void, ms * 1000)
+
+function close [the|] window:
+	execute:
+		@intrinsic("call", "glfw", "glfwDestroyWindow", void, window)
+		@intrinsic("call", "glfw", "glfwTerminate", void)
 
 # --- Shader support (OpenGL 4.6 / SPIR-V) ---
 
@@ -85,91 +135,91 @@ effect close [the|] window:
 # GL_COMPILE_STATUS = 0x8B81 = 35713
 # GL_LINK_STATUS = 0x8B82 = 35714
 
-expression [a|] fragment shader from path:
-	get:
-		set new_shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35632)
-		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
-		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
-		set size to @intrinsic("call", "libc", "ftell", "i64", data)
-		@intrinsic("call", "libc", "fseek", "i32", data, 0, 0)
-		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
-		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
-		@intrinsic("call", "libc", "fclose", "i32", data)
-		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of new_shader, 38225, buf, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", "void", new_shader, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
-		@intrinsic("call", "libc", "free", "void", buf)
+function [a|] fragment shader from path:
+	execute:
+		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35632)
+		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+		@intrinsic("call", "libc", "fseek", an integer, data, 0, 2)
+		set size to @intrinsic("call", "libc", "ftell", a 64 bit integer, data)
+		@intrinsic("call", "libc", "fseek", an integer, data, 0, 0)
+		set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
+		@intrinsic("call", "libc", "fread", a 64 bit integer, buf, 1, size, data)
+		@intrinsic("call", "libc", "fclose", an integer, data)
+		@intrinsic("call", "GL", "glShaderBinary", void, 1, address of new_shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", void, new_shader, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
+		@intrinsic("call", "libc", "free", void, buf)
 		return new_shader
 
-expression [a|] vertex shader from path:
-	get:
-		set new_shader to @intrinsic("call", "GL", "glCreateShader", "i32", 35633)
-		set data to @intrinsic("call", "libc", "fopen", "pointer", path, "rb")
-		@intrinsic("call", "libc", "fseek", "i32", data, 0, 2)
-		set size to @intrinsic("call", "libc", "ftell", "i64", data)
-		@intrinsic("call", "libc", "fseek", "i32", data, 0, 0)
-		set buf to @intrinsic("call", "libc", "malloc", "pointer", size)
-		@intrinsic("call", "libc", "fread", "i64", buf, 1, size, data)
-		@intrinsic("call", "libc", "fclose", "i32", data)
-		@intrinsic("call", "GL", "glShaderBinary", "void", 1, address of new_shader, 38225, buf, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", "void", new_shader, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
-		@intrinsic("call", "libc", "free", "void", buf)
+function [a|] vertex shader from path:
+	execute:
+		set new_shader to @intrinsic("call", "GL", "glCreateShader", an integer, 35633)
+		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+		@intrinsic("call", "libc", "fseek", an integer, data, 0, 2)
+		set size to @intrinsic("call", "libc", "ftell", a 64 bit integer, data)
+		@intrinsic("call", "libc", "fseek", an integer, data, 0, 0)
+		set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
+		@intrinsic("call", "libc", "fread", a 64 bit integer, buf, 1, size, data)
+		@intrinsic("call", "libc", "fclose", an integer, data)
+		@intrinsic("call", "GL", "glShaderBinary", void, 1, address of new_shader, 38225, buf, size as an integer)
+		@intrinsic("call", "GL", "glSpecializeShader", void, new_shader, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
+		@intrinsic("call", "libc", "free", void, buf)
 		return new_shader
 
-expression [a|] shader program with vertex vert and fragment frag:
-	get:
-		set prog to @intrinsic("call", "GL", "glCreateProgram", "i32")
-		@intrinsic("call", "GL", "glAttachShader", "void", prog, vert)
-		@intrinsic("call", "GL", "glAttachShader", "void", prog, frag)
-		@intrinsic("call", "GL", "glLinkProgram", "void", prog)
+function [a|] shader program with vertex vert and fragment frag:
+	execute:
+		set prog to @intrinsic("call", "GL", "glCreateProgram", an integer)
+		@intrinsic("call", "GL", "glAttachShader", void, prog, vert)
+		@intrinsic("call", "GL", "glAttachShader", void, prog, frag)
+		@intrinsic("call", "GL", "glLinkProgram", void, prog)
 		return prog
 
-effect use shader program prog:
+function use shader program prog:
 	execute:
-		@intrinsic("call", "GL", "glUseProgram", "void", prog)
+		@intrinsic("call", "GL", "glUseProgram", void, prog)
 
-expression [the|] time since start:
-	get:
-		return @intrinsic("call", "glfw", "glfwGetTime", "f64")
-
-effect set [the|] uniform name of prog to value:
+function [the|] time since start:
 	execute:
-		set loc to @intrinsic("call", "GL", "glGetUniformLocation", "i32", prog, name)
-		@intrinsic("call", "GL", "glUniform1f", "void", loc, value as a 32 bit float)
+		return @intrinsic("call", "glfw", "glfwGetTime", a float)
 
-effect set [the|] uniform at location to value:
+function set [the|] uniform name of prog to value:
 	execute:
-		@intrinsic("call", "GL", "glUniform1f", "void", location, value as a 32 bit float)
+		set loc to @intrinsic("call", "GL", "glGetUniformLocation", an integer, prog, name)
+		@intrinsic("call", "GL", "glUniform1f", void, loc, value as a 32 bit float)
+
+function set [the|] uniform at location to value:
+	execute:
+		@intrinsic("call", "GL", "glUniform1f", void, location, value as a 32 bit float)
 
 # --- UBO (Uniform Buffer Object) support for SPIR-V shaders ---
 # GL_UNIFORM_BUFFER = 0x8A11 = 35345
 # GL_DYNAMIC_DRAW = 0x88E8 = 35048
 
-expression [a|] uniform buffer:
-	get:
+function [a|] uniform buffer:
+	execute:
 		set buf to 0
-		@intrinsic("call", "GL", "glGenBuffers", "void", 1, address of buf)
-		@intrinsic("call", "GL", "glBindBuffer", "void", 35345, buf)
-		@intrinsic("call", "GL", "glBufferData", "void", 35345, 4 as a 64 bit integer, 0 as a pointer to a byte, 35048)
+		@intrinsic("call", "GL", "glGenBuffers", void, 1, address of buf)
+		@intrinsic("call", "GL", "glBindBuffer", void, 35345, buf)
+		@intrinsic("call", "GL", "glBufferData", void, 35345, 4 as a 64 bit integer, 0 as a pointer to a byte, 35048)
 		return buf
 
-effect bind uniform buffer buf to binding:
+function bind uniform buffer buf to binding:
 	execute:
-		@intrinsic("call", "GL", "glBindBufferBase", "void", 35345, binding, buf)
+		@intrinsic("call", "GL", "glBindBufferBase", void, 35345, binding, buf)
 
-effect update uniform buffer buf with value:
+function update uniform buffer buf with value:
 	execute:
 		set fval to value as a 32 bit float
-		@intrinsic("call", "GL", "glBindBuffer", "void", 35345, buf)
-		@intrinsic("call", "GL", "glBufferSubData", "void", 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, address of fval)
+		@intrinsic("call", "GL", "glBindBuffer", void, 35345, buf)
+		@intrinsic("call", "GL", "glBufferSubData", void, 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, address of fval)
 
-effect draw [a|] fullscreen quad:
+function draw [a|] fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)
 		# GL_TRIANGLE_STRIP = 0x0005 = 5
 		# Use glVertex2d (takes double) since DynLex floats are f64
-		@intrinsic("call", "GL", "glBegin", "void", 5)
-		@intrinsic("call", "GL", "glVertex2d", "void", 0.0 - 1.0, 0.0 - 1.0)
-		@intrinsic("call", "GL", "glVertex2d", "void", 1.0, 0.0 - 1.0)
-		@intrinsic("call", "GL", "glVertex2d", "void", 0.0 - 1.0, 1.0)
-		@intrinsic("call", "GL", "glVertex2d", "void", 1.0, 1.0)
-		@intrinsic("call", "GL", "glEnd", "void")
+		@intrinsic("call", "GL", "glBegin", void, 5)
+		@intrinsic("call", "GL", "glVertex2d", void, 0.0 - 1.0, 0.0 - 1.0)
+		@intrinsic("call", "GL", "glVertex2d", void, 1.0, 0.0 - 1.0)
+		@intrinsic("call", "GL", "glVertex2d", void, 0.0 - 1.0, 1.0)
+		@intrinsic("call", "GL", "glVertex2d", void, 1.0, 1.0)
+		@intrinsic("call", "GL", "glEnd", void)

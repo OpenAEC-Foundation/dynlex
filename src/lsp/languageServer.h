@@ -2,6 +2,7 @@
 #include "lspProtocol.h"
 #include "textDocument.h"
 #include "transport.h"
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <string>
@@ -27,6 +28,9 @@ class LanguageServer {
 	// Stop the server
 	void shutdown();
 
+	// Enable raw JSON-RPC tracing to stderr or a file path.
+	bool enableTrace(const std::string &path = "");
+
   protected:
 	// Override these in derived classes for language-specific behavior
 
@@ -45,8 +49,17 @@ class LanguageServer {
 	// Called when client saves a document
 	virtual void onDidSave(const DidSaveTextDocumentParams &params);
 
+	// Called for DynLex custom cursor tracking notifications.
+	virtual void onActiveCursorChanged(const ActiveCursorParams &params);
+
 	// Called for go-to-definition request
 	virtual std::optional<Location> onDefinition(const TextDocumentPositionParams &params);
+
+	// Called for hover requests
+	virtual std::optional<Hover> onHover(const TextDocumentPositionParams &params);
+
+	// Called for completion requests
+	virtual CompletionList onCompletion(const TextDocumentPositionParams &params);
 
 	// Called for semantic tokens request
 	virtual SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params);
@@ -54,8 +67,21 @@ class LanguageServer {
 	// Called for document symbol request
 	virtual std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params);
 
+	// Called for code action request
+	virtual std::vector<CodeAction> onCodeAction(const CodeActionParams &params);
+
+	// Called for DynLex debug request returning tagged semantic token output.
+	virtual std::string onRenderSemanticTokens(const TextDocumentIdentifier &params);
+
+	// Called for DynLex request returning instantiation choices for a document.
+	virtual Json onInstantiationsInDocument(const TextDocumentIdentifier &params);
+
+	// Called for DynLex notification selecting an instantiation choice.
+	virtual void onSelectInstantiation(const Json &params);
+
 	// Send a notification to the client (e.g., publishDiagnostics)
 	void sendNotification(const std::string &method, const Json &params);
+	void sendRequest(const std::string &method, const Json &params);
 
 	// Document storage
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> documents;
@@ -64,6 +90,9 @@ class LanguageServer {
 	int port = 0;
 	std::unique_ptr<Transport> transport;
 	bool running = false;
+	int nextRequestId = 1;
+	std::ostream *traceStream = nullptr;
+	std::unique_ptr<std::ofstream> traceFile;
 
 	// Handle a single connection (reads messages until disconnect)
 	void handleConnection();
@@ -75,6 +104,7 @@ class LanguageServer {
 	// Request dispatch
 	void handleMessage(const Json &message);
 	void handleRequest(const Json &message);
+	void handleResponse(const Json &message);
 	void handleNotification(const Json &message);
 
 	// Send a response
@@ -84,6 +114,7 @@ class LanguageServer {
 	// Logging (to stderr, so it doesn't interfere with stdio transport)
 	void log(const std::string &message);
 	void logError(const std::string &message);
+	void traceMessage(std::string_view direction, const std::string &body);
 };
 
 } // namespace lsp

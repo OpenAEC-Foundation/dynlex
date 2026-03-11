@@ -16,4 +16,28 @@ struct PatternDefinition {
 	// precedence level (higher = evaluated first). 0 = no precedence declared.
 	int precedence = 0;
 	PatternDefinition(Range range, Section *section);
+
+	std::string toString() const {
+		std::string result;
+		appendElements(result, patternElements);
+		return result;
+	}
+
+  private:
+	static void appendElements(std::string &result, const std::vector<DefinitionPatternElement> &elements) {
+		for (auto &elem : elements) {
+			switch (elem.type) {
+			case PatternElement::Choice:
+				if (!elem.alternatives.empty())
+					appendElements(result, elem.alternatives[0]);
+				break;
+			case PatternElement::Variable:
+				result += elem.text;
+				break;
+			default:
+				result += elem.text;
+				break;
+			}
+		}
+	}
 };

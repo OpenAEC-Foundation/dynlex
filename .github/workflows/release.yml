@@ -4,13 +4,31 @@ on:
   push:
     tags:
       - 'v*'
+      - '*.*.*'
 
 permissions:
   contents: write
 
 jobs:
-  build-test-release:
+  verify-version-tag:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches metadata/VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          TAG_VERSION="${TAG#v}"
+          FILE_VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
+          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
+            echo "Tag version ($TAG_VERSION) does not match metadata/VERSION ($FILE_VERSION)." >&2
+            exit 1
+          fi
+
+  build-linux:
+    runs-on: ubuntu-24.04
+    needs: [verify-version-tag]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,11 +43,254 @@ jobs:
       - name: Run tests
         run: ./scripts/run_tests.sh
 
-      - name: Package .deb
-        run: cd build && cpack
+      - name: Package release artifacts
+        run: |
+          cd build
+          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
+
+      - name: Upload Linux release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            build/*.deb
+            build/*.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    needs: [verify-version-tag]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        shell: pwsh
+        run: ./scripts/install.ps1
+
+      - name: Install WiX toolset
+        shell: pwsh
+        run: |
+          choco install wixtoolset -y --no-progress
+          $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
+          if (Test-Path $wixBin) {
+            Add-Content -Path $env:GITHUB_PATH -Value $wixBin
+          }
+
+      - name: Configure (Release)
+        shell: pwsh
+        run: |
+          $args = @(
+            "-S", ".",
+            "-B", "build",
+            "-G", "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release"
+          )
+          if ($env:LLVM_DIR) {
+            $args += "-DLLVM_DIR=$env:LLVM_DIR"
+          }
+          if ($env:DYNLEX_LLVM_VERSION) {
+            $args += "-DDYNLEX_LLVM_VERSION=$env:DYNLEX_LLVM_VERSION"
+          }
+          cmake @args
+
+      - name: Build (Release)
+        shell: pwsh
+        run: cmake --build build --parallel
+
+      - name: Package MSI
+        shell: bash
+        run: |
+          cd build
+          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            build/*.msi
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-14
+    needs: [verify-version-tag]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: ./scripts/install.sh
+
+      - name: Configure LLVM
+        run: |
+          if brew info llvm@20 >/dev/null 2>&1; then
+            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
+            echo "LLVM_BIN=$(brew --prefix llvm@20)/bin" >> "$GITHUB_ENV"
+          else
+            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
+            echo "LLVM_BIN=$(brew --prefix llvm)/bin" >> "$GITHUB_ENV"
+          fi
+          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
+
+      - name: Build (Release)
+        run: |
+          ./scripts/build.sh --release
+
+      - name: Package PKG
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          cd build
+          rm -rf pkgroot dynlex-component.pkg
+          cmake --install . --prefix "${PWD}/pkgroot/usr/local"
+          pkgbuild \
+            --root "${PWD}/pkgroot" \
+            --identifier "org.dynlex.dynlex" \
+            --version "${VERSION}" \
+            --install-location "/" \
+            "dynlex-component.pkg"
+          productbuild \
+            --package "dynlex-component.pkg" \
+            "dynlex.pkg"
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            build/*.pkg
+          if-no-files-found: error
+
+  smoke-linux:
+    runs-on: ubuntu-24.04
+    needs: [build-linux]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+          path: release-artifacts/linux
+
+      - name: Install package and validate
+        run: |
+          set -euo pipefail
+          ls -lah release-artifacts/linux
+          DEB="$(ls release-artifacts/linux/*.deb | head -n 1)"
+          if ! sudo dpkg -i "$DEB"; then
+            sudo apt-get update
+            sudo apt-get install -f -y
+          fi
+          command -v dynlex
+          dynlex tests/required/simple/main.dl -o /tmp/dynlex-smoke-linux
+          /tmp/dynlex-smoke-linux > /tmp/dynlex-smoke-linux.out
+          diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-linux.out
+
+  smoke-windows:
+    runs-on: windows-latest
+    needs: [build-windows]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release-artifacts/windows
+
+      - name: Install MSI and validate
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "release-artifacts/windows" -Recurse | Select-Object FullName
+          $msi = Get-ChildItem -Path "release-artifacts/windows" -Recurse -Filter *.msi | Select-Object -First 1
+          if (-not $msi) {
+            throw "No MSI artifact found."
+          }
+          Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart" -Wait -NoNewWindow
+          $dynlex = Get-Item "C:\Program Files\dynlex\bin\dynlex.exe" -ErrorAction SilentlyContinue
+          if (-not $dynlex) {
+            $dynlex = Get-ChildItem "C:\Program Files" -Filter dynlex.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $dynlex) {
+            throw "dynlex.exe not found after MSI install."
+          }
+          $helpStdout = "$env:TEMP\\dynlex-smoke-windows-help.stdout.log"
+          $helpStderr = "$env:TEMP\\dynlex-smoke-windows-help.stderr.log"
+          $helpExit = -1
+          try {
+            $helpProc = Start-Process -FilePath $dynlex.FullName -ArgumentList "--help" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $helpStdout -RedirectStandardError $helpStderr
+            $helpExit = $helpProc.ExitCode
+          } catch {
+            Write-Host $_
+            throw "dynlex --help launch failed"
+          }
+          if (Test-Path $helpStdout) { Get-Content $helpStdout | Write-Host }
+          if (Test-Path $helpStderr) { Get-Content $helpStderr | Write-Host }
+          if ($helpExit -ne 0) {
+            throw "dynlex --help failed with exit code $helpExit"
+          }
+          & $dynlex.FullName "tests/required/simple/main.dl" --emit-llvm -o "$env:TEMP\\dynlex-smoke-windows.ll" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.ll")) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-compile.log" | Write-Host
+            throw "dynlex emit-llvm step failed. See dynlex-smoke-windows-compile.log"
+          }
+          $llvmIr = Get-Content "$env:TEMP\\dynlex-smoke-windows.ll" -Raw
+          if ($llvmIr -notmatch "define .*@main\(") {
+            throw "LLVM IR output does not contain a main definition."
+          }
+
+  smoke-macos:
+    runs-on: macos-14
+    needs: [build-macos]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-macos
+          path: release-artifacts/macos
+
+      - name: Install PKG and validate
+        run: |
+          set -euo pipefail
+          ls -lah release-artifacts/macos
+          PKG="$(ls release-artifacts/macos/*.pkg | head -n 1)"
+          sudo installer -pkg "$PKG" -target /
+          if command -v dynlex >/dev/null 2>&1; then
+            DYNLEX_BIN="$(command -v dynlex)"
+          elif [ -x /usr/local/bin/dynlex ]; then
+            DYNLEX_BIN="/usr/local/bin/dynlex"
+          else
+            DYNLEX_BIN="$(find /usr/local -name dynlex -type f | head -n 1)"
+          fi
+          [ -n "${DYNLEX_BIN:-}" ] && [ -x "$DYNLEX_BIN" ]
+          "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-macos
+          /tmp/dynlex-smoke-macos > /tmp/dynlex-smoke-macos.out
+          diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-macos.out
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-macos, smoke-linux, smoke-windows, smoke-macos]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
 
       - name: Determine release type
         id: release_type
+        shell: bash
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           if [[ "$TAG" == *-* ]]; then
@@ -41,6 +302,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/dynlex-*.deb
+          files: |
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.tar.gz
+            release-artifacts/**/*.msi
+            release-artifacts/**/*.pkg
           prerelease: ${{ steps.release_type.outputs.prerelease }}
           generate_release_notes: true

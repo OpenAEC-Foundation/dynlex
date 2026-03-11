@@ -16,6 +16,7 @@ class SemanticTokenBuilder {
 	SemanticTokenBuilder(int lineCount);
 	void add(int line, SemanticToken token);
 	std::vector<int> build();
+	const std::vector<std::vector<SemanticToken>> &tokenLines() const;
 
   private:
 	std::vector<std::vector<SemanticToken>> tokensByLine;

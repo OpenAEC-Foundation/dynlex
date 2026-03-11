@@ -1,5 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
+#include <cctype>
+#include <memory>
 #include <string>
 
 namespace llvm {
@@ -8,205 +11,275 @@ class LLVMContext;
 } // namespace llvm
 
 struct ClassDefinition;
+struct Function;
 
 struct DataType {
-	enum class Kind { Undeduced, Void, Bool, Numeric, Integer, Float, Class, TypeReference };
+	enum class Kind {
+		// any type (unconstrained)
+		Any,
+		// unresolved: the type is defined with a type reference which isn't resolved yet
+		Unresolved,
+		// nothing
+		Void,
+		Bool,
+		Float,
+		Int,
+		Array,
+		Vector,
+		Matrix,
+		// a class with members. for example point
+		Class,
+		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
+		Type
+	};
 
-	Kind kind = Kind::Undeduced;
-	int byteSize = 0;							// Integer: 1/2/4/8, Float: 4/8, others: 0
+	Kind kind = Kind::Unresolved;
+	int numericSize = 0;						// Int/Float: 1/2/4/8, others: 0
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
-	ClassDefinition *classDefinition = nullptr; // For Kind::Class
+	ClassDefinition *classDefinition = nullptr; // For Kind::Class and Kind::Type (class type refs)
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
-	Kind referencedKind = Kind::Undeduced;		// For Kind::TypeReference: the primitive kind it refers to
+	Function *typeFunction = nullptr;			// For Kind::Unresolved: class pattern reference to resolve
+	Kind referencedKind = Kind::Unresolved;		// For Kind::Type: the kind this type literal refers to
+	int arraySize = 0;							// For Kind::Array and Type(Array)
+	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
+	int matrixRowCount = 0;						// For Kind::Matrix and Type(Matrix): row count, arraySize stores column count
+
+	DataType() = default;
+	DataType(Kind kind) : kind(kind) {}
+	DataType(Kind kind, int numericSize) : kind(kind), numericSize(numericSize) {}
+	DataType(
+		Kind kind, int numericSize, int pointerDepth, ClassDefinition *classDefinition = nullptr, int classInstIndex = -1,
+		Function *typeFunction = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
+		std::shared_ptr<DataType> arrayElementType = nullptr
+	)
+		: kind(kind), numericSize(numericSize), pointerDepth(pointerDepth), classDefinition(classDefinition),
+		  classInstIndex(classInstIndex), typeFunction(typeFunction), referencedKind(referencedKind), arraySize(arraySize),
+		  arrayElementType(std::move(arrayElementType)) {}
+
+	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
+	bool hasVectorPayload() const { return kind == Kind::Vector || (kind == Kind::Type && referencedKind == Kind::Vector); }
+	bool hasMatrixPayload() const { return kind == Kind::Matrix || (kind == Kind::Type && referencedKind == Kind::Matrix); }
 
 	bool operator==(const DataType &other) const {
-		return kind == other.kind && byteSize == other.byteSize && pointerDepth == other.pointerDepth &&
-			   classDefinition == other.classDefinition && classInstIndex == other.classInstIndex &&
-			   referencedKind == other.referencedKind;
+		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
+			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount)
+			return false;
+		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
+			bool hasElem = !!arrayElementType;
+			bool otherHasElem = !!other.arrayElementType;
+			if (hasElem != otherHasElem)
+				return false;
+			if (hasElem && *arrayElementType != *other.arrayElementType)
+				return false;
+		}
+		if (kind == Kind::Class)
+			return classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
+		if (kind == Kind::Type && referencedKind == Kind::Class)
+			return classDefinition == other.classDefinition && classInstIndex == other.classInstIndex;
+		return true; // Void, Bool, Int, Float, Type: kind+pointerDepth+numericSize suffice
 	}
 	bool operator!=(const DataType &other) const { return !(*this == other); }
 	bool operator<(const DataType &other) const {
 		if (kind != other.kind)
 			return kind < other.kind;
-		if (byteSize != other.byteSize)
-			return byteSize < other.byteSize;
 		if (pointerDepth != other.pointerDepth)
 			return pointerDepth < other.pointerDepth;
-		if (classDefinition != other.classDefinition)
-			return classDefinition < other.classDefinition;
-		if (classInstIndex != other.classInstIndex)
+		if (numericSize != other.numericSize)
+			return numericSize < other.numericSize;
+		if (referencedKind != other.referencedKind)
+			return referencedKind < other.referencedKind;
+		if (arraySize != other.arraySize)
+			return arraySize < other.arraySize;
+		if (matrixRowCount != other.matrixRowCount)
+			return matrixRowCount < other.matrixRowCount;
+		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
+			if (!!arrayElementType != !!other.arrayElementType)
+				return !!arrayElementType < !!other.arrayElementType;
+			if (arrayElementType && *arrayElementType != *other.arrayElementType)
+				return *arrayElementType < *other.arrayElementType;
+		}
+		if (kind == Kind::Class) {
+			if (classDefinition != other.classDefinition)
+				return classDefinition < other.classDefinition;
 			return classInstIndex < other.classInstIndex;
-		return referencedKind < other.referencedKind;
-	}
-
-	// Convert a TypeReference to the type it refers to.
-	// For class TypeReferences (classDefinition != nullptr), returns a Class type.
-	// For primitive TypeReferences (referencedKind set), returns the primitive type.
-	DataType toReferencedType() const {
-		assert(kind == Kind::TypeReference && "toReferencedType only valid for TypeReference");
-		if (classDefinition)
-			return {Kind::Class, 0, 0, classDefinition, classInstIndex};
-		return {referencedKind, byteSize, pointerDepth};
-	}
-
-	bool isNumeric() const {
-		return pointerDepth == 0 && (kind == Kind::Numeric || kind == Kind::Integer || kind == Kind::Float);
-	}
-	bool isPointer() const { return pointerDepth > 0; }
-	bool isDeduced() const { return kind != Kind::Undeduced; }
-
-	// Whether this type can be refined to a more specific type
-	bool canRefineTo(const DataType &target) const {
-		if (!isDeduced())
-			return true;
-		if (pointerDepth != target.pointerDepth)
-			return false;
-		if (kind == Kind::Numeric && (target.kind == Kind::Integer || target.kind == Kind::Float))
-			return true;
-		// Same kind but different size: allow refinement to larger or more specific size
-		if (kind == target.kind && kind == Kind::Integer && byteSize == 0)
-			return true;
-		if (kind == target.kind && kind == Kind::Float && byteSize == 0)
-			return true;
+		}
+		if (kind == Kind::Type && referencedKind == Kind::Class) {
+			if (classDefinition != other.classDefinition)
+				return classDefinition < other.classDefinition;
+			return classInstIndex < other.classInstIndex;
+		}
 		return false;
 	}
 
+	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int) && pointerDepth == 0; }
+	bool isVector() const { return kind == Kind::Vector && pointerDepth == 0; }
+	bool isMatrix() const { return kind == Kind::Matrix && pointerDepth == 0; }
+	int vectorSize() const { return arraySize; }
+	int matrixColumns() const { return arraySize; }
+	int matrixRows() const { return matrixRowCount; }
+	DataType vectorElementType() const {
+		assert(hasVectorPayload() && arrayElementType && "Vector type must have element type");
+		return *arrayElementType;
+	}
+	DataType matrixElementType() const {
+		assert(hasMatrixPayload() && arrayElementType && "Matrix type must have element type");
+		return *arrayElementType;
+	}
+	bool isPointer() const { return pointerDepth > 0; }
+	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
+	// wether this type is a specific type and the type pattern has been resolved
+	bool isDeduced() const { return kind != Kind::Any && kind != Kind::Unresolved; }
+
+	int getByteSize() const;
+
+	// Whether this type can be refined to a more specific type
+	// bool canRefineTo(const DataType &target) const {
+	//	if (pointerDepth != target.pointerDepth)
+	//		return false;
+	//	return false;
+	//}
+
 	// Return this type with one more level of indirection
 	DataType pointed() const {
-		assert(isDeduced() && "Cannot take pointer to undeduced type");
-		return {kind, byteSize, pointerDepth + 1};
+		assert(isDeduced() && "Cannot take pointer to unresolved type");
+		DataType result = *this;
+		result.pointerDepth++;
+		return result;
 	}
 
 	// Return this type with one less level of indirection
 	DataType dereferenced() const {
 		assert(pointerDepth > 0 && "Cannot dereference non-pointer type");
-		return {kind, byteSize, pointerDepth - 1};
+		DataType result = *this;
+		result.pointerDepth--;
+		return result;
 	}
 
-	// Promote two numeric types for arithmetic: Numeric adapts, Float wins over Integer.
-	// Returns Undeduced if either operand is non-numeric (caller handles the mismatch).
-	static DataType promote(const DataType &a, const DataType &b) {
-		if (!(a.isNumeric() || a.kind == Kind::Undeduced) || !(b.isNumeric() || b.kind == Kind::Undeduced))
-			return {Kind::Undeduced};
-
-		if (a.kind == Kind::Float || b.kind == Kind::Float) {
-			// Float wins. Pick the larger byteSize.
-			int aSize = a.kind == Kind::Float ? a.byteSize : 0;
-			int bSize = b.kind == Kind::Float ? b.byteSize : 0;
-			int floatSize = std::max(aSize, bSize);
-			// When mixing Integer + Float, use max of both sizes (i64+f32 → f64 to avoid precision loss)
-			if (a.kind == Kind::Integer || b.kind == Kind::Integer) {
-				int intSize = a.kind == Kind::Integer ? a.byteSize : b.byteSize;
-				floatSize = std::max(floatSize, intSize);
-			}
-			return {Kind::Float, floatSize};
+	// Promote for arithmetic, including pointer + number -> pointer
+	static bool promoteArithmetic(const DataType &a, const DataType &b, DataType &result) {
+		if (a.kind == Kind::Unresolved || b.kind == Kind::Unresolved) {
+			result = {Kind::Unresolved};
+			return true;
 		}
-		if (a.kind == Kind::Integer || b.kind == Kind::Integer) {
-			// Both Integer (or Integer + Numeric): pick larger byteSize
-			int aSize = a.kind == Kind::Integer ? a.byteSize : 0;
-			int bSize = b.kind == Kind::Integer ? b.byteSize : 0;
-			return {Kind::Integer, std::max(aSize, bSize)};
+		if (a.isPointer() && b.isNumeric()) {
+			result = a;
+			return true;
 		}
-		if (a.kind == Kind::Numeric || b.kind == Kind::Numeric)
-			return {Kind::Numeric};
-		return {Kind::Undeduced};
+		if (b.isPointer() && a.isNumeric()) {
+			result = b;
+			return true;
+		}
+		if (a.isVector() && b.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b, elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (b.isVector() && a.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a, b.vectorElementType(), elem))
+				return false;
+			result = b;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isVector() && b.isVector() && a.vectorSize() == b.vectorSize()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b.vectorElementType(), elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b, elem))
+				return false;
+			result = a;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (b.isMatrix() && a.isNumeric()) {
+			DataType elem;
+			if (!promoteArithmetic(a, b.matrixElementType(), elem))
+				return false;
+			result = b;
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isVector() && a.matrixColumns() == b.vectorSize()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b.vectorElementType(), elem))
+				return false;
+			result = {Kind::Vector};
+			result.arraySize = a.matrixRows();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isVector() && b.isMatrix() && a.vectorSize() == b.matrixRows()) {
+			DataType elem;
+			if (!promoteArithmetic(a.vectorElementType(), b.matrixElementType(), elem))
+				return false;
+			result = {Kind::Vector};
+			result.arraySize = b.matrixColumns();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isMatrix() && b.isMatrix() && a.matrixColumns() == b.matrixRows()) {
+			DataType elem;
+			if (!promoteArithmetic(a.matrixElementType(), b.matrixElementType(), elem))
+				return false;
+			result = {Kind::Matrix};
+			result.matrixRowCount = a.matrixRows();
+			result.arraySize = b.matrixColumns();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (a.isNumeric() && b.isNumeric()) {
+			result = {};
+			result.kind = (a.kind == Kind::Float || b.kind == Kind::Float) ? Kind::Float : Kind::Int;
+			result.numericSize = std::max(a.numericSize, b.numericSize);
+			return true;
+		}
+		return false;
 	}
 
-	// Promote for arithmetic, including pointer + integer -> pointer
-	static DataType promoteArithmetic(const DataType &a, const DataType &b) {
-		if (a.isPointer() && (b.isNumeric() || b.kind == Kind::Undeduced))
-			return a;
-		if (b.isPointer() && (a.isNumeric() || a.kind == Kind::Undeduced))
-			return b;
-		return promote(a, b);
+	// Convert a Type literal to the type it references
+	DataType toReferencedType() const {
+		assert(kind == Kind::Type && "Can only convert Type literals");
+		DataType result;
+		result.kind = referencedKind;
+		result.numericSize = numericSize;
+		result.pointerDepth = pointerDepth;
+		result.classDefinition = classDefinition;
+		result.classInstIndex = classInstIndex;
+		result.arraySize = arraySize;
+		result.matrixRowCount = matrixRowCount;
+		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
+		return result;
 	}
 
+	// Parse a type from a string (e.g. "i32", "f64", "void")
 	static DataType fromString(const std::string &s) {
 		if (s == "void")
 			return {Kind::Void};
 		if (s == "bool")
 			return {Kind::Bool};
-		if (s == "i8")
-			return {Kind::Integer, 1};
-		if (s == "i16")
-			return {Kind::Integer, 2};
-		if (s == "i32")
-			return {Kind::Integer, 4};
-		if (s == "i64")
-			return {Kind::Integer, 8};
-		if (s == "f32")
-			return {Kind::Float, 4};
-		if (s == "f64")
-			return {Kind::Float, 8};
-		if (s == "pointer")
-			return {Kind::Integer, 8, 1};
-		if (s == "string")
-			return {Kind::Integer, 1, 1};
-		assert(false && "Unknown type string");
+		auto isBitSuffix = [&](char prefix) {
+			return s.size() >= 2 && s[0] == prefix && std::all_of(s.begin() + 1, s.end(), [](unsigned char ch) {
+				return std::isdigit(ch);
+			});
+		};
+		if (isBitSuffix('i'))
+			return {Kind::Int, std::stoi(s.substr(1)) / 8};
+		if (isBitSuffix('f'))
+			return {Kind::Float, std::stoi(s.substr(1)) / 8};
 		return {};
 	}
 
 	llvm::Type *toLLVM(llvm::LLVMContext &ctx) const;
 
-	std::string toString() const {
-		std::string base;
-		switch (kind) {
-		case Kind::Undeduced:
-			base = "undeduced";
-			break;
-		case Kind::Void:
-			base = "void";
-			break;
-		case Kind::Bool:
-			base = "bool";
-			break;
-		case Kind::Numeric:
-			base = "numeric";
-			break;
-		case Kind::Integer:
-			switch (byteSize) {
-			case 1:
-				base = "i8";
-				break;
-			case 2:
-				base = "i16";
-				break;
-			case 4:
-				base = "i32";
-				break;
-			case 8:
-				base = "i64";
-				break;
-			default:
-				base = "integer";
-				break;
-			}
-			break;
-		case Kind::Float:
-			switch (byteSize) {
-			case 4:
-				base = "f32";
-				break;
-			case 8:
-				base = "f64";
-				break;
-			default:
-				base = "float";
-				break;
-			}
-			break;
-		case Kind::Class:
-			base = "class";
-			break;
-		case Kind::TypeReference:
-			base = "type reference";
-			break;
-		default:
-			base = "unknown";
-			break;
-		}
-		for (int i = 0; i < pointerDepth; i++)
-			base = "pointer to " + base;
-		return base;
-	}
+	std::string toString() const;
 };

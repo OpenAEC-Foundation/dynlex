@@ -28,3 +28,35 @@ inline void parseCommaSeparatedList(std::string_view text, std::function<void(st
 		text = text.substr(comma + 1);
 	}
 }
+
+template <typename Callback, typename SeparatorCallback>
+inline void parseCommaSeparatedListWithRanges(std::string_view text, Callback callback, SeparatorCallback separatorCallback) {
+	size_t cursor = 0;
+	while (cursor < text.size()) {
+		size_t start = text.find_first_not_of(" \t", cursor);
+		if (start == std::string_view::npos)
+			break;
+
+		size_t comma = text.find(',', start);
+		size_t itemEnd = (comma != std::string_view::npos) ? comma : text.size();
+		std::string_view item = text.substr(start, itemEnd - start);
+
+		size_t trimmedEnd = item.find_last_not_of(" \t");
+		if (trimmedEnd != std::string_view::npos) {
+			item = item.substr(0, trimmedEnd + 1);
+			callback(item, start, start + item.size());
+		}
+
+		if (comma == std::string_view::npos)
+			break;
+		size_t separatorEnd = text.find_first_not_of(" \t", comma + 1);
+		if (separatorEnd == std::string_view::npos)
+			separatorEnd = text.size();
+		separatorCallback(text.substr(comma, separatorEnd - comma), comma, separatorEnd);
+		cursor = separatorEnd;
+	}
+}
+
+template <typename Callback> inline void parseCommaSeparatedListWithRanges(std::string_view text, Callback callback) {
+	parseCommaSeparatedListWithRanges(text, callback, [](std::string_view, size_t, size_t) {});
+}

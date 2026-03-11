@@ -35,7 +35,7 @@ Possible approaches:
 
 With these, `lib/font.dl` can have a generic text rendering pattern:
 ```
-effect draw text msg at x y using font and color r g b:
+function draw text msg at x y using font and color r g b:
     execute:
         enable text rendering
         set cx to x

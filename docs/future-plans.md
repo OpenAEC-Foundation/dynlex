@@ -37,6 +37,6 @@ Features and design decisions planned for later implementation.
 - DynLex's natural-language syntax makes decompiled output genuinely readable, unlike traditional C decompilation
 - Could leverage debug symbols (DWARF) when available for even better results
 
-# Matching names in debugging, better printing and expression evaluation
-# It expression (refer to subject)
+# Matching names in debugging, better printing and function evaluation
+# It function (refer to subject)
 # 

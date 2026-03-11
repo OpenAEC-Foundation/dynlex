@@ -5,17 +5,16 @@ enum class SectionType {
 	// reference of a custom section
 	Custom,
 	Section,
-	Expression,
-	Effect,
+	Function,
 	// a section defining a class.
 	Class,
 	// a section with patterns, always a child section of the main sections.
 	Pattern,
-	// execute of a section or effect
+	// execute of a section
 	Execute,
-	// get of an expression
+	// get of an function
 	Get,
-	// set of an expression
+	// set of an function
 	Set,
 	// replacement of a macro
 	Replacement,

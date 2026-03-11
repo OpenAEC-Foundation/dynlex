@@ -7,23 +7,23 @@ Macros are patterns that get inlined at the call site instead of being compiled 
 ## Syntax
 
 ```
-# Macro effect - inlined, uses "replacement:" instead of "execute:"
-macro effect return value:
+# Macro function - inlined, uses "replacement:" instead of "execute:"
+macro function return value:
     replacement:
         @intrinsic("ret", value)
 
-# Macro expression - inlined, uses "replacement:" instead of "get:"
-macro expression left + right:
+# Macro function - inlined, uses "replacement:" instead of "get:"
+macro function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-# Regular effect - compiled to function, uses "execute:"
-effect print msg:
+# Regular function - compiled to function, uses "execute:"
+function print msg:
     execute:
         @intrinsic("print", msg)
 
-# Regular expression - compiled to function, uses "get:", can recurse
-expression factorial of n:
+# Regular function - compiled to function, uses "get:", can recurse
+function factorial of n:
     get:
         if n <= 1:
             return 1
@@ -34,10 +34,10 @@ expression factorial of n:
 
 | Type | Keyword | Body Section | Compiled To | Can Recurse |
 |------|---------|--------------|-------------|-------------|
-| `macro effect` | `macro` | `replacement:` | Inline code | No |
-| `macro expression` | `macro` | `replacement:` | Inline code | No |
-| `effect` | - | `execute:` | Function | Yes |
-| `expression` | - | `get:` | Function | Yes |
+| `macro function` | `macro` | `replacement:` | Inline code | No |
+| `macro function` | `macro` | `replacement:` | Inline code | No |
+| `function` | - | `execute:` | Function | Yes |
+| `function` | - | `get:` | Function | Yes |
 | `section` | - | `execute:` | Function | Yes |
 | `macro section` | `macro` | `replacement:` | Inline code | No |
 
@@ -46,15 +46,15 @@ expression factorial of n:
 ### Completed
 
 1. **Section hierarchy refactored:**
-   - `DefinitionSection` - new base class for effect/expression/section definitions
+   - `DefinitionSection` - new base class for function/function/section definitions
    - `EffectSection` - inherits from DefinitionSection
-   - `ExpressionSection` - inherits from DefinitionSection
+   - `FunctionSection` - inherits from DefinitionSection
    - `SectionSection` - new, inherits from DefinitionSection
 
 2. **`isMacro` flag added to Section** (`section.h`)
 
 3. **Keyword parsing updated** (`section.cpp`):
-   - Iterates through keywords like `macro`, `effect`, `expression`, `section`
+   - Iterates through keywords like `macro`, `function`, `function`, `section`
    - Sets `isMacro = true` when `macro` keyword is found
    - Creates appropriate section type
 
@@ -64,22 +64,22 @@ expression factorial of n:
    - Falls back to base class which gives error if nothing matches
 
 5. **Codegen skips macros** (`codegen.cpp`):
-   - `generateExpressionCode` inlines macro bodies instead of calling functions
+   - `generateFunctionCode` inlines macro bodies instead of calling functions
 
 ### TODO
 
 1. **Codegen: Inline macro bodies**
-   - In `generateExpressionCode` for `PatternCall`, check if `matchedSection->isMacro`
+   - In `generateFunctionCode` for `PatternCall`, check if `matchedSection->isMacro`
    - If macro: inline the replacement body instead of calling a function
    - Need to bind pattern variables to their argument values
 
 2. **Update test file** to use macro syntax:
    ```
-   macro effect return value:
+   macro function return value:
        replacement:
            @intrinsic("ret", value)
 
-   macro expression left + right:
+   macro function left + right:
        replacement:
            @intrinsic("add", left, right)
    ```
@@ -94,8 +94,8 @@ expression factorial of n:
 - `src/compiler/section/sectionSection.cpp` - new file
 - `src/compiler/section/effectSection.h` - now inherits from DefinitionSection
 - `src/compiler/section/effectSection.cpp` - simplified, delegates to base
-- `src/compiler/section/expressionSection.h` - now inherits from DefinitionSection
-- `src/compiler/section/expressionSection.cpp` - simplified, delegates to base
+- `src/compiler/section/functionSection.h` - now inherits from DefinitionSection
+- `src/compiler/section/functionSection.cpp` - simplified, delegates to base
 - `src/compiler/codegen/codegen.cpp` - skips macros in function generation
 
 ## Design Decisions

@@ -102,7 +102,7 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 
 **File:** `src/compiler/codegen/codegen.cpp`
 
-**In `generateSectionCode`**, before each `generateExpressionCode` call:
+**In `generateSectionCode`**, before each function-codegen call:
 ```cpp
 if (context.llvmDIBuilder && line->sourceFile) {
     auto *diFile = getOrCreateDIFile(context, line->sourceFile);
@@ -116,7 +116,7 @@ if (context.llvmDIBuilder && line->sourceFile) {
 }
 ```
 
-**In `generateExpressionCode`**, for finer-grained column info (optional but nice for single-line multi-expression stepping):
+**In `generateFunctionCode`**, for finer-grained column info (optional but nice for single-line multi-call stepping):
 ```cpp
 if (context.llvmDIBuilder && expr->range.line) {
     auto *diFile = getOrCreateDIFile(context, expr->range.line->sourceFile);
@@ -185,7 +185,7 @@ if (context.llvmDIBuilder && var->definition && var->definition->range.line) {
     );
     context.llvmDIBuilder->insertDeclare(
         var->alloca, diVar,
-        context.llvmDIBuilder->createExpression(),
+        context.llvmDIBuilder->create debug info metadata,
         llvm::DILocation::get(*context.llvmContext, line, col, context.currentDebugScope),
         context.llvmBuilder->GetInsertBlock()
     );
@@ -277,7 +277,7 @@ private:
     json handleStepOut(const json &args);
     json handlePause(const json &args);
     json handleDisconnect(const json &args);
-    json handleEvaluate(const json &args);   // watch expressions
+    json handleEvaluate(const json &args);   // watch values
 
     // GDB MI communication
     void launchGdb(const std::string &program);
@@ -287,7 +287,7 @@ private:
     // DynLex-aware mapping
     std::string demanglePatternName(const std::string &llvmName);
     // Maps monomorphized function names back to pattern definitions
-    // e.g., "add_i32_i32" → "expression left + right"
+    // e.g., "add_i32_i32" → "function left + right"
 };
 ```
 
@@ -359,7 +359,7 @@ public:
 
 These are why we build a custom adapter instead of using CodeLLDB:
 
-1. **Pattern name demangling**: Stack frames show `expression left + right` instead of `add_i32_i32`. The DAP server maintains a map from monomorphized names → pattern definition text (built during compilation or by parsing the binary's symbol table + the source).
+1. **Pattern name demangling**: Stack frames show `function left + right` instead of `add_i32_i32`. The DAP server maintains a map from monomorphized names → pattern definition text (built during compilation or by parsing the binary's symbol table + the source).
 
 2. **Macro expansion transparency**: When stopped inside a macro body, the stack trace shows both the macro expansion site and the macro definition, with the source location pointing to the caller's line (not the macro body).
 
@@ -369,7 +369,7 @@ These are why we build a custom adapter instead of using CodeLLDB:
 
 5. **Breakpoint validation**: The DAP server can validate breakpoints against the compiled debug info and report which breakpoints are on valid lines.
 
-6. **Conditional breakpoints with DynLex expressions**: (Future) Translate DynLex expression syntax to GDB expressions.
+6. **Conditional breakpoints with DynLex functions**: (Future) Translate DynLex function syntax to equivalent GDB conditions.
 
 ### 2.6 Finding a Debugger Backend
 

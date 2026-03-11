@@ -3388,8 +3388,8 @@ var require_main2 = __commonJS({
         }
         uinteger2.is = is;
       })(uinteger || (exports3.uinteger = uinteger = {}));
-      var Position;
-      (function(Position2) {
+      var Position2;
+      (function(Position3) {
         function create(line, character) {
           if (line === Number.MAX_VALUE) {
             line = uinteger.MAX_VALUE;
@@ -3399,31 +3399,31 @@ var require_main2 = __commonJS({
           }
           return { line, character };
         }
-        Position2.create = create;
+        Position3.create = create;
         function is(value) {
           var candidate = value;
           return Is.objectLiteral(candidate) && Is.uinteger(candidate.line) && Is.uinteger(candidate.character);
         }
-        Position2.is = is;
-      })(Position || (exports3.Position = Position = {}));
-      var Range;
-      (function(Range2) {
+        Position3.is = is;
+      })(Position2 || (exports3.Position = Position2 = {}));
+      var Range2;
+      (function(Range3) {
         function create(one, two, three, four) {
           if (Is.uinteger(one) && Is.uinteger(two) && Is.uinteger(three) && Is.uinteger(four)) {
-            return { start: Position.create(one, two), end: Position.create(three, four) };
-          } else if (Position.is(one) && Position.is(two)) {
+            return { start: Position2.create(one, two), end: Position2.create(three, four) };
+          } else if (Position2.is(one) && Position2.is(two)) {
             return { start: one, end: two };
           } else {
             throw new Error("Range#create called with invalid arguments[".concat(one, ", ").concat(two, ", ").concat(three, ", ").concat(four, "]"));
           }
         }
-        Range2.create = create;
+        Range3.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Position.is(candidate.start) && Position.is(candidate.end);
+          return Is.objectLiteral(candidate) && Position2.is(candidate.start) && Position2.is(candidate.end);
         }
-        Range2.is = is;
-      })(Range || (exports3.Range = Range = {}));
+        Range3.is = is;
+      })(Range2 || (exports3.Range = Range2 = {}));
       var Location;
       (function(Location2) {
         function create(uri, range) {
@@ -3432,7 +3432,7 @@ var require_main2 = __commonJS({
         Location2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Range.is(candidate.range) && (Is.string(candidate.uri) || Is.undefined(candidate.uri));
+          return Is.objectLiteral(candidate) && Range2.is(candidate.range) && (Is.string(candidate.uri) || Is.undefined(candidate.uri));
         }
         Location2.is = is;
       })(Location || (exports3.Location = Location = {}));
@@ -3444,7 +3444,7 @@ var require_main2 = __commonJS({
         LocationLink2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Range.is(candidate.targetRange) && Is.string(candidate.targetUri) && Range.is(candidate.targetSelectionRange) && (Range.is(candidate.originSelectionRange) || Is.undefined(candidate.originSelectionRange));
+          return Is.objectLiteral(candidate) && Range2.is(candidate.targetRange) && Is.string(candidate.targetUri) && Range2.is(candidate.targetSelectionRange) && (Range2.is(candidate.originSelectionRange) || Is.undefined(candidate.originSelectionRange));
         }
         LocationLink2.is = is;
       })(LocationLink || (exports3.LocationLink = LocationLink = {}));
@@ -3476,7 +3476,7 @@ var require_main2 = __commonJS({
         ColorInformation2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Range.is(candidate.range) && Color.is(candidate.color);
+          return Is.objectLiteral(candidate) && Range2.is(candidate.range) && Color.is(candidate.color);
         }
         ColorInformation2.is = is;
       })(ColorInformation || (exports3.ColorInformation = ColorInformation = {}));
@@ -3587,7 +3587,7 @@ var require_main2 = __commonJS({
         function is(value) {
           var _a;
           var candidate = value;
-          return Is.defined(candidate) && Range.is(candidate.range) && Is.string(candidate.message) && (Is.number(candidate.severity) || Is.undefined(candidate.severity)) && (Is.integer(candidate.code) || Is.string(candidate.code) || Is.undefined(candidate.code)) && (Is.undefined(candidate.codeDescription) || Is.string((_a = candidate.codeDescription) === null || _a === void 0 ? void 0 : _a.href)) && (Is.string(candidate.source) || Is.undefined(candidate.source)) && (Is.undefined(candidate.relatedInformation) || Is.typedArray(candidate.relatedInformation, DiagnosticRelatedInformation.is));
+          return Is.defined(candidate) && Range2.is(candidate.range) && Is.string(candidate.message) && (Is.number(candidate.severity) || Is.undefined(candidate.severity)) && (Is.integer(candidate.code) || Is.string(candidate.code) || Is.undefined(candidate.code)) && (Is.undefined(candidate.codeDescription) || Is.string((_a = candidate.codeDescription) === null || _a === void 0 ? void 0 : _a.href)) && (Is.string(candidate.source) || Is.undefined(candidate.source)) && (Is.undefined(candidate.relatedInformation) || Is.typedArray(candidate.relatedInformation, DiagnosticRelatedInformation.is));
         }
         Diagnostic2.is = is;
       })(Diagnostic || (exports3.Diagnostic = Diagnostic = {}));
@@ -3627,7 +3627,7 @@ var require_main2 = __commonJS({
         TextEdit2.del = del;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Is.string(candidate.newText) && Range.is(candidate.range);
+          return Is.objectLiteral(candidate) && Is.string(candidate.newText) && Range2.is(candidate.range);
         }
         TextEdit2.is = is;
       })(TextEdit || (exports3.TextEdit = TextEdit = {}));
@@ -4171,7 +4171,7 @@ var require_main2 = __commonJS({
         InsertReplaceEdit2.create = create;
         function is(value) {
           var candidate = value;
-          return candidate && Is.string(candidate.newText) && Range.is(candidate.insert) && Range.is(candidate.replace);
+          return candidate && Is.string(candidate.newText) && Range2.is(candidate.insert) && Range2.is(candidate.replace);
         }
         InsertReplaceEdit2.is = is;
       })(InsertReplaceEdit || (exports3.InsertReplaceEdit = InsertReplaceEdit = {}));
@@ -4214,14 +4214,14 @@ var require_main2 = __commonJS({
         }
         MarkedString2.is = is;
       })(MarkedString || (exports3.MarkedString = MarkedString = {}));
-      var Hover;
-      (function(Hover2) {
+      var Hover2;
+      (function(Hover3) {
         function is(value) {
           var candidate = value;
-          return !!candidate && Is.objectLiteral(candidate) && (MarkupContent.is(candidate.contents) || MarkedString.is(candidate.contents) || Is.typedArray(candidate.contents, MarkedString.is)) && (value.range === void 0 || Range.is(value.range));
+          return !!candidate && Is.objectLiteral(candidate) && (MarkupContent.is(candidate.contents) || MarkedString.is(candidate.contents) || Is.typedArray(candidate.contents, MarkedString.is)) && (value.range === void 0 || Range2.is(value.range));
         }
-        Hover2.is = is;
-      })(Hover || (exports3.Hover = Hover = {}));
+        Hover3.is = is;
+      })(Hover2 || (exports3.Hover = Hover2 = {}));
       var ParameterInformation;
       (function(ParameterInformation2) {
         function create(label, documentation) {
@@ -4339,7 +4339,7 @@ var require_main2 = __commonJS({
         DocumentSymbol2.create = create;
         function is(value) {
           var candidate = value;
-          return candidate && Is.string(candidate.name) && Is.number(candidate.kind) && Range.is(candidate.range) && Range.is(candidate.selectionRange) && (candidate.detail === void 0 || Is.string(candidate.detail)) && (candidate.deprecated === void 0 || Is.boolean(candidate.deprecated)) && (candidate.children === void 0 || Array.isArray(candidate.children)) && (candidate.tags === void 0 || Array.isArray(candidate.tags));
+          return candidate && Is.string(candidate.name) && Is.number(candidate.kind) && Range2.is(candidate.range) && Range2.is(candidate.selectionRange) && (candidate.detail === void 0 || Is.string(candidate.detail)) && (candidate.deprecated === void 0 || Is.boolean(candidate.deprecated)) && (candidate.children === void 0 || Array.isArray(candidate.children)) && (candidate.tags === void 0 || Array.isArray(candidate.tags));
         }
         DocumentSymbol2.is = is;
       })(DocumentSymbol || (exports3.DocumentSymbol = DocumentSymbol = {}));
@@ -4416,7 +4416,7 @@ var require_main2 = __commonJS({
         CodeLens2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.defined(candidate) && Range.is(candidate.range) && (Is.undefined(candidate.command) || Command.is(candidate.command));
+          return Is.defined(candidate) && Range2.is(candidate.range) && (Is.undefined(candidate.command) || Command.is(candidate.command));
         }
         CodeLens2.is = is;
       })(CodeLens || (exports3.CodeLens = CodeLens = {}));
@@ -4440,7 +4440,7 @@ var require_main2 = __commonJS({
         DocumentLink2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.defined(candidate) && Range.is(candidate.range) && (Is.undefined(candidate.target) || Is.string(candidate.target));
+          return Is.defined(candidate) && Range2.is(candidate.range) && (Is.undefined(candidate.target) || Is.string(candidate.target));
         }
         DocumentLink2.is = is;
       })(DocumentLink || (exports3.DocumentLink = DocumentLink = {}));
@@ -4452,7 +4452,7 @@ var require_main2 = __commonJS({
         SelectionRange2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Range.is(candidate.range) && (candidate.parent === void 0 || SelectionRange2.is(candidate.parent));
+          return Is.objectLiteral(candidate) && Range2.is(candidate.range) && (candidate.parent === void 0 || SelectionRange2.is(candidate.parent));
         }
         SelectionRange2.is = is;
       })(SelectionRange || (exports3.SelectionRange = SelectionRange = {}));
@@ -4511,7 +4511,7 @@ var require_main2 = __commonJS({
         InlineValueText2.create = create;
         function is(value) {
           var candidate = value;
-          return candidate !== void 0 && candidate !== null && Range.is(candidate.range) && Is.string(candidate.text);
+          return candidate !== void 0 && candidate !== null && Range2.is(candidate.range) && Is.string(candidate.text);
         }
         InlineValueText2.is = is;
       })(InlineValueText || (exports3.InlineValueText = InlineValueText = {}));
@@ -4523,7 +4523,7 @@ var require_main2 = __commonJS({
         InlineValueVariableLookup2.create = create;
         function is(value) {
           var candidate = value;
-          return candidate !== void 0 && candidate !== null && Range.is(candidate.range) && Is.boolean(candidate.caseSensitiveLookup) && (Is.string(candidate.variableName) || candidate.variableName === void 0);
+          return candidate !== void 0 && candidate !== null && Range2.is(candidate.range) && Is.boolean(candidate.caseSensitiveLookup) && (Is.string(candidate.variableName) || candidate.variableName === void 0);
         }
         InlineValueVariableLookup2.is = is;
       })(InlineValueVariableLookup || (exports3.InlineValueVariableLookup = InlineValueVariableLookup = {}));
@@ -4535,7 +4535,7 @@ var require_main2 = __commonJS({
         InlineValueEvaluatableExpression2.create = create;
         function is(value) {
           var candidate = value;
-          return candidate !== void 0 && candidate !== null && Range.is(candidate.range) && (Is.string(candidate.expression) || candidate.expression === void 0);
+          return candidate !== void 0 && candidate !== null && Range2.is(candidate.range) && (Is.string(candidate.expression) || candidate.expression === void 0);
         }
         InlineValueEvaluatableExpression2.is = is;
       })(InlineValueEvaluatableExpression || (exports3.InlineValueEvaluatableExpression = InlineValueEvaluatableExpression = {}));
@@ -4547,7 +4547,7 @@ var require_main2 = __commonJS({
         InlineValueContext2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.defined(candidate) && Range.is(value.stoppedLocation);
+          return Is.defined(candidate) && Range2.is(value.stoppedLocation);
         }
         InlineValueContext2.is = is;
       })(InlineValueContext || (exports3.InlineValueContext = InlineValueContext = {}));
@@ -4584,7 +4584,7 @@ var require_main2 = __commonJS({
         InlayHint2.create = create;
         function is(value) {
           var candidate = value;
-          return Is.objectLiteral(candidate) && Position.is(candidate.position) && (Is.string(candidate.label) || Is.typedArray(candidate.label, InlayHintLabelPart.is)) && (candidate.kind === void 0 || InlayHintKind.is(candidate.kind)) && candidate.textEdits === void 0 || Is.typedArray(candidate.textEdits, TextEdit.is) && (candidate.tooltip === void 0 || Is.string(candidate.tooltip) || MarkupContent.is(candidate.tooltip)) && (candidate.paddingLeft === void 0 || Is.boolean(candidate.paddingLeft)) && (candidate.paddingRight === void 0 || Is.boolean(candidate.paddingRight));
+          return Is.objectLiteral(candidate) && Position2.is(candidate.position) && (Is.string(candidate.label) || Is.typedArray(candidate.label, InlayHintLabelPart.is)) && (candidate.kind === void 0 || InlayHintKind.is(candidate.kind)) && candidate.textEdits === void 0 || Is.typedArray(candidate.textEdits, TextEdit.is) && (candidate.tooltip === void 0 || Is.string(candidate.tooltip) || MarkupContent.is(candidate.tooltip)) && (candidate.paddingLeft === void 0 || Is.boolean(candidate.paddingLeft)) && (candidate.paddingRight === void 0 || Is.boolean(candidate.paddingRight));
         }
         InlayHint2.is = is;
       })(InlayHint || (exports3.InlayHint = InlayHint = {}));
@@ -4773,7 +4773,7 @@ var require_main2 = __commonJS({
             var lineOffsets = this.getLineOffsets();
             var low = 0, high = lineOffsets.length;
             if (high === 0) {
-              return Position.create(0, offset);
+              return Position2.create(0, offset);
             }
             while (low < high) {
               var mid = Math.floor((low + high) / 2);
@@ -4784,7 +4784,7 @@ var require_main2 = __commonJS({
               }
             }
             var line = low - 1;
-            return Position.create(line, offset - lineOffsets[line]);
+            return Position2.create(line, offset - lineOffsets[line]);
           };
           FullTextDocument2.prototype.offsetAt = function(position) {
             var lineOffsets = this.getLineOffsets();
@@ -16997,12 +16997,12 @@ var require_comparator = __commonJS({
           if (this.value === "") {
             return true;
           }
-          return new Range(comp.value, options).test(this.value);
+          return new Range2(comp.value, options).test(this.value);
         } else if (comp.operator === "") {
           if (comp.value === "") {
             return true;
           }
-          return new Range(this.value, options).test(comp.semver);
+          return new Range2(this.value, options).test(comp.semver);
         }
         options = parseOptions(options);
         if (options.includePrerelease && (this.value === "<0.0.0-0" || comp.value === "<0.0.0-0")) {
@@ -17035,7 +17035,7 @@ var require_comparator = __commonJS({
     var cmp = require_cmp();
     var debug2 = require_debug();
     var SemVer = require_semver();
-    var Range = require_range();
+    var Range2 = require_range();
   }
 });
 
@@ -17044,7 +17044,7 @@ var require_range = __commonJS({
   "node_modules/semver/classes/range.js"(exports2, module2) {
     "use strict";
     var SPACE_CHARACTERS = /\s+/g;
-    var Range = class _Range {
+    var Range2 = class _Range {
       constructor(range, options) {
         options = parseOptions(options);
         if (range instanceof _Range) {
@@ -17182,7 +17182,7 @@ var require_range = __commonJS({
         return false;
       }
     };
-    module2.exports = Range;
+    module2.exports = Range2;
     var LRU = require_lrucache();
     var cache = new LRU();
     var parseOptions = require_parse_options();
@@ -17420,10 +17420,10 @@ var require_range = __commonJS({
 var require_satisfies = __commonJS({
   "node_modules/semver/functions/satisfies.js"(exports2, module2) {
     "use strict";
-    var Range = require_range();
+    var Range2 = require_range();
     var satisfies = (version, range, options) => {
       try {
-        range = new Range(range, options);
+        range = new Range2(range, options);
       } catch (er) {
         return false;
       }
@@ -17645,8 +17645,8 @@ var require_main4 = __commonJS({
         }
       }
       createMessageTransports(encoding) {
-        function getEnvironment(env, fork) {
-          if (!env && !fork) {
+        function getEnvironment(env2, fork) {
+          if (!env2 && !fork) {
             return void 0;
           }
           const result = /* @__PURE__ */ Object.create(null);
@@ -17655,8 +17655,8 @@ var require_main4 = __commonJS({
             result["ELECTRON_RUN_AS_NODE"] = "1";
             result["ELECTRON_NO_ASAR"] = "1";
           }
-          if (env) {
-            Object.keys(env).forEach((key) => result[key] = env[key]);
+          if (env2) {
+            Object.keys(env2).forEach((key) => result[key] = env2[key]);
           }
           return result;
         }
@@ -18025,10 +18025,72 @@ var reconnectAttempts = 0;
 var reconnectTimeout;
 var isShuttingDown = false;
 var extensionPath;
+var cursorClientId = "";
+var lastSentCursorKey;
+var instantiationHoverProvider;
 var BASE_RECONNECT_DELAY = 5e3;
 var MAX_RECONNECT_DELAY = 6e4;
+var DynLexInstantiationHoverProvider = class {
+  async provideHover(document, position) {
+    if (!client || document.languageId !== "dynlex") {
+      return void 0;
+    }
+    try {
+      const response = await client.sendRequest("dynlex/instantiationsInDocument", {
+        uri: document.uri.toString()
+      });
+      if (!Array.isArray(response)) {
+        return void 0;
+      }
+      const entries = [];
+      for (const raw of response) {
+        if (!raw || typeof raw !== "object") {
+          continue;
+        }
+        const r = raw.range;
+        const start = r?.start;
+        const end = r?.end;
+        if (!start || !end) {
+          continue;
+        }
+        const optionsRaw = raw.options;
+        if (!Array.isArray(optionsRaw) || optionsRaw.length === 0) {
+          continue;
+        }
+        const options = optionsRaw.filter((option) => option && typeof option.key === "string" && typeof option.label === "string").map((option) => ({ key: option.key, label: option.label }));
+        entries.push({
+          selectionKey: String(raw.selectionKey || ""),
+          currentKey: String(raw.currentKey || ""),
+          range: new vscode.Range(
+            new vscode.Position(start.line, start.character),
+            new vscode.Position(end.line, end.character)
+          ),
+          options
+        });
+      }
+      const entry = entries.find((item) => item.range.contains(position));
+      if (!entry || !entry.selectionKey) {
+        return void 0;
+      }
+      const markdown = new vscode.MarkdownString("", true);
+      markdown.isTrusted = { enabledCommands: ["dynlex.selectInstantiationPath"] };
+      markdown.appendMarkdown("pick an instance:\n\n");
+      for (const option of entry.options) {
+        const selectedPrefix = option.key === entry.currentKey ? "current: " : "";
+        const commandArgs = encodeURIComponent(JSON.stringify([entry.selectionKey, option.key]));
+        markdown.appendMarkdown(`[${selectedPrefix}${option.label}](command:dynlex.selectInstantiationPath?${commandArgs})  
+`);
+      }
+      return new vscode.Hover(markdown, entry.range);
+    } catch (err) {
+      logError(`Failed to fetch DynLex hover paths: ${err}`);
+      return void 0;
+    }
+  }
+};
 function activate(context) {
   extensionPath = context.extensionPath;
+  cursorClientId = vscode.env.sessionId || `dynlex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   outputChannel = vscode.window.createOutputChannel("DynLex Language Server");
   context.subscriptions.push(outputChannel);
   log("DynLex extension activating...");
@@ -18079,7 +18141,43 @@ function activate(context) {
     vscode.commands.registerCommand("dynlex.restartServer", () => {
       log("Restarting language server...");
       reconnectAttempts = 0;
-      stopLanguageServer().then(() => startLanguageServer(context));
+      void stopLanguageServer().then(() => startLanguageServer(context));
+    })
+  );
+  instantiationHoverProvider = new DynLexInstantiationHoverProvider();
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider({ language: "dynlex", scheme: "file" }, instantiationHoverProvider)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("dynlex.selectInstantiationPath", async (selectionKey, instantiationKey) => {
+      if (!client || !selectionKey || !instantiationKey) {
+        return;
+      }
+      await client.sendNotification("dynlex/selectInstantiation", {
+        selectionKey,
+        instantiationKey
+      });
+      await vscode.commands.executeCommand("editor.action.showHover");
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      void sendActiveCursorNotification(editor);
+    })
+  );
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      if (event.textEditor === vscode.window.activeTextEditor) {
+        void sendActiveCursorNotification(event.textEditor);
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && event.document === editor.document) {
+        void sendActiveCursorNotification(editor);
+      }
     })
   );
 }
@@ -18123,6 +18221,19 @@ function getServerPort() {
   const config = vscode.workspace.getConfiguration("dynlex");
   return config.get("server.port") || 5007;
 }
+function getServerHost() {
+  const config = vscode.workspace.getConfiguration("dynlex");
+  const host = (config.get("server.host") || "").trim();
+  return host.length > 0 ? host : "127.0.0.1";
+}
+function getServerHosts() {
+  const configured = getServerHost();
+  const hosts = [configured];
+  if (configured === "127.0.0.1" || configured === "::1" || configured === "localhost") {
+    hosts.push("127.0.0.1", "::1", "localhost");
+  }
+  return Array.from(new Set(hosts));
+}
 function getServerFlags() {
   const config = vscode.workspace.getConfiguration("dynlex");
   const flags = config.get("server.flags") || "";
@@ -18132,54 +18243,59 @@ function useExternalServer() {
   const config = vscode.workspace.getConfiguration("dynlex");
   return config.get("server.useExternal") || false;
 }
-async function waitForPort(port, timeoutMs = 3e4) {
+async function waitForPort(port, hosts, timeoutMs = 3e4) {
   const startTime = Date.now();
   let attempt = 0;
   while (Date.now() - startTime < timeoutMs) {
     if (isShuttingDown) {
-      return false;
+      return void 0;
     }
     attempt++;
-    const connected = await new Promise((resolve) => {
-      const socket = new net.Socket();
-      socket.setTimeout(500);
-      socket.on("connect", () => {
-        socket.destroy();
-        resolve(true);
+    for (const host of hosts) {
+      const connected = await new Promise((resolve) => {
+        const socket = new net.Socket();
+        socket.setTimeout(500);
+        socket.on("connect", () => {
+          socket.destroy();
+          resolve(true);
+        });
+        socket.on("error", () => {
+          socket.destroy();
+          resolve(false);
+        });
+        socket.on("timeout", () => {
+          socket.destroy();
+          resolve(false);
+        });
+        socket.connect(port, host);
       });
-      socket.on("error", () => {
-        socket.destroy();
-        resolve(false);
-      });
-      socket.on("timeout", () => {
-        socket.destroy();
-        resolve(false);
-      });
-      socket.connect(port, "127.0.0.1");
-    });
-    if (connected) {
-      return true;
+      if (connected) {
+        return host;
+      }
     }
     log(`Connection attempt ${attempt} failed, retrying...`);
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  return false;
+  return void 0;
 }
 async function startLanguageServer(context) {
   const port = getServerPort();
+  const hosts = getServerHosts();
+  let activeHost = hosts[0];
   if (useExternalServer()) {
-    log(`Waiting for external server on port ${port}...`);
-    const ready = await waitForPort(port);
-    if (!ready) {
-      logError(`Timed out waiting for external server on port ${port}`);
-      vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on port ${port}`);
+    log(`Waiting for external server on ${hosts.join(", ")}:${port}...`);
+    const readyHost = await waitForPort(port, hosts);
+    if (!readyHost) {
+      logError(`Timed out waiting for external server on ${hosts.join(", ")}:${port}`);
+      vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on ${hosts.join(", ")}:${port}`);
       return;
     }
+    activeHost = readyHost;
     log(`External server is ready`);
   } else {
     const serverPath = getServerPath();
     const extraFlags = getServerFlags();
-    const args = ["--lsp", ...extraFlags];
+    const args = ["--lsp", "--port", String(port), ...extraFlags];
     log(`Server path resolved to: ${serverPath}`);
     log(`Starting language server: ${serverPath} ${args.join(" ")} on port ${port}`);
     serverProcess = (0, import_child_process.spawn)(serverPath, args, {
@@ -18207,37 +18323,38 @@ async function startLanguageServer(context) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   try {
-    await connectToServer(port, context);
+    await connectToServer(port, activeHost, context);
     reconnectAttempts = 0;
   } catch (err) {
     logError(`Error connecting to server: ${err}`);
     scheduleReconnect(context);
   }
 }
-async function connectToServer(port, context) {
-  log(`Connecting to language server on port ${port}...`);
+async function connectToServer(port, host, context) {
+  log(`Connecting to language server on ${host}:${port}...`);
   const serverOptions = () => {
     return new Promise((resolve, reject) => {
       const socket = new net.Socket();
+      socket.setTimeout(2e3);
       socket.on("connect", () => {
-        log("Connected to language server");
+        socket.setTimeout(0);
+        log(`Connected to language server at ${host}:${port}`);
         resolve({
           reader: socket,
           writer: socket
         });
       });
       socket.on("error", (err) => {
-        logError(`Socket error: ${err.message}`);
-        reject(err);
+        reject(new Error(`Unable to connect to ${host}:${port} (${err.message})`));
+      });
+      socket.on("timeout", () => {
+        socket.destroy();
+        reject(new Error(`Unable to connect to ${host}:${port} (timeout)`));
       });
       socket.on("close", () => {
         log("Socket closed");
-        if (!isShuttingDown && client) {
-          vscode.window.showErrorMessage("Connection to DynLex language server lost.");
-          scheduleReconnect(context);
-        }
       });
-      socket.connect(port, "127.0.0.1");
+      socket.connect(port, host);
     });
   };
   const clientOptions = {
@@ -18257,10 +18374,43 @@ async function connectToServer(port, context) {
     await client.start();
     log("Language client started successfully");
     context.subscriptions.push(client);
+    lastSentCursorKey = void 0;
+    await sendActiveCursorNotification(vscode.window.activeTextEditor);
   } catch (err) {
     logError(`Failed to start language client: ${err}`);
     throw err;
   }
+}
+async function sendActiveCursorNotification(editor) {
+  if (!client) {
+    return;
+  }
+  const document = editor?.document;
+  if (!editor || !document || document.languageId !== "dynlex") {
+    const key2 = `${cursorClientId}:none`;
+    if (lastSentCursorKey === key2) {
+      return;
+    }
+    lastSentCursorKey = key2;
+    await client.sendNotification("dynlex/activeCursorChanged", { clientId: cursorClientId });
+    return;
+  }
+  const position = editor.selection.active;
+  const payload = {
+    clientId: cursorClientId,
+    uri: document.uri.toString(),
+    version: document.version,
+    position: {
+      line: position.line,
+      character: position.character
+    }
+  };
+  const key = `${cursorClientId}:${payload.uri}:${payload.version}:${payload.position.line}:${payload.position.character}`;
+  if (lastSentCursorKey === key) {
+    return;
+  }
+  lastSentCursorKey = key;
+  await client.sendNotification("dynlex/activeCursorChanged", payload);
 }
 function scheduleReconnect(context) {
   if (isShuttingDown) {

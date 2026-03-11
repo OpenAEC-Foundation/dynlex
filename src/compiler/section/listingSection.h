@@ -14,5 +14,6 @@ struct ListingSection : public Section {
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
 
 	// Override this to handle each item in the list
-	virtual void addItem(ParseContext &context, std::string_view item, CodeLine *line) = 0;
+	virtual bool addItem(ParseContext &context, Range itemRange) = 0;
+	virtual void addSeparator(ParseContext & /*context*/, Range /*separatorRange*/) {}
 };

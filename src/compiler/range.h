@@ -2,6 +2,7 @@
 #include <string_view>
 struct CodeLine;
 struct Section;
+struct SourceLocation;
 struct Range {
 	CodeLine *line{};
 	std::string_view subString;
@@ -11,6 +12,8 @@ struct Range {
 	std::string toString() const;
 	int start() const;
 	int end() const;
+	SourceLocation sourceStart() const;
+	SourceLocation sourceEnd() const;
 	Range subRange(int start, int end);
 	Section *section() const;
 };

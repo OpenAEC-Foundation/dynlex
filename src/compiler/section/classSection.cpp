@@ -3,45 +3,55 @@
 #include "parseContext.h"
 #include "parseUtils.h"
 #include "patternsSection.h"
-
-// Forward declaration from membersSection.cpp
-FieldDefinition parseFieldDeclaration(ParseContext &context, std::string_view fieldText, CodeLine *line);
+#include "syntaxConfig.h"
 
 bool ClassSection::processLine(ParseContext &context, CodeLine *line) {
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	// Inline members: "members: x, y, z" or "members: x as i32, y as i32"
 	std::string_view text = line->patternText;
-	if (text.starts_with("members: ") || text.starts_with("members:")) {
-		std::string_view fields = text.substr(text.find(':') + 1);
-		parseCommaSeparatedList(fields, [&](std::string_view fieldText) {
-			classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
+	if (std::optional<std::string_view> fieldsMatch =
+			extractInlineSettingValue(text, syntax.membersSectionName, syntax.sectionOpener)) {
+		std::string_view fields = *fieldsMatch;
+		size_t valueStart = text.size() - fields.size();
+		context.addSourceToken(Range(line, text.substr(0, valueStart)), ParseContext::SourceTokenKind::Keyword);
+		bool success = true;
+		parseCommaSeparatedListWithRanges(fields, [&](std::string_view /*fieldText*/, size_t start, size_t end) {
+			if (!parseFieldDeclaration(context, Range(line, text.substr(valueStart + start, end - start)), this)) {
+				success = false;
+			}
 		});
 		line->resolved = true;
-		return true;
+		return success;
 	}
 
 	// Inline alignment: "alignment: N"
-	if (text.starts_with("alignment:")) {
-		size_t colonPos = text.find(':');
-		std::string_view numStr = text.substr(colonPos + 1);
+	if (std::optional<std::string_view> numStrMatch =
+			extractInlineSettingValue(text, syntax.alignmentName, syntax.sectionOpener)) {
+		std::string_view numStr = *numStrMatch;
 		size_t start = numStr.find_first_not_of(" \t");
 		if (start != std::string_view::npos)
 			numStr = numStr.substr(start);
+		size_t valueStart = text.size() - numStr.size();
+		context.addSourceToken(Range(line, text.substr(0, valueStart)), ParseContext::SourceTokenKind::Keyword);
+		if (!numStr.empty())
+			context.addSourceToken(Range(line, numStr), ParseContext::SourceTokenKind::Number);
 		classDefinition->alignment = std::stoi(std::string(numStr));
 		line->resolved = true;
 		return true;
 	}
 
 	context.diagnostics.push_back(
-		Diagnostic(Diagnostic::Level::Error, "unexpected line in class definition", Range(line, line->patternText))
+		Diagnostic(Diagnostic::Level::Error, syntax.messages.unexpectedClassLine, Range(line, line->patternText))
 	);
 	return false;
 }
 
 Section *ClassSection::createSection(ParseContext &context, CodeLine *line) {
-	if (line->patternText == "patterns") {
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
+	if (matchesConfiguredKeyword(line->patternText, syntax.patternsSectionName)) {
 		return new PatternsSection(this);
 	}
-	if (line->patternText == "members") {
+	if (matchesConfiguredKeyword(line->patternText, syntax.membersSectionName)) {
 		return new MembersSection(this);
 	}
 

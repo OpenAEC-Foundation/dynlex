@@ -1,18 +1,26 @@
 #include "dapServer.h"
 #include "../lsp/stdioTransport.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Program.h"
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
-#include <sys/wait.h>
-#include <unistd.h>
+#include <iterator>
+#include <optional>
+#include <vector>
 
 namespace dap {
 
-DapServer::DapServer(std::unique_ptr<lsp::Transport> transport) : transport(std::move(transport)) {}
+DapServer::DapServer(std::unique_ptr<lsp::Transport> transport, std::string executablePath)
+	: transport(std::move(transport)), debugger(createDebuggerAdapter()), executablePath(std::move(executablePath)) {}
 
 DapServer::~DapServer() {
 	running = false;
-	gdb.terminate();
+	if (debugger)
+		debugger->terminate();
 	if (gdbReaderThread.joinable()) {
 		gdbReaderThread.join();
 	}
@@ -36,7 +44,8 @@ void DapServer::run() {
 	}
 
 	running = false;
-	gdb.terminate();
+	if (debugger)
+		debugger->terminate();
 	if (gdbReaderThread.joinable()) {
 		gdbReaderThread.join();
 	}
@@ -216,8 +225,15 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 	}
 
 	// Launch GDB
-	if (!gdb.launch()) {
-		sendErrorResponse(reqSeq, "launch", "Failed to launch GDB");
+	if (!debugger || !debugger->isSupported()) {
+		std::string message = debugger ? debugger->unsupportedReason() : "Debugger adapter unavailable";
+		sendErrorResponse(reqSeq, "launch", message);
+		return;
+	}
+
+	std::string launchError;
+	if (!debugger->launch("gdb", launchError)) {
+		sendErrorResponse(reqSeq, "launch", launchError.empty() ? "Failed to launch GDB" : launchError);
 		return;
 	}
 
@@ -231,10 +247,10 @@ void DapServer::handleLaunch(int reqSeq, const Json &args) {
 	if (cwd.empty()) {
 		cwd = std::filesystem::current_path().string();
 	}
-	gdb.sendAndWait("environment-cd " + cwd);
+	debugger->sendAndWait("environment-cd " + cwd);
 
 	// Load the binary
-	MiRecord result = gdb.sendAndWait("file-exec-and-symbols " + compiledBinary);
+	MiRecord result = debugger->sendAndWait("file-exec-and-symbols " + compiledBinary);
 	if (result.recordClass != "done") {
 		std::string msg = result.values.value("msg", "Failed to load binary");
 		sendErrorResponse(reqSeq, "launch", msg);
@@ -256,7 +272,7 @@ void DapServer::handleSetBreakpoints(int reqSeq, const Json &args) {
 	// Delete existing breakpoints for this file
 	if (breakpointsByFile.count(sourcePath)) {
 		for (int bpNum : breakpointsByFile[sourcePath]) {
-			gdb.sendAndWait("break-delete " + std::to_string(bpNum));
+			debugger->sendAndWait("break-delete " + std::to_string(bpNum));
 		}
 		breakpointsByFile.erase(sourcePath);
 	}
@@ -270,7 +286,7 @@ void DapServer::handleSetBreakpoints(int reqSeq, const Json &args) {
 			int line = bp.value("line", 0);
 			std::string loc = sourcePath + ":" + std::to_string(line);
 
-			MiRecord result = gdb.sendAndWait("break-insert " + loc);
+			MiRecord result = debugger->sendAndWait("break-insert " + loc);
 
 			Breakpoint dapBp;
 			dapBp.id = static_cast<int>(breakpoints.size() + 1);
@@ -303,15 +319,15 @@ void DapServer::handleConfigurationDone(int reqSeq, const Json & /*args*/) {
 
 	// Set a temporary breakpoint on main if stopOnEntry is requested
 	if (stopOnEntry) {
-		gdb.sendAndWait("break-insert -t main");
+		debugger->sendAndWait("break-insert -t main");
 	}
 
 	// Start the program
-	gdb.send("exec-run");
+	debugger->send("exec-run");
 }
 
 void DapServer::handleThreads(int reqSeq, const Json & /*args*/) {
-	MiRecord result = gdb.sendAndWait("thread-info");
+	MiRecord result = debugger->sendAndWait("thread-info");
 
 	std::vector<Thread> threads;
 	if (result.values.contains("threads")) {
@@ -331,7 +347,7 @@ void DapServer::handleThreads(int reqSeq, const Json & /*args*/) {
 }
 
 void DapServer::handleStackTrace(int reqSeq, const Json & /*args*/) {
-	MiRecord result = gdb.sendAndWait("stack-list-frames");
+	MiRecord result = debugger->sendAndWait("stack-list-frames");
 
 	std::vector<StackFrame> frames;
 	if (result.values.contains("stack")) {
@@ -370,7 +386,7 @@ void DapServer::handleScopes(int reqSeq, const Json & /*args*/) {
 void DapServer::handleVariables(int reqSeq, const Json &args) {
 	int ref = args.value("variablesReference", 0);
 
-	MiRecord result = gdb.sendAndWait("stack-list-variables --all-values");
+	MiRecord result = debugger->sendAndWait("stack-list-variables --all-values");
 
 	std::vector<Variable> vars;
 	if (result.values.contains("variables")) {
@@ -396,33 +412,34 @@ void DapServer::handleVariables(int reqSeq, const Json &args) {
 }
 
 void DapServer::handleContinue(int reqSeq, const Json & /*args*/) {
-	gdb.send("exec-continue");
+	debugger->send("exec-continue");
 	sendResponse(reqSeq, "continue", {{"allThreadsContinued", true}});
 }
 
 void DapServer::handleNext(int reqSeq, const Json & /*args*/) {
-	gdb.send("exec-next");
+	debugger->send("exec-next");
 	sendResponse(reqSeq, "next", Json::object());
 }
 
 void DapServer::handleStepIn(int reqSeq, const Json & /*args*/) {
-	gdb.send("exec-step");
+	debugger->send("exec-step");
 	sendResponse(reqSeq, "stepIn", Json::object());
 }
 
 void DapServer::handleStepOut(int reqSeq, const Json & /*args*/) {
-	gdb.send("exec-finish");
+	debugger->send("exec-finish");
 	sendResponse(reqSeq, "stepOut", Json::object());
 }
 
 void DapServer::handlePause(int reqSeq, const Json & /*args*/) {
-	gdb.send("exec-interrupt");
+	debugger->send("exec-interrupt");
 	sendResponse(reqSeq, "pause", Json::object());
 }
 
 void DapServer::handleDisconnect(int reqSeq, const Json & /*args*/) {
 	sendResponse(reqSeq, "disconnect", Json::object());
-	gdb.terminate();
+	if (debugger)
+		debugger->terminate();
 	running = false;
 
 	// Clean up compiled binary
@@ -434,14 +451,14 @@ void DapServer::handleDisconnect(int reqSeq, const Json & /*args*/) {
 // --- GDB reader thread ---
 
 void DapServer::gdbReaderLoop() {
-	while (running && gdb.isRunning()) {
+	while (running && debugger && debugger->isRunning()) {
 		MiRecord record;
-		if (!gdb.readRecord(record))
+		if (!debugger->readRecord(record))
 			break;
 		if (record.type == MiRecord::Prompt)
 			continue;
 		if (record.type == MiRecord::Result) {
-			gdb.deliverResult(record);
+			debugger->deliverResult(record);
 		} else {
 			handleGdbRecord(record);
 		}
@@ -501,73 +518,59 @@ bool DapServer::compileDlFile(const std::string &dlFile, const std::string &outp
 		return false;
 	}
 
-	// Create pipes to capture stdout and stderr from the compiler
-	int stderrPipe[2];
-	int stdoutPipe[2];
-	if (pipe(stderrPipe) != 0 || pipe(stdoutPipe) != 0) {
-		log("Failed to create pipes");
-		errorOutput = "Failed to create pipes for compilation";
+	llvm::SmallString<128> stdoutPath;
+	llvm::SmallString<128> stderrPath;
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_dap_stdout", "log", stdoutPath)) {
+		errorOutput = "Failed to create temp stdout file: " + ec.message();
+		return false;
+	}
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_dap_stderr", "log", stderrPath)) {
+		llvm::sys::fs::remove(stdoutPath);
+		errorOutput = "Failed to create temp stderr file: " + ec.message();
 		return false;
 	}
 
-	pid_t pid = fork();
-	if (pid < 0) {
-		log("Fork failed for compilation");
-		errorOutput = "Fork failed for compilation";
-		close(stderrPipe[0]);
-		close(stderrPipe[1]);
-		close(stdoutPipe[0]);
-		close(stdoutPipe[1]);
+	const std::string outputArg = "-o" + outputPath;
+	std::vector<llvm::StringRef> commandArgs = {selfPath, dlFile, "-g", "-O0", outputArg};
+	std::vector<std::optional<llvm::StringRef>> redirects = {
+		std::nullopt,
+		llvm::StringRef(stdoutPath),
+		llvm::StringRef(stderrPath),
+	};
+
+	std::string executeError;
+	bool executionFailed = false;
+	int exitCode =
+		llvm::sys::ExecuteAndWait(selfPath, commandArgs, std::nullopt, redirects, 0, 0, &executeError, &executionFailed);
+
+	auto readFile = [](const std::string &path) {
+		std::ifstream file(path, std::ios::in | std::ios::binary);
+		if (!file)
+			return std::string{};
+		return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	};
+
+	const std::string capturedOutput = readFile(std::string(stdoutPath)) + readFile(std::string(stderrPath));
+	llvm::sys::fs::remove(stdoutPath);
+	llvm::sys::fs::remove(stderrPath);
+
+	if (!executeError.empty()) {
+		errorOutput = executeError;
 		return false;
 	}
-
-	if (pid == 0) {
-		// Child: redirect stdout/stderr to pipes
-		close(stderrPipe[0]);
-		close(stdoutPipe[0]);
-		dup2(stdoutPipe[1], STDOUT_FILENO);
-		dup2(stderrPipe[1], STDERR_FILENO);
-		close(stdoutPipe[1]);
-		close(stderrPipe[1]);
-
-		execlp(selfPath.c_str(), selfPath.c_str(), dlFile.c_str(), "-g", "-O0", ("-o" + outputPath).c_str(), nullptr);
-		_exit(1);
+	if (executionFailed || exitCode != 0) {
+		errorOutput = capturedOutput;
+		log("Compilation failed with exit code " + std::to_string(exitCode));
+		return false;
 	}
-
-	// Parent: read captured output
-	close(stderrPipe[1]);
-	close(stdoutPipe[1]);
-
-	std::string captured;
-	char buf[4096];
-	ssize_t n;
-	while ((n = read(stdoutPipe[0], buf, sizeof(buf))) > 0) {
-		captured.append(buf, n);
-	}
-	close(stdoutPipe[0]);
-	while ((n = read(stderrPipe[0], buf, sizeof(buf))) > 0) {
-		captured.append(buf, n);
-	}
-	close(stderrPipe[0]);
-
-	int status;
-	waitpid(pid, &status, 0);
-
-	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-		return true;
-	}
-
-	errorOutput = captured;
-	log("Compilation failed with exit code " + std::to_string(WEXITSTATUS(status)));
-	return false;
+	return true;
 }
 
-std::string DapServer::findSelfPath() {
-	char buf[4096];
-	ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-	if (len > 0) {
-		buf[len] = '\0';
-		return std::string(buf);
+std::string DapServer::findSelfPath() const {
+	if (!executablePath.empty()) {
+		if (std::filesystem::path(executablePath).is_absolute())
+			return executablePath;
+		return std::filesystem::absolute(executablePath).string();
 	}
 	return "";
 }

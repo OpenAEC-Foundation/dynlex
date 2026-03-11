@@ -1,0 +1,109 @@
+import std.dl
+import vector.dl
+
+class:
+    patterns:
+        quaternion
+    members:
+        w, x, y, z
+
+function a new quaternion with w vw, x vx, y vy and z vz:
+    replacement:
+        @intrinsic("construct", quaternion, vw, vx, vy, vz)
+
+function add value to {quaternion:target}:
+    execute:
+        add value to the w of target
+        add value to the x of target
+        add value to the y of target
+        add value to the z of target
+
+function multiply {quaternion:value} by factor:
+    execute:
+        multiply the w of value by factor
+        multiply the x of value by factor
+        multiply the y of value by factor
+        multiply the z of value by factor
+
+function print {quaternion:msg}:
+    execute:
+        @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g, %g]\n", the w of msg as a float, the x of msg as a float, the y of msg as a float, the z of msg as a float)
+
+function [the|] dot product of {vector:left} and {vector:right}:
+    execute:
+        return the x of left * the x of right + the y of left * the y of right + the z of left * the z of right
+
+function [the|] cross product of {vector:left} and {vector:right}:
+    execute:
+        return a new vector with x the y of left * the z of right - the z of left * the y of right, y the z of left * the x of right - the x of left * the z of right and z the x of left * the y of right - the y of left * the x of right
+
+function [the|] length of {vector:value}:
+    execute:
+        return the square root of the dot product of value and value
+
+function [the|] normalized vector of {vector:value}:
+    execute:
+        set magnitude to the length of value
+        if magnitude = 0.0:
+            return a new vector with x 0.0, y 0.0 and z 0.0
+        return a new vector with x the x of value / magnitude, y the y of value / magnitude and z the z of value / magnitude
+
+function [the|] identity quaternion:
+    execute:
+        return a new quaternion with w 1.0, x 0.0, y 0.0 and z 0.0
+
+function [the|] quaternion product of {quaternion:left} and {quaternion:right}:
+    execute:
+        return a new quaternion with w the w of left * the w of right - the x of left * the x of right - the y of left * the y of right - the z of left * the z of right, x the w of left * the x of right + the x of left * the w of right + the y of left * the z of right - the z of left * the y of right, y the w of left * the y of right - the x of left * the z of right + the y of left * the w of right + the z of left * the x of right and z the w of left * the z of right + the x of left * the y of right - the y of left * the x of right + the z of left * the w of right
+
+function {quaternion:left} * {quaternion:right}:
+    before: $ + $, $ - $
+    execute:
+        return the quaternion product of left and right
+
+function [the|] dot product of {quaternion:left} and {quaternion:right}:
+    execute:
+        return the w of left * the w of right + the x of left * the x of right + the y of left * the y of right + the z of left * the z of right
+
+function [the|] length of {quaternion:value}:
+    execute:
+        return the square root of the dot product of value and value
+
+function [the|] normalized quaternion of {quaternion:value}:
+    execute:
+        set magnitude to the length of value
+        if magnitude = 0.0:
+            return the identity quaternion
+        return a new quaternion with w the w of value / magnitude, x the x of value / magnitude, y the y of value / magnitude and z the z of value / magnitude
+
+function [the|] conjugate of {quaternion:value}:
+    execute:
+        return a new quaternion with w the w of value, x the negative of the x of value, y the negative of the y of value and z the negative of the z of value
+
+function [the|] inverse of {quaternion:value}:
+    execute:
+        set magnitude_squared to the dot product of value and value
+        if magnitude_squared = 0.0:
+            return the identity quaternion
+        set conjugate_value to the conjugate of value
+        return a new quaternion with w the w of conjugate_value / magnitude_squared, x the x of conjugate_value / magnitude_squared, y the y of conjugate_value / magnitude_squared and z the z of conjugate_value / magnitude_squared
+
+function [a|] quaternion rotating over {vector:axis} by degrees degrees:
+    execute:
+        set unit_axis to the normalized vector of axis
+        set half_angle to degrees * 0.008726646259971648
+        set sin_half_angle to the sine of half_angle
+        set cos_half_angle to the cosine of half_angle
+        return the normalized quaternion of a new quaternion with w cos_half_angle, x the x of unit_axis * sin_half_angle, y the y of unit_axis * sin_half_angle and z the z of unit_axis * sin_half_angle
+
+function rotate {vector:value} over {vector:axis} by degrees degrees:
+    execute:
+        set rotation to a quaternion rotating over axis by degrees degrees
+        set point to a new quaternion with w 0.0, x the x of value, y the y of value and z the z of value
+        set rotated to rotation * point * the conjugate of rotation
+        return a new vector with x the x of rotated, y the y of rotated and z the z of rotated
+
+function rotate {quaternion:value} over {vector:axis} by degrees degrees:
+    execute:
+        set rotation to a quaternion rotating over axis by degrees degrees
+        return rotation * value

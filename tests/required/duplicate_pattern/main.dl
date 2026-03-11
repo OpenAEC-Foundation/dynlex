@@ -1,7 +1,11 @@
-effect test:
-	execute:
-		@intrinsic("call", "libc", "printf", "i32", "1")
+function [an|a|] integer:
+	replacement:
+		@intrinsic("type", "int", 32)
 
-effect te[st|]:
+function test:
 	execute:
-		@intrinsic("call", "libc", "printf", "i32", "2")
+		@intrinsic("call", "libc", "printf", an integer, "1")
+
+function te[st|]:
+	execute:
+		@intrinsic("call", "libc", "printf", an integer, "2")

@@ -1,0 +1,40 @@
+import lib/std.dl
+
+class:
+	patterns:
+		[a|] cpu n x m matrix
+	members:
+		values as an array of n * m items
+
+function a gpu n x m matrix:
+	replacement:
+		@intrinsic("matrix", n, m)
+
+function a n x m matrix:
+	replacement:
+		a cpu n x m matrix if the build platform is "cpu", else a gpu n x m matrix
+
+function a new n x m matrix from value:
+	replacement:
+		@intrinsic("construct", a n x m matrix, value)
+
+function [a|an|] identity n x m matrix:
+	execute:
+		if n is 4 and m is 4:
+			return a new n x m matrix from [
+				1.0, 0.0, 0.0, 0.0, 
+				0.0, 1.0, 0.0, 0.0, 
+				0.0, 0.0, 1.0, 0.0, 
+				0.0, 0.0, 0.0, 1.0
+			]
+		else if n is 3 and m is 3:
+			return a new n x n matrix from [
+				1.0, 0.0, 0.0, 
+				0.0, 1.0, 0.0, 
+				0.0, 0.0, 1.0
+			]
+		else if n is 2 and m is 2:
+			return a new n x n matrix from [
+				1.0, 0.0, 
+				0.0, 1.0
+			]

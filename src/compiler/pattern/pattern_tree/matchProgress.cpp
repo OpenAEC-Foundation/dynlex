@@ -11,11 +11,72 @@ MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternRef
 }
 
 MatchProgress::MatchProgress(const MatchProgress &other) {
-	// use implicit copy assignment to shallow copy all members,
-	// then deep copy parent. this avoids maintaining a member list.
-	*this = other;
-	if (other.parent)
-		parent = new MatchProgress(*other.parent);
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = other.match;
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
+}
+
+MatchProgress::MatchProgress(MatchProgress &&other) noexcept
+	: parent(other.parent), context(other.context), rootNode(other.rootNode), currentNode(other.currentNode),
+	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type),
+	  sourceElementIndex(other.sourceElementIndex), sourceCharIndex(other.sourceCharIndex),
+	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex) {
+	other.parent = nullptr;
+}
+
+MatchProgress &MatchProgress::operator=(const MatchProgress &other) {
+	if (this == &other)
+		return *this;
+
+	delete parent;
+	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = other.match;
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	return *this;
+}
+
+MatchProgress &MatchProgress::operator=(MatchProgress &&other) noexcept {
+	if (this == &other)
+		return *this;
+
+	delete parent;
+	parent = other.parent;
+	other.parent = nullptr;
+	context = other.context;
+	rootNode = other.rootNode;
+	currentNode = other.currentNode;
+	match = std::move(other.match);
+	patternReference = other.patternReference;
+	type = other.type;
+	sourceElementIndex = other.sourceElementIndex;
+	sourceCharIndex = other.sourceCharIndex;
+	patternStartPos = other.patternStartPos;
+	patternPos = other.patternPos;
+	sourceArgumentIndex = other.sourceArgumentIndex;
+	return *this;
+}
+
+MatchProgress::~MatchProgress() {
+	delete parent;
+	parent = nullptr;
 }
 
 bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr; }
@@ -39,64 +100,29 @@ std::vector<MatchProgress> MatchProgress::step() {
 	};
 
 	if (!currentNode->matchingDefinitions.empty()) {
-		// end node found — find the first definition with valid precedence
-		// (actual overload selection happens later in type inference/codegen based on argument types)
-		PatternDefinition *def = nullptr;
-		for (auto *d : currentNode->matchingDefinitions) {
-			bool precedenceOK = true;
-			if (d->precedence > 0) {
-				if (d->precedence > maxPrecedence || d->precedence >= minRightPrecedence)
-					precedenceOK = false;
-			}
-			if (precedenceOK) {
-				def = d;
-				break;
-			}
+		// end node found — precedence and ordering are handled later during type inference
+		if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
+			addMatchData(match);
 		}
 
-		if (def) {
-			if (!parent && sourceElementIndex == patternReference->patternElements.size()) {
-				addMatchData(match);
+		if (canBeSubmatch()) {
+			// Try extending as left operand of a new function first (lower LIFO priority).
+			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
+			if (canStartSubmatch() && rootNode->argumentChild) {
+				MatchProgress clone = *this;
+				clone.rootNode = rootNode;
+				// advance past the argument slot — the completed sub-function occupies it
+				clone.currentNode = rootNode->argumentChild;
+				clone.match = {};
+				clone.match.nodesPassed.push_back(clone.currentNode);
+
+				clone.type = SectionType::Function;
+				stepUp(clone);
 			}
-
-			if (canBeSubmatch()) {
-				// Try extending as left operand of a new expression first (lower LIFO priority).
-				// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
-				if (canStartSubmatch() && rootNode->argumentChild) {
-					MatchProgress clone = *this;
-					// the old parent progress becomes 'grandparent'
-					if (parent)
-						clone.parent = new MatchProgress(*parent);
-					clone.rootNode = rootNode;
-					// advance past the argument slot — the completed sub-expression occupies it
-					clone.currentNode = rootNode->argumentChild;
-					clone.match = {};
-					clone.match.nodesPassed.push_back(clone.currentNode);
-
-					// Case C: completed match becomes LEFT argument of new operator.
-					// Only constrain for matches that consumed a left argument (infix operators).
-					// Prefix patterns produce atomic values — no precedence constraint needed.
-					bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
-					clone.maxPrecedence = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
-
-					clone.type = SectionType::Expression;
-					stepUp(clone);
-				}
-				// Step up to parent match (higher LIFO priority — prefer returning to the
-				// parent over speculatively extending into a new expression).
-				if (parent) {
-					stepUp(*parent);
-					// Case B: if this submatch fills a right-side argument (parent matched past first arg slot),
-					// propagate the completed expression's precedence as a constraint.
-					// Skip for default-level patterns — they capture full expressions and shouldn't
-					// constrain parent operators (minRightPrecedence is for same-level associativity).
-					if (parent->match.nodesPassed.size() > 1) {
-						bool startedWithLeftArg = !match.nodesPassed.empty() && match.nodesPassed[0] == rootNode->argumentChild;
-						int rightPrec = (def->precedence > 0 && startedWithLeftArg) ? def->precedence : INT_MAX;
-						if (context->defaultPrecedenceLevel == 0 || rightPrec != context->defaultPrecedenceLevel)
-							nextMatches.back().minRightPrecedence = std::min(nextMatches.back().minRightPrecedence, rightPrec);
-					}
-				}
+			// Step up to parent match (higher LIFO priority — prefer returning to the
+			// parent over speculatively extending into a new function).
+			if (parent) {
+				stepUp(*parent);
 			}
 		}
 	}
@@ -105,35 +131,15 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 		// less priority: arguments
 		if (currentNode->argumentChild) {
+			bool preferFunctionSubmatch =
+				elementToCompare.type == PatternElement::Type::VariableLike &&
+				context->patternTrees[(int)SectionType::Function] &&
+				context->patternTrees[(int)SectionType::Function]->literalChildren.contains(elementToCompare.text);
 
-			if (canStartSubmatch()) {
-				// substitute the following part of the pattern
-				// don't increase sourceElementIndex for the submatch, we need to compare this element in the submatch
-				MatchProgress subMatch = *this;
-				subMatch.currentNode = context->patternTrees[(int)SectionType::Expression];
-				subMatch.rootNode = subMatch.currentNode;
-				subMatch.type = SectionType::Expression;
-				subMatch.patternStartPos = patternPos;
-				subMatch.match = {};
-
-				// Case D: new submatch — reset precedence constraints (fresh expression parse)
-				subMatch.maxPrecedence = INT_MAX;
-				subMatch.minRightPrecedence = INT_MAX;
-
-				// deleting null doesn't matter
-				delete subMatch.parent;
-				subMatch.parent = new MatchProgress(*this);
-				subMatch.parent->currentNode = currentNode->argumentChild;
-				subMatch.parent->match.nodesPassed.push_back(subMatch.parent->currentNode);
-				nextMatches.push_back(subMatch);
-			}
-
-			// use an element as argument
-			if (elementToCompare.type != PatternElement::Type::Other) {
-				// variable or potential variable
+			auto pushArgumentCapture = [&]() -> bool {
+				if (elementToCompare.type == PatternElement::Type::Other)
+					return true;
 				MatchProgress substituteStep = *this;
-				// we continue on the branch that takes an argument now
-
 				substituteStep.currentNode = currentNode->argumentChild;
 				substituteStep.match.nodesPassed.push_back(substituteStep.currentNode);
 				substituteStep.sourceElementIndex++;
@@ -142,12 +148,41 @@ std::vector<MatchProgress> MatchProgress::step() {
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
 				} else {
-					// argument
-					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+					if (!patternReference->function || sourceArgumentIndex >= patternReference->function->arguments.size())
+						return false;
+					substituteStep.match.arguments.push_back(patternReference->function->arguments[sourceArgumentIndex]);
 					substituteStep.sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(substituteStep);
+				return true;
+			};
+
+			auto pushSubmatch = [&]() {
+				if (!canStartSubmatch())
+					return;
+				MatchProgress subMatch = *this;
+				subMatch.currentNode = context->patternTrees[(int)SectionType::Function];
+				subMatch.rootNode = subMatch.currentNode;
+				subMatch.type = SectionType::Function;
+				subMatch.patternStartPos = patternPos;
+				subMatch.match = {};
+
+				delete subMatch.parent;
+				subMatch.parent = new MatchProgress(*this);
+				subMatch.parent->currentNode = currentNode->argumentChild;
+				subMatch.parent->match.nodesPassed.push_back(subMatch.parent->currentNode);
+				nextMatches.push_back(subMatch);
+			};
+
+			if (preferFunctionSubmatch) {
+				if (!pushArgumentCapture())
+					return nextMatches;
+				pushSubmatch();
+			} else {
+				pushSubmatch();
+				if (!pushArgumentCapture())
+					return nextMatches;
 			}
 		}
 		// word capture: matches a single VariableLike token as a string literal
@@ -178,10 +213,10 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 bool MatchProgress::canStartSubmatch() const {
 	// prevent infinite recursion
-	return type != SectionType::Expression || currentNode != rootNode;
+	return type != SectionType::Function || currentNode != rootNode;
 }
 
-bool MatchProgress::canBeSubmatch() const { return type == SectionType::Expression; }
+bool MatchProgress::canBeSubmatch() const { return type == SectionType::Function; }
 
 void MatchProgress::addMatchData(PatternMatch &match) {
 	match.matchedEndNode = currentNode;

@@ -1,7 +1,23 @@
 #include "patternTreeNode.h"
 #include "patternDefinition.h"
 #include <algorithm>
+#include <climits>
+#include <tuple>
 #include <unordered_set>
+
+namespace {
+static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
+	if (!def)
+		return {INT_MAX, INT_MAX, INT_MAX, ""};
+	if (!def->range.line)
+		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
+	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
+}
+
+static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
+	return definitionSortKey(a) < definitionSortKey(b);
+}
+} // namespace
 
 // Link all parent nodes to a shared child for the given element.
 // Reuses existing children where possible; creates one shared new child for parents that lack one.
@@ -119,7 +135,7 @@ static void walkForLessSpecific(
 
 	auto advanceNode = [&](PatternTreeNode *node, bool isMainPath) {
 		// Check if this node is an argument/word node that can absorb multiple elements.
-		// An argument node in a less-specific pattern can match a sub-expression spanning
+		// An argument node in a less-specific pattern can match a sub-function spanning
 		// multiple elements. Keep such nodes in nextLess so they continue absorbing.
 		bool isAbsorbingArgNode =
 			!isMainPath && (node->type == PatternElement::Type::Variable || node->type == PatternElement::Type::Word);
@@ -240,6 +256,7 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 		),
 		result.end()
 	);
+	std::sort(result.begin(), result.end(), definitionComesBefore);
 	return result;
 }
 
@@ -286,17 +303,12 @@ PatternTreeNode::addPatternPart(std::vector<DefinitionPatternElement> &elements,
 	return nullptr;
 }
 
-// Check if a tree node has no children, no matchingDefinitions, and no parameterNames.
-// Such nodes are dead-ends that can be detached from their parent.
-static bool isNodeEmpty(PatternTreeNode *node) {
-	return node->matchingDefinitions.empty() && node->literalChildren.empty() && !node->argumentChild && !node->wordChild &&
-		   node->parameterNames.empty();
-}
-
 // Recursively remove a definition from the tree, walking the element path.
-// At each level: find the child, recurse into it, then detach the child if it became empty.
-// Returns true if `current` is now empty (caller should detach it).
-static bool removeDefinitionPath(
+// Only removes the definition from matchingDefinitions/parameterNames at the endpoint.
+// Does NOT detach empty nodes — keeping the trie structure intact ensures that
+// addElementSequence during re-add finds the same nodes, preserving existing
+// PatternMatch::matchedEndNode pointers.
+static void removeDefinitionPath(
 	PatternTreeNode *current, const std::vector<DefinitionPatternElement> &elements, size_t index, PatternDefinition *definition
 ) {
 	if (index >= elements.size()) {
@@ -304,19 +316,18 @@ static bool removeDefinitionPath(
 		auto &defs = current->matchingDefinitions;
 		defs.erase(std::remove(defs.begin(), defs.end(), definition), defs.end());
 		current->parameterNames.erase(definition);
-		return isNodeEmpty(current);
+		return;
 	}
 
 	const DefinitionPatternElement &elem = elements[index];
 
 	if (elem.type == PatternElement::Type::Choice) {
-		// Branch into each alternative. Build sub-sequences: alternative + remaining elements after choice.
 		for (const auto &alternative : elem.alternatives) {
 			std::vector<DefinitionPatternElement> subElements(alternative.begin(), alternative.end());
 			subElements.insert(subElements.end(), elements.begin() + index + 1, elements.end());
 			removeDefinitionPath(current, subElements, 0, definition);
 		}
-		return isNodeEmpty(current);
+		return;
 	}
 
 	// Find the child node for this element
@@ -332,29 +343,13 @@ static bool removeDefinitionPath(
 	}
 
 	if (!child)
-		return isNodeEmpty(current);
+		return;
 
 	// Clean parameterNames on argument/word nodes
 	if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
 		child->parameterNames.erase(definition);
 
-	// Recurse into child
-	bool childEmpty = removeDefinitionPath(child, elements, index + 1, definition);
-
-	if (childEmpty) {
-		// Detach this specific parent→child link.
-		// Other parents may still point to this child (shared nodes from Choice convergence),
-		// but this parent's link is dead.
-		if (elem.type == PatternElement::Type::Variable)
-			current->argumentChild = nullptr;
-		else if (elem.type == PatternElement::Type::Word)
-			current->wordChild = nullptr;
-		else
-			current->literalChildren.erase(elem.text);
-		// Note: we don't delete the child node (arena allocation — owned by ParseContext)
-	}
-
-	return isNodeEmpty(current);
+	removeDefinitionPath(child, elements, index + 1, definition);
 }
 
 void PatternTreeNode::removePatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition) {

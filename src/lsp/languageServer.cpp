@@ -1,7 +1,10 @@
 #include "languageServer.h"
 #include "lspProtocol.h"
 #include "tcpTransport.h"
+#include <chrono>
 #include <cstring>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 
 namespace lsp {
@@ -11,6 +14,24 @@ LanguageServer::LanguageServer(int port) : port(port) {}
 LanguageServer::LanguageServer(std::unique_ptr<Transport> transport) : transport(std::move(transport)) {}
 
 LanguageServer::~LanguageServer() { shutdown(); }
+
+bool LanguageServer::enableTrace(const std::string &path) {
+	if (path.empty()) {
+		traceFile.reset();
+		traceStream = &std::cerr;
+		return true;
+	}
+
+	traceFile = std::make_unique<std::ofstream>(path, std::ios::out | std::ios::trunc);
+	if (!traceFile->is_open()) {
+		traceFile.reset();
+		traceStream = nullptr;
+		return false;
+	}
+
+	traceStream = traceFile.get();
+	return true;
+}
 
 void LanguageServer::run() {
 	running = true;
@@ -123,6 +144,7 @@ std::string LanguageServer::readMessage() {
 		totalRead += n;
 	}
 
+	traceMessage("recv", body);
 	return body;
 }
 
@@ -132,6 +154,7 @@ void LanguageServer::sendMessage(const Json &message) {
 	}
 
 	std::string body = message.dump();
+	traceMessage("send", body);
 	std::string header = "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n";
 	std::string fullMessage = header + body;
 
@@ -147,8 +170,10 @@ void LanguageServer::sendMessage(const Json &message) {
 }
 
 void LanguageServer::handleMessage(const Json &message) {
-	if (message.contains("id")) {
+	if (message.contains("id") && message.contains("method")) {
 		handleRequest(message);
+	} else if (message.contains("id")) {
+		handleResponse(message);
 	} else {
 		handleNotification(message);
 	}
@@ -168,9 +193,20 @@ void LanguageServer::handleRequest(const Json &message) {
 			sendResponse(id, result);
 		} else if (method == "shutdown") {
 			sendResponse(id, nullptr);
+		} else if (method == "textDocument/completion") {
+			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
+			sendResponse(id, onCompletion(p));
 		} else if (method == "textDocument/definition") {
 			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
 			auto result = onDefinition(p);
+			if (result) {
+				sendResponse(id, *result);
+			} else {
+				sendResponse(id, nullptr);
+			}
+		} else if (method == "textDocument/hover") {
+			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
+			auto result = onHover(p);
 			if (result) {
 				sendResponse(id, *result);
 			} else {
@@ -184,6 +220,16 @@ void LanguageServer::handleRequest(const Json &message) {
 			DocumentSymbolParams p = params.get<DocumentSymbolParams>();
 			auto result = onDocumentSymbol(p);
 			sendResponse(id, result);
+		} else if (method == "textDocument/codeAction") {
+			CodeActionParams p = params.get<CodeActionParams>();
+			auto result = onCodeAction(p);
+			sendResponse(id, result);
+		} else if (method == "dynlex/renderSemanticTokens") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			sendResponse(id, onRenderSemanticTokens(p));
+		} else if (method == "dynlex/instantiationsInDocument") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			sendResponse(id, onInstantiationsInDocument(p));
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
@@ -216,6 +262,11 @@ void LanguageServer::handleNotification(const Json &message) {
 		} else if (method == "textDocument/didSave") {
 			DidSaveTextDocumentParams p = params.get<DidSaveTextDocumentParams>();
 			onDidSave(p);
+		} else if (method == "dynlex/activeCursorChanged") {
+			ActiveCursorParams p = params.get<ActiveCursorParams>();
+			onActiveCursorChanged(p);
+		} else if (method == "dynlex/selectInstantiation") {
+			onSelectInstantiation(params);
 		}
 	} catch (const std::exception &e) {
 		logError("Error handling notification " + method + ": " + e.what());
@@ -237,9 +288,37 @@ void LanguageServer::sendNotification(const std::string &method, const Json &par
 	sendMessage(notification);
 }
 
+void LanguageServer::sendRequest(const std::string &method, const Json &params) {
+	Json request = {{"jsonrpc", "2.0"}, {"id", nextRequestId++}, {"method", method}, {"params", params}};
+	sendMessage(request);
+}
+
+void LanguageServer::handleResponse(const Json &message) { (void)message; }
+
 void LanguageServer::log(const std::string &message) { std::cerr << "[LSP] " << message << std::endl; }
 
 void LanguageServer::logError(const std::string &message) { std::cerr << "[LSP ERROR] " << message << std::endl; }
+
+void LanguageServer::traceMessage(std::string_view direction, const std::string &body) {
+	if (!traceStream)
+		return;
+
+	using namespace std::chrono;
+	auto now = system_clock::now();
+	auto nowTime = system_clock::to_time_t(now);
+	auto millis = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+	std::tm tm{};
+#ifdef _WIN32
+	localtime_s(&tm, &nowTime);
+#else
+	localtime_r(&nowTime, &tm);
+#endif
+
+	(*traceStream) << "[LSP TRACE " << direction << " " << std::put_time(&tm, "%F %T") << '.' << std::setw(3)
+				   << std::setfill('0') << millis.count() << "] " << body << '\n';
+	traceStream->flush();
+}
 
 // Default implementations of virtual methods
 
@@ -270,8 +349,22 @@ void LanguageServer::onDidSave(const DidSaveTextDocumentParams & /*params*/) {
 
 std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
 
+std::optional<Hover> LanguageServer::onHover(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
+
+CompletionList LanguageServer::onCompletion(const TextDocumentPositionParams & /*params*/) { return {}; }
+
 SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams & /*params*/) { return SemanticTokens{}; }
 
 std::vector<DocumentSymbol> LanguageServer::onDocumentSymbol(const DocumentSymbolParams & /*params*/) { return {}; }
+
+std::vector<CodeAction> LanguageServer::onCodeAction(const CodeActionParams & /*params*/) { return {}; }
+
+std::string LanguageServer::onRenderSemanticTokens(const TextDocumentIdentifier & /*params*/) { return {}; }
+
+void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
+
+Json LanguageServer::onInstantiationsInDocument(const TextDocumentIdentifier & /*params*/) { return Json::array(); }
+
+void LanguageServer::onSelectInstantiation(const Json & /*params*/) {}
 
 } // namespace lsp

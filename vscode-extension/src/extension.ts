@@ -16,12 +16,93 @@ let reconnectAttempts = 0;
 let reconnectTimeout: NodeJS.Timeout | undefined;
 let isShuttingDown = false;
 let extensionPath: string;
+let cursorClientId = '';
+let lastSentCursorKey: string | undefined;
+let instantiationHoverProvider: DynLexInstantiationHoverProvider | undefined;
 
 const BASE_RECONNECT_DELAY = 5000; // 5 seconds
 const MAX_RECONNECT_DELAY = 60000; // 1 minute
 
+interface DynLexInstantiationOption {
+    key: string;
+    label: string;
+}
+
+interface DynLexInstantiationLensEntry {
+    selectionKey: string;
+    currentKey: string;
+    range: vscode.Range;
+    options: DynLexInstantiationOption[];
+}
+
+class DynLexInstantiationHoverProvider implements vscode.HoverProvider {
+    async provideHover(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Hover | undefined> {
+        if (!client || document.languageId !== 'dynlex') {
+            return undefined;
+        }
+
+        try {
+            const response = await client.sendRequest('dynlex/instantiationsInDocument', {
+                uri: document.uri.toString()
+            }) as unknown;
+            if (!Array.isArray(response)) {
+                return undefined;
+            }
+
+            const entries: DynLexInstantiationLensEntry[] = [];
+            for (const raw of response) {
+                if (!raw || typeof raw !== 'object') {
+                    continue;
+                }
+                const r = (raw as any).range;
+                const start = r?.start;
+                const end = r?.end;
+                if (!start || !end) {
+                    continue;
+                }
+                const optionsRaw = (raw as any).options;
+                if (!Array.isArray(optionsRaw) || optionsRaw.length === 0) {
+                    continue;
+                }
+                const options: DynLexInstantiationOption[] = optionsRaw
+                    .filter((option: any) => option && typeof option.key === 'string' && typeof option.label === 'string')
+                    .map((option: any) => ({ key: option.key as string, label: option.label as string }));
+                entries.push({
+                    selectionKey: String((raw as any).selectionKey || ''),
+                    currentKey: String((raw as any).currentKey || ''),
+                    range: new vscode.Range(
+                        new vscode.Position(start.line, start.character),
+                        new vscode.Position(end.line, end.character),
+                    ),
+                    options,
+                });
+            }
+
+            const entry = entries.find(item => item.range.contains(position));
+            if (!entry || !entry.selectionKey) {
+                return undefined;
+            }
+
+            const markdown = new vscode.MarkdownString('', true);
+            markdown.isTrusted = { enabledCommands: ['dynlex.selectInstantiationPath'] };
+            markdown.appendMarkdown('pick an instance:\n\n');
+            for (const option of entry.options) {
+                const selectedPrefix = option.key === entry.currentKey ? 'current: ' : '';
+                const commandArgs = encodeURIComponent(JSON.stringify([entry.selectionKey, option.key]));
+                markdown.appendMarkdown(`[${selectedPrefix}${option.label}](command:dynlex.selectInstantiationPath?${commandArgs})  \n`);
+            }
+
+            return new vscode.Hover(markdown, entry.range);
+        } catch (err) {
+            logError(`Failed to fetch DynLex hover paths: ${err}`);
+            return undefined;
+        }
+    }
+}
+
 export function activate(context: vscode.ExtensionContext) {
     extensionPath = context.extensionPath;
+    cursorClientId = vscode.env.sessionId || `dynlex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
     outputChannel = vscode.window.createOutputChannel('DynLex Language Server');
     context.subscriptions.push(outputChannel);
 
@@ -87,7 +168,45 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('dynlex.restartServer', () => {
             log('Restarting language server...');
             reconnectAttempts = 0;
-            stopLanguageServer().then(() => startLanguageServer(context));
+            void stopLanguageServer().then(() => startLanguageServer(context));
+        })
+    );
+
+    instantiationHoverProvider = new DynLexInstantiationHoverProvider();
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider({ language: 'dynlex', scheme: 'file' }, instantiationHoverProvider)
+    );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dynlex.selectInstantiationPath', async (selectionKey: string, instantiationKey: string) => {
+            if (!client || !selectionKey || !instantiationKey) {
+                return;
+            }
+            await client.sendNotification('dynlex/selectInstantiation', {
+                selectionKey,
+                instantiationKey,
+            });
+            await vscode.commands.executeCommand('editor.action.showHover');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            void sendActiveCursorNotification(editor);
+        })
+    );
+    context.subscriptions.push(
+        vscode.window.onDidChangeTextEditorSelection((event) => {
+            if (event.textEditor === vscode.window.activeTextEditor) {
+                void sendActiveCursorNotification(event.textEditor);
+            }
+        })
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            const editor = vscode.window.activeTextEditor;
+            if (editor && event.document === editor.document) {
+                void sendActiveCursorNotification(editor);
+            }
         })
     );
 }
@@ -146,6 +265,22 @@ function getServerPort(): number {
     return config.get<number>('server.port') || 5007;
 }
 
+function getServerHost(): string {
+    const config = vscode.workspace.getConfiguration('dynlex');
+    const host = (config.get<string>('server.host') || '').trim();
+    return host.length > 0 ? host : '127.0.0.1';
+}
+
+function getServerHosts(): string[] {
+    const configured = getServerHost();
+    const hosts = [configured];
+    // For local development/debugging, try both loopback families in case one is unavailable.
+    if (configured === '127.0.0.1' || configured === '::1' || configured === 'localhost') {
+        hosts.push('127.0.0.1', '::1', 'localhost');
+    }
+    return Array.from(new Set(hosts));
+}
+
 function getServerFlags(): string[] {
     const config = vscode.workspace.getConfiguration('dynlex');
     const flags = config.get<string>('server.flags') || '';
@@ -157,56 +292,61 @@ function useExternalServer(): boolean {
     return config.get<boolean>('server.useExternal') || false;
 }
 
-async function waitForPort(port: number, timeoutMs: number = 30000): Promise<boolean> {
+async function waitForPort(port: number, hosts: string[], timeoutMs: number = 30000): Promise<string | undefined> {
     const startTime = Date.now();
     let attempt = 0;
     while (Date.now() - startTime < timeoutMs) {
         if (isShuttingDown) {
-            return false;
+            return undefined;
         }
         attempt++;
-        const connected = await new Promise<boolean>(resolve => {
-            const socket = new net.Socket();
-            socket.setTimeout(500);
-            socket.on('connect', () => {
-                socket.destroy();
-                resolve(true);
+        for (const host of hosts) {
+            const connected = await new Promise<boolean>(resolve => {
+                const socket = new net.Socket();
+                socket.setTimeout(500);
+                socket.on('connect', () => {
+                    socket.destroy();
+                    resolve(true);
+                });
+                socket.on('error', () => {
+                    socket.destroy();
+                    resolve(false);
+                });
+                socket.on('timeout', () => {
+                    socket.destroy();
+                    resolve(false);
+                });
+                socket.connect(port, host);
             });
-            socket.on('error', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            socket.on('timeout', () => {
-                socket.destroy();
-                resolve(false);
-            });
-            socket.connect(port, '127.0.0.1');
-        });
-        if (connected) {
-            return true;
+            if (connected) {
+                return host;
+            }
         }
         log(`Connection attempt ${attempt} failed, retrying...`);
         await new Promise(resolve => setTimeout(resolve, 200));
     }
-    return false;
+    return undefined;
 }
 
 async function startLanguageServer(context: vscode.ExtensionContext) {
     const port = getServerPort();
+    const hosts = getServerHosts();
+    let activeHost = hosts[0];
 
     if (useExternalServer()) {
-        log(`Waiting for external server on port ${port}...`);
-        const ready = await waitForPort(port);
-        if (!ready) {
-            logError(`Timed out waiting for external server on port ${port}`);
-            vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on port ${port}`);
+        log(`Waiting for external server on ${hosts.join(', ')}:${port}...`);
+        const readyHost = await waitForPort(port, hosts);
+        if (!readyHost) {
+            logError(`Timed out waiting for external server on ${hosts.join(', ')}:${port}`);
+            vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on ${hosts.join(', ')}:${port}`);
             return;
         }
+        activeHost = readyHost;
         log(`External server is ready`);
     } else {
         const serverPath = getServerPath();
         const extraFlags = getServerFlags();
-        const args = ['--lsp', ...extraFlags];
+        const args = ['--lsp', '--port', String(port), ...extraFlags];
 
         log(`Server path resolved to: ${serverPath}`);
         log(`Starting language server: ${serverPath} ${args.join(' ')} on port ${port}`);
@@ -245,7 +385,7 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
 
     // Connect to the server via TCP
     try {
-        await connectToServer(port, context);
+        await connectToServer(port, activeHost, context);
         reconnectAttempts = 0;
     } catch (err) {
         logError(`Error connecting to server: ${err}`);
@@ -253,15 +393,18 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
     }
 }
 
-async function connectToServer(port: number, context: vscode.ExtensionContext) {
-    log(`Connecting to language server on port ${port}...`);
+async function connectToServer(port: number, host: string, context: vscode.ExtensionContext) {
+    log(`Connecting to language server on ${host}:${port}...`);
 
     const serverOptions = (): Promise<StreamInfo> => {
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
+            socket.setTimeout(2000);
 
             socket.on('connect', () => {
-                log('Connected to language server');
+                // Disable idle timeout after connect; this socket stays open for the full LSP session.
+                socket.setTimeout(0);
+                log(`Connected to language server at ${host}:${port}`);
                 resolve({
                     reader: socket,
                     writer: socket
@@ -269,19 +412,19 @@ async function connectToServer(port: number, context: vscode.ExtensionContext) {
             });
 
             socket.on('error', (err) => {
-                logError(`Socket error: ${err.message}`);
-                reject(err);
+                reject(new Error(`Unable to connect to ${host}:${port} (${err.message})`));
+            });
+
+            socket.on('timeout', () => {
+                socket.destroy();
+                reject(new Error(`Unable to connect to ${host}:${port} (timeout)`));
             });
 
             socket.on('close', () => {
                 log('Socket closed');
-                if (!isShuttingDown && client) {
-                    vscode.window.showErrorMessage('Connection to DynLex language server lost.');
-                    scheduleReconnect(context);
-                }
             });
 
-            socket.connect(port, '127.0.0.1');
+            socket.connect(port, host);
         });
     };
 
@@ -304,10 +447,46 @@ async function connectToServer(port: number, context: vscode.ExtensionContext) {
         await client.start();
         log('Language client started successfully');
         context.subscriptions.push(client);
+        lastSentCursorKey = undefined;
+        await sendActiveCursorNotification(vscode.window.activeTextEditor);
     } catch (err) {
         logError(`Failed to start language client: ${err}`);
         throw err;
     }
+}
+
+async function sendActiveCursorNotification(editor: vscode.TextEditor | undefined) {
+    if (!client) {
+        return;
+    }
+
+    const document = editor?.document;
+    if (!editor || !document || document.languageId !== 'dynlex') {
+        const key = `${cursorClientId}:none`;
+        if (lastSentCursorKey === key) {
+            return;
+        }
+        lastSentCursorKey = key;
+        await client.sendNotification('dynlex/activeCursorChanged', { clientId: cursorClientId });
+        return;
+    }
+
+    const position = editor.selection.active;
+    const payload = {
+        clientId: cursorClientId,
+        uri: document.uri.toString(),
+        version: document.version,
+        position: {
+            line: position.line,
+            character: position.character,
+        }
+    };
+    const key = `${cursorClientId}:${payload.uri}:${payload.version}:${payload.position.line}:${payload.position.character}`;
+    if (lastSentCursorKey === key) {
+        return;
+    }
+    lastSentCursorKey = key;
+    await client.sendNotification('dynlex/activeCursorChanged', payload);
 }
 
 function scheduleReconnect(context: vscode.ExtensionContext) {

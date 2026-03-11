@@ -1,0 +1,148 @@
+name: Cross-Platform Trace Compare
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_file:
+        description: Source file to compile for trace comparison
+        required: true
+        default: tests/required/specificity/main.dl
+        type: string
+      trace_env:
+        description: Trace env var assignment (empty to disable)
+        required: false
+        default: DYNLEX_TRACE_RESOLUTION=1
+        type: string
+
+jobs:
+  trace-compile:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            label: linux
+          - os: macos-14
+            label: macos
+          - os: windows-latest
+            label: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/install.sh
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: ./scripts/install.ps1
+        shell: pwsh
+
+      - name: Configure LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if brew info llvm@20 >/dev/null 2>&1; then
+            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
+          else
+            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
+          fi
+          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
+
+      - name: Build compiler
+        run: ./scripts/build.sh --lint=false
+        shell: bash
+
+      - name: Run traced compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p trace
+          COMPILER=./build/dynlex
+          if [ -x ./build/dynlex.exe ]; then
+            COMPILER=./build/dynlex.exe
+          fi
+
+          SOURCE_FILE="${{ inputs.source_file }}"
+          TRACE_ENV="${{ inputs.trace_env }}"
+
+          set +e
+          if [ -n "$TRACE_ENV" ]; then
+            env "$TRACE_ENV" "$COMPILER" "$SOURCE_FILE" -o trace/compiled.out >trace/stdout.log 2>trace/stderr.log
+          else
+            "$COMPILER" "$SOURCE_FILE" -o trace/compiled.out >trace/stdout.log 2>trace/stderr.log
+          fi
+          status=$?
+          set -e
+          echo "$status" > trace/exit_code.txt
+
+          awk '/^\[res\]/ { print }' trace/stderr.log > trace/resolution.log || true
+
+      - name: Upload trace artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-${{ matrix.label }}
+          path: trace/*
+
+  compare-traces:
+    needs: trace-compile
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: traces
+
+      - name: Compare traces
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          root = pathlib.Path("traces")
+          targets = {
+              "linux": root / "trace-linux",
+              "macos": root / "trace-macos",
+              "windows": root / "trace-windows",
+          }
+
+          missing = [name for name, d in targets.items() if not d.exists()]
+          if missing:
+              print("Missing artifacts:", ", ".join(missing))
+              sys.exit(1)
+
+          exit_codes = {}
+          traces = {}
+          for name, d in targets.items():
+              exit_codes[name] = (d / "exit_code.txt").read_text(encoding="utf-8").strip()
+              traces[name] = (d / "resolution.log").read_text(encoding="utf-8").splitlines()
+
+          print("Exit codes:", exit_codes)
+          code_set = set(exit_codes.values())
+          if len(code_set) != 1:
+              print("Exit code mismatch across platforms.")
+              sys.exit(1)
+
+          names = ["linux", "macos", "windows"]
+          max_len = max(len(traces[n]) for n in names)
+          mismatch = None
+          for i in range(max_len):
+              row = []
+              for n in names:
+                  t = traces[n]
+                  row.append(t[i] if i < len(t) else "<EOF>")
+              if row.count(row[0]) != len(row):
+                  mismatch = (i, row)
+                  break
+
+          if mismatch:
+              i, row = mismatch
+              print(f"First trace divergence at line {i + 1}:")
+              for n, val in zip(names, row):
+                  print(f"  {n}: {val}")
+              sys.exit(1)
+
+          print("No cross-platform trace divergence detected for specificity.")
+          PY

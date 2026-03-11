@@ -2,50 +2,50 @@ import lib/std.dl
 
 # Fragment shader I/O
 
-macro expression [the|] fragment coordinates:
+function [the|] fragment coordinates:
     replacement:
         @intrinsic("shader input", "FragCoord")
 
-macro expression [the|] fragment x coordinate:
+function [the|] fragment x coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 0)
 
-macro expression [the|] fragment y coordinate:
+function [the|] fragment y coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
 
-macro effect set [the|] fragment color to r g b a:
+function set [the|] fragment color to r g b a:
     replacement:
         @intrinsic("shader output", r, g, b, a)
 
 # Vertex shader I/O
 
-macro expression [the|] vertex position:
+function [the|] vertex position:
     replacement:
         @intrinsic("shader input", "Position")
 
-macro expression [the|] vertex x:
+function [the|] vertex x:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 0)
 
-macro expression [the|] vertex y:
+function [the|] vertex y:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 1)
 
-macro expression [the|] vertex z:
+function [the|] vertex z:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 2)
 
-macro expression [the|] vertex w:
+function [the|] vertex w:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
-macro effect set [the|] output position to x y z w:
+function set [the|] output position to x y z w:
     replacement:
         @intrinsic("shader output", x, y, z, w)
 
 # Shader uniforms (values passed from host each frame)
 
-macro expression [the|] shader time:
+function [the|] shader time:
     replacement:
         @intrinsic("shader uniform", "time")

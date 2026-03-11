@@ -1,0 +1,13 @@
+# LeakSanitizer suppressions for third-party process-lifetime allocations.
+# Keep this list focused on external stacks (LLVM/libstdc++/glibc), not DynLex code.
+
+# LLVM backend target-machine and register metadata caches.
+leak:llvm::X86TargetMachine::getSubtargetImpl
+leak:llvm::X86Subtarget::X86Subtarget
+leak:createX86MCRegisterInfo
+leak:llvm::MCRegisterInfo::getCachedAliasesOf
+
+# LLVM codegen pass-manager allocations that intentionally persist for process lifetime.
+leak:llvm::SelectionDAGISel
+leak:llvm::MachineFunctionPass::runOnFunction
+leak:llvm::legacy::PassManagerImpl::run

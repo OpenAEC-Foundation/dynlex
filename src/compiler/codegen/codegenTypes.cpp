@@ -14,11 +14,27 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <unordered_map>
 
 // Get the LLVM type for a given DataType
 llvm::Type *getLLVMType(ParseContext &context, DataType type) { return type.toLLVM(*context.llvmContext); }
+
+static DataType concretizeClassType(DataType type) {
+	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
+		!type.classDefinition->instantiations.empty()) {
+		type.classInstIndex = 0;
+	}
+	return type;
+}
+
+static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName) {
+	if (fieldName == "data" && ownerType.isBytePointer())
+		return ownerType;
+	return {};
+}
 
 // Get the DWARF debug type for a given DataType
 llvm::DIType *getDIType(ParseContext &context, DataType type) {
@@ -38,15 +54,27 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	switch (type.kind) {
 	case DataType::Kind::Bool:
 		return context.diBuilder->createBasicType("bool", 8, llvm::dwarf::DW_ATE_boolean);
-	case DataType::Kind::Integer: {
-		int bits = type.byteSize * 8;
-		return context.diBuilder->createBasicType("i" + std::to_string(type.byteSize * 8), bits, llvm::dwarf::DW_ATE_signed);
-	}
 	case DataType::Kind::Float: {
-		int bits = type.byteSize * 8;
-		std::string name = type.byteSize == 4 ? "f32" : "f64";
+		int bits = type.numericSize * 8;
+		std::string name = type.numericSize == 4 ? "f32" : "f64";
 		return context.diBuilder->createBasicType(name, bits, llvm::dwarf::DW_ATE_float);
 	}
+	case DataType::Kind::Int: {
+		int bits = type.numericSize * 8;
+		return context.diBuilder->createBasicType("i" + std::to_string(bits), bits, llvm::dwarf::DW_ATE_signed);
+	}
+	case DataType::Kind::Array: {
+		if (!type.arrayElementType)
+			return nullptr;
+		llvm::DIType *elementType = getDIType(context, *type.arrayElementType);
+		if (!elementType)
+			return nullptr;
+		auto subscripts = context.diBuilder->getOrCreateArray({context.diBuilder->getOrCreateSubrange(0, type.arraySize)});
+		return context.diBuilder->createArrayType(static_cast<uint64_t>(type.getByteSize()) * 8, 0, elementType, subscripts);
+	}
+	case DataType::Kind::Vector:
+	case DataType::Kind::Matrix:
+		return nullptr;
 	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
 			return nullptr;
@@ -116,47 +144,47 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 	return builder.CreateICmpNE(condValue, llvm::ConstantInt::get(intTy, 0), name);
 }
 
-// Resolve a Variable expression one step through the current macro's binding map.
-// Returns the bound expression (which lives in the caller's scope), or expr unchanged
+// Resolve a Variable function one step through the current macro's binding map.
+// Returns the bound function (which lives in the caller's scope), or expr unchanged
 // if no binding exists. Each resolution crosses one scope boundary — the caller must
 // pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
-Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
+Function *resolveVariableBinding(ParseContext &context, Function *expr) {
+	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
 		return expr;
-	auto it = context.macroExpressionBindings.find(expr->variable->name);
-	if (it != context.macroExpressionBindings.end() && it->second != expr)
+	auto it = context.macroFunctionBindings.find(expr->variable->name);
+	if (it != context.macroFunctionBindings.end() && it->second != expr)
 		return it->second;
 	return expr;
 }
 
-// Resolve an expression through all macro layers: variable bindings (which cross
+// Resolve an function through all macro layers: variable bindings (which cross
 // scope boundaries upward) and macro PatternCall expansions (which push new scopes
 // downward). Variable bindings don't modify the stack; PatternCall expansions push
 // one scope each. Returns the number of scopes pushed, so the caller can pop them
 // when done. Use this when you need to see through macro indirection to inspect the
-// underlying expression kind (e.g., detecting a property intrinsic inside a store).
-void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
+// underlying function kind (e.g., detecting a property intrinsic inside a store).
+void resolveThroughMacroLayers(ParseContext &context, Function *&expr) {
 	while (expr) {
 		// Variable bindings: resolve in current scope, or pop to parent scopes
-		if (expr->kind == Expression::Kind::Variable && expr->variable) {
-			auto it = context.macroExpressionBindings.find(expr->variable->name);
-			if (it != context.macroExpressionBindings.end() && it->second != expr) {
+		if (expr->kind == Function::Kind::Variable && expr->variable) {
+			auto it = context.macroFunctionBindings.find(expr->variable->name);
+			if (it != context.macroFunctionBindings.end() && it->second != expr) {
 				expr = it->second;
 				continue;
 			}
 			// Not found in current scope — try parent scopes
 			if (!context.macroBindingStack.empty()) {
-				context.macroExpressionBindings = context.macroBindingStack.top();
+				context.macroFunctionBindings = context.macroBindingStack.top();
 				context.macroBindingStack.pop();
 				continue;
 			}
 		}
 		// Macro PatternCall: expand into the macro body, pushing a new binding scope
-		std::unordered_map<std::string, Expression *> innerBindings;
-		Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+		std::unordered_map<std::string, Function *> innerBindings;
+		Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 		if (bodyExpr) {
-			context.macroBindingStack.push(context.macroExpressionBindings);
-			context.macroExpressionBindings = std::move(innerBindings);
+			context.macroBindingStack.push(context.macroFunctionBindings);
+			context.macroFunctionBindings = std::move(innerBindings);
 			expr = bodyExpr;
 			continue;
 		}
@@ -167,32 +195,52 @@ void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
 // MacroScopeGuard implementation
 void MacroScopeGuard::popToCallerScope() {
 	assert(!context.macroBindingStack.empty());
-	savedBindings = context.macroExpressionBindings;
-	context.macroExpressionBindings = context.macroBindingStack.top();
+	savedBindings = context.macroFunctionBindings;
+	context.macroFunctionBindings = context.macroBindingStack.top();
 	context.macroBindingStack.pop();
 	active = true;
 }
 
 MacroScopeGuard::~MacroScopeGuard() {
 	if (active) {
-		context.macroBindingStack.push(context.macroExpressionBindings);
-		context.macroExpressionBindings = savedBindings;
+		context.macroBindingStack.push(context.macroFunctionBindings);
+		context.macroFunctionBindings = savedBindings;
 	}
 }
 
-// Resolve the effective type of an expression during codegen.
-// Follows macro expression bindings and pattern parameter types to compute the real type,
-// even for expressions inside non-macro function bodies whose .type was never inferred.
-DataType getEffectiveType(ParseContext &context, Expression *expr) {
+// Resolve the effective type of an function during codegen.
+// Follows macro function bindings and pattern parameter types to compute the real type,
+// even for functions inside non-macro function bodies whose .type was never inferred.
+DataType getEffectiveType(ParseContext &context, Function *expr) {
 	if (!expr)
 		return {};
 
 	switch (expr->kind) {
-	case Expression::Kind::Literal:
-		return expr->type; // Literal types are always set by inference
+	case Function::Kind::Literal:
+		if (expr->type.isDeduced())
+			return expr->type;
+		if (std::holds_alternative<double>(expr->literalValue)) {
+			double value = std::get<double>(expr->literalValue);
+			std::string_view literalText = expr->range.subString;
+			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
+								   literalText.find('e') != std::string_view::npos ||
+								   literalText.find('E') != std::string_view::npos;
+			if (!explicitlyFloat && std::trunc(value) == value)
+				return {DataType::Kind::Int, 4};
+			return {DataType::Kind::Float, 8};
+		}
+		if (std::holds_alternative<std::string>(expr->literalValue)) {
+			DataType stringType{DataType::Kind::Int, 1};
+			stringType.pointerDepth = 1;
+			return stringType;
+		}
+		return expr->type;
 
-	case Expression::Kind::Variable: {
-		Expression *resolved = resolveVariableBinding(context, expr);
+	case Function::Kind::ArrayLiteral:
+		return expr->type;
+
+	case Function::Kind::Variable: {
+		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (!context.macroBindingStack.empty())
@@ -218,20 +266,21 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		return expr->type;
 	}
 
-	case Expression::Kind::IntrinsicCall: {
+	case Function::Kind::IntrinsicCall: {
 		// For intrinsics in non-macro function bodies, expr->type may be Undeduced.
 		// Compute the type dynamically from the resolved argument types.
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
 		if (info) {
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
-				if (info->argCount == 2) {
+				if (expr->arguments.size() == 2) {
 					return getEffectiveType(context, expr->arguments[1]);
 				} else {
 					DataType leftType = getEffectiveType(context, expr->arguments[1]);
 					DataType rightType = getEffectiveType(context, expr->arguments[2]);
-					return isPointerArithmeticOperator(expr->intrinsicName) ? DataType::promoteArithmetic(leftType, rightType)
-																			: DataType::promote(leftType, rightType);
+					DataType result;
+					DataType::promoteArithmetic(leftType, rightType, result);
+					return result;
 				}
 			case IntrinsicReturnKind::Bool:
 				return {DataType::Kind::Bool};
@@ -243,39 +292,184 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 				break;
 			}
 		}
-		if (expr->intrinsicName == "address of" && expr->arguments.size() >= 2)
+		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+		if (kind == IntrinsicKind::AddressOf)
 			return getEffectiveType(context, expr->arguments[1]).pointed();
-		if (expr->intrinsicName == "dereference" && expr->arguments.size() >= 2)
-			return getEffectiveType(context, expr->arguments[1]).dereferenced();
-		if (expr->intrinsicName == "load at")
-			return {DataType::Kind::Integer, 8};
-		if (expr->intrinsicName == "return" && expr->arguments.size() >= 2)
-			return getEffectiveType(context, expr->arguments[1]);
-		if (expr->intrinsicName == "call") {
-			// Format: @intrinsic("call", "library", "function", "return type", args...)
-			if (expr->arguments.size() >= 4) {
-				std::string retTypeStr;
-				if (auto *str = std::get_if<std::string>(&expr->arguments[3]->literalValue))
-					retTypeStr = *str;
-				if (!retTypeStr.empty())
-					return DataType::fromString(retTypeStr);
+		if (kind == IntrinsicKind::Dereference)
+			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
+		if (kind == IntrinsicKind::LoadAt) {
+			DataType ptrType = getEffectiveType(context, expr->arguments[1]);
+			if (ptrType.isPointer()) {
+				DataType pointedType = ptrType.dereferenced();
+				if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType)
+					return *pointedType.arrayElementType;
+				return pointedType;
 			}
-			return {DataType::Kind::Integer, 4};
+			return {DataType::Kind::Int, 8};
 		}
-		if (expr->intrinsicName == "construct" || expr->intrinsicName == "property")
+		if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
+			return getEffectiveType(context, expr->arguments[1]);
+		if (kind == IntrinsicKind::Call) {
+			// Format: @intrinsic("call", "library", "function", type_ref, args...)
+			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
+			if (retTypeRef.kind == DataType::Kind::Type)
+				return retTypeRef.toReferencedType();
+			return {DataType::Kind::Int, 4};
+		}
+		if (kind == IntrinsicKind::Construct)
 			return expr->type; // DataType fully determined during inference
-		if (expr->intrinsicName == "cast" && expr->arguments.size() >= 3) {
-			if (expr->type.kind == DataType::Kind::Class)
+		if (kind == IntrinsicKind::Type) {
+			Function *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
+			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
+				DataType typeRef;
+				typeRef.kind = DataType::Kind::Type;
+				if (*kindStr == "int") {
+					typeRef.referencedKind = DataType::Kind::Int;
+					typeRef.numericSize = 4;
+				} else if (*kindStr == "float") {
+					typeRef.referencedKind = DataType::Kind::Float;
+					typeRef.numericSize = 8;
+				} else if (*kindStr == "bool") {
+					typeRef.referencedKind = DataType::Kind::Bool;
+				} else if (*kindStr == "void") {
+					typeRef.referencedKind = DataType::Kind::Void;
+				} else if (*kindStr == "string") {
+					typeRef.referencedKind = DataType::Kind::Int;
+					typeRef.numericSize = 1;
+					typeRef.pointerDepth = 1;
+				} else if (*kindStr == "type") {
+					typeRef.referencedKind = DataType::Kind::Type;
+				} else {
+					return expr->type;
+				}
+				if (expr->arguments.size() > 2) {
+					Function *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
+					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
+						typeRef.numericSize = static_cast<int>(*bits) / 8;
+				}
+				return typeRef;
+			}
+		}
+		if (kind == IntrinsicKind::AddPointerDepth) {
+			DataType innerType = getEffectiveType(context, expr->arguments[1]);
+			if (innerType.kind == DataType::Kind::Type) {
+				innerType.pointerDepth++;
+				return innerType;
+			}
+		}
+			if (kind == IntrinsicKind::SizeOf)
+				return {DataType::Kind::Int, 8};
+			if (kind == IntrinsicKind::TypeOf) {
+				DataType valueType = getEffectiveType(context, expr->arguments[1]);
+				if (valueType.isDeduced()) {
+					DataType typeRef;
+					typeRef.kind = DataType::Kind::Type;
+					typeRef.referencedKind = valueType.kind;
+					typeRef.numericSize = valueType.numericSize;
+					typeRef.pointerDepth = valueType.pointerDepth;
+					typeRef.classDefinition = valueType.classDefinition;
+					typeRef.classInstIndex = valueType.classInstIndex;
+					typeRef.arraySize = valueType.arraySize;
+					typeRef.matrixRowCount = valueType.matrixRowCount;
+					typeRef.arrayElementType =
+						valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+					return typeRef;
+				}
+			}
+			if (kind == IntrinsicKind::Array)
 				return expr->type;
+		if ((kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix) && expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		if (kind == IntrinsicKind::Property) {
+			DataType ownerType = getEffectiveType(context, expr->arguments[1]);
+			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[2]));
+			DataType builtInPropertyType = resolveBuiltInPropertyType(ownerType, fieldName);
+			if (builtInPropertyType.isDeduced())
+				return builtInPropertyType;
+			return expr->type; // Class property type determined during inference
+		}
+		if (kind == IntrinsicKind::Cast) {
+			if (expr->type.kind == DataType::Kind::Class)
+				return concretizeClassType(expr->type);
 			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);
-			if (typeArgType.kind == DataType::Kind::TypeReference)
-				return typeArgType.toReferencedType();
+			if (typeArgType.kind == DataType::Kind::Type)
+				return concretizeClassType(typeArgType.toReferencedType());
 		}
 		return expr->type;
 	}
 
-	case Expression::Kind::PatternCall:
+	case Function::Kind::PatternCall: {
+		if (expr->type.isDeduced())
+			return concretizeClassType(expr->type);
+		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
+			return expr->type;
+
+		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+		if (defs.empty())
+			return expr->type;
+
+		std::vector<DataType> argTypesForOverload;
+		{
+			size_t argIndex = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				bool isParam = false;
+				for (auto *def : defs) {
+					if (node->parameterNames.contains(def)) {
+						isParam = true;
+						break;
+					}
+				}
+				if (isParam && argIndex < expr->arguments.size()) {
+					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[argIndex]));
+					argIndex++;
+				}
+			}
+		}
+
+		PatternDefinition *matchedDef =
+			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+		if (!matchedDef || !matchedDef->section)
+			return expr->type;
+
+		Section *matchedSection = matchedDef->section;
+		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+			auto *classSec = static_cast<ClassSection *>(matchedSection);
+			return {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
+		}
+
+		if (matchedSection->isMacro) {
+			std::unordered_map<std::string, Function *> innerBindings;
+			Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+			if (!bodyExpr)
+				return expr->type;
+
+			auto savedBindings = context.macroFunctionBindings;
+			context.macroBindingStack.push(savedBindings);
+			context.macroFunctionBindings = std::move(innerBindings);
+			DataType result = getEffectiveType(context, bodyExpr);
+			context.macroFunctionBindings = context.macroBindingStack.top();
+			context.macroBindingStack.pop();
+			return concretizeClassType(result);
+		}
+
+		std::vector<DataType> argTypes;
+		size_t argIndex = 0;
+		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+			auto paramIt = node->parameterNames.find(matchedDef);
+			if (paramIt == node->parameterNames.end() || argIndex >= expr->arguments.size())
+				continue;
+			DataType argType = getEffectiveType(context, expr->arguments[argIndex++]);
+			if (!argType.isDeduced())
+				return expr->type;
+			argTypes.push_back(argType);
+		}
+
+		auto instIt = matchedSection->instantiations.find(argTypes);
+		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
+			return concretizeClassType(instIt->second.returnType);
+
 		return expr->type;
+	}
 
 	default:
 		return expr->type;
@@ -307,10 +501,9 @@ std::string getPatternFunctionName(Section *section) {
 // Allocate all variables for a section at its start
 void allocateSectionVariables(ParseContext &context, Section *section) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
-		DataType varType = {DataType::Kind::Integer}; // fallback
 		Variable *var = section->findVariable(name);
-		if (var)
-			varType = var->type;
+		assert(var && "Internal compiler error: variableDefinitions contains a name missing from section variable metadata");
+		DataType varType = var->type;
 		if (!varType.isDeduced())
 			continue;
 
@@ -361,22 +554,22 @@ void allocateSectionVariables(ParseContext &context, Section *section) {
 	}
 }
 
-// Get the pointer for a variable expression (for store operations).
+// Get the pointer for a variable function (for store operations).
 // Recursively resolves through nested macro binding scopes to find the actual variable.
-llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
+llvm::Value *getVariablePointer(ParseContext &context, Function *expr) {
 	// Resolve through potentially multiple levels of macro bindings.
 	// Each level pops to the caller's scope, so nested macros like
 	// `add value to target` → `set var to val` can resolve var → target → iteration.
-	std::vector<std::unordered_map<std::string, Expression *>> poppedScopes;
+	std::vector<std::unordered_map<std::string, Function *>> poppedScopes;
 
 	while (true) {
-		Expression *resolved = resolveVariableBinding(context, expr);
+		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved == expr)
 			break; // No more macro bindings to resolve
-		// Pop to caller scope so the resolved expression is evaluated in the right context
+		// Pop to caller scope so the resolved function is evaluated in the right context
 		if (!context.macroBindingStack.empty()) {
-			poppedScopes.push_back(context.macroExpressionBindings);
-			context.macroExpressionBindings = context.macroBindingStack.top();
+			poppedScopes.push_back(context.macroFunctionBindings);
+			context.macroFunctionBindings = context.macroBindingStack.top();
 			context.macroBindingStack.pop();
 		}
 		expr = resolved;
@@ -384,7 +577,7 @@ llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 
 	llvm::Value *result = nullptr;
 
-	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+	if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
 		std::string varName = expr->variable->name;
 
 		auto bindingIt = context.patternBindings.find(varName);
@@ -400,8 +593,8 @@ llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 
 	// Restore all popped scopes in reverse order
 	for (auto it = poppedScopes.rbegin(); it != poppedScopes.rend(); ++it) {
-		context.macroBindingStack.push(context.macroExpressionBindings);
-		context.macroExpressionBindings = *it;
+		context.macroBindingStack.push(context.macroFunctionBindings);
+		context.macroFunctionBindings = *it;
 	}
 
 	return result;
@@ -415,41 +608,56 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	llvm::Type *targetLLVM = toType.toLLVM(*context.llvmContext);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
-	if (fromType.isPointer() && toType.kind == DataType::Kind::Integer && !toType.isPointer())
+	if (fromType.isPointer() && toType.isPointer())
+		return builder.CreateBitCast(val, targetLLVM, "ptop");
+	if (fromType.isPointer() && toType.kind == DataType::Kind::Int)
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
-	if (!fromType.isPointer() && fromType.kind == DataType::Kind::Integer && toType.isPointer())
+	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
 
-	// Integer → Integer (different sizes)
-	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Integer) {
-		if (fromType.byteSize < toType.byteSize)
-			return builder.CreateSExt(val, targetLLVM, "sext");
-		return builder.CreateTrunc(val, targetLLVM, "trunc");
-	}
-
-	// Float → Float (different sizes)
-	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
-		if (fromType.byteSize < toType.byteSize)
-			return builder.CreateFPExt(val, targetLLVM, "fpext");
-		return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
-	}
-
-	// Integer → Float
-	if (fromType.kind == DataType::Kind::Integer && toType.kind == DataType::Kind::Float)
-		return builder.CreateSIToFP(val, targetLLVM, "itof");
-
-	// Float → Integer
-	if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Integer)
+	// Numeric conversions
+	if (fromType.isNumeric() && toType.isNumeric()) {
+		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Int) {
+			if (fromType.numericSize < toType.numericSize)
+				return builder.CreateSExt(val, targetLLVM, "sext");
+			return builder.CreateTrunc(val, targetLLVM, "trunc");
+		}
+		if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
+			if (fromType.numericSize < toType.numericSize)
+				return builder.CreateFPExt(val, targetLLVM, "fpext");
+			return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
+		}
+		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Float)
+			return builder.CreateSIToFP(val, targetLLVM, "itof");
 		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
+	}
 
-	// Bool → Integer
-	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Integer)
+	if (toType.kind == DataType::Kind::Vector && fromType.isNumeric()) {
+		llvm::Value *scalar = ensureType(context, val, fromType, toType.vectorElementType());
+		llvm::Value *vectorValue = llvm::Constant::getNullValue(targetLLVM);
+		for (int i = 0; i < toType.vectorSize(); i++)
+			vectorValue = builder.CreateInsertElement(vectorValue, scalar, static_cast<uint64_t>(i), "splat");
+		return vectorValue;
+	}
+
+	if (fromType.kind == DataType::Kind::Vector && toType.kind == DataType::Kind::Vector &&
+		fromType.vectorSize() == toType.vectorSize()) {
+		llvm::Value *result = llvm::Constant::getNullValue(targetLLVM);
+		for (int i = 0; i < toType.vectorSize(); i++) {
+			llvm::Value *lane = builder.CreateExtractElement(val, static_cast<uint64_t>(i), "vec_lane");
+			lane = ensureType(context, lane, fromType.vectorElementType(), toType.vectorElementType());
+			result = builder.CreateInsertElement(result, lane, static_cast<uint64_t>(i), "vec_cast");
+		}
+		return result;
+	}
+
+	// Bool → Numeric
+	if (fromType.kind == DataType::Kind::Bool && toType.isNumeric()) {
+		if (toType.kind == DataType::Kind::Float) {
+			llvm::Value *intVal = builder.CreateZExt(val, builder.getInt64Ty(), "btoi");
+			return builder.CreateSIToFP(intVal, targetLLVM, "itof");
+		}
 		return builder.CreateZExt(val, targetLLVM, "btoi");
-
-	// Bool → Float
-	if (fromType.kind == DataType::Kind::Bool && toType.kind == DataType::Kind::Float) {
-		llvm::Value *intVal = builder.CreateZExt(val, builder.getInt64Ty(), "btoi");
-		return builder.CreateSIToFP(intVal, targetLLVM, "itof");
 	}
 
 	// Unsupported conversion - this should not happen if type inference is correct

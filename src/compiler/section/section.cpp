@@ -1,13 +1,13 @@
 #include "section.h"
 #include "classSection.h"
-#include "effectSection.h"
-#include "expression.h"
-#include "expressionSection.h"
+#include "function.h"
+#include "functionSection.h"
 #include "intrinsicInfo.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
 #include "sectionSection.h"
 #include "stringHierarchy.h"
+#include "syntaxConfig.h"
 #include <iostream>
 #include <stack>
 using namespace std::literals;
@@ -44,37 +44,35 @@ void Section::collectPatternReferencesAndSections(
 }
 
 bool Section::processLine(ParseContext &context, CodeLine *line) {
-	line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Effect);
-	return line->expression != nullptr;
+	line->function = detectPatterns(context, Range(line, line->patternText), SectionType::Function);
+	return line->function != nullptr;
 }
 
 Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	// determine the section type by parsing keywords
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	std::string_view remaining = line->patternText;
 	Section *newSection{};
 	bool isMacro = false;
 	bool isLocal = false;
 
-	// Parse keywords until we hit a section type keyword (effect, expression)
+	// Parse keywords until we hit a section type keyword (function, section)
 	while (!remaining.empty()) {
 		std::size_t spaceIndex = remaining.find(' ');
 		std::string_view current = (spaceIndex != std::string::npos) ? remaining.substr(0, spaceIndex) : remaining;
 		remaining = (spaceIndex != std::string::npos) ? remaining.substr(spaceIndex + 1) : std::string_view{};
 
-		if (current == "macro") {
+		if (current == syntax.macroName) {
 			isMacro = true;
-		} else if (current == "local") {
+		} else if (current == syntax.localName) {
 			isLocal = true;
-		} else if (current == "effect") {
-			newSection = new EffectSection(this);
+		} else if (current == syntax.functionName) {
+			newSection = new FunctionSection(this);
 			break;
-		} else if (current == "expression") {
-			newSection = new ExpressionSection(this);
-			break;
-		} else if (current == "section") {
+		} else if (current == syntax.sectionName) {
 			newSection = new SectionSection(this);
 			break;
-		} else if (current == "class") {
+		} else if (current == syntax.className) {
 			newSection = new ClassSection(this);
 			break;
 		} else {
@@ -95,7 +93,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		// custom section
 		newSection = new Section(SectionType::Custom, this);
 		// detectPatterns already adds the pattern reference via detectPatternsRecursively
-		line->expression = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
+		line->function = detectPatterns(context, Range(line, line->patternText), SectionType::Section);
 	}
 	return newSection;
 }
@@ -133,12 +131,25 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			push();
 			break;
 		}
+		case '[': {
+			push();
+			break;
+		}
 		case ')': {
 			if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
 				nodeStack.pop();
 			}
 			if (!tryPop('('))
+				return nullptr;
+			break;
+		}
+		case ']': {
+			if (nodeStack.top()->character == ',') {
+				nodeStack.top()->end = index;
+				nodeStack.pop();
+			}
+			if (!tryPop('['))
 				return nullptr;
 			break;
 		}
@@ -171,7 +182,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			break;
 		}
 		case ',': {
-			if (nodeStack.top()->character == '(') {
+			if (nodeStack.top()->character == '(' || nodeStack.top()->character == '[') {
 				// add the child, don't push
 				StringHierarchy *newChild = new StringHierarchy(character, nodeStack.top()->start);
 				// move all other children to this new child
@@ -209,31 +220,70 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 	return base;
 }
 
-Expression *Section::detectPatterns(ParseContext &context, Range range, SectionType patternType) {
+Function *Section::detectPatterns(ParseContext &context, Range range, SectionType patternType) {
 	StringHierarchy *hierarchy = parseBracketHierarchy(context, range);
 	if (!hierarchy)
 		return nullptr;
-	Expression *expr = detectPatternsRecursively(context, range, hierarchy, patternType);
+	Function *expr = detectPatternsRecursively(context, range, hierarchy, patternType);
 	delete hierarchy;
 	return expr;
 }
 
-static Expression *createStringLiteral(Range range, StringHierarchy *strNode) {
-	Expression *strExpr = new Expression();
+static Function *createStringLiteral(Range range, StringHierarchy *strNode) {
+	Function *strExpr = new Function();
 	strExpr->range = range.subRange(strNode->start - 1, strNode->end + 1);
-	strExpr->kind = Expression::Kind::Literal;
+	strExpr->kind = Function::Kind::Literal;
 	strExpr->literalValue = processEscapeSequences(range.subString.substr(strNode->start, strNode->end - strNode->start));
 	return strExpr;
 }
 
-Expression *
+static Function *createArrayLiteral(Section *section, ParseContext &context, Range range, StringHierarchy *arrayNode) {
+	Function *arrayExpr = new Function();
+	arrayExpr->range = range.subRange(arrayNode->start - 1, arrayNode->end + 1);
+	arrayExpr->kind = Function::Kind::ArrayLiteral;
+
+	auto processElement = [&](StringHierarchy *elementNode) -> bool {
+		Function *elementExpr = nullptr;
+		if (elementNode->character == '"') {
+			elementExpr = createStringLiteral(range, elementNode);
+		} else {
+			StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
+			elementExpr = section->detectPatternsRecursively(
+				context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function
+			);
+			delete clonedNode;
+		}
+		if (!elementExpr)
+			return false;
+		elementExpr->isExplicitGroup = true;
+		arrayExpr->arguments.push_back(elementExpr);
+		return true;
+	};
+
+	if (!arrayNode->children.empty()) {
+		if (arrayNode->children[0]->character == ',') {
+			for (StringHierarchy *child : arrayNode->children) {
+				if (!processElement(child))
+					return nullptr;
+			}
+		} else {
+			if (!processElement(arrayNode->children[0]))
+				return nullptr;
+		}
+	}
+
+	arrayExpr->arguments = sortArgumentsByPosition(arrayExpr->arguments);
+	return arrayExpr;
+}
+
+Function *
 Section::detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType) {
 	Range relativeRange = Range(range.line, range.subString.substr(node->start, node->end - node->start));
 
-	Expression *expr = new Expression();
+	Function *expr = new Function();
 	expr->range = relativeRange;
 	// This is a pending pattern reference (will be resolved later)
-	expr->kind = Expression::Kind::Pending;
+	expr->kind = Function::Kind::Pending;
 
 	// Create a PatternReference for pattern matching
 	PatternReference *reference = new PatternReference(expr, patternType);
@@ -241,12 +291,14 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 
 	// Process children to find arguments
 	auto delegate = [this, &context, &range, &expr](StringHierarchy *childNode) -> bool {
-		Expression *childExpr = detectPatternsRecursively(
-			context, range.subRange(childNode->start, childNode->end), childNode->cloneWithOffset(-childNode->start),
-			SectionType::Expression
+		StringHierarchy *clonedNode = childNode->cloneWithOffset(-childNode->start);
+		Function *childExpr = detectPatternsRecursively(
+			context, range.subRange(childNode->start, childNode->end), clonedNode, SectionType::Function
 		);
+		delete clonedNode;
 		if (!childExpr)
 			return false;
+		childExpr->isExplicitGroup = true;
 		expr->arguments.push_back(childExpr);
 		return true;
 	};
@@ -264,26 +316,27 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				size_t intrinsicStart = parenPos - intrinsicKeyword.length();
 				size_t intrinsicEnd = child->end + 1; // +1 for closing ')'
 
-				Expression *intrinsicExpr = new Expression();
+				Function *intrinsicExpr = new Function();
 				intrinsicExpr->range = range.subRange(intrinsicStart, intrinsicEnd);
-				intrinsicExpr->kind = Expression::Kind::IntrinsicCall;
+				intrinsicExpr->kind = Function::Kind::IntrinsicCall;
 
 				// Process arguments - first argument is the intrinsic name
 				auto processIntrinsicArg = [&](StringHierarchy *argNode) -> bool {
-					Expression *argExpr;
+					Function *argExpr;
 					if (argNode->character == '"') {
 						argExpr = createStringLiteral(range, argNode);
 					} else {
+						StringHierarchy *clonedNode = argNode->cloneWithOffset(-argNode->start);
 						argExpr = detectPatternsRecursively(
-							context, range.subRange(argNode->start, argNode->end), argNode->cloneWithOffset(-argNode->start),
-							SectionType::Expression
+							context, range.subRange(argNode->start, argNode->end), clonedNode, SectionType::Function
 						);
+						delete clonedNode;
 					}
 					if (!argExpr)
 						return false;
 
 					// First string argument becomes the intrinsic name
-					if (intrinsicExpr->intrinsicName.empty() && argExpr->kind == Expression::Kind::Literal) {
+					if (intrinsicExpr->intrinsicName.empty() && argExpr->kind == Function::Kind::Literal) {
 						if (auto *str = std::get_if<std::string>(&argExpr->literalValue)) {
 							intrinsicExpr->intrinsicName = *str;
 						}
@@ -312,17 +365,28 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 						));
 						return nullptr;
 					}
-					if (info->argCount >= 0 && (int)intrinsicExpr->arguments.size() != info->argCount) {
+					int argCount = (int)intrinsicExpr->arguments.size();
+					bool belowMin = argCount < info->minArgCount;
+					bool aboveMax = info->maxArgCount >= 0 && argCount > info->maxArgCount;
+					if (belowMin || aboveMax) {
+						std::string expected;
+						if (info->maxArgCount < 0)
+							expected = "at least " + std::to_string(info->minArgCount - 1);
+						else if (info->minArgCount == info->maxArgCount)
+							expected = std::to_string(info->minArgCount - 1);
+						else
+							expected = std::to_string(info->minArgCount - 1) + " to " + std::to_string(info->maxArgCount - 1);
 						context.diagnostics.push_back(Diagnostic(
 							Diagnostic::Level::Error,
-							"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + std::to_string(info->argCount - 1) +
-								" argument(s), got " + std::to_string(intrinsicExpr->arguments.size() - 1),
+							"intrinsic \"" + intrinsicExpr->intrinsicName + "\" expects " + expected + " argument(s), got " +
+								std::to_string(argCount - 1),
 							intrinsicExpr->range
 						));
 						return nullptr;
 					}
 				}
 
+				context.processEncounteredIntrinsic(intrinsicExpr);
 				expr->arguments.push_back(intrinsicExpr);
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {
@@ -338,13 +402,19 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 				}
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
+		} else if (child->character == '[') {
+			Function *arrayExpr = createArrayLiteral(this, context, range, child);
+			if (!arrayExpr)
+				return nullptr;
+			expr->arguments.push_back(arrayExpr);
+			reference->pattern.replaceLine(child->start - "["sv.length(), child->end + "]"sv.length());
 		} else if (child->character == '"') {
 			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
 		}
 	}
 
-	// Replace number literals in pattern text and create sub-expressions.
+	// Replace number literals in pattern text and create sub-functions.
 	// Search the transformed pattern text (where strings/intrinsics are already replaced with \a)
 	// to avoid matching digits inside string literals (e.g. "i64").
 	std::regex numLiteralRegex("\\b\\d+(?:\\.\\d+)?\\b");
@@ -352,30 +422,26 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	std::sregex_iterator iter(patternSnapshot.begin(), patternSnapshot.end(), numLiteralRegex);
 	std::sregex_iterator end;
 	// Collect matches, then process in reverse so pattern positions stay valid.
-	// Number expressions are collected separately and added in forward (left-to-right) order
-	// after all pattern replacements, so that sourceArgumentIndex maps to the correct expression.
+	// Number functions are collected separately and added in forward (left-to-right) order
+	// after all pattern replacements, so that sourceArgumentIndex maps to the correct function.
 	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
 	for (; iter != end; ++iter)
 		numMatches.emplace_back(iter->position(), iter->position() + iter->length(), iter->str());
-	std::vector<Expression *> numExprs;
+	std::vector<Function *> numExprs;
 	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
 		auto &[pos, endPos, numStr] = *it;
-		Expression *numExpr = new Expression();
+		Function *numExpr = new Function();
 		size_t lineStart = reference->pattern.getLinePos(pos);
 		size_t lineEnd = reference->pattern.getLinePos(endPos);
 		numExpr->range = relativeRange.subRange(lineStart, lineEnd);
-		numExpr->kind = Expression::Kind::Literal;
-		if (numStr.find('.') != std::string::npos) {
-			numExpr->literalValue = std::stod(numStr);
-		} else {
-			numExpr->literalValue = static_cast<int64_t>(std::stoll(numStr));
-		}
+		numExpr->kind = Function::Kind::Literal;
+		numExpr->literalValue = std::stod(numStr);
 		numExprs.push_back(numExpr);
 		reference->pattern.replacePattern(pos, endPos);
 	}
 	// Reverse to restore left-to-right order (numbers were processed right-to-left above)
 	std::reverse(numExprs.begin(), numExprs.end());
-	for (Expression *numExpr : numExprs)
+	for (Function *numExpr : numExprs)
 		expr->arguments.push_back(numExpr);
 
 	// Sort arguments by source position so sourceArgumentIndex in pattern matching
@@ -428,10 +494,18 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	}
 
 	// If pattern is just an argument placeholder, return the argument directly
-	// This happens for expressions or for intrinsic calls (which are effects on their own)
+	// This happens for functions or for intrinsic calls (which are effects on their own)
 	if (reference->pattern.text == ""s + argumentChar) {
-		Expression *arg = expr->arguments[0];
-		if (patternType == SectionType::Expression || arg->kind == Expression::Kind::IntrinsicCall) {
+		if (expr->arguments.empty()) {
+			context.diagnostics.push_back(Diagnostic(
+				Diagnostic::Level::Error, "Invalid use of reserved internal placeholder character in source code", range
+			));
+			delete expr;
+			delete reference;
+			return nullptr;
+		}
+		Function *arg = expr->arguments[0];
+		if (patternType == SectionType::Function || arg->kind == Function::Kind::IntrinsicCall) {
 			delete expr;
 			delete reference;
 			return arg;
@@ -456,16 +530,21 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 				return;
 			auto markFound = [&] {
 				if (!found) {
-					VariableReference *varRef = new VariableReference(
-						Range(
-							definition->range.line, definition->range.start() + element.startPos,
-							definition->range.start() + element.startPos + element.text.length()
-						),
-						element.text
-					);
-					variableDefinitions[element.text] = varRef;
-					variableReferences[element.text].push_back(varRef);
-					reference->definition = varRef;
+					auto existing = variableDefinitions.find(element.text);
+					if (existing != variableDefinitions.end()) {
+						reference->definition = existing->second;
+					} else {
+						VariableReference *varRef = context.createVariableReference(
+							Range(
+								definition->range.line, definition->range.start() + element.startPos,
+								definition->range.start() + element.startPos + element.text.length()
+							),
+							element.text
+						);
+						variableDefinitions[element.text] = varRef;
+						variableReferences[element.text].push_back(varRef);
+						reference->definition = varRef;
+					}
 				}
 				found = true;
 			};

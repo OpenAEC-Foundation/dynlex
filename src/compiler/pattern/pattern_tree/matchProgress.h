@@ -3,16 +3,17 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "sectionType.h"
-#include <climits>
 struct ParseContext;
 struct PatternReference;
 // traversing the tree will also output a tree of possibilities
 //  (which way should we search first? should we substitute a literal as variable or not?)
 struct MatchProgress {
 	MatchProgress(ParseContext *context, PatternReference *patternReference);
-	// copy constructor, for cloning matchprogresses
 	MatchProgress(const MatchProgress &other);
-	MatchProgress &operator=(const MatchProgress &) = default;
+	MatchProgress(MatchProgress &&other) noexcept;
+	MatchProgress &operator=(const MatchProgress &other);
+	MatchProgress &operator=(MatchProgress &&other) noexcept;
+	~MatchProgress();
 	// the parent match we continue matching when this match is finished (can be promoted to grandparent)
 	// we don't need child nodes, since the youngest node is always the matching once.
 	MatchProgress *parent{};
@@ -35,11 +36,6 @@ struct MatchProgress {
 	size_t patternStartPos{}; // where this match started in pattern
 	size_t patternPos{};	  // current position in pattern
 	size_t sourceArgumentIndex{};
-	// precedence constraints for sub-expression matching
-	// maxPrecedence: the completed left-side expression's precedence (limits what operators can take it as left arg)
-	int maxPrecedence = INT_MAX;
-	// minRightPrecedence: the parent's precedence (right argument must be strictly higher)
-	int minRightPrecedence = INT_MAX;
 	// returns a vector containing alternative steps we could take through the pattern tree, ordered from least important ([0])
 	// to most important ([length() - 1])
 	std::vector<MatchProgress> step();

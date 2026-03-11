@@ -1,0 +1,71 @@
+name: Launchpad PPA
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional upstream version or tag override
+        required: false
+        type: string
+      upload:
+        description: Upload to Launchpad after building
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  publish-source-packages:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        series: [noble, plucky, questing]
+    env:
+      LAUNCHPAD_PPA: ${{ vars.LAUNCHPAD_PPA }}
+      LAUNCHPAD_GPG_KEY_ID: ${{ secrets.LAUNCHPAD_GPG_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Launchpad packaging dependencies
+        run: ./packaging/launchpad/scripts/install-build-deps.sh
+
+      - name: Import signing key
+        if: env.LAUNCHPAD_GPG_KEY_ID != ''
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.LAUNCHPAD_GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.LAUNCHPAD_GPG_PASSPHRASE }}
+
+      - name: Build Launchpad source package
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          SHOULD_UPLOAD: ${{ github.event_name == 'push' || inputs.upload }}
+        run: |
+          set -euo pipefail
+
+          version_args=()
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            version_args+=(--version "$INPUT_VERSION")
+          fi
+
+          upload_args=()
+          if [ "${SHOULD_UPLOAD}" = "true" ] && [ -n "${LAUNCHPAD_PPA:-}" ] && [ -n "${LAUNCHPAD_GPG_KEY_ID:-}" ]; then
+            upload_args+=(--gpg-key "$LAUNCHPAD_GPG_KEY_ID" --upload-target "ppa:${LAUNCHPAD_PPA}")
+          fi
+
+          ./packaging/launchpad/scripts/build-source-package.sh \
+            --series "${{ matrix.series }}" \
+            --ppa-revision "${{ github.run_number }}" \
+            "${version_args[@]}" \
+            "${upload_args[@]}"
+
+      - name: Upload source package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynlex-launchpad-${{ matrix.series }}
+          path: packaging/launchpad/out/${{ matrix.series }}/*

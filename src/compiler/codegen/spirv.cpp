@@ -1,4 +1,5 @@
 #include "spirv.h"
+#include "parseContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -523,11 +524,7 @@ static bool patchShaderBinary(
 	return true;
 }
 
-bool emitSPIRVModule(ParseContext &context) {
-	std::string outputPath = context.options.outputPath;
-	if (outputPath.empty())
-		outputPath = context.options.inputPath + ".spv";
-
+std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &context, std::string &errorMessage) {
 	LLVMInitializeSPIRVTarget();
 	LLVMInitializeSPIRVTargetInfo();
 	LLVMInitializeSPIRVTargetMC();
@@ -536,20 +533,26 @@ bool emitSPIRVModule(ParseContext &context) {
 	std::string targetTriple = "spirv-unknown-vulkan1.3";
 	context.llvmModule->setTargetTriple(targetTriple);
 
-	std::string error;
-	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);
 	if (!target) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range()));
-		return false;
+		return nullptr;
 	}
 
 	llvm::TargetOptions options;
-	auto targetMachine = target->createTargetMachine(targetTriple, "", "", options, std::nullopt);
+	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(targetTriple, "", "", options, std::nullopt));
+}
+
+bool emitSPIRVModule(ParseContext &context) {
+	std::string outputPath = context.options.outputPath;
+	if (outputPath.empty())
+		outputPath = context.options.inputPath + ".spv";
+
+	std::string error;
+	std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
 	if (!targetMachine) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Failed to create SPIR-V target machine", Range()));
+		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range()));
 		return false;
 	}
-
 	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 
 	std::error_code ec;

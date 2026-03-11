@@ -1,125 +1,45 @@
 #include "membersSection.h"
 #include "classSection.h"
+#include "function.h"
 #include "parseContext.h"
-
-// Parse a type string, supporting primitive types and class names
-static DataType parseFieldType(ParseContext &context, std::string_view typeStr) {
-	std::string s(typeStr);
-	// Try primitive types first
-	if (s == "void" || s == "bool" || s == "i8" || s == "i16" || s == "i32" || s == "i64" || s == "f32" || s == "f64" ||
-		s == "pointer" || s == "string")
-		return DataType::fromString(s);
-
-	// Look up class name in pattern trees
-	// Class patterns are stored in the Expression tree (SectionType::Expression)
-	PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Expression];
-	if (exprTree) {
-		// Walk the pattern tree matching word by word via literalChildren
-		PatternTreeNode *node = exprTree;
-		std::string_view remaining = typeStr;
-		while (!remaining.empty() && node) {
-			size_t space = remaining.find(' ');
-			std::string_view word = (space != std::string_view::npos) ? remaining.substr(0, space) : remaining;
-			auto it = node->literalChildren.find(std::string(word));
-			if (it != node->literalChildren.end()) {
-				node = it->second;
-				remaining = (space != std::string_view::npos) ? remaining.substr(space + 1) : std::string_view{};
-			} else {
-				node = nullptr;
-			}
-		}
-		if (node && !node->matchingDefinitions.empty()) {
-			for (auto *d : node->matchingDefinitions) {
-				if (d->section && d->section->type == SectionType::Class) {
-					auto *classSec = static_cast<ClassSection *>(d->section);
-					return {DataType::Kind::Class, 0, 0, classSec->classDefinition, 0};
-				}
-			}
-		}
-	}
-
-	return {}; // Undeduced - unknown type
-}
+#include "patternReference.h"
 
 // Parse a single field declaration, handling optional "name as type" syntax
-FieldDefinition parseFieldDeclaration(ParseContext &context, std::string_view fieldText, CodeLine *line) {
+bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection *section) {
+	// this is hardcoded syntax and will have to be replaced later.
+	std::string_view fieldText = fieldRange.subString;
+	std::string_view separator = " as ";
 	// Look for " as " separator
-	size_t asPos = fieldText.find(" as ");
+	size_t asPos = fieldText.find(separator);
+	FieldDefinition fieldDefinition;
 	if (asPos != std::string_view::npos) {
 		std::string_view name = fieldText.substr(0, asPos);
-		std::string_view typeStr = fieldText.substr(asPos + 4);
-		// Trim whitespace
-		size_t nameEnd = name.find_last_not_of(" \t");
-		if (nameEnd != std::string_view::npos)
-			name = name.substr(0, nameEnd + 1);
-		size_t typeStart = typeStr.find_first_not_of(" \t");
-		if (typeStart != std::string_view::npos)
-			typeStr = typeStr.substr(typeStart);
-		size_t typeEnd = typeStr.find_last_not_of(" \t");
-		if (typeEnd != std::string_view::npos)
-			typeStr = typeStr.substr(0, typeEnd + 1);
-
-		DataType declaredType = parseFieldType(context, typeStr);
-		return {std::string(name), Range(line, line->patternText), declaredType};
-	}
-	return {std::string(fieldText), Range(line, line->patternText), {}};
-}
-
-// Get natural size and alignment for a type (x86-64 ABI)
-static std::pair<int, int> typeSizeAlign(const DataType &t) {
-	if (t.isPointer())
-		return {8, 8};
-	switch (t.kind) {
-	case DataType::Kind::Integer:
-		return {t.byteSize, t.byteSize};
-	case DataType::Kind::Float:
-		return {t.byteSize, t.byteSize};
-	case DataType::Kind::Bool:
-		return {1, 1};
-	default:
-		return {8, 8}; // pointer-sized default
-	}
-}
-
-// Compute the current byte offset of a non-packed struct given its fields so far
-static int computeCurrentOffset(const std::vector<FieldDefinition> &fields) {
-	int offset = 0;
-	for (const auto &field : fields) {
-		auto [size, align] = typeSizeAlign(field.declaredType);
-		offset = ((offset + align - 1) / align) * align; // align up
-		offset += size;
-	}
-	return offset;
-}
-
-// Insert padding fields to align the next field to the given byte boundary
-static void insertAlignmentPadding(ClassDefinition *classDef, int alignment, CodeLine *line) {
-	int offset = computeCurrentOffset(classDef->fields);
-	int padding = (alignment - (offset % alignment)) % alignment;
-	int padIdx = 0;
-	while (padding >= 8) {
-		classDef->fields.push_back(
-			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i64")}
+		std::string_view typeStr = fieldText.substr(asPos + separator.length());
+		context.addSourceToken(fieldRange.subRange(0, static_cast<int>(asPos)), ParseContext::SourceTokenKind::Variable);
+		context.addSourceToken(
+			fieldRange.subRange(static_cast<int>(asPos + 1), static_cast<int>(asPos + 3)),
+			ParseContext::SourceTokenKind::Keyword
 		);
-		padding -= 8;
+
+		// Create a class pattern reference for the type text
+		Range typeRange(fieldRange.line, typeStr);
+		Function *typeExpr = new Function();
+		typeExpr->range = typeRange;
+		typeExpr->kind = Function::Kind::Pending;
+		PatternReference *ref = new PatternReference(typeExpr, SectionType::Function);
+		typeExpr->patternReference = ref;
+		section->addPatternReference(ref);
+
+		DataType type;
+		type.kind = DataType::Kind::Unresolved;
+		type.typeFunction = typeExpr;
+		fieldDefinition = {std::string(name), Range(fieldRange.line, fieldRange.line->patternText), type};
+	} else {
+		context.addSourceToken(fieldRange, ParseContext::SourceTokenKind::Variable);
+		fieldDefinition = {std::string(fieldText), Range(fieldRange.line, fieldRange.line->patternText), {DataType::Kind::Any}};
 	}
-	if (padding >= 4) {
-		classDef->fields.push_back(
-			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i32")}
-		);
-		padding -= 4;
-	}
-	if (padding >= 2) {
-		classDef->fields.push_back(
-			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i16")}
-		);
-		padding -= 2;
-	}
-	if (padding >= 1) {
-		classDef->fields.push_back(
-			{"_pad" + std::to_string(padIdx++), Range(line, line->patternText), DataType::fromString("i8")}
-		);
-	}
+	section->classDefinition->fields.push_back(fieldDefinition);
+	return true;
 }
 
 bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
@@ -134,9 +54,11 @@ bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 		if (start != std::string_view::npos)
 			numStr = numStr.substr(start);
 		int alignment = std::stoi(std::string(numStr));
+		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
+		if (!numStr.empty())
+			context.addSourceToken(Range(line, numStr), ParseContext::SourceTokenKind::Number);
 		if (alignment > cls->classDefinition->alignment)
 			cls->classDefinition->alignment = alignment;
-		insertAlignmentPadding(cls->classDefinition, alignment, line);
 		line->resolved = true;
 		return true;
 	}
@@ -145,7 +67,11 @@ bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
 	return ListingSection::processLine(context, line);
 }
 
-void MembersSection::addItem(ParseContext &context, std::string_view fieldText, CodeLine *line) {
+bool MembersSection::addItem(ParseContext &context, Range itemRange) {
 	auto *cls = static_cast<ClassSection *>(parent);
-	cls->classDefinition->fields.push_back(parseFieldDeclaration(context, fieldText, line));
+	return parseFieldDeclaration(context, itemRange, cls);
+}
+
+void MembersSection::addSeparator(ParseContext &context, Range separatorRange) {
+	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::Keyword);
 }

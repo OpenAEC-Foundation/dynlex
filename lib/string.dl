@@ -6,19 +6,23 @@ class:
     patterns:
         string
     members:
-        data: pointer to byte
-        length: integer
+        data as pointer to byte
+        length as i32
 
-macro expression new string from data ptr with length len:
+function cstring:
+    replacement:
+        @intrinsic("type", "string")
+
+function new string from data ptr with length len:
     replacement:
         @intrinsic("construct", string, ptr, len)
 
-macro expression character index of str:
+function character index of str:
     replacement:
         @intrinsic("dereference", the data of str + index)
 
-expression the length of str:
-    get:
+function the length of str:
+    execute:
         set len to 0
         set ch to character len of str
         loop while ch is not 0:
@@ -28,49 +32,54 @@ expression the length of str:
 
 # --- Conversions to string ---
 
-expression {integer:value} as a string:
-    get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 21)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 21, "%ld", value as a 64 bit integer)
+function {integer:value} as a string:
+    execute:
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 21)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 21, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
 
-expression {float:value} as a string:
-    get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 32)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 32, "%g", value as a 64 bit float)
+function {float:value} as a string:
+    execute:
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 32)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 32, "%g", value as a 64 bit float)
         return new string from data buf with length len
 
-expression {boolean:value} as a string:
-    get:
-        set buf to @intrinsic("call", "libc", "malloc", "string", 2)
-        set len to @intrinsic("call", "libc", "snprintf", "i32", buf, 2, "%ld", value as a 64 bit integer)
+function {boolean:value} as a string:
+    execute:
+        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
+        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
         return new string from data buf with length len
+
+function {cstring:value} as a string:
+    execute:
+        set len to @intrinsic("call", "libc", "strlen", an integer, value)
+        return new string from data value with length len
 
 # --- Line suffix ---
 
-expression value as [a|] line:
-    get:
-        return value as a string + "\n"
+function value as [a|] line:
+    execute:
+        return value as a string + new string from data "\n" with length 1
 
 # --- Output ---
 
-effect print {string:msg}:
+function print {string:msg}:
     execute:
-        @intrinsic("call", "libc", "printf", "i32", "%s", the data of msg)
+        @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
 
-effect print msg:
+function print msg:
     execute:
         print msg as a string
 
 # --- Concatenation ---
 
-expression {string:left} + {string:right}:
+function {string:left} + {string:right}:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
-    get:
+    execute:
         set left_len to the length of left
         set right_len to the length of right
         set total to left_len + right_len
-        set result to @intrinsic("call", "libc", "malloc", "string", total + 1)
-        @intrinsic("call", "libc", "memcpy", "string", result, the data of left, left_len)
-        @intrinsic("call", "libc", "memcpy", "string", result + left_len, the data of right, right_len + 1)
+        set result to @intrinsic("call", "libc", "malloc", a pointer to a byte, total + 1)
+        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result, the data of left, left_len)
+        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result + left_len, the data of right, right_len + 1)
         return new string from data result with length total

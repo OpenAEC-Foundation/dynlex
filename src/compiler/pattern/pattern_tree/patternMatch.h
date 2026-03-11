@@ -11,5 +11,17 @@ struct PatternMatch {
 	std::vector<WordMatch> discoveredWords{};
 	std::vector<PatternMatch> subMatches{};
 	// the arguments
-	std::vector<Expression *> arguments;
+	std::vector<Function *> arguments;
+
+	// Format signature from nodesPassed, e.g. "$ + $", "print $"
+	std::string toString() const {
+		std::string result;
+		for (PatternTreeNode *node : nodesPassed) {
+			if (node->type == PatternElement::Variable)
+				result += "$";
+			else
+				result += node->text;
+		}
+		return result;
+	}
 };

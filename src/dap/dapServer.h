@@ -1,7 +1,7 @@
 #pragma once
 #include "../lsp/transport.h"
 #include "dapProtocol.h"
-#include "gdbmi.h"
+#include "debuggerAdapter.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -14,7 +14,7 @@ namespace dap {
 
 class DapServer {
   public:
-	explicit DapServer(std::unique_ptr<lsp::Transport> transport);
+	explicit DapServer(std::unique_ptr<lsp::Transport> transport, std::string executablePath = "");
 	~DapServer();
 
 	// Run the server (blocks until disconnect)
@@ -22,11 +22,12 @@ class DapServer {
 
   private:
 	std::unique_ptr<lsp::Transport> transport;
-	GdbMI gdb;
+	std::unique_ptr<DebuggerAdapter> debugger;
 	std::atomic<bool> running{false};
 	int seq = 1;
 	std::mutex writeMutex;
 	std::thread gdbReaderThread;
+	std::string executablePath;
 
 	// Breakpoint tracking: source path -> list of GDB breakpoint numbers
 	std::unordered_map<std::string, std::vector<int>> breakpointsByFile;
@@ -74,7 +75,7 @@ class DapServer {
 
 	// Helpers
 	bool compileDlFile(const std::string &dlFile, const std::string &outputPath, std::string &errorOutput);
-	std::string findSelfPath();
+	std::string findSelfPath() const;
 	std::string demangleFunctionName(const std::string &mangled);
 
 	void log(const std::string &msg);

@@ -1,3 +1,10 @@
 {
-  "dynlex.server.path": "./build/dynlex"
+  "dynlex.server.path": "./build/dynlex",
+  "files.associations": {
+    "*.inl": "cpp"
+  },
+  "accessibility.signals.chatResponseReceived": {
+    "sound": "on"
+  },
+  "chat.notifyWindowOnResponseReceived": "windowNotFocused"
 }

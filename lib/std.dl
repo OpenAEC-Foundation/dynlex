@@ -2,76 +2,114 @@
 
 import lib/string.dl
 
-# --- Return ---
+# --- Basic patterns ---
 
-macro effect return value:
+function return value:
+    after: default
     replacement:
         @intrinsic("return", value)
 
+function a new type from value:
+	replacement:
+		@intrinsic("construct", type, value)
+
 # --- Variables ---
 
-macro effect set var to val:
+function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
 # --- Primitive types ---
 
-macro class [an|a|] integer:
+function [an|a|] integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-macro class [an|a|] bits bit integer:
+function [an|a|] bits bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
-macro class [a|] float:
+function [a|] float:
     replacement:
         @intrinsic("type", "float", 64)
 
-macro class [a|] bits bit float:
+function [a|] bits bit float:
     replacement:
         @intrinsic("type", "float", bits)
 
-macro class [a|] byte:
+function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-macro class [a|] boolean:
+function [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
+function void:
+    replacement:
+        @intrinsic("type", "void")
+
 # --- Pointer and string types ---
 
-macro class [a|] pointer to type:
+function [a|] pointer to type:
     replacement:
         @intrinsic("add pointer depth", type)
 
+function [an|a|] array of n [item|items]:
+    replacement:
+        @intrinsic("array", n)
+
+function [an|a|] type array of n [item|items]:
+    replacement:
+        @intrinsic("array", n, type)
+
 # --- Type casts ---
 
-macro expression value as type:
+function value as type:
     replacement:
         @intrinsic("cast", value, type)
 
+function true_value if condition, else false_value:
+    replacement:
+        @intrinsic("select", condition, true_value, false_value)
+
+function [the|] build info key:
+    replacement:
+        @intrinsic("build info", key)
+
+function [the|] size of type:
+    replacement:
+        @intrinsic("size of", type)
+
+function [the|] build platform:
+    replacement:
+        the build info "platform"
+
 # --- Class properties ---
 
-macro expression:
+function:
     patterns:
         the {word:propertyname} of ownername
         ownername's {word:propertyname}
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ + $, $ - $, $ * $, $ / $, $ mod $
     replacement:
         @intrinsic("property", ownername, propertyname)
 
 # --- Pointers ---
 
-macro expression [the|] address of var:
+function [the|] address of var:
     replacement:
         @intrinsic("address of", var)
 
-macro expression [the|] value at ptr:
+function [the|] value at ptr:
     replacement:
         @intrinsic("dereference", ptr)
 
-macro expression element index of ptr:
+function element index of ptr:
     replacement:
         @intrinsic("dereference", ptr + index)
 
@@ -80,63 +118,63 @@ macro expression element index of ptr:
 # Precedence chain (lowest to highest):
 #   or < and < not < comparisons < +,- < *,/,mod < negative
 
-macro expression left + right:
+function left + right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("add", left, right)
 
-macro expression left - right:
+function left - right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("subtract", left, right)
 
-macro expression left * right:
+function left * right:
     before: $ + $, $ - $
     replacement:
         @intrinsic("multiply", left, right)
 
-macro expression left / right:
+function left / right:
     before: $ + $, $ - $
     replacement:
         @intrinsic("divide", left, right)
 
-macro expression left mod right:
+function left mod right:
     before: $ + $, $ - $
     replacement:
         @intrinsic("modulo", left, right)
 
-macro expression [the|] [negative|opposite] [of|] value:
+function [the|] [negative|opposite] [of|] value:
     before: $ * $, $ / $, $ mod $
     replacement:
         @intrinsic("negate", value)
 
-macro effect multiply value by factor:
+function multiply value by factor:
 	replacement:
 		set value to @intrinsic("multiply", value, factor)
 
-macro effect divide value by divisor:
+function divide value by divisor:
 	replacement:
 		set value to @intrinsic("divide", value, divisor)
 
-macro effect add value to target:
+function add value to target:
 	replacement:
 		set target to @intrinsic("add", target, value)
 
-macro effect subtract value from target:
+function subtract value from target:
 	replacement:
 		set target to @intrinsic("subtract", target, value)
 
-macro effect increment val:
+function increment val:
 	replacement:
 		set val to @intrinsic("add", val, 1)
 
-macro effect decrement val:
+function decrement val:
 	replacement:
 		set val to @intrinsic("subtract", val, 1)
 
 # --- Clamping ---
 
-macro effect clamp val between low and high:
+function clamp val between low and high:
 	replacement:
 		if val < low:
 			set val to low
@@ -145,96 +183,101 @@ macro effect clamp val between low and high:
 
 # --- Math functions ---
 
-macro expression [the|] sine of value:
+function [the|] sine of value:
     after: default
     replacement:
         @intrinsic("sin", value)
 
-macro expression [the|] cosine of value:
+function [the|] cosine of value:
     after: default
     replacement:
         @intrinsic("cos", value)
 
-macro expression [the|] square root of value:
+function [the|] square root of value:
     after: default
     replacement:
         @intrinsic("sqrt", value)
 
-macro expression [the|] absolute value of value:
+function [the|] absolute value of value:
     after: default
     replacement:
         @intrinsic("abs", value)
 
-macro expression [the|] floor of value:
+function [the|] floor of value:
     after: default
     replacement:
         @intrinsic("floor", value)
 
-macro expression [the|] ceiling of value:
+function [the|] ceiling of value:
     after: default
     replacement:
         @intrinsic("ceil", value)
 
-macro expression value [raised|] to the power [of|] exponent:
+function value [raised|] to the power [of|] exponent:
     after: default
     replacement:
         @intrinsic("pow", value, exponent)
 
-macro expression [the|] minimum of a and b:
+function [the|] minimum of a and b:
     after: default
     replacement:
         @intrinsic("min", a, b)
 
-macro expression [the|] maximum of a and b:
+function [the|] maximum of a and b:
     after: default
     replacement:
         @intrinsic("max", a, b)
 
 # --- Comparison ---
 
-expression left < right:
+function left < right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("less than", left, right)
 
-expression left > right:
+function left > right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("greater than", left, right)
 
-expression left = right:
+function left = right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("equal", left, right)
 
-expression left [!=|is not] right:
+function left is right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
+        return @intrinsic("equal", left, right)
+
+function left [!=|is not] right:
+    before: $ or $, $ and $, not $
+    execute:
         return @intrinsic("not equal", left, right)
 
-expression left [is less than or equal to|<=] right:
+function left [is less than or equal to|<=] right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("less than or equal", left, right)
 
-expression left [is greater than or equal to|>=] right:
+function left [is greater than or equal to|>=] right:
     before: $ or $, $ and $, not $
-    get:
+    execute:
         return @intrinsic("greater than or equal", left, right)
 
 # --- Logic ---
 
-macro expression not value:
+function not value:
     before: $ or $, $ and $
     replacement:
         @intrinsic("not", value)
 
-macro expression left and right:
+function left and right:
     before: $ or $
     replacement:
         @intrinsic("and", left, right)
 
-macro expression left or right:
+function left or right:
     before: default
     replacement:
         @intrinsic("or", left, right)
@@ -264,4 +307,3 @@ macro section [match|switch] [based|] [on|] value:
 macro section case value:
     replacement:
         @intrinsic("case", value)
-

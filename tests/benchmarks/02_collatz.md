@@ -27,43 +27,43 @@ The gap between DynLex and C++ will narrow as more patterns become macros (inlin
 ### DynLex (collatz.dl)
 
 ```
-macro effect return value:
+macro function return value:
     replacement:
         @intrinsic("return", value)
 
-macro effect set var to val:
+macro function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
-effect print msg as line:
+function print msg as line:
     execute:
         @intrinsic("call", "libc", "printf", "%ld\n", msg)
 
-expression left < right:
-    get:
+function left < right:
+    execute:
         return @intrinsic("less than", left, right)
 
-expression left > right:
-    get:
+function left > right:
+    execute:
         return @intrinsic("greater than", left, right)
 
-expression left equals right:
-    get:
+function left equals right:
+    execute:
         return @intrinsic("equal", left, right)
 
-macro expression left + right:
+macro function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-macro expression left * right:
+macro function left * right:
     replacement:
         @intrinsic("multiply", left, right)
 
-macro expression left / right:
+macro function left / right:
     replacement:
         @intrinsic("divide", left, right)
 
-macro expression left mod right:
+macro function left mod right:
     replacement:
         @intrinsic("modulo", left, right)
 
@@ -150,5 +150,5 @@ time python3 collatz.py
 
 ## Notes
 
-- The DynLex code uses `set temp to num * 3` then `set num to temp + 1` due to a current expression precedence parsing issue with `num * 3 + 1`
+- The DynLex code uses `set temp to num * 3` then `set num to temp + 1` due to a current function precedence parsing issue with `num * 3 + 1`
 - The `set var to val` pattern is not yet a macro, causing function call overhead; making it a macro would improve performance

@@ -21,22 +21,50 @@ class DynLexServer : public LanguageServer {
 	void onDidOpen(const DidOpenTextDocumentParams &params) override;
 	void onDidChange(const DidChangeTextDocumentParams &params) override;
 	void onDidClose(const DidCloseTextDocumentParams &params) override;
+	void onActiveCursorChanged(const ActiveCursorParams &params) override;
+	CompletionList onCompletion(const TextDocumentPositionParams &params) override;
 	std::optional<Location> onDefinition(const TextDocumentPositionParams &params) override;
+	std::optional<Hover> onHover(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
+	std::string onRenderSemanticTokens(const TextDocumentIdentifier &params) override;
+	Json onInstantiationsInDocument(const TextDocumentIdentifier &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
+	std::vector<CodeAction> onCodeAction(const CodeActionParams &params) override;
+	void onSelectInstantiation(const Json &params) override;
 
   private:
+	struct CursorState {
+		std::string uri;
+		int version = 0;
+		Position position;
+	};
+
+	struct LockedLineState {
+		std::unordered_set<std::string> clients;
+		std::string committedText;
+	};
+
 	// ParseContext per main document URI
 	std::unordered_map<std::string, std::unique_ptr<ParseContext>> parseContexts;
+	std::unordered_map<std::string, std::unique_ptr<TextDocument>> compiledDocuments;
+	std::string workspaceRootPath;
+	std::unordered_map<std::string, CursorState> activeCursors;
+	std::unordered_map<std::string, std::unordered_map<int, LockedLineState>> lockedLinesByUri;
 
 	// Import graph: imported file URI → set of main URIs that import it
 	std::unordered_map<std::string, std::unordered_set<std::string>> importedBy;
 
 	// Cached LSP diagnostics per main document, grouped by source file URI
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Diagnostic>>> diagnosticsPerMain;
+	std::unordered_map<std::string, std::string> selectedInstantiationBySelectionKey;
 
 	// Compile a main document and update all tracking state
 	void recompileMainDocument(const std::string &uri);
+	void recompileDependents(const std::string &uri);
+	bool syncCompiledDocument(const std::string &uri, bool ignoreLocks = false);
+	void refreshLockedLineBaselines(const std::string &uri);
+	bool isStructuralEdit(const DidChangeTextDocumentParams &params) const;
+	bool updateCursorLock(const std::string &clientId, const std::optional<CursorState> &nextCursor);
 
 	// Publish merged diagnostics for a file from all main compilations that reference it
 	void publishMergedDiagnostics(const std::string &fileUri);
@@ -49,6 +77,7 @@ class DynLexServer : public LanguageServer {
 
 	// Publish diagnostics for a document
 	void publishDiagnostics(const std::string &uri, const std::vector<Diagnostic> &diagnostics);
+	void requestSemanticTokensRefresh();
 
 	// Find the ParseContext for a URI (either as a main document or via importedBy)
 	ParseContext *findContextFor(const std::string &uri);

@@ -1,13 +1,13 @@
 import lib/std.dl
-# this effect has a single pattern, defined right at the effect definition line instead of in a pattern section.
-expression var's next power of two:
-	get:
+# this function has a single pattern, defined right at the function definition line instead of in a pattern section.
+function var's next power of two:
+	execute:
 		set result to 1
 		while result < var:
 			multiply result by 2
 		return result
 
-effect say message:
+function say message:
 	execute:
 		print message as line
 
@@ -18,8 +18,8 @@ class:
 		uint_8
 
 
-expression number%:
-	get:
+function number%:
+	execute:
 		return number * 0.01
 
 say "Hello, World!"

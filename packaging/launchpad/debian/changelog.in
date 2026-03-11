@@ -1,0 +1,5 @@
+dynlex (@DEBIAN_VERSION@) @SERIES@; urgency=medium
+
+  * Release DynLex @UPSTREAM_VERSION@ for Ubuntu @SERIES@.
+
+ -- @MAINTAINER_NAME@ <@MAINTAINER_EMAIL@>  @DATE_RFC2822@
