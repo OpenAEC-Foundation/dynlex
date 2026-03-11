@@ -6,6 +6,14 @@ paths:
 
 # LSP Architecture (`src/lsp/`)
 
+## VS Code extension debug workspaces
+- Use workspace files to switch extension debug behavior for the same repo instead of toggling one shared `.vscode/settings.json`.
+- `.vscode/lsp-managed.code-workspace`: managed mode (`dynlex.server.useExternal=false`) for normal extension development.
+- `.vscode/lsp-debug.code-workspace`: external mode (`dynlex.server.useExternal=true`, `localhost:5008`) for C++ LSP debugging.
+- `.vscode/launch.json` must keep separate extension host entries for managed and external workspaces; the `Extension + C++ Debugger` compound must target the external workspace entry.
+- `Extension + C++ Debugger` must use compound-level `preLaunchTask: prepare external lsp debug` and no-prep child configs to avoid duplicate builds.
+- `prepare external lsp debug` must run `build` then `compile extension` in sequence; if `build` fails, the compound must not launch either debugger session.
+
 ## Multi-file diagnostic tracking
 - The LSP tracks an **import graph** (`importedBy`: imported URI → set of main URIs) and **cached diagnostics per main document** (`diagnosticsPerMain`: main URI → file URI → diagnostics).
 - `onDidOpen`: if the file is already an import of an open main document, skip compilation (diagnostics already published). Otherwise compile as a new main document.

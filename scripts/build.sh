@@ -134,14 +134,18 @@ if [ "$LINT" = "true" ]; then
 
     if [ -n "$CHANGED_FILES" ]; then
         echo "Checking style violations on $FILE_MSG..."
-        OUTPUT=$(echo "$CHANGED_FILES" | xargs -r "$CLANG_TIDY" -p . -quiet --header-filter='.*src/.*' 2>&1 | grep -E "(warning:|error:)" || true)
-        if echo "$OUTPUT" | grep -q "error:"; then
+        # Only treat actual clang/clang-tidy diagnostics as errors:
+        #   <file>:<line>:<column>: (warning|error|fatal error): ...
+        DIAGNOSTIC_REGEX='^[^:]+:[0-9]+:[0-9]+: (warning|error|fatal error): '
+        ERROR_REGEX='^[^:]+:[0-9]+:[0-9]+: (error|fatal error): '
+        OUTPUT=$(echo "$CHANGED_FILES" | xargs -r "$CLANG_TIDY" -p . -quiet --header-filter='.*src/.*' 2>&1 | grep -E "$DIAGNOSTIC_REGEX" || true)
+        if echo "$OUTPUT" | grep -Eq "$ERROR_REGEX"; then
             echo "$OUTPUT"
             echo "clang-tidy found errors, skipping auto-fix"
             exit 1
         else
             echo "Fixing style violations..."
-            echo "$CHANGED_FILES" | xargs -r "$CLANG_TIDY" -p . -quiet -fix --header-filter='.*src/.*' 2>&1 | grep -E "(warning:|error:)" || true
+            echo "$CHANGED_FILES" | xargs -r "$CLANG_TIDY" -p . -quiet -fix --header-filter='.*src/.*' 2>&1 | grep -E "$DIAGNOSTIC_REGEX" || true
             touch "$LINT_TIMESTAMP"
         fi
     fi

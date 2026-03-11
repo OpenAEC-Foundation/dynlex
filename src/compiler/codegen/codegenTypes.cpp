@@ -357,27 +357,27 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 				return innerType;
 			}
 		}
-			if (kind == IntrinsicKind::SizeOf)
-				return {DataType::Kind::Int, 8};
-			if (kind == IntrinsicKind::TypeOf) {
-				DataType valueType = getEffectiveType(context, expr->arguments[1]);
-				if (valueType.isDeduced()) {
-					DataType typeRef;
-					typeRef.kind = DataType::Kind::Type;
-					typeRef.referencedKind = valueType.kind;
-					typeRef.numericSize = valueType.numericSize;
-					typeRef.pointerDepth = valueType.pointerDepth;
-					typeRef.classDefinition = valueType.classDefinition;
-					typeRef.classInstIndex = valueType.classInstIndex;
-					typeRef.arraySize = valueType.arraySize;
-					typeRef.matrixRowCount = valueType.matrixRowCount;
-					typeRef.arrayElementType =
-						valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
-					return typeRef;
-				}
+		if (kind == IntrinsicKind::SizeOf)
+			return {DataType::Kind::Int, 8};
+		if (kind == IntrinsicKind::TypeOf) {
+			DataType valueType = getEffectiveType(context, expr->arguments[1]);
+			if (valueType.isDeduced()) {
+				DataType typeRef;
+				typeRef.kind = DataType::Kind::Type;
+				typeRef.referencedKind = valueType.kind;
+				typeRef.numericSize = valueType.numericSize;
+				typeRef.pointerDepth = valueType.pointerDepth;
+				typeRef.classDefinition = valueType.classDefinition;
+				typeRef.classInstIndex = valueType.classInstIndex;
+				typeRef.arraySize = valueType.arraySize;
+				typeRef.matrixRowCount = valueType.matrixRowCount;
+				typeRef.arrayElementType =
+					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+				return typeRef;
 			}
-			if (kind == IntrinsicKind::Array)
-				return expr->type;
+		}
+		if (kind == IntrinsicKind::Array)
+			return expr->type;
 		if ((kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix) && expr->type.kind == DataType::Kind::Type)
 			return expr->type;
 		if (kind == IntrinsicKind::Property) {

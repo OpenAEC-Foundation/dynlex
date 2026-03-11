@@ -49,6 +49,10 @@ function [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
+function [a|] type:
+	replacement:
+		@intrinsic("type", "type")
+
 function void:
     replacement:
         @intrinsic("type", "void")

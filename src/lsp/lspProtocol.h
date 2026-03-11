@@ -5,7 +5,7 @@
 #include <variant>
 #include <vector>
 
-using Json = nlohmann::json;
+using Json = nlohmann::Json;
 
 namespace lsp {
 
@@ -19,8 +19,8 @@ struct Position {
 inline void to_json(Json &j, const Position &p) { j = Json{{"line", p.line}, {"character", p.character}}; }
 
 inline void from_json(const Json &j, Position &p) {
-	j.at("line").get_to(p.line);
-	j.at("character").get_to(p.character);
+	j.at("line").getTo(p.line);
+	j.at("character").getTo(p.character);
 }
 
 struct Range {
@@ -31,8 +31,8 @@ struct Range {
 inline void to_json(Json &j, const Range &r) { j = Json{{"start", r.start}, {"end", r.end}}; }
 
 inline void from_json(const Json &j, Range &r) {
-	j.at("start").get_to(r.start);
-	j.at("end").get_to(r.end);
+	j.at("start").getTo(r.start);
+	j.at("end").getTo(r.end);
 }
 
 struct Location {
@@ -43,8 +43,8 @@ struct Location {
 inline void to_json(Json &j, const Location &l) { j = Json{{"uri", l.uri}, {"range", l.range}}; }
 
 inline void from_json(const Json &j, Location &l) {
-	j.at("uri").get_to(l.uri);
-	j.at("range").get_to(l.range);
+	j.at("uri").getTo(l.uri);
+	j.at("range").getTo(l.range);
 }
 
 // Diagnostic severity levels (1-indexed per LSP spec)
@@ -85,15 +85,15 @@ inline void to_json(Json &j, const Diagnostic &d) {
 }
 
 inline void from_json(const Json &j, Diagnostic &d) {
-	j.at("range").get_to(d.range);
-	j.at("message").get_to(d.message);
-	if (j.contains("severity") && !j.at("severity").is_null()) {
+	j.at("range").getTo(d.range);
+	j.at("message").getTo(d.message);
+	if (j.contains("severity") && !j.at("severity").isNull()) {
 		d.severity = static_cast<DiagnosticSeverity>(j.at("severity").get<int>());
 	}
-	if (j.contains("source") && !j.at("source").is_null()) {
+	if (j.contains("source") && !j.at("source").isNull()) {
 		d.source = j.at("source").get<std::string>();
 	}
-	if (j.contains("data") && !j.at("data").is_null()) {
+	if (j.contains("data") && !j.at("data").isNull()) {
 		d.data = j.at("data");
 	}
 }
@@ -103,7 +103,7 @@ struct TextDocumentIdentifier {
 	std::string uri;
 };
 
-inline void from_json(const Json &j, TextDocumentIdentifier &t) { j.at("uri").get_to(t.uri); }
+inline void from_json(const Json &j, TextDocumentIdentifier &t) { j.at("uri").getTo(t.uri); }
 
 struct VersionedTextDocumentIdentifier {
 	std::string uri;
@@ -111,8 +111,8 @@ struct VersionedTextDocumentIdentifier {
 };
 
 inline void from_json(const Json &j, VersionedTextDocumentIdentifier &t) {
-	j.at("uri").get_to(t.uri);
-	j.at("version").get_to(t.version);
+	j.at("uri").getTo(t.uri);
+	j.at("version").getTo(t.version);
 }
 
 // Text document item (for didOpen)
@@ -124,10 +124,10 @@ struct TextDocumentItem {
 };
 
 inline void from_json(const Json &j, TextDocumentItem &t) {
-	j.at("uri").get_to(t.uri);
-	j.at("languageId").get_to(t.languageId);
-	j.at("version").get_to(t.version);
-	j.at("text").get_to(t.text);
+	j.at("uri").getTo(t.uri);
+	j.at("languageId").getTo(t.languageId);
+	j.at("version").getTo(t.version);
+	j.at("text").getTo(t.text);
 }
 
 // Text document position params (for definition, hover, etc.)
@@ -137,8 +137,8 @@ struct TextDocumentPositionParams {
 };
 
 inline void from_json(const Json &j, TextDocumentPositionParams &p) {
-	j.at("textDocument").get_to(p.textDocument);
-	j.at("position").get_to(p.position);
+	j.at("textDocument").getTo(p.textDocument);
+	j.at("position").getTo(p.position);
 }
 
 struct Hover {
@@ -217,7 +217,7 @@ inline void from_json(const Json &j, TextDocumentContentChangeEvent &c) {
 	if (j.contains("range")) {
 		c.range = j.at("range").get<Range>();
 	}
-	j.at("text").get_to(c.text);
+	j.at("text").getTo(c.text);
 }
 
 // didChange params
@@ -227,8 +227,8 @@ struct DidChangeTextDocumentParams {
 };
 
 inline void from_json(const Json &j, DidChangeTextDocumentParams &p) {
-	j.at("textDocument").get_to(p.textDocument);
-	j.at("contentChanges").get_to(p.contentChanges);
+	j.at("textDocument").getTo(p.textDocument);
+	j.at("contentChanges").getTo(p.contentChanges);
 }
 
 // didOpen params
@@ -236,14 +236,14 @@ struct DidOpenTextDocumentParams {
 	TextDocumentItem textDocument;
 };
 
-inline void from_json(const Json &j, DidOpenTextDocumentParams &p) { j.at("textDocument").get_to(p.textDocument); }
+inline void from_json(const Json &j, DidOpenTextDocumentParams &p) { j.at("textDocument").getTo(p.textDocument); }
 
 // didClose params
 struct DidCloseTextDocumentParams {
 	TextDocumentIdentifier textDocument;
 };
 
-inline void from_json(const Json &j, DidCloseTextDocumentParams &p) { j.at("textDocument").get_to(p.textDocument); }
+inline void from_json(const Json &j, DidCloseTextDocumentParams &p) { j.at("textDocument").getTo(p.textDocument); }
 
 // didSave params
 struct DidSaveTextDocumentParams {
@@ -252,7 +252,7 @@ struct DidSaveTextDocumentParams {
 };
 
 inline void from_json(const Json &j, DidSaveTextDocumentParams &p) {
-	j.at("textDocument").get_to(p.textDocument);
+	j.at("textDocument").getTo(p.textDocument);
 	if (j.contains("text")) {
 		p.text = j.at("text").get<std::string>();
 	}
@@ -268,14 +268,14 @@ struct ActiveCursorParams {
 };
 
 inline void from_json(const Json &j, ActiveCursorParams &p) {
-	j.at("clientId").get_to(p.clientId);
-	if (j.contains("uri") && !j.at("uri").is_null()) {
+	j.at("clientId").getTo(p.clientId);
+	if (j.contains("uri") && !j.at("uri").isNull()) {
 		p.uri = j.at("uri").get<std::string>();
 	}
-	if (j.contains("version") && !j.at("version").is_null()) {
+	if (j.contains("version") && !j.at("version").isNull()) {
 		p.version = j.at("version").get<int>();
 	}
-	if (j.contains("position") && !j.at("position").is_null()) {
+	if (j.contains("position") && !j.at("position").isNull()) {
 		p.position = j.at("position").get<Position>();
 	}
 }
@@ -300,7 +300,7 @@ struct SemanticTokensParams {
 	TextDocumentIdentifier textDocument;
 };
 
-inline void from_json(const Json &j, SemanticTokensParams &p) { j.at("textDocument").get_to(p.textDocument); }
+inline void from_json(const Json &j, SemanticTokensParams &p) { j.at("textDocument").getTo(p.textDocument); }
 
 // SymbolKind (subset used by DynLex)
 enum class SymbolKind { File = 1, Module = 2, Namespace = 3, Class = 5, Function = 12, Variable = 13, Operator = 25 };
@@ -331,7 +331,7 @@ struct DocumentSymbolParams {
 	TextDocumentIdentifier textDocument;
 };
 
-inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").get_to(p.textDocument); }
+inline void from_json(const Json &j, DocumentSymbolParams &p) { j.at("textDocument").getTo(p.textDocument); }
 
 struct WorkspaceEdit {
 	Json changes = Json::object();
@@ -362,7 +362,7 @@ struct CodeActionContext {
 
 inline void from_json(const Json &j, CodeActionContext &c) {
 	if (j.contains("diagnostics")) {
-		j.at("diagnostics").get_to(c.diagnostics);
+		j.at("diagnostics").getTo(c.diagnostics);
 	}
 }
 
@@ -373,10 +373,10 @@ struct CodeActionParams {
 };
 
 inline void from_json(const Json &j, CodeActionParams &p) {
-	j.at("textDocument").get_to(p.textDocument);
-	j.at("range").get_to(p.range);
+	j.at("textDocument").getTo(p.textDocument);
+	j.at("range").getTo(p.range);
 	if (j.contains("context")) {
-		j.at("context").get_to(p.context);
+		j.at("context").getTo(p.context);
 	}
 }
 
@@ -387,10 +387,10 @@ struct InitializeParams {
 };
 
 inline void from_json(const Json &j, InitializeParams &p) {
-	if (j.contains("processId") && !j.at("processId").is_null()) {
+	if (j.contains("processId") && !j.at("processId").isNull()) {
 		p.processId = j.at("processId").get<int>();
 	}
-	if (j.contains("rootUri") && !j.at("rootUri").is_null()) {
+	if (j.contains("rootUri") && !j.at("rootUri").isNull()) {
 		p.rootUri = j.at("rootUri").get<std::string>();
 	}
 }

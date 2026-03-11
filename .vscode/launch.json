@@ -85,6 +85,31 @@
 			"miDebuggerPath": "/usr/bin/gdb"
 		},
 		{
+			"name": "Debug DynLex LSP Server (No Prep)",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${workspaceFolder}/build/dynlex",
+			"args": ["--lsp", "--port", "5008", "--lsp-trace=/tmp/dynlex-lsp-trace.log"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"environment": [],
+			"externalConsole": false,
+			"MIMode": "gdb",
+			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
+			"setupCommands": [
+				{
+					"description": "Enable pretty-printing for gdb",
+					"text": "-enable-pretty-printing",
+					"ignoreFailures": true
+				},
+				{
+					"description": "Skip library files",
+					"text": "-interpreter-exec console \"skip -gfi **/bits/*.h\""
+				}
+			],
+			"miDebuggerPath": "/usr/bin/gdb"
+		},
+		{
 			"name": "Debug .dl Program",
 			"type": "dynlex",
 			"request": "launch",
@@ -92,7 +117,20 @@
 			"preLaunchTask": "build"
 		},
 		{
-			"name": "Run VS Code Extension",
+			"name": "Run VS Code Extension (Managed LSP)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
+				"${workspaceFolder}/.vscode/lsp-managed.code-workspace"
+			],
+			"outFiles": [
+				"${workspaceFolder}/vscode-extension/dist/**/*.js"
+			],
+			"preLaunchTask": "compile extension"
+		},
+		{
+			"name": "Run VS Code Extension (External LSP)",
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
@@ -102,13 +140,26 @@
 			"outFiles": [
 				"${workspaceFolder}/vscode-extension/dist/**/*.js"
 			],
-			"preLaunchTask": "compile extension"
+			"preLaunchTask": "prepare external lsp debug"
+		},
+		{
+			"name": "Run VS Code Extension (External LSP, No Prep)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/vscode-extension",
+				"${workspaceFolder}/.vscode/lsp-debug.code-workspace"
+			],
+			"outFiles": [
+				"${workspaceFolder}/vscode-extension/dist/**/*.js"
+			]
 		}
 	],
 	"compounds": [
 		{
 			"name": "Extension + C++ Debugger",
-			"configurations": ["Debug DynLex LSP Server", "Run VS Code Extension"],
+			"configurations": ["Debug DynLex LSP Server (No Prep)", "Run VS Code Extension (External LSP, No Prep)"],
+			"preLaunchTask": "prepare external lsp debug",
 			"stopAll": true
 		}
 	]

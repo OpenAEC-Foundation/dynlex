@@ -21,6 +21,15 @@
 			"problemMatcher": []
 		},
 		{
+			"label": "prepare external lsp debug",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"build",
+				"compile extension"
+			],
+			"problemMatcher": []
+		},
+		{
 			"label": "run tests",
 			"type": "shell",
 			"command": "./scripts/run_tests.sh",

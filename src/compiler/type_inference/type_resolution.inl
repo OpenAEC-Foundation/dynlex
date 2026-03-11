@@ -146,13 +146,13 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.referencedKind = DataType::Kind::Bool;
 				} else if (kindStr == "void") {
 					typeRef.referencedKind = DataType::Kind::Void;
-					} else if (kindStr == "string") {
-						typeRef.referencedKind = DataType::Kind::Int;
-						typeRef.numericSize = 1;
-						typeRef.pointerDepth = 1;
-					} else if (kindStr == "type") {
-						typeRef.referencedKind = DataType::Kind::Type;
-					}
+				} else if (kindStr == "string") {
+					typeRef.referencedKind = DataType::Kind::Int;
+					typeRef.numericSize = 1;
+					typeRef.pointerDepth = 1;
+				} else if (kindStr == "type") {
+					typeRef.referencedKind = DataType::Kind::Type;
+				}
 				if (resolved->arguments.size() > 2) {
 					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))

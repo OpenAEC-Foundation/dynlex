@@ -323,6 +323,42 @@ static void incrementVariableLikeCounts(PatternReference *reference) {
 	}
 }
 
+// True when a single-word reference token can also bind to a parameter candidate
+// in an enclosing definition section.
+static bool findEnclosingParameterCandidate(PatternReference *reference, const std::string &token, Range *outRange = nullptr) {
+	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
+		for (PatternDefinition *def : sec->patternDefinitions) {
+			bool found = false;
+			Range candidateRange;
+			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
+				if (found || element.text != token)
+					return;
+				if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::VariableLike)
+					return;
+				found = true;
+				if (def->range.line) {
+					int start = def->range.start() + static_cast<int>(element.startPos);
+					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
+				} else {
+					candidateRange = def->range;
+				}
+			});
+			if (found) {
+				if (outRange)
+					*outRange = candidateRange;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static Range firstMatchedDefinitionRange(PatternMatch *match) {
+	if (!match || !match->matchedEndNode || match->matchedEndNode->matchingDefinitions.empty())
+		return {};
+	return match->matchedEndNode->matchingDefinitions.front()->range;
+}
+
 // Remove VariableReferences created from a match, undoing addVariableReferencesFromMatch and searchParentPatterns effects.
 // If any ancestor definitions had VL→Variable promotions reverted, their sections are added to affectedSections.
 static void removeVariableReferencesFromMatch(
@@ -454,6 +490,28 @@ static bool resolveReferences(
 	return std::erase_if(references, [&context, decrementCounts, defToRefs, phase](PatternReference *reference) {
 		PatternMatch *match = context.match(reference);
 		if (match) {
+			if (reference->patternElements.size() == 1 &&
+				reference->patternElements[0].type == PatternElement::Type::VariableLike) {
+				const std::string &token = reference->patternElements[0].text;
+				Range parameterRange;
+				if (findEnclosingParameterCandidate(reference, token, &parameterRange)) {
+					Diagnostic diag(
+						Diagnostic::Level::Warning,
+						"Ambiguous single-word reference '" + token +
+							"' resolved as a function call, but the same token is also used as a parameter in an enclosing "
+							"pattern. Consider using a multi-word pattern or renaming the parameter.",
+						reference->range()
+					);
+					if (parameterRange.line)
+						diag.relatedInfo.push_back({"Enclosing parameter candidate appears here", parameterRange});
+					Range functionRange = firstMatchedDefinitionRange(match);
+					if (functionRange.line)
+						diag.relatedInfo.push_back({"Matched function pattern appears here", functionRange});
+					// Intentionally no per-reference dedupe tracking here.
+					context.diagnostics.push_back(std::move(diag));
+				}
+			}
+
 			// Multi-word reference matched a pattern in the tree
 			reference->resolve(match);
 			addVariableReferencesFromMatch(context, reference, *match);
@@ -651,13 +709,16 @@ bool resolvePatterns(ParseContext &context) {
 			pendingRequeueSections.clear();
 		}
 
-		if (unResolvedSections.size() < sectionsBefore)
+		if (unResolvedSections.size() < sectionsBefore) {
 			madeProgress = true;
-		if (staleInvalidationOccurred)
+		}
+		if (staleInvalidationOccurred) {
 			madeProgress = true;
+		}
 
-		if (resolveReferences(context, bodyReferences, true, &definitionToReferences, "body"))
+		if (resolveReferences(context, bodyReferences, true, &definitionToReferences, "body")) {
 			madeProgress = true;
+		}
 
 		// Resolve type constraints on definition elements ({type:name} syntax).
 		// Walk all definitions and resolve typeConstraintName strings to DataTypes

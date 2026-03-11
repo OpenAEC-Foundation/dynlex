@@ -59,3 +59,10 @@ npm run compile
 ```
 
 To test the extension, press F5 in VS Code to launch an Extension Development Host.
+
+## Extension Debug Workspaces (Repo)
+
+- `.vscode/lsp-managed.code-workspace`: managed mode (`dynlex.server.useExternal=false`). Use this for normal extension development.
+- `.vscode/lsp-debug.code-workspace`: external mode (`dynlex.server.useExternal=true`, `localhost:5008`). Use this when the LSP server is started separately (for C++ debugging).
+- `.vscode/launch.json` contains explicit extension host launch configs for both modes.
+- `Extension + C++ Debugger` uses a compound-level prep task (`prepare external lsp debug`) and no-prep child debug configs so build runs once and failures stop the whole compound launch.

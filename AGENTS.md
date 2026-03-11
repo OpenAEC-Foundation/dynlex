@@ -12,7 +12,7 @@ These instructions apply to all coding agents working in this repository (includ
 - Generalize reusable logic instead of duplicating one-off fixes.
 - Drive ALL language behavior through patterns and intrinsics. so NO HARDCODING.
 - Keep dependencies minimal.
-- Always answer direct user questions.
+- Always answer direct user questions instead of doing. if the user didn't ask you to do something, propose it.
 - Suggest better approaches when you see one.
 - Verify before assuming package/version/tool availability.
 - Document important fixes in repository docs/rules so all agents share the same context.
