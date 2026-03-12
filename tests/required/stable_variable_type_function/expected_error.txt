@@ -1,1 +1,1 @@
-Function 'set a to toint a' parses successfully without types, but not with types: Variable 'a' cannot change type from f64 to i32
+Function 'set a to toint a' parses successfully without types, but not with types: Variable 'a' cannot change type from a 64 bit float to a 32 bit integer

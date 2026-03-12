@@ -22,13 +22,21 @@ class BasicBlock;
 struct ParseContext;
 struct Variable;
 struct Function;
+struct PatternDefinition;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
+	struct IfChainSelection {
+		bool known = false;
+		CodeLine *selectedBranchLine = nullptr;
+	};
+
 	DataType returnType{DataType::Kind::Any};
 	std::vector<DataType> parameterTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_map<Function *, PatternDefinition *> selectedOverloadsByCall;
+	std::unordered_map<CodeLine *, IfChainSelection> ifChainSelections;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;

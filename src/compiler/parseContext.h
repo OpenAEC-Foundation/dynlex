@@ -6,6 +6,8 @@
 #include "patternTreeNode.h"
 #include "section.h"
 #include "syntaxConfig.h"
+#include <algorithm>
+#include <cassert>
 #include <list>
 #include <map>
 #include <stack>
@@ -146,6 +148,7 @@ struct ParseContext {
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
 	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_map<CodeLine *, Instantiation::IfChainSelection> inferredIfChainSelections;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
@@ -178,7 +181,11 @@ inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::
 	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	PatternDefinition *def = defs.empty() ? nullptr : defs[0];
+	PatternDefinition *def =
+		expr->selectedPatternDefinition ? expr->selectedPatternDefinition : (defs.empty() ? nullptr : defs[0]);
+	if (expr->selectedPatternDefinition) {
+		assert(std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end());
+	}
 	if (!def || !def->section || !def->section->isMacro)
 		return nullptr;
 	Function *bodyExpr = nullptr;

@@ -85,6 +85,8 @@ static bool inferFunction(
 );
 static bool
 inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings);
+static DataType
+derivePatternCallType(Function *expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings);
 static DataType inferFunctionTypeWithoutSideEffects(
 	Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings
 );
@@ -98,6 +100,30 @@ static void snapshotFunctionVariableReferences(Function *expr, InferenceContext 
 		snapshotFunctionVariableReferences(arg, context);
 	if (expr->kind == Function::Kind::Variable && expr->variable)
 		context.snapshotReferenceConstant(expr->variable);
+}
+
+static void recordSelectedOverloadsForInstantiation(Function *expr, Instantiation *instantiation) {
+	if (!expr || !instantiation)
+		return;
+	if (expr->kind == Function::Kind::PatternCall && expr->selectedPatternDefinition)
+		instantiation->selectedOverloadsByCall[expr] = expr->selectedPatternDefinition;
+	for (Function *arg : expr->arguments)
+		recordSelectedOverloadsForInstantiation(arg, instantiation);
+}
+
+static DataType ensureArgumentTypeForPatternCall(
+	Function *argExpr, InferenceContext &context, const std::unordered_map<std::string, Function *> &callerBindings
+) {
+	Function *inferExpr = argExpr;
+	(void)inferFunction(inferExpr, context, false, callerBindings);
+	DataType argType = ensureFunctionType(argExpr, context, callerBindings);
+	if (argType.isDeduced())
+		return argType;
+	argType = derivePatternCallType(argExpr, context, callerBindings);
+	if (argType.isDeduced())
+		return argType;
+	argType = resolveTypeThroughBindings(argExpr, callerBindings);
+	return argType;
 }
 
 static void resetSectionFunctionTypes(Section *section) {
@@ -925,7 +951,19 @@ static void inferOrderedFunction(
 	}
 
 	case Function::Kind::PatternCall: {
+		if (!context.trial)
+			expr->selectedPatternDefinition = nullptr;
 		if (expandsToSelectIntrinsic(expr)) {
+			if (!context.trial && expr->patternMatch && expr->patternMatch->matchedEndNode) {
+				auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+				if (!defs.empty()) {
+					std::vector<DataType> argTypesForOverload;
+					for (Function *arg : expr->arguments)
+						argTypesForOverload.push_back(resolveTypeThroughBindings(arg, macroBindings));
+					expr->selectedPatternDefinition =
+						selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
+				}
+			}
 			if (expr->arguments.size() < 3) {
 				context.setTypeFailure("select pattern requires condition and both branches");
 				break;
@@ -977,6 +1015,11 @@ static void inferOrderedFunction(
 			);
 			break;
 		}
+		if (!context.trial) {
+			expr->selectedPatternDefinition = def;
+			if (context.currentInstantiation)
+				context.currentInstantiation->selectedOverloadsByCall[expr] = def;
+		}
 
 		Section *matchedSection = def->section;
 
@@ -1023,21 +1066,13 @@ static void inferOrderedFunction(
 				if (paramIt != node->parameterNames.end()) {
 					Function *argExpr = callBindings[paramIt->second];
 					paramBindings.push_back({paramIt->second, argExpr});
-					argTypes.push_back(resolveTypeThroughBindings(argExpr, macroBindings));
+					DataType argType = ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
+					assert(
+						argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
+					);
+					argTypes.push_back(argType);
 				}
 			}
-
-			// Skip if any argument type is undeduced — can't meaningfully
-			// infer the body without knowing all argument types.
-			bool allDeduced = true;
-			for (auto &t : argTypes) {
-				if (!t.isDeduced()) {
-					allDeduced = false;
-					break;
-				}
-			}
-			if (!allDeduced)
-				break;
 
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordSectionInstantiationWrite(matchedSection, argTypes);
@@ -1046,11 +1081,23 @@ static void inferOrderedFunction(
 				context.parseContext, inst, paramBindings, macroBindings, context.currentInstantiation
 			);
 			if (!inst.inferring) {
+				if (!context.trial)
+					inst.selectedOverloadsByCall.clear();
+				if (!context.trial)
+					inst.ifChainSelections.clear();
 				inst.inferring = true;
 				Instantiation *savedInst = context.currentInstantiation;
 				auto savedKnownConstants = context.currentKnownConstants;
 				context.currentInstantiation = &inst;
-				bool inferenceSucceeded = inferSection(matchedSection, context, callBindings);
+				std::unordered_map<std::string, Function *> nonMacroTypeBindings;
+				std::vector<std::unique_ptr<Function>> ownedNonMacroTypeBindings;
+				for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++) {
+					auto typedPlaceholder = std::make_unique<Function>();
+					typedPlaceholder->type = argTypes[i];
+					nonMacroTypeBindings[paramBindings[i].first] = typedPlaceholder.get();
+					ownedNonMacroTypeBindings.push_back(std::move(typedPlaceholder));
+				}
+				bool inferenceSucceeded = inferSection(matchedSection, context, nonMacroTypeBindings);
 				context.currentKnownConstants = std::move(savedKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.inferring = false;

@@ -318,6 +318,8 @@ static bool inferFunction(
 	auto tryInfer = [&]() -> bool {
 		context.typeFailureDetail.clear();
 		inferOrderedFunction(expr, context, macroBindings);
+		if (context.typesValid && !context.trial && context.currentInstantiation)
+			recordSelectedOverloadsForInstantiation(expr, context.currentInstantiation);
 		if (context.typesValid)
 			snapshotFunctionVariableReferences(expr, context);
 		return context.typesValid;

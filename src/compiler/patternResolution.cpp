@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <list>
 #include <ranges>
@@ -120,6 +121,196 @@ static void appendUniqueSection(std::vector<Section *> &sections, Section *secti
 	if (std::find(sections.begin(), sections.end(), section) == sections.end())
 		sections.push_back(section);
 }
+
+struct AlternativePatternSuggestion {
+	PatternDefinition *definition = nullptr;
+	std::string spelling;
+	bool isMultiWord = false;
+};
+
+static bool isParameterLikeElement(const DefinitionPatternElement &element) {
+	return element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike;
+}
+
+static bool forEachPatternSpelling(
+	const std::vector<DefinitionPatternElement> &elements, size_t elementIndex, std::string &currentSpelling,
+	const std::function<bool(const std::string &)> &visitor
+);
+
+static bool forEachPatternSpellingWithSuffix(
+	const std::vector<DefinitionPatternElement> &alternativeElements, size_t alternativeIndex, std::string &currentSpelling,
+	const std::vector<DefinitionPatternElement> &suffixElements, size_t suffixIndex,
+	const std::function<bool(const std::string &)> &visitor
+) {
+	if (alternativeIndex >= alternativeElements.size())
+		return forEachPatternSpelling(suffixElements, suffixIndex, currentSpelling, visitor);
+
+	const DefinitionPatternElement &element = alternativeElements[alternativeIndex];
+	if (element.type == PatternElement::Type::Choice) {
+		for (const auto &nestedAlternative : element.alternatives) {
+			if (forEachPatternSpellingWithSuffix(
+					nestedAlternative, 0, currentSpelling, alternativeElements, alternativeIndex + 1, visitor
+				))
+				return true;
+		}
+		return false;
+	}
+
+	size_t previousSize = currentSpelling.size();
+	currentSpelling += element.text;
+	bool found = forEachPatternSpellingWithSuffix(
+		alternativeElements, alternativeIndex + 1, currentSpelling, suffixElements, suffixIndex, visitor
+	);
+	currentSpelling.resize(previousSize);
+	return found;
+}
+
+static bool forEachPatternSpelling(
+	const std::vector<DefinitionPatternElement> &elements, size_t elementIndex, std::string &currentSpelling,
+	const std::function<bool(const std::string &)> &visitor
+) {
+	if (elementIndex >= elements.size())
+		return visitor(currentSpelling);
+
+	const DefinitionPatternElement &element = elements[elementIndex];
+	if (element.type == PatternElement::Type::Choice) {
+		for (const auto &alternative : element.alternatives) {
+			if (forEachPatternSpellingWithSuffix(alternative, 0, currentSpelling, elements, elementIndex + 1, visitor))
+				return true;
+		}
+		return false;
+	}
+
+	size_t previousSize = currentSpelling.size();
+	currentSpelling += element.text;
+	bool found = forEachPatternSpelling(elements, elementIndex + 1, currentSpelling, visitor);
+	currentSpelling.resize(previousSize);
+	return found;
+}
+
+static bool isSingleWordPatternSpelling(const std::string &spelling) {
+	std::vector<PatternElement> elements = getPatternElements(spelling);
+	int wordCount = 0;
+	for (const PatternElement &element : elements) {
+		if (element.type == PatternElement::Type::VariableLike || element.type == PatternElement::Type::Variable)
+			wordCount++;
+	}
+	return wordCount <= 1;
+}
+
+static bool findEnclosingParameterCandidate(PatternReference *reference, const std::string &token, Range *outRange = nullptr) {
+	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
+		for (PatternDefinition *def : sec->patternDefinitions) {
+			bool found = false;
+			Range candidateRange;
+			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
+				if (found || element.text != token)
+					return;
+				if (!isParameterLikeElement(element))
+					return;
+				found = true;
+				if (def->range.line) {
+					int start = def->range.start() + static_cast<int>(element.startPos);
+					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
+				} else {
+					candidateRange = def->range;
+				}
+			});
+			if (found) {
+				if (outRange)
+					*outRange = candidateRange;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static std::vector<Range> collectEnclosingParameterCandidateRanges(PatternReference *reference, const std::string &token) {
+	std::vector<Range> ranges;
+	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
+		for (PatternDefinition *def : sec->patternDefinitions) {
+			bool found = false;
+			Range candidateRange;
+			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
+				if (found || element.text != token)
+					return;
+				if (!isParameterLikeElement(element))
+					return;
+				found = true;
+				if (def->range.line) {
+					int start = def->range.start() + static_cast<int>(element.startPos);
+					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
+				} else {
+					candidateRange = def->range;
+				}
+			});
+			if (found && candidateRange.line)
+				ranges.push_back(candidateRange);
+		}
+	}
+	return ranges;
+}
+
+static std::vector<PatternDefinition *> collectAlternativeSearchOrder(PatternMatch *match) {
+	if (!match || !match->matchedEndNode || match->matchedEndNode->matchingDefinitions.empty())
+		return {};
+
+	PatternDefinition *matchedDefinition = match->matchedEndNode->matchingDefinitions.front();
+	std::vector<Section *> orderedSections;
+	if (matchedDefinition && matchedDefinition->section)
+		orderedSections.push_back(matchedDefinition->section);
+	for (PatternDefinition *definition : match->matchedEndNode->matchingDefinitions) {
+		if (!definition || !definition->section)
+			continue;
+		if (std::find(orderedSections.begin(), orderedSections.end(), definition->section) == orderedSections.end())
+			orderedSections.push_back(definition->section);
+	}
+
+	std::vector<PatternDefinition *> orderedDefinitions;
+	if (matchedDefinition)
+		orderedDefinitions.push_back(matchedDefinition);
+	for (Section *section : orderedSections) {
+		std::vector<PatternDefinition *> sectionDefinitions = section->patternDefinitions;
+		std::sort(sectionDefinitions.begin(), sectionDefinitions.end(), definitionComesBefore);
+		for (PatternDefinition *definition : sectionDefinitions) {
+			if (!definition)
+				continue;
+			if (std::find(orderedDefinitions.begin(), orderedDefinitions.end(), definition) == orderedDefinitions.end())
+				orderedDefinitions.push_back(definition);
+		}
+	}
+
+	return orderedDefinitions;
+}
+
+static AlternativePatternSuggestion
+findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *match, const std::string &originalToken) {
+	for (PatternDefinition *definition : collectAlternativeSearchOrder(match)) {
+		AlternativePatternSuggestion suggestion;
+		std::string spelling;
+		bool found =
+			forEachPatternSpelling(definition->patternElements, 0, spelling, [&](const std::string &candidateSpelling) {
+			if (candidateSpelling.empty() || candidateSpelling == originalToken)
+				return false;
+
+			bool isMultiWord = !isSingleWordPatternSpelling(candidateSpelling);
+			if (isMultiWord) {
+				suggestion = {definition, candidateSpelling, true};
+				return true;
+			}
+
+			if (!findEnclosingParameterCandidate(reference, candidateSpelling)) {
+				suggestion = {definition, candidateSpelling, false};
+				return true;
+			}
+			return false;
+		});
+		if (found)
+			return suggestion;
+	}
+	return {};
+}
 } // namespace
 
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
@@ -141,6 +332,9 @@ void expandMatch(Function *rootFunction, Function *expr, PatternMatch *match) {
 	// move arguments to the appropriate submatches
 	expr->kind = Function::Kind::PatternCall;
 	expr->patternMatch = match;
+	expr->selectedPatternDefinition = (match->matchedEndNode && !match->matchedEndNode->matchingDefinitions.empty())
+										  ? match->matchedEndNode->matchingDefinitions.front()
+										  : nullptr;
 	for (const PatternMatch &subMatch : match->subMatches) {
 		Function *arg = new Function();
 		arg->isSubMatch = true;
@@ -323,36 +517,6 @@ static void incrementVariableLikeCounts(PatternReference *reference) {
 	}
 }
 
-// True when a single-word reference token can also bind to a parameter candidate
-// in an enclosing definition section.
-static bool findEnclosingParameterCandidate(PatternReference *reference, const std::string &token, Range *outRange = nullptr) {
-	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
-		for (PatternDefinition *def : sec->patternDefinitions) {
-			bool found = false;
-			Range candidateRange;
-			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
-				if (found || element.text != token)
-					return;
-				if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::VariableLike)
-					return;
-				found = true;
-				if (def->range.line) {
-					int start = def->range.start() + static_cast<int>(element.startPos);
-					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
-				} else {
-					candidateRange = def->range;
-				}
-			});
-			if (found) {
-				if (outRange)
-					*outRange = candidateRange;
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 static Range firstMatchedDefinitionRange(PatternMatch *match) {
 	if (!match || !match->matchedEndNode || match->matchedEndNode->matchingDefinitions.empty())
 		return {};
@@ -493,20 +657,38 @@ static bool resolveReferences(
 			if (reference->patternElements.size() == 1 &&
 				reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 				const std::string &token = reference->patternElements[0].text;
-				Range parameterRange;
-				if (findEnclosingParameterCandidate(reference, token, &parameterRange)) {
+				if (findEnclosingParameterCandidate(reference, token)) {
+					AlternativePatternSuggestion suggestion = findAlternativePatternSuggestion(reference, match, token);
+					std::string suggestionMessage;
+					if (!suggestion.spelling.empty()) {
+						suggestionMessage = " Consider using '" + suggestion.spelling + "'.";
+					} else {
+						suggestionMessage =
+							" If this was meant as an argument, rename the variable; otherwise add an extra possible pattern.";
+					}
 					Diagnostic diag(
 						Diagnostic::Level::Warning,
 						"Ambiguous single-word reference '" + token +
 							"' resolved as a function call, but the same token is also used as a parameter in an enclosing "
-							"pattern. Consider using a multi-word pattern or renaming the parameter.",
+							"pattern." +
+							suggestionMessage,
 						reference->range()
 					);
-					if (parameterRange.line)
-						diag.relatedInfo.push_back({"Enclosing parameter candidate appears here", parameterRange});
+					for (const Range &candidateRange : collectEnclosingParameterCandidateRanges(reference, token))
+						diag.relatedInfo.push_back({"Enclosing parameter candidate appears here", candidateRange});
 					Range functionRange = firstMatchedDefinitionRange(match);
 					if (functionRange.line)
 						diag.relatedInfo.push_back({"Matched function pattern appears here", functionRange});
+					if (suggestion.definition && suggestion.definition->range.line)
+						diag.relatedInfo.push_back({"Suggested alternative pattern appears here", suggestion.definition->range}
+						);
+					if (suggestion.isMultiWord && !suggestion.spelling.empty()) {
+						diag.quickFixes.push_back({
+							"Use '" + suggestion.spelling + "'",
+							reference->range(),
+							suggestion.spelling,
+						});
+					}
 					// Intentionally no per-reference dedupe tracking here.
 					context.diagnostics.push_back(std::move(diag));
 				}

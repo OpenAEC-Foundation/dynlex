@@ -8,6 +8,7 @@
 #include <vector>
 
 struct PatternMatch;
+struct PatternDefinition;
 struct PatternReference;
 struct VariableReference;
 
@@ -33,6 +34,8 @@ struct Function {
 
 	// For PatternCall: the matched pattern (filled after resolution)
 	PatternMatch *patternMatch{};
+	// For PatternCall: overload selected during type inference.
+	PatternDefinition *selectedPatternDefinition{};
 
 	// For Pending: the pattern reference (used during resolution)
 	PatternReference *patternReference{};

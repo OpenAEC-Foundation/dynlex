@@ -148,13 +148,6 @@ void generateSpecializedFunction(
 	}
 }
 
-static bool expandsToSelectIntrinsic(Function *function) {
-	std::unordered_map<std::string, Function *> ignoredBindings;
-	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
-	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall &&
-		   intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Select;
-}
-
 // Generate code for an function
 llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 	if (!expr)
@@ -254,40 +247,24 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		if (defs.empty())
 			return nullptr;
 
-		// Arguments are already sorted by source position (type inference sorts in-place)
-
-		// Build argument types for overload selection
-		std::vector<DataType> argTypesForOverload;
-		if (!expandsToSelectIntrinsic(expr)) {
-			size_t ai = 0;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				bool isParam = false;
-				for (auto *d : defs) {
-					if (node->parameterNames.contains(d)) {
-						isParam = true;
-						break;
-					}
-				}
-				if (isParam && ai < expr->arguments.size()) {
-					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[ai]));
-					ai++;
-				}
-			}
-		}
-
-		// Select the best overload based on argument types
-		PatternDefinition *matchedDef =
-			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-		if (!matchedDef) {
-			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "No overload matches argument types", expr->range)
+		PatternDefinition *matchedDef = nullptr;
+		if (context.currentCodegenInstantiation) {
+			auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
+			assert(
+				selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
+				"Pattern call missing per-instantiation overload selection from type inference"
 			);
-			return nullptr;
+			matchedDef = selectedIt->second;
+		} else {
+			matchedDef = expr->selectedPatternDefinition;
+			assert(matchedDef && "Pattern call missing overload selection from type inference");
+			assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		}
+		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
+		assert(matchedDef && "No overload matched during codegen");
 
 		Section *matchedSection = matchedDef->section;
-		if (!matchedSection)
-			return nullptr;
+		assert(matchedSection && "Selected overload has no section");
 
 		// Non-macro class type references are compile-time only — no runtime code.
 		// Macro class sections (primitive type definitions) fall through to macro expansion.
@@ -451,46 +428,32 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 				chainEnd++;
 			}
 
-			std::optional<size_t> selectedBranch;
-			bool branchKnown = true;
-			for (size_t k = i; k <= chainEnd; k++) {
-				auto branchInfo = controlHeaderInfo(section->codeLines[k]);
-				if (!branchInfo) {
-					branchKnown = false;
-					break;
-				}
-				const std::string &branchKind = std::get<0>(*branchInfo);
-				Function *header = std::get<1>(*branchInfo);
-				const auto &headerBindings = std::get<2>(*branchInfo);
-				if (branchKind == "else") {
-					if (!selectedBranch.has_value())
-						selectedBranch = k;
-					break;
-				}
-				if (header->arguments.size() < 2) {
-					branchKnown = false;
-					break;
-				}
-				CompileTimeValue conditionValue = evaluateCompileTimeValue(
-					header->arguments[1], context, headerBindings, context.currentCodegenInstantiation
+			if (context.currentCodegenInstantiation) {
+				auto selectionIt = context.currentCodegenInstantiation->ifChainSelections.find(line);
+				assert(
+					selectionIt != context.currentCodegenInstantiation->ifChainSelections.end() &&
+					"Missing per-instantiation if-chain selection from type inference"
 				);
-				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-				if (!condition.has_value()) {
-					branchKnown = false;
-					break;
+				const Instantiation::IfChainSelection &selection = selectionIt->second;
+				if (selection.known) {
+					if (selection.selectedBranchLine && selection.selectedBranchLine->sectionOpening)
+						generateSectionCode(context, selection.selectedBranchLine->sectionOpening);
+					i = chainEnd;
+					continue;
 				}
-				if (*condition) {
-					selectedBranch = k;
-					break;
+			} else {
+				auto selectionIt = context.inferredIfChainSelections.find(line);
+				assert(
+					selectionIt != context.inferredIfChainSelections.end() &&
+					"Missing non-instantiated if-chain selection from type inference"
+				);
+				const Instantiation::IfChainSelection &selection = selectionIt->second;
+				if (selection.known) {
+					if (selection.selectedBranchLine && selection.selectedBranchLine->sectionOpening)
+						generateSectionCode(context, selection.selectedBranchLine->sectionOpening);
+					i = chainEnd;
+					continue;
 				}
-			}
-
-			if (branchKnown && selectedBranch.has_value()) {
-				CodeLine *selectedLine = section->codeLines[*selectedBranch];
-				if (selectedLine->sectionOpening)
-					generateSectionCode(context, selectedLine->sectionOpening);
-				i = chainEnd;
-				continue;
 			}
 		}
 

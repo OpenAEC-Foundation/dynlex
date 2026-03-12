@@ -80,6 +80,7 @@ paths:
 - **`currentInstantiation` moved to InferenceContext**: Removed `currentInstantiation` from `ParseContext` — it's only needed during type inference, not codegen. Now lives in `InferenceContext`.
 - **Codegen uses pre-sorted arguments**: `generateExpressionCode` no longer calls `sortArgumentsByPosition` — type inference now sorts arguments in-place, so codegen can use `expr->arguments` directly.
 - **Overload selection failure is an error**: When `selectOverload` returns null in both type inference and codegen, it's now treated as an error (with diagnostic) instead of silently falling back to `defs[0]`.
+- **Ambiguous single-word function-vs-parameter warnings now suggest concrete pattern alternatives**: During pattern resolution, the warning walks matched function section definitions in source order (starting from the matched definition), expands parsed `Choice` alternatives from `DefinitionPatternElement` trees, and suggests the first valid alternative spelling. Multi-word alternatives get both a warning suggestion and a quick-fix edit; single-word alternatives are only suggested when they don't collide with enclosing parameter names.
 
 ## TODO / Known Issues
 - **Argument greediness**: `factorial of n - 1` parses as `(factorial of n) - 1`. Pattern arguments greedily consume tokens. Operator precedence (wave-based) fixes associativity but not argument boundaries for non-operator patterns.

@@ -1,1 +1,1 @@
-Variable 'a' cannot change type from i32 to f64
+Variable 'a' cannot change type from a 32 bit integer to a 64 bit float

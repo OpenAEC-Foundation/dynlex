@@ -4,7 +4,7 @@ import lib/array.dl
 
 class:
     patterns:
-        string
+        [a|] string
     members:
         data as pointer to byte
         length as i32
@@ -15,7 +15,7 @@ function cstring:
 
 function new string from data ptr with length len:
     replacement:
-        @intrinsic("construct", string, ptr, len)
+        @intrinsic("construct", a string, ptr, len)
 
 function character index of str:
     replacement:

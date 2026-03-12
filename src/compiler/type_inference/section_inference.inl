@@ -166,6 +166,17 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 				}
 			}
 
+			if (!context.trial) {
+				Instantiation::IfChainSelection selection;
+				selection.known = branchKnown;
+				if (branchKnown && selectedBranch.has_value())
+					selection.selectedBranchLine = section->codeLines[*selectedBranch];
+				if (context.currentInstantiation)
+					context.currentInstantiation->ifChainSelections[line] = selection;
+				else
+					context.parseContext.inferredIfChainSelections[line] = selection;
+			}
+
 			if (branchKnown && selectedBranch.has_value()) {
 				context.currentKnownConstants = constantsBeforeChain;
 				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
@@ -237,6 +248,7 @@ bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	InferenceContext context(parseContext);
 	parseContext.constantValuesByReference.clear();
+	parseContext.inferredIfChainSelections.clear();
 	context.currentKnownConstants.clear();
 	if (!inferSection(parseContext.mainSection, context))
 		return false;
@@ -310,6 +322,8 @@ bool ensureSectionInstantiationInferred(
 		return inst.returnType.isDeduced() && inst.valid;
 
 	inst.constantValuesByReference.clear();
+	inst.selectedOverloadsByCall.clear();
+	inst.ifChainSelections.clear();
 	InferenceContext context(parseContext);
 	inst.inferring = true;
 	Instantiation *savedInst = context.currentInstantiation;
@@ -320,7 +334,7 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	bool inferenceSucceeded = inferSection(section, context, callBindings);
+	bool inferenceSucceeded = inferSection(section, context, {});
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;

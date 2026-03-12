@@ -86,10 +86,19 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 		auto &defs = resolved->patternMatch->matchedEndNode->matchingDefinitions;
 		if (!defs.empty()) {
 			std::vector<DataType> argTypesForOverload;
+			bool allArgTypesDeduced = true;
 			for (Function *arg : resolved->arguments)
 				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindings));
+			for (const DataType &argType : argTypesForOverload) {
+				if (!argType.isDeduced()) {
+					allArgTypesDeduced = false;
+					break;
+				}
+			}
 			PatternDefinition *def =
 				selectOverload(defs, resolved->arguments, resolved->patternMatch->nodesPassed, argTypesForOverload);
+			if (def && allArgTypesDeduced)
+				resolved->selectedPatternDefinition = def;
 			if (def && def->section && def->section->type == SectionType::Class && !def->section->isMacro &&
 				activeTypeResolutionParseContext) {
 				return instantiateBoundClassType(
@@ -468,10 +477,19 @@ static bool resolveCompileTimeTypeReference(
 		if (defs.empty())
 			return false;
 		std::vector<DataType> argTypesForOverload;
+		bool allArgTypesDeduced = true;
 		for (Function *arg : resolved->arguments)
 			argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindings));
+		for (const DataType &argType : argTypesForOverload) {
+			if (!argType.isDeduced()) {
+				allArgTypesDeduced = false;
+				break;
+			}
+		}
 		PatternDefinition *def =
 			selectOverload(defs, resolved->arguments, resolved->patternMatch->nodesPassed, argTypesForOverload);
+		if (def && allArgTypesDeduced)
+			resolved->selectedPatternDefinition = def;
 		if (!def || !def->section)
 			return false;
 

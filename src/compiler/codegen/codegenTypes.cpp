@@ -14,6 +14,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <filesystem>
@@ -408,28 +409,22 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		if (defs.empty())
 			return expr->type;
 
-		std::vector<DataType> argTypesForOverload;
-		{
-			size_t argIndex = 0;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				bool isParam = false;
-				for (auto *def : defs) {
-					if (node->parameterNames.contains(def)) {
-						isParam = true;
-						break;
-					}
-				}
-				if (isParam && argIndex < expr->arguments.size()) {
-					argTypesForOverload.push_back(getEffectiveType(context, expr->arguments[argIndex]));
-					argIndex++;
-				}
-			}
+		PatternDefinition *matchedDef = nullptr;
+		if (context.currentCodegenInstantiation) {
+			auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
+			assert(
+				selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
+				"Pattern call missing per-instantiation overload selection from type inference"
+			);
+			matchedDef = selectedIt->second;
+		} else {
+			matchedDef = expr->selectedPatternDefinition;
+			assert(matchedDef && "Pattern call missing overload selection from type inference");
+			assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		}
-
-		PatternDefinition *matchedDef =
-			selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-		if (!matchedDef || !matchedDef->section)
-			return expr->type;
+		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
+		assert(matchedDef && "No overload matched during codegen");
+		assert(matchedDef->section && "Selected overload has no section");
 
 		Section *matchedSection = matchedDef->section;
 		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
@@ -467,6 +462,10 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		auto instIt = matchedSection->instantiations.find(argTypes);
 		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
 			return concretizeClassType(instIt->second.returnType);
+		assert(
+			instIt != matchedSection->instantiations.end() &&
+			"Missing inferred instantiation for deduced non-macro pattern call in getEffectiveType"
+		);
 
 		return expr->type;
 	}

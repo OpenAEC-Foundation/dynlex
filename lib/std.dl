@@ -9,9 +9,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function a new type from value:
+function a new variabletype from value:
 	replacement:
-		@intrinsic("construct", type, value)
+		@intrinsic("construct", variabletype, value)
 
 # --- Variables ---
 
@@ -59,23 +59,23 @@ function void:
 
 # --- Pointer and string types ---
 
-function [a|] pointer to type:
+function [a|] pointer to pointedtype:
     replacement:
-        @intrinsic("add pointer depth", type)
+        @intrinsic("add pointer depth", pointedtype)
 
 function [an|a|] array of n [item|items]:
     replacement:
         @intrinsic("array", n)
 
-function [an|a|] type array of n [item|items]:
+function [an|a|] elementtype array of n [item|items]:
     replacement:
-        @intrinsic("array", n, type)
+        @intrinsic("array", n, elementtype)
 
 # --- Type casts ---
 
-function value as type:
+function value as destinationtype:
     replacement:
-        @intrinsic("cast", value, type)
+        @intrinsic("cast", value, destinationtype)
 
 function true_value if condition, else false_value:
     replacement:
@@ -85,9 +85,9 @@ function [the|] build info key:
     replacement:
         @intrinsic("build info", key)
 
-function [the|] size of type:
+function [the|] size of typetomeasure:
     replacement:
-        @intrinsic("size of", type)
+        @intrinsic("size of", typetomeasure)
 
 function [the|] build platform:
     replacement:
