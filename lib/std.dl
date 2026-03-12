@@ -89,6 +89,10 @@ function [the|] size of typetomeasure:
     replacement:
         @intrinsic("size of", typetomeasure)
 
+function [the|] type of value:
+    replacement:
+        @intrinsic("type of", value)
+
 function [the|] build platform:
     replacement:
         the build info "platform"

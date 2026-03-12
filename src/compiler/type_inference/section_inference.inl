@@ -152,7 +152,6 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 					branchKnown = false;
 					break;
 				}
-				markCompileTimeParameterRequirements(header->arguments[1], headerBindings, context.currentInstantiation);
 				CompileTimeValue conditionValue =
 					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindings);
 				std::optional<bool> condition = compileTimeTruthiness(conditionValue);

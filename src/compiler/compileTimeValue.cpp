@@ -255,6 +255,8 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 		return {};
 	case Function::Kind::Variable:
 		if (expr->variable && instantiation) {
+			if (!instantiation->requiredCompileTimeParameters.contains(expr->variable->name))
+				return {};
 			auto it = instantiation->constantParameterValues.find(expr->variable->name);
 			if (it != instantiation->constantParameterValues.end())
 				return it->second;

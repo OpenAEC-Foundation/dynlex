@@ -273,7 +273,7 @@ static bool inferFunction(
 		deleteFunctionTree(originalExpr);
 		originalExpr = nullptr;
 	};
-	auto inferNestedForGrouping = [&](Function *&subExpr) -> bool {
+	auto inferNestedForGrouping = [&](Function *subExpr, Function *&updatedSubExpr) -> bool {
 		auto isMacroPatternCall = [&](Function *candidate) -> bool {
 			if (!candidate || candidate->kind != Function::Kind::PatternCall || !candidate->patternMatch ||
 				!candidate->patternMatch->matchedEndNode)
@@ -293,13 +293,15 @@ static bool inferFunction(
 		InferenceContext trialContext(context.parseContext, true);
 		trialContext.currentInstantiation = context.currentInstantiation;
 		trialContext.trialJournal = &journal;
-		bool ok = inferFunction(subExpr, trialContext, false, macroBindings);
+		Function *inferredExpr = subExpr;
+		bool ok = inferFunction(inferredExpr, trialContext, false, macroBindings);
 		if (!ok && context.typeFailureDetail.empty())
 			context.typeFailureDetail = trialContext.typeFailureDetail;
-		if (ok && isMacroPatternCall(subExpr)) {
-			DataType resolvedType = inferFunctionTypeWithoutSideEffects(subExpr, context, macroBindings);
+		if (ok && isMacroPatternCall(inferredExpr)) {
+			DataType resolvedType = inferFunctionTypeWithoutSideEffects(inferredExpr, context, macroBindings);
 			if (traceNestedMacroType && !resolvedType.isDeduced()) {
-				std::cerr << "[nested-macro-type] unresolved expr='" << std::string(subExpr->range.subString) << "' bindings={";
+				std::cerr << "[nested-macro-type] unresolved expr='" << std::string(inferredExpr->range.subString)
+						  << "' bindings={";
 				bool first = true;
 				for (const auto &[name, value] : macroBindings) {
 					if (!first)
@@ -311,6 +313,7 @@ static bool inferFunction(
 			}
 			ok = resolvedType.isDeduced();
 		}
+		updatedSubExpr = inferredExpr;
 		rollbackTrialJournal(journal);
 		return ok;
 	};
@@ -350,8 +353,12 @@ static bool inferFunction(
 		return true;
 	}
 	if (mustOwnEntireRange(expr)) {
-		for (Function *&argument : expr->arguments) {
-			if (!inferNestedForGrouping(argument)) {
+		for (size_t i = 0; i < expr->arguments.size(); i++) {
+			// Do not keep Function*& aliases into argument slots across inference:
+			// recursive regrouping may rebuild argument vectors, which would dangle references.
+			Function *argument = expr->arguments[i];
+			Function *updatedArgument = argument;
+			if (!inferNestedForGrouping(argument, updatedArgument)) {
 				expr = originalExpr;
 				resetFunctionTypes(expr);
 				context.addDiagnostic(
@@ -360,6 +367,7 @@ static bool inferFunction(
 				);
 				return false;
 			}
+			expr->arguments[i] = updatedArgument;
 		}
 		if (!tryInfer()) {
 			expr = originalExpr;
@@ -375,7 +383,7 @@ static bool inferFunction(
 	}
 	std::vector<Function *> flatNodes;
 	size_t operatorCount = 0;
-	std::function<void(Function *&, bool, bool)> collectFlatNodes = [&](Function *&function, bool isOnBoundary, bool isRoot) {
+	std::function<void(Function *, bool, bool)> collectFlatNodes = [&](Function *function, bool isOnBoundary, bool isRoot) {
 		bool isPatternCall =
 			function->kind == Function::Kind::PatternCall && !function->arguments.empty() && !function->isExplicitGroup;
 
@@ -386,10 +394,12 @@ static bool inferFunction(
 
 		if (!isRoot &&
 			(function->isExplicitGroup || !isOnBoundary || !function->isSubMatch || hasMultipleBoundaryArguments(function))) {
-			if (!inferNestedForGrouping(function)) {
+			Function *updatedFunction = function;
+			if (!inferNestedForGrouping(function, updatedFunction)) {
 				context.typesValid = false;
 				return;
 			}
+			function = updatedFunction;
 			flatNodes.push_back(function);
 			return;
 		}
@@ -398,42 +408,57 @@ static bool inferFunction(
 		bool hasRightEdge = endsWithArgument(function);
 
 		if (!hasLeftEdge && !hasRightEdge) {
-			for (Function *&argument : function->arguments) {
-				if (!inferNestedForGrouping(argument)) {
+			for (size_t i = 0; i < function->arguments.size(); i++) {
+				Function *argument = function->arguments[i];
+				Function *updatedArgument = argument;
+				if (!inferNestedForGrouping(argument, updatedArgument)) {
 					context.typesValid = false;
 					return;
 				}
+				function->arguments[i] = updatedArgument;
 			}
 			flatNodes.push_back(function);
 			return;
 		}
 
 		if (hasMultipleBoundaryArguments(function)) {
-			for (Function *&argument : function->arguments) {
-				if (!inferNestedForGrouping(argument)) {
+			for (size_t i = 0; i < function->arguments.size(); i++) {
+				Function *argument = function->arguments[i];
+				Function *updatedArgument = argument;
+				if (!inferNestedForGrouping(argument, updatedArgument)) {
 					context.typesValid = false;
 					return;
 				}
+				function->arguments[i] = updatedArgument;
 			}
 			flatNodes.push_back(function);
 			return;
 		}
 
-		if (hasLeftEdge)
-			collectFlatNodes(function->arguments.front(), true, false);
+		if (hasLeftEdge) {
+			Function *left = function->arguments.front();
+			collectFlatNodes(left, true, false);
+			function->arguments.front() = left;
+		}
 
 		for (size_t i = (hasLeftEdge ? 1 : 0); i < function->arguments.size() - (hasRightEdge ? 1 : 0); i++) {
-			if (!inferNestedForGrouping(function->arguments[i])) {
+			Function *argument = function->arguments[i];
+			Function *updatedArgument = argument;
+			if (!inferNestedForGrouping(argument, updatedArgument)) {
 				context.typesValid = false;
 				return;
 			}
+			function->arguments[i] = updatedArgument;
 		}
 
 		operatorCount++;
 		flatNodes.push_back(function);
 
-		if (hasRightEdge)
-			collectFlatNodes(function->arguments.back(), true, false);
+		if (hasRightEdge) {
+			Function *right = function->arguments.back();
+			collectFlatNodes(right, true, false);
+			function->arguments.back() = right;
+		}
 	};
 
 	collectFlatNodes(expr, true, true);
@@ -470,7 +495,7 @@ static bool inferFunction(
 	std::function<bool(int, int, std::function<bool(Function *)>)> tryGroupings =
 		[&](int start, int end, std::function<bool(Function *)> onResult) -> bool {
 		if (start > end)
-			return onResult(nullptr);
+			return false;
 		if (start == end)
 			return onResult(flatNodes[start]);
 
@@ -491,11 +516,13 @@ static bool inferFunction(
 				continue;
 			bool hasLeftEdge = startsWithArgument(rootFunction);
 			bool hasRightEdge = endsWithArgument(rootFunction);
+			if (hasLeftEdge && rootIndex == start)
+				continue;
+			if (hasRightEdge && rootIndex == end)
+				continue;
 			if (!hasLeftEdge && rootIndex > start)
 				continue;
 			if (!hasRightEdge && rootIndex < end)
-				continue;
-			if (hasLeftEdge && hasRightEdge && (rootIndex == start || rootIndex == end))
 				continue;
 			int rootPrecedence = functionPrecedence(rootFunction);
 			if (rootPrecedence > 0 && hasLeftEdge && hasRightEdge) {
@@ -521,15 +548,23 @@ static bool inferFunction(
 
 			Function *savedLeft = hasLeftEdge ? rootFunction->arguments.front() : nullptr;
 			Function *savedRight = hasRightEdge ? rootFunction->arguments.back() : nullptr;
-			bool done = tryGroupings(start, rootIndex - 1, [&](Function *leftResult) -> bool {
-				if (hasLeftEdge)
-					rootFunction->arguments.front() = leftResult;
+			auto tryRight = [&](void) -> bool {
+				if (!hasRightEdge)
+					return onResult(rootFunction);
 				return tryGroupings(rootIndex + 1, end, [&](Function *rightResult) -> bool {
-					if (hasRightEdge)
-						rootFunction->arguments.back() = rightResult;
+					rootFunction->arguments.back() = rightResult;
 					return onResult(rootFunction);
 				});
-			});
+			};
+			bool done = false;
+			if (hasLeftEdge) {
+				done = tryGroupings(start, rootIndex - 1, [&](Function *leftResult) -> bool {
+					rootFunction->arguments.front() = leftResult;
+					return tryRight();
+				});
+			} else {
+				done = tryRight();
+			}
 			if (done)
 				return true;
 			if (hasLeftEdge)

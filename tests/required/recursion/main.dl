@@ -26,3 +26,38 @@ function n is odd:
 
 print 4 is even as line
 print 7 is even as line
+
+# exception case: base return appears after the recursive return path
+function n is even inverted:
+    execute:
+        if n != 0:
+            return n - 1 is odd inverted
+        return 1
+
+function n is odd inverted:
+    execute:
+        if n != 0:
+            return n - 1 is even inverted
+        return 0
+
+print 4 is even inverted as line
+print 7 is even inverted as line
+
+# exception case: recursive call is used in a nested condition before base return
+function n is even nested:
+    execute:
+        if n != 0:
+            if n - 1 is odd nested:
+                return 1
+            else:
+                return 0
+        return 1
+
+function n is odd nested:
+    execute:
+        if n != 0:
+            return n - 1 is even nested
+        return 0
+
+print 4 is even nested as line
+print 7 is even nested as line

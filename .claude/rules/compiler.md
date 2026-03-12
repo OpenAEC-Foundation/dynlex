@@ -20,7 +20,7 @@ paths:
 
 ## Key Invariants
 - Macro body expression nodes are **shared mutable state** — reset types before each `inferMacroBody` call (macro sections only)
-- Type inference: single-pass, execution-order processing (top to bottom). No fixed-point iteration.
+- Type inference: execution-order processing (top to bottom), with per-instantiation recursive re-inference when undeduced recursive dependencies are observed.
 - Instantiation argTypes vector must be built in `nodesPassed` order (both inference and codegen)
 - `macroBindingStack` (`std::stack`): macros only see their own bindings. `MacroScopeGuard` pops to caller scope for argument evaluation
 - `getVariablePointer` recursively resolves through multiple macro binding scopes (for nested macros like `add value to target` → `set var to val`)
@@ -32,7 +32,7 @@ paths:
 2. **Section Analysis** — parse indentation, identify sections (`compiler.cpp`: `analyzeSections`)
 3. **Pattern Resolution** — match patterns, resolve variables, assign precedence (`patternResolution.cpp`: `resolvePatterns`)
 4. **Variable Resolution** — group variables by scope, handle globals (part of `resolvePatterns`)
-5. **Type Inference** — single-pass execution-order processing with operand reordering (`typeInference.cpp`: `inferTypes`)
+5. **Type Inference** — execution-order processing with operand reordering, plus per-instantiation recursive re-inference on undeduced recursive dependencies (`typeInference.cpp`: `inferTypes`)
 6. **Codegen** — LLVM IR generation → native executable, .ll, or .spv (`codegen/`)
 
 ## Source File Organization
@@ -40,7 +40,7 @@ paths:
 ### Compiler core (`src/compiler/`)
 - `compiler.cpp` — import phase, section analysis, intrinsic classifier helpers (`isArithmeticOperator`, etc.)
 - `patternResolution.cpp` — pattern matching, resolution loop, precedence assignment, variable scoping
-- `typeInference.cpp` — single-pass type inference with operand reordering, `InferenceContext` (trial mode for reordering), macro body inference, type validation
+- `typeInference.cpp` — execution-order type inference with operand reordering and per-instantiation recursive re-inference, `InferenceContext` (trial mode for reordering), macro body inference, type validation
 
 ### Code generation (`src/compiler/codegen/`)
 - `codegen.cpp` — expression codegen (`generateExpressionCode`), monomorphized function generation (`generateSpecializedFunction`), section codegen, main driver (`generateCode`)
@@ -81,6 +81,7 @@ paths:
 - **Codegen uses pre-sorted arguments**: `generateExpressionCode` no longer calls `sortArgumentsByPosition` — type inference now sorts arguments in-place, so codegen can use `expr->arguments` directly.
 - **Overload selection failure is an error**: When `selectOverload` returns null in both type inference and codegen, it's now treated as an error (with diagnostic) instead of silently falling back to `defs[0]`.
 - **Ambiguous single-word function-vs-parameter warnings now suggest concrete pattern alternatives**: During pattern resolution, the warning walks matched function section definitions in source order (starting from the matched definition), expands parsed `Choice` alternatives from `DefinitionPatternElement` trees, and suggests the first valid alternative spelling. Multi-word alternatives get both a warning suggestion and a quick-fix edit; single-word alternatives are only suggested when they don't collide with enclosing parameter names.
+- **Recursive return inference is order-robust**: Non-macro instantiation inference now records when an in-progress callee return type is still undeduced, defers only those argument deductions for the current pass, and re-infers the same instantiation in code order until resolved (or emits a non-convergence type error). This keeps hard-failure behavior for non-recursive undeduced arguments.
 
 ## TODO / Known Issues
 - **Argument greediness**: `factorial of n - 1` parses as `(factorial of n) - 1`. Pattern arguments greedily consume tokens. Operator precedence (wave-based) fixes associativity but not argument boundaries for non-operator patterns.

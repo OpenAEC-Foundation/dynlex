@@ -79,6 +79,34 @@ static void deleteFunctionTree(Function *expr) {
 	delete expr;
 }
 
+static std::unique_ptr<Function>
+makeNonMacroParameterBinding(const std::string &parameterName, const DataType &argType, const Instantiation &instantiation) {
+	if (!instantiation.requiredCompileTimeParameters.contains(parameterName)) {
+		auto typedBinding = std::make_unique<Function>();
+		typedBinding->type = argType;
+		return typedBinding;
+	}
+
+	auto constIt = instantiation.constantParameterValues.find(parameterName);
+	if (constIt != instantiation.constantParameterValues.end() && isCompileTimeKnown(constIt->second)) {
+		const CompileTimeValue &constantValue = constIt->second;
+		auto literalBinding = std::make_unique<Function>();
+		literalBinding->kind = Function::Kind::Literal;
+		if (const auto *number = std::get_if<double>(&constantValue))
+			literalBinding->literalValue = *number;
+		else if (const auto *text = std::get_if<std::string>(&constantValue))
+			literalBinding->literalValue = *text;
+		else if (const auto *boolean = std::get_if<bool>(&constantValue))
+			literalBinding->literalValue = *boolean ? 1.0 : 0.0;
+		literalBinding->type = argType;
+		return literalBinding;
+	}
+
+	auto typedBinding = std::make_unique<Function>();
+	typedBinding->type = argType;
+	return typedBinding;
+}
+
 static bool inferFunction(
 	Function *&expr, InferenceContext &context, bool alreadyOrdered,
 	const std::unordered_map<std::string, Function *> &macroBindings
@@ -111,19 +139,28 @@ static void recordSelectedOverloadsForInstantiation(Function *expr, Instantiatio
 		recordSelectedOverloadsForInstantiation(arg, instantiation);
 }
 
-static DataType ensureArgumentTypeForPatternCall(
+struct ArgumentTypeInferenceResult {
+	DataType type;
+	bool deferred = false;
+};
+
+static ArgumentTypeInferenceResult ensureArgumentTypeForPatternCall(
 	Function *argExpr, InferenceContext &context, const std::unordered_map<std::string, Function *> &callerBindings
 ) {
+	bool savedObservedInProgress = context.observedInProgressUndeducedInstantiation;
+	context.observedInProgressUndeducedInstantiation = false;
 	Function *inferExpr = argExpr;
 	(void)inferFunction(inferExpr, context, false, callerBindings);
-	DataType argType = ensureFunctionType(argExpr, context, callerBindings);
-	if (argType.isDeduced())
-		return argType;
-	argType = derivePatternCallType(argExpr, context, callerBindings);
-	if (argType.isDeduced())
-		return argType;
-	argType = resolveTypeThroughBindings(argExpr, callerBindings);
-	return argType;
+	ArgumentTypeInferenceResult result;
+	result.type = ensureFunctionType(argExpr, context, callerBindings);
+	if (!result.type.isDeduced())
+		result.type = derivePatternCallType(argExpr, context, callerBindings);
+	if (!result.type.isDeduced())
+		result.type = resolveTypeThroughBindings(argExpr, callerBindings);
+	bool observedInProgress = context.observedInProgressUndeducedInstantiation;
+	context.observedInProgressUndeducedInstantiation = savedObservedInProgress || observedInProgress;
+	result.deferred = !result.type.isDeduced() && observedInProgress;
+	return result;
 }
 
 static void resetSectionFunctionTypes(Section *section) {
@@ -236,6 +273,7 @@ static DataType inferFunctionTypeWithoutSideEffects(
 		targetExpr = resolvedExpr;
 		targetBindings = std::move(effectiveBindings);
 	}
+	bool bindingDependentProbe = (targetExpr != expr) || !targetBindings.empty();
 
 	if (targetExpr && targetExpr->kind == Function::Kind::PatternCall && expandsToSelectIntrinsic(targetExpr) &&
 		targetExpr->arguments.size() >= 3) {
@@ -246,7 +284,8 @@ static DataType inferFunctionTypeWithoutSideEffects(
 			Function *activeBranch = targetExpr->arguments[*condition ? 0 : 2];
 			DataType activeType = inferFunctionTypeWithoutSideEffects(activeBranch, context, targetBindings);
 			if (activeType.isDeduced()) {
-				targetExpr->type = activeType;
+				if (!bindingDependentProbe)
+					targetExpr->type = activeType;
 				return activeType;
 			}
 		}
@@ -284,7 +323,7 @@ static DataType inferFunctionTypeWithoutSideEffects(
 		context.typeFailureDetail = trialContext.typeFailureDetail;
 
 	rollbackTrialJournal(journal);
-	if (type.isDeduced())
+	if (type.isDeduced() && !bindingDependentProbe)
 		expr->type = type;
 	return type;
 }
@@ -546,6 +585,10 @@ static void inferOrderedFunction(
 						if (rawTypeArg.kind == DataType::Kind::Type)
 							valType = concretizeClassType(rawTypeArg.toReferencedType());
 					}
+					if (valType.kind == DataType::Kind::Type) {
+						context.setTypeFailure("compile-time type values cannot be used as runtime values");
+						break;
+					}
 					if (destExpr->kind == Function::Kind::Variable && destExpr->variable && valType.isDeduced()) {
 						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
 						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
@@ -661,6 +704,24 @@ static void inferOrderedFunction(
 					}
 				} else if (kind == IntrinsicKind::Call) {
 					DataType retTypeRef = resolveTypeThroughBindings(expr->arguments[3], macroBindings);
+					if (retTypeRef.kind != DataType::Kind::Type) {
+						context.setTypeFailure("call return type must be a compile-time type reference");
+						break;
+					}
+					if (retTypeRef.kind == DataType::Kind::Type && (retTypeRef.referencedKind == DataType::Kind::Type ||
+																	retTypeRef.referencedKind == DataType::Kind::Unresolved)) {
+						context.setTypeFailure("call return type must be a concrete runtime type");
+						break;
+					}
+					for (size_t i = 4; i < expr->arguments.size(); i++) {
+						DataType argType = resolveTypeThroughBindings(expr->arguments[i], macroBindings);
+						if (argType.kind == DataType::Kind::Type) {
+							context.setTypeFailure("call arguments cannot be compile-time type values");
+							break;
+						}
+					}
+					if (!context.typesValid)
+						break;
 					if (retTypeRef.kind == DataType::Kind::Type)
 						expr->type = retTypeRef.toReferencedType();
 				} else if (kind == IntrinsicKind::Cast) {
@@ -734,6 +795,11 @@ static void inferOrderedFunction(
 				} else if (kind == IntrinsicKind::SizeOf) {
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (typeArgType.kind == DataType::Kind::Type) {
+						if (typeArgType.referencedKind == DataType::Kind::Type ||
+							typeArgType.referencedKind == DataType::Kind::Unresolved) {
+							context.setTypeFailure("size of 'type' is invalid");
+							break;
+						}
 						expr->type = {DataType::Kind::Int, 8};
 					}
 				} else if (kind == IntrinsicKind::BuildInfo) {
@@ -807,6 +873,11 @@ static void inferOrderedFunction(
 				} else if (kind == IntrinsicKind::AddPointerDepth) {
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					if (typeArgType.kind == DataType::Kind::Type) {
+						if (typeArgType.referencedKind == DataType::Kind::Type ||
+							typeArgType.referencedKind == DataType::Kind::Unresolved) {
+							context.setTypeFailure("pointer to 'type' is invalid");
+							break;
+						}
 						expr->type = typeArgType;
 						expr->type.pointerDepth++;
 					}
@@ -1066,10 +1137,22 @@ static void inferOrderedFunction(
 				if (paramIt != node->parameterNames.end()) {
 					Function *argExpr = callBindings[paramIt->second];
 					paramBindings.push_back({paramIt->second, argExpr});
-					DataType argType = ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
-					assert(
-						argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
-					);
+					ArgumentTypeInferenceResult argTypeResult =
+						ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
+					DataType argType = argTypeResult.type;
+					if (!argType.isDeduced()) {
+						if (argTypeResult.deferred && context.currentInstantiation) {
+							context.currentInstantiation->needsReinfer = true;
+							return;
+						}
+						if (context.trial) {
+							context.setTypeFailure("Undeduced argument type encountered during trial pattern-call inference");
+							return;
+						}
+						assert(
+							argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
+						);
+					}
 					argTypes.push_back(argType);
 				}
 			}
@@ -1077,33 +1160,74 @@ static void inferOrderedFunction(
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordSectionInstantiationWrite(matchedSection, argTypes);
 			Instantiation &inst = matchedSection->instantiations[argTypes];
-			seedInstantiationCompileTimeParameters(
-				context.parseContext, inst, paramBindings, macroBindings, context.currentInstantiation
-			);
 			if (!inst.inferring) {
-				if (!context.trial)
-					inst.selectedOverloadsByCall.clear();
-				if (!context.trial)
-					inst.ifChainSelections.clear();
-				inst.inferring = true;
 				Instantiation *savedInst = context.currentInstantiation;
-				auto savedKnownConstants = context.currentKnownConstants;
-				context.currentInstantiation = &inst;
-				std::unordered_map<std::string, Function *> nonMacroTypeBindings;
-				std::vector<std::unique_ptr<Function>> ownedNonMacroTypeBindings;
-				for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++) {
-					auto typedPlaceholder = std::make_unique<Function>();
-					typedPlaceholder->type = argTypes[i];
-					nonMacroTypeBindings[paramBindings[i].first] = typedPlaceholder.get();
-					ownedNonMacroTypeBindings.push_back(std::move(typedPlaceholder));
+				auto callerKnownConstants = context.currentKnownConstants;
+				const Instantiation *callerInstantiation = savedInst;
+				bool inferenceSucceeded = true;
+				size_t reinferPass = 0;
+				constexpr size_t maxReinferPasses = 32;
+				while (true) {
+					if (!context.trial)
+						inst.selectedOverloadsByCall.clear();
+					if (!context.trial)
+						inst.ifChainSelections.clear();
+					seedInstantiationCompileTimeParameters(
+						context.parseContext, inst, paramBindings, macroBindings, callerInstantiation
+					);
+					size_t requiredBeforePass = inst.requiredCompileTimeParameters.size();
+					inst.needsReinfer = false;
+					inst.inferring = true;
+					context.currentInstantiation = &inst;
+					context.currentKnownConstants = callerKnownConstants;
+					bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
+					context.suppressReinferPassDiagnostics = true;
+					std::unordered_map<std::string, Function *> nonMacroTypeBindings;
+					std::vector<std::unique_ptr<Function>> ownedNonMacroTypeBindings;
+					for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++) {
+						auto bindingValue = makeNonMacroParameterBinding(paramBindings[i].first, argTypes[i], inst);
+						nonMacroTypeBindings[paramBindings[i].first] = bindingValue.get();
+						ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
+					}
+					inferenceSucceeded = inferSection(matchedSection, context, nonMacroTypeBindings);
+					context.suppressReinferPassDiagnostics = savedReinferSuppression;
+					inst.inferring = false;
+					if (inst.requiredCompileTimeParameters.size() != requiredBeforePass)
+						inst.needsReinfer = true;
+					bool retryWithNewCompileTimeBindings =
+						inst.needsReinfer && (inst.requiredCompileTimeParameters.size() != requiredBeforePass);
+					if (retryWithNewCompileTimeBindings) {
+						reinferPass++;
+						if (reinferPass >= maxReinferPasses) {
+							context.setTypeFailure(
+								"Recursive type inference did not converge for function '" + (std::string)def->range.subString +
+								"'"
+							);
+							inferenceSucceeded = false;
+							break;
+						}
+						context.typesValid = true;
+						context.typeFailureDetail.clear();
+						continue;
+					}
+					if (!inferenceSucceeded || !context.typesValid || !inst.needsReinfer)
+						break;
+					reinferPass++;
+					if (reinferPass >= maxReinferPasses) {
+						context.setTypeFailure(
+							"Recursive type inference did not converge for function '" + (std::string)def->range.subString + "'"
+						);
+						inferenceSucceeded = false;
+						break;
+					}
 				}
-				bool inferenceSucceeded = inferSection(matchedSection, context, nonMacroTypeBindings);
-				context.currentKnownConstants = std::move(savedKnownConstants);
+				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
-				inst.inferring = false;
 				inst.valid = inferenceSucceeded;
 			} else if (inst.returnType.isDeduced()) {
 				expr->type = inst.returnType;
+			} else {
+				context.observedInProgressUndeducedInstantiation = true;
 			}
 			if (!inst.valid) {
 				context.typesValid = false;

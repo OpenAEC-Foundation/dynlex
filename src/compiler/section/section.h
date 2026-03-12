@@ -40,6 +40,7 @@ struct Instantiation {
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
 	bool inferring = false;
+	bool needsReinfer = false;
 	bool valid = true;
 };
 

@@ -13,8 +13,9 @@ static Function *resolveCompileTimeSelectBranch(
 }
 
 static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
-	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced())
+	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && bindings.empty()) {
 		return concretizeClassType(expr->type);
+	}
 	Function *directResolved = resolveThroughBindings(expr, bindings);
 	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
 		return concretizeClassType(directResolved->type);
@@ -97,7 +98,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			}
 			PatternDefinition *def =
 				selectOverload(defs, resolved->arguments, resolved->patternMatch->nodesPassed, argTypesForOverload);
-			if (def && allArgTypesDeduced)
+			if (def && allArgTypesDeduced && !dependsOnBindings)
 				resolved->selectedPatternDefinition = def;
 			if (def && def->section && def->section->type == SectionType::Class && !def->section->isMacro &&
 				activeTypeResolutionParseContext) {
@@ -133,6 +134,19 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
 			if (valueType.isDeduced())
 				return valueType.pointed();
+		} else if (kind == IntrinsicKind::Call) {
+			if (resolved->arguments.size() <= 3)
+				return {};
+			DataType retTypeRef = resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings);
+			if (retTypeRef.kind != DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Type ||
+				retTypeRef.referencedKind == DataType::Kind::Unresolved)
+				return {};
+			for (size_t i = 4; i < resolved->arguments.size(); i++) {
+				DataType argType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+				if (argType.kind == DataType::Kind::Type)
+					return {};
+			}
+			return concretizeClassType(retTypeRef.toReferencedType());
 		} else if (kind == IntrinsicKind::Cast) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
 			if (typeArgType.kind == DataType::Kind::Type)
@@ -186,7 +200,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			}
 		} else if (kind == IntrinsicKind::SizeOf) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
-			if (typeArgType.kind == DataType::Kind::Type)
+			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
+				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
 			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
@@ -265,7 +280,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			return typeRef;
 		} else if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
-			if (typeArgType.kind == DataType::Kind::Type) {
+			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
+				typeArgType.referencedKind != DataType::Kind::Unresolved) {
 				typeArgType.pointerDepth++;
 				return typeArgType;
 			}
@@ -495,6 +511,11 @@ static bool resolveCompileTimeTypeReference(
 
 		std::unordered_map<std::string, Function *> callBindings = effectiveBindings;
 		appendPatternCallBindings(resolved, def, callBindings);
+		for (auto &[name, boundExpr] : callBindings) {
+			Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindings);
+			if (resolvedExpr)
+				boundExpr = resolvedExpr;
+		}
 		if (!def->section->isMacro && def->section->type == SectionType::Class) {
 			outTypeRef = instantiateBoundClassType(
 				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindings
@@ -764,6 +785,8 @@ struct InferenceContext {
 	bool typesValid = true;
 	bool trial = false;
 	bool suppressDiagnostics = false;
+	bool suppressReinferPassDiagnostics = false;
+	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	TrialJournal *trialJournal{};
 
@@ -771,7 +794,7 @@ struct InferenceContext {
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
 
 	void addDiagnostic(Diagnostic diagnostic) {
-		if (!trial && !suppressDiagnostics)
+		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics)
 			parseContext.diagnostics.push_back(std::move(diagnostic));
 	}
 

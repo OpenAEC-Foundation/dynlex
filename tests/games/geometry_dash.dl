@@ -1,4 +1,188 @@
-import lib/std.dl
-import li
-#sample game to show the power of dynlex
+# Geometry Dash style game in DynLex
 
+import lib/graphics.dl
+
+# Window and world setup
+set window_width to 1000
+set window_height to 420
+set ground_y to 340
+set player_size to 32
+set player_x to 180
+
+# Obstacle generation
+set obstacle_spacing to 210
+set obstacle_width to 48
+set first_obstacle_offset to 700
+set obstacle_scan_count to 12
+set obstacle_trail_count to 2
+
+# Physics and timing
+set gravity to 1.15
+set jump_velocity to 0.0 - 15.5
+set scroll_speed to 7
+set frame_sleep_ms to 16
+set player_ground_y to (ground_y - player_size) as a float
+
+# Boot resources
+set window to a new window with width window_width and height window_height
+
+# Game state
+set player_y to player_ground_y
+set y_velocity to 0.0
+set distance to 0
+set score to 0
+set game_over to 0
+set jump_lock to 0
+
+loop while not the window should close:
+	set key to the pressed key of window
+	set jump_input to key = 1 or key = 2 or key = 4
+
+	if key = 5:
+		@intrinsic("call", "glfw", "glfwSetWindowShouldClose", void, window, 1)
+
+	if not game_over:
+		if jump_input and not jump_lock and player_y >= player_ground_y:
+			set y_velocity to jump_velocity
+
+		if jump_input:
+			set jump_lock to 1
+		else:
+			set jump_lock to 0
+
+		# Update motion and progress
+		set y_velocity to y_velocity + gravity
+		set player_y to player_y + y_velocity
+		set distance to distance + scroll_speed
+		set score to distance / 25
+		if score > 999:
+			set score to 999
+
+		# Ground collision
+		if player_y > player_ground_y:
+			set player_y to player_ground_y
+			set y_velocity to 0.0
+
+		# Obstacle collision pass
+		set collided to 0
+		set first_obstacle to distance / obstacle_spacing - obstacle_trail_count
+		if first_obstacle < 0:
+			set first_obstacle to 0
+		set i to 0
+		loop while i < obstacle_scan_count:
+			set obstacle_index to first_obstacle + i
+			set world_x to obstacle_index * obstacle_spacing + first_obstacle_offset
+			set obstacle_x to world_x - distance
+
+			if obstacle_x < window_width and obstacle_x + obstacle_width > 0:
+				set obstacle_style to obstacle_index mod 6
+				set obstacle_height to 90
+				if obstacle_style = 0:
+					set obstacle_height to 70
+				else if obstacle_style = 1:
+					set obstacle_height to 100
+				else if obstacle_style = 2:
+					set obstacle_height to 125
+				else if obstacle_style = 3:
+					set obstacle_height to 150
+				else if obstacle_style = 4:
+					set obstacle_height to 85
+				else:
+					set obstacle_height to 110
+
+				set obstacle_y to ground_y - obstacle_height
+				set player_draw_y to player_y as an integer
+
+				if player_x < obstacle_x + obstacle_width:
+					if player_x + player_size > obstacle_x:
+						if player_draw_y < ground_y:
+							if player_draw_y + player_size > obstacle_y:
+								set collided to 1
+
+			set i to i + 1
+
+		if collided:
+			set game_over to 1
+	else:
+		if jump_input and not jump_lock:
+			# Restart state
+			set player_y to player_ground_y
+			set y_velocity to 0.0
+			set distance to 0
+			set score to 0
+			set game_over to 0
+			set jump_lock to 1
+		if not jump_input:
+			set jump_lock to 0
+
+	# Render
+	clear screen
+
+	# Background bands
+	draw rectangle at 0 0 size window_width window_height with color 13 15 28
+	draw rectangle at 0 0 size window_width 120 with color 20 30 54
+	draw rectangle at 0 120 size window_width 120 with color 16 24 44
+
+	# Scrolling skyline blocks
+	set stripe_shift to distance mod 200
+	set sx to 0 - stripe_shift
+	loop while sx < window_width:
+		draw rectangle at sx 240 size 60 18 with color 30 56 100
+		draw rectangle at sx + 70 220 size 32 38 with color 25 45 82
+		draw rectangle at sx + 120 250 size 46 14 with color 36 63 112
+		set sx to sx + 200
+
+	# Ground
+	draw rectangle at 0 ground_y size window_width (window_height - ground_y) with color 40 40 50
+	draw rectangle at 0 ground_y size window_width 6 with color 100 220 255
+
+	# Obstacles
+	set first_obstacle to distance / obstacle_spacing - obstacle_trail_count
+	if first_obstacle < 0:
+		set first_obstacle to 0
+	set i to 0
+	loop while i < obstacle_scan_count:
+		set obstacle_index to first_obstacle + i
+		set world_x to obstacle_index * obstacle_spacing + first_obstacle_offset
+		set obstacle_x to world_x - distance
+
+		if obstacle_x < window_width and obstacle_x + obstacle_width > 0:
+			set obstacle_style to obstacle_index mod 6
+			set obstacle_height to 90
+			if obstacle_style = 0:
+				set obstacle_height to 70
+			else if obstacle_style = 1:
+				set obstacle_height to 100
+			else if obstacle_style = 2:
+				set obstacle_height to 125
+			else if obstacle_style = 3:
+				set obstacle_height to 150
+			else if obstacle_style = 4:
+				set obstacle_height to 85
+			else:
+				set obstacle_height to 110
+
+			set obstacle_y to ground_y - obstacle_height
+			draw rectangle at obstacle_x obstacle_y size obstacle_width obstacle_height with color 230 80 100
+			draw rectangle at obstacle_x obstacle_y size obstacle_width 6 with color 255 200 120
+
+		set i to i + 1
+
+	# Player cube
+	set player_draw_y to player_y as an integer
+	if game_over:
+		draw rectangle at player_x player_draw_y size player_size player_size with color 255 120 120
+	else:
+		draw rectangle at player_x player_draw_y size player_size player_size with color 100 240 255
+		draw rectangle at player_x + 6 player_draw_y + 6 size 8 8 with color 13 15 28
+
+	# HUD bars (text-free fallback for current compiler environment)
+	draw rectangle at 20 20 size score 10 with color 255 255 255
+	if game_over:
+		draw rectangle at 220 110 size 560 170 with color 65 20 35
+
+	display the frame of window
+	sleep for frame_sleep_ms milliseconds
+
+close the window
+print score as line
