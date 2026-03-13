@@ -105,12 +105,9 @@ void generateSpecializedFunction(
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
-	auto savedMacroBindings = context.macroFunctionBindings;
-	auto savedMacroBindingStack = context.macroBindingStack;
-	// Non-macro instantiations must be caller-agnostic during codegen. Start with a
-	// clean macro-binding scope so nested macro expansion cannot leak into caller scopes.
+	// Push macro bindings — function bodies must not see caller's macro bindings
+	context.macroBindingStack.push(context.macroFunctionBindings);
 	context.macroFunctionBindings.clear();
-	context.macroBindingStack = {};
 
 	builder.SetInsertPoint(entry);
 
@@ -138,8 +135,8 @@ void generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
-	context.macroFunctionBindings = std::move(savedMacroBindings);
-	context.macroBindingStack = std::move(savedMacroBindingStack);
+	context.macroFunctionBindings = context.macroBindingStack.top();
+	context.macroBindingStack.pop();
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
@@ -253,25 +250,18 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		PatternDefinition *matchedDef = nullptr;
 		if (context.currentCodegenInstantiation) {
 			auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
-			if (selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end())
-				matchedDef = selectedIt->second;
+			assert(
+				selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
+				"Pattern call missing per-instantiation overload selection from type inference"
+			);
+			matchedDef = selectedIt->second;
 		} else {
 			matchedDef = expr->selectedPatternDefinition;
+			assert(matchedDef && "Pattern call missing overload selection from type inference");
+			assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		}
-		if (matchedDef && std::find(defs.begin(), defs.end(), matchedDef) == defs.end())
-			matchedDef = nullptr;
-		if (!matchedDef) {
-			std::vector<DataType> argTypesForOverload;
-			argTypesForOverload.reserve(expr->arguments.size());
-			for (Function *arg : expr->arguments)
-				argTypesForOverload.push_back(getEffectiveType(context, arg));
-			PatternDefinition *reselected =
-				selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-			if (reselected)
-				matchedDef = reselected;
-		}
-		assert(matchedDef && "No overload matched during codegen");
 		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
+		assert(matchedDef && "No overload matched during codegen");
 
 		Section *matchedSection = matchedDef->section;
 		assert(matchedSection && "Selected overload has no section");
@@ -290,45 +280,16 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 				paramBindings.push_back({paramIt->second, expr->arguments[argIndex++]});
 			}
 		}
-		if (paramBindings.size() < expr->arguments.size()) {
-			std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-			std::vector<std::string> positionalNames;
-			std::unordered_set<std::string> seen;
-			forEachLeafElement(matchedDef->patternElements, [&](DefinitionPatternElement &element) {
-				std::string name;
-				if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
-					name = element.text;
-				} else if (element.type == PatternElement::Type::VariableLike && matchedSection &&
-						   matchedSection->findVariable(element.text)) {
-					name = element.text;
-				}
-				if (!name.empty() && seen.insert(name).second)
-					positionalNames.push_back(name);
-			});
-			size_t fallbackCount = std::min(sortedArgs.size(), positionalNames.size());
-			for (size_t i = 0; i < fallbackCount; i++) {
-				bool exists = false;
-				for (const auto &[boundName, _] : paramBindings) {
-					if (boundName == positionalNames[i]) {
-						exists = true;
-						break;
-					}
-				}
-				if (!exists)
-					paramBindings.push_back({positionalNames[i], sortedArgs[i]});
-			}
-		}
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with function substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
 			context.macroBindingStack.push(context.macroFunctionBindings);
-			std::unordered_map<std::string, Function *> mergedBindings = context.macroFunctionBindings;
+			context.macroFunctionBindings.clear();
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
-				mergedBindings[paramName] = argExpr;
+				context.macroFunctionBindings[paramName] = argExpr;
 			}
-			context.macroFunctionBindings = std::move(mergedBindings);
 
 			// Only section-type macros (like "if condition:", "loop while condition:")
 			// should pick up and process the body section opened by this line.

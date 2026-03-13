@@ -286,29 +286,6 @@ static void appendPatternCallBindings(
 		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size())
 			bindings[paramIt->second] = sortedArgs[argIndex++];
 	}
-	if (bindings.size() >= sortedArgs.size() || sortedArgs.empty())
-		return;
-
-	// Fallback: recover positional parameter names from pattern elements for
-	// VariableLike tokens that were promoted to section variables.
-	std::vector<std::string> positionalNames;
-	std::unordered_set<std::string> seen;
-	forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-		std::string name;
-		if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
-			name = element.text;
-		} else if (element.type == PatternElement::Type::VariableLike && definition->section &&
-				   definition->section->findVariable(element.text)) {
-			name = element.text;
-		}
-		if (!name.empty() && seen.insert(name).second)
-			positionalNames.push_back(name);
-	});
-	size_t fallbackCount = std::min(sortedArgs.size(), positionalNames.size());
-	for (size_t i = 0; i < fallbackCount; i++) {
-		if (!bindings.contains(positionalNames[i]))
-			bindings[positionalNames[i]] = sortedArgs[i];
-	}
 }
 
 static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
@@ -848,10 +825,6 @@ PatternDefinition *selectOverload(
 						if (constraint.kind == DataType::Kind::Class) {
 							matches =
 								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
-						} else if (constraint.kind == DataType::Kind::Type) {
-							// {type:x} accepts any compile-time type reference, including
-							// pointer/array/class type refs (pointerDepth/referenced payload varies).
-							matches = argType.kind == DataType::Kind::Type;
 						} else if (constraint.isNumeric()) {
 							// Numeric constraint: match exact kind (Int or Float) and pointer depth
 							// {integer:x} matches Int, {float:x} matches Float

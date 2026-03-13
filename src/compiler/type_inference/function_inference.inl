@@ -172,14 +172,6 @@ static void resetSectionFunctionTypes(Section *section) {
 	}
 }
 
-static void resetSectionFunctionTypesRecursive(Section *section) {
-	if (!section)
-		return;
-	resetSectionFunctionTypes(section);
-	for (Section *child : section->children)
-		resetSectionFunctionTypesRecursive(child);
-}
-
 static void resetSectionLocalVariableTypes(Section *section) {
 	if (!section)
 		return;
@@ -202,48 +194,16 @@ derivePatternCallType(Function *expr, InferenceContext &context, const std::unor
 		return {};
 
 	std::vector<DataType> argTypesForOverload;
-	for (Function *&arg : expr->arguments) {
-		DataType argType = inferFunctionTypeWithoutSideEffects(arg, context, bindings);
-		if (!argType.isDeduced()) {
-			DataType compileTimeTypeRef;
-			if (resolveCompileTimeTypeReference(context.parseContext, arg, bindings, compileTimeTypeRef) &&
-				compileTimeTypeRef.kind == DataType::Kind::Type) {
-				argType = compileTimeTypeRef;
-			}
-		}
-		argTypesForOverload.push_back(argType);
-	}
+	for (Function *&arg : expr->arguments)
+		argTypesForOverload.push_back(inferFunctionTypeWithoutSideEffects(arg, context, bindings));
 
 	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
 	if (!def || !def->section)
 		return {};
 
 	Section *matchedSection = def->section;
-	static bool traceCallKind = std::getenv("DYNLEX_TRACE_CALL_KIND") != nullptr;
-	if (traceCallKind) {
-		std::cerr << "[call-kind] expr='" << std::string(expr->range.subString) << "' section='"
-				  << (matchedSection ? matchedSection->toString() : "<null>")
-				  << "' isMacro=" << (matchedSection ? matchedSection->isMacro : false)
-				  << " sectionType=" << (matchedSection ? static_cast<int>(matchedSection->type) : -1) << "\n";
-	}
-	std::unordered_map<std::string, Function *> parameterBindings;
-	appendPatternCallBindings(expr, def, parameterBindings);
 	std::unordered_map<std::string, Function *> callBindings = bindings;
-	for (const auto &[name, boundExpr] : parameterBindings)
-		callBindings[name] = boundExpr;
-	static bool tracePatternBindings = std::getenv("DYNLEX_TRACE_PATTERN_BINDINGS") != nullptr;
-	if (tracePatternBindings) {
-		std::cerr << "[pattern-bindings] expr='" << std::string(expr->range.subString) << "' def='"
-				  << std::string(def->range.subString) << "' bindings={";
-		bool first = true;
-		for (const auto &[name, boundExpr] : callBindings) {
-			if (!first)
-				std::cerr << ", ";
-			first = false;
-			std::cerr << name << "='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>") << "'";
-		}
-		std::cerr << "}\n";
-	}
+	appendPatternCallBindings(expr, def, callBindings);
 	for (auto &[name, boundExpr] : callBindings) {
 		Function *resolvedExpr = resolveThroughBindings(boundExpr, bindings);
 		if (resolvedExpr)
@@ -279,10 +239,7 @@ derivePatternCallType(Function *expr, InferenceContext &context, const std::unor
 		auto paramIt = node->parameterNames.find(def);
 		if (paramIt == node->parameterNames.end())
 			continue;
-		auto argIt = parameterBindings.find(paramIt->second);
-		if (argIt == parameterBindings.end() || !argIt->second)
-			return {};
-		Function *&argExpr = argIt->second;
+		Function *&argExpr = callBindings[paramIt->second];
 		DataType argType = inferFunctionTypeWithoutSideEffects(argExpr, context, callBindings);
 		if (!argType.isDeduced())
 			return {};
@@ -307,36 +264,7 @@ derivePatternCallType(Function *expr, InferenceContext &context, const std::unor
 static DataType inferFunctionTypeWithoutSideEffects(
 	Function *&expr, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings
 ) {
-	struct TypeProbeKey {
-		const Function *expr;
-		size_t bindingsHash;
-
-		bool operator==(const TypeProbeKey &other) const { return expr == other.expr && bindingsHash == other.bindingsHash; }
-	};
-	struct TypeProbeKeyHasher {
-		size_t operator()(const TypeProbeKey &key) const {
-			size_t h = std::hash<const Function *>{}(key.expr);
-			h ^= key.bindingsHash + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-			return h;
-		}
-	};
-	auto hashBindings = [](const std::unordered_map<std::string, Function *> &map) {
-		std::vector<std::pair<std::string, uintptr_t>> entries;
-		entries.reserve(map.size());
-		for (const auto &[name, boundExpr] : map)
-			entries.push_back({name, reinterpret_cast<uintptr_t>(boundExpr)});
-		std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-			return a.first < b.first;
-		});
-		size_t h = 1469598103934665603ULL;
-		for (const auto &[name, ptr] : entries) {
-			size_t nameHash = std::hash<std::string>{}(name);
-			h ^= nameHash + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-			h ^= ptr + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-		}
-		return h;
-	};
-	static thread_local std::unordered_set<TypeProbeKey, TypeProbeKeyHasher> activeTypeProbes;
+	static thread_local std::unordered_set<const Function *> activeTypeProbes;
 	Function *targetExpr = expr;
 	std::unordered_map<std::string, Function *> targetBindings = bindings;
 	std::unordered_map<std::string, Function *> effectiveBindings;
@@ -368,21 +296,19 @@ static DataType inferFunctionTypeWithoutSideEffects(
 		return type;
 	if (!targetExpr)
 		return {};
-	TypeProbeKey probeKey{targetExpr, bindingDependentProbe ? hashBindings(targetBindings) : 0};
-	if (activeTypeProbes.contains(probeKey))
+	if (activeTypeProbes.contains(targetExpr))
 		return type;
 
 	struct ActiveTypeProbeGuard {
-		std::unordered_set<TypeProbeKey, TypeProbeKeyHasher> &active;
-		TypeProbeKey key;
+		std::unordered_set<const Function *> &active;
+		const Function *expr;
 
-		ActiveTypeProbeGuard(std::unordered_set<TypeProbeKey, TypeProbeKeyHasher> &active, TypeProbeKey key)
-			: active(active), key(key) {
-			active.insert(this->key);
+		ActiveTypeProbeGuard(std::unordered_set<const Function *> &active, const Function *expr) : active(active), expr(expr) {
+			active.insert(expr);
 		}
 
-		~ActiveTypeProbeGuard() { active.erase(key); }
-	} activeProbe(activeTypeProbes, probeKey);
+		~ActiveTypeProbeGuard() { active.erase(expr); }
+	} activeProbe(activeTypeProbes, targetExpr);
 
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(context.parseContext, true);
@@ -410,10 +336,6 @@ ensureFunctionType(Function *&expr, InferenceContext &context, const std::unorde
 static void commitVariableTypeFromValue(Variable *var, Function *valueExpr, const DataType &valueType) {
 	if (!var)
 		return;
-	static bool traceVarType = std::getenv("DYNLEX_TRACE_VAR_TYPE") != nullptr;
-	if (traceVarType)
-		std::cerr << "[var-type] set " << var->name << " = " << valueType.toString() << " from '"
-				  << (valueExpr ? std::string(valueExpr->range.subString) : "<null>") << "'\n";
 	var->type = concretizeClassType(valueType);
 	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
 	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
@@ -556,13 +478,6 @@ static void inferOrderedFunction(
 						);
 						break;
 					}
-					if (!result.isDeduced()) {
-						context.setTypeFailure(
-							"Undeduced operand types '" + typeToUserName(leftType, context.parseContext) + "' and '" +
-							typeToUserName(rightType, context.parseContext) + "'"
-						);
-						break;
-					}
 					expr->type = result;
 				}
 				break;
@@ -570,55 +485,7 @@ static void inferOrderedFunction(
 				if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 					DataType leftType = ensureFunctionType(expr->arguments[1], context, macroBindings);
 					DataType rightType = ensureFunctionType(expr->arguments[2], context, macroBindings);
-					if (!leftType.isDeduced()) {
-						Function *resolvedLeft = resolveThroughBindings(expr->arguments[1], macroBindings);
-						if (resolvedLeft && resolvedLeft != expr->arguments[1]) {
-							Function *probeLeft = resolvedLeft;
-							leftType = ensureFunctionType(probeLeft, context, macroBindings);
-						}
-						if (!leftType.isDeduced()) {
-							Function *leftExpr = expr->arguments[1];
-							(void)inferFunction(leftExpr, context, false, macroBindings);
-							leftType = resolveTypeThroughBindings(leftExpr, macroBindings);
-						}
-					}
-					if (!rightType.isDeduced()) {
-						Function *resolvedRight = resolveThroughBindings(expr->arguments[2], macroBindings);
-						if (resolvedRight && resolvedRight != expr->arguments[2]) {
-							Function *probeRight = resolvedRight;
-							rightType = ensureFunctionType(probeRight, context, macroBindings);
-						}
-						if (!rightType.isDeduced()) {
-							Function *rightExpr = expr->arguments[2];
-							(void)inferFunction(rightExpr, context, false, macroBindings);
-							rightType = resolveTypeThroughBindings(rightExpr, macroBindings);
-						}
-					}
 					if (!isLogicalOperandType(leftType) || !isLogicalOperandType(rightType)) {
-						static bool traceLogicalFail = std::getenv("DYNLEX_TRACE_LOGICAL_FAIL") != nullptr;
-						if (traceLogicalFail) {
-							std::cerr << "[logical-fail] expr='" << std::string(expr->range.subString) << "' left='"
-									  << std::string(expr->arguments[1]->range.subString)
-									  << "' leftType=" << leftType.toString() << " right='"
-									  << std::string(expr->arguments[2]->range.subString)
-									  << "' rightType=" << rightType.toString() << " bindings={";
-							bool firstBinding = true;
-							for (const auto &[name, bound] : macroBindings) {
-								if (!firstBinding)
-									std::cerr << ", ";
-								firstBinding = false;
-								std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-								if (bound) {
-									std::cerr << "(kind=" << static_cast<int>(bound->kind);
-									if (const auto *number = std::get_if<double>(&bound->literalValue))
-										std::cerr << ",lit=" << *number;
-									else if (const auto *text = std::get_if<std::string>(&bound->literalValue))
-										std::cerr << ",lit='" << *text << "'";
-									std::cerr << ",type=" << bound->type.toString() << ")";
-								}
-							}
-							std::cerr << "}\n";
-						}
 						context.setTypeFailure(
 							"Logical operator '" + expr->intrinsicName + "' requires boolean or numeric operands, got '" +
 							typeToUserName(leftType, context.parseContext) + "' and '" +
@@ -659,7 +526,7 @@ static void inferOrderedFunction(
 					Function *destExpr = resolveThroughBindingsDeep(expr->arguments[1], macroBindings, destBindings);
 					std::unordered_map<std::string, Function *> valueBindings;
 					Function *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindings, valueBindings);
-					DataType valType = ensureFunctionType(expr->arguments[2], context, macroBindings);
+					DataType valType = ensureFunctionType(valueExpr, context, valueBindings);
 					auto applyCastTargetType = [&](Function *castExpr,
 												   const std::unordered_map<std::string, Function *> &castBindings) {
 						if (!castExpr || castExpr->kind != Function::Kind::IntrinsicCall ||
@@ -836,21 +703,8 @@ static void inferOrderedFunction(
 						}
 					}
 				} else if (kind == IntrinsicKind::Call) {
-					std::unordered_map<std::string, Function *> returnTypeBindings;
-					Function *returnTypeExpr =
-						resolveThroughBindingsDeep(expr->arguments[3], macroBindings, returnTypeBindings);
-					const auto &effectiveReturnTypeBindings = returnTypeBindings.empty() ? macroBindings : returnTypeBindings;
-					if (returnTypeExpr && !inferFunction(returnTypeExpr, context, false, effectiveReturnTypeBindings))
-						return;
-					// The resolved return-type expression can include pattern calls not reachable
-					// through the original AST node; record their chosen overloads for codegen.
-					if (!context.trial && context.currentInstantiation && returnTypeExpr)
-						recordSelectedOverloadsForInstantiation(returnTypeExpr, context.currentInstantiation);
-					DataType retTypeRef;
-					if (!resolveCompileTimeTypeReference(
-							context.parseContext, expr->arguments[3], effectiveReturnTypeBindings, retTypeRef
-						) ||
-						retTypeRef.kind != DataType::Kind::Type) {
+					DataType retTypeRef = resolveTypeThroughBindings(expr->arguments[3], macroBindings);
+					if (retTypeRef.kind != DataType::Kind::Type) {
 						context.setTypeFailure("call return type must be a compile-time type reference");
 						break;
 					}
@@ -873,67 +727,7 @@ static void inferOrderedFunction(
 				} else if (kind == IntrinsicKind::Cast) {
 					DataType valueType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindings);
-					if (!valueType.isDeduced()) {
-						Function *resolvedValueExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
-						if (resolvedValueExpr && resolvedValueExpr != expr->arguments[1]) {
-							valueType = resolveTypeThroughBindings(resolvedValueExpr, macroBindings);
-							if (!valueType.isDeduced()) {
-								Function *probeExpr = resolvedValueExpr;
-								valueType = ensureFunctionType(probeExpr, context, macroBindings);
-							}
-						}
-					}
-					static bool traceCastType = std::getenv("DYNLEX_TRACE_CAST_TYPE") != nullptr;
-					if (traceCastType) {
-						std::cerr << "[cast-type] value='" << std::string(expr->arguments[1]->range.subString)
-								  << "' valueType=" << valueType.toString() << " typeExpr='"
-								  << std::string(expr->arguments[2]->range.subString) << "' typeArg=" << typeArgType.toString()
-								  << " typeKind=" << static_cast<int>(typeArgType.kind)
-								  << " typeRefKind=" << static_cast<int>(typeArgType.referencedKind)
-								  << " num=" << typeArgType.numericSize << " ptr=" << typeArgType.pointerDepth
-								  << " classDef=" << typeArgType.classDefinition << " bindings={";
-						bool firstBinding = true;
-						for (const auto &[name, bound] : macroBindings) {
-							if (!firstBinding)
-								std::cerr << ", ";
-							firstBinding = false;
-							std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-						}
-						std::cerr << "}\n";
-					}
 					if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void) {
-						static bool traceCastFail = std::getenv("DYNLEX_TRACE_CAST_FAIL") != nullptr;
-						if (traceCastFail) {
-							std::cerr << "[cast-fail] valueExpr='" << std::string(expr->arguments[1]->range.subString)
-									  << "' kind=" << static_cast<int>(expr->arguments[1]->kind)
-									  << " resolvedType=" << valueType.toString();
-							if (!expr->arguments[1]->arguments.empty()) {
-								std::cerr << " args=[";
-								for (size_t i = 0; i < expr->arguments[1]->arguments.size(); i++) {
-									Function *arg = expr->arguments[1]->arguments[i];
-									DataType argType = resolveTypeThroughBindings(arg, macroBindings);
-									if (i > 0)
-										std::cerr << ", ";
-									std::cerr << "'" << std::string(arg->range.subString) << "':" << argType.toString();
-								}
-								std::cerr << "]";
-							}
-							std::cerr << " bindings={";
-							bool firstBinding = true;
-							for (const auto &[name, bound] : macroBindings) {
-								if (!firstBinding)
-									std::cerr << ", ";
-								firstBinding = false;
-								std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-								if (bound) {
-									std::cerr << "(k=" << static_cast<int>(bound->kind);
-									if (const auto *number = std::get_if<double>(&bound->literalValue))
-										std::cerr << ",lit=" << *number;
-									std::cerr << ")";
-								}
-							}
-							std::cerr << "}\n";
-						}
 						context.setTypeFailure(
 							"Invalid cast source type '" + typeToUserName(valueType, context.parseContext) + "'"
 						);
@@ -999,20 +793,15 @@ static void inferOrderedFunction(
 							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
 					}
 				} else if (kind == IntrinsicKind::SizeOf) {
-					DataType typeArgType;
-					if (!resolveCompileTimeTypeReference(
-							context.parseContext, expr->arguments[1], macroBindings, typeArgType
-						) ||
-						typeArgType.kind != DataType::Kind::Type) {
-						context.setTypeFailure("size of expects a compile-time type reference");
-						break;
+					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeArgType.kind == DataType::Kind::Type) {
+						if (typeArgType.referencedKind == DataType::Kind::Type ||
+							typeArgType.referencedKind == DataType::Kind::Unresolved) {
+							context.setTypeFailure("size of 'type' is invalid");
+							break;
+						}
+						expr->type = {DataType::Kind::Int, 8};
 					}
-					if (typeArgType.referencedKind == DataType::Kind::Type ||
-						typeArgType.referencedKind == DataType::Kind::Unresolved) {
-						context.setTypeFailure("size of 'type' is invalid");
-						break;
-					}
-					expr->type = {DataType::Kind::Int, 8};
 				} else if (kind == IntrinsicKind::BuildInfo) {
 					Function *keyExpr = resolveThroughBindings(expr->arguments[1], macroBindings);
 					if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
@@ -1082,21 +871,16 @@ static void inferOrderedFunction(
 							expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
 				} else if (kind == IntrinsicKind::AddPointerDepth) {
-					DataType typeArgType;
-					if (!resolveCompileTimeTypeReference(
-							context.parseContext, expr->arguments[1], macroBindings, typeArgType
-						) ||
-						typeArgType.kind != DataType::Kind::Type) {
-						context.setTypeFailure("pointer target must be a compile-time type reference");
-						break;
+					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindings);
+					if (typeArgType.kind == DataType::Kind::Type) {
+						if (typeArgType.referencedKind == DataType::Kind::Type ||
+							typeArgType.referencedKind == DataType::Kind::Unresolved) {
+							context.setTypeFailure("pointer to 'type' is invalid");
+							break;
+						}
+						expr->type = typeArgType;
+						expr->type.pointerDepth++;
 					}
-					if (typeArgType.referencedKind == DataType::Kind::Type ||
-						typeArgType.referencedKind == DataType::Kind::Unresolved) {
-						context.setTypeFailure("pointer to 'type' is invalid");
-						break;
-					}
-					expr->type = typeArgType;
-					expr->type.pointerDepth++;
 				} else if (kind == IntrinsicKind::Construct) {
 					markCompileTimeParameterRequirements(expr->arguments[1], macroBindings, context.currentInstantiation);
 					DataType typeRefType;
@@ -1104,34 +888,7 @@ static void inferOrderedFunction(
 							context.parseContext, expr->arguments[1], macroBindings, typeRefType
 						) ||
 						typeRefType.kind != DataType::Kind::Type) {
-						static bool traceConstructType = std::getenv("DYNLEX_TRACE_CONSTRUCT_TYPE") != nullptr;
-						if (traceConstructType) {
-							std::cerr << "[construct-type] unresolved typeRef expr='"
-									  << std::string(expr->arguments[1]->range.subString) << "' bindings={";
-							bool firstBinding = true;
-							for (const auto &[name, bound] : macroBindings) {
-								if (!firstBinding)
-									std::cerr << ", ";
-								firstBinding = false;
-								std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-								if (bound) {
-									std::cerr << "(k=" << static_cast<int>(bound->kind);
-									if (const auto *number = std::get_if<double>(&bound->literalValue))
-										std::cerr << ",lit=" << *number;
-									std::cerr << ")";
-								}
-							}
-							std::cerr << "}\n";
-						}
-						context.setTypeFailure("construct target type must be a compile-time type reference");
 						break;
-					}
-					static bool traceConstructType = std::getenv("DYNLEX_TRACE_CONSTRUCT_TYPE") != nullptr;
-					if (traceConstructType) {
-						std::cerr << "[construct-type] typeRef expr='" << std::string(expr->arguments[1]->range.subString)
-								  << "' resolvedKind=" << static_cast<int>(typeRefType.referencedKind)
-								  << " num=" << typeRefType.numericSize << " ptr=" << typeRefType.pointerDepth
-								  << " classDef=" << typeRefType.classDefinition << "\n";
 					}
 					if (typeRefType.referencedKind == DataType::Kind::Array) {
 						DataType arrayType = typeRefType.toReferencedType();
@@ -1241,21 +998,12 @@ static void inferOrderedFunction(
 						expr->type = builtInPropertyType;
 						break;
 					}
-					if (instType.kind == DataType::Kind::Class && instType.classDefinition) {
+					if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
 						if (!fieldName.empty()) {
 							ClassDefinition *classDef = instType.classDefinition;
 							for (size_t i = 0; i < classDef->fields.size(); i++) {
-								if (classDef->fields[i].name != fieldName)
-									continue;
-								if (instType.classInstIndex >= 0 &&
-									static_cast<size_t>(instType.classInstIndex) < classDef->instantiations.size() &&
-									i < classDef->instantiations[instType.classInstIndex].fieldTypes.size()) {
+								if (classDef->fields[i].name == fieldName) {
 									expr->type = classDef->instantiations[instType.classInstIndex].fieldTypes[i];
-									break;
-								}
-								DataType declaredFieldType = classDef->fields[i].declaredType;
-								if (declaredFieldType.isDeduced()) {
-									expr->type = concretizeClassType(declaredFieldType);
 									break;
 								}
 							}
@@ -1313,19 +1061,8 @@ static void inferOrderedFunction(
 		// Arguments are sorted by source position and include both Variable and Word captures.
 		std::vector<DataType> argTypesForOverload;
 		if (!expandsToSelectIntrinsic(expr)) {
-			for (size_t ai = 0; ai < expr->arguments.size(); ai++) {
-				DataType argType = resolveTypeThroughBindings(expr->arguments[ai], macroBindings);
-				if (!argType.isDeduced()) {
-					DataType compileTimeTypeRef;
-					if (resolveCompileTimeTypeReference(
-							context.parseContext, expr->arguments[ai], macroBindings, compileTimeTypeRef
-						) &&
-						compileTimeTypeRef.kind == DataType::Kind::Type) {
-						argType = compileTimeTypeRef;
-					}
-				}
-				argTypesForOverload.push_back(argType);
-			}
+			for (size_t ai = 0; ai < expr->arguments.size(); ai++)
+				argTypesForOverload.push_back(resolveTypeThroughBindings(expr->arguments[ai], macroBindings));
 		}
 
 		// Select the best overload based on argument types
@@ -1356,31 +1093,10 @@ static void inferOrderedFunction(
 		}
 
 		Section *matchedSection = def->section;
-		static bool traceCallKindInfer = std::getenv("DYNLEX_TRACE_CALL_KIND_INFER") != nullptr;
-		if (traceCallKindInfer) {
-			std::cerr << "[call-kind-infer] expr='" << std::string(expr->range.subString) << "' def='"
-					  << std::string(def->range.subString) << "' isMacro=" << (matchedSection ? matchedSection->isMacro : false)
-					  << " sectionType=" << (matchedSection ? static_cast<int>(matchedSection->type) : -1) << "\n";
-		}
 
 		// Build parameter bindings from call-site arguments
-		std::unordered_map<std::string, Function *> parameterBindings;
-		appendPatternCallBindings(expr, def, parameterBindings);
 		std::unordered_map<std::string, Function *> callBindings = macroBindings;
-		for (const auto &[name, boundExpr] : parameterBindings)
-			callBindings[name] = boundExpr;
-		static bool tracePatternBindingsInfer = std::getenv("DYNLEX_TRACE_PATTERN_BINDINGS_INFER") != nullptr;
-		if (tracePatternBindingsInfer) {
-			std::cerr << "[pattern-bindings-infer] expr='" << std::string(expr->range.subString) << "' bindings={";
-			bool first = true;
-			for (const auto &[name, boundExpr] : callBindings) {
-				if (!first)
-					std::cerr << ", ";
-				first = false;
-				std::cerr << name << "='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>") << "'";
-			}
-			std::cerr << "}\n";
-		}
+		appendPatternCallBindings(expr, def, callBindings);
 		for (auto &[name, boundExpr] : callBindings) {
 			Function *resolvedExpr = resolveThroughBindings(boundExpr, macroBindings);
 			if (resolvedExpr)
@@ -1389,14 +1105,11 @@ static void inferOrderedFunction(
 
 		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
 			auto *classSec = static_cast<ClassSection *>(matchedSection);
-			expr->type = instantiateBoundClassType(context.parseContext, classSec->classDefinition, parameterBindings);
+			expr->type = instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindings);
 		} else if (matchedSection->isMacro) {
 			// Code replacement: infer body, type = replacement function type
 			if (!matchedSection->inferring) {
 				matchedSection->inferring = true;
-				// Macro bodies are shared AST; clear inferred types so caller-specific
-				// bindings never leak across calls/instantiations.
-				resetSectionFunctionTypesRecursive(matchedSection);
 				ScopedDiagnosticSuppression suppressDiagnostics(context);
 				inferSection(matchedSection, context, callBindings);
 				matchedSection->inferring = false;
@@ -1407,15 +1120,13 @@ static void inferOrderedFunction(
 				for (CodeLine *line : child->codeLines) {
 					if (!line->function)
 						continue;
-					if (!context.trial && context.currentInstantiation)
-						recordSelectedOverloadsForInstantiation(line->function, context.currentInstantiation);
 					DataType resolvedType = resolveTypeThroughBindings(line->function, callBindings);
 					if (resolvedType.isDeduced()) {
+						line->function->type = resolvedType;
 						expr->type = resolvedType;
 					}
 				}
 			}
-			resetSectionFunctionTypesRecursive(matchedSection);
 		} else {
 			// Non-macro function: infer body per-instantiation
 			// Build parameter bindings and argTypes in nodesPassed order (must match codegen's paramBindings order)
@@ -1424,60 +1135,8 @@ static void inferOrderedFunction(
 			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 				auto paramIt = node->parameterNames.find(def);
 				if (paramIt != node->parameterNames.end()) {
-					auto argIt = parameterBindings.find(paramIt->second);
-					if (argIt == parameterBindings.end() || !argIt->second) {
-						context.setTypeFailure("Missing argument binding for parameter '" + paramIt->second + "'");
-						return;
-					}
-					Function *argExpr = argIt->second;
+					Function *argExpr = callBindings[paramIt->second];
 					paramBindings.push_back({paramIt->second, argExpr});
-					ArgumentTypeInferenceResult argTypeResult =
-						ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
-					DataType argType = argTypeResult.type;
-					if (!argType.isDeduced()) {
-						if (argTypeResult.deferred && context.currentInstantiation) {
-							context.currentInstantiation->needsReinfer = true;
-							return;
-						}
-						if (context.trial) {
-							context.setTypeFailure("Undeduced argument type encountered during trial pattern-call inference");
-							return;
-						}
-						assert(
-							argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
-						);
-					}
-					argTypes.push_back(argType);
-				}
-			}
-			if (paramBindings.size() < expr->arguments.size()) {
-				std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-				std::vector<std::string> positionalNames;
-				std::unordered_set<std::string> seen;
-				forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
-					std::string name;
-					if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
-						name = element.text;
-					} else if (element.type == PatternElement::Type::VariableLike && matchedSection &&
-							   matchedSection->findVariable(element.text)) {
-						name = element.text;
-					}
-					if (!name.empty() && seen.insert(name).second)
-						positionalNames.push_back(name);
-				});
-				size_t fallbackCount = std::min(sortedArgs.size(), positionalNames.size());
-				for (size_t i = 0; i < fallbackCount; i++) {
-					bool exists = false;
-					for (const auto &[boundName, _] : paramBindings) {
-						if (boundName == positionalNames[i]) {
-							exists = true;
-							break;
-						}
-					}
-					if (exists)
-						continue;
-					Function *argExpr = sortedArgs[i];
-					paramBindings.push_back({positionalNames[i], argExpr});
 					ArgumentTypeInferenceResult argTypeResult =
 						ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
 					DataType argType = argTypeResult.type;
@@ -1508,11 +1167,11 @@ static void inferOrderedFunction(
 				bool inferenceSucceeded = true;
 				size_t reinferPass = 0;
 				constexpr size_t maxReinferPasses = 32;
-				if (!context.trial) {
-					inst.selectedOverloadsByCall.clear();
-					inst.ifChainSelections.clear();
-				}
 				while (true) {
+					if (!context.trial)
+						inst.selectedOverloadsByCall.clear();
+					if (!context.trial)
+						inst.ifChainSelections.clear();
 					seedInstantiationCompileTimeParameters(
 						context.parseContext, inst, paramBindings, macroBindings, callerInstantiation
 					);

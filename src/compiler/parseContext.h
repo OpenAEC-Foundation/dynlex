@@ -205,27 +205,5 @@ inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::
 			outBindings[paramIt->second] = sortedArgs[argIndex++];
 		}
 	}
-	if (outBindings.size() < sortedArgs.size()) {
-		// Recover positional bindings for VariableLike pattern elements that were
-		// promoted to section variables and therefore have no trie parameterNames entry.
-		std::vector<std::string> positionalNames;
-		std::unordered_set<std::string> seen;
-		forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
-			std::string name;
-			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
-				name = element.text;
-			} else if (element.type == PatternElement::Type::VariableLike && def->section &&
-					   def->section->findVariable(element.text)) {
-				name = element.text;
-			}
-			if (!name.empty() && seen.insert(name).second)
-				positionalNames.push_back(name);
-		});
-		size_t fallbackCount = std::min(sortedArgs.size(), positionalNames.size());
-		for (size_t i = 0; i < fallbackCount; i++) {
-			if (!outBindings.contains(positionalNames[i]))
-				outBindings[positionalNames[i]] = sortedArgs[i];
-		}
-	}
 	return bodyExpr;
 }

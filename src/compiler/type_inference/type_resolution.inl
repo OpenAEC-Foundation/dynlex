@@ -12,99 +12,31 @@ static Function *resolveCompileTimeSelectBranch(
 	return selectExpr->arguments[*condition ? 2 : 3];
 }
 
-static bool resolveCompileTimeTypeReference(
-	ParseContext &parseContext, Function *expr, const std::unordered_map<std::string, Function *> &bindings,
-	DataType &outTypeRef
-);
-
 static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
-	struct TypeResolutionStateKey {
-		const Function *expr;
-		size_t bindingsHash;
-
-		bool operator==(const TypeResolutionStateKey &other) const {
-			return expr == other.expr && bindingsHash == other.bindingsHash;
-		}
-	};
-	struct TypeResolutionStateKeyHasher {
-		size_t operator()(const TypeResolutionStateKey &key) const {
-			size_t h = std::hash<const Function *>{}(key.expr);
-			h ^= key.bindingsHash + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-			return h;
-		}
-	};
-	auto hashBindings = [](const std::unordered_map<std::string, Function *> &map) {
-		std::vector<std::pair<std::string, uintptr_t>> entries;
-		entries.reserve(map.size());
-		for (const auto &[name, boundExpr] : map)
-			entries.push_back({name, reinterpret_cast<uintptr_t>(boundExpr)});
-		std::sort(entries.begin(), entries.end(), [](const auto &a, const auto &b) {
-			return a.first < b.first;
-		});
-		size_t h = 1469598103934665603ULL;
-		for (const auto &[name, ptr] : entries) {
-			size_t nameHash = std::hash<std::string>{}(name);
-			h ^= nameHash + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-			h ^= ptr + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-		}
-		return h;
-	};
-	static thread_local std::unordered_set<TypeResolutionStateKey, TypeResolutionStateKeyHasher> activeTypeResolutionStates;
-
-	auto isMacroPatternCall = [](Function *call) {
-		if (!call || call->kind != Function::Kind::PatternCall)
-			return false;
-		if (call->selectedPatternDefinition && call->selectedPatternDefinition->section)
-			return call->selectedPatternDefinition->section->isMacro;
-		if (!call->patternMatch || !call->patternMatch->matchedEndNode)
-			return false;
-		auto &defs = call->patternMatch->matchedEndNode->matchingDefinitions;
-		return defs.size() == 1 && defs.front() && defs.front()->section && defs.front()->section->isMacro;
-	};
-	Function *boundResolved = resolveThroughBindings(expr, bindings);
-	if (boundResolved && boundResolved != expr && boundResolved->type.isDeduced() && !isMacroPatternCall(boundResolved)) {
-		bool isSafeBoundLeaf = boundResolved->kind == Function::Kind::Pending ||
-							   boundResolved->kind == Function::Kind::Literal ||
-							   boundResolved->kind == Function::Kind::Variable;
-		if (isSafeBoundLeaf)
-			return concretizeClassType(boundResolved->type);
-	}
-	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && bindings.empty() &&
-		!isMacroPatternCall(expr)) {
+	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && bindings.empty()) {
 		return concretizeClassType(expr->type);
 	}
+	Function *directResolved = resolveThroughBindings(expr, bindings);
+	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
+		return concretizeClassType(directResolved->type);
 	std::unordered_map<std::string, Function *> effectiveBindings;
 	Function *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
 	if (!resolved)
 		return {};
 	bool dependsOnBindings = resolved != expr || !effectiveBindings.empty();
-	TypeResolutionStateKey stateKey{resolved, dependsOnBindings ? hashBindings(effectiveBindings) : 0};
-	if (activeTypeResolutionStates.contains(stateKey)) {
-		if (resolved->type.isDeduced() && !isMacroPatternCall(resolved))
-			return concretizeClassType(resolved->type);
+	if (activeTypeResolutionFunctions.contains(resolved))
 		return {};
-	}
 
 	struct ActiveTypeResolutionGuard {
-		TypeResolutionStateKey key;
+		const Function *expr;
 
-		explicit ActiveTypeResolutionGuard(TypeResolutionStateKey key) : key(key) {
-			activeTypeResolutionStates.insert(this->key);
+		explicit ActiveTypeResolutionGuard(const Function *function) : expr(function) {
+			activeTypeResolutionFunctions.insert(expr);
 		}
-		~ActiveTypeResolutionGuard() { activeTypeResolutionStates.erase(key); }
-	} activeGuard(stateKey);
-	if (resolved->type.isDeduced() && !isMacroPatternCall(resolved) && !dependsOnBindings) {
-		static bool traceTypeCache = std::getenv("DYNLEX_TRACE_TYPE_CACHE") != nullptr;
-		if (traceTypeCache) {
-			std::cerr << "[type-cache:resolved] expr='" << std::string(expr->range.subString) << "' resolved='"
-					  << std::string(resolved->range.subString) << "' type=" << resolved->type.toString()
-					  << " kind=" << static_cast<int>(resolved->type.kind)
-					  << " refKind=" << static_cast<int>(resolved->type.referencedKind) << " num=" << resolved->type.numericSize
-					  << " ptr=" << resolved->type.pointerDepth << " classDef=" << resolved->type.classDefinition
-					  << " dependsOnBindings=" << dependsOnBindings << "\n";
-		}
+		~ActiveTypeResolutionGuard() { activeTypeResolutionFunctions.erase(expr); }
+	} activeGuard(resolved);
+	if (bindings.empty() && !dependsOnBindings && resolved->type.isDeduced())
 		return concretizeClassType(resolved->type);
-	}
 	if (resolved->kind == Function::Kind::Literal) {
 		if (std::holds_alternative<double>(resolved->literalValue)) {
 			double value = std::get<double>(resolved->literalValue);
@@ -170,18 +102,9 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				resolved->selectedPatternDefinition = def;
 			if (def && def->section && def->section->type == SectionType::Class && !def->section->isMacro &&
 				activeTypeResolutionParseContext) {
-				std::unordered_map<std::string, Function *> callBindings;
-				appendPatternCallBindings(resolved, def, callBindings);
-				for (auto &[name, boundExpr] : callBindings) {
-					Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindings);
-					if (resolvedExpr)
-						boundExpr = resolvedExpr;
-				}
-				std::unordered_map<std::string, Function *> classBindings = effectiveBindings;
-				for (const auto &[name, boundExpr] : callBindings)
-					classBindings[name] = boundExpr;
 				return instantiateBoundClassType(
-					*activeTypeResolutionParseContext, static_cast<ClassSection *>(def->section)->classDefinition, classBindings
+					*activeTypeResolutionParseContext, static_cast<ClassSection *>(def->section)->classDefinition,
+					effectiveBindings
 				);
 			}
 		}
@@ -192,38 +115,15 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			DataType instType = concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings));
 			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
 				instType = concretizeClassType(instType.dereferenced());
-			static bool tracePropertyType = std::getenv("DYNLEX_TRACE_PROPERTY_TYPE") != nullptr;
-			if (tracePropertyType) {
-				std::cerr << "[property-type] owner='" << std::string(resolved->arguments[1]->range.subString)
-						  << "' ownerType=" << instType.toString() << " kind=" << static_cast<int>(instType.kind)
-						  << " ptr=" << instType.pointerDepth << " classDef=" << instType.classDefinition
-						  << " classInst=" << instType.classInstIndex << " bindings={";
-				bool firstBinding = true;
-				for (const auto &[name, bound] : effectiveBindings) {
-					if (!firstBinding)
-						std::cerr << ", ";
-					firstBinding = false;
-					std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-				}
-				std::cerr << "}\n";
-			}
 			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
 			std::string fieldName = extractFieldName(propExpr);
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 			if (builtInPropertyType.isDeduced())
 				return builtInPropertyType;
-			if (instType.kind == DataType::Kind::Class && instType.classDefinition) {
+			if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
 				for (size_t i = 0; i < instType.classDefinition->fields.size(); i++) {
-					if (instType.classDefinition->fields[i].name != fieldName)
-						continue;
-					if (instType.classInstIndex >= 0 &&
-						static_cast<size_t>(instType.classInstIndex) < instType.classDefinition->instantiations.size() &&
-						i < instType.classDefinition->instantiations[instType.classInstIndex].fieldTypes.size()) {
+					if (instType.classDefinition->fields[i].name == fieldName)
 						return instType.classDefinition->instantiations[instType.classInstIndex].fieldTypes[i];
-					}
-					DataType declaredFieldType = instType.classDefinition->fields[i].declaredType;
-					if (declaredFieldType.isDeduced())
-						return concretizeClassType(declaredFieldType);
 				}
 			}
 		} else if (kind == IntrinsicKind::Dereference) {
@@ -299,12 +199,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::SizeOf) {
-			DataType typeArgType;
-			if (activeTypeResolutionParseContext &&
-				resolveCompileTimeTypeReference(
-					*activeTypeResolutionParseContext, resolved->arguments[1], effectiveBindings, typeArgType
-				) &&
-				typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
@@ -383,28 +279,9 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::AddPointerDepth) {
-			DataType typeArgType;
-			static bool traceTypeRef = std::getenv("DYNLEX_TRACE_TYPE_REF") != nullptr;
-			if (activeTypeResolutionParseContext &&
-				resolveCompileTimeTypeReference(
-					*activeTypeResolutionParseContext, resolved->arguments[1], effectiveBindings, typeArgType
-				) &&
-				typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved) {
-				if (traceTypeRef) {
-					std::cerr << "[type-ref:add-pointer] arg='" << std::string(resolved->arguments[1]->range.subString)
-							  << "' resolvedKind=" << static_cast<int>(typeArgType.referencedKind)
-							  << " num=" << typeArgType.numericSize << " ptr=" << typeArgType.pointerDepth
-							  << " classDef=" << typeArgType.classDefinition << " bindings={";
-					bool firstBinding = true;
-					for (const auto &[name, bound] : effectiveBindings) {
-						if (!firstBinding)
-							std::cerr << ", ";
-						firstBinding = false;
-						std::cerr << name << "='" << (bound ? std::string(bound->range.subString) : "<null>") << "'";
-					}
-					std::cerr << "}\n";
-				}
 				typeArgType.pointerDepth++;
 				return typeArgType;
 			}
@@ -508,21 +385,13 @@ static bool resolveCompileTimeTypeReference(
 	ParseContext &parseContext, Function *expr, const std::unordered_map<std::string, Function *> &bindings,
 	DataType &outTypeRef
 ) {
-	static bool traceTypeRefFail = std::getenv("DYNLEX_TRACE_TYPE_REF_FAIL") != nullptr;
 	std::unordered_map<std::string, Function *> effectiveBindings;
 	Function *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
 	if (!resolved)
 		return false;
 	bool dependsOnBindings = resolved != expr || !effectiveBindings.empty();
 
-	if (!dependsOnBindings && resolved->type.kind == DataType::Kind::Type &&
-		resolved->type.referencedKind != DataType::Kind::Type && resolved->type.referencedKind != DataType::Kind::Unresolved) {
-		static bool traceTypeRef = std::getenv("DYNLEX_TRACE_TYPE_REF") != nullptr;
-		if (traceTypeRef) {
-			std::cerr << "[type-ref:cached] expr='" << std::string(resolved->range.subString)
-					  << "' kind=" << static_cast<int>(resolved->type.referencedKind) << " num=" << resolved->type.numericSize
-					  << " ptr=" << resolved->type.pointerDepth << " classDef=" << resolved->type.classDefinition << "\n";
-		}
+	if (!dependsOnBindings && resolved->type.kind == DataType::Kind::Type) {
 		outTypeRef = resolved->type;
 		return true;
 	}
@@ -555,22 +424,6 @@ static bool resolveCompileTimeTypeReference(
 				return false;
 			innerTypeRef.pointerDepth++;
 			outTypeRef = innerTypeRef;
-			return true;
-		}
-		if (kind == IntrinsicKind::TypeOf) {
-			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
-			if (!valueType.isDeduced())
-				return false;
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = valueType.kind;
-			outTypeRef.numericSize = valueType.numericSize;
-			outTypeRef.pointerDepth = valueType.pointerDepth;
-			outTypeRef.classDefinition = valueType.classDefinition;
-			outTypeRef.classInstIndex = valueType.classInstIndex;
-			outTypeRef.arraySize = valueType.arraySize;
-			outTypeRef.matrixRowCount = valueType.matrixRowCount;
-			outTypeRef.arrayElementType =
-				valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
 			return true;
 		}
 		if (kind == IntrinsicKind::Array) {
@@ -630,10 +483,6 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::Select) {
 			Function *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindings);
-			if (traceTypeRefFail && !selectedBranch) {
-				std::cerr << "[type-ref-fail] select condition unknown expr='" << std::string(resolved->range.subString)
-						  << "'\n";
-			}
 			if (selectedBranch)
 				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindings, outTypeRef);
 		}
@@ -659,12 +508,8 @@ static bool resolveCompileTimeTypeReference(
 			resolved->selectedPatternDefinition = def;
 		if (!def || !def->section)
 			return false;
-		if (traceTypeRefFail) {
-			std::cerr << "[type-ref-fail] pattern-call expr='" << std::string(resolved->range.subString) << "' def='"
-					  << std::string(def->range.subString) << "' isMacro=" << def->section->isMacro << "\n";
-		}
 
-		std::unordered_map<std::string, Function *> callBindings;
+		std::unordered_map<std::string, Function *> callBindings = effectiveBindings;
 		appendPatternCallBindings(resolved, def, callBindings);
 		for (auto &[name, boundExpr] : callBindings) {
 			Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindings);
@@ -672,29 +517,8 @@ static bool resolveCompileTimeTypeReference(
 				boundExpr = resolvedExpr;
 		}
 		if (!def->section->isMacro && def->section->type == SectionType::Class) {
-			if (traceTypeRefFail) {
-				std::cerr << "[type-ref-fail] class call expr='" << std::string(resolved->range.subString)
-						  << "' callBindings={";
-				bool first = true;
-				for (const auto &[name, boundExpr] : callBindings) {
-					if (!first)
-						std::cerr << ", ";
-					first = false;
-					std::cerr << name << "='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>") << "'";
-					if (boundExpr) {
-						std::cerr << "(k=" << static_cast<int>(boundExpr->kind);
-						if (const auto *number = std::get_if<double>(&boundExpr->literalValue))
-							std::cerr << ",lit=" << *number;
-						std::cerr << ")";
-					}
-				}
-				std::cerr << "}\n";
-			}
-			std::unordered_map<std::string, Function *> classBindings = effectiveBindings;
-			for (const auto &[name, boundExpr] : callBindings)
-				classBindings[name] = boundExpr;
 			outTypeRef = instantiateBoundClassType(
-				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, classBindings
+				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindings
 			);
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
@@ -703,41 +527,11 @@ static bool resolveCompileTimeTypeReference(
 		Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 		if (!bodyExpr)
 			return false;
-		if (traceTypeRefFail) {
-			std::cerr << "[type-ref-fail] expanded body='" << std::string(bodyExpr->range.subString) << "' bindings={";
-			bool first = true;
-			for (const auto &[name, argExpr] : innerBindings) {
-				if (!first)
-					std::cerr << ", ";
-				first = false;
-				std::cerr << name << "='" << (argExpr ? std::string(argExpr->range.subString) : "<null>") << "'";
-			}
-			std::cerr << "}\n";
-		}
 		for (const auto &[name, argExpr] : innerBindings) {
 			Function *resolvedArg = resolveThroughBindings(argExpr, callBindings);
 			callBindings[name] = resolvedArg ? resolvedArg : argExpr;
 		}
-		bool resolvedType = resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindings, outTypeRef);
-		if (traceTypeRefFail) {
-			std::cerr << "[type-ref-fail] body result=" << resolvedType;
-			if (resolvedType)
-				std::cerr << " type=" << outTypeRef.toString();
-			std::cerr << "\n";
-		}
-		return resolvedType;
-	}
-	if (traceTypeRefFail) {
-		std::cerr << "[type-ref-fail] unresolved expr='" << std::string(resolved->range.subString)
-				  << "' kind=" << static_cast<int>(resolved->kind) << " bindings={";
-		bool first = true;
-		for (const auto &[name, boundExpr] : effectiveBindings) {
-			if (!first)
-				std::cerr << ", ";
-			first = false;
-			std::cerr << name << "='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>") << "'";
-		}
-		std::cerr << "}\n";
+		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindings, outTypeRef);
 	}
 	return false;
 }
@@ -745,7 +539,6 @@ static bool resolveCompileTimeTypeReference(
 static DataType instantiateBoundClassType(
 	ParseContext &parseContext, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings
 ) {
-	static bool traceClassInstantiate = std::getenv("DYNLEX_TRACE_CLASS_INSTANTIATE") != nullptr;
 	if (!classDef)
 		return {};
 
@@ -758,29 +551,8 @@ static DataType instantiateBoundClassType(
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeFunction) {
 			DataType resolvedTypeRef;
 			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeFunction, bindings, resolvedTypeRef) ||
-				resolvedTypeRef.kind != DataType::Kind::Type) {
-				if (traceClassInstantiate) {
-					std::cerr << "[class-instantiate] failed field type for class="
-							  << (classDef->patternNames.empty() ? std::string("<unnamed>") : classDef->patternNames.front())
-							  << " field='" << field.name << "' expr='" << std::string(fieldType.typeFunction->range.subString)
-							  << "' bindings={";
-					bool first = true;
-					for (const auto &[name, boundExpr] : bindings) {
-						if (!first)
-							std::cerr << ", ";
-						first = false;
-						std::cerr << name << "='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>") << "'";
-						if (boundExpr) {
-							std::cerr << "(k=" << static_cast<int>(boundExpr->kind);
-							if (const auto *number = std::get_if<double>(&boundExpr->literalValue))
-								std::cerr << ",lit=" << *number;
-							std::cerr << ")";
-						}
-					}
-					std::cerr << "}\n";
-				}
+				resolvedTypeRef.kind != DataType::Kind::Type)
 				return {};
-			}
 			fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
 		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
 			fieldType = concretizeClassType(fieldType);

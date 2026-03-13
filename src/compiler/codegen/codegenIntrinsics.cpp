@@ -403,22 +403,9 @@ llvm::Value *generateIntrinsicCode(
 			arithmeticOp == ArithmeticIntrinsicKind::Multiply)
 			return generateMatrixMatrixMultiply(context, left, leftType, right, rightType);
 
-		DataType effectiveResultType = resultType;
-		if (!effectiveResultType.isDeduced()) {
-			DataType promoted;
-			if (!DataType::promoteArithmetic(leftType, rightType, promoted) || !promoted.isDeduced()) {
-				crashCompilerBug(
-					"arithmetic result type unresolved for intrinsic '" + name + "' with left='" + leftType.toString() +
-					"' right='" + rightType.toString() + "' leftExpr='" + std::string(args[0]->range.subString) +
-					"' rightExpr='" + std::string(args[1]->range.subString) + "'"
-				);
-			}
-			effectiveResultType = promoted;
-		}
-
-		left = ensureType(context, left, leftType, effectiveResultType);
-		right = ensureType(context, right, rightType, effectiveResultType);
-		return generateScalarOrVectorArithmetic(context, arithmeticOp, left, right, effectiveResultType);
+		left = ensureType(context, left, leftType, resultType);
+		right = ensureType(context, right, rightType, resultType);
+		return generateScalarOrVectorArithmetic(context, arithmeticOp, left, right, resultType);
 	}
 
 	// Comparison intrinsics
@@ -939,11 +926,6 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		if (resultType.kind != DataType::Kind::Class) {
-			if (!resultType.isDeduced()) {
-				crashCompilerBug(
-					"construct result type unresolved for type expression '" + std::string(args[0]->range.subString) + "'"
-				);
-			}
 			llvm::Value *val = generateFunctionCode(context, args[1]);
 			DataType fromType = getEffectiveType(context, args[1]);
 			return ensureType(context, val, fromType, resultType);
@@ -952,30 +934,8 @@ llvm::Value *generateIntrinsicCode(
 		ClassDefinition *classDef = resultType.classDefinition;
 		std::vector<DataType> fieldTypes;
 		fieldTypes.reserve(args.size() - 1);
-		for (size_t i = 1; i < args.size(); i++) {
-			DataType fieldType = getEffectiveType(context, args[i]);
-			if (!fieldType.isDeduced()) {
-				Function *resolvedArg = resolveVariableBinding(context, args[i]);
-				std::string bindingDump;
-				bool firstBinding = true;
-				for (const auto &[name, boundExpr] : context.macroFunctionBindings) {
-					if (!firstBinding)
-						bindingDump += ", ";
-					firstBinding = false;
-					bindingDump +=
-						name + "='" + (boundExpr ? std::string(boundExpr->range.subString) : std::string("<null>")) + "'";
-				}
-				crashCompilerBug(
-					"construct argument type unresolved for arg '" + std::string(args[i]->range.subString) +
-					"' in construct call '" + std::string(args[0]->range.subString) + "', resolved='" +
-					(resolvedArg ? std::string(resolvedArg->range.subString) : std::string("<null>")) +
-					"' kind=" + std::to_string(static_cast<int>(resolvedArg ? resolvedArg->kind : Function::Kind::Pending)) +
-					" type=" + (resolvedArg ? resolvedArg->type.toString() : std::string("<none>")) + " currentBindings={" +
-					bindingDump + "}"
-				);
-			}
-			fieldTypes.push_back(fieldType);
-		}
+		for (size_t i = 1; i < args.size(); i++)
+			fieldTypes.push_back(getEffectiveType(context, args[i]));
 		int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
 		DataType concreteType = resultType;
 		concreteType.classInstIndex = instIndex;
