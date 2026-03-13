@@ -295,8 +295,11 @@ static bool inferFunction(
 		trialContext.trialJournal = &journal;
 		Function *inferredExpr = subExpr;
 		bool ok = inferFunction(inferredExpr, trialContext, false, macroBindings);
-		if (!ok && context.typeFailureDetail.empty())
+		if (!ok && context.typeFailureDetail.empty()) {
 			context.typeFailureDetail = trialContext.typeFailureDetail;
+			if (context.typeFailureDetail.empty())
+				context.typeFailureDetail = "Failed to infer nested argument '" + (std::string)subExpr->range.subString + "'";
+		}
 		if (ok && isMacroPatternCall(inferredExpr)) {
 			DataType resolvedType = inferFunctionTypeWithoutSideEffects(inferredExpr, context, macroBindings);
 			if (traceNestedMacroType && !resolvedType.isDeduced()) {
@@ -312,6 +315,9 @@ static bool inferFunction(
 				std::cerr << "}\n";
 			}
 			ok = resolvedType.isDeduced();
+			if (!ok && context.typeFailureDetail.empty())
+				context.typeFailureDetail =
+					"Unable to resolve macro result type for '" + (std::string)inferredExpr->range.subString + "'";
 		}
 		updatedSubExpr = inferredExpr;
 		rollbackTrialJournal(journal);
@@ -588,8 +594,13 @@ static bool inferFunction(
 		trialContext.currentInstantiation = context.currentInstantiation;
 		trialContext.trialJournal = &journal;
 		inferOrderedFunction(expr, trialContext, macroBindings);
-		if (!trialContext.typesValid && trialFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
-			trialFailureDetail = trialContext.typeFailureDetail;
+		if (!trialContext.typesValid && trialFailureDetail.empty()) {
+			if (!trialContext.typeFailureDetail.empty())
+				trialFailureDetail = trialContext.typeFailureDetail;
+			else
+				trialFailureDetail =
+					"Unable to infer candidate grouping rooted at '" + (std::string)expr->range.subString + "'";
+		}
 		rollbackTrialJournal(journal);
 		return trialContext.typesValid;
 	});

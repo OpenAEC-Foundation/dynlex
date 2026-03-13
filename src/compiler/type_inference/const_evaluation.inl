@@ -164,6 +164,29 @@ static void appendPatternCallBindings(
 			bindings[paramIt->second] = argExpr;
 		}
 	}
+	if (bindings.size() >= sortedArgs.size() || sortedArgs.empty())
+		return;
+
+	// Fallback: recover positional parameter names from pattern elements for
+	// VariableLike tokens that were promoted to section variables.
+	std::vector<std::string> positionalNames;
+	std::unordered_set<std::string> seen;
+	forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
+		std::string name;
+		if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
+			name = element.text;
+		} else if (element.type == PatternElement::Type::VariableLike && definition->section &&
+				   definition->section->findVariable(element.text)) {
+			name = element.text;
+		}
+		if (!name.empty() && seen.insert(name).second)
+			positionalNames.push_back(name);
+	});
+	size_t fallbackCount = std::min(sortedArgs.size(), positionalNames.size());
+	for (size_t i = 0; i < fallbackCount; i++) {
+		if (!bindings.contains(positionalNames[i]))
+			bindings[positionalNames[i]] = sortedArgs[i];
+	}
 }
 
 static Function *selectCompileTimeBranch(
@@ -206,8 +229,21 @@ static void seedInstantiationCompileTimeParameters(
 	const std::vector<std::pair<std::string, Function *>> &paramBindings,
 	const std::unordered_map<std::string, Function *> &callerBindings, const Instantiation *callerInstantiation
 ) {
+	static bool traceConstSeed = std::getenv("DYNLEX_TRACE_CONST_SEED") != nullptr;
 	for (const auto &[name, argExpr] : paramBindings) {
 		CompileTimeValue value = evaluateCompileTimeValue(argExpr, parseContext, callerBindings, callerInstantiation);
+		if (traceConstSeed) {
+			std::cerr << "[const-seed] param='" << name << "' expr='"
+					  << (argExpr ? std::string(argExpr->range.subString) : std::string("<null>"))
+					  << "' known=" << isCompileTimeKnown(value);
+			if (const auto *number = std::get_if<double>(&value))
+				std::cerr << " value=" << *number;
+			else if (const auto *text = std::get_if<std::string>(&value))
+				std::cerr << " value='" << *text << "'";
+			else if (const auto *boolean = std::get_if<bool>(&value))
+				std::cerr << " value=" << (*boolean ? "true" : "false");
+			std::cerr << "\n";
+		}
 		if (isCompileTimeKnown(value))
 			instantiation.constantParameterValues[name] = value;
 		else

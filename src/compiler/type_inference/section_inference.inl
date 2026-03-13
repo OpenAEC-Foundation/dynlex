@@ -30,6 +30,13 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		if (!boundVar)
 			continue;
 		DataType boundType = resolveTypeThroughBindings(boundExpr, bindings);
+		static bool traceSectionBindings = std::getenv("DYNLEX_TRACE_SECTION_BINDINGS") != nullptr;
+		if (traceSectionBindings) {
+			std::cerr << "[section-bind] section='"
+					  << (section->openingLine ? std::string(section->openingLine->patternText) : "<root>")
+					  << "' param=" << name << " expr='" << (boundExpr ? std::string(boundExpr->range.subString) : "<null>")
+					  << "' type=" << boundType.toString() << " deduced=" << boundType.isDeduced() << "\n";
+		}
 		if (!boundType.isDeduced())
 			continue;
 		if (context.trial && context.trialJournal)
@@ -306,6 +313,25 @@ bool ensureSectionInstantiationInferred(
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!section)
 		return false;
+	static bool traceSectionCallBindings = std::getenv("DYNLEX_TRACE_SECTION_CALL_BINDINGS") != nullptr;
+	if (traceSectionCallBindings) {
+		std::string sectionName = section->openingLine ? std::string(section->openingLine->patternText) : section->toString();
+		std::cerr << "[section-call-bindings] section='" << sectionName << "' argTypes=[";
+		for (size_t i = 0; i < argTypes.size(); i++) {
+			if (i > 0)
+				std::cerr << ", ";
+			std::cerr << argTypes[i].toString();
+		}
+		std::cerr << "] bindings={";
+		bool first = true;
+		for (const auto &[name, expr] : callBindings) {
+			if (!first)
+				std::cerr << ", ";
+			first = false;
+			std::cerr << name << "='" << (expr ? std::string(expr->range.subString) : "<null>") << "'";
+		}
+		std::cerr << "}\n";
+	}
 
 	Instantiation &inst = section->instantiations[argTypes];
 	for (const auto &[name, argExpr] : callBindings) {
@@ -324,6 +350,19 @@ bool ensureSectionInstantiationInferred(
 	inst.selectedOverloadsByCall.clear();
 	inst.ifChainSelections.clear();
 	InferenceContext context(parseContext);
+	static bool traceSectionVariables = std::getenv("DYNLEX_TRACE_SECTION_VARIABLES") != nullptr;
+	if (traceSectionVariables) {
+		std::string sectionName = section->openingLine ? std::string(section->openingLine->patternText) : section->toString();
+		std::cerr << "[section-vars] " << sectionName << " vars={";
+		bool first = true;
+		for (const auto &[varName, _] : section->variables) {
+			if (!first)
+				std::cerr << ", ";
+			first = false;
+			std::cerr << "'" << varName << "'";
+		}
+		std::cerr << "}\n";
+	}
 	inst.inferring = true;
 	Instantiation *savedInst = context.currentInstantiation;
 	context.currentKnownConstants.clear();
@@ -333,7 +372,7 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	bool inferenceSucceeded = inferSection(section, context, {});
+	bool inferenceSucceeded = inferSection(section, context, callBindings);
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;

@@ -16,14 +16,14 @@ class:
         face_flags as i64
         style_flags as i64
         num_glyphs as i64
-        family_name as pointer
-        style_name as pointer
+        family_name as a pointer to a byte
+        style_name as a pointer to a byte
         num_fixed_sizes as i32
-        available_sizes as pointer
+        available_sizes as a pointer to a byte
         num_charmaps as i32
-        charmaps as pointer
-        generic_data as pointer
-        generic_finalizer as pointer
+        charmaps as a pointer to a byte
+        generic_data as a pointer to a byte
+        generic_finalizer as a pointer to a byte
         bbox_xmin as i64
         bbox_ymin as i64
         bbox_xmax as i64
@@ -36,7 +36,7 @@ class:
         max_advance_height as i16
         underline_position as i16
         underline_thickness as i16
-        glyph as pointer
+        glyph as a pointer to a byte
 
 # FT_GlyphSlotRec — rendered glyph data
 # Mirrors the C struct field-by-field up to 'bitmap_top'
@@ -45,12 +45,12 @@ class:
     patterns:
         ft glyph slot
     members:
-        slot_library as pointer
-        slot_face as pointer
-        slot_next as pointer
+        slot_library as a pointer to a byte
+        slot_face as a pointer to a byte
+        slot_next as a pointer to a byte
         glyph_index as i32
-        slot_generic_data as pointer
-        slot_generic_finalizer as pointer
+        slot_generic_data as a pointer to a byte
+        slot_generic_finalizer as a pointer to a byte
         metrics_width as i64
         metrics_height as i64
         hori_bearing_x as i64
@@ -68,11 +68,11 @@ class:
         bitmap_rows as i32
         bitmap_width as i32
         bitmap_pitch as i32
-        bitmap_buffer as pointer
+        bitmap_buffer as a pointer to a byte
         bitmap_num_grays as i16
         bitmap_pixel_mode as i8
         bitmap_palette_mode as i8
-        bitmap_palette as pointer
+        bitmap_palette as a pointer to a byte
         bitmap_left as i32
         bitmap_top as i32
 

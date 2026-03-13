@@ -19,7 +19,7 @@ function new string from data ptr with length len:
 
 function character index of str:
     replacement:
-        @intrinsic("dereference", the data of str + index)
+        @intrinsic("load at", the data of str, index)
 
 function the length of str:
     execute:

@@ -249,6 +249,10 @@ struct DataType {
 	// Convert a Type literal to the type it references
 	DataType toReferencedType() const {
 		assert(kind == Kind::Type && "Can only convert Type literals");
+		assert(
+			referencedKind != Kind::Class || classDefinition != nullptr ||
+			!"Type(Class) must carry classDefinition before conversion"
+		);
 		DataType result;
 		result.kind = referencedKind;
 		result.numericSize = numericSize;
