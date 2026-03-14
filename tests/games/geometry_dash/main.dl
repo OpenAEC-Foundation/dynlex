@@ -48,10 +48,18 @@ set rhythm_index to 0
 set rhythm_elapsed_ms to 0
 set rhythm_jumped to 0
 set jump_grace_ms to 120
+set jump_buffer_ms to 0
+set jump_buffer_max_ms to 220
 
 loop while not the window should close:
 	set key to the pressed key of window
 	set jump_input to key = 1 or key = 2 or key = 4
+	if jump_input:
+		set jump_buffer_ms to jump_buffer_max_ms
+	else if jump_buffer_ms > 0:
+		set jump_buffer_ms to jump_buffer_ms - frame_sleep_ms
+		if jump_buffer_ms < 0:
+			set jump_buffer_ms to 0
 
 	if key = 5:
 		@intrinsic("call", "glfw", "glfwSetWindowShouldClose", void, window, 1)
@@ -89,10 +97,11 @@ loop while not the window should close:
 		set expected_slide_ms to item rhythm_index of trajectory_slide_ms
 		set expected_jump_ms to item rhythm_index of trajectory_jump_ms
 
-		if jump_input and standing_on_surface and not rhythm_jumped:
+		if jump_buffer_ms > 0 and standing_on_surface and not rhythm_jumped:
 			if rhythm_elapsed_ms >= expected_slide_ms - jump_grace_ms and rhythm_elapsed_ms <= expected_slide_ms + jump_grace_ms:
 				set y_velocity to jump_velocity
 				set rhythm_jumped to 1
+				set jump_buffer_ms to 0
 
 		# Missed scheduled jump while still on a slide surface
 		if standing_on_surface and not rhythm_jumped and rhythm_elapsed_ms > expected_slide_ms + jump_grace_ms:
@@ -186,6 +195,7 @@ loop while not the window should close:
 			set rhythm_index to 0
 			set rhythm_elapsed_ms to 0
 			set rhythm_jumped to 0
+			set jump_buffer_ms to 0
 		if not jump_input:
 			set jump_lock to 0
 
@@ -253,7 +263,6 @@ loop while not the window should close:
 	draw number score at 108 32 using font and color 255 255 255
 	if not game_over:
 		draw text "FOLLOW THE RHYTHM" at 20 66 using font and color 155 175 230
-		draw text "HOLD DOES NOT AUTO-WIN" at 20 92 using font and color 155 175 230
 	else:
 		draw rectangle at 220 110 size 560 170 with color 65 20 35
 		draw text "CRASHED" at 430 170 using font and color 255 255 255

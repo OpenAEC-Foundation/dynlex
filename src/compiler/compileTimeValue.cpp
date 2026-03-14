@@ -21,19 +21,17 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 }
 
 static CompileTimeValue evaluateCompileTimeValueImpl(
-	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
-	const Instantiation *instantiation
+	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 );
 
 static thread_local std::unordered_set<const Function *> activeCompileTimeFunctions;
 
 static Function *resolveCompileTimeBinding(
-	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
-	std::unordered_map<std::string, Function *> *outBindings = nullptr
+	Function *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
 ) {
-	if (outBindings)
-		*outBindings = bindings;
-	return resolveVariableBindingChain(expr, bindings);
+	if (outBindingFrameStack)
+		*outBindingFrameStack = bindingFrameStack;
+	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 }
 
 static std::string currentBuildInfo(ParseContext &context, std::string_view key) {
@@ -56,12 +54,11 @@ static std::optional<double> currentBuildInfoNumber(ParseContext &context, std::
 }
 
 static CompileTimeValue evaluateIntrinsic(
-	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
-	const Instantiation *instantiation
+	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	if (kind == IntrinsicKind::BuildInfo) {
-		CompileTimeValue keyValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
+		CompileTimeValue keyValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
 		if (auto *key = std::get_if<std::string>(&keyValue)) {
 			if (std::optional<double> number = currentBuildInfoNumber(context, *key))
 				return *number;
@@ -72,7 +69,7 @@ static CompileTimeValue evaluateIntrinsic(
 		return {};
 	}
 	if (kind == IntrinsicKind::SizeOf) {
-		Function *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindings);
+		Function *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindingFrameStack);
 		if (!typeExpr)
 			return {};
 		DataType typeRef = typeExpr->type;
@@ -82,23 +79,26 @@ static CompileTimeValue evaluateIntrinsic(
 	}
 
 	if (kind == IntrinsicKind::Select) {
-		CompileTimeValue conditionValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
+		CompileTimeValue conditionValue =
+			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 		if (!condition.has_value())
 			return {};
-		return evaluateCompileTimeValueImpl(expr->arguments[*condition ? 2 : 3], context, bindings, instantiation);
+		return evaluateCompileTimeValueImpl(expr->arguments[*condition ? 2 : 3], context, bindingFrameStack, instantiation);
 	}
 
 	if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
-		return evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation);
+		return evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
 
 	auto lhs = [&]() -> CompileTimeValue {
-		return expr->arguments.size() >= 2 ? evaluateCompileTimeValueImpl(expr->arguments[1], context, bindings, instantiation)
-										   : CompileTimeValue{};
+		return expr->arguments.size() >= 2
+				   ? evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation)
+				   : CompileTimeValue{};
 	};
 	auto rhs = [&]() -> CompileTimeValue {
-		return expr->arguments.size() >= 3 ? evaluateCompileTimeValueImpl(expr->arguments[2], context, bindings, instantiation)
-										   : CompileTimeValue{};
+		return expr->arguments.size() >= 3
+				   ? evaluateCompileTimeValueImpl(expr->arguments[2], context, bindingFrameStack, instantiation)
+				   : CompileTimeValue{};
 	};
 
 	if (kind == IntrinsicKind::Not) {
@@ -187,8 +187,7 @@ static Function *getSingleCompileTimeBody(Section *section) {
 }
 
 static CompileTimeValue evaluatePatternCall(
-	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
-	const Instantiation *instantiation
+	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	if (!expr->patternMatch || !expr->patternMatch->matchedEndNode ||
 		expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
@@ -198,31 +197,38 @@ static CompileTimeValue evaluatePatternCall(
 	if (!def || !def->section)
 		return {};
 
-	std::unordered_map<std::string, Function *> callBindings = bindings;
+	BindingMap callBindings;
+	bindingFrameStack.forEachFrame([&callBindings](const BindingFrame &frame) {
+		for (const auto &[bindingName, functionExpression] : frame.bindings)
+			callBindings[bindingName] = functionExpression;
+	});
 	collectPatternCallBindings(expr, def, callBindings);
 
 	if (def->section->isMacro) {
-		std::unordered_map<std::string, Function *> innerBindings;
+		BindingMap innerBindings;
 		Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 		if (!bodyExpr)
 			return {};
 		for (const auto &[name, argExpr] : innerBindings)
 			callBindings[name] = argExpr;
-		return evaluateCompileTimeValueImpl(bodyExpr, context, callBindings, instantiation);
+		BindingFrameStack callBindingFrameStack;
+		callBindingFrameStack.pushFrame(std::move(callBindings));
+		return evaluateCompileTimeValueImpl(bodyExpr, context, callBindingFrameStack, instantiation);
 	}
 
 	Function *bodyExpr = getSingleCompileTimeBody(def->section);
 	if (!bodyExpr)
 		return {};
-	return evaluateCompileTimeValueImpl(bodyExpr, context, callBindings, instantiation);
+	BindingFrameStack callBindingFrameStack;
+	callBindingFrameStack.pushFrame(std::move(callBindings));
+	return evaluateCompileTimeValueImpl(bodyExpr, context, callBindingFrameStack, instantiation);
 }
 
 static CompileTimeValue evaluateCompileTimeValueImpl(
-	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
-	const Instantiation *instantiation
+	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
-	std::unordered_map<std::string, Function *> effectiveBindings;
-	expr = resolveCompileTimeBinding(expr, bindings, &effectiveBindings);
+	BindingFrameStack effectiveBindingFrameStack;
+	expr = resolveCompileTimeBinding(expr, bindingFrameStack, &effectiveBindingFrameStack);
 	if (!expr)
 		return {};
 	if (activeCompileTimeFunctions.contains(expr))
@@ -255,16 +261,15 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 	case Function::Kind::Pending:
 		return {};
 	case Function::Kind::IntrinsicCall:
-		return evaluateIntrinsic(expr, context, effectiveBindings, instantiation);
+		return evaluateIntrinsic(expr, context, effectiveBindingFrameStack, instantiation);
 	case Function::Kind::PatternCall:
-		return evaluatePatternCall(expr, context, effectiveBindings, instantiation);
+		return evaluatePatternCall(expr, context, effectiveBindingFrameStack, instantiation);
 	}
 	return {};
 }
 
 CompileTimeValue evaluateCompileTimeValue(
-	Function *expr, ParseContext &context, const std::unordered_map<std::string, Function *> &bindings,
-	const Instantiation *instantiation
+	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
-	return evaluateCompileTimeValueImpl(expr, context, bindings, instantiation);
+	return evaluateCompileTimeValueImpl(expr, context, bindingFrameStack, instantiation);
 }

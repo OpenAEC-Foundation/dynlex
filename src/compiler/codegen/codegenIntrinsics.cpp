@@ -269,8 +269,7 @@ llvm::Value *generateIntrinsicCode(
 
 		// Save scope state — resolveThroughMacroLayers freely crosses scope
 		// boundaries, so we restore afterward.
-		auto savedBindings = context.macroFunctionBindings;
-		auto savedStack = context.macroBindingStack;
+		auto savedBindingFrames = context.macroBindingFrames;
 
 		// Resolve the destination through all macro and scope layers to detect
 		// property stores. E.g., `add value to the x of target` chains through
@@ -310,8 +309,7 @@ llvm::Value *generateIntrinsicCode(
 			builder.CreateStore(val, fieldPtr);
 		} else {
 			// Restore scope state — the else branch evaluates args[0] directly
-			context.macroFunctionBindings = savedBindings;
-			context.macroBindingStack = savedStack;
+			context.macroBindingFrames = savedBindingFrames;
 
 			llvm::Value *ptr = getVariablePointer(context, args[0]);
 			if (ptr && val) {
@@ -364,8 +362,7 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		// Restore scope state
-		context.macroFunctionBindings = savedBindings;
-		context.macroBindingStack = savedStack;
+		context.macroBindingFrames = savedBindingFrames;
 		return nullptr;
 	}
 
@@ -883,7 +880,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue =
-			evaluateCompileTimeValue(args[0], context, context.macroFunctionBindings, context.currentCodegenInstantiation);
+			evaluateCompileTimeValue(args[0], context, context.macroBindingFrames, context.currentCodegenInstantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 		if (!condition.has_value()) {
 			context.diagnostics.push_back(

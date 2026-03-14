@@ -4,7 +4,7 @@
 #include "intrinsicInfo.h"
 #include <algorithm>
 
-using Bindings = std::unordered_map<std::string, Function *>;
+using Bindings = BindingMap;
 
 static bool isInternalSection(Section *section) {
 	if (!section)

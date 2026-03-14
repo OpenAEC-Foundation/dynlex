@@ -22,6 +22,13 @@ These instructions apply to all coding agents working in this repository (includ
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
 - Keep bash commands on one line by chaining with `&&` or `;`.
+- When encountering ANY compiler issue while working on .dl code:
+1. identify the root cause with whatever tools you need.
+2. identify a possible fix.
+3. report to the user.
+- this is a compiler. only PERFECT code is accepted.
+- your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
+- be direct. 
 
 ## Project Overview
 

@@ -13,8 +13,12 @@ bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
 bool ensureSectionInstantiationInferred(
-	ParseContext &context, Section *section, const std::unordered_map<std::string, Function *> &callBindings,
+	ParseContext &context, Section *section, const BindingFrameStack &callBindingFrameStack,
 	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation = nullptr
+);
+bool ensureSectionInstantiationInferred(
+	ParseContext &context, Section *section, const BindingMap &callBindings, const std::vector<DataType> &argTypes,
+	const Instantiation *callerInstantiation = nullptr
 );
 bool isInternalSourcePath(std::string_view path);
 void expandFunction(Function *expr, Section *section);
@@ -34,6 +38,4 @@ PatternDefinition *selectOverload(
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );
 
-void appendPatternCallBindings(
-	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
-);
+void appendPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings);

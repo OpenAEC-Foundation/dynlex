@@ -47,7 +47,7 @@ void generateSpecializedFunction(
 	auto it = section->instantiations.find(argTypes);
 	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
 	if (!it->second.returnType.isDeduced()) {
-		std::unordered_map<std::string, Function *> callBindings;
+		BindingMap callBindings;
 		for (const auto &[name, expr] : paramBindings)
 			callBindings[name] = expr;
 		ensureSectionInstantiationInferred(context, section, callBindings, argTypes);
@@ -107,7 +107,7 @@ void generateSpecializedFunction(
 	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	// Push macro bindings — function bodies must not see caller's macro bindings.
-	pushClearedBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+	pushClearedBindingScope(context.macroBindingFrames);
 
 	builder.SetInsertPoint(entry);
 
@@ -135,7 +135,7 @@ void generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
-	bool restoredFunctionBindingScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+	bool restoredFunctionBindingScope = popBindingScope(context.macroBindingFrames);
 	assert(restoredFunctionBindingScope && "Missing macro binding scope when restoring codegen state");
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
@@ -210,7 +210,7 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		Function *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
-			if (!context.macroBindingStack.empty())
+			if (context.macroBindingFrames.hasParentScope())
 				guard.popToCallerScope();
 			return generateFunctionCode(context, resolved);
 		}
@@ -278,11 +278,11 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with function substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
-			pushClearedBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+			pushClearedBindingScope(context.macroBindingFrames);
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
-				context.macroFunctionBindings[paramName] = argExpr;
+				context.macroBindingFrames.topBindings()[paramName] = argExpr;
 			}
 
 			// Only section-type macros (like "if condition:", "loop while condition:")
@@ -315,7 +315,7 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 				}
 			}
 
-			bool restoredMacroScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+			bool restoredMacroScope = popBindingScope(context.macroBindingFrames);
 			assert(restoredMacroScope && "Missing macro binding scope after macro pattern call");
 			context.currentBodySection = savedBodySection;
 			return result;
@@ -383,15 +383,18 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
-	auto controlHeaderInfo =
-		[&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, BindingMap>> {
 		if (!line || !line->function)
 			return std::nullopt;
 
 		Function *header = line->function;
-		std::unordered_map<std::string, Function *> headerBindings = context.macroFunctionBindings;
+		BindingMap headerBindings;
+		context.macroBindingFrames.forEachFrame([&headerBindings](const BindingFrame &frame) {
+			for (const auto &[bindingName, functionExpression] : frame.bindings)
+				headerBindings[bindingName] = functionExpression;
+		});
 		if (header->kind == Function::Kind::PatternCall) {
-			std::unordered_map<std::string, Function *> innerBindings;
+			BindingMap innerBindings;
 			Function *expanded = expandMacroPatternCall(header, innerBindings);
 			if (expanded) {
 				header = expanded;
@@ -489,6 +492,8 @@ bool generateCode(ParseContext &context) {
 	}
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	if (context.macroBindingFrames.empty())
+		context.macroBindingFrames.pushFrame({});
 
 	// Initialize debug info builder (skip for SPIR-V — no DWARF in SPIR-V)
 	if (context.options.emitDebugInfo && !context.options.emitSPIRV) {

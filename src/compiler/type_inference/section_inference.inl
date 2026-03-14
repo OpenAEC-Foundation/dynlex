@@ -7,7 +7,7 @@ static bool isLoopSectionOpening(CodeLine *line) {
 		return false;
 	Function *header = line->function;
 	if (header->kind == Function::Kind::PatternCall) {
-		std::unordered_map<std::string, Function *> innerBindings;
+		BindingMap innerBindings;
 		Function *expanded = expandMacroPatternCall(header, innerBindings);
 		if (expanded)
 			header = expanded;
@@ -16,8 +16,8 @@ static bool isLoopSectionOpening(CodeLine *line) {
 		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
 }
 
-static bool
-inferSection(Section *section, InferenceContext &context, const std::unordered_map<std::string, Function *> &bindings) {
+static bool inferSection(Section *section, InferenceContext &context, const BindingMap &bindings) {
+	BindingFrameStack bindingFrameStack = makeBindingFrameStack(bindings);
 	// The first instantiation determines operand ordering; subsequent ones reuse it.
 	// size() > 1 because the current instantiation is already inserted before inferSection is called.
 	bool alreadyOrdered = section->instantiations.size() > 1;
@@ -29,7 +29,7 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		Variable *boundVar = section->findVariable(name);
 		if (!boundVar)
 			continue;
-		DataType boundType = resolveTypeThroughBindings(boundExpr, bindings);
+		DataType boundType = resolveTypeThroughBindings(boundExpr, bindingFrameStack);
 		if (!boundType.isDeduced())
 			continue;
 		if (context.trial && context.trialJournal)
@@ -70,20 +70,19 @@ inferSection(Section *section, InferenceContext &context, const std::unordered_m
 		}
 	} loopMutationScope(context, loopSection);
 
-	auto controlHeaderInfo =
-		[&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, std::unordered_map<std::string, Function *>>> {
+	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, BindingMap>> {
 		if (!line || !line->function)
 			return std::nullopt;
 
 		Function *header = line->function;
-		std::unordered_map<std::string, Function *> headerBindings = bindings;
+		BindingMap headerBindings = bindings;
 		if (header->kind == Function::Kind::PatternCall) {
-			std::unordered_map<std::string, Function *> innerBindings;
+			BindingMap innerBindings;
 			Function *expanded = expandMacroPatternCall(header, innerBindings);
 			if (expanded) {
 				header = expanded;
 				for (const auto &[name, argExpr] : innerBindings)
-					headerBindings[name] = resolveThroughBindings(argExpr, bindings);
+					headerBindings[name] = resolveThroughBindings(argExpr, bindingFrameStack);
 			}
 		}
 		if (!header || header->kind != Function::Kind::IntrinsicCall)
@@ -300,7 +299,7 @@ bool inferTypes(ParseContext &parseContext) {
 }
 
 bool ensureSectionInstantiationInferred(
-	ParseContext &parseContext, Section *section, const std::unordered_map<std::string, Function *> &callBindings,
+	ParseContext &parseContext, Section *section, const BindingFrameStack &callBindingFrameStack,
 	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation
 ) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
@@ -308,13 +307,16 @@ bool ensureSectionInstantiationInferred(
 		return false;
 
 	Instantiation &inst = section->instantiations[argTypes];
-	for (const auto &[name, argExpr] : callBindings) {
-		CompileTimeValue value = evaluateCompileTimeValue(argExpr, parseContext, {}, callerInstantiation);
-		if (isCompileTimeKnown(value))
-			inst.constantParameterValues[name] = value;
-		else
-			inst.constantParameterValues.erase(name);
-	}
+	callBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
+		for (const auto &[name, argExpr] : frame.bindings) {
+			CompileTimeValue value =
+				evaluateCompileTimeValue(argExpr, parseContext, callBindingFrameStack, callerInstantiation);
+			if (isCompileTimeKnown(value))
+				inst.constantParameterValues[name] = value;
+			else
+				inst.constantParameterValues.erase(name);
+		}
+	});
 	if (inst.returnType.isDeduced())
 		return inst.valid;
 	if (inst.inferring)
@@ -344,4 +346,13 @@ bool ensureSectionInstantiationInferred(
 		inst.returnType = {DataType::Kind::Void};
 
 	return inst.returnType.isDeduced();
+}
+
+bool ensureSectionInstantiationInferred(
+	ParseContext &parseContext, Section *section, const BindingMap &callBindings, const std::vector<DataType> &argTypes,
+	const Instantiation *callerInstantiation
+) {
+	return ensureSectionInstantiationInferred(
+		parseContext, section, makeBindingFrameStack(callBindings), argTypes, callerInstantiation
+	);
 }

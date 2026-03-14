@@ -19,6 +19,7 @@ passed=0
 failed=0
 skipped=0
 failures=()
+failure_timings=()
 test_output=""
 is_windows=false
 case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
@@ -27,6 +28,28 @@ esac
 
 # Known failing tests — these don't count as unexpected failures
 KNOWN_FAILURES=""
+
+now_ms() {
+    local timestamp
+    timestamp=$(date +%s%3N 2>/dev/null || true)
+    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        printf "%s\n" "$timestamp"
+        return
+    fi
+    timestamp=$(date +%s 2>/dev/null || true)
+    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        printf "%s\n" "$((timestamp * 1000))"
+        return
+    fi
+    printf "0\n"
+}
+
+elapsed_ms_since() {
+    local start_ms="$1"
+    local end_ms
+    end_ms=$(now_ms)
+    printf "%s\n" "$((end_ms - start_ms))"
+}
 
 normalize_output() {
     printf "%s" "$1" | tr -d '\r'
@@ -71,7 +94,10 @@ if [[ ! -x "$COMPILER" ]]; then
     "$SCRIPT_DIR/build.sh"
 fi
 
+total_start_ms=$(now_ms)
+
 for test_dir in "$TESTS_DIR"/*/; do
+    test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
     test_name="$(basename "$test_dir")"
     source_file="$test_dir/main.dl"
@@ -99,9 +125,11 @@ for test_dir in "$TESTS_DIR"/*/; do
     compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
-        test_output+="${RED}FAIL${NC} $test_name (compilation timed out)\n"
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (compilation timed out, ${test_elapsed_ms} ms)\n"
         ((failed++))
         failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
     output_binary_exists=false
@@ -120,26 +148,33 @@ for test_dir in "$TESTS_DIR"/*/; do
                 test_output+="${GREEN}PASS${NC} $test_name\n"
                 ((passed++))
             else
+                test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
                 test_output+="${RED}FAIL${NC} $test_name (compile error mismatch)\n"
                 test_output+="  Expected error containing: $expected_error\n"
                 test_output+="  Actual: $compile_output\n"
+                test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
                 ((failed++))
                 failures+=("$test_name")
+                failure_timings+=("$test_name:${test_elapsed_ms}")
             fi
         else
-            test_output+="${RED}FAIL${NC} $test_name (compilation failed)\n"
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            test_output+="${RED}FAIL${NC} $test_name (compilation failed, ${test_elapsed_ms} ms)\n"
             [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
             ((failed++)) || true
             failures+=("$test_name")
+            failure_timings+=("$test_name:${test_elapsed_ms}")
         fi
         continue
     fi
 
     # Compilation succeeded but we expected an error
     if [[ -f "$expected_error_file" && ! -f "$expected_file" ]]; then
-        test_output+="${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded)\n"
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded, ${test_elapsed_ms} ms)\n"
         ((failed++))
         failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
@@ -147,16 +182,20 @@ for test_dir in "$TESTS_DIR"/*/; do
     actual_output=$(run_with_timeout 5 "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
-        test_output+="${RED}FAIL${NC} $test_name (execution timed out)\n"
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (execution timed out, ${test_elapsed_ms} ms)\n"
         ((failed++))
         failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
     if [[ $run_exit -ne 0 ]]; then
-        test_output+="${RED}FAIL${NC} $test_name (runtime error, exit $run_exit)\n"
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (runtime error, exit $run_exit, ${test_elapsed_ms} ms)\n"
         test_output+="  $actual_output\n"
         ((failed++))
         failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
@@ -167,20 +206,29 @@ for test_dir in "$TESTS_DIR"/*/; do
         test_output+="${GREEN}PASS${NC} $test_name\n"
         ((passed++))
     else
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         test_output+="${RED}FAIL${NC} $test_name (output mismatch)\n"
         test_output+="  Expected: $(head -c 200 <<< "$expected_output")\n"
         test_output+="  Actual:   $(head -c 200 <<< "$actual_output")\n"
+        test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
         ((failed++))
         failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
     fi
 done
+
+total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
 
 # Only show per-test details if there are failures
 if [[ $failed -gt 0 ]]; then
     echo -e "$test_output"
+    echo "Failure timings (ms):"
+    for entry in "${failure_timings[@]}"; do
+        echo "  ${entry/:/: } ms"
+    done
 fi
 
-echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped"
+echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total_elapsed_ms} ms total)"
 
 if [[ ${#failures[@]} -gt 0 ]]; then
     # Separate known vs unexpected failures

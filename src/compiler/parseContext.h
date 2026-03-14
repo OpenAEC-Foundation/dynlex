@@ -1,4 +1,5 @@
 #pragma once
+#include "bindingResolution.h"
 #include "codeLine.h"
 #include "diagnostic.h"
 #include "lsp/fileSystem.h"
@@ -98,12 +99,8 @@ struct ParseContext {
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
 	std::unordered_map<std::string, DataType> patternParamTypes;
-	// Macro function bindings: maps variable name to Function* (for macro expansion)
-	// Only contains the CURRENT macro's parameter bindings (scoped, not inherited).
-	std::unordered_map<std::string, Function *> macroFunctionBindings;
-	// Stack of caller macro bindings (pushed when entering a macro, popped when exiting).
-	// Used to restore caller scope when generating resolved argument functions.
-	std::stack<std::unordered_map<std::string, Function *>> macroBindingStack;
+	// Macro binding stack for macro expansion and variable resolution across nested macro scopes.
+	BindingFrameStack macroBindingFrames;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
 	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
@@ -211,15 +208,13 @@ inline void collectPatternCallBindingPairs(
 	});
 }
 
-inline void collectPatternCallBindings(
-	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
-) {
+inline void collectPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings) {
 	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Function *argumentExpression) {
 		bindings[parameterName] = argumentExpression;
 	});
 }
 
-inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::string, Function *> &outBindings) {
+inline Function *expandMacroPatternCall(Function *expr, BindingMap &outBindings) {
 	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;

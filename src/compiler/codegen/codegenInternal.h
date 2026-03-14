@@ -32,7 +32,7 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 // MacroScopeGuard: RAII guard that pops to caller's macro binding scope, restores on destruction.
 struct MacroScopeGuard {
 	ParseContext &context;
-	std::unordered_map<std::string, Function *> savedBindings;
+	BindingFrameStack savedBindingFrames;
 	bool active = false;
 
 	MacroScopeGuard(ParseContext &ctx) : context(ctx) {}

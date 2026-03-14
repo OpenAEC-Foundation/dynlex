@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DynLex Main File Function Hit Heatmap</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+      background: #f4f7fb;
+      color: #0f2440;
+    }
+    main {
+      max-width: 1400px;
+      margin: 18px auto 40px;
+      padding: 0 14px;
+    }
+    h1 { margin: 0 0 6px; }
+    .muted { color: #576a89; font-size: 0.92rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #d6deea;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 8px 22px rgba(15, 36, 64, 0.05);
+    }
+    #heatmap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border: 1px solid #cfd8e8;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fbff;
+    }
+    .rect {
+      position: absolute;
+      border: 1px solid rgba(255,255,255,0.8);
+      box-sizing: border-box;
+      cursor: default;
+    }
+    .label {
+      position: absolute;
+      left: 4px;
+      top: 2px;
+      right: 2px;
+      font-size: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #0b1e36;
+      pointer-events: none;
+    }
+    #tooltip {
+      position: fixed;
+      display: none;
+      background: #10233f;
+      color: #f0f5ff;
+      font-size: 12px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 9999;
+      max-width: 560px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+      white-space: pre-wrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    th, td {
+      border-bottom: 1px solid #e1e7f1;
+      text-align: left;
+      padding: 6px 5px;
+      vertical-align: top;
+    }
+    th {
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: #556784;
+      background: #f9fbff;
+      position: sticky;
+      top: 0;
+    }
+    .scroll {
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid #d6deea;
+      border-radius: 8px;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Function Hit Heatmap Across Main .dl Files</h1>
+  <div class="muted">
+    Mains discovered: <b>40</b> |
+    Mains profiled successfully: <b>25</b> |
+    Failed: <b>15</b> |
+    Aggregated compiler-function hits: <b>1604</b> |
+    Frequency: <b>999</b>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2 style="margin:0 0 8px;">Treemap (Top 500 Functions by Hit Count)</h2>
+      <div id="heatmap"></div>
+      <p class="muted" style="margin:8px 0 0;">
+        Hover a rectangle to see function and exact hit count. Rectangle area is proportional to hit count.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 8px;">Top Main Files by Compiler Hits</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Main File</th><th>Hits</th></tr></thead>
+          <tbody>
+            <tr><td>tests/required/recursion/main.dl</td><td>283</td></tr><tr><td>tests/required/class/main.dl</td><td>219</td></tr><tr><td>tests/required/precedence/main.dl</td><td>187</td></tr><tr><td>tests/required/array_literal/main.dl</td><td>168</td></tr><tr><td>tests/required/globals/main.dl</td><td>143</td></tr><tr><td>tests/games/geometry_dash/main.dl</td><td>117</td></tr><tr><td>tests/required/spacing_tmp.dl</td><td>101</td></tr><tr><td>tests/required/section/main.dl</td><td>76</td></tr><tr><td>tests/games/snake.dl</td><td>71</td></tr><tr><td>tests/required/pattern/main.dl</td><td>71</td></tr><tr><td>tests/games/geometry_dash/print_trajectory.dl</td><td>58</td></tr><tr><td>tests/required/conditional/main.dl</td><td>39</td></tr><tr><td>lib/quaternion.dl</td><td>21</td></tr><tr><td>tests/required/font_property_inference/main.dl</td><td>16</td></tr><tr><td>tests/games/shader_gallery.dl</td><td>10</td></tr><tr><td>tests/games/text_test.dl</td><td>8</td></tr><tr><td>tests/games/plasma.dl</td><td>6</td></tr><tr><td>tests/games/mandelbrot.dl</td><td>4</td></tr><tr><td>tests/required/lib/main.dl</td><td>2</td></tr><tr><td>tests/required/unary_minus_tmp.dl</td><td>2</td></tr><tr><td>tests/required/simple/main.dl</td><td>1</td></tr><tr><td>tests/required/syntax_config/main.dl</td><td>1</td></tr><tr><td>tests/required/custom_patterns/main.dl</td><td>0</td></tr><tr><td>tests/required/language/main.dl</td><td>0</td></tr><tr><td>tests/required/loops/main.dl</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:12px;">
+    <h2 style="margin:0 0 8px;">Top 300 Functions (Aggregated Hits)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Function</th><th>Hits</th><th>Representative Full Name</th></tr></thead>
+        <tbody>
+          <tr><td>BindingContextHasher::operator</td><td>141</td><td class="mono">BindingContextHasher::operator()(BindingContext const&amp;) const</td></tr><tr><td>functionContainsExplicitReturn</td><td>118</td><td class="mono">functionContainsExplicitReturn(Function*)</td></tr><tr><td>BindingFrameStack::flattenBindings[abi:cxx11]</td><td>105</td><td class="mono">BindingFrameStack::flattenBindings[abi:cxx11]() const</td></tr><tr><td>BindingFrameStack::~BindingFrameStack</td><td>77</td><td class="mono">BindingFrameStack::~BindingFrameStack()</td></tr><tr><td>resolveVariableBindingAcrossFrames</td><td>75</td><td class="mono">resolveVariableBindingAcrossFrames(Function*, BindingFrameStack const&amp;, unsigned long)</td></tr><tr><td>TypeResolutionKey::~TypeResolutionKey</td><td>64</td><td class="mono">TypeResolutionKey::~TypeResolutionKey()</td></tr><tr><td>DataType::DataType</td><td>63</td><td class="mono">DataType::DataType(DataType::Kind, int)</td></tr><tr><td>recomputeRanges</td><td>56</td><td class="mono">recomputeRanges(Function*)</td></tr><tr><td>Function::Function</td><td>56</td><td class="mono">Function::Function(Function const&amp;)</td></tr><tr><td>DataType::isDeduced</td><td>43</td><td class="mono">DataType::isDeduced() const</td></tr><tr><td>deleteFunctionTree</td><td>41</td><td class="mono">deleteFunctionTree(Function*)</td></tr><tr><td>compileTimeOnlyArgumentIndices</td><td>40</td><td class="mono">compileTimeOnlyArgumentIndices(Function*)</td></tr><tr><td>sortArgumentsRecursive</td><td>40</td><td class="mono">sortArgumentsRecursive(Function*)</td></tr><tr><td>snapshotFunctionVariableReferences</td><td>39</td><td class="mono">snapshotFunctionVariableReferences(Function*, InferenceContext&amp;)</td></tr><tr><td>cloneFunctionTree</td><td>38</td><td class="mono">cloneFunctionTree(Function*)</td></tr><tr><td>Range::start</td><td>38</td><td class="mono">Range::start() const</td></tr><tr><td>absorbOperatorIntoBoundaryArgument</td><td>34</td><td class="mono">absorbOperatorIntoBoundaryArgument(Function*&amp;)</td></tr><tr><td>BindingFrameStack::operator=</td><td>31</td><td class="mono">BindingFrameStack::operator=(BindingFrameStack const&amp;)</td></tr><tr><td>resetFunctionTypes</td><td>26</td><td class="mono">resetFunctionTypes(Function*)</td></tr><tr><td>expandsToSelectIntrinsic</td><td>25</td><td class="mono">expandsToSelectIntrinsic(Function*)</td></tr><tr><td>TypeResolutionKey::TypeResolutionKey</td><td>25</td><td class="mono">TypeResolutionKey::TypeResolutionKey(TypeResolutionKey&amp;&amp;)</td></tr><tr><td>countBoundaryArguments</td><td>24</td><td class="mono">countBoundaryArguments(Function*, bool)</td></tr><tr><td>resetSectionFunctionTypes</td><td>22</td><td class="mono">resetSectionFunctionTypes(Section*)</td></tr><tr><td>BindingContext::~BindingContext</td><td>21</td><td class="mono">BindingContext::~BindingContext()</td></tr><tr><td>DataType::~DataType</td><td>20</td><td class="mono">DataType::~DataType()</td></tr><tr><td>mustOwnEntireRange</td><td>18</td><td class="mono">mustOwnEntireRange(Function*)</td></tr><tr><td>concretizeClassType</td><td>18</td><td class="mono">concretizeClassType(DataType)</td></tr><tr><td>MatchProgress::MatchProgress</td><td>17</td><td class="mono">MatchProgress::MatchProgress(MatchProgress const&amp;)</td></tr><tr><td>BindingContext::BindingContext</td><td>17</td><td class="mono">BindingContext::BindingContext(BindingContext&amp;&amp;)</td></tr><tr><td>resolveThroughBindings</td><td>15</td><td class="mono">resolveThroughBindings(Function*, BindingFrameStack const&amp;)</td></tr><tr><td>TypeResolutionKeyHasher::operator</td><td>14</td><td class="mono">TypeResolutionKeyHasher::operator()(TypeResolutionKey const&amp;) const</td></tr><tr><td>startsWithArgument</td><td>14</td><td class="mono">startsWithArgument(Function*)</td></tr><tr><td>Function::~Function</td><td>13</td><td class="mono">Function::~Function()</td></tr><tr><td>sectionDefaultsToVoid</td><td>13</td><td class="mono">sectionDefaultsToVoid(Section*)</td></tr><tr><td>InferenceContext::snapshotReferenceConstant</td><td>12</td><td class="mono">InferenceContext::snapshotReferenceConstant(VariableReference*)</td></tr><tr><td>BindingContext::operator=</td><td>11</td><td class="mono">BindingContext::operator=(BindingContext&amp;&amp;)</td></tr><tr><td>DataType::operator=</td><td>11</td><td class="mono">DataType::operator=(DataType&amp;&amp;)</td></tr><tr><td>intrinsicRegistry[abi:cxx11]</td><td>10</td><td class="mono">intrinsicRegistry[abi:cxx11]()</td></tr><tr><td>DataType::operator&lt;</td><td>10</td><td class="mono">DataType::operator&lt;(DataType const&amp;) const</td></tr><tr><td>PatternMatch::PatternMatch</td><td>7</td><td class="mono">PatternMatch::PatternMatch(PatternMatch const&amp;)</td></tr><tr><td>PatternMatch::operator=</td><td>7</td><td class="mono">PatternMatch::operator=(PatternMatch const&amp;)</td></tr><tr><td>BindingFrameStack::BindingFrameStack</td><td>7</td><td class="mono">BindingFrameStack::BindingFrameStack()</td></tr><tr><td>endsWithArgument</td><td>6</td><td class="mono">endsWithArgument(Function*)</td></tr><tr><td>TypeResolutionKey::operator==</td><td>6</td><td class="mono">TypeResolutionKey::operator==(TypeResolutionKey const&amp;) const</td></tr><tr><td>PatternMatch::~PatternMatch</td><td>5</td><td class="mono">PatternMatch::~PatternMatch()</td></tr><tr><td>MatchProgress::step</td><td>5</td><td class="mono">MatchProgress::step()</td></tr><tr><td>functionPrecedence</td><td>5</td><td class="mono">functionPrecedence(Function*)</td></tr><tr><td>Section::detectPatternsRecursively</td><td>5</td><td class="mono">Section::detectPatternsRecursively(ParseContext&amp;, Range, StringHierarchy*, SectionType)</td></tr><tr><td>Range::end</td><td>5</td><td class="mono">Range::end() const</td></tr><tr><td>rollbackTrialJournal</td><td>4</td><td class="mono">rollbackTrialJournal(InferenceContext::TrialJournal&amp;)</td></tr><tr><td>DataType::toReferencedType</td><td>4</td><td class="mono">DataType::toReferencedType() const</td></tr><tr><td>InferenceContext::TrialJournal::TrialJournal</td><td>4</td><td class="mono">InferenceContext::TrialJournal::TrialJournal()</td></tr><tr><td>resetSectionLocalVariableTypes</td><td>4</td><td class="mono">resetSectionLocalVariableTypes(Section*)</td></tr><tr><td>BindingContext::operator==</td><td>4</td><td class="mono">BindingContext::operator==(BindingContext const&amp;) const</td></tr><tr><td>InferenceContext::TrialJournal::~TrialJournal</td><td>4</td><td class="mono">InferenceContext::TrialJournal::~TrialJournal()</td></tr><tr><td>InferenceContext::TrialJournal::recordTouchedSection</td><td>4</td><td class="mono">InferenceContext::TrialJournal::recordTouchedSection(Section*)</td></tr><tr><td>DataType::operator==</td><td>3</td><td class="mono">DataType::operator==(DataType const&amp;) const</td></tr><tr><td>resolvePatterns</td><td>3</td><td class="mono">resolvePatterns(ParseContext&amp;)::$_5::operator()(Section*) const::{lambda(PatternElement&amp;)#1}::operator()(PatternElement&amp;) const</td></tr><tr><td>ParseContext::match</td><td>3</td><td class="mono">ParseContext::match(PatternReference*)</td></tr><tr><td>isLoopSectionOpening</td><td>3</td><td class="mono">isLoopSectionOpening(CodeLine*)</td></tr><tr><td>DataType::isPointer</td><td>3</td><td class="mono">DataType::isPointer() const</td></tr><tr><td>analyzeSections</td><td>2</td><td class="mono">analyzeSections(ParseContext&amp;)</td></tr><tr><td>VariableMatch::~VariableMatch</td><td>2</td><td class="mono">VariableMatch::~VariableMatch()</td></tr><tr><td>recordSelectedOverloadsForInstantiation</td><td>2</td><td class="mono">recordSelectedOverloadsForInstantiation(Function*, Instantiation*)</td></tr><tr><td>InferenceContext::InferenceContext</td><td>2</td><td class="mono">InferenceContext::InferenceContext(ParseContext&amp;, bool)</td></tr><tr><td>MatchProgress::~MatchProgress</td><td>2</td><td class="mono">MatchProgress::~MatchProgress()</td></tr><tr><td>generateFunctionCode</td><td>2</td><td class="mono">generateFunctionCode(ParseContext&amp;, Function*)</td></tr><tr><td>ScopedDiagnosticSuppression::ScopedDiagnosticSuppression</td><td>2</td><td class="mono">ScopedDiagnosticSuppression::ScopedDiagnosticSuppression(InferenceContext&amp;)</td></tr><tr><td>BindingFrameStack::popFrame</td><td>2</td><td class="mono">BindingFrameStack::popFrame()</td></tr><tr><td>Instantiation::Instantiation</td><td>2</td><td class="mono">Instantiation::Instantiation(Instantiation const&amp;)</td></tr><tr><td>DataType::promoteArithmetic</td><td>2</td><td class="mono">DataType::promoteArithmetic(DataType const&amp;, DataType const&amp;, DataType&amp;)</td></tr><tr><td>ParseContext::~ParseContext</td><td>2</td><td class="mono">ParseContext::~ParseContext()</td></tr><tr><td>VariableMatch::VariableMatch</td><td>1</td><td class="mono">VariableMatch::VariableMatch(VariableMatch const&amp;)</td></tr><tr><td>WordMatch::~WordMatch</td><td>1</td><td class="mono">WordMatch::~WordMatch()</td></tr><tr><td>Range::section</td><td>1</td><td class="mono">Range::section() const</td></tr><tr><td>MatchProgress::isComplete</td><td>1</td><td class="mono">MatchProgress::isComplete() const</td></tr><tr><td>DataType::isBytePointer</td><td>1</td><td class="mono">DataType::isBytePointer() const</td></tr><tr><td>generateSectionCode</td><td>1</td><td class="mono">generateSectionCode(ParseContext&amp;, Section*)::$_0::operator()[abi:cxx11](CodeLine*) const</td></tr><tr><td>StringHierarchy::~StringHierarchy</td><td>1</td><td class="mono">StringHierarchy::~StringHierarchy()</td></tr><tr><td>MembersSection::processLine</td><td>1</td><td class="mono">MembersSection::processLine(ParseContext&amp;, CodeLine*)</td></tr><tr><td>PatternElement::PatternElement</td><td>1</td><td class="mono">PatternElement::PatternElement(PatternElement const&amp;)</td></tr><tr><td>StringHierarchy::cloneWithOffset</td><td>1</td><td class="mono">StringHierarchy::cloneWithOffset(unsigned long)</td></tr><tr><td>InferenceContext::lookupKnownConstant[abi:cxx11]</td><td>1</td><td class="mono">InferenceContext::lookupKnownConstant[abi:cxx11](VariableReference*) const</td></tr><tr><td>DataType::isVector</td><td>1</td><td class="mono">DataType::isVector() const</td></tr><tr><td>extractFieldName[abi:cxx11]</td><td>1</td><td class="mono">extractFieldName[abi:cxx11](Function*)</td></tr><tr><td>InferenceContext::~InferenceContext</td><td>1</td><td class="mono">InferenceContext::~InferenceContext()</td></tr><tr><td>expandMatch</td><td>1</td><td class="mono">expandMatch(Function*, Function*, PatternMatch*)</td></tr><tr><td>getSingleCompileTimeBody</td><td>1</td><td class="mono">getSingleCompileTimeBody(Section*)</td></tr><tr><td>InferenceContext::TrialJournal::SectionInstantiationUndo::~SectionInstantiationUndo</td><td>1</td><td class="mono">InferenceContext::TrialJournal::SectionInstantiationUndo::~SectionInstantiationUndo()</td></tr><tr><td>InferenceContext::normalizeReference</td><td>1</td><td class="mono">InferenceContext::normalizeReference(VariableReference*) const</td></tr><tr><td>InferenceContext::popLoopMutationScope</td><td>1</td><td class="mono">InferenceContext::popLoopMutationScope()</td></tr><tr><td>Section::processLine</td><td>1</td><td class="mono">Section::processLine(ParseContext&amp;, CodeLine*)</td></tr><tr><td>DataType::isMatrix</td><td>1</td><td class="mono">DataType::isMatrix() const</td></tr><tr><td>DataType::toString[abi:cxx11]</td><td>1</td><td class="mono">DataType::toString[abi:cxx11]() const</td></tr><tr><td>DataType::isNumeric</td><td>1</td><td class="mono">DataType::isNumeric() const</td></tr><tr><td>Range::Range</td><td>1</td><td class="mono">Range::Range(CodeLine*, int, int)</td></tr><tr><td>DataType::hasVectorPayload</td><td>1</td><td class="mono">DataType::hasVectorPayload() const</td></tr><tr><td>parseBracketHierarchy</td><td>1</td><td class="mono">parseBracketHierarchy(ParseContext&amp;, Range)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:12px;">
+    <h2 style="margin:0 0 8px;">Profiling Failures</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Main File</th><th>Exit</th><th>Stderr Tail</th></tr></thead>
+        <tbody>
+          <tr><td>lib/config.dl</td><td>1</td><td class="mono">lib/config.dl:8:9-22: Error: unexpected line in class definition</td></tr><tr><td>tests/games/julia_shader.dl</td><td>1</td><td class="mono">lib/shader.dl:11:66-77: Error: Shader input &#x27;FragCoord&#x27; is unavailable in this compilation mode</td></tr><tr><td>tests/games/mandelbrot_shader.dl</td><td>1</td><td class="mono">lib/shader.dl:11:66-77: Error: Shader input &#x27;FragCoord&#x27; is unavailable in this compilation mode</td></tr><tr><td>tests/games/mirror/main.dl</td><td>1</td><td class="mono">tests/games/mirror/main.dl:10:1-42: Error: Function &#x27;set transform to an identity 4 x 4 matrix&#x27; parses successfully without types, but not with types</td></tr><tr><td>tests/games/passthrough_vertex.dl</td><td>1</td><td class="mono">lib/shader.dl:29:66-76: Error: Shader input &#x27;Position&#x27; is unavailable in this compilation mode</td></tr><tr><td>tests/games/plasma_shader.dl</td><td>1</td><td class="mono">lib/shader.dl:11:66-77: Error: Shader input &#x27;FragCoord&#x27; is unavailable in this compilation mode</td></tr><tr><td>tests/games/rings_shader.dl</td><td>1</td><td class="mono">lib/shader.dl:11:66-77: Error: Shader input &#x27;FragCoord&#x27; is unavailable in this compilation mode</td></tr><tr><td>tests/required/array_literal_mismatch/main.dl</td><td>1</td><td class="mono">tests/required/array_literal_mismatch/main.dl:3:1-23: Error: Function &#x27;set values to [1, &quot;x&quot;]&#x27; parses successfully without types, but not with types: Array literal elements must have matching or compatible numeric types</td></tr><tr><td>tests/required/duplicate_pattern/main.dl</td><td>1</td><td class="mono">tests/required/duplicate_pattern/main.dl:9:10-17: Error: Duplicate pattern definition (Conflicts with this definition tests/required/duplicate_pattern/main.dl:5:10-14)</td></tr><tr><td>tests/required/stable_variable_type/main.dl</td><td>1</td><td class="mono">tests/required/stable_variable_type/main.dl:4:1-13: Error: Function &#x27;add 0.5 to a&#x27; parses successfully without types, but not with types: Variable &#x27;a&#x27; cannot change type from a 32 bit integer to a 64 bit float</td></tr><tr><td>tests/required/stable_variable_type_function/main.dl</td><td>1</td><td class="mono">tests/required/stable_variable_type_function/main.dl:8:1-17: Error: Function &#x27;set a to toint a&#x27; parses successfully without types, but not with types: Variable &#x27;a&#x27; cannot change type from a 64 bit float to a 32 bit integer</td></tr><tr><td>tests/required/stale_trie/main.dl</td><td>1</td><td class="mono">tests/required/stale_trie/main.dl:10:1-19: Error: This pattern couldn&#x27;t be resolved</td></tr><tr><td>tests/required/syntax_config/config.dl</td><td>1</td><td class="mono">tests/required/syntax_config/config.dl:1:1-15: Error: This pattern couldn&#x27;t be resolved</td></tr><tr><td>tests/required/syntax_messages/config.dl</td><td>1</td><td class="mono">tests/required/syntax_messages/config.dl:1:1-15: Error: This pattern couldn&#x27;t be resolved</td></tr><tr><td>tests/required/syntax_messages/main.dl</td><td>1</td><td class="mono">tests/required/syntax_messages/main.dl:2:5-11: Error: Onbekende sectie: vreemd</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="tooltip"></div>
+<script>
+  const rectangles = [{"name": "BindingContextHasher::operator", "full": "BindingContextHasher::operator()(BindingContext const&) const", "hits": 141, "x": 0.0, "y": 0.0, "w": 30.719827, "h": 28.615147}, {"name": "functionContainsExplicitReturn", "full": "functionContainsExplicitReturn(Function*)", "hits": 118, "x": 0.0, "y": 28.615147, "w": 30.719827, "h": 23.947428}, {"name": "BindingFrameStack::flattenBindings[abi:cxx11]", "full": "BindingFrameStack::flattenBindings[abi:cxx11]() const", "hits": 105, "x": 30.719827, "y": 0.0, "w": 21.586906, "h": 30.324562}, {"name": "BindingFrameStack::~BindingFrameStack", "full": "BindingFrameStack::~BindingFrameStack()", "hits": 77, "x": 30.719827, "y": 30.324562, "w": 21.586906, "h": 22.238012}, {"name": "resolveVariableBindingAcrossFrames", "full": "resolveVariableBindingAcrossFrames(Function*, BindingFrameStack const&, unsigned long)", "hits": 75, "x": 0.0, "y": 52.562574, "w": 14.324265, "h": 32.642585}, {"name": "TypeResolutionKey::~TypeResolutionKey", "full": "TypeResolutionKey::~TypeResolutionKey()", "hits": 64, "x": 14.324265, "y": 52.562574, "w": 12.223373, "h": 32.642585}, {"name": "DataType::DataType", "full": "DataType::DataType(DataType::Kind, int)", "hits": 63, "x": 0.0, "y": 85.205159, "w": 26.547638, "h": 14.794841}, {"name": "recomputeRanges", "full": "recomputeRanges(Function*)", "hits": 56, "x": 26.547638, "y": 52.562574, "w": 12.879547, "h": 27.1071}, {"name": "Function::Function", "full": "Function::Function(Function const&)", "hits": 56, "x": 39.427186, "y": 52.562574, "w": 12.879547, "h": 27.1071}, {"name": "DataType::isDeduced", "full": "DataType::isDeduced() const", "hits": 43, "x": 26.547638, "y": 79.669675, "w": 13.186203, "h": 20.330325}, {"name": "deleteFunctionTree", "full": "deleteFunctionTree(Function*)", "hits": 41, "x": 39.733842, "y": 79.669675, "w": 12.572891, "h": 20.330325}, {"name": "compileTimeOnlyArgumentIndices", "full": "compileTimeOnlyArgumentIndices(Function*)", "hits": 40, "x": 52.306733, "y": 0.0, "w": 18.219252, "h": 13.68753}, {"name": "sortArgumentsRecursive", "full": "sortArgumentsRecursive(Function*)", "hits": 40, "x": 52.306733, "y": 13.68753, "w": 18.219252, "h": 13.68753}, {"name": "snapshotFunctionVariableReferences", "full": "snapshotFunctionVariableReferences(Function*, InferenceContext&)", "hits": 39, "x": 70.525985, "y": 0.0, "w": 8.881885, "h": 27.375061}, {"name": "cloneFunctionTree", "full": "cloneFunctionTree(Function*)", "hits": 38, "x": 52.306733, "y": 27.375061, "w": 18.724422, "h": 12.652339}, {"name": "Range::start", "full": "Range::start() const", "hits": 38, "x": 52.306733, "y": 40.0274, "w": 18.724422, "h": 12.652339}, {"name": "absorbOperatorIntoBoundaryArgument", "full": "absorbOperatorIntoBoundaryArgument(Function*&)", "hits": 34, "x": 71.031155, "y": 27.375061, "w": 8.376715, "h": 25.304678}, {"name": "BindingFrameStack::operator=", "full": "BindingFrameStack::operator=(BindingFrameStack const&)", "hits": 31, "x": 79.40787, "y": 0.0, "w": 10.969639, "h": 17.61834}, {"name": "resetFunctionTypes", "full": "resetFunctionTypes(Function*)", "hits": 26, "x": 79.40787, "y": 17.61834, "w": 10.969639, "h": 14.776672}, {"name": "expandsToSelectIntrinsic", "full": "expandsToSelectIntrinsic(Function*)", "hits": 25, "x": 90.377509, "y": 0.0, "w": 9.622491, "h": 16.197506}, {"name": "TypeResolutionKey::TypeResolutionKey", "full": "TypeResolutionKey::TypeResolutionKey(TypeResolutionKey&&)", "hits": 25, "x": 90.377509, "y": 16.197506, "w": 9.622491, "h": 16.197506}, {"name": "countBoundaryArguments", "full": "countBoundaryArguments(Function*, bool)", "hits": 24, "x": 79.40787, "y": 32.395012, "w": 14.13788, "h": 10.583336}, {"name": "resetSectionFunctionTypes", "full": "resetSectionFunctionTypes(Section*)", "hits": 22, "x": 79.40787, "y": 42.978347, "w": 14.13788, "h": 9.701391}, {"name": "BindingContext::~BindingContext", "full": "BindingContext::~BindingContext()", "hits": 21, "x": 93.54575, "y": 32.395012, "w": 6.45425, "h": 20.284727}, {"name": "DataType::~DataType", "full": "DataType::~DataType()", "hits": 20, "x": 52.306733, "y": 52.679739, "w": 6.730774, "h": 18.525102}, {"name": "mustOwnEntireRange", "full": "mustOwnEntireRange(Function*)", "hits": 18, "x": 59.037507, "y": 52.679739, "w": 6.057697, "h": 18.525102}, {"name": "concretizeClassType", "full": "concretizeClassType(DataType)", "hits": 18, "x": 52.306733, "y": 71.204841, "w": 12.788471, "h": 8.775048}, {"name": "MatchProgress::MatchProgress", "full": "MatchProgress::MatchProgress(MatchProgress const&)", "hits": 17, "x": 65.095204, "y": 52.679739, "w": 5.594956, "h": 18.942962}, {"name": "BindingContext::BindingContext", "full": "BindingContext::BindingContext(BindingContext&&)", "hits": 17, "x": 70.69016, "y": 52.679739, "w": 5.594956, "h": 18.942962}, {"name": "resolveThroughBindings", "full": "resolveThroughBindings(Function*, BindingFrameStack const&)", "hits": 15, "x": 65.095204, "y": 71.6227, "w": 11.189912, "h": 8.357189}, {"name": "TypeResolutionKeyHasher::operator", "full": "TypeResolutionKeyHasher::operator()(TypeResolutionKey const&) const", "hits": 14, "x": 52.306733, "y": 79.979889, "w": 6.383855, "h": 13.672271}, {"name": "startsWithArgument", "full": "startsWithArgument(Function*)", "hits": 14, "x": 58.690588, "y": 79.979889, "w": 6.383855, "h": 13.672271}, {"name": "Function::~Function", "full": "Function::~Function()", "hits": 13, "x": 52.306733, "y": 93.65216, "w": 12.76771, "h": 6.34784}, {"name": "sectionDefaultsToVoid", "full": "sectionDefaultsToVoid(Section*)", "hits": 13, "x": 65.074443, "y": 79.979889, "w": 5.82955, "h": 13.902855}, {"name": "InferenceContext::snapshotReferenceConstant", "full": "InferenceContext::snapshotReferenceConstant(VariableReference*)", "hits": 12, "x": 70.903993, "y": 79.979889, "w": 5.381123, "h": 13.902855}, {"name": "BindingContext::operator=", "full": "BindingContext::operator=(BindingContext&&)", "hits": 11, "x": 65.074443, "y": 93.882744, "w": 11.210672, "h": 6.117256}, {"name": "DataType::operator=", "full": "DataType::operator=(DataType&&)", "hits": 11, "x": 76.285116, "y": 52.679739, "w": 8.982537, "h": 7.634653}, {"name": "intrinsicRegistry[abi:cxx11]", "full": "intrinsicRegistry[abi:cxx11]()", "hits": 10, "x": 76.285116, "y": 60.314392, "w": 8.982537, "h": 6.940594}, {"name": "DataType::operator<", "full": "DataType::operator<(DataType const&) const", "hits": 10, "x": 85.267653, "y": 52.679739, "w": 4.277398, "h": 14.575247}, {"name": "PatternMatch::PatternMatch", "full": "PatternMatch::PatternMatch(PatternMatch const&)", "hits": 7, "x": 76.285116, "y": 67.254986, "w": 8.839957, "h": 4.936777}, {"name": "PatternMatch::operator=", "full": "PatternMatch::operator=(PatternMatch const&)", "hits": 7, "x": 76.285116, "y": 72.191763, "w": 8.839957, "h": 4.936777}, {"name": "BindingFrameStack::BindingFrameStack", "full": "BindingFrameStack::BindingFrameStack()", "hits": 7, "x": 85.125073, "y": 67.254986, "w": 4.419978, "h": 9.873555}, {"name": "endsWithArgument", "full": "endsWithArgument(Function*)", "hits": 6, "x": 89.545051, "y": 52.679739, "w": 5.702699, "h": 6.559435}, {"name": "TypeResolutionKey::operator==", "full": "TypeResolutionKey::operator==(TypeResolutionKey const&) const", "hits": 6, "x": 89.545051, "y": 59.239173, "w": 5.702699, "h": 6.559435}, {"name": "PatternMatch::~PatternMatch", "full": "PatternMatch::~PatternMatch()", "hits": 5, "x": 95.247751, "y": 52.679739, "w": 4.752249, "h": 6.559435}, {"name": "MatchProgress::step", "full": "MatchProgress::step()", "hits": 5, "x": 95.247751, "y": 59.239173, "w": 4.752249, "h": 6.559435}, {"name": "functionPrecedence", "full": "functionPrecedence(Function*)", "hits": 5, "x": 89.545051, "y": 65.798608, "w": 5.502605, "h": 5.664966}, {"name": "Section::detectPatternsRecursively", "full": "Section::detectPatternsRecursively(ParseContext&, Range, StringHierarchy*, SectionType)", "hits": 5, "x": 89.545051, "y": 71.463574, "w": 5.502605, "h": 5.664966}, {"name": "Range::end", "full": "Range::end() const", "hits": 5, "x": 95.047656, "y": 65.798608, "w": 4.952344, "h": 6.294407}, {"name": "rollbackTrialJournal", "full": "rollbackTrialJournal(InferenceContext::TrialJournal&)", "hits": 4, "x": 95.047656, "y": 72.093015, "w": 4.952344, "h": 5.035526}, {"name": "DataType::toReferencedType", "full": "DataType::toReferencedType() const", "hits": 4, "x": 76.285116, "y": 77.12854, "w": 3.06658, "h": 8.132075}, {"name": "InferenceContext::TrialJournal::TrialJournal", "full": "InferenceContext::TrialJournal::TrialJournal()", "hits": 4, "x": 79.351696, "y": 77.12854, "w": 3.06658, "h": 8.132075}, {"name": "resetSectionLocalVariableTypes", "full": "resetSectionLocalVariableTypes(Section*)", "hits": 4, "x": 76.285116, "y": 85.260615, "w": 6.13316, "h": 4.066037}, {"name": "BindingContext::operator==", "full": "BindingContext::operator==(BindingContext const&) const", "hits": 4, "x": 82.418276, "y": 77.12854, "w": 3.06658, "h": 8.132075}, {"name": "InferenceContext::TrialJournal::~TrialJournal", "full": "InferenceContext::TrialJournal::~TrialJournal()", "hits": 4, "x": 85.484855, "y": 77.12854, "w": 3.06658, "h": 8.132075}, {"name": "InferenceContext::TrialJournal::recordTouchedSection", "full": "InferenceContext::TrialJournal::recordTouchedSection(Section*)", "hits": 4, "x": 82.418276, "y": 85.260615, "w": 6.13316, "h": 4.066037}, {"name": "DataType::operator==", "full": "DataType::operator==(DataType const&) const", "hits": 3, "x": 76.285116, "y": 89.326652, "w": 3.504663, "h": 5.336674}, {"name": "resolvePatterns", "full": "resolvePatterns(ParseContext&)::$_5::operator()(Section*) const::{lambda(PatternElement&)#1}::operator()(PatternElement&) const", "hits": 3, "x": 79.789779, "y": 89.326652, "w": 3.504663, "h": 5.336674}, {"name": "ParseContext::match", "full": "ParseContext::match(PatternReference*)", "hits": 3, "x": 76.285116, "y": 94.663326, "w": 3.504663, "h": 5.336674}, {"name": "isLoopSectionOpening", "full": "isLoopSectionOpening(CodeLine*)", "hits": 3, "x": 79.789779, "y": 94.663326, "w": 3.504663, "h": 5.336674}, {"name": "DataType::isPointer", "full": "DataType::isPointer() const", "hits": 3, "x": 83.294441, "y": 89.326652, "w": 3.154196, "h": 5.929638}, {"name": "analyzeSections", "full": "analyzeSections(ParseContext&)", "hits": 2, "x": 86.448638, "y": 89.326652, "w": 2.102798, "h": 5.929638}, {"name": "VariableMatch::~VariableMatch", "full": "VariableMatch::~VariableMatch()", "hits": 2, "x": 83.294441, "y": 95.25629, "w": 2.628497, "h": 4.74371}, {"name": "recordSelectedOverloadsForInstantiation", "full": "recordSelectedOverloadsForInstantiation(Function*, Instantiation*)", "hits": 2, "x": 85.922938, "y": 95.25629, "w": 2.628497, "h": 4.74371}, {"name": "InferenceContext::InferenceContext", "full": "InferenceContext::InferenceContext(ParseContext&, bool)", "hits": 2, "x": 88.551435, "y": 77.12854, "w": 4.361358, "h": 2.858932}, {"name": "MatchProgress::~MatchProgress", "full": "MatchProgress::~MatchProgress()", "hits": 2, "x": 88.551435, "y": 79.987473, "w": 4.361358, "h": 2.858932}, {"name": "generateFunctionCode", "full": "generateFunctionCode(ParseContext&, Function*)", "hits": 2, "x": 92.912793, "y": 77.12854, "w": 2.180679, "h": 5.717865}, {"name": "ScopedDiagnosticSuppression::ScopedDiagnosticSuppression", "full": "ScopedDiagnosticSuppression::ScopedDiagnosticSuppression(InferenceContext&)", "hits": 2, "x": 88.551435, "y": 82.846405, "w": 4.361358, "h": 2.858932}, {"name": "BindingFrameStack::popFrame", "full": "BindingFrameStack::popFrame()", "hits": 2, "x": 88.551435, "y": 85.705338, "w": 4.361358, "h": 2.858932}, {"name": "Instantiation::Instantiation", "full": "Instantiation::Instantiation(Instantiation const&)", "hits": 2, "x": 92.912793, "y": 82.846405, "w": 2.180679, "h": 5.717865}, {"name": "DataType::promoteArithmetic", "full": "DataType::promoteArithmetic(DataType const&, DataType const&, DataType&)", "hits": 2, "x": 95.093472, "y": 77.12854, "w": 3.925222, "h": 3.176592}, {"name": "ParseContext::~ParseContext", "full": "ParseContext::~ParseContext()", "hits": 2, "x": 95.093472, "y": 80.305132, "w": 3.925222, "h": 3.176592}, {"name": "VariableMatch::VariableMatch", "full": "VariableMatch::VariableMatch(VariableMatch const&)", "hits": 1, "x": 99.018694, "y": 77.12854, "w": 0.981306, "h": 6.353183}, {"name": "WordMatch::~WordMatch", "full": "WordMatch::~WordMatch()", "hits": 1, "x": 95.093472, "y": 83.481724, "w": 2.453264, "h": 2.541273}, {"name": "Range::section", "full": "Range::section() const", "hits": 1, "x": 95.093472, "y": 86.022997, "w": 2.453264, "h": 2.541273}, {"name": "MatchProgress::isComplete", "full": "MatchProgress::isComplete() const", "hits": 1, "x": 97.546736, "y": 83.481724, "w": 2.453264, "h": 2.541273}, {"name": "DataType::isBytePointer", "full": "DataType::isBytePointer() const", "hits": 1, "x": 97.546736, "y": 86.022997, "w": 2.453264, "h": 2.541273}, {"name": "generateSectionCode", "full": "generateSectionCode(ParseContext&, Section*)::$_0::operator()[abi:cxx11](CodeLine*) const", "hits": 1, "x": 88.551435, "y": 88.56427, "w": 1.499217, "h": 4.158447}, {"name": "StringHierarchy::~StringHierarchy", "full": "StringHierarchy::~StringHierarchy()", "hits": 1, "x": 90.050652, "y": 88.56427, "w": 1.499217, "h": 4.158447}, {"name": "MembersSection::processLine", "full": "MembersSection::processLine(ParseContext&, CodeLine*)", "hits": 1, "x": 88.551435, "y": 92.722717, "w": 2.998434, "h": 2.079224}, {"name": "PatternElement::PatternElement", "full": "PatternElement::PatternElement(PatternElement const&)", "hits": 1, "x": 91.549869, "y": 88.56427, "w": 1.499217, "h": 4.158447}, {"name": "StringHierarchy::cloneWithOffset", "full": "StringHierarchy::cloneWithOffset(unsigned long)", "hits": 1, "x": 93.049086, "y": 88.56427, "w": 1.499217, "h": 4.158447}, {"name": "InferenceContext::lookupKnownConstant[abi:cxx11]", "full": "InferenceContext::lookupKnownConstant[abi:cxx11](VariableReference*) const", "hits": 1, "x": 91.549869, "y": 92.722717, "w": 2.998434, "h": 2.079224}, {"name": "DataType::isVector", "full": "DataType::isVector() const", "hits": 1, "x": 88.551435, "y": 94.801941, "w": 1.79906, "h": 3.465373}, {"name": "extractFieldName[abi:cxx11]", "full": "extractFieldName[abi:cxx11](Function*)", "hits": 1, "x": 90.350495, "y": 94.801941, "w": 1.79906, "h": 3.465373}, {"name": "InferenceContext::~InferenceContext", "full": "InferenceContext::~InferenceContext()", "hits": 1, "x": 88.551435, "y": 98.267314, "w": 3.59812, "h": 1.732686}, {"name": "expandMatch", "full": "expandMatch(Function*, Function*, PatternMatch*)", "hits": 1, "x": 92.149556, "y": 94.801941, "w": 2.398747, "h": 2.59903}, {"name": "getSingleCompileTimeBody", "full": "getSingleCompileTimeBody(Section*)", "hits": 1, "x": 92.149556, "y": 97.40097, "w": 2.398747, "h": 2.59903}, {"name": "InferenceContext::TrialJournal::SectionInstantiationUndo::~SectionInstantiationUndo", "full": "InferenceContext::TrialJournal::SectionInstantiationUndo::~SectionInstantiationUndo()", "hits": 1, "x": 94.548303, "y": 88.56427, "w": 1.635509, "h": 3.81191}, {"name": "InferenceContext::normalizeReference", "full": "InferenceContext::normalizeReference(VariableReference*) const", "hits": 1, "x": 96.183812, "y": 88.56427, "w": 1.635509, "h": 3.81191}, {"name": "InferenceContext::popLoopMutationScope", "full": "InferenceContext::popLoopMutationScope()", "hits": 1, "x": 94.548303, "y": 92.37618, "w": 3.271018, "h": 1.905955}, {"name": "Section::processLine", "full": "Section::processLine(ParseContext&, CodeLine*)", "hits": 1, "x": 97.819321, "y": 88.56427, "w": 2.180679, "h": 2.858932}, {"name": "DataType::isMatrix", "full": "DataType::isMatrix() const", "hits": 1, "x": 97.819321, "y": 91.423203, "w": 2.180679, "h": 2.858932}, {"name": "DataType::toString[abi:cxx11]", "full": "DataType::toString[abi:cxx11]() const", "hits": 1, "x": 94.548303, "y": 94.282135, "w": 1.635509, "h": 3.81191}, {"name": "DataType::isNumeric", "full": "DataType::isNumeric() const", "hits": 1, "x": 96.183812, "y": 94.282135, "w": 1.635509, "h": 3.81191}, {"name": "Range::Range", "full": "Range::Range(CodeLine*, int, int)", "hits": 1, "x": 94.548303, "y": 98.094045, "w": 3.271018, "h": 1.905955}, {"name": "DataType::hasVectorPayload", "full": "DataType::hasVectorPayload() const", "hits": 1, "x": 97.819321, "y": 94.282135, "w": 2.180679, "h": 2.858932}, {"name": "parseBracketHierarchy", "full": "parseBracketHierarchy(ParseContext&, Range)", "hits": 1, "x": 97.819321, "y": 97.141068, "w": 2.180679, "h": 2.858932}];
+  const maxHits = 141;
+
+  const heatmap = document.getElementById("heatmap");
+  const tooltip = document.getElementById("tooltip");
+
+  function colorFor(hits) {
+    const t = Math.log(hits + 1) / Math.log(maxHits + 1);
+    const hue = 210 - Math.round(180 * t);
+    const sat = 75;
+    const light = 88 - Math.round(40 * t);
+    return `hsl(${hue} ${sat}% ${light}%)`;
+  }
+
+  function maybeLabel(rect, name) {
+    if (rect.w < 9 || rect.h < 6) {
+      return;
+    }
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = name;
+    rect.el.appendChild(label);
+  }
+
+  rectangles.forEach((item) => {
+    const el = document.createElement("div");
+    el.className = "rect";
+    el.style.left = `${item.x}%`;
+    el.style.top = `${item.y}%`;
+    el.style.width = `${item.w}%`;
+    el.style.height = `${item.h}%`;
+    el.style.background = colorFor(item.hits);
+    maybeLabel({ w: item.w, h: item.h, el }, item.name);
+
+    el.addEventListener("mouseenter", () => {
+      tooltip.style.display = "block";
+      tooltip.textContent = `${item.name}\nHits: ${item.hits}\nFull: ${item.full}`;
+    });
+    el.addEventListener("mousemove", (ev) => {
+      tooltip.style.left = `${ev.clientX + 14}px`;
+      tooltip.style.top = `${ev.clientY + 14}px`;
+    });
+    el.addEventListener("mouseleave", () => {
+      tooltip.style.display = "none";
+    });
+
+    heatmap.appendChild(el);
+  });
+</script>
+</body>
+</html>

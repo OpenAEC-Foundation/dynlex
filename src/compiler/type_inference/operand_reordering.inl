@@ -170,7 +170,7 @@ static bool functionContainsExplicitReturn(Function *function) {
 		return false;
 	if (function->kind == Function::Kind::IntrinsicCall && intrinsicKind(function->intrinsicName) == IntrinsicKind::Return)
 		return true;
-	std::unordered_map<std::string, Function *> ignoredBindings;
+	BindingMap ignoredBindings;
 	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
 	if (bodyExpr && functionContainsExplicitReturn(bodyExpr))
 		return true;
@@ -182,7 +182,7 @@ static bool functionContainsExplicitReturn(Function *function) {
 }
 
 static bool expandsToSelectIntrinsic(Function *function) {
-	std::unordered_map<std::string, Function *> ignoredBindings;
+	BindingMap ignoredBindings;
 	Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
 	return bodyExpr && bodyExpr->kind == Function::Kind::IntrinsicCall &&
 		   intrinsicKind(bodyExpr->intrinsicName) == IntrinsicKind::Select;
@@ -211,7 +211,7 @@ static bool mustOwnEntireRange(Function *function) {
 			continue;
 		sawCandidate = true;
 		if (def->section->isMacro) {
-			std::unordered_map<std::string, Function *> ignoredBindings;
+			BindingMap ignoredBindings;
 			Function *bodyExpr = expandMacroPatternCall(function, ignoredBindings);
 			if (!bodyExpr)
 				return false;
@@ -258,10 +258,8 @@ static int functionPrecedence(Function *function) {
 	return precedence;
 }
 
-static bool inferFunction(
-	Function *&expr, InferenceContext &context, bool alreadyOrdered,
-	const std::unordered_map<std::string, Function *> &macroBindings = {}
-) {
+static bool
+inferFunction(Function *&expr, InferenceContext &context, bool alreadyOrdered, const BindingMap &macroBindings = {}) {
 	static bool traceNestedMacroType = std::getenv("DYNLEX_TRACE_NESTED_MACRO_TYPE") != nullptr;
 	recomputeRanges(expr);
 	sortArgumentsRecursive(expr);
@@ -283,7 +281,7 @@ static bool inferFunction(
 				return false;
 			std::vector<DataType> argTypesForOverload;
 			for (Function *arg : candidate->arguments)
-				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, macroBindings));
+				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, makeBindingFrameStack(macroBindings)));
 			PatternDefinition *def =
 				selectOverload(defs, candidate->arguments, candidate->patternMatch->nodesPassed, argTypesForOverload);
 			return def && def->section && def->section->isMacro;

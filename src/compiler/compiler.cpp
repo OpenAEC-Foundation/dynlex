@@ -263,10 +263,8 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
-static bool evaluateCompileTimeInteger(
-	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, int &outValue
-) {
-	CompileTimeValue value = evaluateCompileTimeValue(expr, context, bindings);
+static bool evaluateCompileTimeInteger(ParseContext &context, Function *expr, const BindingMap &bindings, int &outValue) {
+	CompileTimeValue value = evaluateCompileTimeValue(expr, context, makeBindingFrameStack(bindings));
 	auto *number = std::get_if<double>(&value);
 	if (!number)
 		return false;
@@ -274,9 +272,7 @@ static bool evaluateCompileTimeInteger(
 	return *number == static_cast<double>(outValue);
 }
 
-void appendPatternCallBindings(
-	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
-) {
+void appendPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings) {
 	collectPatternCallBindings(expr, definition, bindings);
 }
 
@@ -324,13 +320,11 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 	return true;
 }
 
-static bool resolveTypeReferenceFunction(
-	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
-);
+static bool
+resolveTypeReferenceFunction(ParseContext &context, Function *expr, const BindingMap &bindings, DataType &outTypeRef);
 
 static bool instantiateClassTypeReference(
-	ParseContext &context, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings,
-	DataType &outTypeRef
+	ParseContext &context, ClassDefinition *classDef, const BindingMap &bindings, DataType &outTypeRef
 ) {
 	if (!classDef)
 		return false;
@@ -368,9 +362,8 @@ static bool instantiateClassTypeReference(
 	return true;
 }
 
-static bool resolveTypeReferenceFunction(
-	ParseContext &context, Function *expr, const std::unordered_map<std::string, Function *> &bindings, DataType &outTypeRef
-) {
+static bool
+resolveTypeReferenceFunction(ParseContext &context, Function *expr, const BindingMap &bindings, DataType &outTypeRef) {
 	if (!expr)
 		return false;
 
@@ -441,17 +434,17 @@ static bool resolveTypeReferenceFunction(
 
 	if (!def->section->isMacro && def->section->type == SectionType::Class) {
 		auto *classSec = static_cast<ClassSection *>(def->section);
-		std::unordered_map<std::string, Function *> classBindings = bindings;
+		BindingMap classBindings = bindings;
 		appendPatternCallBindings(expr, def, classBindings);
 		return instantiateClassTypeReference(context, classSec->classDefinition, classBindings, outTypeRef);
 	}
 
-	std::unordered_map<std::string, Function *> innerBindings;
+	BindingMap innerBindings;
 	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (!bodyExpr)
 		return false;
 
-	std::unordered_map<std::string, Function *> mergedBindings = bindings;
+	BindingMap mergedBindings = bindings;
 	for (const auto &[name, argExpr] : innerBindings)
 		mergedBindings[name] = argExpr;
 	return resolveTypeReferenceFunction(context, bodyExpr, mergedBindings, outTypeRef);

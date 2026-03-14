@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DynLex Profiling Report - 2026-03-14</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --text: #14213d;
+      --muted: #5c6b8a;
+      --accent: #1d3557;
+      --blue: #3a86ff;
+      --green: #2a9d8f;
+      --orange: #f4a261;
+      --red: #e63946;
+      --purple: #6c5ce7;
+      --border: #d9e1ef;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(180deg, #eef3fb 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.7rem;
+    }
+
+    .subtitle {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 8px 20px rgba(20, 33, 61, 0.06);
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.06rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      padding: 8px 6px;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DynLex Profiling Report</h1>
+    <p class="subtitle">Captured on 2026-03-14 with <code>perf</code> and <code>/usr/bin/time</code> for three compile targets.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Compile Time (seconds)</h2>
+        <svg id="timeChart" width="100%" viewBox="0 0 520 260" role="img" aria-label="Compile times"></svg>
+        <div class="legend">
+          <span><i class="swatch" style="background:#3a86ff"></i>recursion/main.dl</span>
+          <span><i class="swatch" style="background:#2a9d8f"></i>snake.dl</span>
+          <span><i class="swatch" style="background:#f4a261"></i>geometry_dash/main.dl</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Hotspot Comparison (% children)</h2>
+        <svg id="hotspotChart" width="100%" viewBox="0 0 520 320" role="img" aria-label="Hotspot percentages"></svg>
+        <div class="legend">
+          <span><i class="swatch" style="background:#3a86ff"></i>resolveTypeThroughBindings</span>
+          <span><i class="swatch" style="background:#2a9d8f"></i>resolveThroughBindingsDeep</span>
+          <span><i class="swatch" style="background:#e63946"></i>inferOrderedFunction</span>
+          <span><i class="swatch" style="background:#6c5ce7"></i>resolvePatterns</span>
+          <span><i class="swatch" style="background:#f4a261"></i>getPatternElements</span>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Raw Timing Table</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Target</th>
+              <th>Wall (s)</th>
+              <th>User (s)</th>
+              <th>Sys (s)</th>
+              <th>Max RSS (KB)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>tests/required/recursion/main.dl</td><td>6.13</td><td>6.12</td><td>0.01</td><td>41136</td></tr>
+            <tr><td>tests/games/snake.dl</td><td>2.91</td><td>2.89</td><td>0.01</td><td>44048</td></tr>
+            <tr><td>tests/games/geometry_dash/main.dl</td><td>4.27</td><td>4.25</td><td>0.02</td><td>45700</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Percentages come from <code>perf report --children --call-graph none</code>; categories are cumulative and intentionally not additive.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const timeData = [
+      { label: "recursion", value: 6.13, color: "#3a86ff" },
+      { label: "snake", value: 2.91, color: "#2a9d8f" },
+      { label: "geometry", value: 4.27, color: "#f4a261" }
+    ];
+
+    const hotspotData = [
+      {
+        target: "recursion",
+        values: [
+          { name: "resolveType", value: 52.52, color: "#3a86ff" },
+          { name: "resolveDeep", value: 28.46, color: "#2a9d8f" },
+          { name: "inferOrdered", value: 92.64, color: "#e63946" },
+          { name: "resolvePatterns", value: 4.11, color: "#6c5ce7" },
+          { name: "patternElems", value: 3.74, color: "#f4a261" }
+        ]
+      },
+      {
+        target: "snake",
+        values: [
+          { name: "resolveType", value: 34.63, color: "#3a86ff" },
+          { name: "resolveDeep", value: 16.90, color: "#2a9d8f" },
+          { name: "inferOrdered", value: 60.27, color: "#e63946" },
+          { name: "resolvePatterns", value: 21.54, color: "#6c5ce7" },
+          { name: "patternElems", value: 19.69, color: "#f4a261" }
+        ]
+      },
+      {
+        target: "geometry",
+        values: [
+          { name: "resolveType", value: 35.17, color: "#3a86ff" },
+          { name: "resolveDeep", value: 17.68, color: "#2a9d8f" },
+          { name: "inferOrdered", value: 59.55, color: "#e63946" },
+          { name: "resolvePatterns", value: 24.51, color: "#6c5ce7" },
+          { name: "patternElems", value: 22.67, color: "#f4a261" }
+        ]
+      }
+    ];
+
+    function line(svg, x1, y1, x2, y2, color = "#d9e1ef") {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      el.setAttribute("x1", x1);
+      el.setAttribute("y1", y1);
+      el.setAttribute("x2", x2);
+      el.setAttribute("y2", y2);
+      el.setAttribute("stroke", color);
+      el.setAttribute("stroke-width", "1");
+      svg.appendChild(el);
+    }
+
+    function text(svg, str, x, y, size = 11, color = "#5c6b8a", anchor = "middle") {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      el.textContent = str;
+      el.setAttribute("x", x);
+      el.setAttribute("y", y);
+      el.setAttribute("fill", color);
+      el.setAttribute("font-size", size);
+      el.setAttribute("text-anchor", anchor);
+      el.setAttribute("font-family", "IBM Plex Sans, Segoe UI, Arial, sans-serif");
+      svg.appendChild(el);
+    }
+
+    function rect(svg, x, y, w, h, fill) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      el.setAttribute("x", x);
+      el.setAttribute("y", y);
+      el.setAttribute("width", w);
+      el.setAttribute("height", h);
+      el.setAttribute("fill", fill);
+      el.setAttribute("rx", "4");
+      svg.appendChild(el);
+    }
+
+    function drawTimeChart() {
+      const svg = document.getElementById("timeChart");
+      const w = 520;
+      const h = 260;
+      const pad = { l: 46, r: 16, t: 18, b: 44 };
+      const plotW = w - pad.l - pad.r;
+      const plotH = h - pad.t - pad.b;
+      const max = Math.max(...timeData.map(d => d.value)) * 1.15;
+
+      line(svg, pad.l, pad.t, pad.l, h - pad.b);
+      line(svg, pad.l, h - pad.b, w - pad.r, h - pad.b);
+
+      for (let i = 0; i <= 5; i++) {
+        const v = (max / 5) * i;
+        const y = h - pad.b - (v / max) * plotH;
+        line(svg, pad.l, y, w - pad.r, y, "#eef2f8");
+        text(svg, v.toFixed(1), pad.l - 8, y + 4, 10, "#7081a1", "end");
+      }
+
+      const barW = plotW / timeData.length * 0.46;
+      timeData.forEach((d, i) => {
+        const x = pad.l + ((i + 0.5) * (plotW / timeData.length)) - (barW / 2);
+        const barH = (d.value / max) * plotH;
+        const y = h - pad.b - barH;
+        rect(svg, x, y, barW, barH, d.color);
+        text(svg, d.value.toFixed(2) + "s", x + barW / 2, y - 6, 10, "#203052");
+        text(svg, d.label, x + barW / 2, h - 18, 11, "#425172");
+      });
+    }
+
+    function drawHotspotChart() {
+      const svg = document.getElementById("hotspotChart");
+      const w = 520;
+      const h = 320;
+      const pad = { l: 60, r: 16, t: 18, b: 34 };
+      const plotW = w - pad.l - pad.r;
+      const plotH = h - pad.t - pad.b;
+
+      line(svg, pad.l, pad.t, pad.l, h - pad.b);
+      line(svg, pad.l, h - pad.b, w - pad.r, h - pad.b);
+
+      for (let i = 0; i <= 5; i++) {
+        const v = i * 20;
+        const y = h - pad.b - (v / 100) * plotH;
+        line(svg, pad.l, y, w - pad.r, y, "#eef2f8");
+        text(svg, v + "%", pad.l - 8, y + 4, 10, "#7081a1", "end");
+      }
+
+      const groups = hotspotData.length;
+      const series = hotspotData[0].values.length;
+      const groupW = plotW / groups;
+      const barW = Math.min(18, (groupW * 0.86) / series);
+
+      hotspotData.forEach((group, gi) => {
+        const gx = pad.l + gi * groupW + groupW * 0.07;
+        group.values.forEach((item, si) => {
+          const x = gx + si * barW;
+          const barH = (item.value / 100) * plotH;
+          const y = h - pad.b - barH;
+          rect(svg, x, y, barW - 2, barH, item.color);
+        });
+        text(svg, group.target, gx + (series * barW) / 2, h - 14, 11, "#425172");
+      });
+    }
+
+    drawTimeChart();
+    drawHotspotChart();
+  </script>
+</body>
+</html>

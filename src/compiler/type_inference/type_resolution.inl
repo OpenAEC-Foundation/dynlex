@@ -2,47 +2,64 @@
 
 #include "const_evaluation.inl"
 
-static Function *resolveCompileTimeSelectBranch(
-	Function *selectExpr, ParseContext &parseContext, const std::unordered_map<std::string, Function *> &bindings
-) {
-	CompileTimeValue conditionValue = evaluateCompileTimeValue(selectExpr->arguments[1], parseContext, bindings);
+static BindingMap collectBindingMapFromFrames(const BindingFrameStack &bindingFrameStack) {
+	BindingMap flattenedBindings;
+	bindingFrameStack.forEachFrame([&flattenedBindings](const BindingFrame &frame) {
+		for (const auto &[bindingName, functionExpression] : frame.bindings)
+			flattenedBindings[bindingName] = functionExpression;
+	});
+	return flattenedBindings;
+}
+
+static Function *
+resolveCompileTimeSelectBranch(Function *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack) {
+	CompileTimeValue conditionValue = evaluateCompileTimeValue(selectExpr->arguments[1], parseContext, bindingFrameStack);
 	std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 	if (!condition.has_value())
 		return nullptr;
 	return selectExpr->arguments[*condition ? 2 : 3];
 }
 
-static BindingContext buildBindingContext(const std::unordered_map<std::string, Function *> &bindings) {
+static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameStack) {
+	BindingMap bindings = collectBindingMapFromFrames(bindingFrameStack);
 	BindingContext bindingContext;
 	bindingContext.bindingEntries.reserve(bindings.size());
+	bindingContext.fingerprint = bindings.size() * 1099511628211ull;
 	for (const auto &[bindingName, functionExpression] : bindings) {
 		bindingContext.bindingEntries[bindingName] = functionExpression;
+		size_t nameHash = std::hash<std::string>{}(bindingName);
+		size_t functionHash = std::hash<const Function *>{}(functionExpression);
+		size_t entryHash = nameHash;
+		entryHash ^= functionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
+		bindingContext.fingerprint ^= entryHash;
 	}
 	return bindingContext;
 }
 
 static TypeResolutionKey
-buildTypeResolutionKey(const Function *functionExpression, const std::unordered_map<std::string, Function *> &bindings) {
+buildTypeResolutionKey(const Function *functionExpression, const BindingFrameStack &bindingFrameStack) {
 	TypeResolutionKey typeResolutionKey;
 	typeResolutionKey.functionExpression = functionExpression;
-	typeResolutionKey.bindingContext = buildBindingContext(bindings);
+	typeResolutionKey.bindingContext = buildBindingContext(bindingFrameStack);
 	return typeResolutionKey;
 }
 
-static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
-	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && bindings.empty()) {
+static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack) {
+	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
 		return concretizeClassType(expr->type);
 	}
-	Function *directResolved = resolveThroughBindings(expr, bindings);
+	Function *directResolved = resolveThroughBindings(expr, bindingFrameStack);
 	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
 		return concretizeClassType(directResolved->type);
-	std::unordered_map<std::string, Function *> effectiveBindings;
-	Function *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
+	BindingFrameStack effectiveBindingFrameStack;
+	Function *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return {};
-	bool dependsOnBindings = resolved != expr || !effectiveBindings.empty();
-	TypeResolutionKey typeResolutionKey = buildTypeResolutionKey(resolved, effectiveBindings);
-	if (activeTypeResolutionKeys.contains(typeResolutionKey))
+	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
+	if (!bindingFrameStack.hasBindings() && !dependsOnBindings && resolved->type.isDeduced())
+		return concretizeClassType(resolved->type);
+	TypeResolutionKey typeResolutionKey = buildTypeResolutionKey(resolved, effectiveBindingFrameStack);
+	if (containsActiveTypeResolutionKey(typeResolutionKey))
 		return {};
 
 	struct ActiveTypeResolutionGuard {
@@ -50,12 +67,10 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 
 		explicit ActiveTypeResolutionGuard(TypeResolutionKey activeTypeResolutionKey)
 			: typeResolutionKey(std::move(activeTypeResolutionKey)) {
-			activeTypeResolutionKeys.insert(typeResolutionKey);
+			pushActiveTypeResolutionKey(typeResolutionKey);
 		}
-		~ActiveTypeResolutionGuard() { activeTypeResolutionKeys.erase(typeResolutionKey); }
+		~ActiveTypeResolutionGuard() { popActiveTypeResolutionKey(typeResolutionKey); }
 	} activeGuard(std::move(typeResolutionKey));
-	if (bindings.empty() && !dependsOnBindings && resolved->type.isDeduced())
-		return concretizeClassType(resolved->type);
 	if (resolved->kind == Function::Kind::Literal) {
 		if (std::holds_alternative<double>(resolved->literalValue)) {
 			double value = std::get<double>(resolved->literalValue);
@@ -76,11 +91,11 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 	if (resolved->kind == Function::Kind::ArrayLiteral) {
 		if (resolved->arguments.empty())
 			return {};
-		DataType elementType = resolveTypeThroughBindings(resolved->arguments[0], effectiveBindings);
+		DataType elementType = resolveTypeThroughBindings(resolved->arguments[0], effectiveBindingFrameStack);
 		if (!elementType.isDeduced())
 			return {};
 		for (size_t i = 1; i < resolved->arguments.size(); i++) {
-			DataType nextType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+			DataType nextType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindingFrameStack);
 			DataType merged;
 			if (!mergeArrayElementType(elementType, nextType, merged))
 				return {};
@@ -108,7 +123,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			std::vector<DataType> argTypesForOverload;
 			bool allArgTypesDeduced = true;
 			for (Function *arg : resolved->arguments)
-				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindings));
+				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindingFrameStack));
 			for (const DataType &argType : argTypesForOverload) {
 				if (!argType.isDeduced()) {
 					allArgTypesDeduced = false;
@@ -123,7 +138,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				activeTypeResolutionParseContext) {
 				return instantiateBoundClassType(
 					*activeTypeResolutionParseContext, static_cast<ClassSection *>(def->section)->classDefinition,
-					effectiveBindings
+					effectiveBindingFrameStack
 				);
 			}
 		}
@@ -131,10 +146,11 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 	if (resolved->kind == Function::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Property) {
-			DataType instType = concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings));
+			DataType instType =
+				concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack));
 			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
 				instType = concretizeClassType(instType.dereferenced());
-			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
+			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			std::string fieldName = extractFieldName(propExpr);
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 			if (builtInPropertyType.isDeduced())
@@ -146,33 +162,33 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				}
 			}
 		} else if (kind == IntrinsicKind::Dereference) {
-			DataType ptrType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType ptrType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (ptrType.isDeduced() && ptrType.isPointer())
 				return concretizeClassType(ptrType.dereferenced());
 		} else if (kind == IntrinsicKind::AddressOf) {
-			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (valueType.isDeduced())
 				return valueType.pointed();
 		} else if (kind == IntrinsicKind::Call) {
 			if (resolved->arguments.size() <= 3)
 				return {};
-			DataType retTypeRef = resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings);
+			DataType retTypeRef = resolveTypeThroughBindings(resolved->arguments[3], effectiveBindingFrameStack);
 			if (retTypeRef.kind != DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Type ||
 				retTypeRef.referencedKind == DataType::Kind::Unresolved)
 				return {};
 			for (size_t i = 4; i < resolved->arguments.size(); i++) {
-				DataType argType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+				DataType argType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindingFrameStack);
 				if (argType.kind == DataType::Kind::Type)
 					return {};
 			}
 			return concretizeClassType(retTypeRef.toReferencedType());
 		} else if (kind == IntrinsicKind::Cast) {
-			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type)
 				return concretizeClassType(typeArgType.toReferencedType());
 		} else if (kind == IntrinsicKind::Type) {
 			std::string kindStr;
-			Function *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			Function *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
 				kindStr = *str;
 			if (!kindStr.empty()) {
@@ -196,14 +212,14 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 					typeRef.referencedKind = DataType::Kind::Type;
 				}
 				if (resolved->arguments.size() > 2) {
-					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
+					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = (int)*bits / 8;
 				}
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::TypeOf) {
-			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (valueType.isDeduced()) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
@@ -218,12 +234,12 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::SizeOf) {
-			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
-			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
 				if (*key == "word size" || *key == "optimization level") {
 					return {DataType::Kind::Int, 4};
@@ -232,25 +248,25 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			}
 		} else if (kind == IntrinsicKind::Select && activeTypeResolutionParseContext) {
 			Function *selectedBranch =
-				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindings);
+				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindingFrameStack);
 			if (selectedBranch)
-				return resolveTypeThroughBindings(selectedBranch, effectiveBindings);
+				return resolveTypeThroughBindings(selectedBranch, effectiveBindingFrameStack);
 		} else if (kind == IntrinsicKind::Array) {
-			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
 				typeRef.referencedKind = DataType::Kind::Array;
 				typeRef.arraySize = static_cast<int>(*size);
 				if (resolved->arguments.size() > 2) {
-					DataType elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
+					DataType elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 					if (elemTypeRef.kind == DataType::Kind::Type)
 						typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 				}
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::Vector) {
-			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
+			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			auto *size = std::get_if<double>(&sizeExpr->literalValue);
 			if (!size)
 				return {};
@@ -264,15 +280,16 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 2) {
 				DataType elemTypeRef;
-				if (resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings).kind == DataType::Kind::Type)
-					elemTypeRef = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings).toReferencedType();
+				if (resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack).kind == DataType::Kind::Type)
+					elemTypeRef =
+						resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack).toReferencedType();
 				if (elemTypeRef.isDeduced())
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::Matrix) {
-			Function *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindings);
-			Function *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindings);
+			Function *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Function *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			auto *rowsValue = std::get_if<double>(&rowsExpr->literalValue);
 			auto *columnsValue = std::get_if<double>(&columnsExpr->literalValue);
 			if (!rowsValue || !columnsValue)
@@ -291,21 +308,22 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 3) {
 				DataType elemTypeRef;
-				if (resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings).kind == DataType::Kind::Type)
-					elemTypeRef = resolveTypeThroughBindings(resolved->arguments[3], effectiveBindings).toReferencedType();
+				if (resolveTypeThroughBindings(resolved->arguments[3], effectiveBindingFrameStack).kind == DataType::Kind::Type)
+					elemTypeRef =
+						resolveTypeThroughBindings(resolved->arguments[3], effectiveBindingFrameStack).toReferencedType();
 				if (elemTypeRef.isDeduced())
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::AddPointerDepth) {
-			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved) {
 				typeArgType.pointerDepth++;
 				return typeArgType;
 			}
 		} else if (kind == IntrinsicKind::Construct) {
-			DataType typeRefType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindings);
+			DataType typeRefType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
 				DataType arrayType = typeRefType.toReferencedType();
 				if (arrayType.arraySize == static_cast<int>(resolved->arguments.size()) - 2) {
@@ -313,7 +331,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 						arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
 					bool allDeduced = true;
 					for (size_t i = 2; i < resolved->arguments.size(); i++) {
-						DataType argType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+						DataType argType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindingFrameStack);
 						if (!argType.isDeduced())
 							allDeduced = false;
 						if (!arrayType.arrayElementType) {
@@ -333,7 +351,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				argumentTypes.reserve(resolved->arguments.size() - 2);
 				bool allArgumentsDeduced = true;
 				for (size_t i = 2; i < resolved->arguments.size(); i++) {
-					DataType argumentType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindings);
+					DataType argumentType = resolveTypeThroughBindings(resolved->arguments[i], effectiveBindingFrameStack);
 					if (!argumentType.isDeduced()) {
 						allArgumentsDeduced = false;
 						break;
@@ -363,22 +381,24 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 				}
 			} else if (typeRefType.kind == DataType::Kind::Type && resolved->arguments.size() == 3) {
 				DataType targetType = typeRefType.toReferencedType();
-				DataType valueType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindings);
+				DataType valueType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 				if (valueType.isDeduced())
 					return targetType;
 			}
 		}
 	}
-	std::unordered_map<std::string, Function *> innerBindings;
+	BindingMap innerBindings;
 	Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 	if (bodyExpr) {
-		std::unordered_map<std::string, Function *> mergedBindings = bindings;
+		BindingFrameStack mergedBindingFrameStack = bindingFrameStack;
+		BindingMap scopedMacroBindings;
 		for (auto &[name, argExpr] : innerBindings) {
 			// Preserve direct argument expressions to avoid placeholder self-capture
 			// in nested macro expansions.
-			mergedBindings[name] = resolveThroughBindings(argExpr, bindings);
+			scopedMacroBindings[name] = resolveThroughBindings(argExpr, bindingFrameStack);
 		}
-		return resolveTypeThroughBindings(bodyExpr, mergedBindings);
+		pushBindingScope(mergedBindingFrameStack, std::move(scopedMacroBindings));
+		return resolveTypeThroughBindings(bodyExpr, mergedBindingFrameStack);
 	}
 	return concretizeClassType(resolved->type);
 }
@@ -401,14 +421,13 @@ static std::string typeToUserName(const DataType &type, ParseContext &parseConte
 }
 
 static bool resolveCompileTimeTypeReference(
-	ParseContext &parseContext, Function *expr, const std::unordered_map<std::string, Function *> &bindings,
-	DataType &outTypeRef
+	ParseContext &parseContext, Function *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef
 ) {
-	std::unordered_map<std::string, Function *> effectiveBindings;
-	Function *resolved = resolveThroughBindingsDeep(expr, bindings, effectiveBindings);
+	BindingFrameStack effectiveBindingFrameStack;
+	Function *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return false;
-	bool dependsOnBindings = resolved != expr || !effectiveBindings.empty();
+	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
 
 	if (!dependsOnBindings && resolved->type.kind == DataType::Kind::Type) {
 		outTypeRef = resolved->type;
@@ -430,7 +449,7 @@ static bool resolveCompileTimeTypeReference(
 	if (resolved->kind == Function::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Type) {
-			DataType resolvedType = resolveTypeThroughBindings(resolved, effectiveBindings);
+			DataType resolvedType = resolveTypeThroughBindings(resolved, effectiveBindingFrameStack);
 			if (resolvedType.kind == DataType::Kind::Type) {
 				outTypeRef = resolvedType;
 				return true;
@@ -438,7 +457,9 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
-			if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[1], effectiveBindings, innerTypeRef) ||
+			if (!resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, innerTypeRef
+				) ||
 				innerTypeRef.kind != DataType::Kind::Type)
 				return false;
 			innerTypeRef.pointerDepth++;
@@ -447,14 +468,16 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::Array) {
 			int arraySize = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, arraySize))
+			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, arraySize))
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Array;
 			outTypeRef.arraySize = arraySize;
 			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
-				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[2], effectiveBindings, elementTypeRef) ||
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef
+					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
 				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
@@ -463,7 +486,7 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::Vector) {
 			int vectorSize = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, vectorSize) ||
+			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, vectorSize) ||
 				vectorSize < 1)
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
@@ -472,7 +495,9 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
-				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[2], effectiveBindings, elementTypeRef) ||
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef
+					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
 				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
@@ -482,9 +507,9 @@ static bool resolveCompileTimeTypeReference(
 		if (kind == IntrinsicKind::Matrix) {
 			int rows = 0;
 			int columns = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindings, rows) ||
-				!evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindings, columns) || rows < 1 ||
-				columns < 1)
+			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, rows) ||
+				!evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindingFrameStack, columns) ||
+				rows < 1 || columns < 1)
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Matrix;
@@ -493,7 +518,9 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 3) {
 				DataType elementTypeRef;
-				if (!resolveCompileTimeTypeReference(parseContext, resolved->arguments[3], effectiveBindings, elementTypeRef) ||
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[3], effectiveBindingFrameStack, elementTypeRef
+					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
 				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
@@ -501,9 +528,9 @@ static bool resolveCompileTimeTypeReference(
 			return true;
 		}
 		if (kind == IntrinsicKind::Select) {
-			Function *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindings);
+			Function *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack);
 			if (selectedBranch)
-				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindings, outTypeRef);
+				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindingFrameStack, outTypeRef);
 		}
 	}
 
@@ -514,7 +541,7 @@ static bool resolveCompileTimeTypeReference(
 		std::vector<DataType> argTypesForOverload;
 		bool allArgTypesDeduced = true;
 		for (Function *arg : resolved->arguments)
-			argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindings));
+			argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindingFrameStack));
 		for (const DataType &argType : argTypesForOverload) {
 			if (!argType.isDeduced()) {
 				allArgTypesDeduced = false;
@@ -528,36 +555,36 @@ static bool resolveCompileTimeTypeReference(
 		if (!def || !def->section)
 			return false;
 
-		std::unordered_map<std::string, Function *> callBindings = effectiveBindings;
+		BindingMap callBindings = collectBindingMapFromFrames(effectiveBindingFrameStack);
 		appendPatternCallBindings(resolved, def, callBindings);
 		for (auto &[name, boundExpr] : callBindings) {
-			Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindings);
+			Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
 			if (resolvedExpr)
 				boundExpr = resolvedExpr;
 		}
 		if (!def->section->isMacro && def->section->type == SectionType::Class) {
 			outTypeRef = instantiateBoundClassType(
-				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindings
+				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, makeBindingFrameStack(callBindings)
 			);
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
 
-		std::unordered_map<std::string, Function *> innerBindings;
+		BindingMap innerBindings;
 		Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 		if (!bodyExpr)
 			return false;
+		BindingFrameStack callBindingFrameStack = makeBindingFrameStack(callBindings);
 		for (const auto &[name, argExpr] : innerBindings) {
-			Function *resolvedArg = resolveThroughBindings(argExpr, callBindings);
+			Function *resolvedArg = resolveThroughBindings(argExpr, callBindingFrameStack);
 			callBindings[name] = resolvedArg ? resolvedArg : argExpr;
 		}
-		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindings, outTypeRef);
+		return resolveCompileTimeTypeReference(parseContext, bodyExpr, makeBindingFrameStack(callBindings), outTypeRef);
 	}
 	return false;
 }
 
-static DataType instantiateBoundClassType(
-	ParseContext &parseContext, ClassDefinition *classDef, const std::unordered_map<std::string, Function *> &bindings
-) {
+static DataType
+instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack) {
 	if (!classDef)
 		return {};
 
@@ -569,7 +596,7 @@ static DataType instantiateBoundClassType(
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeFunction) {
 			DataType resolvedTypeRef;
-			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeFunction, bindings, resolvedTypeRef) ||
+			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeFunction, bindingFrameStack, resolvedTypeRef) ||
 				resolvedTypeRef.kind != DataType::Kind::Type)
 				return {};
 			fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
