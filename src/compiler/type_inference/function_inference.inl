@@ -1173,7 +1173,8 @@ static void inferOrderedFunction(Function *expr, InferenceContext &context, cons
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordSectionInstantiationWrite(matchedSection, argTypes);
 			Instantiation &inst = matchedSection->instantiations[argTypes];
-			if (!inst.inferring) {
+			bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
+			if (!inst.inferring && !hasReusableInstantiation) {
 				Instantiation *savedInst = context.currentInstantiation;
 				auto callerKnownConstants = context.currentKnownConstants;
 				const Instantiation *callerInstantiation = savedInst;
