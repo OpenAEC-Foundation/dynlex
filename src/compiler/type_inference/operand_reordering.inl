@@ -236,19 +236,19 @@ static int functionPrecedence(Function *function) {
 	if (!function || function->isExplicitGroup || function->kind != Function::Kind::PatternCall || !function->patternMatch ||
 		!function->patternMatch->matchedEndNode || function->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return 0;
-	auto countParameters = [](PatternDefinition *def) {
-		if (!def)
+	auto countMatchedParameters = [&](PatternDefinition *definition) {
+		if (!definition || !function->patternMatch)
 			return 0;
 		int count = 0;
-		for (const auto &elem : def->patternElements) {
-			if (elem.type == PatternElement::Type::Variable)
+		for (PatternTreeNode *node : function->patternMatch->nodesPassed) {
+			if (node && node->parameterNames.contains(definition))
 				count++;
 		}
 		return count;
 	};
 	int precedence = 0;
 	for (PatternDefinition *def : function->patternMatch->matchedEndNode->matchingDefinitions) {
-		if (!def || countParameters(def) != (int)function->arguments.size())
+		if (!def || countMatchedParameters(def) != (int)function->arguments.size())
 			continue;
 		if (def->precedence <= 0)
 			continue;

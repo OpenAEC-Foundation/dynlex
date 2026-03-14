@@ -83,6 +83,7 @@ bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr;
 
 std::vector<MatchProgress> MatchProgress::step() {
 	std::vector<MatchProgress> nextMatches = std::vector<MatchProgress>();
+	std::vector<MatchProgress> splitFallbackMatches;
 
 	// submatch and use the result as argument for the parent progress
 	auto stepUp = [&nextMatches, this](MatchProgress &parentProgress) {
@@ -128,6 +129,8 @@ std::vector<MatchProgress> MatchProgress::step() {
 	}
 	if (sourceElementIndex < patternReference->patternElements.size()) {
 		PatternElement elementToCompare = patternReference->patternElements[sourceElementIndex];
+		if (sourceCharIndex > 0 && sourceCharIndex < elementToCompare.text.size())
+			elementToCompare.text = elementToCompare.text.substr(sourceCharIndex);
 
 		// less priority: arguments
 		if (currentNode->argumentChild) {
@@ -198,16 +201,36 @@ std::vector<MatchProgress> MatchProgress::step() {
 			nextMatches.push_back(wordStep);
 		}
 		// most priority: text match
-		if (elementToCompare.type != PatternElement::Type::Variable &&
-			currentNode->literalChildren.contains(elementToCompare.text)) {
+		bool hasFullLiteralMatch = elementToCompare.type != PatternElement::Type::Variable &&
+								   currentNode->literalChildren.contains(elementToCompare.text);
+		if (hasFullLiteralMatch) {
 			MatchProgress elemStep = *this;
 			elemStep.currentNode = currentNode->literalChildren[elementToCompare.text];
 			elemStep.match.nodesPassed.push_back(elemStep.currentNode);
 			elemStep.sourceElementIndex++;
+			elemStep.sourceCharIndex = 0;
 			elemStep.patternPos += elementToCompare.text.size();
 			nextMatches.push_back(elemStep);
 		}
+
+		// Lowest-priority fallback: if a full literal did not match, split only Other
+		// elements into prefix+suffix and try matching the prefix as a literal token.
+		if (!hasFullLiteralMatch && elementToCompare.type == PatternElement::Type::Other && elementToCompare.text.size() > 1) {
+			for (size_t prefixLength = 1; prefixLength < elementToCompare.text.size(); prefixLength++) {
+				std::string prefix = elementToCompare.text.substr(0, prefixLength);
+				if (!currentNode->literalChildren.contains(prefix))
+					continue;
+				MatchProgress splitStep = *this;
+				splitStep.currentNode = currentNode->literalChildren[prefix];
+				splitStep.match.nodesPassed.push_back(splitStep.currentNode);
+				splitStep.sourceCharIndex += prefixLength;
+				splitStep.patternPos += prefixLength;
+				splitFallbackMatches.push_back(splitStep);
+			}
+		}
 	}
+	if (!splitFallbackMatches.empty())
+		nextMatches.insert(nextMatches.begin(), splitFallbackMatches.begin(), splitFallbackMatches.end());
 	return nextMatches;
 }
 
