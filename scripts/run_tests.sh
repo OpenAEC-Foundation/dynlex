@@ -108,8 +108,11 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     if [[ ! -f "$source_file" ]]; then
-        test_output+="${YELLOW}SKIP${NC} $test_name (no main.dl)\n"
-        ((skipped++))
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (missing main.dl, ${test_elapsed_ms} ms)\n"
+        ((failed++))
+        failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
