@@ -16,9 +16,9 @@ function allocate count items:
 
 function:
     patterns:
-        allocate count slots of {type:type}
+        allocate count slots of {type:elementtype}
     replacement:
-        allocate (count * the size of type) bytes as a pointer to type
+        allocate (count * the size of elementtype) bytes as a pointer to elementtype
 
 function allocate count slots of value:
     execute:

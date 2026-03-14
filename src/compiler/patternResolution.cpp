@@ -523,6 +523,46 @@ static Range firstMatchedDefinitionRange(PatternMatch *match) {
 	return match->matchedEndNode->matchingDefinitions.front()->range;
 }
 
+static void emitExplicitDefinitionParameterAmbiguityWarnings(ParseContext &context) {
+	std::function<void(Section *)> visitSection = [&](Section *section) {
+		for (PatternDefinition *definition : section->patternDefinitions) {
+			forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
+				if (element.type != PatternElement::Type::Variable || element.typeConstraintName.empty())
+					return;
+
+				PatternDefinition *singleWordFunction =
+					findDefinitionBySignature(context, SectionType::Function, element.text);
+				if (!singleWordFunction)
+					return;
+
+				Range parameterRange = definition->range;
+				if (definition->range.line) {
+					int start = definition->range.start() + static_cast<int>(element.startPos);
+					parameterRange = Range(definition->range.line, start, start + static_cast<int>(element.text.size()));
+				}
+
+				Diagnostic warning(
+					Diagnostic::Level::Warning,
+					"Explicit parameter '" + element.text +
+						"' may be ambiguous with a callable single-word function pattern of the same name.",
+					parameterRange
+				);
+				warning.relatedInfo.push_back({"Parameter is declared here", parameterRange});
+				if (singleWordFunction->range.line) {
+					warning.relatedInfo.push_back(
+						{"Single-word function pattern with the same name appears here", singleWordFunction->range}
+					);
+				}
+				context.diagnostics.push_back(std::move(warning));
+			});
+		}
+		for (Section *child : section->children)
+			visitSection(child);
+	};
+
+	visitSection(context.mainSection);
+}
+
 // Remove VariableReferences created from a match, undoing addVariableReferencesFromMatch and searchParentPatterns effects.
 // If any ancestor definitions had VL→Variable promotions reverted, their sections are added to affectedSections.
 static void removeVariableReferencesFromMatch(
@@ -1086,6 +1126,8 @@ bool resolvePatterns(ParseContext &context) {
 		};
 		validateTypeConstraints(context.mainSection);
 	}
+
+	emitExplicitDefinitionParameterAmbiguityWarnings(context);
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
 	{

@@ -447,17 +447,18 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			return concretizeClassType(result);
 		}
 
-		std::vector<DataType> argTypes;
-		size_t argIndex = 0;
-		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-			auto paramIt = node->parameterNames.find(matchedDef);
-			if (paramIt == node->parameterNames.end() || argIndex >= expr->arguments.size())
-				continue;
-			DataType argType = getEffectiveType(context, expr->arguments[argIndex++]);
-			if (!argType.isDeduced())
-				return expr->type;
-			argTypes.push_back(argType);
-		}
+			std::vector<DataType> argTypes;
+			std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+			size_t argIndex = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				auto paramIt = node->parameterNames.find(matchedDef);
+				if (paramIt == node->parameterNames.end() || argIndex >= sortedArgs.size())
+					continue;
+				DataType argType = getEffectiveType(context, sortedArgs[argIndex++]);
+				if (!argType.isDeduced())
+					return expr->type;
+				argTypes.push_back(argType);
+			}
 
 		auto instIt = matchedSection->instantiations.find(argTypes);
 		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())

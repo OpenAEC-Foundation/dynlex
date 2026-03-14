@@ -268,18 +268,20 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 
 		// Non-macro class type references are compile-time only — no runtime code.
 		// Macro class sections (primitive type definitions) fall through to macro expansion.
-		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro)
-			return nullptr;
-
-		// Build parameter name → argument function mapping
-		std::vector<std::pair<std::string, Function *>> paramBindings;
-		size_t argIndex = 0;
-		for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-			auto paramIt = node->parameterNames.find(matchedDef);
-			if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size()) {
-				paramBindings.push_back({paramIt->second, expr->arguments[argIndex++]});
+			if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+				return nullptr;
 			}
-		}
+
+			// Build parameter name → argument function mapping
+			std::vector<std::pair<std::string, Function *>> paramBindings;
+			std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+			size_t argIndex = 0;
+			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+				auto paramIt = node->parameterNames.find(matchedDef);
+				if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
+					paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
+				}
+			}
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with function substitution.
 			// Push current bindings and set only this macro's parameters (scoped).

@@ -598,9 +598,7 @@ static bool inferFunction(
 		recomputeRanges(expr);
 		sortArgumentsRecursive(expr);
 		resetFunctionTypes(expr);
-		inferOrderedFunction(expr, context, macroBindings);
-		if (context.typesValid)
-			snapshotFunctionVariableReferences(expr, context);
+		(void)tryInfer();
 		releaseOriginalExpr();
 		return context.typesValid;
 	}

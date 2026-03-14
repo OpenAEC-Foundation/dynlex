@@ -815,35 +815,42 @@ PatternDefinition *selectOverload(
 
 			// Find the corresponding element in the candidate's definition to get its type constraint
 			const std::string &paramName = paramIt->second;
-			for (auto &elem : candidate->patternElements) {
-				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
-					if (elem.resolvedTypeConstraint.isDeduced()) {
-						// DataType constraint exists — check if argument type matches
-						const DataType &argType = argTypes[argIdx];
-						const DataType &constraint = elem.resolvedTypeConstraint;
-						bool matches = false;
-						if (constraint.kind == DataType::Kind::Class) {
-							matches =
-								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
-						} else if (constraint.isNumeric()) {
-							// Numeric constraint: match exact kind (Int or Float) and pointer depth
-							// {integer:x} matches Int, {float:x} matches Float
-							matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
-						} else {
-							// Other primitive type constraint: match kind and pointer depth
-							matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
+				for (auto &elem : candidate->patternElements) {
+					if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
+						if (elem.resolvedTypeConstraint.isDeduced()) {
+							// DataType constraint exists — check if argument type matches
+							const DataType &argType = argTypes[argIdx];
+							const DataType &constraint = elem.resolvedTypeConstraint;
+							if (!argType.isDeduced()) {
+								// Keep candidate viable until the argument type is known.
+								break;
+							}
+							bool matches = false;
+							if (constraint.kind == DataType::Kind::Class) {
+								matches =
+									argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
+							} else if (constraint.kind == DataType::Kind::Type) {
+								// {type:x} accepts any compile-time type value, including pointer/array/etc. type refs.
+								matches = argType.kind == DataType::Kind::Type;
+							} else if (constraint.isNumeric()) {
+								// Numeric constraint: match exact kind (Int or Float) and pointer depth
+								// {integer:x} matches Int, {float:x} matches Float
+								matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
+							} else {
+								// Other primitive type constraint: match kind and pointer depth
+								matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
+							}
+							if (matches) {
+								score++;
+							} else {
+								constraintFailed = true;
+							}
 						}
-						if (matches) {
-							score++;
-						} else {
-							constraintFailed = true;
-						}
+						break;
 					}
-					break;
 				}
+				argIdx++;
 			}
-			argIdx++;
-		}
 
 		if (constraintFailed)
 			continue;
