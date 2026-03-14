@@ -16,18 +16,59 @@
 #include <unordered_set>
 #include <vector>
 
+struct BindingFrameStack {
+	std::vector<std::unordered_map<std::string, Function *>> frames;
+
+	void pushFrame(std::unordered_map<std::string, Function *> frame) { frames.push_back(std::move(frame)); }
+
+	void popFrame() {
+		assert(!frames.empty() && "Cannot pop an empty binding frame stack");
+		frames.pop_back();
+	}
+
+	Function *lookup(const std::string &bindingName) const {
+		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
+			auto bindingIt = frameIt->find(bindingName);
+			if (bindingIt != frameIt->end())
+				return bindingIt->second;
+		}
+		return nullptr;
+	}
+
+	std::unordered_map<std::string, Function *> flattenBindings() const {
+		std::unordered_map<std::string, Function *> flattenedBindings;
+		for (const auto &frame : frames) {
+			for (const auto &[bindingName, functionExpression] : frame)
+				flattenedBindings[bindingName] = functionExpression;
+		}
+		return flattenedBindings;
+	}
+};
+
+static Function *resolveThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack) {
+	constexpr size_t maxBindingResolutionDepth = 256;
+	size_t bindingResolutionDepth = 0;
+	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
+		Function *boundExpression = bindingFrameStack.lookup(expr->variable->name);
+		if (!boundExpression || boundExpression == expr)
+			return expr;
+		expr = boundExpression;
+		bindingResolutionDepth++;
+		if (bindingResolutionDepth > maxBindingResolutionDepth)
+			return expr;
+	}
+	return expr;
+}
+
 // Resolve a Variable function through macro bindings to find the bound function.
 // Only follows Variable → Variable chains; stops at non-Variable functions (PatternCall,
 // IntrinsicCall, Literal, etc.). The caller handles those function kinds separately.
 // See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp) which additionally
 // expands macro PatternCalls and operates on the context's binding stack.
 static Function *resolveThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
-	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
-		return expr;
-	auto it = bindings.find(expr->variable->name);
-	if (it != bindings.end() && it->second != expr)
-		return resolveThroughBindings(it->second, bindings);
-	return expr;
+	BindingFrameStack bindingFrameStack;
+	bindingFrameStack.pushFrame(bindings);
+	return resolveThroughBindings(expr, bindingFrameStack);
 }
 
 static Function *resolveThroughBindingsDeep(
@@ -63,11 +104,11 @@ expressionReferencesAnyBindingName(Function *expr, const std::unordered_map<std:
 // destination). See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp)
 // for the codegen equivalent that uses the context's binding stack.
 static Function *resolveThroughBindingsDeepImpl(
-	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
-	std::unordered_map<std::string, Function *> &outBindings, std::unordered_set<Function *> &visited
+	Function *expr, BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
+	std::unordered_set<Function *> &visited
 ) {
-	expr = resolveThroughBindings(expr, bindings);
-	outBindings = bindings;
+	expr = resolveThroughBindings(expr, bindingFrameStack);
+	outBindingFrameStack = bindingFrameStack;
 	if (!expr)
 		return expr;
 	if (visited.contains(expr))
@@ -76,29 +117,18 @@ static Function *resolveThroughBindingsDeepImpl(
 	std::unordered_map<std::string, Function *> innerBindings;
 	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (bodyExpr) {
-		std::unordered_map<std::string, Function *> mergedBindings = bindings;
+		std::unordered_map<std::string, Function *> scopedMacroBindings;
+		scopedMacroBindings.reserve(innerBindings.size());
 		for (auto &[name, argExpr] : innerBindings) {
-			std::unordered_map<std::string, Function *> argBindings;
-			Function *resolvedArg = resolveThroughBindingsDeepImpl(argExpr, bindings, argBindings, visited);
-			Function *directArg = resolveThroughBindings(argExpr, bindings);
-			if (resolvedArg && !argBindings.empty()) {
-				for (const auto &[depName, depExpr] : argBindings) {
-					// Keep nested dependency propagation, but never leak names that are
-					// parameters of the current macro call scope.
-					if (innerBindings.contains(depName))
-						continue;
-					if (!mergedBindings.contains(depName)) {
-						Function *resolvedDep = resolveThroughBindings(depExpr, bindings);
-						mergedBindings[depName] = resolvedDep ? resolvedDep : depExpr;
-					}
-				}
-			}
-			Function *bindingArg = resolvedArg ? resolvedArg : argExpr;
+			Function *directArg = resolveThroughBindings(argExpr, bindingFrameStack);
+			Function *bindingArg = directArg ? directArg : argExpr;
 			if (bindingArg && expressionReferencesAnyBindingName(bindingArg, innerBindings))
 				bindingArg = directArg ? directArg : argExpr;
-			mergedBindings[name] = bindingArg;
+			scopedMacroBindings[name] = bindingArg;
 		}
-		Function *resolved = resolveThroughBindingsDeepImpl(bodyExpr, mergedBindings, outBindings, visited);
+		bindingFrameStack.pushFrame(std::move(scopedMacroBindings));
+		Function *resolved = resolveThroughBindingsDeepImpl(bodyExpr, bindingFrameStack, outBindingFrameStack, visited);
+		bindingFrameStack.popFrame();
 		visited.erase(expr);
 		return resolved;
 	}
@@ -110,8 +140,13 @@ static Function *resolveThroughBindingsDeep(
 	Function *expr, const std::unordered_map<std::string, Function *> &bindings,
 	std::unordered_map<std::string, Function *> &outBindings
 ) {
+	BindingFrameStack bindingFrameStack;
+	bindingFrameStack.pushFrame(bindings);
+	BindingFrameStack outBindingFrameStack;
 	std::unordered_set<Function *> visited;
-	return resolveThroughBindingsDeepImpl(expr, bindings, outBindings, visited);
+	Function *resolvedExpression = resolveThroughBindingsDeepImpl(expr, bindingFrameStack, outBindingFrameStack, visited);
+	outBindings = outBindingFrameStack.flattenBindings();
+	return resolvedExpression;
 }
 
 static bool evaluateCompileTimeInteger(
@@ -140,19 +175,20 @@ static bool instantiateClassFromArgumentTypes(
 );
 
 struct BindingContext {
-	std::vector<std::pair<std::string, const Function *>> bindingEntries;
+	std::unordered_map<std::string, const Function *> bindingEntries;
 
 	bool operator==(const BindingContext &other) const { return bindingEntries == other.bindingEntries; }
 };
 
 struct BindingContextHasher {
 	size_t operator()(const BindingContext &bindingContext) const {
-		size_t hashValue = bindingContext.bindingEntries.size();
+		size_t hashValue = bindingContext.bindingEntries.size() * 1099511628211ull;
 		for (const auto &[bindingName, functionExpression] : bindingContext.bindingEntries) {
 			size_t nameHash = std::hash<std::string>{}(bindingName);
 			size_t functionHash = std::hash<const Function *>{}(functionExpression);
-			hashValue ^= nameHash + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
-			hashValue ^= functionHash + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
+			size_t entryHash = nameHash;
+			entryHash ^= functionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
+			hashValue ^= entryHash;
 		}
 		return hashValue;
 	}

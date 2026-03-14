@@ -15,16 +15,9 @@ static Function *resolveCompileTimeSelectBranch(
 static BindingContext buildBindingContext(const std::unordered_map<std::string, Function *> &bindings) {
 	BindingContext bindingContext;
 	bindingContext.bindingEntries.reserve(bindings.size());
-	for (const auto &[bindingName, functionExpression] : bindings)
-		bindingContext.bindingEntries.emplace_back(bindingName, functionExpression);
-	std::sort(
-		bindingContext.bindingEntries.begin(), bindingContext.bindingEntries.end(),
-		[](const auto &leftEntry, const auto &rightEntry) {
-			if (leftEntry.first != rightEntry.first)
-				return leftEntry.first < rightEntry.first;
-			return leftEntry.second < rightEntry.second;
-		}
-	);
+	for (const auto &[bindingName, functionExpression] : bindings) {
+		bindingContext.bindingEntries[bindingName] = functionExpression;
+	}
 	return bindingContext;
 }
 
