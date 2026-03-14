@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include "bindingResolution.h"
 #include "classDefinition.h"
 #include "classSection.h"
 #include "codegenInternal.h"
@@ -105,9 +106,8 @@ void generateSpecializedFunction(
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
-	// Push macro bindings — function bodies must not see caller's macro bindings
-	context.macroBindingStack.push(context.macroFunctionBindings);
-	context.macroFunctionBindings.clear();
+	// Push macro bindings — function bodies must not see caller's macro bindings.
+	pushClearedBindingScope(context.macroFunctionBindings, context.macroBindingStack);
 
 	builder.SetInsertPoint(entry);
 
@@ -135,8 +135,8 @@ void generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
-	context.macroFunctionBindings = context.macroBindingStack.top();
-	context.macroBindingStack.pop();
+	bool restoredFunctionBindingScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+	assert(restoredFunctionBindingScope && "Missing macro binding scope when restoring codegen state");
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
@@ -268,25 +268,17 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 
 		// Non-macro class type references are compile-time only — no runtime code.
 		// Macro class sections (primitive type definitions) fall through to macro expansion.
-			if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
-				return nullptr;
-			}
+		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+			return nullptr;
+		}
 
-			// Build parameter name → argument function mapping
-			std::vector<std::pair<std::string, Function *>> paramBindings;
-			std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-			size_t argIndex = 0;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				auto paramIt = node->parameterNames.find(matchedDef);
-				if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-					paramBindings.push_back({paramIt->second, sortedArgs[argIndex++]});
-				}
-			}
+		// Build parameter name → argument function mapping
+		std::vector<std::pair<std::string, Function *>> paramBindings;
+		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with function substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
-			context.macroBindingStack.push(context.macroFunctionBindings);
-			context.macroFunctionBindings.clear();
+			pushClearedBindingScope(context.macroFunctionBindings, context.macroBindingStack);
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
@@ -323,8 +315,8 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 				}
 			}
 
-			context.macroFunctionBindings = context.macroBindingStack.top();
-			context.macroBindingStack.pop();
+			bool restoredMacroScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+			assert(restoredMacroScope && "Missing macro binding scope after macro pattern call");
 			context.currentBodySection = savedBodySection;
 			return result;
 		}

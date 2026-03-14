@@ -274,18 +274,10 @@ static bool evaluateCompileTimeInteger(
 	return *number == static_cast<double>(outValue);
 }
 
-static void appendPatternCallBindings(
+void appendPatternCallBindings(
 	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
 ) {
-	if (!expr || !definition || !expr->patternMatch)
-		return;
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(definition);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size())
-			bindings[paramIt->second] = sortedArgs[argIndex++];
-	}
+	collectPatternCallBindings(expr, definition, bindings);
 }
 
 static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
@@ -815,42 +807,42 @@ PatternDefinition *selectOverload(
 
 			// Find the corresponding element in the candidate's definition to get its type constraint
 			const std::string &paramName = paramIt->second;
-				for (auto &elem : candidate->patternElements) {
-					if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
-						if (elem.resolvedTypeConstraint.isDeduced()) {
-							// DataType constraint exists — check if argument type matches
-							const DataType &argType = argTypes[argIdx];
-							const DataType &constraint = elem.resolvedTypeConstraint;
-							if (!argType.isDeduced()) {
-								// Keep candidate viable until the argument type is known.
-								break;
-							}
-							bool matches = false;
-							if (constraint.kind == DataType::Kind::Class) {
-								matches =
-									argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
-							} else if (constraint.kind == DataType::Kind::Type) {
-								// {type:x} accepts any compile-time type value, including pointer/array/etc. type refs.
-								matches = argType.kind == DataType::Kind::Type;
-							} else if (constraint.isNumeric()) {
-								// Numeric constraint: match exact kind (Int or Float) and pointer depth
-								// {integer:x} matches Int, {float:x} matches Float
-								matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
-							} else {
-								// Other primitive type constraint: match kind and pointer depth
-								matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
-							}
-							if (matches) {
-								score++;
-							} else {
-								constraintFailed = true;
-							}
+			for (auto &elem : candidate->patternElements) {
+				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
+					if (elem.resolvedTypeConstraint.isDeduced()) {
+						// DataType constraint exists — check if argument type matches
+						const DataType &argType = argTypes[argIdx];
+						const DataType &constraint = elem.resolvedTypeConstraint;
+						if (!argType.isDeduced()) {
+							// Keep candidate viable until the argument type is known.
+							break;
 						}
-						break;
+						bool matches = false;
+						if (constraint.kind == DataType::Kind::Class) {
+							matches =
+								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
+						} else if (constraint.kind == DataType::Kind::Type) {
+							// {type:x} accepts any compile-time type value, including pointer/array/etc. type refs.
+							matches = argType.kind == DataType::Kind::Type;
+						} else if (constraint.isNumeric()) {
+							// Numeric constraint: match exact kind (Int or Float) and pointer depth
+							// {integer:x} matches Int, {float:x} matches Float
+							matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
+						} else {
+							// Other primitive type constraint: match kind and pointer depth
+							matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
+						}
+						if (matches) {
+							score++;
+						} else {
+							constraintFailed = true;
+						}
 					}
+					break;
 				}
-				argIdx++;
 			}
+			argIdx++;
+		}
 
 		if (constraintFailed)
 			continue;

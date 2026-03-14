@@ -177,6 +177,48 @@ struct ParseContext {
 // and fills outBindings with parameter name → call-site argument function.
 // Returns nullptr if expr is not a macro PatternCall. Does not modify any binding stack —
 // the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
+template <typename OnPatternParameterNameFn>
+inline void forEachPatternParameterName(
+	const std::vector<PatternTreeNode *> &nodesPassed, PatternDefinition *definition,
+	OnPatternParameterNameFn &&onPatternParameterName
+) {
+	if (!definition)
+		return;
+	for (PatternTreeNode *node : nodesPassed) {
+		auto paramIt = node->parameterNames.find(definition);
+		if (paramIt != node->parameterNames.end())
+			onPatternParameterName(paramIt->second);
+	}
+}
+
+template <typename OnPatternBindingFn>
+inline void forEachPatternCallBinding(Function *expr, PatternDefinition *definition, OnPatternBindingFn &&onPatternBinding) {
+	if (!expr || !definition || !expr->patternMatch)
+		return;
+	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	size_t argIndex = 0;
+	forEachPatternParameterName(expr->patternMatch->nodesPassed, definition, [&](const std::string &parameterName) {
+		if (argIndex < sortedArgs.size())
+			onPatternBinding(parameterName, sortedArgs[argIndex++]);
+	});
+}
+
+inline void collectPatternCallBindingPairs(
+	Function *expr, PatternDefinition *definition, std::vector<std::pair<std::string, Function *>> &outBindings
+) {
+	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Function *argumentExpression) {
+		outBindings.push_back({parameterName, argumentExpression});
+	});
+}
+
+inline void collectPatternCallBindings(
+	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
+) {
+	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Function *argumentExpression) {
+		bindings[parameterName] = argumentExpression;
+	});
+}
+
 inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::string, Function *> &outBindings) {
 	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
@@ -197,13 +239,6 @@ inline Function *expandMacroPatternCall(Function *expr, std::unordered_map<std::
 	}
 	if (!bodyExpr)
 		return nullptr;
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-			outBindings[paramIt->second] = sortedArgs[argIndex++];
-		}
-	}
+	collectPatternCallBindings(expr, def, outBindings);
 	return bodyExpr;
 }

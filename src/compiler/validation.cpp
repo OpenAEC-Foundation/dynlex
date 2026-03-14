@@ -1,3 +1,4 @@
+#include "bindingResolution.h"
 #include "compiler.h"
 #include "function.h"
 #include "intrinsicInfo.h"
@@ -16,14 +17,7 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static Function *resolveVar(Function *expr, const Bindings &bindings) {
-	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
-		return expr;
-	auto it = bindings.find(expr->variable->name);
-	if (it != bindings.end() && it->second != expr)
-		return resolveVar(it->second, bindings);
-	return expr;
-}
+static Function *resolveVar(Function *expr, const Bindings &bindings) { return resolveVariableBindingChain(expr, bindings); }
 
 static Bindings buildBindings(Function *expr) {
 	Bindings result;
@@ -32,15 +26,7 @@ static Bindings buildBindings(Function *expr) {
 	if (expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return result;
 	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-			result[paramIt->second] = sortedArgs[argIndex];
-			argIndex++;
-		}
-	}
+	collectPatternCallBindings(expr, def, result);
 	return result;
 }
 

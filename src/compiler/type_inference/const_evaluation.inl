@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bindingResolution.h"
 #include "classDefinition.h"
 #include "classSection.h"
 #include "compileTimeValue.h"
@@ -16,48 +17,8 @@
 #include <unordered_set>
 #include <vector>
 
-struct BindingFrameStack {
-	std::vector<std::unordered_map<std::string, Function *>> frames;
-
-	void pushFrame(std::unordered_map<std::string, Function *> frame) { frames.push_back(std::move(frame)); }
-
-	void popFrame() {
-		assert(!frames.empty() && "Cannot pop an empty binding frame stack");
-		frames.pop_back();
-	}
-
-	Function *lookup(const std::string &bindingName) const {
-		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
-			auto bindingIt = frameIt->find(bindingName);
-			if (bindingIt != frameIt->end())
-				return bindingIt->second;
-		}
-		return nullptr;
-	}
-
-	std::unordered_map<std::string, Function *> flattenBindings() const {
-		std::unordered_map<std::string, Function *> flattenedBindings;
-		for (const auto &frame : frames) {
-			for (const auto &[bindingName, functionExpression] : frame)
-				flattenedBindings[bindingName] = functionExpression;
-		}
-		return flattenedBindings;
-	}
-};
-
 static Function *resolveThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack) {
-	constexpr size_t maxBindingResolutionDepth = 256;
-	size_t bindingResolutionDepth = 0;
-	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-		Function *boundExpression = bindingFrameStack.lookup(expr->variable->name);
-		if (!boundExpression || boundExpression == expr)
-			return expr;
-		expr = boundExpression;
-		bindingResolutionDepth++;
-		if (bindingResolutionDepth > maxBindingResolutionDepth)
-			return expr;
-	}
-	return expr;
+	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 }
 
 // Resolve a Variable function through macro bindings to find the bound function.
@@ -225,22 +186,6 @@ struct ActiveTypeResolutionParseContextGuard {
 	~ActiveTypeResolutionParseContextGuard() { activeTypeResolutionParseContext = previous; }
 };
 
-static void appendPatternCallBindings(
-	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
-) {
-	if (!expr || !definition || !expr->patternMatch)
-		return;
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(definition);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size()) {
-			Function *argExpr = sortedArgs[argIndex++];
-			bindings[paramIt->second] = argExpr;
-		}
-	}
-}
-
 static Function *selectCompileTimeBranch(
 	Function *selectExpr, ParseContext &parseContext, const std::unordered_map<std::string, Function *> &bindings,
 	const Instantiation *instantiation = nullptr
@@ -322,12 +267,10 @@ static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Function *expr)
 		return indices;
 
 	std::unordered_map<std::string, size_t> paramIndices;
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt != node->parameterNames.end() && argIndex < expr->arguments.size())
-			paramIndices[paramIt->second] = argIndex++;
-	}
+	std::vector<std::pair<std::string, Function *>> orderedBindings;
+	collectPatternCallBindingPairs(expr, def, orderedBindings);
+	for (size_t argumentIndex = 0; argumentIndex < orderedBindings.size(); argumentIndex++)
+		paramIndices[orderedBindings[argumentIndex].first] = argumentIndex;
 
 	for (size_t i = 1; i < bodyExpr->arguments.size(); i++) {
 		if (!intrinsicArgumentIsCompileTimeOnly(bodyExpr->intrinsicName, static_cast<int>(i)))

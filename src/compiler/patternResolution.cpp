@@ -530,8 +530,7 @@ static void emitExplicitDefinitionParameterAmbiguityWarnings(ParseContext &conte
 				if (element.type != PatternElement::Type::Variable || element.typeConstraintName.empty())
 					return;
 
-				PatternDefinition *singleWordFunction =
-					findDefinitionBySignature(context, SectionType::Function, element.text);
+				PatternDefinition *singleWordFunction = findDefinitionBySignature(context, SectionType::Function, element.text);
 				if (!singleWordFunction)
 					return;
 

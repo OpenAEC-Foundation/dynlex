@@ -1,4 +1,5 @@
 #include "compileTimeValue.h"
+#include "bindingResolution.h"
 #include "compilerUtils.h"
 #include "function.h"
 #include "intrinsicInfo.h"
@@ -32,13 +33,7 @@ static Function *resolveCompileTimeBinding(
 ) {
 	if (outBindings)
 		*outBindings = bindings;
-	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-		auto it = bindings.find(expr->variable->name);
-		if (it == bindings.end() || it->second == expr)
-			break;
-		expr = it->second;
-	}
-	return expr;
+	return resolveVariableBindingChain(expr, bindings);
 }
 
 static std::string currentBuildInfo(ParseContext &context, std::string_view key) {
@@ -204,13 +199,7 @@ static CompileTimeValue evaluatePatternCall(
 		return {};
 
 	std::unordered_map<std::string, Function *> callBindings = bindings;
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-	size_t argIndex = 0;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt != node->parameterNames.end() && argIndex < sortedArgs.size())
-			callBindings[paramIt->second] = sortedArgs[argIndex++];
-	}
+	collectPatternCallBindings(expr, def, callBindings);
 
 	if (def->section->isMacro) {
 		std::unordered_map<std::string, Function *> innerBindings;

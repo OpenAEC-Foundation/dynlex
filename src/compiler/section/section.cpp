@@ -8,6 +8,7 @@
 #include "sectionSection.h"
 #include "stringHierarchy.h"
 #include "syntaxConfig.h"
+#include <cctype>
 #include <iostream>
 #include <stack>
 using namespace std::literals;
@@ -417,16 +418,51 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 	// Replace number literals in pattern text and create sub-functions.
 	// Search the transformed pattern text (where strings/intrinsics are already replaced with \a)
 	// to avoid matching digits inside string literals (e.g. "i64").
-	std::regex numLiteralRegex("\\b\\d+(?:\\.\\d+)?\\b");
 	std::string patternSnapshot = reference->pattern.text;
-	std::sregex_iterator iter(patternSnapshot.begin(), patternSnapshot.end(), numLiteralRegex);
-	std::sregex_iterator end;
 	// Collect matches, then process in reverse so pattern positions stay valid.
 	// Number functions are collected separately and added in forward (left-to-right) order
 	// after all pattern replacements, so that sourceArgumentIndex maps to the correct function.
 	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
-	for (; iter != end; ++iter)
-		numMatches.emplace_back(iter->position(), iter->position() + iter->length(), iter->str());
+
+	for (size_t pos = 0; pos < patternSnapshot.size();) {
+		// Number literals are intentionally unsigned.
+		// Unary minus is modeled as a real operator pattern (e.g. "-value"),
+		// not as part of lexical number parsing.
+		size_t start = pos;
+		if (pos > 0) {
+			unsigned char prev = static_cast<unsigned char>(patternSnapshot[pos - 1]);
+			if (std::isalnum(prev) || prev == '_') {
+				pos = start + 1;
+				continue;
+			}
+		}
+
+		if (pos >= patternSnapshot.size() || !std::isdigit(static_cast<unsigned char>(patternSnapshot[pos]))) {
+			pos = start + 1;
+			continue;
+		}
+
+		size_t intStart = pos;
+		while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+			pos++;
+		if (pos < patternSnapshot.size() && patternSnapshot[pos] == '.') {
+			size_t dotPos = pos;
+			pos++;
+			size_t fracStart = pos;
+			while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+				pos++;
+			if (fracStart == pos)
+				pos = dotPos; // keep integer-only match if '.' isn't followed by digits
+		}
+
+		// Word boundary on the right to avoid partial matches in identifiers.
+		if (pos < patternSnapshot.size() && std::isalnum(static_cast<unsigned char>(patternSnapshot[pos]))) {
+			pos = intStart + 1;
+			continue;
+		}
+
+		numMatches.emplace_back(intStart, pos, std::string(patternSnapshot.substr(intStart, pos - intStart)));
+	}
 	std::vector<Function *> numExprs;
 	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
 		auto &[pos, endPos, numStr] = *it;

@@ -126,22 +126,22 @@ function element index of ptr:
 # Precedence chain (lowest to highest):
 #   or < and < not < comparisons < +,- < *,/,mod < negative
 
-function left + right:
+function left[ |]+[ |]right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("add", left, right)
 
-function left - right:
+function left[ |]-[ |]right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         @intrinsic("subtract", left, right)
 
-function left * right:
+function left[ |]*[ |]right:
     before: $ + $, $ - $
     replacement:
         @intrinsic("multiply", left, right)
 
-function left / right:
+function left[ |]/[ |]right:
     before: $ + $, $ - $
     replacement:
         @intrinsic("divide", left, right)
@@ -151,7 +151,7 @@ function left mod right:
     replacement:
         @intrinsic("modulo", left, right)
 
-function [the|] [negative|opposite] [of|] value:
+function [the |][negative [of ]|opposite [of ]|-]value:
     before: $ * $, $ / $, $ mod $
     replacement:
         @intrinsic("negate", value)

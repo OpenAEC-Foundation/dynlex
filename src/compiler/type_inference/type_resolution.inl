@@ -21,9 +21,8 @@ static BindingContext buildBindingContext(const std::unordered_map<std::string, 
 	return bindingContext;
 }
 
-static TypeResolutionKey buildTypeResolutionKey(
-	const Function *functionExpression, const std::unordered_map<std::string, Function *> &bindings
-) {
+static TypeResolutionKey
+buildTypeResolutionKey(const Function *functionExpression, const std::unordered_map<std::string, Function *> &bindings) {
 	TypeResolutionKey typeResolutionKey;
 	typeResolutionKey.functionExpression = functionExpression;
 	typeResolutionKey.bindingContext = buildBindingContext(bindings);

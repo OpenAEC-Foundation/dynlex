@@ -235,11 +235,11 @@ derivePatternCallType(Function *expr, InferenceContext &context, const std::unor
 	}
 
 	std::vector<DataType> argTypes;
-	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		auto paramIt = node->parameterNames.find(def);
-		if (paramIt == node->parameterNames.end())
-			continue;
-		Function *&argExpr = callBindings[paramIt->second];
+	std::vector<std::pair<std::string, Function *>> orderedBindings;
+	collectPatternCallBindingPairs(expr, def, orderedBindings);
+	for (const auto &[parameterName, ignoredArgumentExpression] : orderedBindings) {
+		Function *&argExpr = callBindings[parameterName];
+		(void)ignoredArgumentExpression;
 		DataType argType = inferFunctionTypeWithoutSideEffects(argExpr, context, callBindings);
 		if (!argType.isDeduced())
 			return {};
@@ -1131,30 +1131,27 @@ static void inferOrderedFunction(
 			// Non-macro function: infer body per-instantiation
 			// Build parameter bindings and argTypes in nodesPassed order (must match codegen's paramBindings order)
 			std::vector<std::pair<std::string, Function *>> paramBindings;
+			collectPatternCallBindingPairs(expr, def, paramBindings);
 			std::vector<DataType> argTypes;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				auto paramIt = node->parameterNames.find(def);
-				if (paramIt != node->parameterNames.end()) {
-					Function *argExpr = callBindings[paramIt->second];
-					paramBindings.push_back({paramIt->second, argExpr});
-					ArgumentTypeInferenceResult argTypeResult =
-						ensureArgumentTypeForPatternCall(argExpr, context, macroBindings);
-					DataType argType = argTypeResult.type;
-					if (!argType.isDeduced()) {
-						if (argTypeResult.deferred && context.currentInstantiation) {
-							context.currentInstantiation->needsReinfer = true;
-							return;
-						}
-						if (context.trial) {
-							context.setTypeFailure("Undeduced argument type encountered during trial pattern-call inference");
-							return;
-						}
-						assert(
-							argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
-						);
+			for (auto &[parameterName, argumentExpression] : paramBindings) {
+				argumentExpression = callBindings[parameterName];
+				ArgumentTypeInferenceResult argTypeResult =
+					ensureArgumentTypeForPatternCall(argumentExpression, context, macroBindings);
+				DataType argType = argTypeResult.type;
+				if (!argType.isDeduced()) {
+					if (argTypeResult.deferred && context.currentInstantiation) {
+						context.currentInstantiation->needsReinfer = true;
+						return;
 					}
-					argTypes.push_back(argType);
+					if (context.trial) {
+						context.setTypeFailure("Undeduced argument type encountered during trial pattern-call inference");
+						return;
+					}
+					assert(
+						argType.isDeduced() && "Undeduced argument type encountered during non-macro pattern-call inference"
+					);
 				}
+				argTypes.push_back(argType);
 			}
 
 			if (context.trial && context.trialJournal)

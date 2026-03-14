@@ -1,0 +1,8 @@
+import lib/std.dl
+
+set a to -1
+set b to 3-2
+set c to 3*-2
+print a
+print b
+print c

@@ -1,3 +1,4 @@
+#include "bindingResolution.h"
 #include "classDefinition.h"
 #include "classSection.h"
 #include "codegenInternal.h"
@@ -150,12 +151,7 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 // if no binding exists. Each resolution crosses one scope boundary — the caller must
 // pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
 Function *resolveVariableBinding(ParseContext &context, Function *expr) {
-	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
-		return expr;
-	auto it = context.macroFunctionBindings.find(expr->variable->name);
-	if (it != context.macroFunctionBindings.end() && it->second != expr)
-		return it->second;
-	return expr;
+	return resolveVariableBindingOneStep(expr, context.macroFunctionBindings);
 }
 
 // Resolve an function through all macro layers: variable bindings (which cross
@@ -165,47 +161,26 @@ Function *resolveVariableBinding(ParseContext &context, Function *expr) {
 // when done. Use this when you need to see through macro indirection to inspect the
 // underlying function kind (e.g., detecting a property intrinsic inside a store).
 void resolveThroughMacroLayers(ParseContext &context, Function *&expr) {
-	while (expr) {
-		// Variable bindings: resolve in current scope, or pop to parent scopes
-		if (expr->kind == Function::Kind::Variable && expr->variable) {
-			auto it = context.macroFunctionBindings.find(expr->variable->name);
-			if (it != context.macroFunctionBindings.end() && it->second != expr) {
-				expr = it->second;
-				continue;
-			}
-			// Not found in current scope — try parent scopes
-			if (!context.macroBindingStack.empty()) {
-				context.macroFunctionBindings = context.macroBindingStack.top();
-				context.macroBindingStack.pop();
-				continue;
-			}
-		}
-		// Macro PatternCall: expand into the macro body, pushing a new binding scope
-		std::unordered_map<std::string, Function *> innerBindings;
-		Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
-		if (bodyExpr) {
-			context.macroBindingStack.push(context.macroFunctionBindings);
-			context.macroFunctionBindings = std::move(innerBindings);
-			expr = bodyExpr;
-			continue;
-		}
-		break;
+	resolveThroughBindingLayers(
+		expr, context.macroFunctionBindings, context.macroBindingStack,
+		[](Function *functionExpression, std::unordered_map<std::string, Function *> &innerBindings) {
+		return expandMacroPatternCall(functionExpression, innerBindings);
 	}
+	);
 }
 
 // MacroScopeGuard implementation
 void MacroScopeGuard::popToCallerScope() {
 	assert(!context.macroBindingStack.empty());
 	savedBindings = context.macroFunctionBindings;
-	context.macroFunctionBindings = context.macroBindingStack.top();
-	context.macroBindingStack.pop();
+	bool poppedMacroScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+	assert(poppedMacroScope && "Missing macro binding scope for MacroScopeGuard");
 	active = true;
 }
 
 MacroScopeGuard::~MacroScopeGuard() {
 	if (active) {
-		context.macroBindingStack.push(context.macroFunctionBindings);
-		context.macroFunctionBindings = savedBindings;
+		pushBindingScope(context.macroFunctionBindings, context.macroBindingStack, savedBindings);
 	}
 }
 
@@ -308,20 +283,19 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			}
 			return {DataType::Kind::Int, 8};
 		}
-			if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
-				return getEffectiveType(context, expr->arguments[1]);
-			}
-			if (kind == IntrinsicKind::Call) {
-				// Format: @intrinsic("call", "library", "function", type_ref, args...)
-				DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
-				assert(retTypeRef.kind == DataType::Kind::Type && "call return type must be a compile-time type reference");
-				assert(
-					retTypeRef.referencedKind != DataType::Kind::Type &&
-					retTypeRef.referencedKind != DataType::Kind::Unresolved &&
-					"call return type must resolve to a concrete runtime type"
-				);
-				return retTypeRef.toReferencedType();
-			}
+		if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
+			return getEffectiveType(context, expr->arguments[1]);
+		}
+		if (kind == IntrinsicKind::Call) {
+			// Format: @intrinsic("call", "library", "function", type_ref, args...)
+			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
+			assert(retTypeRef.kind == DataType::Kind::Type && "call return type must be a compile-time type reference");
+			assert(
+				retTypeRef.referencedKind != DataType::Kind::Type && retTypeRef.referencedKind != DataType::Kind::Unresolved &&
+				"call return type must resolve to a concrete runtime type"
+			);
+			return retTypeRef.toReferencedType();
+		}
 		if (kind == IntrinsicKind::Construct)
 			return expr->type; // DataType fully determined during inference
 		if (kind == IntrinsicKind::Type) {
@@ -443,27 +417,23 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			if (!bodyExpr)
 				return expr->type;
 
-			auto savedBindings = context.macroFunctionBindings;
-			context.macroBindingStack.push(savedBindings);
-			context.macroFunctionBindings = std::move(innerBindings);
+			pushBindingScope(context.macroFunctionBindings, context.macroBindingStack, std::move(innerBindings));
 			DataType result = getEffectiveType(context, bodyExpr);
-			context.macroFunctionBindings = context.macroBindingStack.top();
-			context.macroBindingStack.pop();
+			bool restoredMacroScope = popBindingScope(context.macroFunctionBindings, context.macroBindingStack);
+			assert(restoredMacroScope && "Missing macro binding scope while restoring effective-type context");
 			return concretizeClassType(result);
 		}
 
-			std::vector<DataType> argTypes;
-			std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-			size_t argIndex = 0;
-			for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-				auto paramIt = node->parameterNames.find(matchedDef);
-				if (paramIt == node->parameterNames.end() || argIndex >= sortedArgs.size())
-					continue;
-				DataType argType = getEffectiveType(context, sortedArgs[argIndex++]);
-				if (!argType.isDeduced())
-					return expr->type;
-				argTypes.push_back(argType);
-			}
+		std::vector<DataType> argTypes;
+		std::vector<std::pair<std::string, Function *>> orderedBindings;
+		collectPatternCallBindingPairs(expr, matchedDef, orderedBindings);
+		for (const auto &[ignoredParameterName, argumentExpression] : orderedBindings) {
+			(void)ignoredParameterName;
+			DataType argType = getEffectiveType(context, argumentExpression);
+			if (!argType.isDeduced())
+				return expr->type;
+			argTypes.push_back(argType);
+		}
 
 		auto instIt = matchedSection->instantiations.find(argTypes);
 		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
@@ -562,23 +532,10 @@ void allocateSectionVariables(ParseContext &context, Section *section) {
 // Get the pointer for a variable function (for store operations).
 // Recursively resolves through nested macro binding scopes to find the actual variable.
 llvm::Value *getVariablePointer(ParseContext &context, Function *expr) {
-	// Resolve through potentially multiple levels of macro bindings.
-	// Each level pops to the caller's scope, so nested macros like
-	// `add value to target` → `set var to val` can resolve var → target → iteration.
 	std::vector<std::unordered_map<std::string, Function *>> poppedScopes;
-
-	while (true) {
-		Function *resolved = resolveVariableBinding(context, expr);
-		if (resolved == expr)
-			break; // No more macro bindings to resolve
-		// Pop to caller scope so the resolved function is evaluated in the right context
-		if (!context.macroBindingStack.empty()) {
-			poppedScopes.push_back(context.macroFunctionBindings);
-			context.macroFunctionBindings = context.macroBindingStack.top();
-			context.macroBindingStack.pop();
-		}
-		expr = resolved;
-	}
+	// Resolve through macro binding layers and keep a trail so we can restore
+	// the exact stack state before returning to the caller.
+	expr = resolveVariableBindingAcrossScopes(expr, context.macroFunctionBindings, context.macroBindingStack, &poppedScopes);
 
 	llvm::Value *result = nullptr;
 
@@ -596,11 +553,8 @@ llvm::Value *getVariablePointer(ParseContext &context, Function *expr) {
 		}
 	}
 
-	// Restore all popped scopes in reverse order
-	for (auto it = poppedScopes.rbegin(); it != poppedScopes.rend(); ++it) {
-		context.macroBindingStack.push(context.macroFunctionBindings);
-		context.macroFunctionBindings = *it;
-	}
+	// Restore all popped scopes in reverse order.
+	restoreBindingScopes(context.macroFunctionBindings, context.macroBindingStack, poppedScopes);
 
 	return result;
 }

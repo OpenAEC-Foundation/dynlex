@@ -33,3 +33,7 @@ PatternDefinition *selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Function *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );
+
+void appendPatternCallBindings(
+	Function *expr, PatternDefinition *definition, std::unordered_map<std::string, Function *> &bindings
+);
