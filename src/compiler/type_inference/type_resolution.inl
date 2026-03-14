@@ -12,6 +12,31 @@ static Function *resolveCompileTimeSelectBranch(
 	return selectExpr->arguments[*condition ? 2 : 3];
 }
 
+static BindingContext buildBindingContext(const std::unordered_map<std::string, Function *> &bindings) {
+	BindingContext bindingContext;
+	bindingContext.bindingEntries.reserve(bindings.size());
+	for (const auto &[bindingName, functionExpression] : bindings)
+		bindingContext.bindingEntries.emplace_back(bindingName, functionExpression);
+	std::sort(
+		bindingContext.bindingEntries.begin(), bindingContext.bindingEntries.end(),
+		[](const auto &leftEntry, const auto &rightEntry) {
+			if (leftEntry.first != rightEntry.first)
+				return leftEntry.first < rightEntry.first;
+			return leftEntry.second < rightEntry.second;
+		}
+	);
+	return bindingContext;
+}
+
+static TypeResolutionKey buildTypeResolutionKey(
+	const Function *functionExpression, const std::unordered_map<std::string, Function *> &bindings
+) {
+	TypeResolutionKey typeResolutionKey;
+	typeResolutionKey.functionExpression = functionExpression;
+	typeResolutionKey.bindingContext = buildBindingContext(bindings);
+	return typeResolutionKey;
+}
+
 static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_map<std::string, Function *> &bindings) {
 	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && bindings.empty()) {
 		return concretizeClassType(expr->type);
@@ -24,17 +49,19 @@ static DataType resolveTypeThroughBindings(Function *expr, const std::unordered_
 	if (!resolved)
 		return {};
 	bool dependsOnBindings = resolved != expr || !effectiveBindings.empty();
-	if (activeTypeResolutionFunctions.contains(resolved))
+	TypeResolutionKey typeResolutionKey = buildTypeResolutionKey(resolved, effectiveBindings);
+	if (activeTypeResolutionKeys.contains(typeResolutionKey))
 		return {};
 
 	struct ActiveTypeResolutionGuard {
-		const Function *expr;
+		TypeResolutionKey typeResolutionKey;
 
-		explicit ActiveTypeResolutionGuard(const Function *function) : expr(function) {
-			activeTypeResolutionFunctions.insert(expr);
+		explicit ActiveTypeResolutionGuard(TypeResolutionKey activeTypeResolutionKey)
+			: typeResolutionKey(std::move(activeTypeResolutionKey)) {
+			activeTypeResolutionKeys.insert(typeResolutionKey);
 		}
-		~ActiveTypeResolutionGuard() { activeTypeResolutionFunctions.erase(expr); }
-	} activeGuard(resolved);
+		~ActiveTypeResolutionGuard() { activeTypeResolutionKeys.erase(typeResolutionKey); }
+	} activeGuard(std::move(typeResolutionKey));
 	if (bindings.empty() && !dependsOnBindings && resolved->type.isDeduced())
 		return concretizeClassType(resolved->type);
 	if (resolved->kind == Function::Kind::Literal) {

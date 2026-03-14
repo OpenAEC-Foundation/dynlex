@@ -308,15 +308,20 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 			}
 			return {DataType::Kind::Int, 8};
 		}
-		if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
-			return getEffectiveType(context, expr->arguments[1]);
-		if (kind == IntrinsicKind::Call) {
-			// Format: @intrinsic("call", "library", "function", type_ref, args...)
-			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
-			if (retTypeRef.kind == DataType::Kind::Type)
+			if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
+				return getEffectiveType(context, expr->arguments[1]);
+			}
+			if (kind == IntrinsicKind::Call) {
+				// Format: @intrinsic("call", "library", "function", type_ref, args...)
+				DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
+				assert(retTypeRef.kind == DataType::Kind::Type && "call return type must be a compile-time type reference");
+				assert(
+					retTypeRef.referencedKind != DataType::Kind::Type &&
+					retTypeRef.referencedKind != DataType::Kind::Unresolved &&
+					"call return type must resolve to a concrete runtime type"
+				);
 				return retTypeRef.toReferencedType();
-			return {DataType::Kind::Int, 4};
-		}
+			}
 		if (kind == IntrinsicKind::Construct)
 			return expr->type; // DataType fully determined during inference
 		if (kind == IntrinsicKind::Type) {

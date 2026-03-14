@@ -9,10 +9,12 @@
 #include "intrinsicInfo.h"
 #include "type.h"
 #include "variable.h"
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <optional>
 #include <unordered_set>
+#include <vector>
 
 // Resolve a Variable function through macro bindings to find the bound function.
 // Only follows Variable → Variable chains; stops at non-Variable functions (PatternCall,
@@ -137,8 +139,45 @@ static bool instantiateClassFromArgumentTypes(
 	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex = -1
 );
 
+struct BindingContext {
+	std::vector<std::pair<std::string, const Function *>> bindingEntries;
+
+	bool operator==(const BindingContext &other) const { return bindingEntries == other.bindingEntries; }
+};
+
+struct BindingContextHasher {
+	size_t operator()(const BindingContext &bindingContext) const {
+		size_t hashValue = bindingContext.bindingEntries.size();
+		for (const auto &[bindingName, functionExpression] : bindingContext.bindingEntries) {
+			size_t nameHash = std::hash<std::string>{}(bindingName);
+			size_t functionHash = std::hash<const Function *>{}(functionExpression);
+			hashValue ^= nameHash + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
+			hashValue ^= functionHash + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
+		}
+		return hashValue;
+	}
+};
+
+struct TypeResolutionKey {
+	const Function *functionExpression = nullptr;
+	BindingContext bindingContext;
+
+	bool operator==(const TypeResolutionKey &other) const {
+		return functionExpression == other.functionExpression && bindingContext == other.bindingContext;
+	}
+};
+
+struct TypeResolutionKeyHasher {
+	size_t operator()(const TypeResolutionKey &typeResolutionKey) const {
+		size_t hashValue = std::hash<const Function *>{}(typeResolutionKey.functionExpression);
+		size_t bindingContextHash = BindingContextHasher{}(typeResolutionKey.bindingContext);
+		hashValue ^= bindingContextHash + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
+		return hashValue;
+	}
+};
+
 static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
-static thread_local std::unordered_set<const Function *> activeTypeResolutionFunctions;
+static thread_local std::unordered_set<TypeResolutionKey, TypeResolutionKeyHasher> activeTypeResolutionKeys;
 
 struct ActiveTypeResolutionParseContextGuard {
 	ParseContext *previous;
