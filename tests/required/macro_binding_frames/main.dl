@@ -1,0 +1,5 @@
+import lib/array.dl
+
+set values to allocate 4 slots of an integer
+store 7 into values at 0
+print item 0 of values

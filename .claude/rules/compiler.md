@@ -14,7 +14,7 @@ paths:
 
 ## Build & Test
 - `./scripts/build.sh` to build
-- `./scripts/run_tests.sh` to run all tests
+- `./scripts/test.sh` to run all tests
 - `--emit-llvm` to inspect generated IR, `--emit-spirv` for SPIR-V shaders
 - Build lint stage (`scripts/build.sh`) must only classify clang-tidy errors from real diagnostic lines (`file:line:column: error:`), not substring matches like `parse_error::...`.
 

@@ -16,19 +16,21 @@ These instructions apply to all coding agents working in this repository (includ
 - Suggest better approaches when you see one.
 - Verify before assuming package/version/tool availability.
 - Document important fixes in repository docs/rules so all agents share the same context.
-- Be cautious with git; other agents may work in the same tree.
+- Be cautious with git; other agents may work in the same tree. if the user tells you to revert that doesn't mean git revert or git checkout. verify no other agents edited a file before deleting or editing it.
 - Inspect intermediates instead of binaries.
 - Understand full scope before fixing; gather context first.
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
 - Keep bash commands on one line by chaining with `&&` or `;`.
 - When encountering ANY compiler issue while working on .dl code:
+do NOT add a workaround. temporary solutions are NOT accepted.
 1. identify the root cause with whatever tools you need.
-2. identify a possible fix.
+2. identify a minimal reproducible example and possible fix.
 3. report to the user.
 - this is a compiler. only PERFECT code is accepted.
 - your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
-- be direct. 
+- be direct. don't hide anything relevant.
+- remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
 
 ## Project Overview
 
@@ -78,7 +80,7 @@ Implementation details are documented in `.claude/rules/` (`compiler.md`, `codeg
 ## Testing
 
 ```bash
-./scripts/run_tests.sh
+./scripts/test.sh
 ./build/dynlex tests/required/simple/main.dl -o tests/required/simple/main.out && ./tests/required/simple/main.out
 ```
 

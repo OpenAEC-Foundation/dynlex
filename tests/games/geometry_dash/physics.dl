@@ -1,0 +1,65 @@
+import lib/std.dl
+
+function the window width:
+	execute:
+		return 1000
+
+function the world height:
+	execute:
+		return 420
+
+function the ground y:
+	execute:
+		return 340
+
+function the ceiling height:
+	execute:
+		return 48
+
+function the player size:
+	execute:
+		return 32
+
+function the player x:
+	execute:
+		return 180
+
+function the reference x offset:
+	execute:
+		return 84
+
+function the scroll speed:
+	execute:
+		return 7
+
+function the frame time in milliseconds:
+	execute:
+		return 16
+
+function the gravity strength:
+	execute:
+		return 1.15
+
+function the jump speed:
+	execute:
+		return 15.5
+
+function the player ground y:
+	execute:
+		return (the ground y - the player size) as a float
+
+function start a jump on velocity:
+	execute:
+		set velocity to the negative of the jump speed
+
+function apply gravity to y and velocity:
+	execute:
+		add the gravity strength to velocity
+		add velocity to y
+
+function clamp y and velocity to the ground:
+	execute:
+		set ground_level to the player ground y
+		if y > ground_level:
+			set y to ground_level
+			set velocity to 0.0

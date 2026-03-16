@@ -1,0 +1,233 @@
+import lib/shader.dl
+
+function [the|] shader camera x:
+    replacement:
+        @intrinsic("shader uniform", "cam_x")
+
+function [the|] shader camera y:
+    replacement:
+        @intrinsic("shader uniform", "cam_y")
+
+function [the|] shader camera z:
+    replacement:
+        @intrinsic("shader uniform", "cam_z")
+
+function [the|] shader camera yaw:
+    replacement:
+        @intrinsic("shader uniform", "yaw")
+
+function [the|] shader step scale:
+    replacement:
+        @intrinsic("shader uniform", "step_scale")
+
+function [the|] shader debug mode:
+    replacement:
+        @intrinsic("shader uniform", "debug_mode")
+
+function fract of value:
+    execute:
+        return value - the floor of value
+
+function hash from x and z:
+    execute:
+        set n to x * 127.1 + z * 311.7
+        set s to the sine of n * 43758.5453
+        return fract of s
+
+function clamp01 of value:
+    execute:
+        set result to value
+        clamp result between 0.0 and 1.0
+        return result
+
+function building height at cell_x cell_z:
+    execute:
+        set base to hash from cell_x and cell_z
+        set accent to hash from cell_x + 13.0 and cell_z + 7.0
+        return 6.0 + base * 18.0 + accent * 10.0
+
+function building width at cell_x cell_z:
+    execute:
+        return 1.8 + (hash from cell_x + 5.0 and cell_z + 19.0) * 2.2
+
+function building depth at cell_x cell_z:
+    execute:
+        return 1.8 + (hash from cell_x + 29.0 and cell_z + 11.0) * 2.2
+
+function scene distance at x y z:
+    execute:
+        set ground to y
+
+        set cell_x to the floor of (x / 18.0)
+        set cell_z to the floor of (z / 18.0)
+        set local_x to x - cell_x * 18.0 - 9.0
+        set local_z to z - cell_z * 18.0 - 9.0
+        set local_y to y
+
+        set half_x to building width at cell_x cell_z
+        set half_y to building height at cell_x cell_z
+        set half_z to building depth at cell_x cell_z
+
+        set ax to the absolute value of local_x
+        set ay to the absolute value of (local_y - half_y)
+        set az to the absolute value of local_z
+
+        set dx to ax - half_x
+        set dy to ay - half_y
+        set dz to az - half_z
+
+        set outside_x to the maximum of dx and 0.0
+        set outside_y to the maximum of dy and 0.0
+        set outside_z to the maximum of dz and 0.0
+        set outside_distance to the square root of (outside_x * outside_x + outside_y * outside_y + outside_z * outside_z)
+        set inside_distance to the minimum of (the maximum of dx and (the maximum of dy and dz)) and 0.0
+        set building to outside_distance + inside_distance
+
+        return the minimum of ground and building
+
+set px to the fragment x coordinate
+set py to the fragment y coordinate
+
+set uv_x to px / 800.0 * 2.0 - 1.0
+set uv_y to py / 600.0 * 2.0 - 1.0
+set uv_x to uv_x * 1.3333333
+
+set cam_x to the shader camera x
+set cam_y to the shader camera y
+set cam_z to the shader camera z
+set yaw to the shader camera yaw
+set step_scale to the shader step scale
+set debug_mode to the shader debug mode
+set cos_yaw to the cosine of yaw
+set sin_yaw to the sine of yaw
+
+set local_dir_x to uv_x
+set local_dir_y to uv_y * 0.38 - 0.22
+set local_dir_z to 1.25
+set dir_x to local_dir_x * cos_yaw + local_dir_z * sin_yaw
+set dir_y to local_dir_y
+set dir_z to local_dir_z * cos_yaw - local_dir_x * sin_yaw
+set dir_len to the square root of (dir_x * dir_x + dir_y * dir_y + dir_z * dir_z)
+set dir_x to dir_x / dir_len
+set dir_y to dir_y / dir_len
+set dir_z to dir_z / dir_len
+
+set travel to 0.0
+set hit to 0
+set hit_x to cam_x
+set hit_y to cam_y
+set hit_z to cam_z
+set steps to 0
+
+while steps < 120 and hit = 0 and travel < 260.0:
+    set sample_x to cam_x + dir_x * travel
+    set sample_y to cam_y + dir_y * travel
+    set sample_z to cam_z + dir_z * travel
+    set distance to scene distance at sample_x sample_y sample_z
+    if distance < 0.005:
+        set hit to 1
+        set hit_x to sample_x
+        set hit_y to sample_y
+        set hit_z to sample_z
+    else:
+        if distance < 0.2:
+            set travel to travel + distance * 0.25
+        else:
+            set travel to travel + distance * step_scale
+    increment steps
+
+if hit = 0:
+    set horizon to clamp01 of (0.58 - dir_y * 1.15)
+    set r to 0.44 + horizon * 0.18
+    set g to 0.60 + horizon * 0.12
+    set b to 0.82 + horizon * 0.08
+    set the fragment color to r g b 1.0
+else:
+    set eps to 0.25
+    set nxp to scene distance at hit_x + eps hit_y hit_z
+    set nxn to scene distance at hit_x - eps hit_y hit_z
+    set nyp to scene distance at hit_x hit_y + eps hit_z
+    set nyn to scene distance at hit_x hit_y - eps hit_z
+    set nzp to scene distance at hit_x hit_y hit_z + eps
+    set nzn to scene distance at hit_x hit_y hit_z - eps
+
+    set normal_x to nxp - nxn
+    set normal_y to nyp - nyn
+    set normal_z to nzp - nzn
+    set normal_len to the square root of (normal_x * normal_x + normal_y * normal_y + normal_z * normal_z)
+    if normal_len < 0.001:
+        set normal_x to 0.0
+        set normal_y to 1.0
+        set normal_z to 0.0
+    else:
+        set normal_x to normal_x / normal_len
+        set normal_y to normal_y / normal_len
+        set normal_z to normal_z / normal_len
+
+    set light_x to 0.55
+    set light_y to 0.78
+    set light_z to 0.30
+    set light_len to the square root of (light_x * light_x + light_y * light_y + light_z * light_z)
+    set light_x to light_x / light_len
+    set light_y to light_y / light_len
+    set light_z to light_z / light_len
+
+    set diffuse to normal_x * light_x + normal_y * light_y + normal_z * light_z
+    set diffuse to clamp01 of diffuse
+
+    set cell_x to the floor of (hit_x / 18.0)
+    set cell_z to the floor of (hit_z / 18.0)
+    set half_x to building width at cell_x cell_z
+    set half_z to building depth at cell_x cell_z
+    set variation to hash from cell_x and cell_z
+    set accent to hash from cell_x + 21.0 and cell_z + 9.0
+
+    set base_r to 0.16 + variation * 0.12
+    set base_g to 0.17 + accent * 0.11
+    set base_b to 0.20 + variation * 0.09
+
+    if normal_y > 0.85:
+        set base_r to 0.10
+        set base_g to 0.11
+        set base_b to 0.12
+
+    set fog to clamp01 of (travel / 260.0)
+    set fog to fog * fog
+    set sky_r to 0.44
+    set sky_g to 0.60
+    set sky_b to 0.82
+
+    if debug_mode < 0.5:
+        set shade to 0.18 + diffuse * 0.72
+        set r to base_r * shade
+        set g to base_g * shade
+        set b to base_b * shade
+        set r to r * (1.0 - fog) + sky_r * fog
+        set g to g * (1.0 - fog) + sky_g * fog
+        set b to b * (1.0 - fog) + sky_b * fog
+        set the fragment color to r g b 1.0
+    else:
+        if debug_mode < 1.5:
+            set r to normal_x * 0.5 + 0.5
+            set g to normal_y * 0.5 + 0.5
+            set b to normal_z * 0.5 + 0.5
+            set the fragment color to r g b 1.0
+        else:
+            if debug_mode < 2.5:
+                set gray to clamp01 of (travel / 80.0)
+                set the fragment color to gray gray gray 1.0
+            else:
+                if debug_mode < 3.5:
+                    set r to variation
+                    set g to accent
+                    set b to 1.0 - variation
+                    set the fragment color to r g b 1.0
+                else:
+                    if debug_mode < 4.5:
+                        set gray to fog
+                        set the fragment color to gray gray gray 1.0
+                    else:
+                        set r to (half_x - 1.8) / 2.2
+                        set g to (half_z - 1.8) / 2.2
+                        set b to 0.0
+                        set the fragment color to r g b 1.0

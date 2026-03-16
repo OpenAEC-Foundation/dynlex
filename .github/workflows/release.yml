@@ -41,7 +41,7 @@ jobs:
         run: ./scripts/build.sh --release
 
       - name: Run tests
-        run: ./scripts/run_tests.sh
+        run: ./scripts/test.sh
 
       - name: Package release artifacts
         run: |

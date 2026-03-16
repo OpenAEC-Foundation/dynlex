@@ -68,7 +68,7 @@ For sanitizer leak checks that ignore known process-lifetime allocations from
 third-party libraries (for example LLVM internals), use:
 
 ```bash
-./scripts/run_asan_leak_check.sh
+./scripts/asan_leak_check.sh
 ```
 
 By default this runs `build-asan/dynlex` with `scripts/lsan.supp`.

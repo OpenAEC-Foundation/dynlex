@@ -1,0 +1,7 @@
+import lib/std.dl
+
+set a to 1
+set b to 2
+print a+b as line
+print a + b as line
+print 3*-2 as line

@@ -1,7 +1,7 @@
 # Regression Findings (2026-03-13)
 
 ## Context
-During macro/type-inference and codegen alignment work, regressions appeared in `run_tests.sh` (notably: `array_literal`, `import`, `pattern`, `section`, `specificity`, `syntax_config`).
+During macro/type-inference and codegen alignment work, regressions appeared in `test.sh` (notably: `array_literal`, `import`, `pattern`, `section`, `specificity`, `syntax_config`).
 
 ## Confirmed causes
 1. Codegen-side macro overload reselection can pick a different parse shape than inference-selected ordering, causing invalid groupings to survive (example path: vector construction expression regrouped into class `*` float).

@@ -4,7 +4,7 @@
 #include "compiler.h"
 #include "completion.h"
 #include "configDocument.h"
-#include "function.h"
+#include "expression.h"
 #include "lspFileSystem.h"
 #include "pathUtils.h"
 #include "patternMatch.h"
@@ -564,13 +564,13 @@ CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &para
 	);
 }
 
-// Find the deepest function containing the cursor position.
-// Depth-first: children (subfunctions) take priority over parents,
+// Find the deepest expression containing the cursor position.
+// Depth-first: child expressions take priority over parents,
 // matching the semantic tokenizer's slicing behavior.
-static Function *findDeepestFunction(Function *expr, int character) {
-	for (Function *arg : expr->arguments) {
+static Expression *findDeepestExpression(Expression *expr, int character) {
+	for (Expression *arg : expr->arguments) {
 		if (arg->range.start() <= character && character < arg->range.end()) {
-			Function *deeper = findDeepestFunction(arg, character);
+			Expression *deeper = findDeepestExpression(arg, character);
 			if (deeper)
 				return deeper;
 		}
@@ -581,18 +581,18 @@ static Function *findDeepestFunction(Function *expr, int character) {
 	return nullptr;
 }
 
-static Function *findVariableArgumentAtOffset(Function *expr, int character) {
+static Expression *findVariableArgumentAtOffset(Expression *expr, int character) {
 	if (!expr)
 		return nullptr;
-	if (expr->kind == Function::Kind::PatternCall) {
-		std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
-		for (Function *arg : sortedArgs) {
+	if (expr->kind == Expression::Kind::PatternCall) {
+		std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+		for (Expression *arg : sortedArgs) {
 			if (!arg)
 				continue;
 			if (arg->range.start() <= character && character < arg->range.end()) {
-				if (arg->kind == Function::Kind::Variable && arg->variable)
+				if (arg->kind == Expression::Kind::Variable && arg->variable)
 					return arg;
-				if (Function *nested = findVariableArgumentAtOffset(arg, character))
+				if (Expression *nested = findVariableArgumentAtOffset(arg, character))
 					return nested;
 			}
 		}
@@ -600,16 +600,16 @@ static Function *findVariableArgumentAtOffset(Function *expr, int character) {
 	return nullptr;
 }
 
-// Get the definition location for an function, following the same
+// Get the definition location for an expression, following the same
 // semantic categories as the tokenizer (Variable, PatternCall, etc.)
-static std::optional<::Range> getDefinitionTarget(Function *expr) {
+static std::optional<::Range> getDefinitionTarget(Expression *expr) {
 	switch (expr->kind) {
-	case Function::Kind::Variable:
+	case Expression::Kind::Variable:
 		if (expr->variable && expr->variable->definition) {
 			return expr->variable->definition->range;
 		}
 		break;
-	case Function::Kind::PatternCall:
+	case Expression::Kind::PatternCall:
 		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
 			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty()) {
 			return expr->patternMatch->matchedEndNode->matchingDefinitions[0]->range;
@@ -909,12 +909,12 @@ static Json buildInstantiationOptions(ParseContext &parseContext, const Section 
 	return options;
 }
 
-static std::vector<DataType> argumentTypesForDefinition(const Function *expr, PatternDefinition *definition) {
+static std::vector<DataType> argumentTypesForDefinition(const Expression *expr, PatternDefinition *definition) {
 	std::vector<DataType> argTypes;
-	if (!expr || !definition || expr->kind != Function::Kind::PatternCall || !expr->patternMatch)
+	if (!expr || !definition || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch)
 		return argTypes;
 
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
 		auto paramIt = node->parameterNames.find(definition);
@@ -922,7 +922,7 @@ static std::vector<DataType> argumentTypesForDefinition(const Function *expr, Pa
 			continue;
 		if (argIndex >= sortedArgs.size())
 			break;
-		Function *argExpr = sortedArgs[argIndex++];
+		Expression *argExpr = sortedArgs[argIndex++];
 		argTypes.push_back(argExpr ? argExpr->type : DataType{});
 	}
 	return argTypes;
@@ -1023,16 +1023,16 @@ static VariableReference *findVariableReferenceInDocument(
 	return nullptr;
 }
 
-static Function *findVariableFunctionAtSource(Function *expr, const std::string &uri, int line, int character) {
+static Expression *findVariableExpressionAtSource(Expression *expr, const std::string &uri, int line, int character) {
 	if (!expr)
 		return nullptr;
-	for (Function *arg : expr->arguments) {
+	for (Expression *arg : expr->arguments) {
 		if (!arg)
 			continue;
-		if (Function *nested = findVariableFunctionAtSource(arg, uri, line, character))
+		if (Expression *nested = findVariableExpressionAtSource(arg, uri, line, character))
 			return nested;
 	}
-	if (expr->kind == Function::Kind::Variable && rangeContainsSource(expr->range, uri, line, character))
+	if (expr->kind == Expression::Kind::Variable && rangeContainsSource(expr->range, uri, line, character))
 		return expr;
 	return nullptr;
 }
@@ -1145,8 +1145,8 @@ static std::optional<CompileTimeValue> lookupConstantValueByNameInOwnerSection(
 	);
 }
 
-static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr) {
-	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+static PatternDefinition *matchedPatternDefinitionForHover(const Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 
 	const std::vector<PatternDefinition *> &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
@@ -1155,7 +1155,7 @@ static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr)
 
 	std::vector<DataType> argTypes;
 	argTypes.reserve(expr->arguments.size());
-	for (const Function *arg : expr->arguments)
+	for (const Expression *arg : expr->arguments)
 		argTypes.push_back(arg ? arg->type : DataType{});
 
 	PatternDefinition *matched = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypes);
@@ -1167,7 +1167,7 @@ static PatternDefinition *matchedPatternDefinitionForHover(const Function *expr)
 struct CursorResolution {
 	CodeLine *codeLine{};
 	int localOffset = -1;
-	Function *expr{};
+	Expression *expr{};
 	PatternDefinition *matchedPattern{};
 	VariableReference *referenceAtCursor{};
 	VariableReference *definitionAtCursor{};
@@ -1177,16 +1177,16 @@ struct CursorResolution {
 static std::optional<CursorResolution>
 resolveCursorData(ParseContext &context, const std::string &uri, int line, int character) {
 	for (CodeLine *codeLine : context.codeLines) {
-		if (!codeLine || !codeLine->containsSourceLocation(uri, line, character) || !codeLine->function)
+		if (!codeLine || !codeLine->containsSourceLocation(uri, line, character) || !codeLine->expression)
 			continue;
 		int localOffset = codeLine->mapSourceToOffset(uri, line, character);
 		if (localOffset < 0)
 			continue;
 
-		Function *expr = findDeepestFunction(codeLine->function, localOffset);
-		if (Function *sourceVariable = findVariableArgumentAtOffset(codeLine->function, localOffset))
+		Expression *expr = findDeepestExpression(codeLine->expression, localOffset);
+		if (Expression *sourceVariable = findVariableArgumentAtOffset(codeLine->expression, localOffset))
 			expr = sourceVariable;
-		else if (Function *sourceVariable = findVariableFunctionAtSource(codeLine->function, uri, line, character))
+		else if (Expression *sourceVariable = findVariableExpressionAtSource(codeLine->expression, uri, line, character))
 			expr = sourceVariable;
 
 		CursorResolution resolved;
@@ -1194,7 +1194,7 @@ resolveCursorData(ParseContext &context, const std::string &uri, int line, int c
 		resolved.localOffset = localOffset;
 		resolved.expr = expr;
 		resolved.matchedPattern = matchedPatternDefinitionForHover(expr);
-		if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
+		if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
 			resolved.referenceAtCursor = expr->variable;
 			resolved.definitionAtCursor = expr->variable->definition ? expr->variable->definition : expr->variable;
 			resolved.variableName = expr->variable->name;
@@ -1223,7 +1223,7 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 		resolveCursorData(*context, params.textDocument.uri, params.position.line, params.position.character);
 	if (!resolved.has_value())
 		return std::nullopt;
-	if (resolved->expr && resolved->expr->kind == Function::Kind::PatternCall && resolved->matchedPattern) {
+	if (resolved->expr && resolved->expr->kind == Expression::Kind::PatternCall && resolved->matchedPattern) {
 		Section *targetSection = resolved->matchedPattern->section;
 		if (targetSection && targetSection->instantiations.size() > 1) {
 			std::vector<DataType> callArgTypes = argumentTypesForDefinition(resolved->expr, resolved->matchedPattern);
@@ -1351,7 +1351,7 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 			resolved = std::move(previousCharResolved);
 	}
 	if (resolved.has_value()) {
-		Function *expr = resolved->expr;
+		Expression *expr = resolved->expr;
 		PatternDefinition *matchedPattern = resolved->matchedPattern;
 		VariableReference *referenceAtHover = resolved->referenceAtCursor;
 		VariableReference *variableDefinition = resolved->definitionAtCursor;
@@ -1394,7 +1394,7 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 				std::string typeText;
 				if (ownedVariable)
 					typeText = typeToUserPatternName(*context, ownedVariable->type);
-				else if (expr && expr->kind == Function::Kind::Variable)
+				else if (expr && expr->kind == Expression::Kind::Variable)
 					typeText = typeToUserPatternName(*context, expr->type);
 
 				std::optional<CompileTimeValue> value = lookupHoverConstantValue(

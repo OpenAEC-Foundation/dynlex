@@ -1,0 +1,110 @@
+import lib/graphics.dl
+
+function set perspective with width w and height h:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5889)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        set aspect to w as a float / h as a float
+        set near to 0.1
+        set far to 200.0
+        set top to 0.08
+        set bottom to 0.0 - top
+        set right to top * aspect
+        set left to 0.0 - right
+        @intrinsic("call", "GL", "glFrustum", void, left, right, bottom, top, near, far)
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+
+function clear [the|] 3d screen:
+    execute:
+        @intrinsic("call", "GL", "glClear", void, 16640)
+
+function enable depth test:
+    execute:
+        @intrinsic("call", "GL", "glEnable", void, 2929)
+
+function set clear color to r g b:
+    execute:
+        @intrinsic("call", "GL", "glClearColor", void, r as a 32 bit float, g as a 32 bit float, b as a 32 bit float, 1.0 as a 32 bit float)
+
+function apply camera at x y z yaw degrees:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        @intrinsic("call", "GL", "glRotated", void, 0.0 - degrees, 0.0, 1.0, 0.0)
+        @intrinsic("call", "GL", "glTranslated", void, 0.0 - x, 0.0 - y, 0.0 - z)
+
+function draw cube at x y z with size cube_size:
+    execute:
+        set half to cube_size / 2.0
+        @intrinsic("call", "GL", "glPushMatrix", void)
+        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
+        @intrinsic("call", "GL", "glBegin", void, 7)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 220, 80, 80)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, half)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 80, 220, 80)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, 0.0 - half)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 80, 80, 220)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, 0.0 - half)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 220, 220, 80)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, half)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 220, 80, 220)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, half, 0.0 - half)
+
+        @intrinsic("call", "GL", "glColor3ub", void, 80, 220, 220)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, 0.0 - half)
+        @intrinsic("call", "GL", "glVertex3d", void, half, 0.0 - half, half)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half, 0.0 - half, half)
+
+        @intrinsic("call", "GL", "glEnd", void)
+        @intrinsic("call", "GL", "glPopMatrix", void)
+
+set window to a new window with width 800 and height 600
+set perspective with width 800 and height 600
+enable depth test
+set clear color to 0.08 0.10 0.14
+
+set camera_x to 0.0
+set camera_y to 1.5
+set camera_z to 8.0
+set yaw to 0.0
+
+while not the window should close:
+    set key to the pressed key of window
+    if key = 1:
+        subtract the sine of (yaw * 0.0174533) * 0.2 from camera_x
+        subtract the cosine of (yaw * 0.0174533) * 0.2 from camera_z
+    if key = 3:
+        add the sine of (yaw * 0.0174533) * 0.2 to camera_x
+        add the cosine of (yaw * 0.0174533) * 0.2 to camera_z
+    if key = 2:
+        add 2.0 to yaw
+    if key = 4:
+        subtract 2.0 from yaw
+
+    clear the 3d screen
+    apply camera at camera_x camera_y camera_z yaw yaw
+    draw cube at 0.0 0.0 0.0 with size 2.0
+    display the frame of window
+
+close the window

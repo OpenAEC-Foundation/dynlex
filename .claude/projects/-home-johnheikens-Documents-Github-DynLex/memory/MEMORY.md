@@ -6,7 +6,7 @@
 
 ## Test Infrastructure
 - Tests renamed from numbered (`0_simple`) to descriptive (`simple`) names
-- `expected_error.txt` support added to `run_tests.sh` for expected compilation failures (substring match)
+- `expected_error.txt` support added to `test.sh` for expected compilation failures (substring match)
 - `tests/required/*/main` binaries are gitignored
 
 ## Pattern Specificity Rematching

@@ -1,5 +1,5 @@
 #include "completion.h"
-#include "function.h"
+#include "expression.h"
 #include "parseContext.h"
 #include "pathUtils.h"
 #include "pattern/patternReference.h"
@@ -545,7 +545,7 @@ collectMatcherFrontier(const CompletionContext &context, SectionType sectionType
 	}
 
 	std::string normalizedPrefix = normalizeCompletionPatternPrefix(linePrefix);
-	Function expr;
+	Expression expr;
 	expr.range.subString = normalizedPrefix;
 	PatternReference reference(&expr, sectionType);
 	reference.patternElements = getPatternElements(reference.pattern.text);

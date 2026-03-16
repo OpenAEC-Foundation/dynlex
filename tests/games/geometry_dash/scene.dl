@@ -1,0 +1,13 @@
+import lib/graphics.dl
+import tests/games/geometry_dash/physics.dl
+
+function draw static world in window:
+	execute:
+		clear screen
+		draw rectangle at 0 0 size the window width the world height with color 18 18 24
+		draw rectangle at 0 0 size the window width the ceiling height with color 92 58 34
+		draw rectangle at 0 the ground y size the window width the world height - the ground y with color 40 28 18
+
+function draw runner at x y with color r g b:
+	execute:
+		draw rectangle at x y size the player size the player size with color r g b

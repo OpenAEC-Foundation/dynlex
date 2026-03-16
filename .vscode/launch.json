@@ -7,7 +7,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/build/dynlex",
 			"args": [
-				"${workspaceFolder}/tests/required/0_simple/main.dl",
+				"${workspaceFolder}/tests/required/simple/main.dl",
 				"--emit-llvm"
 			],
 			"stopAtEntry": false,

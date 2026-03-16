@@ -3,19 +3,19 @@
 ## Overview
 
 Two new language features that work together:
-- **`it`** — an function that resolves to the current subject variable
+- **`it`** — a function that resolves to the current subject variable
 - **`and`** — chains multiple statements on a single line
 
 Both are defined as patterns in std.dl, not hardcoded in the compiler.
 
 ## Prerequisites: Unify Effects and Functions
 
-Effects and functions are nearly identical — effects are just functions that return void. Unifying them enables function sub-matches, which `and` requires.
+Effects and functions are nearly identical — effects are just functions that return void. Unifying them enables expression submatches, which `and` requires.
 
 ### Changes
 - Merge the Effect and Function pattern trees into one
 - Remove `SectionType::Effect` (or make it an alias)
-- Allow sub-matches to match function-like patterns (patterns that return void)
+- Allow sub-matches to match expression-like patterns (patterns that return void)
 - Update `MatchProgress::step()` — sub-matches search the unified tree
 - Update `resolveReferences`, `analyzeSections`, and codegen to work with one tree
 
@@ -93,12 +93,12 @@ print it              # error: "what subject are you referring to?"
 ```
 
 ```
-x + 1                 # error: "unused function result"
+x + 1                 # error: "unused expression result"
                       # function returns a value but is used at line-level
                       # (the result is discarded — likely a mistake)
 ```
 
-Line-level statements that return a non-void value are errors. The user probably forgot `set ... to` or `print`. This is checked after type inference — if a top-level line function has a non-void return type, report *"unused function result"*.
+Line-level statements that return a non-void value are errors. The user probably forgot `set ... to` or `print`. This is checked after type inference — if a top-level line expression has a non-void return type, report *"unused expression result"*.
 
 ## Implementation Steps
 

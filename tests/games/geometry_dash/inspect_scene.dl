@@ -1,0 +1,38 @@
+import lib/array.dl
+import tests/games/geometry_dash/generator.dl
+import tests/games/geometry_dash/physics.dl
+
+set count to 24
+set levels to allocate count slots of an integer
+set jump_ms to allocate count slots of an integer
+set slide_ms to allocate count slots of an integer
+
+fill plan levels jump_ms slide_ms with count count using seed 1337
+
+set min_jump to item 0 of jump_ms
+set max_jump to item 0 of jump_ms
+set total_jump to 0
+set highest_level to 0
+set staircase_run to 0
+set longest_staircase to 0
+set i to 0
+loop while i < count:
+	set jump_value to item i of jump_ms
+	set level_value to item i of levels
+	add jump_value to total_jump
+	if jump_value < min_jump:
+		set min_jump to jump_value
+	if jump_value > max_jump:
+		set max_jump to jump_value
+	if level_value > highest_level:
+		set highest_level to level_value
+	if i > 0 and level_value > item i - 1 of levels:
+		set staircase_run to staircase_run + 1
+		if staircase_run > longest_staircase:
+			set longest_staircase to staircase_run
+	else:
+		set staircase_run to 0
+	set i to i + 1
+
+set average_jump to total_jump / count
+@intrinsic("call", "libc", "printf", an integer, "INSPECT avg_jump=%ld min_jump=%ld max_jump=%ld highest_level=%ld longest_staircase=%ld\n", average_jump as a 64 bit integer, min_jump as a 64 bit integer, max_jump as a 64 bit integer, highest_level as a 64 bit integer, longest_staircase as a 64 bit integer)

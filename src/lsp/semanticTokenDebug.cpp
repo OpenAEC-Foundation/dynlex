@@ -2,7 +2,7 @@
 #include "codeLine.h"
 #include "compileTimeValue.h"
 #include "compiler.h"
-#include "function.h"
+#include "expression.h"
 #include "pathUtils.h"
 #include "pattern/patternReference.h"
 #include "patternMatch.h"
@@ -50,7 +50,7 @@ static SemanticTokenType classifySectionCallTokenType(Section *section, const Da
 }
 
 static SemanticTokenType getMatchedPatternTokenType(
-	const std::vector<PatternDefinition *> &defs, const std::vector<Function *> &args,
+	const std::vector<PatternDefinition *> &defs, const std::vector<Expression *> &args,
 	const std::vector<PatternTreeNode *> &nodesPassed, const DataType &resolvedExprType
 ) {
 	if (defs.empty())
@@ -58,7 +58,7 @@ static SemanticTokenType getMatchedPatternTokenType(
 
 	std::vector<DataType> argTypes;
 	argTypes.reserve(args.size());
-	for (const Function *arg : args)
+	for (const Expression *arg : args)
 		argTypes.push_back(arg ? arg->type : DataType{});
 
 	PatternDefinition *matchedDef = selectOverload(defs, args, nodesPassed, argTypes);
@@ -70,8 +70,8 @@ static SemanticTokenType getMatchedPatternTokenType(
 	return classifySectionCallTokenType(matchedDef->section, resolvedExprType);
 }
 
-static SemanticTokenType getPatternCallTokenType(const Function *expr) {
-	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+static SemanticTokenType getPatternCallTokenType(const Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return SemanticTokenType::Function;
 
 	return getMatchedPatternTokenType(
@@ -410,25 +410,25 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		}
 	}
 
-	std::function<void(const Function *)> tokenizeFunction = [&](const Function *expr) {
+	std::function<void(const Expression *)> tokenizeExpression = [&](const Expression *expr) {
 		if (!expr)
 			return;
-		for (const Function *arg : expr->arguments)
-			tokenizeFunction(arg);
+		for (const Expression *arg : expr->arguments)
+			tokenizeExpression(arg);
 		switch (expr->kind) {
-		case Function::Kind::Literal:
+		case Expression::Kind::Literal:
 			if (std::holds_alternative<std::string>(expr->literalValue))
 				addToken(expr->range, SemanticTokenType::String, false);
 			else if (std::holds_alternative<double>(expr->literalValue))
 				addToken(expr->range, SemanticTokenType::Number, false);
 			break;
-		case Function::Kind::IntrinsicCall:
+		case Expression::Kind::IntrinsicCall:
 			addToken(expr->range, SemanticTokenType::Intrinsic, false);
 			break;
-		case Function::Kind::PatternCall:
+		case Expression::Kind::PatternCall:
 			addToken(expr->range, getPatternCallTokenType(expr), false);
 			break;
-		case Function::Kind::Variable:
+		case Expression::Kind::Variable:
 			if (expr->variable) {
 				addTokenWithModifiers(
 					expr->range, SemanticTokenType::Variable,
@@ -444,9 +444,9 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	};
 
 	for (CodeLine *line : context.codeLines) {
-		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->function)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
 			continue;
-		tokenizeFunction(line->function);
+		tokenizeExpression(line->expression);
 	}
 
 	for (CodeLine *line : context.codeLines) {

@@ -31,7 +31,7 @@ jobs:
       - name: Build and test
         run: |
           ./scripts/build.sh --lint=false
-          ./scripts/run_tests.sh
+          ./scripts/test.sh
 
       - name: ccache stats
         if: always()
@@ -77,7 +77,7 @@ jobs:
       - name: Build and test
         run: |
           ./scripts/build.sh --lint=false
-          ./scripts/run_tests.sh
+          ./scripts/test.sh
 
       - name: ccache stats
         if: always()
@@ -97,7 +97,7 @@ jobs:
       - name: Build and test
         run: |
           ./scripts/build.sh --lint=false
-          ./scripts/run_tests.sh
+          ./scripts/test.sh
         shell: bash
 
   launchpad-source-package:

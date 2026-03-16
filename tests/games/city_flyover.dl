@@ -1,0 +1,109 @@
+import lib/graphics.dl
+
+# Procedural city flyover
+# Controls:
+#   W/S: move forward/backward
+#   A/D: strafe left/right
+#   Q/E: move down/up
+#   Left/Right: turn
+#   Z/X: decrease/increase march step scale
+#   C: cycle debug view
+# Views:
+#   0 final shading
+#   1 normals
+#   2 hit distance
+#   3 cell hash
+#   4 fog
+#   5 footprint extents
+# Build:
+#   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
+#   ./build/dynlex tests/games/city_flyover_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/city_flyover.spv
+#   ./build/dynlex tests/games/city_flyover.dl -o tests/games/city_flyover
+# Run:
+#   ./tests/games/city_flyover
+
+set window to a new window with width 800 and height 600
+
+set vert to a vertex shader from "tests/games/passthrough.spv"
+set frag to a fragment shader from "tests/games/city_flyover.spv"
+set prog to a shader program with vertex vert and fragment frag
+
+set cam_x_ubo to a uniform buffer
+set cam_y_ubo to a uniform buffer
+set cam_z_ubo to a uniform buffer
+set yaw_ubo to a uniform buffer
+set step_ubo to a uniform buffer
+set debug_ubo to a uniform buffer
+bind uniform buffer cam_x_ubo to 0
+bind uniform buffer cam_y_ubo to 1
+bind uniform buffer cam_z_ubo to 2
+bind uniform buffer yaw_ubo to 3
+bind uniform buffer step_ubo to 4
+bind uniform buffer debug_ubo to 5
+
+use shader program prog
+
+set cam_x to 0.0
+set cam_y to 16.0
+set cam_z to 0.0
+set yaw to 0.0
+set move_speed to 0.45
+set turn_speed to 0.06
+set step_scale to 0.65
+set debug_mode to 0.0
+set cycle_pressed to 0
+
+while not the window should close:
+    set sin_yaw to the sine of yaw
+    set cos_yaw to the cosine of yaw
+    set right_x to cos_yaw
+    set right_z to 0.0 - sin_yaw
+
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
+        add sin_yaw * move_speed to cam_x
+        add cos_yaw * move_speed to cam_z
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 83) = 1:
+        subtract sin_yaw * move_speed from cam_x
+        subtract cos_yaw * move_speed from cam_z
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 65) = 1:
+        subtract right_x * move_speed from cam_x
+        subtract right_z * move_speed from cam_z
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 68) = 1:
+        add right_x * move_speed to cam_x
+        add right_z * move_speed to cam_z
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 81) = 1:
+        subtract move_speed from cam_y
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
+        add move_speed to cam_y
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
+        subtract turn_speed from yaw
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
+        add turn_speed to yaw
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 90) = 1:
+        subtract 0.02 from step_scale
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 88) = 1:
+        add 0.02 to step_scale
+
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 67) = 1:
+        if cycle_pressed = 0:
+            add 1.0 to debug_mode
+            if debug_mode > 5.5:
+                set debug_mode to 0.0
+            set cycle_pressed to 1
+    else:
+        set cycle_pressed to 0
+
+    clamp step_scale between 0.10 and 1.00
+
+    update uniform buffer cam_x_ubo with cam_x
+    update uniform buffer cam_y_ubo with cam_y
+    update uniform buffer cam_z_ubo with cam_z
+    update uniform buffer yaw_ubo with yaw
+    update uniform buffer step_ubo with step_scale
+    update uniform buffer debug_ubo with debug_mode
+
+    clear the screen
+    draw a fullscreen quad
+    display the frame of window
+
+close the window

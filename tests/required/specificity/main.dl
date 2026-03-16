@@ -37,22 +37,22 @@ function turn the lights off for user:
 # ==========================================================
 # "a new message" is a valid function that returns a value.
 # This means the generic "show msg" pattern's argument slot could
-# consume "a new message" as a sub-function match.
+# consume "a new message" as a sub-expression match.
 function a new message:
     execute:
         return 77
 
 # Generic: "show msg" has an argument slot. When matching
-# "show a new message", the argument could consume the sub-function
+# "show a new message", the argument could consume the sub-expression
 # "a new message" (which evaluates to 77).
 function show msg:
     execute:
         print msg
 
 # Body reference uses "show a new message" — initially matches
-# "show msg" with msg = sub-function "a new message" (value 77).
+# "show msg" with msg = sub-expression "a new message" (value 77).
 # When the specific function is added later, the overlap detector must
-# recognize that the generic's argument consumed a sub-function
+# recognize that the generic's argument consumed a sub-expression
 # matching the specific's literal words, and re-match.
 function demonstrate:
     execute:

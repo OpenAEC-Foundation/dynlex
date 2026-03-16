@@ -193,7 +193,7 @@ if [[ "${retag_mode}" != "true" ]]; then
   "${ROOT_DIR}/scripts/build.sh" --release
 
   echo "Running tests for release ${target_version}..."
-  "${ROOT_DIR}/scripts/run_tests.sh"
+  "${ROOT_DIR}/scripts/test.sh"
 
   git -C "${ROOT_DIR}" add metadata/VERSION
   git -C "${ROOT_DIR}" commit -m "Release ${target_version}"

@@ -13,3 +13,9 @@ print 2 * 3 * 4 as line
 set a to 4.0
 set result to the square root of a + the square root of a
 print result as an integer as line
+
+# Later call arguments with operators stay inside the call
+set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0
+set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0
+print minimum_result as line
+print maximum_result as line
