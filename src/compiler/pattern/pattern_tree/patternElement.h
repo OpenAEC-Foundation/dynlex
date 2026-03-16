@@ -1,8 +1,10 @@
 #pragma once
+#include "range.h"
 #include <string>
 #include <vector>
 
 #include "type.h"
+struct ParseContext;
 
 struct PatternElement {
 	enum Type {
@@ -48,9 +50,11 @@ struct DefinitionPatternElement : public PatternElement {
 // Parse plain text (no brackets) into pattern elements
 std::vector<PatternElement> getPatternElements(std::string_view patternString);
 
-// Parse pattern text with [bracket|alternatives] and {type:name} captures into definition elements
-std::vector<DefinitionPatternElement> parsePatternElements(
-	std::string_view patternString, size_t offset = 0, std::string *errorMessage = nullptr, size_t *errorOffset = nullptr
+// Parse pattern text with [bracket|alternatives] and {type:name} captures into definition elements.
+// Returns false and emits a diagnostic on the first parse error.
+bool parsePatternElements(
+	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &elements,
+	size_t offset = 0
 );
 
 // Visit all leaf (non-Choice) elements recursively, including inside Choice alternatives

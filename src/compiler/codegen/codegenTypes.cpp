@@ -24,6 +24,11 @@
 // Get the LLVM type for a given DataType
 llvm::Type *getLLVMType(ParseContext &context, DataType type) { return type.toLLVM(*context.llvmContext); }
 
+llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	return builder.getInt32(index);
+}
+
 static DataType concretizeClassType(DataType type) {
 	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
 		!type.classDefinition->instantiations.empty()) {
@@ -151,25 +156,25 @@ static void ensureMacroBindingRootFrame(ParseContext &context) {
 		context.macroBindingFrames.pushFrame({});
 }
 
-// Resolve a Variable function one step through the current macro's binding map.
-// Returns the bound function (which lives in the caller's scope), or expr unchanged
+// Resolve a Variable expression one step through the current macro's binding map.
+// Returns the bound expression (which lives in the caller's scope), or expr unchanged
 // if no binding exists. Each resolution crosses one scope boundary — the caller must
 // pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
-Function *resolveVariableBinding(ParseContext &context, Function *expr) {
+Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 	ensureMacroBindingRootFrame(context);
 	return resolveVariableBindingAcrossFrames(expr, context.macroBindingFrames);
 }
 
-// Resolve an function through all macro layers: variable bindings (which cross
+// Resolve an expression through all macro layers: variable bindings (which cross
 // scope boundaries upward) and macro PatternCall expansions (which push new scopes
 // downward). Variable bindings don't modify the stack; PatternCall expansions push
 // one scope each. Returns the number of scopes pushed, so the caller can pop them
 // when done. Use this when you need to see through macro indirection to inspect the
-// underlying function kind (e.g., detecting a property intrinsic inside a store).
-void resolveThroughMacroLayers(ParseContext &context, Function *&expr) {
+// underlying expression kind (e.g., detecting a property intrinsic inside a store).
+void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
 	ensureMacroBindingRootFrame(context);
-	resolveThroughBindingLayers(expr, context.macroBindingFrames, [](Function *functionExpression, BindingMap &innerBindings) {
-		return expandMacroPatternCall(functionExpression, innerBindings);
+	resolveThroughBindingLayers(expr, context.macroBindingFrames, [](Expression *expression, BindingMap &innerBindings) {
+		return expandMacroPatternCall(expression, innerBindings);
 	});
 }
 
@@ -188,15 +193,15 @@ MacroScopeGuard::~MacroScopeGuard() {
 		context.macroBindingFrames = savedBindingFrames;
 }
 
-// Resolve the effective type of an function during codegen.
-// Follows macro function bindings and pattern parameter types to compute the real type,
-// even for functions inside non-macro function bodies whose .type was never inferred.
-DataType getEffectiveType(ParseContext &context, Function *expr) {
+// Resolve the effective type of an expression during codegen.
+// Follows macro expression bindings and pattern parameter types to compute the real type,
+// even for expressions inside non-macro function bodies whose .type was never inferred.
+DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return {};
 
 	switch (expr->kind) {
-	case Function::Kind::Literal:
+	case Expression::Kind::Literal:
 		if (expr->type.isDeduced())
 			return expr->type;
 		if (std::holds_alternative<double>(expr->literalValue)) {
@@ -207,7 +212,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 								   literalText.find('E') != std::string_view::npos;
 			if (!explicitlyFloat && std::trunc(value) == value)
 				return {DataType::Kind::Int, 4};
-			return {DataType::Kind::Float, 8};
+			return {DataType::Kind::Float, context.options.emitSPIRV ? 4 : 8};
 		}
 		if (std::holds_alternative<std::string>(expr->literalValue)) {
 			DataType stringType{DataType::Kind::Int, 1};
@@ -216,11 +221,11 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		}
 		return expr->type;
 
-	case Function::Kind::ArrayLiteral:
+	case Expression::Kind::ArrayLiteral:
 		return expr->type;
 
-	case Function::Kind::Variable: {
-		Function *resolved = resolveVariableBinding(context, expr);
+	case Expression::Kind::Variable: {
+		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (context.macroBindingFrames.hasParentScope())
@@ -246,7 +251,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		return expr->type;
 	}
 
-	case Function::Kind::IntrinsicCall: {
+	case Expression::Kind::IntrinsicCall: {
 		// For intrinsics in non-macro function bodies, expr->type may be Undeduced.
 		// Compute the type dynamically from the resolved argument types.
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
@@ -303,7 +308,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		if (kind == IntrinsicKind::Construct)
 			return expr->type; // DataType fully determined during inference
 		if (kind == IntrinsicKind::Type) {
-			Function *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
+			Expression *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
 			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
@@ -327,7 +332,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 					return expr->type;
 				}
 				if (expr->arguments.size() > 2) {
-					Function *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
+					Expression *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = static_cast<int>(*bits) / 8;
 				}
@@ -382,7 +387,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		return expr->type;
 	}
 
-	case Function::Kind::PatternCall: {
+	case Expression::Kind::PatternCall: {
 		if (expr->type.isDeduced())
 			return concretizeClassType(expr->type);
 		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
@@ -417,7 +422,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 
 		if (matchedSection->isMacro) {
 			BindingMap innerBindings;
-			Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+			Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 			if (!bodyExpr)
 				return expr->type;
 
@@ -429,7 +434,7 @@ DataType getEffectiveType(ParseContext &context, Function *expr) {
 		}
 
 		std::vector<DataType> argTypes;
-		std::vector<std::pair<std::string, Function *>> orderedBindings;
+		std::vector<std::pair<std::string, Expression *>> orderedBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, orderedBindings);
 		for (const auto &[ignoredParameterName, argumentExpression] : orderedBindings) {
 			(void)ignoredParameterName;
@@ -533,9 +538,9 @@ void allocateSectionVariables(ParseContext &context, Section *section) {
 	}
 }
 
-// Get the pointer for a variable function (for store operations).
+// Get the pointer for a variable expression (for store operations).
 // Recursively resolves through nested macro binding scopes to find the actual variable.
-llvm::Value *getVariablePointer(ParseContext &context, Function *expr) {
+llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 	ensureMacroBindingRootFrame(context);
 	BindingScopeTrail scopeTrail;
 	// Resolve through macro binding layers and keep a trail so we can restore
@@ -544,7 +549,7 @@ llvm::Value *getVariablePointer(ParseContext &context, Function *expr) {
 
 	llvm::Value *result = nullptr;
 
-	if (expr && expr->kind == Function::Kind::Variable && expr->variable) {
+	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
 		std::string varName = expr->variable->name;
 
 		auto bindingIt = context.patternBindings.find(varName);
@@ -600,7 +605,7 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		llvm::Value *scalar = ensureType(context, val, fromType, toType.vectorElementType());
 		llvm::Value *vectorValue = llvm::Constant::getNullValue(targetLLVM);
 		for (int i = 0; i < toType.vectorSize(); i++)
-			vectorValue = builder.CreateInsertElement(vectorValue, scalar, static_cast<uint64_t>(i), "splat");
+			vectorValue = builder.CreateInsertElement(vectorValue, scalar, getVectorLaneIndexValue(context, i), "splat");
 		return vectorValue;
 	}
 
@@ -608,9 +613,9 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		fromType.vectorSize() == toType.vectorSize()) {
 		llvm::Value *result = llvm::Constant::getNullValue(targetLLVM);
 		for (int i = 0; i < toType.vectorSize(); i++) {
-			llvm::Value *lane = builder.CreateExtractElement(val, static_cast<uint64_t>(i), "vec_lane");
+			llvm::Value *lane = builder.CreateExtractElement(val, getVectorLaneIndexValue(context, i), "vec_lane");
 			lane = ensureType(context, lane, fromType.vectorElementType(), toType.vectorElementType());
-			result = builder.CreateInsertElement(result, lane, static_cast<uint64_t>(i), "vec_cast");
+			result = builder.CreateInsertElement(result, lane, getVectorLaneIndexValue(context, i), "vec_cast");
 		}
 		return result;
 	}

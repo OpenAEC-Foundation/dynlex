@@ -3,6 +3,6 @@
 #include <string>
 #include <unordered_map>
 
-struct Function;
+struct Expression;
 
-using BindingMap = std::unordered_map<std::string, Function *>;
+using BindingMap = std::unordered_map<std::string, Expression *>;

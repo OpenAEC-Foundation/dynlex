@@ -80,7 +80,7 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 	}
 
 	context.diagnostics.push_back(
-		Diagnostic(Diagnostic::Level::Error, syntax.messages.missingBodySection, Range(line, line->patternText))
+		Diagnostic(context, Diagnostic::Level::Error, "missing body section", Range(line, line->patternText))
 	);
 	return false;
 }
@@ -106,9 +106,8 @@ Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line)
 	}
 
 	// Nothing matched - give error
-	context.diagnostics.push_back(Diagnostic(
-		Diagnostic::Level::Error, renderSyntaxMessage(syntax.messages.unknownSection, {{"section", line->patternText}}),
-		Range(line, line->patternText)
+	context.addDiagnostic(Diagnostic(
+		context, Diagnostic::Level::Error, "unknown section", Range(line, line->patternText), "section", line->patternText
 	));
 	return nullptr;
 }

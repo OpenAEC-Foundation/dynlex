@@ -11,7 +11,7 @@ class LLVMContext;
 } // namespace llvm
 
 struct ClassDefinition;
-struct Function;
+struct Expression;
 
 struct DataType {
 	enum class Kind {
@@ -38,7 +38,7 @@ struct DataType {
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
 	ClassDefinition *classDefinition = nullptr; // For Kind::Class and Kind::Type (class type refs)
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
-	Function *typeFunction = nullptr;			// For Kind::Unresolved: class pattern reference to resolve
+	Expression *typeExpression = nullptr;		// For Kind::Unresolved: class pattern reference to resolve
 	Kind referencedKind = Kind::Unresolved;		// For Kind::Type: the kind this type literal refers to
 	int arraySize = 0;							// For Kind::Array and Type(Array)
 	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
@@ -49,11 +49,11 @@ struct DataType {
 	DataType(Kind kind, int numericSize) : kind(kind), numericSize(numericSize) {}
 	DataType(
 		Kind kind, int numericSize, int pointerDepth, ClassDefinition *classDefinition = nullptr, int classInstIndex = -1,
-		Function *typeFunction = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
+		Expression *typeExpression = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
 		std::shared_ptr<DataType> arrayElementType = nullptr
 	)
 		: kind(kind), numericSize(numericSize), pointerDepth(pointerDepth), classDefinition(classDefinition),
-		  classInstIndex(classInstIndex), typeFunction(typeFunction), referencedKind(referencedKind), arraySize(arraySize),
+		  classInstIndex(classInstIndex), typeExpression(typeExpression), referencedKind(referencedKind), arraySize(arraySize),
 		  arrayElementType(std::move(arrayElementType)) {}
 
 	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
@@ -131,13 +131,6 @@ struct DataType {
 	bool isDeduced() const { return kind != Kind::Any && kind != Kind::Unresolved; }
 
 	int getByteSize() const;
-
-	// Whether this type can be refined to a more specific type
-	// bool canRefineTo(const DataType &target) const {
-	//	if (pointerDepth != target.pointerDepth)
-	//		return false;
-	//	return false;
-	//}
 
 	// Return this type with one more level of indirection
 	DataType pointed() const {

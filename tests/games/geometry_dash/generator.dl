@@ -1,117 +1,20 @@
 import lib/random.dl
+import lib/array.dl
 
-# Fills arrays with a trajectory/rhythm plan.
-# levels: platform height bands (0..max_level)
-# jump_ms: intended airtime per step
-# slide_ms: intended pre-jump slide time per step
-function generate trajectory count into levels, jump_ms, slide_ms using seed_value, step_unit, max_level:
+function fill plan levels jump_ms slide_ms with count count using seed seed_value:
 	execute:
 		seed random with seed_value
-
-		set current_level to 0
-		set trend_dir to 0
-		set trend_len to 0
 		set i to 0
+		set current_level to 0
 		loop while i < count:
-			# Rhythm bucket
-			set pick to a random number mod 10
-			set next_jump_ms to 1000
-			if pick = 0:
-				set next_jump_ms to 500
-			else if pick = 1:
-				set next_jump_ms to 800
-			else if pick = 2:
-				set next_jump_ms to 1000
-			else if pick = 3:
-				set next_jump_ms to 1200
-			else if pick = 4:
-				set next_jump_ms to 1500
-			else if pick = 5:
-				set next_jump_ms to 1800
-			else if pick = 6:
-				set next_jump_ms to 2200
-			else if pick = 7:
-				set next_jump_ms to 2600
-			else:
-				set next_jump_ms to 3000
-
-			# Structured accents so rhythm evolves over time.
-			if i mod 12 = 0:
-				set next_jump_ms to 2000
-			else if i mod 12 = 4:
-				set next_jump_ms to 1000
-			else if i mod 12 = 8:
-				set next_jump_ms to 3000
-
-			# Convert jump duration into reachable upward level delta.
-			set frames to next_jump_ms / 16
-			if frames < 6:
-				set frames to 6
-			set jump_vertical to frames * (0.0 - 15.5) + 1.15 * (frames * (frames + 1) / 2)
-			set up_px to (0 - jump_vertical) as an integer - 8
-			if up_px < 0:
-				set up_px to 0
-			set up_steps to up_px / step_unit
-			if up_steps > 3:
-				set up_steps to 3
-			if up_steps < 1:
-				set up_steps to 1
-
-			# Allow faster descents than climbs.
-			set down_steps to 2 + (a random number mod 2)
-			if current_level = 0:
-				set down_steps to 0
-
-			set span to up_steps + down_steps + 1
-			set raw to a random number mod span
-			set delta to raw - down_steps
-			set candidate_level to current_level + delta
-
-			if candidate_level < 0:
-				set candidate_level to 0
-			if candidate_level > max_level:
-				set candidate_level to max_level
-
-			# Prevent endless monotonic up/down drift.
-			set new_dir to 0
-			if candidate_level > current_level:
-				set new_dir to 1
-			else if candidate_level < current_level:
-				set new_dir to -1
-
-			if new_dir != 0 and new_dir = trend_dir and trend_len >= 3:
-				if new_dir = 1 and current_level > 0:
-					set candidate_level to current_level - 1
-				else if new_dir = -1 and current_level < max_level:
-					set candidate_level to current_level + 1
-
-			set new_dir to 0
-			if candidate_level > current_level:
-				set new_dir to 1
-			else if candidate_level < current_level:
-				set new_dir to -1
-
-			if new_dir = 0:
-				set trend_len to 0
-				set trend_dir to 0
-			else:
-				if new_dir = trend_dir:
-					set trend_len to trend_len + 1
-				else:
-					set trend_len to 1
-					set trend_dir to new_dir
-
-			set current_level to candidate_level
-
-			# Higher levels get shorter slide windows on average.
-			set next_slide_ms to 550 + (max_level - current_level) * 240
-			set variation to (a random number mod 301) - 150
-			set next_slide_ms to next_slide_ms + variation
-			if next_slide_ms < 250:
-				set next_slide_ms to 250
-			if next_slide_ms > 2600:
-				set next_slide_ms to 2600
-
+			set next_jump_ms to 420 + a random number mod 180
+			set next_slide_ms to 100 + a random number mod 180
+			if i mod 4 = 0:
+				set next_jump_ms to 340 + a random number mod 120
+			if i mod 3 = 0 and current_level < 4:
+				set current_level to current_level + 1
+			else if i mod 5 = 0 and current_level > 0:
+				set current_level to current_level - 1
 			store current_level into levels at i
 			store next_jump_ms into jump_ms at i
 			store next_slide_ms into slide_ms at i

@@ -1,6 +1,6 @@
 #include "classSection.h"
 #include "compiler.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "patternElement.h"
 #include "patternTreeNode.h"
@@ -327,77 +327,77 @@ void addVariableReferencesFromMatch(ParseContext &context, PatternReference *ref
 	}
 }
 
-void expandMatch(Function *rootFunction, Function *expr, PatternMatch *match) {
+void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
 	expr->arguments = match->arguments;
 	// move arguments to the appropriate submatches
-	expr->kind = Function::Kind::PatternCall;
+	expr->kind = Expression::Kind::PatternCall;
 	expr->patternMatch = match;
 	expr->selectedPatternDefinition = (match->matchedEndNode && !match->matchedEndNode->matchingDefinitions.empty())
 										  ? match->matchedEndNode->matchingDefinitions.front()
 										  : nullptr;
 	for (const PatternMatch &subMatch : match->subMatches) {
-		Function *arg = new Function();
+		Expression *arg = new Expression();
 		arg->isSubMatch = true;
 		arg->range = Range(
-			expr->range.line, rootFunction->range.start() + subMatch.lineStartPos,
-			rootFunction->range.start() + subMatch.lineEndPos
+			expr->range.line, rootExpression->range.start() + subMatch.lineStartPos,
+			rootExpression->range.start() + subMatch.lineEndPos
 		);
-		expandMatch(rootFunction, arg, const_cast<PatternMatch *>(&subMatch));
+		expandMatch(rootExpression, arg, const_cast<PatternMatch *>(&subMatch));
 		expr->arguments.push_back(arg);
 	}
 
-	// Handle discoveredVariables - add Variable functions using stored references
+	// Handle discoveredVariables - add variable expressions using stored references
 	for (const VariableMatch &varMatch : match->discoveredVariables) {
-		Function *arg = new Function();
-		arg->kind = Function::Kind::Variable;
+		Expression *arg = new Expression();
+		arg->kind = Expression::Kind::Variable;
 		arg->variable = varMatch.variableReference;
 		arg->range = varMatch.variableReference->range;
 		expr->arguments.push_back(arg);
 	}
 
-	// Handle discoveredWords - add string Literal functions
+	// Handle discoveredWords - add string literal expressions
 	for (const WordMatch &wordMatch : match->discoveredWords) {
-		Function *arg = new Function();
-		arg->kind = Function::Kind::Literal;
+		Expression *arg = new Expression();
+		arg->kind = Expression::Kind::Literal;
 		arg->literalValue = wordMatch.text;
 		arg->range = Range(
-			rootFunction->range.line, rootFunction->range.start() + wordMatch.lineStartPos,
-			rootFunction->range.start() + wordMatch.lineEndPos
+			rootExpression->range.line, rootExpression->range.start() + wordMatch.lineStartPos,
+			rootExpression->range.start() + wordMatch.lineEndPos
 		);
 		expr->arguments.push_back(arg);
 	}
 }
 
-// Recursively expand pending functions to their resolved forms
-void expandFunction(Function *expr, Section *section) {
+// Recursively expand pending expressions to their resolved forms
+void expandExpression(Expression *expr, Section *section) {
 	if (!expr)
 		return;
 
 	// Expand children first
-	for (Function *arg : expr->arguments) {
-		expandFunction(arg, section);
+	for (Expression *arg : expr->arguments) {
+		expandExpression(arg, section);
 	}
 
-	// If this is a pending function, resolve it
-	// we can assume that expr->patternReference is set, since pending functions are only expanded after complete pattern
+	// If this is a pending expression, resolve it
+	// we can assume that expr->patternReference is set, since pending expressions are only expanded after complete pattern
 	// resolution
-	if (expr->kind == Function::Kind::Pending) {
+	if (expr->kind == Expression::Kind::Pending) {
 		PatternReference *ref = expr->patternReference;
 		if (ref->match) {
 			expandMatch(expr, expr, ref->match);
 		} else if (ref->patternElements.size() == 1 && ref->patternElements[0].type == PatternElement::Type::Variable) {
 			// Resolved to a variable reference
-			expr->kind = Function::Kind::Variable;
+			expr->kind = Expression::Kind::Variable;
 			// Find the variable reference in the section
 			std::string varName = ref->patternElements[0].text;
 			auto it = section->variableReferences.find(varName);
 			if (it != section->variableReferences.end() && !it->second.empty()) {
 				expr->variable = it->second.front();
 			}
-		} else if (expr->arguments.size() == 1 && expr->arguments[0]->kind == Function::Kind::IntrinsicCall) {
+		} else if (expr->arguments.size() == 1 && expr->arguments[0]->kind == Expression::Kind::IntrinsicCall) {
 			// If the pattern is just an argument placeholder and we have a single intrinsic call,
-			// promote the intrinsic to be this function
-			Function *intrinsic = expr->arguments[0];
+			// promote the intrinsic to be this expression
+			Expression *intrinsic = expr->arguments[0];
 			expr->kind = intrinsic->kind;
 			expr->intrinsicName = intrinsic->intrinsicName;
 			expr->arguments = intrinsic->arguments;
@@ -540,16 +540,18 @@ static void emitExplicitDefinitionParameterAmbiguityWarnings(ParseContext &conte
 					parameterRange = Range(definition->range.line, start, start + static_cast<int>(element.text.size()));
 				}
 
+				const SyntaxConfig &syntax = syntaxConfigForRange(context, parameterRange);
 				Diagnostic warning(
-					Diagnostic::Level::Warning,
-					"Explicit parameter '" + element.text +
-						"' may be ambiguous with a callable single-word function pattern of the same name.",
-					parameterRange
+					context, Diagnostic::Level::Warning, "explicit parameter ambiguity", parameterRange, "parameter",
+					element.text
 				);
-				warning.relatedInfo.push_back({"Parameter is declared here", parameterRange});
+				warning.relatedInfo.push_back(
+					{renderConfiguredMessage(syntax, "explicit parameter ambiguity related parameter"), parameterRange}
+				);
 				if (singleWordFunction->range.line) {
 					warning.relatedInfo.push_back(
-						{"Single-word function pattern with the same name appears here", singleWordFunction->range}
+						{renderConfiguredMessage(syntax, "explicit parameter ambiguity related function"),
+						 singleWordFunction->range}
 					);
 				}
 				context.diagnostics.push_back(std::move(warning));
@@ -698,32 +700,36 @@ static bool resolveReferences(
 				const std::string &token = reference->patternElements[0].text;
 				if (findEnclosingParameterCandidate(reference, token)) {
 					AlternativePatternSuggestion suggestion = findAlternativePatternSuggestion(reference, match, token);
-					std::string suggestionMessage;
-					if (!suggestion.spelling.empty()) {
-						suggestionMessage = " Consider using '" + suggestion.spelling + "'.";
-					} else {
-						suggestionMessage =
-							" If this was meant as an argument, rename the variable; otherwise add an extra possible pattern.";
-					}
+					const SyntaxConfig &syntax = syntaxConfigForRange(context, reference->range());
+					std::string suggestionMessage =
+						suggestion.spelling.empty()
+							? renderConfiguredMessage(syntax, "ambiguous single word reference", "suggestion fallback")
+							: " Consider using '" + suggestion.spelling + "'.";
 					Diagnostic diag(
-						Diagnostic::Level::Warning,
-						"Ambiguous single-word reference '" + token +
-							"' resolved as a function call, but the same token is also used as a parameter in an enclosing "
-							"pattern." +
-							suggestionMessage,
-						reference->range()
+						context, Diagnostic::Level::Warning, "ambiguous single word reference", reference->range(), "token",
+						token, "suggestion", suggestionMessage
 					);
 					for (const Range &candidateRange : collectEnclosingParameterCandidateRanges(reference, token))
-						diag.relatedInfo.push_back({"Enclosing parameter candidate appears here", candidateRange});
+						diag.relatedInfo.push_back(
+							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related parameter"),
+							 candidateRange}
+						);
 					Range functionRange = firstMatchedDefinitionRange(match);
 					if (functionRange.line)
-						diag.relatedInfo.push_back({"Matched function pattern appears here", functionRange});
+						diag.relatedInfo.push_back(
+							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related matched pattern"),
+							 functionRange}
+						);
 					if (suggestion.definition && suggestion.definition->range.line)
-						diag.relatedInfo.push_back({"Suggested alternative pattern appears here", suggestion.definition->range}
+						diag.relatedInfo.push_back(
+							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related suggestion"),
+							 suggestion.definition->range}
 						);
 					if (suggestion.isMultiWord && !suggestion.spelling.empty()) {
 						diag.quickFixes.push_back({
-							"Use '" + suggestion.spelling + "'",
+							renderConfiguredMessage(
+								syntax, "ambiguous single word reference", "quick fix", {{"spelling", suggestion.spelling}}
+							),
 							reference->range(),
 							suggestion.spelling,
 						});
@@ -786,17 +792,14 @@ bool resolvePatterns(ParseContext &context) {
 	bool hadPatternParseError = false;
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
-			std::string errorMessage;
-			size_t errorOffset = 0;
-			unresolvedDefinition->patternElements =
-				parsePatternElements(unresolvedDefinition->range.subString, 0, &errorMessage, &errorOffset);
-			if (!errorMessage.empty()) {
+			std::vector<DefinitionPatternElement> parsedElements;
+			if (!parsePatternElements(
+					context, unresolvedDefinition->range, unresolvedDefinition->range.subString, parsedElements
+				)) {
 				hadPatternParseError = true;
-				size_t diagnosticEnd = std::min(errorOffset + 1, unresolvedDefinition->range.subString.size());
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, errorMessage, unresolvedDefinition->range.subRange(errorOffset, diagnosticEnd)
-				));
+				continue;
 			}
+			unresolvedDefinition->patternElements = std::move(parsedElements);
 		}
 	}
 	if (hadPatternParseError)
@@ -856,8 +859,11 @@ bool resolvePatterns(ParseContext &context) {
 			context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 		traceResolution("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
 		if (existing) {
-			Diagnostic diag(Diagnostic::Level::Error, "Duplicate pattern definition", definition->range);
-			diag.relatedInfo.push_back({"Conflicts with this definition", existing->range});
+			const SyntaxConfig &syntax = syntaxConfigForRange(context, definition->range);
+			Diagnostic diag(context, Diagnostic::Level::Error, "duplicate pattern definition", definition->range);
+			diag.relatedInfo.push_back(
+				{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), existing->range}
+			);
 			context.diagnostics.push_back(std::move(diag));
 			traceResolution("duplicate " + definitionTraceId(definition) + " vs " + definitionTraceId(existing));
 		}
@@ -972,9 +978,9 @@ bool resolvePatterns(ParseContext &context) {
 								// Macro type (e.g., integer, float, boolean) — evaluate the type intrinsic
 								for (Section *child : d->section->children) {
 									for (CodeLine *cl : child->codeLines) {
-										if (cl->function && cl->function->kind == Function::Kind::IntrinsicCall &&
-											intrinsicKind(cl->function->intrinsicName) == IntrinsicKind::Type) {
-											auto &args = cl->function->arguments;
+										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
+											intrinsicKind(cl->expression->intrinsicName) == IntrinsicKind::Type) {
+											auto &args = cl->expression->arguments;
 											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
 												if (*kindStr == "int") {
 													int bits = 32;
@@ -1091,18 +1097,18 @@ bool resolvePatterns(ParseContext &context) {
 		for (Section *sec : unResolvedSections) {
 			for (PatternDefinition *def : sec->patternDefinitions) {
 				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error,
-					"This pattern definition couldn't be resolved: " + (std::string)def->range.subString, def->range
+					context, Diagnostic::Level::Error, "unresolved pattern definition", def->range, "pattern",
+					(std::string)def->range.subString
 				));
 			}
 		}
 		for (PatternReference *reference : bodyReferences)
 			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
+				Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range())
 			);
 		for (PatternReference *reference : globalReferences)
 			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "This pattern couldn't be resolved", reference->range())
+				Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range())
 			);
 		return false;
 	}
@@ -1114,8 +1120,8 @@ bool resolvePatterns(ParseContext &context) {
 				for (auto &elem : def->patternElements) {
 					if (!elem.typeConstraintName.empty() && !elem.resolvedTypeConstraint.isDeduced()) {
 						context.diagnostics.push_back(Diagnostic(
-							Diagnostic::Level::Error,
-							"Type constraint '" + elem.typeConstraintName + "' does not refer to a known type", def->range
+							context, Diagnostic::Level::Error, "unknown type constraint", def->range, "type_constraint",
+							elem.typeConstraintName
 						));
 					}
 				}
@@ -1163,9 +1169,10 @@ bool resolvePatterns(ParseContext &context) {
 						}
 						PatternDefinition *target = resolveSignature(beforeStr);
 						if (!target) {
-							context.diagnostics.push_back(
-								Diagnostic(Diagnostic::Level::Error, "Precedence target not found: " + beforeStr, def->range)
-							);
+							context.diagnostics.push_back(Diagnostic(
+								context, Diagnostic::Level::Error, "precedence target not found", def->range, "target",
+								beforeStr
+							));
 							return false;
 						}
 						involvedDefs.insert(target);
@@ -1182,9 +1189,9 @@ bool resolvePatterns(ParseContext &context) {
 						}
 						PatternDefinition *target = resolveSignature(afterStr);
 						if (!target) {
-							context.diagnostics.push_back(
-								Diagnostic(Diagnostic::Level::Error, "Precedence target not found: " + afterStr, def->range)
-							);
+							context.diagnostics.push_back(Diagnostic(
+								context, Diagnostic::Level::Error, "precedence target not found", def->range, "target", afterStr
+							));
 							return false;
 						}
 						involvedDefs.insert(target);
@@ -1245,7 +1252,7 @@ bool resolvePatterns(ParseContext &context) {
 
 			if (processedCount != involvedDefs.size()) {
 				context.diagnostics.push_back(
-					Diagnostic(Diagnostic::Level::Error, "Cycle detected in precedence declarations", Range())
+					Diagnostic(context, Diagnostic::Level::Error, "precedence cycle detected", Range())
 				);
 				return false;
 			}
@@ -1262,10 +1269,10 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	}
 
-	// All patterns resolved — expand functions and resolve variable references
+	// All patterns resolved — expand expressions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
-		if (line->function)
-			expandFunction(line->function, line->section);
+		if (line->expression)
+			expandExpression(line->expression, line->section);
 	}
 	std::vector<std::string> unresolvedNames;
 	unresolvedNames.reserve(context.unresolvedVariableReferences.size());

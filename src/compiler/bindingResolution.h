@@ -1,6 +1,6 @@
 #pragma once
 
-#include "function.h"
+#include "expression.h"
 #include "variableReference.h"
 #include <cassert>
 #include <stack>
@@ -46,7 +46,7 @@ struct BindingFrameStack {
 		frames.back().bindings = std::move(frameBindings);
 	}
 
-	Function *lookup(const std::string &bindingName) const {
+	Expression *lookup(const std::string &bindingName) const {
 		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
 			auto bindingIt = frameIt->bindings.find(bindingName);
 			if (bindingIt != frameIt->bindings.end())
@@ -82,8 +82,8 @@ inline BindingFrameStack makeBindingFrameStack(const BindingMap &bindings) {
 	return bindingFrameStack;
 }
 
-inline Function *resolveVariableBindingOneStep(Function *expr, const BindingMap &bindings) {
-	if (!expr || expr->kind != Function::Kind::Variable || !expr->variable)
+inline Expression *resolveVariableBindingOneStep(Expression *expr, const BindingMap &bindings) {
+	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
 	auto it = bindings.find(expr->variable->name);
 	if (it != bindings.end() && it->second != expr)
@@ -91,11 +91,11 @@ inline Function *resolveVariableBindingOneStep(Function *expr, const BindingMap 
 	return expr;
 }
 
-inline Function *
-resolveVariableBindingChain(Function *expr, const BindingMap &bindings, size_t maxBindingResolutionDepth = 256) {
+inline Expression *
+resolveVariableBindingChain(Expression *expr, const BindingMap &bindings, size_t maxBindingResolutionDepth = 256) {
 	size_t bindingResolutionDepth = 0;
-	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-		Function *resolvedExpression = resolveVariableBindingOneStep(expr, bindings);
+	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		Expression *resolvedExpression = resolveVariableBindingOneStep(expr, bindings);
 		if (resolvedExpression == expr)
 			return expr;
 		expr = resolvedExpression;
@@ -106,12 +106,12 @@ resolveVariableBindingChain(Function *expr, const BindingMap &bindings, size_t m
 	return expr;
 }
 
-inline Function *resolveVariableBindingAcrossFrames(
-	Function *expr, const BindingFrameStack &bindingFrameStack, size_t maxBindingResolutionDepth = 256
+inline Expression *resolveVariableBindingAcrossFrames(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, size_t maxBindingResolutionDepth = 256
 ) {
 	size_t bindingResolutionDepth = 0;
-	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-		Function *boundExpression = bindingFrameStack.lookup(expr->variable->name);
+	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		Expression *boundExpression = bindingFrameStack.lookup(expr->variable->name);
 		if (!boundExpression || boundExpression == expr)
 			return expr;
 		expr = boundExpression;
@@ -144,11 +144,11 @@ inline void restoreBindingScopes(BindingFrameStack &bindingFrameStack, BindingSc
 	}
 }
 
-inline Function *resolveVariableBindingAcrossScopes(
-	Function *expr, BindingFrameStack &bindingFrameStack, BindingScopeTrail *scopeTrail = nullptr
+inline Expression *resolveVariableBindingAcrossScopes(
+	Expression *expr, BindingFrameStack &bindingFrameStack, BindingScopeTrail *scopeTrail = nullptr
 ) {
-	while (expr && expr->kind == Function::Kind::Variable && expr->variable) {
-		Function *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
+	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		Expression *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 		if (resolvedExpression == expr)
 			return expr;
 		expr = resolvedExpression;
@@ -160,11 +160,11 @@ inline Function *resolveVariableBindingAcrossScopes(
 
 template <typename ExpandMacroPatternCallFn>
 inline void resolveThroughBindingLayers(
-	Function *&expr, BindingFrameStack &bindingFrameStack, ExpandMacroPatternCallFn &&expandMacroPatternCall
+	Expression *&expr, BindingFrameStack &bindingFrameStack, ExpandMacroPatternCallFn &&expandMacroPatternCall
 ) {
 	while (expr) {
-		if (expr->kind == Function::Kind::Variable && expr->variable) {
-			Function *resolvedExpression = resolveVariableBindingAcrossScopes(expr, bindingFrameStack);
+		if (expr->kind == Expression::Kind::Variable && expr->variable) {
+			Expression *resolvedExpression = resolveVariableBindingAcrossScopes(expr, bindingFrameStack);
 			if (resolvedExpression != expr) {
 				expr = resolvedExpression;
 				continue;
@@ -172,7 +172,7 @@ inline void resolveThroughBindingLayers(
 		}
 
 		BindingMap innerBindings;
-		Function *bodyExpression = expandMacroPatternCall(expr, innerBindings);
+		Expression *bodyExpression = expandMacroPatternCall(expr, innerBindings);
 		if (bodyExpression) {
 			pushBindingScope(bindingFrameStack, std::move(innerBindings));
 			expr = bodyExpression;

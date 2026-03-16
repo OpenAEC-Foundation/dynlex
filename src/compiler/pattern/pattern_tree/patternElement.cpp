@@ -1,4 +1,5 @@
 #include "patternElement.h"
+#include "parseContext.h"
 #include "transformedPattern.h"
 #include <regex>
 using namespace std::literals;
@@ -18,8 +19,8 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 									   : std::regex_match(""s + *it, std::regex("\\w")) ? PatternElement::Type::VariableLike
 																						: PatternElement::Type::Other;
 		// Split Other-type sequences at space boundaries so spaces are always separate elements.
-		// Without this, "% " would merge into one element, preventing sub-function matching
-		// (e.g. "10%" where "%" is part of an function pattern but followed by a space).
+		// Without this, "% " would merge into one element, preventing sub-expression matching
+		// (e.g. "10%" where "%" is part of an expression pattern but followed by a space).
 		bool splitAtSpace =
 			(newType == PatternElement::Type::Other && currentType == PatternElement::Type::Other &&
 			 ((*it == ' ') != (*currentStart == ' ')));
@@ -94,18 +95,16 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 	}
 }
 
-static std::vector<DefinitionPatternElement>
-parsePatternFailure(std::string *errorMessage, size_t *errorOffset, std::string message, size_t offset) {
-	if (errorMessage)
-		*errorMessage = std::move(message);
-	if (errorOffset)
-		*errorOffset = offset;
-	return {};
+static bool emitPatternParseFailure(ParseContext &context, Diagnostic diagnostic) {
+	context.addDiagnostic(std::move(diagnostic));
+	return false;
 }
 
-std::vector<DefinitionPatternElement>
-parsePatternElements(std::string_view patternString, size_t offset, std::string *errorMessage, size_t *errorOffset) {
-	std::vector<DefinitionPatternElement> result;
+bool parsePatternElements(
+	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &result,
+	size_t offset
+) {
+	result.clear();
 	size_t pos = 0;
 
 	while (pos < patternString.size()) {
@@ -148,8 +147,13 @@ parsePatternElements(std::string_view patternString, size_t offset, std::string 
 			i++;
 		}
 		if (depth != 0) {
-			return parsePatternFailure(
-				errorMessage, errorOffset, std::string("Unmatched '") + openBracket + "' in pattern", bracketStart + offset
+			size_t diagnosticEnd = std::min(bracketStart + offset + 1, patternRange.subString.size());
+			return emitPatternParseFailure(
+				context, Diagnostic(
+							 context, Diagnostic::Level::Error, "invalid pattern parse unmatched bracket",
+							 patternRange.subRange(static_cast<int>(bracketStart + offset), static_cast<int>(diagnosticEnd)),
+							 "character", std::string(1, openBracket)
+						 )
 			);
 		}
 
@@ -160,8 +164,12 @@ parsePatternElements(std::string_view patternString, size_t offset, std::string 
 			// {type:name} — capture element
 			size_t colonPos = content.find(':');
 			if (colonPos == std::string_view::npos) {
-				return parsePatternFailure(
-					errorMessage, errorOffset, "Capture element must have format {type:name}", bracketStart + offset
+				size_t diagnosticEnd = std::min(bracketStart + offset + 1, patternRange.subString.size());
+				return emitPatternParseFailure(
+					context, Diagnostic(
+								 context, Diagnostic::Level::Error, "invalid pattern parse capture format",
+								 patternRange.subRange(static_cast<int>(bracketStart + offset), static_cast<int>(diagnosticEnd))
+							 )
 				);
 			}
 			std::string_view captureType = content.substr(0, colonPos);
@@ -198,10 +206,9 @@ parsePatternElements(std::string_view patternString, size_t offset, std::string 
 			DefinitionPatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
 			size_t altOffset = bracketStart + 1 + offset;
 			for (auto &part : parts) {
-				std::vector<DefinitionPatternElement> alternative =
-					parsePatternElements(part, altOffset, errorMessage, errorOffset);
-				if (errorMessage && !errorMessage->empty())
-					return {};
+				std::vector<DefinitionPatternElement> alternative;
+				if (!parsePatternElements(context, patternRange, part, alternative, altOffset))
+					return false;
 				choice.alternatives.push_back(std::move(alternative));
 				altOffset += part.size() + 1; // +1 for '|'
 			}
@@ -231,5 +238,5 @@ parsePatternElements(std::string_view patternString, size_t offset, std::string 
 	}
 
 	normalizePatternElements(result);
-	return result;
+	return true;
 }

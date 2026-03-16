@@ -43,7 +43,7 @@ std::string DataType::toString() const {
 		break;
 	case Kind::Any:
 	case Kind::Unresolved:
-		return "unresolved(" + (typeFunction ? std::string("expr") : std::string("?")) + ")";
+		return "unresolved(" + (typeExpression ? std::string("expr") : std::string("?")) + ")";
 	}
 	for (int i = 0; i < pointerDepth; i++)
 		result += "*";

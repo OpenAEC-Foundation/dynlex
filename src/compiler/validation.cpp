@@ -1,6 +1,6 @@
 #include "bindingResolution.h"
 #include "compiler.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include <algorithm>
 
@@ -17,11 +17,13 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static Function *resolveVar(Function *expr, const Bindings &bindings) { return resolveVariableBindingChain(expr, bindings); }
+static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
+	return resolveVariableBindingChain(expr, bindings);
+}
 
-static Bindings buildBindings(Function *expr) {
+static Bindings buildBindings(Expression *expr) {
 	Bindings result;
-	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return result;
 	if (expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return result;
@@ -34,20 +36,20 @@ struct VarUsage {
 	bool writes = false, reads = false;
 };
 
-// Determine whether an function writes to and/or reads from a named variable,
+// Determine whether an expression writes to and/or reads from a named variable,
 // resolving through macro bindings to reach the underlying intrinsics.
 static VarUsage analyzeVariableUsage(
-	Function *expr, const std::string &varName, const Bindings &bindings, std::unordered_set<Function *> &visited
+	Expression *expr, const std::string &varName, const Bindings &bindings, std::unordered_set<Expression *> &visited
 ) {
 	VarUsage usage;
 	if (!expr || !visited.insert(expr).second)
 		return usage;
 
 	switch (expr->kind) {
-	case Function::Kind::IntrinsicCall:
+	case Expression::Kind::IntrinsicCall:
 		if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Store) {
-			Function *dest = resolveVar(expr->arguments[1], bindings);
-			if (dest && dest->kind == Function::Kind::Variable && dest->variable && dest->variable->name == varName)
+			Expression *dest = resolveVar(expr->arguments[1], bindings);
+			if (dest && dest->kind == Expression::Kind::Variable && dest->variable && dest->variable->name == varName)
 				usage.writes = true;
 			usage.reads |= analyzeVariableUsage(expr->arguments[2], varName, bindings, visited).reads;
 			return usage;
@@ -56,7 +58,7 @@ static VarUsage analyzeVariableUsage(
 			usage.reads |= analyzeVariableUsage(expr->arguments[i], varName, bindings, visited).reads;
 		return usage;
 
-	case Function::Kind::PatternCall: {
+	case Expression::Kind::PatternCall: {
 		PatternDefinition *def = nullptr;
 		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
 			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
@@ -67,21 +69,21 @@ static VarUsage analyzeVariableUsage(
 				merged[key] = resolveVar(val, bindings);
 			for (Section *child : def->section->children)
 				for (CodeLine *line : child->codeLines)
-					if (line->function) {
-						VarUsage body = analyzeVariableUsage(line->function, varName, merged, visited);
+					if (line->expression) {
+						VarUsage body = analyzeVariableUsage(line->expression, varName, merged, visited);
 						usage.writes |= body.writes;
 						usage.reads |= body.reads;
 					}
 			return usage;
 		}
-		for (Function *arg : expr->arguments)
+		for (Expression *arg : expr->arguments)
 			usage.reads |= analyzeVariableUsage(arg, varName, bindings, visited).reads;
 		return usage;
 	}
 
-	case Function::Kind::Variable:
+	case Expression::Kind::Variable:
 		if (expr->variable) {
-			Function *resolved = resolveVar(expr, bindings);
+			Expression *resolved = resolveVar(expr, bindings);
 			if (resolved != expr)
 				return analyzeVariableUsage(resolved, varName, bindings, visited);
 			if (expr->variable->name == varName)
@@ -90,7 +92,7 @@ static VarUsage analyzeVariableUsage(
 		return usage;
 
 	default:
-		for (Function *arg : expr->arguments) {
+		for (Expression *arg : expr->arguments) {
 			VarUsage a = analyzeVariableUsage(arg, varName, bindings, visited);
 			usage.writes |= a.writes;
 			usage.reads |= a.reads;
@@ -146,22 +148,27 @@ static void validateSection(ParseContext &context, Section *section) {
 					break;
 				}
 		}
-		if (!warnRef || !warnRef->range.line->function)
+		if (!warnRef || !warnRef->range.line->expression)
 			continue;
 
-		std::unordered_set<Function *> visited;
-		VarUsage usage = analyzeVariableUsage(warnRef->range.line->function, name, Bindings{}, visited);
+		std::unordered_set<Expression *> visited;
+		VarUsage usage = analyzeVariableUsage(warnRef->range.line->expression, name, Bindings{}, visited);
 		bool problem = isPatternArg ? (usage.writes && !usage.reads) : usage.reads;
 		if (!problem)
 			continue;
 
+		const SyntaxConfig &syntax = syntaxConfigForRange(context, warnRef->range);
 		Diagnostic diag(
-			Diagnostic::Level::Warning,
-			isPatternArg ? "Pattern argument '" + name + "' is assigned before being read"
-						 : "Variable '" + name + "' may be read before being assigned",
-			warnRef->range
+			context, Diagnostic::Level::Warning, "variable usage warning",
+			isPatternArg ? "pattern argument assigned before read" : "variable read before assigned", warnRef->range, "name",
+			name
 		);
-		diag.relatedInfo.push_back({isPatternArg ? "Defined as argument here" : "Assigned here", defRef->range});
+		diag.relatedInfo.push_back(
+			{renderConfiguredMessage(
+				 syntax, "variable usage warning", isPatternArg ? "related argument definition" : "related assignment"
+			 ),
+			 defRef->range}
+		);
 		context.diagnostics.push_back(std::move(diag));
 	}
 

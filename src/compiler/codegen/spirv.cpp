@@ -550,7 +550,9 @@ bool emitSPIRVModule(ParseContext &context) {
 	std::string error;
 	std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
 	if (!targetMachine) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range()));
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "spirv target not available", Range(), "error", error)
+		);
 		return false;
 	}
 	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
@@ -559,14 +561,16 @@ bool emitSPIRVModule(ParseContext &context) {
 	llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
 	if (ec) {
 		context.diagnostics.push_back(
-			Diagnostic(Diagnostic::Level::Error, "Could not open SPIR-V output file: " + ec.message(), Range())
+			Diagnostic(context, Diagnostic::Level::Error, "spirv output open failed", Range(), "error", ec.message())
 		);
 		return false;
 	}
 
 	llvm::legacy::PassManager passManager;
 	if (targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target cannot emit object file", Range()));
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "spirv target cannot emit object file", Range())
+		);
 		return false;
 	}
 
@@ -613,7 +617,9 @@ bool emitSPIRVModule(ParseContext &context) {
 
 	std::string patchError;
 	if (!patchShaderBinary(outputPath, executionModel, ioVars, patchError)) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, patchError, Range()));
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "spirv patch failed", Range(), "error", patchError)
+		);
 		return false;
 	}
 

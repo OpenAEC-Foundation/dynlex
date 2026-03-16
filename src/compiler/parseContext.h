@@ -160,18 +160,19 @@ struct ParseContext {
 	ParseContext() = default;
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
+	void addDiagnostic(Diagnostic diagnostic) { diagnostics.push_back(std::move(diagnostic)); }
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
-	void processEncounteredIntrinsic(Function *intrinsicExpr);
+	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 };
 
-// Extract the body function and parameter bindings from a macro PatternCall.
-// If expr is a PatternCall to a macro section, returns the macro body's last function
-// and fills outBindings with parameter name → call-site argument function.
+// Extract the body expression and parameter bindings from a macro PatternCall.
+// If expr is a PatternCall to a macro section, returns the macro body's last expression
+// and fills outBindings with parameter name → call-site argument expression.
 // Returns nullptr if expr is not a macro PatternCall. Does not modify any binding stack —
 // the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
 template <typename OnPatternParameterNameFn>
@@ -189,10 +190,10 @@ inline void forEachPatternParameterName(
 }
 
 template <typename OnPatternBindingFn>
-inline void forEachPatternCallBinding(Function *expr, PatternDefinition *definition, OnPatternBindingFn &&onPatternBinding) {
+inline void forEachPatternCallBinding(Expression *expr, PatternDefinition *definition, OnPatternBindingFn &&onPatternBinding) {
 	if (!expr || !definition || !expr->patternMatch)
 		return;
-	std::vector<Function *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 	size_t argIndex = 0;
 	forEachPatternParameterName(expr->patternMatch->nodesPassed, definition, [&](const std::string &parameterName) {
 		if (argIndex < sortedArgs.size())
@@ -201,35 +202,38 @@ inline void forEachPatternCallBinding(Function *expr, PatternDefinition *definit
 }
 
 inline void collectPatternCallBindingPairs(
-	Function *expr, PatternDefinition *definition, std::vector<std::pair<std::string, Function *>> &outBindings
+	Expression *expr, PatternDefinition *definition, std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
-	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Function *argumentExpression) {
+	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	});
 }
 
-inline void collectPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings) {
-	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Function *argumentExpression) {
+inline void collectPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings) {
+	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Expression *argumentExpression) {
 		bindings[parameterName] = argumentExpression;
 	});
 }
 
-inline Function *expandMacroPatternCall(Function *expr, BindingMap &outBindings) {
-	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+inline Expression *expandMacroPatternCall(Expression *expr, BindingMap &outBindings) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	PatternDefinition *def =
-		expr->selectedPatternDefinition ? expr->selectedPatternDefinition : (defs.empty() ? nullptr : defs[0]);
+	PatternDefinition *def = expr->selectedPatternDefinition;
 	if (expr->selectedPatternDefinition) {
 		assert(std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end());
+	} else {
+		if (defs.size() != 1)
+			return nullptr;
+		def = defs.front();
 	}
 	if (!def || !def->section || !def->section->isMacro)
 		return nullptr;
-	Function *bodyExpr = nullptr;
+	Expression *bodyExpr = nullptr;
 	for (Section *child : def->section->children) {
 		for (CodeLine *line : child->codeLines) {
-			if (line->function)
-				bodyExpr = line->function;
+			if (line->expression)
+				bodyExpr = line->expression;
 		}
 	}
 	if (!bodyExpr)

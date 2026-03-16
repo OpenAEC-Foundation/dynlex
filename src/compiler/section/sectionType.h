@@ -12,9 +12,9 @@ enum class SectionType {
 	Pattern,
 	// execute of a section
 	Execute,
-	// get of an function
+	// get of an expression
 	Get,
-	// set of an function
+	// set of an expression
 	Set,
 	// replacement of a macro
 	Replacement,

@@ -1,5 +1,5 @@
 #include "parseContext.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "matchProgress.h"
 #include "patternDefinition.h"
@@ -17,12 +17,12 @@
 #include <unordered_set>
 
 namespace {
-void deleteFunctionTree(Function *function, std::unordered_set<Function *> &visited) {
-	if (!function || !visited.insert(function).second)
+void deleteExpressionTree(Expression *expression, std::unordered_set<Expression *> &visited) {
+	if (!expression || !visited.insert(expression).second)
 		return;
-	for (Function *argument : function->arguments)
-		deleteFunctionTree(argument, visited);
-	delete function;
+	for (Expression *argument : expression->arguments)
+		deleteExpressionTree(argument, visited);
+	delete expression;
 }
 
 void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode *> &visited) {
@@ -36,12 +36,12 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 }
 } // namespace
 
-static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outType) {
+static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outType) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
 		return false;
 
-	Function *kindExpr = intrinsicExpr->arguments[1];
+	Expression *kindExpr = intrinsicExpr->arguments[1];
 	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
 	if (!kindStr)
 		return false;
@@ -65,7 +65,7 @@ static bool tryParseIntrinsicTypeAlias(Function *intrinsicExpr, DataType &outTyp
 	}
 
 	if (intrinsicExpr->arguments.size() > 2) {
-		Function *bitsExpr = intrinsicExpr->arguments[2];
+		Expression *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)
 			return false;
@@ -97,7 +97,7 @@ PatternMatch *ParseContext::match(PatternReference *reference) {
 	return nullptr;
 }
 
-void ParseContext::processEncounteredIntrinsic(Function *intrinsicExpr) {
+void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (!intrinsicExpr)
 		return;
 
@@ -136,10 +136,10 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 ParseContext::~ParseContext() {
-	std::unordered_set<Function *> visitedFunctions;
+	std::unordered_set<Expression *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
-		if (line && line->function)
-			deleteFunctionTree(line->function, visitedFunctions);
+		if (line && line->expression)
+			deleteExpressionTree(line->expression, visitedFunctions);
 	}
 
 	std::unordered_set<Section *> visitedSections;
@@ -165,8 +165,8 @@ ParseContext::~ParseContext() {
 		for (PatternReference *reference : section->patternReferences) {
 			if (!reference || !visitedReferences.insert(reference).second)
 				continue;
-			if (reference->function)
-				deleteFunctionTree(reference->function, visitedFunctions);
+			if (reference->expression)
+				deleteExpressionTree(reference->expression, visitedFunctions);
 			delete reference->match;
 			reference->match = nullptr;
 			delete reference;
@@ -179,9 +179,9 @@ ParseContext::~ParseContext() {
 			auto *classSection = static_cast<ClassSection *>(section);
 			if (classSection->classDefinition) {
 				for (FieldDefinition &field : classSection->classDefinition->fields) {
-					if (field.declaredType.typeFunction)
-						deleteFunctionTree(field.declaredType.typeFunction, visitedFunctions);
-					field.declaredType.typeFunction = nullptr;
+					if (field.declaredType.typeExpression)
+						deleteExpressionTree(field.declaredType.typeExpression, visitedFunctions);
+					field.declaredType.typeExpression = nullptr;
 				}
 				delete classSection->classDefinition;
 				classSection->classDefinition = nullptr;

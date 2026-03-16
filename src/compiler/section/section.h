@@ -21,7 +21,7 @@ class BasicBlock;
 
 struct ParseContext;
 struct Variable;
-struct Function;
+struct Expression;
 struct PatternDefinition;
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
@@ -35,7 +35,7 @@ struct Instantiation {
 	std::vector<DataType> parameterTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
-	std::unordered_map<Function *, PatternDefinition *> selectedOverloadsByCall;
+	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
 	std::unordered_map<CodeLine *, IfChainSelection> ifChainSelections;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	llvm::Function *llvmFunction = nullptr;
@@ -94,8 +94,8 @@ struct Section {
 	);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
-	Function *detectPatterns(ParseContext &context, Range range, SectionType patternType);
-	Function *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
+	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
+	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void addPatternReference(PatternReference *reference);

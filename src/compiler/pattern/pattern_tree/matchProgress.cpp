@@ -107,12 +107,12 @@ std::vector<MatchProgress> MatchProgress::step() {
 		}
 
 		if (canBeSubmatch()) {
-			// Try extending as left operand of a new function first (lower LIFO priority).
+			// Try extending as left operand of a new expression first (lower LIFO priority).
 			// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
 			if (canStartSubmatch() && rootNode->argumentChild) {
 				MatchProgress clone = *this;
 				clone.rootNode = rootNode;
-				// advance past the argument slot — the completed sub-function occupies it
+				// advance past the argument slot — the completed sub-expression occupies it
 				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};
 				clone.match.nodesPassed.push_back(clone.currentNode);
@@ -121,7 +121,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 				stepUp(clone);
 			}
 			// Step up to parent match (higher LIFO priority — prefer returning to the
-			// parent over speculatively extending into a new function).
+			// parent over speculatively extending into a new expression).
 			if (parent) {
 				stepUp(*parent);
 			}
@@ -151,9 +151,9 @@ std::vector<MatchProgress> MatchProgress::step() {
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
 				} else {
-					if (!patternReference->function || sourceArgumentIndex >= patternReference->function->arguments.size())
+					if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
 						return false;
-					substituteStep.match.arguments.push_back(patternReference->function->arguments[sourceArgumentIndex]);
+					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
 					substituteStep.sourceArgumentIndex++;
 				}
 				substituteStep.patternPos += elementToCompare.text.size();

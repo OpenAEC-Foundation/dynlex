@@ -3,42 +3,43 @@
 #include "operand_reordering.inl"
 
 static bool isLoopSectionOpening(CodeLine *line) {
-	if (!line || !line->function)
+	if (!line || !line->expression)
 		return false;
-	Function *header = line->function;
-	if (header->kind == Function::Kind::PatternCall) {
+	Expression *header = line->expression;
+	if (header->kind == Expression::Kind::PatternCall) {
 		BindingMap innerBindings;
-		Function *expanded = expandMacroPatternCall(header, innerBindings);
+		Expression *expanded = expandMacroPatternCall(header, innerBindings);
 		if (expanded)
 			header = expanded;
 	}
-	return header && header->kind == Function::Kind::IntrinsicCall &&
+	return header && header->kind == Expression::Kind::IntrinsicCall &&
 		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
 }
 
-static bool inferSection(Section *section, InferenceContext &context, const BindingMap &bindings) {
-	BindingFrameStack bindingFrameStack = makeBindingFrameStack(bindings);
+static bool inferSection(Section *section, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	// The first instantiation determines operand ordering; subsequent ones reuse it.
 	// size() > 1 because the current instantiation is already inserted before inferSection is called.
 	bool alreadyOrdered = section->instantiations.size() > 1;
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordTouchedSection(section);
-	resetSectionFunctionTypes(section);
+	resetSectionExpressionTypes(section);
 	resetSectionLocalVariableTypes(section);
-	for (const auto &[name, boundExpr] : bindings) {
-		Variable *boundVar = section->findVariable(name);
-		if (!boundVar)
-			continue;
-		DataType boundType = resolveTypeThroughBindings(boundExpr, bindingFrameStack);
-		if (!boundType.isDeduced())
-			continue;
-		if (context.trial && context.trialJournal)
-			context.trialJournal->recordVariableWrite(boundVar);
-		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
-		CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindings);
-		context.setKnownConstant(boundVar->definition, boundValue);
-		context.snapshotReferenceConstant(boundVar->definition);
-	}
+	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
+		for (const auto &[name, boundExpr] : frame.bindings) {
+			Variable *boundVar = section->findVariable(name);
+			if (!boundVar)
+				continue;
+			DataType boundType = resolveTypeThroughBindings(boundExpr, bindingFrameStack);
+			if (!boundType.isDeduced())
+				continue;
+			if (context.trial && context.trialJournal)
+				context.trialJournal->recordVariableWrite(boundVar);
+			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
+			CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindingFrameStack);
+			context.setKnownConstant(boundVar->definition, boundValue);
+			context.snapshotReferenceConstant(boundVar->definition);
+		}
+	});
 
 	if (context.currentInstantiation) {
 		for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
@@ -70,32 +71,34 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		}
 	} loopMutationScope(context, loopSection);
 
-	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, BindingMap>> {
-		if (!line || !line->function)
+	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Expression *, BindingFrameStack>> {
+		if (!line || !line->expression)
 			return std::nullopt;
 
-		Function *header = line->function;
-		BindingMap headerBindings = bindings;
-		if (header->kind == Function::Kind::PatternCall) {
+		Expression *header = line->expression;
+		BindingFrameStack headerBindingFrameStack = bindingFrameStack;
+		if (header->kind == Expression::Kind::PatternCall) {
 			BindingMap innerBindings;
-			Function *expanded = expandMacroPatternCall(header, innerBindings);
+			Expression *expanded = expandMacroPatternCall(header, innerBindings);
 			if (expanded) {
 				header = expanded;
+				BindingMap resolvedHeaderBindings;
 				for (const auto &[name, argExpr] : innerBindings)
-					headerBindings[name] = resolveThroughBindings(argExpr, bindingFrameStack);
+					resolvedHeaderBindings[name] = resolveThroughBindings(argExpr, bindingFrameStack);
+				headerBindingFrameStack.pushFrame(std::move(resolvedHeaderBindings));
 			}
 		}
-		if (!header || header->kind != Function::Kind::IntrinsicCall)
+		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
 		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
 			return std::nullopt;
-		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindings)));
+		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindingFrameStack)));
 	};
 
 	auto inferOpenedSection = [&](CodeLine *line) {
 		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
 			return true;
-		if (!inferSection(line->sectionOpening, context, bindings)) {
+		if (!inferSection(line->sectionOpening, context, bindingFrameStack)) {
 			context.typesValid = false;
 			return false;
 		}
@@ -123,9 +126,9 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 
 			for (size_t k = i; k <= chainEnd; k++) {
 				CodeLine *header = section->codeLines[k];
-				if (!header->function)
+				if (!header->expression)
 					continue;
-				if (!inferFunction(header->function, context, alreadyOrdered, bindings)) {
+				if (!inferExpression(header->expression, context, alreadyOrdered, bindingFrameStack)) {
 					context.typesValid = false;
 					return false;
 				}
@@ -140,8 +143,8 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 					break;
 				}
 				const std::string &branchKind = std::get<0>(*branchInfo);
-				Function *header = std::get<1>(*branchInfo);
-				const auto &headerBindings = std::get<2>(*branchInfo);
+				Expression *header = std::get<1>(*branchInfo);
+				const auto &headerBindingFrameStack = std::get<2>(*branchInfo);
 				if (branchKind == "else") {
 					if (!selectedBranch.has_value())
 						selectedBranch = k;
@@ -152,7 +155,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 					break;
 				}
 				CompileTimeValue conditionValue =
-					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindings);
+					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindingFrameStack);
 				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 				if (!condition.has_value()) {
 					branchKnown = false;
@@ -213,8 +216,8 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			continue;
 		}
 
-		if (line->function) {
-			if (!inferFunction(line->function, context, alreadyOrdered, bindings)) {
+		if (line->expression) {
+			if (!inferExpression(line->expression, context, alreadyOrdered, bindingFrameStack)) {
 				context.typesValid = false;
 				return false;
 			}
@@ -235,7 +238,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			context.currentKnownConstants = constantsAtLoopEntry;
 			for (VariableReference *ref : loopMutations)
 				context.setKnownConstant(ref, {});
-			return inferSection(section, context, bindings);
+			return inferSection(section, context, bindingFrameStack);
 		}
 	}
 	context.typesValid = true;
@@ -248,7 +251,7 @@ bool inferTypes(ParseContext &parseContext) {
 	parseContext.constantValuesByReference.clear();
 	parseContext.inferredIfChainSelections.clear();
 	context.currentKnownConstants.clear();
-	if (!inferSection(parseContext.mainSection, context))
+	if (!inferSection(parseContext.mainSection, context, {}))
 		return false;
 
 	// Validate variables — all must have deduced types
@@ -260,8 +263,7 @@ bool inferTypes(ParseContext &parseContext) {
 		for (auto &[name, var] : section->variables) {
 			if (!var->type.isDeduced()) {
 				parseContext.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error, "Variable '" + name + "' has no type (never assigned a value)",
-					var->definition->range
+					parseContext, Diagnostic::Level::Error, "variable has no type", var->definition->range, "name", name
 				));
 				valid = false;
 			}
@@ -271,7 +273,7 @@ bool inferTypes(ParseContext &parseContext) {
 	};
 	validateVariables(parseContext.mainSection);
 
-	// Validate non-macro function functions have deduced return types
+	// Validate non-macro functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
 		if (section->type == SectionType::Function && !section->isMacro && !section->patternDefinitions.empty()) {
 			for (auto &[argTypes, inst] : section->instantiations) {
@@ -280,10 +282,9 @@ bool inferTypes(ParseContext &parseContext) {
 					continue;
 				if (!inst.returnType.isDeduced()) {
 					parseContext.diagnostics.push_back(Diagnostic(
-						Diagnostic::Level::Error,
-						"Function '" + (std::string)section->patternDefinitions.front()->range.subString +
-							"' has no deduced return type",
-						section->patternDefinitions.front()->range
+						parseContext, Diagnostic::Level::Error, "function has no deduced return type",
+						section->patternDefinitions.front()->range, "function",
+						(std::string)section->patternDefinitions.front()->range.subString
 					));
 					valid = false;
 					break; // one error per section is enough
@@ -335,7 +336,7 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	bool inferenceSucceeded = inferSection(section, context, {});
+	bool inferenceSucceeded = inferSection(section, context, BindingFrameStack{});
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;
@@ -346,13 +347,4 @@ bool ensureSectionInstantiationInferred(
 		inst.returnType = {DataType::Kind::Void};
 
 	return inst.returnType.isDeduced();
-}
-
-bool ensureSectionInstantiationInferred(
-	ParseContext &parseContext, Section *section, const BindingMap &callBindings, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation
-) {
-	return ensureSectionInstantiationInferred(
-		parseContext, section, makeBindingFrameStack(callBindings), argTypes, callerInstantiation
-	);
 }

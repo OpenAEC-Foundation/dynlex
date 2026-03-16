@@ -15,8 +15,8 @@ bool ListingSection::processLine(ParseContext &context, CodeLine *line) {
 }
 
 Section *ListingSection::createSection(ParseContext &context, CodeLine *line) {
-	context.diagnostics.push_back(
-		Diagnostic(Diagnostic::Level::Error, "you can't create sections in a listing section", Range(line, line->patternText))
+	context.addDiagnostic(
+		Diagnostic(context, Diagnostic::Level::Error, "listing section cannot create sections", Range(line, line->patternText))
 	);
 	return nullptr;
 }

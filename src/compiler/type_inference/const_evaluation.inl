@@ -6,7 +6,7 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "definitionSection.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "type.h"
 #include "variable.h"
@@ -17,41 +17,43 @@
 #include <unordered_set>
 #include <vector>
 
-static Function *resolveThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack) {
+static Expression *resolveThroughBindings(Expression *expr, const BindingFrameStack &bindingFrameStack) {
 	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 }
 
-static Function *
-resolveThroughBindingsDeep(Function *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack);
+static Expression *resolveThroughBindingsDeep(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack
+);
 
-static bool
-expressionReferencesAnyBindingName(Function *expr, const BindingMap &bindingNames, std::unordered_set<Function *> &visited) {
+static bool expressionReferencesAnyBindingName(
+	Expression *expr, const BindingMap &bindingNames, std::unordered_set<Expression *> &visited
+) {
 	if (!expr || visited.contains(expr))
 		return false;
 	visited.insert(expr);
-	if (expr->kind == Function::Kind::Variable && expr->variable && bindingNames.contains(expr->variable->name))
+	if (expr->kind == Expression::Kind::Variable && expr->variable && bindingNames.contains(expr->variable->name))
 		return true;
-	for (Function *arg : expr->arguments) {
+	for (Expression *arg : expr->arguments) {
 		if (expressionReferencesAnyBindingName(arg, bindingNames, visited))
 			return true;
 	}
 	return false;
 }
 
-static bool expressionReferencesAnyBindingName(Function *expr, const BindingMap &bindingNames) {
-	std::unordered_set<Function *> visited;
+static bool expressionReferencesAnyBindingName(Expression *expr, const BindingMap &bindingNames) {
+	std::unordered_set<Expression *> visited;
 	return expressionReferencesAnyBindingName(expr, bindingNames, visited);
 }
 
 // Like resolveThroughBindings, but also expands macro PatternCalls to find the
-// underlying function. Outputs the final active bindings in outBindings so the
-// caller can resolve arguments of the returned function. Use when inspecting
-// function kind matters (e.g., detecting a property intrinsic inside a store
+// underlying expression. Outputs the final active bindings in outBindings so the
+// caller can resolve arguments of the returned expression. Use when inspecting
+// expression kind matters (e.g., detecting a property intrinsic inside a store
 // destination). See also: resolveThroughMacroLayers (codegen, codegenTypes.cpp)
 // for the codegen equivalent that uses the context's binding stack.
-static Function *resolveThroughBindingsDeepImpl(
-	Function *expr, BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
-	std::unordered_set<Function *> &visited
+static Expression *resolveThroughBindingsDeepImpl(
+	Expression *expr, BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
+	std::unordered_set<Expression *> &visited
 ) {
 	expr = resolveThroughBindings(expr, bindingFrameStack);
 	outBindingFrameStack = bindingFrameStack;
@@ -61,19 +63,19 @@ static Function *resolveThroughBindingsDeepImpl(
 		return expr;
 	visited.insert(expr);
 	BindingMap innerBindings;
-	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (bodyExpr) {
 		BindingMap scopedMacroBindings;
 		scopedMacroBindings.reserve(innerBindings.size());
 		for (auto &[name, argExpr] : innerBindings) {
-			Function *directArg = resolveThroughBindings(argExpr, bindingFrameStack);
-			Function *bindingArg = directArg ? directArg : argExpr;
+			Expression *directArg = resolveThroughBindings(argExpr, bindingFrameStack);
+			Expression *bindingArg = directArg ? directArg : argExpr;
 			if (bindingArg && expressionReferencesAnyBindingName(bindingArg, innerBindings))
 				bindingArg = directArg ? directArg : argExpr;
 			scopedMacroBindings[name] = bindingArg;
 		}
 		bindingFrameStack.pushFrame(std::move(scopedMacroBindings));
-		Function *resolved = resolveThroughBindingsDeepImpl(bodyExpr, bindingFrameStack, outBindingFrameStack, visited);
+		Expression *resolved = resolveThroughBindingsDeepImpl(bodyExpr, bindingFrameStack, outBindingFrameStack, visited);
 		bindingFrameStack.popFrame();
 		visited.erase(expr);
 		return resolved;
@@ -82,16 +84,16 @@ static Function *resolveThroughBindingsDeepImpl(
 	return expr;
 }
 
-static Function *resolveThroughBindingsDeep(
-	Function *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack
+static Expression *resolveThroughBindingsDeep(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack
 ) {
 	BindingFrameStack localBindingFrameStack = bindingFrameStack;
-	std::unordered_set<Function *> visited;
+	std::unordered_set<Expression *> visited;
 	return resolveThroughBindingsDeepImpl(expr, localBindingFrameStack, outBindingFrameStack, visited);
 }
 
 static bool evaluateCompileTimeInteger(
-	ParseContext &parseContext, Function *expr, const BindingFrameStack &bindingFrameStack, int &outValue
+	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue
 ) {
 	CompileTimeValue value = evaluateCompileTimeValue(expr, parseContext, bindingFrameStack);
 	auto *number = std::get_if<double>(&value);
@@ -101,13 +103,12 @@ static bool evaluateCompileTimeInteger(
 	return *number == static_cast<double>(outValue);
 }
 
-// Convenience: resolve an function through bindings, then return its type.
+// Convenience: resolve an expression through bindings, then return its type.
 static DataType concretizeClassType(DataType type);
-static std::string extractFieldName(Function *expr);
+static std::string extractFieldName(Expression *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
-static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack);
+static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameStack &bindingFrameStack);
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged);
-static bool expandsToSelectIntrinsic(Function *function);
 static DataType
 instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack);
 static bool instantiateClassFromArgumentTypes(
@@ -115,7 +116,7 @@ static bool instantiateClassFromArgumentTypes(
 );
 
 struct BindingContext {
-	std::unordered_map<std::string, const Function *> bindingEntries;
+	std::unordered_map<std::string, const Expression *> bindingEntries;
 	size_t fingerprint = 0;
 
 	bool operator==(const BindingContext &other) const {
@@ -124,18 +125,18 @@ struct BindingContext {
 };
 
 struct TypeResolutionKey {
-	const Function *functionExpression = nullptr;
+	const Expression *expression = nullptr;
 	BindingContext bindingContext;
 
 	bool operator==(const TypeResolutionKey &other) const {
-		return functionExpression == other.functionExpression && bindingContext == other.bindingContext;
+		return expression == other.expression && bindingContext == other.bindingContext;
 	}
 };
 
 static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
 struct TypeResolutionKeyHasher {
 	size_t operator()(const TypeResolutionKey &typeResolutionKey) const {
-		size_t hashValue = std::hash<const Function *>{}(typeResolutionKey.functionExpression);
+		size_t hashValue = std::hash<const Expression *>{}(typeResolutionKey.expression);
 		hashValue ^= typeResolutionKey.bindingContext.fingerprint + 0x9e3779b9 + (hashValue << 6) + (hashValue >> 2);
 		return hashValue;
 	}
@@ -165,8 +166,8 @@ struct ActiveTypeResolutionParseContextGuard {
 	~ActiveTypeResolutionParseContextGuard() { activeTypeResolutionParseContext = previous; }
 };
 
-static Function *selectCompileTimeBranch(
-	Function *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack,
+static Expression *selectCompileTimeBranch(
+	Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack,
 	const Instantiation *instantiation = nullptr
 ) {
 	if (!selectExpr || selectExpr->intrinsicName != "select" || selectExpr->arguments.size() < 4)
@@ -179,22 +180,23 @@ static Function *selectCompileTimeBranch(
 	return selectExpr->arguments[*condition ? 2 : 3];
 }
 
-static void
-markCompileTimeParameterRequirements(Function *expr, const BindingFrameStack &bindingFrameStack, Instantiation *instantiation) {
+static void markCompileTimeParameterRequirements(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, Instantiation *instantiation
+) {
 	if (!expr || !instantiation)
 		return;
 
-	std::unordered_set<Function *> visited;
-	std::function<void(Function *)> visit = [&](Function *current) {
+	std::unordered_set<Expression *> visited;
+	std::function<void(Expression *)> visit = [&](Expression *current) {
 		if (!current || visited.contains(current))
 			return;
 		visited.insert(current);
-		if (current->kind == Function::Kind::Variable && current->variable) {
+		if (current->kind == Expression::Kind::Variable && current->variable) {
 			if (bindingFrameStack.lookup(current->variable->name))
 				instantiation->requiredCompileTimeParameters.insert(current->variable->name);
 			return;
 		}
-		for (Function *arg : current->arguments)
+		for (Expression *arg : current->arguments)
 			visit(arg);
 	};
 	visit(expr);
@@ -202,7 +204,7 @@ markCompileTimeParameterRequirements(Function *expr, const BindingFrameStack &bi
 
 static void seedInstantiationCompileTimeParameters(
 	ParseContext &parseContext, Instantiation &instantiation,
-	const std::vector<std::pair<std::string, Function *>> &paramBindings, const BindingFrameStack &callerBindingFrameStack,
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const BindingFrameStack &callerBindingFrameStack,
 	const Instantiation *callerInstantiation
 ) {
 	for (const auto &[name, argExpr] : paramBindings) {
@@ -214,16 +216,16 @@ static void seedInstantiationCompileTimeParameters(
 	}
 }
 
-static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Function *expr) {
+static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Expression *expr) {
 	std::unordered_set<size_t> indices;
-	if (!expr || expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return indices;
 
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	if (defs.empty())
 		return indices;
 	std::vector<DataType> argTypesForOverload;
-	for (Function *arg : expr->arguments)
+	for (Expression *arg : expr->arguments)
 		argTypesForOverload.push_back(resolveTypeThroughBindings(arg, {}));
 	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
 	if (!def) {
@@ -235,18 +237,18 @@ static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Function *expr)
 
 	if (!def->section || !def->section->isMacro)
 		return indices;
-	Function *bodyExpr = nullptr;
+	Expression *bodyExpr = nullptr;
 	for (Section *child : def->section->children) {
 		for (CodeLine *line : child->codeLines) {
-			if (line->function)
-				bodyExpr = line->function;
+			if (line->expression)
+				bodyExpr = line->expression;
 		}
 	}
-	if (!bodyExpr || bodyExpr->kind != Function::Kind::IntrinsicCall)
+	if (!bodyExpr || bodyExpr->kind != Expression::Kind::IntrinsicCall)
 		return indices;
 
 	std::unordered_map<std::string, size_t> paramIndices;
-	std::vector<std::pair<std::string, Function *>> orderedBindings;
+	std::vector<std::pair<std::string, Expression *>> orderedBindings;
 	collectPatternCallBindingPairs(expr, def, orderedBindings);
 	for (size_t argumentIndex = 0; argumentIndex < orderedBindings.size(); argumentIndex++)
 		paramIndices[orderedBindings[argumentIndex].first] = argumentIndex;
@@ -254,8 +256,8 @@ static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Function *expr)
 	for (size_t i = 1; i < bodyExpr->arguments.size(); i++) {
 		if (!intrinsicArgumentIsCompileTimeOnly(bodyExpr->intrinsicName, static_cast<int>(i)))
 			continue;
-		Function *arg = bodyExpr->arguments[i];
-		if (arg && arg->kind == Function::Kind::Variable && arg->variable) {
+		Expression *arg = bodyExpr->arguments[i];
+		if (arg && arg->kind == Expression::Kind::Variable && arg->variable) {
 			auto it = paramIndices.find(arg->variable->name);
 			if (it != paramIndices.end())
 				indices.insert(it->second);

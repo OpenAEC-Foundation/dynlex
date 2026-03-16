@@ -1,5 +1,5 @@
 #pragma once
-#include "function.h"
+#include "expression.h"
 #include "patternMatch.h"
 #include "range.h"
 #include "sectionType.h"
@@ -11,9 +11,9 @@ struct PatternReference {
 	std::vector<PatternElement> patternElements{};
 	PatternMatch *match{};
 	// for extracting arguments
-	Function *function;
+	Expression *expression;
 	bool resolved{};
-	PatternReference(Function *function, SectionType patternType);
+	PatternReference(Expression *expression, SectionType patternType);
 	void resolve(PatternMatch *matchResult = nullptr);
 	const Range &range() const { return sourceRange; }
 };

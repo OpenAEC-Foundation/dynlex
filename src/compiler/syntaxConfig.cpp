@@ -12,6 +12,21 @@ using namespace std::literals;
 
 namespace {
 
+std::string renderMessageTemplate(
+	std::string_view templ, std::initializer_list<std::pair<std::string_view, std::string_view>> replacements
+) {
+	std::string result(templ);
+	for (const auto &[key, value] : replacements) {
+		std::string needle = "{" + std::string(key) + "}";
+		size_t pos = 0;
+		while ((pos = result.find(needle, pos)) != std::string::npos) {
+			result.replace(pos, needle.size(), value);
+			pos += value.size();
+		}
+	}
+	return result;
+}
+
 struct ConfigNode {
 	std::string key;
 	std::optional<std::string> value;
@@ -84,7 +99,7 @@ void addConfigError(ParseContext &context, std::string_view path, int lineNumber
 	if (lineNumber > 0)
 		fullMessage += ":" + std::to_string(lineNumber);
 	fullMessage += ": " + message;
-	context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, fullMessage, Range()));
+	context.diagnostics.push_back(Diagnostic::configParseError(fullMessage, Range()));
 }
 
 bool parseConfigTree(ParseContext &context, std::string_view path, std::string_view content, ConfigNode &root) {
@@ -293,78 +308,19 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	}
 	if (node.key == "messages") {
 		for (const auto &child : node.children) {
-			if (child->key == "could not import main file") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber,
-						"config entry 'messages.could not import main file' must define a value"
-					);
-					return false;
-				}
-				config.messages.couldNotImportMainFile = *child->value;
-			} else if (child->key == "failed to import source file") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber,
-						"config entry 'messages.failed to import source file' must define a value"
-					);
-					return false;
-				}
-				config.messages.failedToImportSourceFile = *child->value;
-			} else if (child->key == "invalid indentation amount") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber,
-						"config entry 'messages.invalid indentation amount' must define a value"
-					);
-					return false;
-				}
-				config.messages.invalidIndentationAmount = *child->value;
-			} else if (child->key == "invalid indentation character") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber,
-						"config entry 'messages.invalid indentation character' must define a value"
-					);
-					return false;
-				}
-				config.messages.invalidIndentationCharacter = *child->value;
-			} else if (child->key == "invalid indentation increase") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber,
-						"config entry 'messages.invalid indentation increase' must define a value"
-					);
-					return false;
-				}
-				config.messages.invalidIndentationIncrease = *child->value;
-			} else if (child->key == "missing body section") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber, "config entry 'messages.missing body section' must define a value"
-					);
-					return false;
-				}
-				config.messages.missingBodySection = *child->value;
-			} else if (child->key == "unknown section") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber, "config entry 'messages.unknown section' must define a value"
-					);
-					return false;
-				}
-				config.messages.unknownSection = *child->value;
-			} else if (child->key == "unexpected class line") {
-				if (!child->value) {
-					addConfigError(
-						context, path, child->lineNumber, "config entry 'messages.unexpected class line' must define a value"
-					);
-					return false;
-				}
-				config.messages.unexpectedClassLine = *child->value;
+			if (child->value) {
+				config.messages.set(child->key, "message", *child->value);
 			} else {
-				addConfigError(context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'messages'");
-				return false;
+				for (const auto &grandChild : child->children) {
+					if (!grandChild->value) {
+						addConfigError(
+							context, path, grandChild->lineNumber,
+							"config entry 'messages." + child->key + "." + grandChild->key + "' must define a value"
+						);
+						return false;
+					}
+					config.messages.set(child->key, grandChild->key, *grandChild->value);
+				}
 			}
 		}
 		return true;
@@ -475,6 +431,12 @@ const SyntaxConfig &syntaxConfigForSourceFile(const ParseContext &context, const
 	return syntaxConfigForSourcePath(context, sourceFile->uri);
 }
 
+const SyntaxConfig &syntaxConfigForRange(const ParseContext &context, Range range) {
+	if (!range.line || !range.line->sourceFile)
+		return context.projectSyntax;
+	return syntaxConfigForSourceFile(context, range.line->sourceFile);
+}
+
 size_t findCommentStart(std::string_view line, std::string_view commentPrefix) {
 	if (commentPrefix.empty())
 		return std::string_view::npos;
@@ -523,15 +485,73 @@ extractInlineSettingValue(std::string_view text, std::string_view key, std::stri
 
 bool matchesConfiguredKeyword(std::string_view text, std::string_view keyword) { return text == keyword; }
 
+SyntaxConfig::Messages::Messages() {
+	set("could not import main file", "message", "couldn't import main file: {path}");
+	set("failed to import source file", "message", "failed to import source file: {path}");
+	set("invalid indentation amount", "message", "Invalid indentation! expected {expected}, but found {found}");
+	set("invalid indentation character", "message", "Invalid indentation! expected only {expected}, but found {found}");
+	set("invalid indentation increase", "message", "Invalid indentation! expected at max {expected}, but found {found}");
+	set("missing body section", "message", "Code without body section");
+	set("unknown section", "message", "Unknown section: {section}");
+	set("unexpected class line", "message", "unexpected line in class definition");
+}
+
+const std::string *SyntaxConfig::Messages::find(std::string_view key, std::string_view variant) const {
+	auto keyIt = entries.find(std::string(key));
+	if (keyIt == entries.end())
+		return nullptr;
+	auto variantIt = keyIt->second.find(std::string(variant));
+	if (variantIt != keyIt->second.end())
+		return &variantIt->second;
+	if (variant != "message") {
+		variantIt = keyIt->second.find("message");
+		if (variantIt != keyIt->second.end())
+			return &variantIt->second;
+	}
+	return nullptr;
+}
+
+void SyntaxConfig::Messages::set(std::string key, std::string variant, std::string value) {
+	entries[std::move(key)][std::move(variant)] = std::move(value);
+}
+
 std::string
 renderSyntaxMessage(std::string_view templ, std::initializer_list<std::pair<std::string_view, std::string_view>> replacements) {
-	std::string result(templ);
-	for (const auto &[key, value] : replacements) {
-		std::string needle = "{" + std::string(key) + "}";
+	return renderMessageTemplate(templ, replacements);
+}
+
+std::string renderConfiguredMessage(const SyntaxConfig &syntaxConfig, std::string_view key) {
+	return renderConfiguredMessage(syntaxConfig, key, "message");
+}
+
+std::string renderConfiguredMessage(const SyntaxConfig &syntaxConfig, std::string_view key, std::string_view variant) {
+	return renderConfiguredMessage(syntaxConfig, key, variant, {});
+}
+
+std::string renderConfiguredMessage(
+	const SyntaxConfig &syntaxConfig, std::string_view key, std::string_view variant,
+	std::initializer_list<std::pair<std::string_view, std::string_view>> replacements
+) {
+	const std::string *templ = syntaxConfig.messages.find(key, variant);
+	if (!templ)
+		return std::string(key);
+	return renderMessageTemplate(*templ, replacements);
+}
+
+std::string renderConfiguredMessage(
+	const SyntaxConfig &syntaxConfig, std::string_view key, std::string_view variant,
+	const std::vector<std::pair<std::string, std::string>> &replacements
+) {
+	const std::string *templ = syntaxConfig.messages.find(key, variant);
+	if (!templ)
+		return std::string(key);
+	std::string result(*templ);
+	for (const auto &[placeholderName, placeholderValue] : replacements) {
+		std::string needle = "{" + placeholderName + "}";
 		size_t pos = 0;
 		while ((pos = result.find(needle, pos)) != std::string::npos) {
-			result.replace(pos, needle.size(), value);
-			pos += value.size();
+			result.replace(pos, needle.size(), placeholderValue);
+			pos += placeholderValue.size();
 		}
 	}
 	return result;

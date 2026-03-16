@@ -9,9 +9,9 @@ bool PatternsSection::processLine(ParseContext &, CodeLine *line) {
 }
 
 Section *PatternsSection::createSection(ParseContext &context, CodeLine *line) {
-	context.diagnostics.push_back(Diagnostic(
-		Diagnostic::Level::Error, "you can't create sections in a " + sectionTypeToString(type) + " section",
-		Range(line, line->patternText)
+	context.addDiagnostic(Diagnostic(
+		context, Diagnostic::Level::Error, "patterns section cannot create sections", Range(line, line->patternText),
+		"section_type", sectionTypeToString(type)
 	));
 	return nullptr;
 }

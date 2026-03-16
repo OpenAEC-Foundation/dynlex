@@ -2,17 +2,8 @@
 
 #include "const_evaluation.inl"
 
-static BindingMap collectBindingMapFromFrames(const BindingFrameStack &bindingFrameStack) {
-	BindingMap flattenedBindings;
-	bindingFrameStack.forEachFrame([&flattenedBindings](const BindingFrame &frame) {
-		for (const auto &[bindingName, functionExpression] : frame.bindings)
-			flattenedBindings[bindingName] = functionExpression;
-	});
-	return flattenedBindings;
-}
-
-static Function *
-resolveCompileTimeSelectBranch(Function *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack) {
+static Expression *
+resolveCompileTimeSelectBranch(Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack) {
 	CompileTimeValue conditionValue = evaluateCompileTimeValue(selectExpr->arguments[1], parseContext, bindingFrameStack);
 	std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 	if (!condition.has_value())
@@ -21,38 +12,37 @@ resolveCompileTimeSelectBranch(Function *selectExpr, ParseContext &parseContext,
 }
 
 static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameStack) {
-	BindingMap bindings = collectBindingMapFromFrames(bindingFrameStack);
 	BindingContext bindingContext;
-	bindingContext.bindingEntries.reserve(bindings.size());
-	bindingContext.fingerprint = bindings.size() * 1099511628211ull;
-	for (const auto &[bindingName, functionExpression] : bindings) {
-		bindingContext.bindingEntries[bindingName] = functionExpression;
-		size_t nameHash = std::hash<std::string>{}(bindingName);
-		size_t functionHash = std::hash<const Function *>{}(functionExpression);
-		size_t entryHash = nameHash;
-		entryHash ^= functionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
-		bindingContext.fingerprint ^= entryHash;
-	}
+	bindingContext.fingerprint = 1469598103934665603ull;
+	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
+		for (const auto &[bindingName, expression] : frame.bindings) {
+			bindingContext.bindingEntries[bindingName] = expression;
+			size_t nameHash = std::hash<std::string>{}(bindingName);
+			size_t expressionHash = std::hash<const Expression *>{}(expression);
+			size_t entryHash = nameHash;
+			entryHash ^= expressionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
+			bindingContext.fingerprint ^= entryHash;
+		}
+	});
 	return bindingContext;
 }
 
-static TypeResolutionKey
-buildTypeResolutionKey(const Function *functionExpression, const BindingFrameStack &bindingFrameStack) {
+static TypeResolutionKey buildTypeResolutionKey(const Expression *expression, const BindingFrameStack &bindingFrameStack) {
 	TypeResolutionKey typeResolutionKey;
-	typeResolutionKey.functionExpression = functionExpression;
+	typeResolutionKey.expression = expression;
 	typeResolutionKey.bindingContext = buildBindingContext(bindingFrameStack);
 	return typeResolutionKey;
 }
 
-static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameStack &bindingFrameStack) {
-	if (expr && expr->kind == Function::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
+static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameStack &bindingFrameStack) {
+	if (expr && expr->kind == Expression::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
 		return concretizeClassType(expr->type);
 	}
-	Function *directResolved = resolveThroughBindings(expr, bindingFrameStack);
+	Expression *directResolved = resolveThroughBindings(expr, bindingFrameStack);
 	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
 		return concretizeClassType(directResolved->type);
 	BindingFrameStack effectiveBindingFrameStack;
-	Function *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
+	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return {};
 	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
@@ -71,7 +61,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 		}
 		~ActiveTypeResolutionGuard() { popActiveTypeResolutionKey(typeResolutionKey); }
 	} activeGuard(std::move(typeResolutionKey));
-	if (resolved->kind == Function::Kind::Literal) {
+	if (resolved->kind == Expression::Kind::Literal) {
 		if (std::holds_alternative<double>(resolved->literalValue)) {
 			double value = std::get<double>(resolved->literalValue);
 			std::string_view literalText = resolved->range.subString;
@@ -80,7 +70,10 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 								   literalText.find('E') != std::string_view::npos;
 			if (!explicitlyFloat && std::trunc(value) == value)
 				return {DataType::Kind::Int, 4};
-			return {DataType::Kind::Float, 8};
+			return {
+				DataType::Kind::Float,
+				activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV ? 4 : 8
+			};
 		}
 		if (std::holds_alternative<std::string>(resolved->literalValue)) {
 			DataType strType{DataType::Kind::Int, 1};
@@ -88,7 +81,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 			return strType;
 		}
 	}
-	if (resolved->kind == Function::Kind::ArrayLiteral) {
+	if (resolved->kind == Expression::Kind::ArrayLiteral) {
 		if (resolved->arguments.empty())
 			return {};
 		DataType elementType = resolveTypeThroughBindings(resolved->arguments[0], effectiveBindingFrameStack);
@@ -106,7 +99,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 		arrayType.arrayElementType = std::make_shared<DataType>(elementType);
 		return arrayType;
 	}
-	if (resolved->kind == Function::Kind::Variable && resolved->variable) {
+	if (resolved->kind == Expression::Kind::Variable && resolved->variable) {
 		VariableReference *varRef = resolved->variable;
 		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
 		Section *sec = definition->range.line ? definition->range.line->section : nullptr;
@@ -117,12 +110,12 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 		if (var && var->type.isDeduced())
 			return concretizeClassType(var->type);
 	}
-	if (resolved->kind == Function::Kind::PatternCall && resolved->patternMatch && resolved->patternMatch->matchedEndNode) {
+	if (resolved->kind == Expression::Kind::PatternCall && resolved->patternMatch && resolved->patternMatch->matchedEndNode) {
 		auto &defs = resolved->patternMatch->matchedEndNode->matchingDefinitions;
 		if (!defs.empty()) {
 			std::vector<DataType> argTypesForOverload;
 			bool allArgTypesDeduced = true;
-			for (Function *arg : resolved->arguments)
+			for (Expression *arg : resolved->arguments)
 				argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindingFrameStack));
 			for (const DataType &argType : argTypesForOverload) {
 				if (!argType.isDeduced()) {
@@ -143,14 +136,14 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 			}
 		}
 	}
-	if (resolved->kind == Function::Kind::IntrinsicCall) {
+	if (resolved->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Property) {
 			DataType instType =
 				concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack));
 			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
 				instType = concretizeClassType(instType.dereferenced());
-			Function *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+			Expression *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			std::string fieldName = extractFieldName(propExpr);
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 			if (builtInPropertyType.isDeduced())
@@ -188,7 +181,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 				return concretizeClassType(typeArgType.toReferencedType());
 		} else if (kind == IntrinsicKind::Type) {
 			std::string kindStr;
-			Function *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *kindExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
 				kindStr = *str;
 			if (!kindStr.empty()) {
@@ -212,7 +205,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 					typeRef.referencedKind = DataType::Kind::Type;
 				}
 				if (resolved->arguments.size() > 2) {
-					Function *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+					Expression *bitsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
 						typeRef.numericSize = (int)*bits / 8;
 				}
@@ -239,7 +232,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
-			Function *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
 				if (*key == "word size" || *key == "optimization level") {
 					return {DataType::Kind::Int, 4};
@@ -247,12 +240,12 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 				return {DataType::Kind::Int, 1, 1};
 			}
 		} else if (kind == IntrinsicKind::Select && activeTypeResolutionParseContext) {
-			Function *selectedBranch =
+			Expression *selectedBranch =
 				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindingFrameStack);
 			if (selectedBranch)
 				return resolveTypeThroughBindings(selectedBranch, effectiveBindingFrameStack);
 		} else if (kind == IntrinsicKind::Array) {
-			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
@@ -266,7 +259,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::Vector) {
-			Function *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			auto *size = std::get_if<double>(&sizeExpr->literalValue);
 			if (!size)
 				return {};
@@ -288,8 +281,8 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::Matrix) {
-			Function *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
-			Function *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+			Expression *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			auto *rowsValue = std::get_if<double>(&rowsExpr->literalValue);
 			auto *columnsValue = std::get_if<double>(&columnsExpr->literalValue);
 			if (!rowsValue || !columnsValue)
@@ -388,7 +381,7 @@ static DataType resolveTypeThroughBindings(Function *expr, const BindingFrameSta
 		}
 	}
 	BindingMap innerBindings;
-	Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
+	Expression *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 	if (bodyExpr) {
 		BindingFrameStack mergedBindingFrameStack = bindingFrameStack;
 		BindingMap scopedMacroBindings;
@@ -421,10 +414,10 @@ static std::string typeToUserName(const DataType &type, ParseContext &parseConte
 }
 
 static bool resolveCompileTimeTypeReference(
-	ParseContext &parseContext, Function *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef
+	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef
 ) {
 	BindingFrameStack effectiveBindingFrameStack;
-	Function *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
+	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return false;
 	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
@@ -434,7 +427,7 @@ static bool resolveCompileTimeTypeReference(
 		return true;
 	}
 
-	if (resolved->kind == Function::Kind::Variable && resolved->variable) {
+	if (resolved->kind == Expression::Kind::Variable && resolved->variable) {
 		DataType shorthandType = DataType::fromString(resolved->variable->name);
 		if (shorthandType.isDeduced()) {
 			outTypeRef.kind = DataType::Kind::Type;
@@ -446,7 +439,7 @@ static bool resolveCompileTimeTypeReference(
 		return false;
 	}
 
-	if (resolved->kind == Function::Kind::IntrinsicCall) {
+	if (resolved->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Type) {
 			DataType resolvedType = resolveTypeThroughBindings(resolved, effectiveBindingFrameStack);
@@ -528,19 +521,19 @@ static bool resolveCompileTimeTypeReference(
 			return true;
 		}
 		if (kind == IntrinsicKind::Select) {
-			Function *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack);
+			Expression *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack);
 			if (selectedBranch)
 				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindingFrameStack, outTypeRef);
 		}
 	}
 
-	if (resolved->kind == Function::Kind::PatternCall) {
+	if (resolved->kind == Expression::Kind::PatternCall) {
 		auto &defs = resolved->patternMatch->matchedEndNode->matchingDefinitions;
 		if (defs.empty())
 			return false;
 		std::vector<DataType> argTypesForOverload;
 		bool allArgTypesDeduced = true;
-		for (Function *arg : resolved->arguments)
+		for (Expression *arg : resolved->arguments)
 			argTypesForOverload.push_back(resolveTypeThroughBindings(arg, effectiveBindingFrameStack));
 		for (const DataType &argType : argTypesForOverload) {
 			if (!argType.isDeduced()) {
@@ -555,30 +548,33 @@ static bool resolveCompileTimeTypeReference(
 		if (!def || !def->section)
 			return false;
 
-		BindingMap callBindings = collectBindingMapFromFrames(effectiveBindingFrameStack);
+		BindingMap callBindings;
 		appendPatternCallBindings(resolved, def, callBindings);
 		for (auto &[name, boundExpr] : callBindings) {
-			Function *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
+			Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
 			if (resolvedExpr)
 				boundExpr = resolvedExpr;
 		}
+		BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
+		callBindingFrameStack.pushFrame(std::move(callBindings));
 		if (!def->section->isMacro && def->section->type == SectionType::Class) {
 			outTypeRef = instantiateBoundClassType(
-				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, makeBindingFrameStack(callBindings)
+				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack
 			);
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
 
 		BindingMap innerBindings;
-		Function *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
+		Expression *bodyExpr = expandMacroPatternCall(resolved, innerBindings);
 		if (!bodyExpr)
 			return false;
-		BindingFrameStack callBindingFrameStack = makeBindingFrameStack(callBindings);
+		BindingMap resolvedInnerBindings;
 		for (const auto &[name, argExpr] : innerBindings) {
-			Function *resolvedArg = resolveThroughBindings(argExpr, callBindingFrameStack);
-			callBindings[name] = resolvedArg ? resolvedArg : argExpr;
+			Expression *resolvedArg = resolveThroughBindings(argExpr, callBindingFrameStack);
+			resolvedInnerBindings[name] = resolvedArg ? resolvedArg : argExpr;
 		}
-		return resolveCompileTimeTypeReference(parseContext, bodyExpr, makeBindingFrameStack(callBindings), outTypeRef);
+		callBindingFrameStack.pushFrame(std::move(resolvedInnerBindings));
+		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindingFrameStack, outTypeRef);
 	}
 	return false;
 }
@@ -594,9 +590,9 @@ instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef,
 		DataType fieldType = field.declaredType;
 		if (fieldType.kind == DataType::Kind::Any)
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
-		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeFunction) {
+		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
 			DataType resolvedTypeRef;
-			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeFunction, bindingFrameStack, resolvedTypeRef) ||
+			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeExpression, bindingFrameStack, resolvedTypeRef) ||
 				resolvedTypeRef.kind != DataType::Kind::Type)
 				return {};
 			fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
@@ -650,8 +646,8 @@ static bool instantiateClassFromArgumentTypes(
 	return true;
 }
 
-static bool isWholeNumberLiteral(Function *expr) {
-	if (!expr || expr->kind != Function::Kind::Literal || !std::holds_alternative<double>(expr->literalValue))
+static bool isWholeNumberLiteral(Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::Literal || !std::holds_alternative<double>(expr->literalValue))
 		return false;
 	std::string_view literalText = expr->range.subString;
 	if (literalText.find('.') != std::string_view::npos || literalText.find('e') != std::string_view::npos ||
@@ -661,7 +657,7 @@ static bool isWholeNumberLiteral(Function *expr) {
 	return std::trunc(value) == value;
 }
 
-static std::string makeFloatLiteralReplacement(Function *expr) {
+static std::string makeFloatLiteralReplacement(Expression *expr) {
 	if (!isWholeNumberLiteral(expr))
 		return {};
 	return (std::string)expr->range.subString + ".0";
@@ -693,17 +689,17 @@ static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std:
 
 static bool isLogicalOperandType(const DataType &type) { return type.kind == DataType::Kind::Bool || type.isNumeric(); }
 
-static std::string extractFieldName(Function *expr) {
+static std::string extractFieldName(Expression *expr) {
 	if (!expr)
 		return {};
 	if (auto *str = std::get_if<std::string>(&expr->literalValue))
 		return *str;
-	if (expr->kind == Function::Kind::Variable && expr->variable)
+	if (expr->kind == Expression::Kind::Variable && expr->variable)
 		return expr->variable->name;
 	return {};
 }
 
-static std::string diagnosticFunctionText(Function *expr) {
+static std::string diagnosticExpressionText(Expression *expr) {
 	if (!expr)
 		return {};
 
@@ -722,12 +718,17 @@ static std::string diagnosticFunctionText(Function *expr) {
 	return (std::string)lineText;
 }
 
-static std::string buildTypeFailureDiagnostic(Function *expr, const std::string &detail) {
-	std::string message =
-		"Function '" + diagnosticFunctionText(expr) + "' parses successfully without types, but not with types";
-	if (!detail.empty())
-		message += ": " + detail;
-	return message;
+static Diagnostic buildTypeFailureDiagnostic(const ParseContext &parseContext, Expression *expr, const std::string &detail) {
+	std::string expressionText = diagnosticExpressionText(expr);
+	if (detail.empty())
+		return Diagnostic(
+			parseContext, Diagnostic::Level::Error, "expression type inference failed", expr ? expr->range : Range(),
+			"expression", expressionText
+		);
+	return Diagnostic(
+		parseContext, Diagnostic::Level::Error, "expression type inference failed", "with detail", expr ? expr->range : Range(),
+		"expression", expressionText, "detail", detail
+	);
 }
 
 // Must stay in sync with codegen's ensureType conversion support.
@@ -841,7 +842,7 @@ struct InferenceContext {
 
 	void addDiagnostic(Diagnostic diagnostic) {
 		if (!trial && !suppressDiagnostics && !suppressReinferPassDiagnostics)
-			parseContext.diagnostics.push_back(std::move(diagnostic));
+			parseContext.addDiagnostic(std::move(diagnostic));
 	}
 
 	void setTypeFailure(std::string detail) {

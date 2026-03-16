@@ -6,7 +6,7 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "native.h"
 #include "patternDefinition.h"
@@ -31,7 +31,7 @@
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 void generateSpecializedFunction(
-	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Function *>> &paramBindings,
+	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	const std::vector<DataType> &argTypes, Instantiation &inst
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -50,7 +50,7 @@ void generateSpecializedFunction(
 		BindingMap callBindings;
 		for (const auto &[name, expr] : paramBindings)
 			callBindings[name] = expr;
-		ensureSectionInstantiationInferred(context, section, callBindings, argTypes);
+		ensureSectionInstantiationInferred(context, section, makeBindingFrameStack(callBindings), argTypes);
 		it = section->instantiations.find(argTypes);
 	}
 	if (!it->second.returnType.isDeduced()) {
@@ -148,15 +148,15 @@ void generateSpecializedFunction(
 	}
 }
 
-// Generate code for an function
-llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
+// Generate code for an expression
+llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return nullptr;
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
 	switch (expr->kind) {
-	case Function::Kind::Literal: {
+	case Expression::Kind::Literal: {
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
 			DataType numType = getEffectiveType(context, expr);
 			llvm::Type *llvmType = numType.toLLVM(*context.llvmContext);
@@ -188,14 +188,14 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		crashCompilerBug("Unknown literal type in codegen");
 	}
 
-	case Function::Kind::ArrayLiteral: {
+	case Expression::Kind::ArrayLiteral: {
 		DataType arrayType = getEffectiveType(context, expr);
 		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
 			return nullptr;
 		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
 		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
-			llvm::Value *elementValue = generateFunctionCode(context, expr->arguments[i]);
+			llvm::Value *elementValue = generateExpressionCode(context, expr->arguments[i]);
 			DataType fromType = getEffectiveType(context, expr->arguments[i]);
 			elementValue = ensureType(context, elementValue, fromType, *arrayType.arrayElementType);
 			llvm::Value *elementPtr = builder.CreateGEP(
@@ -206,13 +206,13 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		return builder.CreateAlignedLoad(llvmArrayType, tempAlloca, llvm::Align(8), "array_literal_load");
 	}
 
-	case Function::Kind::Variable: {
-		Function *resolved = resolveVariableBinding(context, expr);
+	case Expression::Kind::Variable: {
+		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
 			MacroScopeGuard guard(context);
 			if (context.macroBindingFrames.hasParentScope())
 				guard.popToCallerScope();
-			return generateFunctionCode(context, resolved);
+			return generateExpressionCode(context, resolved);
 		}
 
 		if (!expr->variable)
@@ -224,7 +224,7 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 
 		llvm::Type *loadType = getLLVMType(context, varType);
 
-		// Pattern parameter: load from function argument pointer
+		// Pattern parameter: load from generated function parameter pointer
 		auto bindingIt = context.patternBindings.find(varName);
 		if (bindingIt != context.patternBindings.end())
 			return builder.CreateAlignedLoad(loadType, bindingIt->second, llvm::Align(8), varName + "_val");
@@ -235,11 +235,11 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		if (definition->alloca)
 			return builder.CreateAlignedLoad(loadType, definition->alloca, llvm::Align(8), varName + "_val");
 
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unknown variable: " + varName, expr->range));
+		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unknown variable", expr->range, "name", varName));
 		return nullptr;
 	}
 
-	case Function::Kind::PatternCall: {
+	case Expression::Kind::PatternCall: {
 		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
 			return nullptr;
 
@@ -272,11 +272,11 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 			return nullptr;
 		}
 
-		// Build parameter name → argument function mapping
-		std::vector<std::pair<std::string, Function *>> paramBindings;
+		// Build parameter name → argument expression mapping
+		std::vector<std::pair<std::string, Expression *>> paramBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
 		if (matchedSection->isMacro) {
-			// Macro: inline the body with function substitution.
+			// Macro: inline the body with expression substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
 			pushClearedBindingScope(context.macroBindingFrames);
 			Section *savedBodySection = context.currentBodySection;
@@ -298,8 +298,8 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 			llvm::Value *result = nullptr;
 			for (Section *child : matchedSection->children) {
 				for (CodeLine *line : child->codeLines) {
-					if (line->function)
-						result = generateFunctionCode(context, line->function);
+					if (line->expression)
+						result = generateExpressionCode(context, line->expression);
 				}
 			}
 
@@ -349,12 +349,12 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		// Build call arguments: pass variable pointers or temp allocas
 		std::vector<llvm::Value *> args;
 		for (size_t i = 0; i < paramBindings.size(); i++) {
-			Function *argExpr = paramBindings[i].second;
+			Expression *argExpr = paramBindings[i].second;
 			llvm::Value *ptr = getVariablePointer(context, argExpr);
 			if (ptr) {
 				args.push_back(ptr);
 			} else {
-				llvm::Value *argVal = generateFunctionCode(context, argExpr);
+				llvm::Value *argVal = generateExpressionCode(context, argExpr);
 				if (argVal) {
 					llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[i]);
 					builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
@@ -366,13 +366,13 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 		return builder.CreateCall(func, args);
 	}
 
-	case Function::Kind::IntrinsicCall: {
-		std::vector<Function *> args(expr->arguments.begin() + 1, expr->arguments.end());
+	case Expression::Kind::IntrinsicCall: {
+		std::vector<Expression *> args(expr->arguments.begin() + 1, expr->arguments.end());
 		return generateIntrinsicCode(context, expr->intrinsicName, args, getEffectiveType(context, expr));
 	}
 
-	case Function::Kind::Pending:
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Unresolved pending function", expr->range));
+	case Expression::Kind::Pending:
+		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pending expression", expr->range));
 		return nullptr;
 	}
 
@@ -383,26 +383,26 @@ llvm::Value *generateFunctionCode(ParseContext &context, Function *expr) {
 bool generateSectionCode(ParseContext &context, Section *section) {
 	allocateSectionVariables(context, section);
 
-	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Function *, BindingMap>> {
-		if (!line || !line->function)
+	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Expression *, BindingMap>> {
+		if (!line || !line->expression)
 			return std::nullopt;
 
-		Function *header = line->function;
+		Expression *header = line->expression;
 		BindingMap headerBindings;
 		context.macroBindingFrames.forEachFrame([&headerBindings](const BindingFrame &frame) {
-			for (const auto &[bindingName, functionExpression] : frame.bindings)
-				headerBindings[bindingName] = functionExpression;
+			for (const auto &[bindingName, expression] : frame.bindings)
+				headerBindings[bindingName] = expression;
 		});
-		if (header->kind == Function::Kind::PatternCall) {
+		if (header->kind == Expression::Kind::PatternCall) {
 			BindingMap innerBindings;
-			Function *expanded = expandMacroPatternCall(header, innerBindings);
+			Expression *expanded = expandMacroPatternCall(header, innerBindings);
 			if (expanded) {
 				header = expanded;
 				for (const auto &[name, argExpr] : innerBindings)
 					headerBindings[name] = argExpr;
 			}
 		}
-		if (!header || header->kind != Function::Kind::IntrinsicCall)
+		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
 		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
 			return std::nullopt;
@@ -454,7 +454,7 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 			}
 		}
 
-		if (line->function) {
+		if (line->expression) {
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 				// Use a DILexicalBlockFile scope when the code line's source file
@@ -467,7 +467,7 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
-			generateFunctionCode(context, line->function);
+			generateExpressionCode(context, line->expression);
 		}
 	}
 
@@ -482,7 +482,8 @@ bool generateCode(ParseContext &context) {
 		std::string error;
 		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
 		if (!targetMachine) {
-			context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "SPIR-V target not available: " + error, Range())
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "spirv target not available", Range(), "error", error)
 			);
 			return false;
 		}
@@ -599,7 +600,8 @@ bool generateCode(ParseContext &context) {
 		llvm::errs() << "\n=== Invalid LLVM IR (for debugging) ===\n";
 		context.llvmModule->print(llvm::errs(), nullptr);
 		llvm::errs() << "=== End Invalid LLVM IR ===\n\n";
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "LLVM verification failed: " + error, Range()));
+		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "llvm verification failed", Range(), "error", error)
+		);
 		return false;
 	}
 
@@ -648,8 +650,8 @@ bool generateCode(ParseContext &context) {
 		std::error_code ec;
 		llvm::raw_fd_ostream out(outputPath, ec);
 		if (ec) {
-			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "Failed to open output file: " + ec.message(), Range())
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "failed to open output file", Range(), "error", ec.message())
 			);
 			return false;
 		}

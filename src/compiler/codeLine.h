@@ -7,7 +7,7 @@ namespace lsp {
 struct SourceFile;
 }
 struct Section;
-struct Function;
+struct Expression;
 
 struct SourceLocation {
 	lsp::SourceFile *sourceFile{};
@@ -54,8 +54,8 @@ struct CodeLine {
 	// the elements of this code lines pattern
 	std::vector<PatternElement> patternElements;
 
-	// the function tree for this code line (built during analysis)
-	Function *function{};
+	// the expression tree for this code line (built during analysis)
+	Expression *expression{};
 
 	// Mapping from transformed text back to original file locations.
 	std::vector<SourceSlice> sourceSlices;

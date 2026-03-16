@@ -2,9 +2,9 @@
 #include "codeLine.h"
 #include "section.h"
 
-PatternReference::PatternReference(Function *function, SectionType patternType)
-	: sourceRange(function->range), pattern(std::string(function->range.subString)), patternType(patternType),
-	  function(function) {}
+PatternReference::PatternReference(Expression *expression, SectionType patternType)
+	: sourceRange(expression->range), pattern(std::string(expression->range.subString)), patternType(patternType),
+	  expression(expression) {}
 
 void PatternReference::resolve(PatternMatch *matchResult) {
 	match = matchResult;

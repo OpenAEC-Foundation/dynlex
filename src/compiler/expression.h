@@ -13,7 +13,7 @@ struct PatternDefinition;
 struct PatternReference;
 struct VariableReference;
 
-struct Function {
+struct Expression {
 	enum class Kind {
 		Literal,
 		ArrayLiteral,
@@ -45,22 +45,22 @@ struct Function {
 	std::string intrinsicName;
 
 	// Arguments (for PatternCall and IntrinsicCall)
-	std::vector<Function *> arguments;
+	std::vector<Expression *> arguments;
 
 	// True if this node was created from a subMatch in expandMatch.
 	// Only subMatch-originated PatternCalls participate in operand reordering.
 	bool isSubMatch = false;
 
-	// True if this function came from explicit parentheses in the source.
-	// Grouped functions are inferred independently and should not be flattened
+	// True if this expression came from explicit parentheses in the source.
+	// Grouped expressions are inferred independently and should not be flattened
 	// back into surrounding operator regrouping.
 	bool isExplicitGroup = false;
 };
 
-// Utility: Sort function arguments by their source position
-inline std::vector<Function *> sortArgumentsByPosition(const std::vector<Function *> &args) {
-	std::vector<Function *> sortedArgs = args;
-	std::sort(sortedArgs.begin(), sortedArgs.end(), [](Function *a, Function *b) {
+// Utility: Sort expression arguments by their source position
+inline std::vector<Expression *> sortArgumentsByPosition(const std::vector<Expression *> &args) {
+	std::vector<Expression *> sortedArgs = args;
+	std::sort(sortedArgs.begin(), sortedArgs.end(), [](Expression *a, Expression *b) {
 		return a->range.start() < b->range.start();
 	});
 	return sortedArgs;

@@ -2,7 +2,7 @@
 #include "IndentData.h"
 #include "classSection.h"
 #include "compileTimeValue.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
@@ -263,7 +263,7 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
-static bool evaluateCompileTimeInteger(ParseContext &context, Function *expr, const BindingMap &bindings, int &outValue) {
+static bool evaluateCompileTimeInteger(ParseContext &context, Expression *expr, const BindingMap &bindings, int &outValue) {
 	CompileTimeValue value = evaluateCompileTimeValue(expr, context, makeBindingFrameStack(bindings));
 	auto *number = std::get_if<double>(&value);
 	if (!number)
@@ -272,16 +272,16 @@ static bool evaluateCompileTimeInteger(ParseContext &context, Function *expr, co
 	return *number == static_cast<double>(outValue);
 }
 
-void appendPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings) {
+void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings) {
 	collectPatternCallBindings(expr, definition, bindings);
 }
 
-static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &outTypeRef) {
+static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
 		return false;
 
-	Function *kindExpr = intrinsicExpr->arguments[1];
+	Expression *kindExpr = intrinsicExpr->arguments[1];
 	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
 	if (!kindStr)
 		return false;
@@ -309,7 +309,7 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 	}
 
 	if (intrinsicExpr->arguments.size() > 2) {
-		Function *bitsExpr = intrinsicExpr->arguments[2];
+		Expression *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
 		if (!bits)
 			return false;
@@ -321,7 +321,7 @@ static bool tryParseIntrinsicTypeReference(Function *intrinsicExpr, DataType &ou
 }
 
 static bool
-resolveTypeReferenceFunction(ParseContext &context, Function *expr, const BindingMap &bindings, DataType &outTypeRef);
+resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef);
 
 static bool instantiateClassTypeReference(
 	ParseContext &context, ClassDefinition *classDef, const BindingMap &bindings, DataType &outTypeRef
@@ -337,12 +337,12 @@ static bool instantiateClassTypeReference(
 			outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 			return true;
 		}
-		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeFunction) {
-			if (fieldType.typeFunction->kind == Function::Kind::Pending && field.range.line && field.range.line->section)
-				expandFunction(fieldType.typeFunction, field.range.line->section);
+		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
+			if (fieldType.typeExpression->kind == Expression::Kind::Pending && field.range.line && field.range.line->section)
+				expandExpression(fieldType.typeExpression, field.range.line->section);
 
 			DataType fieldTypeRef;
-			if (!resolveTypeReferenceFunction(context, fieldType.typeFunction, bindings, fieldTypeRef) ||
+			if (!resolveTypeReferenceExpression(context, fieldType.typeExpression, bindings, fieldTypeRef) ||
 				fieldTypeRef.kind != DataType::Kind::Type)
 				return false;
 			fieldType = concretizeClassType(fieldTypeRef.toReferencedType());
@@ -363,14 +363,14 @@ static bool instantiateClassTypeReference(
 }
 
 static bool
-resolveTypeReferenceFunction(ParseContext &context, Function *expr, const BindingMap &bindings, DataType &outTypeRef) {
+resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef) {
 	if (!expr)
 		return false;
 
-	if (expr->kind == Function::Kind::Variable && expr->variable) {
+	if (expr->kind == Expression::Kind::Variable && expr->variable) {
 		auto it = bindings.find(expr->variable->name);
 		if (it != bindings.end())
-			return resolveTypeReferenceFunction(context, it->second, bindings, outTypeRef);
+			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
 		if (expr->variable->name == "pointer") {
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Int;
@@ -389,13 +389,13 @@ resolveTypeReferenceFunction(ParseContext &context, Function *expr, const Bindin
 		return false;
 	}
 
-	if (expr->kind == Function::Kind::IntrinsicCall) {
+	if (expr->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 		if (tryParseIntrinsicTypeReference(expr, outTypeRef))
 			return true;
 		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
-			if (!resolveTypeReferenceFunction(context, expr->arguments[1], bindings, innerTypeRef) ||
+			if (!resolveTypeReferenceExpression(context, expr->arguments[1], bindings, innerTypeRef) ||
 				innerTypeRef.kind != DataType::Kind::Type)
 				return false;
 			innerTypeRef.pointerDepth++;
@@ -411,7 +411,7 @@ resolveTypeReferenceFunction(ParseContext &context, Function *expr, const Bindin
 			outTypeRef.arraySize = arraySize;
 			if (expr->arguments.size() > 2) {
 				DataType elementTypeRef;
-				if (!resolveTypeReferenceFunction(context, expr->arguments[2], bindings, elementTypeRef) ||
+				if (!resolveTypeReferenceExpression(context, expr->arguments[2], bindings, elementTypeRef) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
 				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
@@ -421,7 +421,7 @@ resolveTypeReferenceFunction(ParseContext &context, Function *expr, const Bindin
 		return false;
 	}
 
-	if (expr->kind != Function::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+	if (expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return false;
 
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
@@ -440,14 +440,14 @@ resolveTypeReferenceFunction(ParseContext &context, Function *expr, const Bindin
 	}
 
 	BindingMap innerBindings;
-	Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 	if (!bodyExpr)
 		return false;
 
 	BindingMap mergedBindings = bindings;
 	for (const auto &[name, argExpr] : innerBindings)
 		mergedBindings[name] = argExpr;
-	return resolveTypeReferenceFunction(context, bodyExpr, mergedBindings, outTypeRef);
+	return resolveTypeReferenceExpression(context, bodyExpr, mergedBindings, outTypeRef);
 }
 
 static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
@@ -468,13 +468,13 @@ static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
 
 		for (ClassDefinition *classDef : classDefinitions) {
 			for (FieldDefinition &field : classDef->fields) {
-				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeFunction) {
-					if (field.declaredType.typeFunction->kind == Function::Kind::Pending && field.range.line &&
+				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeExpression) {
+					if (field.declaredType.typeExpression->kind == Expression::Kind::Pending && field.range.line &&
 						field.range.line->section) {
-						expandFunction(field.declaredType.typeFunction, field.range.line->section);
+						expandExpression(field.declaredType.typeExpression, field.range.line->section);
 					}
 					DataType typeRef;
-					if (resolveTypeReferenceFunction(context, field.declaredType.typeFunction, {}, typeRef) &&
+					if (resolveTypeReferenceExpression(context, field.declaredType.typeExpression, {}, typeRef) &&
 						typeRef.kind == DataType::Kind::Type) {
 						field.declaredType = concretizeClassType(typeRef.toReferencedType());
 						madeProgress = true;
@@ -550,10 +550,9 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
 			// If this is the main file, report error
-			context.diagnostics.push_back(Diagnostic(
-				Diagnostic::Level::Error,
-				renderSyntaxMessage(context.projectSyntax.messages.couldNotImportMainFile, {{"path", path}}), Range()
-			));
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "could not import main file", Range(), "path", path)
+			);
 		}
 		return false;
 	}
@@ -590,10 +589,10 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 					.string();
 			std::string importPath = resolveImportPath(std::string(*importPathView), importingDir, context.fileSystem.get());
 			if (!importSourceFile(importPath, context)) {
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error,
-					renderSyntaxMessage(syntax.messages.failedToImportSourceFile, {{"path", importPath}}),
-					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length())
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "failed to import source file",
+					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length()), "path",
+					importPath
 				));
 				return false;
 			}
@@ -635,17 +634,11 @@ bool analyzeSections(ParseContext &context) {
 			data.indentLevel = !indentString.empty();
 		} else if (indentString.length() % data.indentString.length() != 0) {
 			// check amount of indents
-			context.diagnostics.push_back(Diagnostic(
-				Diagnostic::Level::Error,
-				renderSyntaxMessage(
-					syntax.messages.invalidIndentationAmount,
-					{
-						{"expected", std::to_string(data.indentString.length() * data.indentLevel) + " " +
-										 charName(data.indentString[0]) + "s"},
-						{"found", std::to_string(indentString.length())},
-					}
-				),
-				Range(line, 0, indentString.length())
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "invalid indentation amount", Range(line, 0, indentString.length()),
+				"expected",
+				std::to_string(data.indentString.length() * data.indentLevel) + " " + charName(data.indentString[0]) + "s",
+				"found", std::to_string(indentString.length())
 			));
 		}
 		// check type of indent. indentation is only important for section
@@ -654,14 +647,10 @@ bool analyzeSections(ParseContext &context) {
 			char expectedIndentChar = data.indentString[0];
 			size_t invalidCharIndex = indentString.find_first_not_of(expectedIndentChar);
 			if (invalidCharIndex != std::string::npos) {
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error,
-					renderSyntaxMessage(
-						syntax.messages.invalidIndentationCharacter,
-						{{"expected", charName(expectedIndentChar) + "s"},
-						 {"found", "a " + charName(indentString[invalidCharIndex])}}
-					),
-					Range(line, invalidCharIndex, indentString.length())
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "invalid indentation character",
+					Range(line, invalidCharIndex, indentString.length()), "expected", charName(expectedIndentChar) + "s",
+					"found", "a " + charName(indentString[invalidCharIndex])
 				));
 			} else {
 				data.indentLevel = indentString.length() / data.indentString.length();
@@ -675,17 +664,11 @@ bool analyzeSections(ParseContext &context) {
 			// section change
 			if (data.indentLevel > oldIndentLevel) {
 				// cannot go up sections twice in a time
-				context.diagnostics.push_back(Diagnostic(
-					Diagnostic::Level::Error,
-					renderSyntaxMessage(
-						syntax.messages.invalidIndentationIncrease,
-						{
-							{"expected", std::to_string(data.indentString.length() * oldIndentLevel) + " " +
-											 charName(data.indentString[0]) + "s"},
-							{"found", std::to_string(indentString.length())},
-						}
-					),
-					Range(line, 0, indentString.length())
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "invalid indentation increase", Range(line, 0, indentString.length()),
+					"expected",
+					std::to_string(data.indentString.length() * oldIndentLevel) + " " + charName(data.indentString[0]) + "s",
+					"found", std::to_string(indentString.length())
 				));
 
 				// fatal for compilation, since no sections will be made
@@ -774,7 +757,7 @@ bool isMathFunction(const std::string &name) {
 }
 
 PatternDefinition *selectOverload(
-	const std::vector<PatternDefinition *> &definitions, const std::vector<Function *> & /*sortedArgs*/,
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 ) {
 	if (definitions.size() <= 1)

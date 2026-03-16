@@ -24,7 +24,9 @@ bool emitNativeExecutable(ParseContext &context) {
 	std::string error;
 	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
 	if (!target) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Failed to get target: " + error, Range()));
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "failed to get target", Range(), "error", error)
+		);
 		return false;
 	}
 
@@ -36,7 +38,8 @@ bool emitNativeExecutable(ParseContext &context) {
 	);
 
 	if (!targetMachine) {
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, "Failed to create target machine", Range()));
+		context.diagnostics.push_back(Diagnostic(context, Diagnostic::Level::Error, "failed to create target machine", Range())
+		);
 		return false;
 	}
 
@@ -61,7 +64,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		llvm::raw_fd_ostream dest(objectPath, ec, llvm::sys::fs::OF_None);
 		if (ec) {
 			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "Could not open object file: " + ec.message(), Range())
+				Diagnostic(context, Diagnostic::Level::Error, "failed to open object file", Range(), "error", ec.message())
 			);
 			return false;
 		}
@@ -69,7 +72,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		llvm::legacy::PassManager passManager;
 		if (targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 			context.diagnostics.push_back(
-				Diagnostic(Diagnostic::Level::Error, "Target machine cannot emit object file", Range())
+				Diagnostic(context, Diagnostic::Level::Error, "target machine cannot emit object file", Range())
 			);
 			return false;
 		}
@@ -102,7 +105,10 @@ bool emitNativeExecutable(ParseContext &context) {
 		linkResult = pclose(pipe);
 	}
 	if (linkResult != 0) {
-		std::string errorMsg = "Linking failed with exit code " + std::to_string(linkResult);
+		Diagnostic diagnostic(
+			context, Diagnostic::Level::Error, "linking failed", Range(), "exit_code", std::to_string(linkResult)
+		);
+		const SyntaxConfig &syntax = syntaxConfigForRange(context, Range());
 
 		// Check which libraries are actually missing
 		std::vector<std::string> missingLibs;
@@ -113,18 +119,18 @@ bool emitNativeExecutable(ParseContext &context) {
 		}
 
 		if (!missingLibs.empty()) {
-			errorMsg += "\nMissing libraries: ";
-			bool first = true;
-			for (const std::string &lib : missingLibs) {
-				if (!first)
-					errorMsg += ", ";
-				errorMsg += lib;
-				first = false;
+			std::string libraries;
+			for (size_t i = 0; i < missingLibs.size(); i++) {
+				if (i > 0)
+					libraries += ", ";
+				libraries += missingLibs[i];
 			}
-			errorMsg += "\nSearch online for installation instructions for your system.";
+			diagnostic.message +=
+				"\n" + renderConfiguredMessage(syntax, "linking failed", "missing libraries", {{"libraries", libraries}}) +
+				"\n" + renderConfiguredMessage(syntax, "linking failed", "install hint");
 		}
 
-		context.diagnostics.push_back(Diagnostic(Diagnostic::Level::Error, errorMsg, Range()));
+		context.diagnostics.push_back(std::move(diagnostic));
 		return false;
 	}
 

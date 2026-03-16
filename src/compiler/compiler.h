@@ -16,12 +16,8 @@ bool ensureSectionInstantiationInferred(
 	ParseContext &context, Section *section, const BindingFrameStack &callBindingFrameStack,
 	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation = nullptr
 );
-bool ensureSectionInstantiationInferred(
-	ParseContext &context, Section *section, const BindingMap &callBindings, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation = nullptr
-);
 bool isInternalSourcePath(std::string_view path);
-void expandFunction(Function *expr, Section *section);
+void expandExpression(Expression *expr, Section *section);
 
 // Intrinsic operator checking utilities
 bool isArithmeticOperator(const std::string &name);
@@ -34,8 +30,8 @@ PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType 
 // argTypes: the deduced types of the call-site arguments (in nodesPassed order).
 // Returns the best-matching definition, preferring type-constrained overloads over unconstrained ones.
 PatternDefinition *selectOverload(
-	const std::vector<PatternDefinition *> &definitions, const std::vector<Function *> &sortedArgs,
+	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );
 
-void appendPatternCallBindings(Function *expr, PatternDefinition *definition, BindingMap &bindings);
+void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings);

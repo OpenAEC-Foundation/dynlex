@@ -1,7 +1,7 @@
 #include "compileTimeValue.h"
 #include "bindingResolution.h"
 #include "compilerUtils.h"
-#include "function.h"
+#include "expression.h"
 #include "intrinsicInfo.h"
 #include "parseContext.h"
 #include "section.h"
@@ -21,13 +21,13 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 }
 
 static CompileTimeValue evaluateCompileTimeValueImpl(
-	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
+	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 );
 
-static thread_local std::unordered_set<const Function *> activeCompileTimeFunctions;
+static thread_local std::unordered_set<const Expression *> activeCompileTimeFunctions;
 
-static Function *resolveCompileTimeBinding(
-	Function *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
+static Expression *resolveCompileTimeBinding(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
 ) {
 	if (outBindingFrameStack)
 		*outBindingFrameStack = bindingFrameStack;
@@ -54,7 +54,7 @@ static std::optional<double> currentBuildInfoNumber(ParseContext &context, std::
 }
 
 static CompileTimeValue evaluateIntrinsic(
-	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
+	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	if (kind == IntrinsicKind::BuildInfo) {
@@ -69,7 +69,7 @@ static CompileTimeValue evaluateIntrinsic(
 		return {};
 	}
 	if (kind == IntrinsicKind::SizeOf) {
-		Function *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindingFrameStack);
+		Expression *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindingFrameStack);
 		if (!typeExpr)
 			return {};
 		DataType typeRef = typeExpr->type;
@@ -170,24 +170,24 @@ static CompileTimeValue evaluateIntrinsic(
 	return {};
 }
 
-static Function *getSingleCompileTimeBody(Section *section) {
+static Expression *getSingleCompileTimeBody(Section *section) {
 	if (!section)
 		return nullptr;
-	Function *result = nullptr;
+	Expression *result = nullptr;
 	for (Section *child : section->children) {
 		for (CodeLine *line : child->codeLines) {
-			if (!line->function)
+			if (!line->expression)
 				continue;
 			if (result)
 				return nullptr;
-			result = line->function;
+			result = line->expression;
 		}
 	}
 	return result;
 }
 
 static CompileTimeValue evaluatePatternCall(
-	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
+	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	if (!expr->patternMatch || !expr->patternMatch->matchedEndNode ||
 		expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
@@ -199,14 +199,14 @@ static CompileTimeValue evaluatePatternCall(
 
 	BindingMap callBindings;
 	bindingFrameStack.forEachFrame([&callBindings](const BindingFrame &frame) {
-		for (const auto &[bindingName, functionExpression] : frame.bindings)
-			callBindings[bindingName] = functionExpression;
+		for (const auto &[bindingName, expression] : frame.bindings)
+			callBindings[bindingName] = expression;
 	});
 	collectPatternCallBindings(expr, def, callBindings);
 
 	if (def->section->isMacro) {
 		BindingMap innerBindings;
-		Function *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+		Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
 		if (!bodyExpr)
 			return {};
 		for (const auto &[name, argExpr] : innerBindings)
@@ -216,7 +216,7 @@ static CompileTimeValue evaluatePatternCall(
 		return evaluateCompileTimeValueImpl(bodyExpr, context, callBindingFrameStack, instantiation);
 	}
 
-	Function *bodyExpr = getSingleCompileTimeBody(def->section);
+	Expression *bodyExpr = getSingleCompileTimeBody(def->section);
 	if (!bodyExpr)
 		return {};
 	BindingFrameStack callBindingFrameStack;
@@ -225,7 +225,7 @@ static CompileTimeValue evaluatePatternCall(
 }
 
 static CompileTimeValue evaluateCompileTimeValueImpl(
-	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
+	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	BindingFrameStack effectiveBindingFrameStack;
 	expr = resolveCompileTimeBinding(expr, bindingFrameStack, &effectiveBindingFrameStack);
@@ -235,20 +235,22 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 		return {};
 
 	struct ActiveCompileTimeGuard {
-		const Function *expr;
+		const Expression *expr;
 
-		explicit ActiveCompileTimeGuard(const Function *function) : expr(function) { activeCompileTimeFunctions.insert(expr); }
+		explicit ActiveCompileTimeGuard(const Expression *expression) : expr(expression) {
+			activeCompileTimeFunctions.insert(expr);
+		}
 		~ActiveCompileTimeGuard() { activeCompileTimeFunctions.erase(expr); }
 	} guard(expr);
 
 	switch (expr->kind) {
-	case Function::Kind::Literal:
+	case Expression::Kind::Literal:
 		if (auto *number = std::get_if<double>(&expr->literalValue))
 			return *number;
 		if (auto *text = std::get_if<std::string>(&expr->literalValue))
 			return *text;
 		return {};
-	case Function::Kind::Variable:
+	case Expression::Kind::Variable:
 		if (expr->variable && instantiation) {
 			if (!instantiation->requiredCompileTimeParameters.contains(expr->variable->name))
 				return {};
@@ -257,19 +259,19 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 				return it->second;
 		}
 		return {};
-	case Function::Kind::ArrayLiteral:
-	case Function::Kind::Pending:
+	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::Pending:
 		return {};
-	case Function::Kind::IntrinsicCall:
+	case Expression::Kind::IntrinsicCall:
 		return evaluateIntrinsic(expr, context, effectiveBindingFrameStack, instantiation);
-	case Function::Kind::PatternCall:
+	case Expression::Kind::PatternCall:
 		return evaluatePatternCall(expr, context, effectiveBindingFrameStack, instantiation);
 	}
 	return {};
 }
 
 CompileTimeValue evaluateCompileTimeValue(
-	Function *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
+	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 ) {
 	return evaluateCompileTimeValueImpl(expr, context, bindingFrameStack, instantiation);
 }

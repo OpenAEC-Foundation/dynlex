@@ -1,20 +1,12 @@
-import lib/std.dl
+import lib/array.dl
 import tests/games/geometry_dash/generator.dl
 
-set count to 48
-set step_unit to 24
-set max_level to 4
-set seed_value to current time
-
+set count to 24
 set levels to allocate count slots of an integer
 set jump_ms to allocate count slots of an integer
 set slide_ms to allocate count slots of an integer
 
-generate trajectory count into levels, jump_ms, slide_ms using seed_value, step_unit, max_level
-
-print "TRAJECTORY PLAN" as line
-print "seed" as line
-print seed_value as line
+fill plan levels jump_ms slide_ms with count count using seed 1337
 
 set i to 0
 loop while i < count:
