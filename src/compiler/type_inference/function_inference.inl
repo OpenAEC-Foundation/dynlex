@@ -12,7 +12,7 @@ static bool endsWithArgument(Expression *expression);
 
 struct InstantiationProgressSnapshot {
 	DataType returnType;
-	std::vector<DataType> parameterTypes;
+	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
@@ -24,7 +24,7 @@ struct InstantiationProgressSnapshot {
 static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instantiation &instantiation) {
 	return {
 		instantiation.returnType,
-		instantiation.parameterTypes,
+		instantiation.argumentTypes,
 		instantiation.constantParameterValues,
 		instantiation.constantValuesByReference,
 		instantiation.selectedOverloadsByCall,
@@ -39,8 +39,8 @@ static void setRecursiveInferenceFailure(
 	if (functionName.empty())
 		functionName = definition ? (std::string)definition->range.subString : "<expression>";
 	context.setTypeFailure(renderConfiguredMessage(
-		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge",
-		"message", {{"function", functionName}}
+		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge", "message",
+		{{"function", functionName}}
 	));
 }
 
@@ -178,12 +178,13 @@ makeNonMacroParameterBinding(const std::string &parameterName, const DataType &a
 static bool inferExpression(
 	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack
 );
+static bool
+inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static bool inferSection(Section *section, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static DataType derivePatternCallType(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static DataType
 inferExpressionTypeWithoutSideEffects(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static DataType ensureExpressionType(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
-
 static void snapshotExpressionVariableReferences(Expression *expr, InferenceContext &context) {
 	if (!expr)
 		return;
@@ -207,19 +208,51 @@ struct ArgumentTypeInferenceResult {
 	bool deferred = false;
 };
 
+static bool definitionParameterAcceptsVoid(
+	PatternDefinition *definition, const std::vector<PatternTreeNode *> &nodesPassed, size_t argumentIndex
+) {
+	if (!definition)
+		return false;
+	size_t currentArgumentIndex = 0;
+	for (PatternTreeNode *node : nodesPassed) {
+		if (!node)
+			continue;
+		auto paramIt = node->parameterNames.find(definition);
+		if (paramIt == node->parameterNames.end())
+			continue;
+		if (currentArgumentIndex != argumentIndex) {
+			currentArgumentIndex++;
+			continue;
+		}
+		for (const auto &element : definition->patternElements) {
+			if (element.type != PatternElement::Type::Variable || element.text != paramIt->second)
+				continue;
+			return element.resolvedTypeConstraint.isDeduced() && element.resolvedTypeConstraint.kind == DataType::Kind::Void &&
+				   element.resolvedTypeConstraint.pointerDepth == 0;
+		}
+		return false;
+	}
+	return false;
+}
+
 static ArgumentTypeInferenceResult ensureArgumentTypeForPatternCall(
 	Expression *argExpr, InferenceContext &context, const BindingFrameStack &callerBindingFrameStack
 ) {
+	ArgumentTypeInferenceResult result;
+	DataType resolvedType = resolveTypeThroughBindings(argExpr, callerBindingFrameStack);
+	if (argExpr && argExpr->kind != Expression::Kind::PatternCall && resolvedType.isDeduced()) {
+		result.type = resolvedType;
+		return result;
+	}
 	bool savedObservedInProgress = context.observedInProgressUndeducedInstantiation;
 	context.observedInProgressUndeducedInstantiation = false;
 	Expression *inferExpr = argExpr;
-	(void)inferExpression(inferExpr, context, false, callerBindingFrameStack);
-	ArgumentTypeInferenceResult result;
-	result.type = ensureExpressionType(argExpr, context, callerBindingFrameStack);
+	(void)inferExpressionWithCurrentGrouping(inferExpr, context, callerBindingFrameStack);
+	result.type = ensureExpressionType(inferExpr, context, callerBindingFrameStack);
 	if (!result.type.isDeduced())
-		result.type = derivePatternCallType(argExpr, context, callerBindingFrameStack);
+		result.type = derivePatternCallType(inferExpr, context, callerBindingFrameStack);
 	if (!result.type.isDeduced())
-		result.type = resolveTypeThroughBindings(argExpr, callerBindingFrameStack);
+		result.type = resolveTypeThroughBindings(inferExpr, callerBindingFrameStack);
 	bool observedInProgress = context.observedInProgressUndeducedInstantiation;
 	context.observedInProgressUndeducedInstantiation = savedObservedInProgress || observedInProgress;
 	result.deferred = !result.type.isDeduced() && observedInProgress;
@@ -378,9 +411,11 @@ static DataType inferExpressionTypeWithoutSideEffects(
 	trialContext.trialJournal = &journal;
 
 	(void)inferExpression(targetExpr, trialContext, false, targetBindingFrameStack);
-	type = resolveTypeThroughBindings(targetExpr, targetBindingFrameStack);
-	if (!type.isDeduced())
-		type = derivePatternCallType(targetExpr, trialContext, targetBindingFrameStack);
+	if (trialContext.typesValid) {
+		type = resolveTypeThroughBindings(targetExpr, targetBindingFrameStack);
+		if (!type.isDeduced())
+			type = derivePatternCallType(targetExpr, trialContext, targetBindingFrameStack);
+	}
 	if (!type.isDeduced() && context.typeFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
 		context.typeFailureDetail = trialContext.typeFailureDetail;
 
@@ -411,6 +446,13 @@ static bool isVariableAssignmentCompatible(const DataType &targetType, const Dat
 		   valueType.pointerDepth == 0;
 }
 
+static Diagnostic
+buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const DataType &valueType, ParseContext &parseContext);
+static int getRefinedClassInstantiationIndex(
+	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
+);
+
+#include "intrinsics/store_inference.inl"
 #include "variable_flow.inl"
 
 // Infer types for a section's code lines with operand reordering. Returns false on failure.
@@ -420,7 +462,8 @@ inferSection(Section *section, InferenceContext &context, const BindingFrameStac
 // Infer the type of an expression bottom-up.
 // Sets context.typesValid = false if types are invalid for this grouping.
 static void inferOrderedExpression(
-	Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack = BindingFrameStack{}
+	Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack = BindingFrameStack{},
+	bool preserveCurrentGrouping = false
 ) {
 	context.typesValid = true;
 	auto resolveThroughMacroBindings = [&](Expression *expression) {
@@ -442,7 +485,8 @@ static void inferOrderedExpression(
 		}
 		size_t chosenIndex = chosenBranch == expr->arguments[2] ? 2 : 3;
 		Expression *activeBranch = chosenBranch;
-		if (!inferExpression(activeBranch, context, false, macroBindingFrameStack))
+		if (!(preserveCurrentGrouping ? inferExpressionWithCurrentGrouping(activeBranch, context, macroBindingFrameStack)
+									  : inferExpression(activeBranch, context, false, macroBindingFrameStack)))
 			return;
 		expr->arguments[chosenIndex] = activeBranch;
 		expr->type = resolveTypeThroughBindings(activeBranch, macroBindingFrameStack);
@@ -458,7 +502,8 @@ static void inferOrderedExpression(
 			if (skippedArgumentIndices.contains(i))
 				continue;
 			Expression *arg = expr->arguments[i];
-			if (!inferExpression(arg, context, false, macroBindingFrameStack))
+			if (!(preserveCurrentGrouping ? inferExpressionWithCurrentGrouping(arg, context, macroBindingFrameStack)
+										  : inferExpression(arg, context, false, macroBindingFrameStack)))
 				return;
 			expr->arguments[i] = arg;
 		}
@@ -595,163 +640,13 @@ static void inferOrderedExpression(
 				break;
 			}
 			case IntrinsicReturnKind::Void:
-				// "store" has side effects on variable types beyond just being Void
-				if (kind == IntrinsicKind::Store) {
-					BindingFrameStack destinationBindingFrameStack;
-					Expression *destExpr =
-						resolveThroughBindingsDeep(expr->arguments[1], macroBindingFrameStack, destinationBindingFrameStack);
-					BindingFrameStack valueBindingFrameStack;
-					Expression *valueExpr =
-						resolveThroughBindingsDeep(expr->arguments[2], macroBindingFrameStack, valueBindingFrameStack);
-					DataType valType = ensureExpressionType(valueExpr, context, valueBindingFrameStack);
-					auto applyCastTargetType = [&](Expression *castExpr, const BindingFrameStack &castBindingFrameStack) {
-						if (!castExpr || castExpr->kind != Expression::Kind::IntrinsicCall ||
-							intrinsicKind(castExpr->intrinsicName) != IntrinsicKind::Cast || castExpr->arguments.size() < 3)
-							return;
-						BindingFrameStack resolvedTypeBindingFrameStack;
-						Expression *resolvedTypeExpr = resolveThroughBindingsDeep(
-							castExpr->arguments[2], castBindingFrameStack, resolvedTypeBindingFrameStack
-						);
-						if (!resolvedTypeExpr)
-							resolvedTypeExpr = castExpr->arguments[2];
-						const BindingFrameStack &typeBindingsForResolution =
-							resolvedTypeBindingFrameStack.hasBindings() ? resolvedTypeBindingFrameStack : castBindingFrameStack;
-						DataType castTypeArg = resolveTypeThroughBindings(resolvedTypeExpr, typeBindingsForResolution);
-						if (!(castTypeArg.kind == DataType::Kind::Type &&
-							  castTypeArg.referencedKind != DataType::Kind::Unresolved)) {
-							Expression *valBinding = castBindingFrameStack.lookup("val");
-							if (valBinding && valBinding->kind == Expression::Kind::PatternCall &&
-								valBinding->arguments.size() >= 2) {
-								Expression *rawTypeExpr = valBinding->arguments[1];
-								DataType recoveredTypeArg;
-								if (rawTypeExpr && rawTypeExpr->type.kind == DataType::Kind::Type) {
-									recoveredTypeArg = rawTypeExpr->type;
-								} else if (resolveCompileTimeTypeReference(
-											   context.parseContext, rawTypeExpr, castBindingFrameStack, recoveredTypeArg
-										   ) &&
-										   recoveredTypeArg.kind == DataType::Kind::Type) {
-									castTypeArg = recoveredTypeArg;
-								}
-								if (recoveredTypeArg.kind == DataType::Kind::Type)
-									castTypeArg = recoveredTypeArg;
-							}
-						}
-						if (castTypeArg.kind == DataType::Kind::Type)
-							valType = concretizeClassType(castTypeArg.toReferencedType());
-					};
-					applyCastTargetType(valueExpr, valueBindingFrameStack);
-					if (valueExpr && valueExpr->kind == Expression::Kind::PatternCall) {
-						BindingFrameStack castBindingFrameStack = valueBindingFrameStack;
-						BindingMap innerBindings;
-						Expression *bodyExpr = expandMacroPatternCall(valueExpr, innerBindings);
-						if (bodyExpr) {
-							BindingMap scopedMacroBindings;
-							scopedMacroBindings.reserve(innerBindings.size());
-							for (const auto &[name, argExpr] : innerBindings) {
-								Expression *resolvedArg = resolveThroughBindings(argExpr, castBindingFrameStack);
-								scopedMacroBindings[name] = resolvedArg ? resolvedArg : argExpr;
-							}
-							pushBindingScope(castBindingFrameStack, std::move(scopedMacroBindings));
-							applyCastTargetType(bodyExpr, castBindingFrameStack);
-						}
-					}
-					// If the original syntax is "value as type", recover the cast target type directly
-					// from the raw PatternCall argument to avoid stale template types.
-					Expression *rawValueExpr = expr->arguments[2];
-					if (rawValueExpr && rawValueExpr->kind == Expression::Kind::PatternCall &&
-						rawValueExpr->arguments.size() >= 2 &&
-						rawValueExpr->range.subString.find(" as ") != std::string_view::npos) {
-						DataType rawTypeArg = resolveTypeThroughBindings(rawValueExpr->arguments[1], macroBindingFrameStack);
-						if (rawTypeArg.kind == DataType::Kind::Type)
-							valType = concretizeClassType(rawTypeArg.toReferencedType());
-					}
-					if (valType.kind == DataType::Kind::Type) {
-						setConfiguredTypeFailure(expr->range, "compile time type value used at runtime");
-						break;
-					}
-					if (destExpr->kind == Expression::Kind::Variable && destExpr->variable && valType.isDeduced()) {
-						Section *sec = destExpr->range.line ? destExpr->range.line->section : nullptr;
-						Variable *var = sec ? sec->findVariable(destExpr->variable->name) : nullptr;
-						if (var) {
-							if (!var->type.isDeduced() || isVariableAssignmentCompatible(var->type, valType)) {
-								if (context.trial && context.trialJournal)
-									context.trialJournal->recordVariableWrite(var);
-								if (!var->type.isDeduced() || var->type == valType)
-									commitVariableTypeFromValue(var, valueExpr, valType);
-								CompileTimeValue assignedValue =
-									evaluateCompileTimeValueWithKnownState(valueExpr, context, valueBindingFrameStack);
-								context.setKnownConstant(var->definition, assignedValue);
-								if (context.inLoopMutationScope()) {
-									context.noteLoopMutation(var->definition);
-									context.setKnownConstant(var->definition, {});
-								}
-								context.snapshotReferenceConstant(destExpr->variable);
-							} else if (context.trial) {
-								setConfiguredTypeFailure(
-									valueExpr ? valueExpr->range : expr->range, "variable type change", "message",
-									{{"name", var->name},
-									 {"from_type", typeToUserName(var->type, context.parseContext)},
-									 {"to_type", typeToUserName(valType, context.parseContext)}}
-								);
-								break;
-							} else {
-								setConfiguredTypeFailure(
-									valueExpr ? valueExpr->range : expr->range, "variable type change", "message",
-									{{"name", var->name},
-									 {"from_type", typeToUserName(var->type, context.parseContext)},
-									 {"to_type", typeToUserName(valType, context.parseContext)}}
-								);
-								context.addDiagnostic(
-									buildVariableTypeChangeDiagnostic(var, valueExpr, valType, context.parseContext)
-								);
-								break;
-							}
-						}
-					} else if (destExpr->kind == Expression::Kind::IntrinsicCall &&
-							   intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property && valType.isDeduced()) {
-						BindingFrameStack resolvedBindingFrameStack = macroBindingFrameStack;
-						destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-							pushBindingScope(resolvedBindingFrameStack, frame.bindings);
-						});
-						BindingFrameStack ignoredBindingFrameStack;
-						Expression *ownerExpr = resolveThroughBindingsDeep(
-							destExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack
-						);
-						DataType instType = ownerExpr ? concretizeClassType(ownerExpr->type) : DataType{};
-						if (instType.kind == DataType::Kind::Class && instType.classDefinition &&
-							instType.classInstIndex >= 0) {
-							Expression *propExpr = resolveThroughBindings(destExpr->arguments[2], resolvedBindingFrameStack);
-							std::string fieldName;
-							if (auto *str = std::get_if<std::string>(&propExpr->literalValue))
-								fieldName = *str;
-							if (!fieldName.empty()) {
-								ClassDefinition *classDef = instType.classDefinition;
-								for (size_t i = 0; i < classDef->fields.size(); i++) {
-									if (classDef->fields[i].name == fieldName) {
-										int refinedInstIndex = getRefinedClassInstantiationIndex(
-											context, classDef, instType.classInstIndex, i, valType
-										);
-										if (refinedInstIndex < 0)
-											break;
-										if (ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable) {
-											Section *ownerSection =
-												ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
-											Variable *ownerVar =
-												ownerSection ? ownerSection->findVariable(ownerExpr->variable->name) : nullptr;
-											if (ownerVar && ownerVar->type.kind == DataType::Kind::Class &&
-												ownerVar->type.classDefinition == classDef) {
-												if (context.trial && context.trialJournal)
-													context.trialJournal->recordVariableWrite(ownerVar);
-												ownerVar->type.classInstIndex = refinedInstIndex;
-											}
-										}
-										break;
-									}
-								}
-							}
-						}
-					}
+				if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
+					DataType retType = resolveTypeThroughBindings(expr->arguments[1], macroBindingFrameStack);
+					if (retType.isDeduced() && context.currentInstantiation)
+						context.currentInstantiation->returnType = retType;
 				}
+				if (kind == IntrinsicKind::Store)
+					inferStoreEffects(expr, context, macroBindingFrameStack);
 				expr->type = {DataType::Kind::Void};
 				break;
 			case IntrinsicReturnKind::Float:
@@ -777,15 +672,6 @@ static void inferOrderedExpression(
 					} else {
 						setConfiguredTypeFailure(expr->range, "load at requires pointer");
 						break;
-					}
-				} else if (kind == IntrinsicKind::Return) {
-					if (expr->arguments.size() > 1) {
-						DataType retType = resolveTypeThroughBindings(expr->arguments[1], macroBindingFrameStack);
-						if (retType.isDeduced()) {
-							expr->type = retType;
-							if (context.currentInstantiation)
-								context.currentInstantiation->returnType = retType;
-						}
 					}
 				} else if (kind == IntrinsicKind::Call) {
 					DataType retTypeRef = resolveTypeThroughBindings(expr->arguments[3], macroBindingFrameStack);
@@ -899,20 +785,6 @@ static void inferOrderedExpression(
 							expr->type.pointerDepth = 1;
 						}
 					}
-				} else if (kind == IntrinsicKind::Select) {
-					markCompileTimeParameterRequirements(
-						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
-					);
-					Expression *chosenBranch = selectCompileTimeBranch(
-						expr, context.parseContext, macroBindingFrameStack, context.currentInstantiation
-					);
-					if (!chosenBranch) {
-						setConfiguredTypeFailure(expr->range, "select condition must be compile time known");
-						break;
-					}
-					DataType chosenType = resolveTypeThroughBindings(chosenBranch, macroBindingFrameStack);
-					if (chosenType.isDeduced())
-						expr->type = chosenType;
 				} else if (kind == IntrinsicKind::Array) {
 					Expression *sizeExpr = resolveThroughMacroBindings(expr->arguments[1]);
 					if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
@@ -1043,6 +915,7 @@ static void inferOrderedExpression(
 								}
 							}
 						}
+
 					} else if (typeRefType.classDefinition) {
 						std::vector<DataType> argumentTypes;
 						argumentTypes.reserve(expr->arguments.size() - 2);
@@ -1085,7 +958,11 @@ static void inferOrderedExpression(
 					}
 				} else if (kind == IntrinsicKind::Property) {
 					DataType instType =
-						concretizeClassType(resolveTypeThroughBindings(expr->arguments[1], macroBindingFrameStack));
+						concretizeClassType(ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack));
+					if (!instType.isDeduced()) {
+						context.typesValid = false;
+						break;
+					}
 					if (instType.isPointer() && instType.kind == DataType::Kind::Class)
 						instType = concretizeClassType(instType.dereferenced());
 					Expression *propExpr = resolveThroughMacroBindings(expr->arguments[2]);
@@ -1105,6 +982,12 @@ static void inferOrderedExpression(
 								}
 							}
 						}
+					}
+					if (!expr->type.isDeduced() && !fieldName.empty()) {
+						setConfiguredTypeFailure(
+							expr->range, "class missing property", "message",
+							{{"type", typeToUserName(instType, context.parseContext)}, {"property", fieldName}}
+						);
 					}
 				} else {
 					std::string uri =
@@ -1152,6 +1035,20 @@ static void inferOrderedExpression(
 			));
 			break;
 		}
+		for (size_t ai = 0; ai < argTypesForOverload.size(); ai++) {
+			if (argTypesForOverload[ai].kind != DataType::Kind::Void)
+				continue;
+			if (definitionParameterAcceptsVoid(def, expr->patternMatch->nodesPassed, ai))
+				continue;
+			context.setTypeFailure(renderConfiguredMessage(
+				syntaxConfigForRange(context.parseContext, expr->arguments[ai]->range), "no overload matches call", "message",
+				{{"call", (std::string)expr->range.subString},
+				 {"argument_types", formatTypeList(argTypesForOverload, context.parseContext)}}
+			));
+			break;
+		}
+		if (!context.typesValid)
+			break;
 		if (!context.trial) {
 			expr->selectedPatternDefinition = def;
 			if (context.currentInstantiation)
@@ -1225,13 +1122,19 @@ static void inferOrderedExpression(
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordSectionInstantiationWrite(matchedSection, argTypes);
 			Instantiation &inst = matchedSection->instantiations[argTypes];
+			if (inst.argumentTypes.empty()) {
+				inst.argumentTypes = argTypes;
+			} else {
+				assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
+			}
 			bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
 			if (!inst.inferring && !hasReusableInstantiation) {
 				Instantiation *savedInst = context.currentInstantiation;
 				auto callerKnownConstants = context.currentKnownConstants;
 				const Instantiation *callerInstantiation = savedInst;
 				bool inferenceSucceeded = runInstantiationReinferenceLoop(
-					context, inst, def, expr->range, (std::string)def->range.subString, [&]() -> bool {
+					context, inst, def, expr->range, (std::string)def->range.subString,
+					[&]() -> bool {
 					if (!context.trial)
 						inst.selectedOverloadsByCall.clear();
 					if (!context.trial)
@@ -1259,7 +1162,8 @@ static void inferOrderedExpression(
 					if (inst.requiredCompileTimeParameters.size() != requiredBeforePass)
 						inst.needsReinfer = true;
 					return passSucceeded;
-				});
+				}
+				);
 				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.valid = inferenceSucceeded;
@@ -1275,39 +1179,6 @@ static void inferOrderedExpression(
 			if (!context.typesValid)
 				break;
 
-			if (inst.parameterTypes.size() != paramBindings.size()) {
-				inst.parameterTypes.clear();
-				for (size_t i = 0; i < paramBindings.size(); i++) {
-					Variable *paramVar = findVariableInSectionTree(matchedSection, paramBindings[i].first);
-					if (paramVar && paramVar->type.isDeduced())
-						inst.parameterTypes.push_back(paramVar->type);
-					else
-						inst.parameterTypes.push_back(argTypes[i]);
-				}
-			}
-			for (size_t i = 0; i < paramBindings.size() && i < inst.parameterTypes.size(); i++) {
-				const DataType &parameterType = inst.parameterTypes[i];
-				if (!parameterType.isDeduced() || parameterType == argTypes[i])
-					continue;
-				Expression *argExpr = resolveThroughMacroBindings(paramBindings[i].second);
-				if (!argExpr || argExpr->kind != Expression::Kind::Variable || !argExpr->variable)
-					continue;
-				Section *argSection = argExpr->range.line ? argExpr->range.line->section : nullptr;
-				Variable *argVar = argSection ? argSection->findVariable(argExpr->variable->name) : nullptr;
-				if (!argVar)
-					continue;
-				if (!argVar->type.isDeduced() || argVar->type == parameterType) {
-					if (context.trial && context.trialJournal)
-						context.trialJournal->recordVariableWrite(argVar);
-					commitVariableTypeFromValue(argVar, argExpr, parameterType);
-				} else if (argVar->type.kind == DataType::Kind::Class && parameterType.kind == DataType::Kind::Class &&
-						   argVar->type.classDefinition == parameterType.classDefinition) {
-					if (context.trial && context.trialJournal)
-						context.trialJournal->recordVariableWrite(argVar);
-					argVar->type.classInstIndex = parameterType.classInstIndex;
-				}
-			}
-
 			// If no return intrinsic was found, default to Void
 			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
 				inst.returnType = {DataType::Kind::Void};
@@ -1322,4 +1193,12 @@ static void inferOrderedExpression(
 	case Expression::Kind::Pending:
 		break;
 	}
+}
+
+static bool
+inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
+	if (!context.fixedGroupingRoots || !context.fixedGroupingRoots->contains(expr))
+		return inferExpression(expr, context, false, bindingFrameStack);
+	inferOrderedExpression(expr, context, bindingFrameStack, true);
+	return context.typesValid;
 }

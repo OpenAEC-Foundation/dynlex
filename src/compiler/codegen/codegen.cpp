@@ -114,12 +114,11 @@ void generateSpecializedFunction(
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
 	context.patternParamTypes.clear();
-	const std::vector<DataType> &parameterTypes =
-		inst.parameterTypes.size() == argTypes.size() ? inst.parameterTypes : argTypes;
+	assert(inst.argumentTypes == argTypes && "Codegen argTypes diverged from instantiation signature");
 	argIdx = 0;
 	for (auto &arg : func->args()) {
 		context.patternBindings[varNames[argIdx]] = &arg;
-		context.patternParamTypes[varNames[argIdx]] = parameterTypes[argIdx];
+		context.patternParamTypes[varNames[argIdx]] = argTypes[argIdx];
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &inst;
@@ -247,19 +246,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (defs.empty())
 			return nullptr;
 
-		PatternDefinition *matchedDef = nullptr;
-		if (context.currentCodegenInstantiation) {
-			auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
-			assert(
-				selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
-				"Pattern call missing per-instantiation overload selection from type inference"
-			);
-			matchedDef = selectedIt->second;
-		} else {
-			matchedDef = expr->selectedPatternDefinition;
-			assert(matchedDef && "Pattern call missing overload selection from type inference");
-			assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		}
+		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
+		assert(matchedDef && "Pattern call missing overload selection from type inference");
+		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		assert(matchedDef && "No overload matched during codegen");
 
@@ -341,6 +330,11 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		// Look up or generate the specialized function
 		Instantiation &inst = matchedSection->instantiations[argTypes];
+		if (inst.argumentTypes.empty()) {
+			inst.argumentTypes = argTypes;
+		} else {
+			assert(inst.argumentTypes == argTypes && "Codegen instantiation signature diverged from lookup key");
+		}
 		if (!inst.llvmFunction) {
 			generateSpecializedFunction(context, matchedSection, paramBindings, argTypes, inst);
 		}

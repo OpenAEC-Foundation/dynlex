@@ -32,7 +32,7 @@ struct Instantiation {
 	};
 
 	DataType returnType{DataType::Kind::Any};
-	std::vector<DataType> parameterTypes;
+	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;

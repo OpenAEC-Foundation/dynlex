@@ -33,18 +33,6 @@ buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const Da
 	return diagnostic;
 }
 
-static Variable *findVariableInSectionTree(Section *section, const std::string &name) {
-	if (!section)
-		return nullptr;
-	if (Variable *var = section->findVariable(name))
-		return var;
-	for (Section *child : section->children) {
-		if (Variable *var = findVariableInSectionTree(child, name))
-			return var;
-	}
-	return nullptr;
-}
-
 static int getRefinedClassInstantiationIndex(
 	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
 ) {

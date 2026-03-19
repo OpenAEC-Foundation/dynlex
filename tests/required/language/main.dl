@@ -6,13 +6,17 @@ function waarde als bits bit integer:
 	replacement:
 		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
+function discard waarde:
+	replacement:
+		@intrinsic("discard", waarde)
+
 function zeg bericht:
 	execute:
-		@intrinsic("call", "libc", "printf", een 32 bit integer, "%s\n", bericht)
+		discard @intrinsic("call", "libc", "printf", een 32 bit integer, "%s\n", bericht)
 
 function toon getal:
 	execute:
-		@intrinsic("call", "libc", "printf", een 32 bit integer, "%ld\n", getal als 64 bit integer)
+		discard @intrinsic("call", "libc", "printf", een 32 bit integer, "%ld\n", getal als 64 bit integer)
 
 function maak variabele waarde:
 	replacement:

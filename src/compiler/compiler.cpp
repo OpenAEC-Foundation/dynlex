@@ -753,7 +753,8 @@ bool isComparisonOperator(const std::string &name) { return isComparisonIntrinsi
 bool isMathFunction(const std::string &name) {
 	const IntrinsicInfo *info = findIntrinsic(name);
 	return info && info->returnKind == IntrinsicReturnKind::SameAsArgs && !isArithmeticOperator(name) &&
-		   intrinsicKind(name) != IntrinsicKind::Negate;
+		   intrinsicKind(name) != IntrinsicKind::Negate && intrinsicKind(name) != IntrinsicKind::Min &&
+		   intrinsicKind(name) != IntrinsicKind::Max;
 }
 
 PatternDefinition *selectOverload(
@@ -785,9 +786,20 @@ PatternDefinition *selectOverload(
 			const std::string &paramName = paramIt->second;
 			for (auto &elem : candidate->patternElements) {
 				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
+					const DataType &argType = argTypes[argIdx];
+					if (argType.kind == DataType::Kind::Void) {
+						bool acceptsVoid = elem.resolvedTypeConstraint.isDeduced() &&
+										   elem.resolvedTypeConstraint.kind == DataType::Kind::Void &&
+										   elem.resolvedTypeConstraint.pointerDepth == 0;
+						if (acceptsVoid) {
+							score++;
+						} else {
+							constraintFailed = true;
+						}
+						break;
+					}
 					if (elem.resolvedTypeConstraint.isDeduced()) {
 						// DataType constraint exists — check if argument type matches
-						const DataType &argType = argTypes[argIdx];
 						const DataType &constraint = elem.resolvedTypeConstraint;
 						if (!argType.isDeduced()) {
 							// Keep candidate viable until the argument type is known.

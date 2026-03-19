@@ -137,7 +137,55 @@ static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameS
 		}
 	}
 	if (resolved->kind == Expression::Kind::IntrinsicCall) {
+		const IntrinsicInfo *info = findIntrinsic(resolved->intrinsicName);
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
+		if (info) {
+			switch (info->returnKind) {
+			case IntrinsicReturnKind::SameAsArgs:
+				if (resolved->arguments.size() == 2)
+					return resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+				if (resolved->arguments.size() > 2) {
+					DataType leftType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType rightType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType result;
+					if (DataType::promoteArithmetic(leftType, rightType, result))
+						return result;
+				}
+				return {};
+			case IntrinsicReturnKind::Bool:
+				if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
+					DataType leftType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType rightType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+					if ((leftType.kind == DataType::Kind::Bool || leftType.isNumeric()) &&
+						(rightType.kind == DataType::Kind::Bool || rightType.isNumeric())) {
+						return {DataType::Kind::Bool};
+					}
+					return {};
+				}
+				if (kind == IntrinsicKind::Not) {
+					DataType valueType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+					if (valueType.kind == DataType::Kind::Bool || valueType.isNumeric())
+						return {DataType::Kind::Bool};
+					return {};
+				}
+				if (resolved->arguments.size() > 2) {
+					DataType leftType = resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType rightType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType promoted;
+					bool pointerEquality = (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) &&
+										   leftType.isPointer() && rightType.isPointer() && leftType == rightType;
+					if (pointerEquality || DataType::promoteArithmetic(leftType, rightType, promoted))
+						return {DataType::Kind::Bool};
+				}
+				return {};
+			case IntrinsicReturnKind::Void:
+				return {DataType::Kind::Void};
+			case IntrinsicReturnKind::Float:
+				return {DataType::Kind::Float, 4};
+			case IntrinsicReturnKind::Custom:
+				break;
+			}
+		}
 		if (kind == IntrinsicKind::Property) {
 			DataType instType =
 				concretizeClassType(resolveTypeThroughBindings(resolved->arguments[1], effectiveBindingFrameStack));
@@ -175,6 +223,8 @@ static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameS
 					return {};
 			}
 			return concretizeClassType(retTypeRef.toReferencedType());
+		} else if (kind == IntrinsicKind::Return) {
+			return {DataType::Kind::Void};
 		} else if (kind == IntrinsicKind::Cast) {
 			DataType typeArgType = resolveTypeThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type)
@@ -836,6 +886,8 @@ struct InferenceContext {
 	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	TrialJournal *trialJournal{};
+	const std::unordered_set<Expression *> *fixedGroupingRoots{};
+	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}

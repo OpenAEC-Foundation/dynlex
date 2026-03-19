@@ -253,6 +253,22 @@ static llvm::Intrinsic::ID mathIntrinsicId(IntrinsicKind kind) {
 	}
 }
 
+static DataType mathComputationType(DataType resultType, int mathFloatBytes) {
+	if (resultType.kind == DataType::Kind::Float) {
+		resultType.numericSize = mathFloatBytes;
+		return resultType;
+	}
+	if (resultType.kind == DataType::Kind::Int)
+		return {DataType::Kind::Float, mathFloatBytes};
+	if (resultType.kind == DataType::Kind::Vector && resultType.arrayElementType) {
+		DataType computationType = resultType;
+		computationType.arrayElementType =
+			std::make_shared<DataType>(mathComputationType(*resultType.arrayElementType, mathFloatBytes));
+		return computationType;
+	}
+	return resultType;
+}
+
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
 llvm::Value *generateIntrinsicCode(
@@ -501,31 +517,55 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateNeg(val, "neg");
 	}
 
+	if (kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
+		llvm::Value *left = generateExpressionCode(context, args[0]);
+		llvm::Value *right = generateExpressionCode(context, args[1]);
+		DataType leftType = getEffectiveType(context, args[0]);
+		DataType rightType = getEffectiveType(context, args[1]);
+		DataType promoted;
+		bool compatible = DataType::promoteArithmetic(leftType, rightType, promoted);
+		assert(compatible && "min/max operands must be arithmetic-compatible before codegen");
+		left = ensureType(context, left, leftType, promoted);
+		right = ensureType(context, right, rightType, promoted);
+
+		if (promoted.kind == DataType::Kind::Float) {
+			llvm::Intrinsic::ID intrinsicId = kind == IntrinsicKind::Min ? llvm::Intrinsic::minnum : llvm::Intrinsic::maxnum;
+			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
+			return builder.CreateCall(fn, {left, right}, kind == IntrinsicKind::Min ? "fmin" : "fmax");
+		}
+
+		llvm::Value *cmp = kind == IntrinsicKind::Min ? builder.CreateICmpSLT(left, right, "min_cmp")
+													  : builder.CreateICmpSGT(left, right, "max_cmp");
+		return builder.CreateSelect(cmp, left, right, kind == IntrinsicKind::Min ? "min" : "max");
+	}
+
 	// Math functions (sin, cos, sqrt, abs, floor, ceil, round, exp, log, pow, atan2, min, max)
 	if (isMathFunction(name)) {
 		context.requiredLibraries.insert("m");
 		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
-			// Use f32 for SPIR-V targets and keep the result in that width.
+			// Compute in float and convert back to the inferred result type.
 			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
-			DataType mathFloat = {DataType::Kind::Float, mathFloatBytes};
+			DataType computationType = mathComputationType(resultType, mathFloatBytes);
 			if (args.size() == 1) {
 				llvm::Value *val = generateExpressionCode(context, args[0]);
 				DataType valType = getEffectiveType(context, args[0]);
-				if (valType.kind != DataType::Kind::Float || valType.numericSize != mathFloatBytes)
-					val = ensureType(context, val, valType, mathFloat);
+				if (valType != computationType)
+					val = ensureType(context, val, valType, computationType);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {val->getType()});
-				return builder.CreateCall(fn, {val}, name);
+				llvm::Value *computed = builder.CreateCall(fn, {val}, name);
+				return ensureType(context, computed, computationType, resultType);
 			}
 			llvm::Value *left = generateExpressionCode(context, args[0]);
 			llvm::Value *right = generateExpressionCode(context, args[1]);
 			DataType leftType = getEffectiveType(context, args[0]);
 			DataType rightType = getEffectiveType(context, args[1]);
-			left = ensureType(context, left, leftType, mathFloat);
-			right = ensureType(context, right, rightType, mathFloat);
+			left = ensureType(context, left, leftType, computationType);
+			right = ensureType(context, right, rightType, computationType);
 			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
-			return builder.CreateCall(fn, {left, right}, name);
+			llvm::Value *computed = builder.CreateCall(fn, {left, right}, name);
+			return ensureType(context, computed, computationType, resultType);
 		}
 
 		// atan2: no LLVM intrinsic, call libm
@@ -536,15 +576,15 @@ llvm::Value *generateIntrinsicCode(
 			DataType xType = getEffectiveType(context, args[1]);
 			DataType promoted;
 			DataType::promoteArithmetic(yType, xType, promoted);
-			if (promoted.kind != DataType::Kind::Float)
-				promoted = {DataType::Kind::Float, context.options.emitSPIRV ? 4 : 8};
+			promoted = mathComputationType(promoted, context.options.emitSPIRV ? 4 : 8);
 			y = ensureType(context, y, yType, promoted);
 			x = ensureType(context, x, xType, promoted);
 			llvm::Type *floatType = promoted.toLLVM(*context.llvmContext);
 			llvm::FunctionType *ft = llvm::FunctionType::get(floatType, {floatType, floatType}, false);
 			const char *fnName = promoted.numericSize == 4 ? "atan2f" : "atan2";
 			llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(fnName, ft);
-			return builder.CreateCall(callee, {y, x}, "atan2");
+			llvm::Value *computed = builder.CreateCall(callee, {y, x}, "atan2");
+			return ensureType(context, computed, promoted, resultType);
 		}
 
 		return nullptr;

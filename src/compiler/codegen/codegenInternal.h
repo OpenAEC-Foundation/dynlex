@@ -24,6 +24,7 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
 void resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
 DataType getEffectiveType(ParseContext &context, Expression *expr);
+PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
 std::string getPatternFunctionName(Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section);

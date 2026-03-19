@@ -66,7 +66,7 @@ enum class IntrinsicReturnKind {
 
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
 	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom)                                                              \
-	X(Return, "return", 1, 2, IntrinsicReturnKind::Custom)                                                                     \
+	X(Return, "return", 1, 2, IntrinsicReturnKind::Void)                                                                       \
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom)                                                                        \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom)                                                                         \
 	X(Array, "array", 2, 3, IntrinsicReturnKind::Custom)                                                                       \

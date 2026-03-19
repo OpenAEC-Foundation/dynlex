@@ -65,7 +65,7 @@ function value as [a|] line:
 
 function print {string:msg}:
     execute:
-        @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
+        discard @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
 
 function print msg:
     execute:
@@ -80,6 +80,6 @@ function {string:left} + {string:right}:
         set right_len to the length of right
         set total to left_len + right_len
         set result to @intrinsic("call", "libc", "malloc", a pointer to a byte, total + 1)
-        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result, the data of left, left_len)
-        @intrinsic("call", "libc", "memcpy", a pointer to a byte, result + left_len, the data of right, right_len + 1)
+        discard @intrinsic("call", "libc", "memcpy", a pointer to a byte, result, the data of left, left_len)
+        discard @intrinsic("call", "libc", "memcpy", a pointer to a byte, result + left_len, the data of right, right_len + 1)
         return new string from data result with length total

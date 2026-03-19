@@ -22,6 +22,14 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 	bool alreadyOrdered = section->instantiations.size() > 1;
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordTouchedSection(section);
+	if (context.trial && context.trialJournal) {
+		for (auto &[name, variable] : section->variables) {
+			(void)name;
+			if (!variable || variable->isGlobal)
+				continue;
+			context.trialJournal->recordVariableWrite(variable);
+		}
+	}
 	resetSectionExpressionTypes(section);
 	resetSectionLocalVariableTypes(section);
 	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
@@ -219,6 +227,14 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		if (line->expression) {
 			if (!inferExpression(line->expression, context, alreadyOrdered, bindingFrameStack)) {
 				context.typesValid = false;
+				return false;
+			}
+			DataType lineType = resolveTypeThroughBindings(line->expression, bindingFrameStack);
+			if (section->type != SectionType::Replacement && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
+				context.setTypeFailure(
+					"Standalone expression '" + std::string(line->expression->range.subString) +
+					"' must return nothing; use discard if you want to ignore a value"
+				);
 				return false;
 			}
 		}

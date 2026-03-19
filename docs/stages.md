@@ -35,6 +35,7 @@ print x as line
 we don't know that 'print x' returns void and cannot be used as argument for 'as line'.
 since we are fully agnostic, we will make all left expressions subexpressions:
 (print x) as line.
+((x + x) + x) + x.
 
 # type resolution stage
 
@@ -44,9 +45,26 @@ we can reorder expressions based on types, but we cannot change what's a variabl
 
 we only go over loops once. variables modified in there are marked as non-constant.
 
-(print x) as line is incorrect, since print x returns void. we know this because we expand print x, which is a macro pattern, to the intrinsic("print") and that intrinsic returns void. when encountering a non-macro function, we do the same, but instead of expanding it, we instantiate it and walk over the code just like we do with the code in the main section. we store the return type of non-macro functions so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume non-macro functions always return the same type for the same argument types and constants.
+(print x) as line is incorrect, since void as argument is not allowed unless explicitly specified in the pattern and print x returns void. we know this because we expand print x, which is a macro pattern, to the intrinsic("print") and that intrinsic returns void. when encountering a non-macro function, we do the same, but instead of expanding it, we instantiate it and walk over the code just like we do with the code in the main section. we store the return type of non-macro functions so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume non-macro functions always return the same type for the same argument types and constants.
 
-all instantiations of a function have the same reordering, but can use different overloads. the first valid instantiation determines reordering.
+all instantiations of a function have the same operand reordering for each code line, but can use different overloads. the first valid instantiation determines reordering.
+
+## operand reordering
+
+we iterate over all possible operand orders until we find a valid one.
+
+all instantiation types are known when instantiating a function and do not change. we use this fact for reordering.
+the only exception is the store intrinsic: it takes a value whose first arguments type should be determined by its second arguments type. this only affects macros.
+
+we prefer depth-first, just like pattern matching.
+
+
+a functions return value may never be unused. this prevents wrong groupings. if we want to discard a functions return value, we can use a discard intrinsic.
+
+enclosed expressions like '1 + 4' in 'the minimum of 1 + 4 and 5 + 6' are inferred first. when all orderings in the parent expression fail, different orderings in enclosed expressions are tried.
+
+we don't clone the expression tree for reordering, but reorder it.
+we don't use pointers to expression locations, since those can be dangling pointers.
 
 # code generation stage
 

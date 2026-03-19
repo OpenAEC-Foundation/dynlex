@@ -1,0 +1,92 @@
+#pragma once
+
+static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack) {
+	BindingFrameStack destinationBindingFrameStack;
+	Expression *destinationExpr =
+		resolveThroughBindingsDeep(expr->arguments[1], macroBindingFrameStack, destinationBindingFrameStack);
+	BindingFrameStack valueBindingFrameStack;
+	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindingFrameStack, valueBindingFrameStack);
+	DataType valueType = ensureExpressionType(valueExpr, context, valueBindingFrameStack);
+
+	if (valueType.kind == DataType::Kind::Type) {
+		context.setTypeFailure("compile time type value used at runtime");
+		return;
+	}
+
+	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable && valueType.isDeduced()) {
+		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
+		Variable *variable = section ? section->findVariable(destinationExpr->variable->name) : nullptr;
+		if (!variable)
+			return;
+
+		if (!variable->type.isDeduced() || isVariableAssignmentCompatible(variable->type, valueType)) {
+			if (context.trial && context.trialJournal)
+				context.trialJournal->recordVariableWrite(variable);
+			if (!variable->type.isDeduced() || variable->type == valueType)
+				commitVariableTypeFromValue(variable, valueExpr, valueType);
+			CompileTimeValue assignedValue = evaluateCompileTimeValueWithKnownState(valueExpr, context, valueBindingFrameStack);
+			context.setKnownConstant(variable->definition, assignedValue);
+			if (context.inLoopMutationScope()) {
+				context.noteLoopMutation(variable->definition);
+				context.setKnownConstant(variable->definition, {});
+			}
+			context.snapshotReferenceConstant(destinationExpr->variable);
+			return;
+		}
+
+		context.setTypeFailure(renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
+			"message",
+			{{"name", variable->name},
+			 {"from_type", typeToUserName(variable->type, context.parseContext)},
+			 {"to_type", typeToUserName(valueType, context.parseContext)}}
+		));
+		if (!context.trial) {
+			context.addDiagnostic(buildVariableTypeChangeDiagnostic(variable, valueExpr, valueType, context.parseContext));
+		}
+		return;
+	}
+
+	if (destinationExpr->kind != Expression::Kind::IntrinsicCall ||
+		intrinsicKind(destinationExpr->intrinsicName) != IntrinsicKind::Property || !valueType.isDeduced())
+		return;
+
+	BindingFrameStack resolvedBindingFrameStack = macroBindingFrameStack;
+	destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
+		pushBindingScope(resolvedBindingFrameStack, frame.bindings);
+	});
+	BindingFrameStack ignoredBindingFrameStack;
+	Expression *ownerExpr =
+		resolveThroughBindingsDeep(destinationExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack);
+	DataType instanceType = ownerExpr ? concretizeClassType(ownerExpr->type) : DataType{};
+	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0)
+		return;
+
+	Expression *propertyExpr = resolveThroughBindings(destinationExpr->arguments[2], resolvedBindingFrameStack);
+	std::string fieldName;
+	if (auto *str = std::get_if<std::string>(&propertyExpr->literalValue))
+		fieldName = *str;
+	if (fieldName.empty())
+		return;
+
+	ClassDefinition *classDefinition = instanceType.classDefinition;
+	for (size_t i = 0; i < classDefinition->fields.size(); i++) {
+		if (classDefinition->fields[i].name != fieldName)
+			continue;
+		int refinedInstIndex =
+			getRefinedClassInstantiationIndex(context, classDefinition, instanceType.classInstIndex, i, valueType);
+		if (refinedInstIndex < 0)
+			return;
+		if (ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable) {
+			Section *ownerSection = ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
+			Variable *ownerVariable = ownerSection ? ownerSection->findVariable(ownerExpr->variable->name) : nullptr;
+			if (ownerVariable && ownerVariable->type.kind == DataType::Kind::Class &&
+				ownerVariable->type.classDefinition == classDefinition) {
+				if (context.trial && context.trialJournal)
+					context.trialJournal->recordVariableWrite(ownerVariable);
+				ownerVariable->type.classInstIndex = refinedInstIndex;
+			}
+		}
+		return;
+	}
+}

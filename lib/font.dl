@@ -83,16 +83,16 @@ function a loaded font from path at size s:
     execute:
         # Initialize FreeType
         set lib_ptr to allocate 1 slots of a pointer to a byte
-        @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, lib_ptr)
+        discard @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, lib_ptr)
         set library to item 0 of lib_ptr
 
         # Load font face
         set face_out to allocate 1 slots of a pointer to a byte
-        @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a 64 bit integer, face_out)
+        discard @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a 64 bit integer, face_out)
         set face_raw to item 0 of face_out
 
         # Set pixel size
-        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, s as a 32 bit integer)
+        discard @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, s as a 32 bit integer)
 
         # Set up GL state for texture rendering
         @intrinsic("call", "GL", "glPixelStorei", void, 3317, 1)
@@ -120,7 +120,7 @@ function render char code at px py using font and color r g b:
         set tex_id to item 1 of font as a 32 bit integer
 
         # Load and render the glyph
-        @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
+        discard @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
 
         # Read glyph slot from the face after loading the character
         set face_ptr to face_raw as a pointer to ft face
@@ -182,7 +182,7 @@ function disable text rendering:
 function set font pixel size to sz:
     execute:
         set face_raw to item 0 of font as a pointer to a byte
-        @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
+        discard @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face_raw, 0 as a 32 bit integer, sz as a 32 bit integer)
 
 # --- Number rendering ---
 

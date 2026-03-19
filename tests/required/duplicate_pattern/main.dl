@@ -2,10 +2,14 @@ function [an|a|] integer:
 	replacement:
 		@intrinsic("type", "int", 32)
 
+function discard val:
+	replacement:
+		@intrinsic("discard", val)
+
 function test:
 	execute:
-		@intrinsic("call", "libc", "printf", an integer, "1")
+		discard @intrinsic("call", "libc", "printf", an integer, "1")
 
 function te[st|]:
 	execute:
-		@intrinsic("call", "libc", "printf", an integer, "2")
+		discard @intrinsic("call", "libc", "printf", an integer, "2")

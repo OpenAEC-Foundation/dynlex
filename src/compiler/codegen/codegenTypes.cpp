@@ -397,19 +397,9 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		if (defs.empty())
 			return expr->type;
 
-		PatternDefinition *matchedDef = nullptr;
-		if (context.currentCodegenInstantiation) {
-			auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
-			assert(
-				selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
-				"Pattern call missing per-instantiation overload selection from type inference"
-			);
-			matchedDef = selectedIt->second;
-		} else {
-			matchedDef = expr->selectedPatternDefinition;
-			assert(matchedDef && "Pattern call missing overload selection from type inference");
-			assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		}
+		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
+		assert(matchedDef && "Pattern call missing overload selection from type inference");
+		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
 		assert(matchedDef && "No overload matched during codegen");
 		assert(matchedDef->section && "Selected overload has no section");
@@ -458,6 +448,43 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	default:
 		return expr->type;
 	}
+}
+
+PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return nullptr;
+
+	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	if (defs.empty())
+		return nullptr;
+
+	std::vector<DataType> argTypes;
+	argTypes.reserve(expr->arguments.size());
+	bool allArgumentTypesDeduced = true;
+	for (Expression *arg : expr->arguments) {
+		DataType argType = getEffectiveType(context, arg);
+		argTypes.push_back(argType);
+		if (!argType.isDeduced())
+			allArgumentTypesDeduced = false;
+	}
+	if (allArgumentTypesDeduced) {
+		PatternDefinition *matchedDef = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypes);
+		if (matchedDef)
+			return matchedDef;
+	}
+
+	if (context.currentCodegenInstantiation) {
+		auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
+		if (selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
+			std::find(defs.begin(), defs.end(), selectedIt->second) != defs.end()) {
+			return selectedIt->second;
+		}
+	}
+
+	if (expr->selectedPatternDefinition && std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end())
+		return expr->selectedPatternDefinition;
+
+	return nullptr;
 }
 
 // Create an alloca at function entry (avoids stack growth in loops)

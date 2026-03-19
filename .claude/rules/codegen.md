@@ -35,7 +35,7 @@ paths:
 ## Math Function Codegen
 - Most math intrinsics map to LLVM intrinsics (e.g. `llvm::Intrinsic::sin`), which lower to libm calls
 - `atan2` has no LLVM intrinsic — directly calls libm `atan2`
-- Arguments are auto-converted to float (f64) if not already float
+- Math intrinsics compute in float (f64, or f32 for SPIR-V) and must convert the result back to the inferred DynLex result type before returning from codegen
 - `-lm` is automatically added to `requiredLibraries` when any math intrinsic is used
 - Registry-based: `isMathFunction()` checks `SameAsArgs` kind, excluding arithmetic and negate
 

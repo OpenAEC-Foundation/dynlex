@@ -6,6 +6,10 @@ function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
 function [an|a|] bits bit integer:
     replacement:
         @intrinsic("type", "int", bits)
@@ -16,7 +20,7 @@ function value as [a|an|] bits bit integer:
 
 function print msg:
     execute:
-        @intrinsic("call", "libc", "printf", a 32 bit integer, "%ld", msg as a 64 bit integer)
+        discard @intrinsic("call", "libc", "printf", a 32 bit integer, "%ld", msg as a 64 bit integer)
 
 function left + right:
     replacement:

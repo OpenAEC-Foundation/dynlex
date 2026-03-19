@@ -36,4 +36,4 @@ function print {vector:msg}:
         set vx to the x of msg
         set vy to the y of msg
         set vz to the z of msg
-        @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g]\n", vx as a float, vy as a float, vz as a float)
+        discard @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g]\n", vx as a float, vy as a float, vz as a float)

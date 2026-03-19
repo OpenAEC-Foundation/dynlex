@@ -69,6 +69,7 @@ Corpus used for these lessons:
 
 - The user repeatedly pushes toward better diagnostics and LSP quick fixes.
 - Errors should be accurate, general where needed, and actionable.
+- Operand-regrouping failures must surface the real nested expression that failed type probing; generic caller-site errors hide the root cause.
 
 9. Follow explicit workflow instructions exactly.
 
@@ -76,6 +77,11 @@ Corpus used for these lessons:
 - If the user says do not patch, do not patch.
 - If the user says report first, report first.
 - When an agent violates stated workflow, John treats that as a serious failure.
+
+10. Standalone non-void expressions in `execute:` blocks must be explicit.
+
+- If an intrinsic returns a value and the result is intentionally ignored, use `discard`.
+- Library code should not rely on the compiler to implicitly drop return values from calls like `glfwInit`, `fseek`, `fread`, or `fclose`.
 
 ## Repeated Operational Preferences
 
