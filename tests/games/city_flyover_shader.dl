@@ -54,12 +54,8 @@ function building depth at cell_x cell_z:
     execute:
         return 1.8 + (hash from (cell_x + 29.0) and (cell_z + 11.0)) * 2.2
 
-function scene distance at x y z:
+function building distance at x y z for cell cell_x cell_z:
     execute:
-        set ground to y
-
-        set cell_x to the floor of (x / 18.0)
-        set cell_z to the floor of (z / 18.0)
         set local_x to (x - (cell_x * 18.0)) - 9.0
         set local_z to (z - (cell_z * 18.0)) - 9.0
         set local_y to y
@@ -81,7 +77,24 @@ function scene distance at x y z:
         set outside_z to the maximum of dz and 0.0
         set outside_distance to the square root of (outside_x * outside_x + outside_y * outside_y + outside_z * outside_z)
         set inside_distance to the minimum of (the maximum of dx and (the maximum of dy and dz)) and 0.0
-        set building to outside_distance + inside_distance
+        return outside_distance + inside_distance
+
+function scene distance at x y z:
+    execute:
+        set ground to y
+
+        set cell_x to the floor of (x / 18.0)
+        set cell_z to the floor of (z / 18.0)
+
+        set building to building distance at x y z for cell (cell_x - 1.0) (cell_z - 1.0)
+        set building to the minimum of building and (building distance at x y z for cell cell_x (cell_z - 1.0))
+        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) (cell_z - 1.0))
+        set building to the minimum of building and (building distance at x y z for cell (cell_x - 1.0) cell_z)
+        set building to the minimum of building and (building distance at x y z for cell cell_x cell_z)
+        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) cell_z)
+        set building to the minimum of building and (building distance at x y z for cell (cell_x - 1.0) (cell_z + 1.0))
+        set building to the minimum of building and (building distance at x y z for cell cell_x (cell_z + 1.0))
+        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) (cell_z + 1.0))
 
         return the minimum of ground and building
 
@@ -89,7 +102,7 @@ set px to the fragment x coordinate
 set py to the fragment y coordinate
 
 set uv_x to ((px / 800.0) * 2.0) - 1.0
-set uv_y to 1.0 - ((py / 600.0) * 2.0)
+set uv_y to ((py / 600.0) * 2.0) - 1.0
 set uv_x to uv_x * 1.3333333
 
 set cam_x to the shader camera x
