@@ -1,0 +1,1 @@
+tests/required/array_literal_mismatch/main.dl:3:1-23: Error: Expression 'set values to [1, "x"]' parses successfully without types, but not with types: Array literal elements must have matching or compatible numeric types

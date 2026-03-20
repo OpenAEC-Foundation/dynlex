@@ -31,7 +31,7 @@ function fract of value:
 function hash from x and z:
     execute:
         set n to x * 127.1 + z * 311.7
-        set s to the sine of n * 43758.5453
+        set s to (the sine of n) * 43758.5453
         return fract of s
 
 function clamp01 of value:
@@ -43,16 +43,16 @@ function clamp01 of value:
 function building height at cell_x cell_z:
     execute:
         set base to hash from cell_x and cell_z
-        set accent to hash from cell_x + 13.0 and cell_z + 7.0
-        return 6.0 + base * 18.0 + accent * 10.0
+        set accent to hash from (cell_x + 13.0) and (cell_z + 7.0)
+        return (6.0 + (base * 18.0)) + (accent * 10.0)
 
 function building width at cell_x cell_z:
     execute:
-        return 1.8 + (hash from cell_x + 5.0 and cell_z + 19.0) * 2.2
+        return 1.8 + (hash from (cell_x + 5.0) and (cell_z + 19.0)) * 2.2
 
 function building depth at cell_x cell_z:
     execute:
-        return 1.8 + (hash from cell_x + 29.0 and cell_z + 11.0) * 2.2
+        return 1.8 + (hash from (cell_x + 29.0) and (cell_z + 11.0)) * 2.2
 
 function scene distance at x y z:
     execute:
@@ -60,8 +60,8 @@ function scene distance at x y z:
 
         set cell_x to the floor of (x / 18.0)
         set cell_z to the floor of (z / 18.0)
-        set local_x to x - cell_x * 18.0 - 9.0
-        set local_z to z - cell_z * 18.0 - 9.0
+        set local_x to (x - (cell_x * 18.0)) - 9.0
+        set local_z to (z - (cell_z * 18.0)) - 9.0
         set local_y to y
 
         set half_x to building width at cell_x cell_z
@@ -88,8 +88,8 @@ function scene distance at x y z:
 set px to the fragment x coordinate
 set py to the fragment y coordinate
 
-set uv_x to px / 800.0 * 2.0 - 1.0
-set uv_y to py / 600.0 * 2.0 - 1.0
+set uv_x to ((px / 800.0) * 2.0) - 1.0
+set uv_y to 1.0 - ((py / 600.0) * 2.0)
 set uv_x to uv_x * 1.3333333
 
 set cam_x to the shader camera x
@@ -119,7 +119,7 @@ set hit_y to cam_y
 set hit_z to cam_z
 set steps to 0
 
-while steps < 120 and hit = 0 and travel < 260.0:
+while ((steps < 120) and (hit = 0)) and (travel < 260.0):
     set sample_x to cam_x + dir_x * travel
     set sample_y to cam_y + dir_y * travel
     set sample_z to cam_z + dir_z * travel
@@ -148,8 +148,8 @@ else:
     set nxn to scene distance at hit_x - eps hit_y hit_z
     set nyp to scene distance at hit_x hit_y + eps hit_z
     set nyn to scene distance at hit_x hit_y - eps hit_z
-    set nzp to scene distance at hit_x hit_y hit_z + eps
-    set nzn to scene distance at hit_x hit_y hit_z - eps
+    set nzp to scene distance at hit_x hit_y (hit_z + eps)
+    set nzn to scene distance at hit_x hit_y (hit_z - eps)
 
     set normal_x to nxp - nxn
     set normal_y to nyp - nyn
@@ -172,7 +172,7 @@ else:
     set light_y to light_y / light_len
     set light_z to light_z / light_len
 
-    set diffuse to normal_x * light_x + normal_y * light_y + normal_z * light_z
+    set diffuse to ((normal_x * light_x) + (normal_y * light_y)) + (normal_z * light_z)
     set diffuse to clamp01 of diffuse
 
     set cell_x to the floor of (hit_x / 18.0)
@@ -180,7 +180,7 @@ else:
     set half_x to building width at cell_x cell_z
     set half_z to building depth at cell_x cell_z
     set variation to hash from cell_x and cell_z
-    set accent to hash from cell_x + 21.0 and cell_z + 9.0
+    set accent to hash from (cell_x + 21.0) and (cell_z + 9.0)
 
     set base_r to 0.16 + variation * 0.12
     set base_g to 0.17 + accent * 0.11

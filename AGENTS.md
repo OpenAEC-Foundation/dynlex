@@ -23,14 +23,16 @@ These instructions apply to all coding agents working in this repository (includ
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
 - Keep bash commands on one line by chaining with `&&` or `;`.
 - When encountering ANY compiler issue while working on .dl code:
-do NOT add a workaround. temporary solutions are NOT accepted.
+do NOT add a workaround like internal code validation, narrow case 'fixes', etc. temporary solutions are NOT accepted.
 1. identify the root cause with whatever tools you need.
 2. identify a minimal reproducible example and possible fix.
 3. report to the user.
-- this is a compiler. only PERFECT code is accepted.
+- this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.
 - your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
 - be direct. don't hide anything relevant.
 - remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
+- find the broader, deterministic and simple pattern.
+- if you find a compiler bug but the dynlex code is also incorrect, keep the code incorrect until you fix how the compiler handles it. after you have verified the compiler bug is gone, fix the incorrect .dl code.
 
 ## Project Overview
 

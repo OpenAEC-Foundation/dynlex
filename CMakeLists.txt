@@ -39,14 +39,31 @@ if(NOT nlohmann_json_FOUND)
         add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
         set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
         )
     else()
+        set(JSON_SystemInclude ON CACHE BOOL "Include nlohmann_json headers as system headers" FORCE)
         include(FetchContent)
         FetchContent_Declare(
             nlohmann_json
             URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
         )
         FetchContent_MakeAvailable(nlohmann_json)
+    endif()
+endif()
+
+if(TARGET nlohmann_json::nlohmann_json)
+    set(DYNLEX_NLOHMANN_TARGET nlohmann_json::nlohmann_json)
+    get_target_property(DYNLEX_NLOHMANN_ALIASED_TARGET nlohmann_json::nlohmann_json ALIASED_TARGET)
+    if(DYNLEX_NLOHMANN_ALIASED_TARGET)
+        set(DYNLEX_NLOHMANN_TARGET "${DYNLEX_NLOHMANN_ALIASED_TARGET}")
+    endif()
+
+    get_target_property(DYNLEX_NLOHMANN_INCLUDE_DIRS ${DYNLEX_NLOHMANN_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+    if(DYNLEX_NLOHMANN_INCLUDE_DIRS)
+        set_target_properties(${DYNLEX_NLOHMANN_TARGET} PROPERTIES
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${DYNLEX_NLOHMANN_INCLUDE_DIRS}"
+        )
     endif()
 endif()
 

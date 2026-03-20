@@ -1,0 +1,1 @@
+tests/required/stable_variable_type/main.dl:4:1-13: Error: Expression 'add 0.5 to a' parses successfully without types, but not with types: Variable 'a' cannot change type from a 32 bit integer to a 64 bit float

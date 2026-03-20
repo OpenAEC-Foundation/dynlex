@@ -1,0 +1,1 @@
+tests/required/stale_trie/main.dl:10:1-19: Error: This pattern couldn't be resolved

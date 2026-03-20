@@ -61,10 +61,14 @@ we prefer depth-first, just like pattern matching.
 
 a functions return value may never be unused. this prevents wrong groupings. if we want to discard a functions return value, we can use a discard intrinsic.
 
-enclosed expressions like '1 + 4' in 'the minimum of 1 + 4 and 5 + 6' are inferred first. when all orderings in the parent expression fail, different orderings in enclosed expressions are tried.
+enclosed expressions like '1 + 4' in 'the minimum of 1 + 4 and 5 + 6' are inferred first. when an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
 
-we don't clone the expression tree for reordering, but reorder it.
+we don't clone the expression tree for reordering, but reorder it. even when storing correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
 we don't use pointers to expression locations, since those can be dangling pointers.
+
+some orderings are ambigous.
+for example:
+the maximum of 5 and 3 + 4. did the user mean '(the maximum of 5 and 3) + 4' or 'the maximum of 5 and (3 + 4)'? both parse correctly. because of the left expression = subexpression nature, the compiler will choose the first one. this behaviour might cause glitches. but even humans will not be able to tell without context. we'd like the user to specify which option to choose.
 
 # code generation stage
 

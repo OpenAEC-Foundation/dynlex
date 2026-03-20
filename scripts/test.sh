@@ -55,6 +55,10 @@ normalize_output() {
     printf "%s" "$1" | tr -d '\r'
 }
 
+normalize_diagnostics() {
+    printf "%s" "$1" | tr -d '\r' | sed "s|$PROJECT_DIR/||g" | sed 's/[[:space:]]*$//'
+}
+
 run_with_timeout() {
     local seconds="$1"
     shift
@@ -116,10 +120,14 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    expected_error_file="$test_dir/expected_error.txt"
+    expected_diagnostics_file="$test_dir/expected_diagnostics.txt"
+    legacy_expected_error_file="$test_dir/expected_error.txt"
+    if [[ ! -f "$expected_diagnostics_file" && -f "$legacy_expected_error_file" ]]; then
+        expected_diagnostics_file="$legacy_expected_error_file"
+    fi
 
-    if [[ ! -f "$expected_file" && ! -f "$expected_error_file" ]]; then
-        test_output+="${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_error.txt)\n"
+    if [[ ! -f "$expected_file" && ! -f "$expected_diagnostics_file" ]]; then
+        test_output+="${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_diagnostics.txt)\n"
         ((skipped++))
         continue
     fi
@@ -143,26 +151,50 @@ for test_dir in "$TESTS_DIR"/*/; do
         output_binary_exists=false
     fi
 
+    normalized_compile_output=$(normalize_diagnostics "$compile_output")
+    expected_diagnostics=""
+    normalized_expected_diagnostics=""
+    has_expected_diagnostics=false
+    if [[ -f "$expected_diagnostics_file" ]]; then
+        expected_diagnostics=$(<"$expected_diagnostics_file")
+        normalized_expected_diagnostics=$(normalize_diagnostics "$expected_diagnostics")
+        has_expected_diagnostics=true
+    fi
+
+    if [[ "$has_expected_diagnostics" == "true" ]]; then
+        if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            test_output+="${RED}FAIL${NC} $test_name (diagnostics mismatch)\n"
+            test_output+="  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")\n"
+            test_output+="  Actual diagnostics:   $(head -c 400 <<< "$compile_output")\n"
+            test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
+            ((failed++))
+            failures+=("$test_name")
+            failure_timings+=("$test_name:${test_elapsed_ms}")
+            continue
+        fi
+    elif [[ -n "$normalized_compile_output" ]]; then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        test_output+="${RED}FAIL${NC} $test_name (unexpected diagnostics)\n"
+        test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
+        test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
+        ((failed++))
+        failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
+        continue
+    fi
+
     if [[ $compile_exit -ne 0 || "$output_binary_exists" != "true" ]]; then
-        # Compilation failed — check if this was expected
-        if [[ -f "$expected_error_file" ]]; then
-            expected_error=$(<"$expected_error_file")
-            if [[ "$compile_output" == *"$expected_error"* ]]; then
-                test_output+="${GREEN}PASS${NC} $test_name\n"
-                ((passed++))
-            else
-                test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-                test_output+="${RED}FAIL${NC} $test_name (compile error mismatch)\n"
-                test_output+="  Expected error containing: $expected_error\n"
-                test_output+="  Actual: $compile_output\n"
-                test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
-                ((failed++))
-                failures+=("$test_name")
-                failure_timings+=("$test_name:${test_elapsed_ms}")
-            fi
+        if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
+            test_output+="${GREEN}PASS${NC} $test_name\n"
+            ((passed++))
         else
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-            test_output+="${RED}FAIL${NC} $test_name (compilation failed, ${test_elapsed_ms} ms)\n"
+            if [[ "$output_binary_exists" != "true" ]]; then
+                test_output+="${RED}FAIL${NC} $test_name (compilation did not produce runnable output, ${test_elapsed_ms} ms)\n"
+            else
+                test_output+="${RED}FAIL${NC} $test_name (compilation failed, ${test_elapsed_ms} ms)\n"
+            fi
             [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
             ((failed++)) || true
             failures+=("$test_name")
@@ -171,10 +203,10 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    # Compilation succeeded but we expected an error
-    if [[ -f "$expected_error_file" && ! -f "$expected_file" ]]; then
+    # Compilation succeeded but this test only expected diagnostics from a failed compile
+    if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (expected compile error but compilation succeeded, ${test_elapsed_ms} ms)\n"
+        test_output+="${RED}FAIL${NC} $test_name (expected compile diagnostics without runnable output, but compilation succeeded, ${test_elapsed_ms} ms)\n"
         ((failed++))
         failures+=("$test_name")
         failure_timings+=("$test_name:${test_elapsed_ms}")

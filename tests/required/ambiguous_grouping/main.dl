@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function combine {integer:left} and {integer:right}:
+    replacement:
+        left - right
+
+print combine 1 + 2 and 3 + 4 as line

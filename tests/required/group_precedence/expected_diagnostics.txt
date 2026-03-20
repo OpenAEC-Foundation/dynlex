@@ -1,0 +1,1 @@
+tests/required/group_precedence/main.dl:5:7-57: Warning: Expression 'the square root of (2.0 + 3.0 + 4.0 * 4.0) as line' has multiple valid operand groupings. Using '(the square root of ((2.0 + 3.0) + (4.0 * 4.0))) as line' instead of 'the square root of (((2.0 + 3.0) + (4.0 * 4.0)) as line)'.

@@ -1,0 +1,1 @@
+tests/required/stable_variable_type_function/main.dl:8:1-17: Error: Expression 'set a to toint a' parses successfully without types, but not with types: Variable 'a' cannot change type from a 64 bit float to a 32 bit integer

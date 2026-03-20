@@ -1,6 +1,24 @@
 #pragma once
 
+#include "compiler.h"
 #include "const_evaluation.inl"
+
+static Expression *prepareCompileTimeTypeReferenceExpression(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &effectiveBindingFrameStack
+) {
+	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
+	if (!resolved)
+		return nullptr;
+	if (!expandPendingTypeReferenceExpression(resolved, resolved->range.line ? resolved->range.line->section : nullptr))
+		return resolved;
+	BindingFrameStack reboundBindingFrameStack;
+	Expression *rebound = resolveThroughBindingsDeep(resolved, effectiveBindingFrameStack, reboundBindingFrameStack);
+	if (rebound) {
+		effectiveBindingFrameStack = std::move(reboundBindingFrameStack);
+		return rebound;
+	}
+	return resolved;
+}
 
 static Expression *
 resolveCompileTimeSelectBranch(Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack) {
@@ -467,7 +485,7 @@ static bool resolveCompileTimeTypeReference(
 	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef
 ) {
 	BindingFrameStack effectiveBindingFrameStack;
-	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
+	Expression *resolved = prepareCompileTimeTypeReferenceExpression(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return false;
 	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
@@ -641,6 +659,9 @@ instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef,
 		if (fieldType.kind == DataType::Kind::Any)
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
+			expandPendingTypeReferenceExpression(
+				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
+			);
 			DataType resolvedTypeRef;
 			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeExpression, bindingFrameStack, resolvedTypeRef) ||
 				resolvedTypeRef.kind != DataType::Kind::Type)
@@ -768,16 +789,29 @@ static std::string diagnosticExpressionText(Expression *expr) {
 	return (std::string)lineText;
 }
 
-static Diagnostic buildTypeFailureDiagnostic(const ParseContext &parseContext, Expression *expr, const std::string &detail) {
-	std::string expressionText = diagnosticExpressionText(expr);
+struct DiagnosticExpressionSnapshot {
+	Range range;
+	std::string text;
+};
+
+static DiagnosticExpressionSnapshot captureDiagnosticExpressionSnapshot(Expression *expr) {
+	if (!expr)
+		return {};
+	return {expr->range, diagnosticExpressionText(expr)};
+}
+
+static Diagnostic buildTypeFailureDiagnostic(
+	const ParseContext &parseContext, const DiagnosticExpressionSnapshot &snapshot, const std::string &detail
+) {
+	std::string expressionText = snapshot.text;
 	if (detail.empty())
 		return Diagnostic(
-			parseContext, Diagnostic::Level::Error, "expression type inference failed", expr ? expr->range : Range(),
-			"expression", expressionText
+			parseContext, Diagnostic::Level::Error, "expression type inference failed", snapshot.range, "expression",
+			expressionText
 		);
 	return Diagnostic(
-		parseContext, Diagnostic::Level::Error, "expression type inference failed", "with detail", expr ? expr->range : Range(),
-		"expression", expressionText, "detail", detail
+		parseContext, Diagnostic::Level::Error, "expression type inference failed", "with detail", snapshot.range, "expression",
+		expressionText, "detail", detail
 	);
 }
 
@@ -812,7 +846,20 @@ static bool mergeArrayElementType(const DataType &current, const DataType &next,
 
 // Wraps ParseContext with type validity tracking and trial mode for operand reordering.
 // During reordering trials, diagnostics are suppressed and failures only affect the current trial.
+struct TrialInstantiationSummary {
+	DataType returnType{};
+};
+
+using TrialInstantiationCache = std::unordered_map<std::string, TrialInstantiationSummary>;
+
 struct InferenceContext {
+	struct OperandGroupingWarning {
+		Range range;
+		std::string expressionText;
+		std::string chosenGrouping;
+		std::string alternativeGrouping;
+	};
+
 	struct TrialJournal {
 		struct VariableUndo {
 			Variable *variable;
@@ -886,8 +933,11 @@ struct InferenceContext {
 	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	TrialJournal *trialJournal{};
+	std::shared_ptr<TrialInstantiationCache> trialInstantiationCache;
 	const std::unordered_set<Expression *> *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
+	bool detectGroupingAmbiguity = false;
+	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
@@ -901,6 +951,12 @@ struct InferenceContext {
 		typesValid = false;
 		if (typeFailureDetail.empty())
 			typeFailureDetail = std::move(detail);
+	}
+
+	std::shared_ptr<TrialInstantiationCache> ensureTrialInstantiationCache() {
+		if (!trialInstantiationCache)
+			trialInstantiationCache = std::make_shared<TrialInstantiationCache>();
+		return trialInstantiationCache;
 	}
 
 	VariableReference *normalizeReference(VariableReference *reference) const {

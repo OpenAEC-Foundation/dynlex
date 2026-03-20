@@ -1,5 +1,12 @@
 #pragma once
 
+static void setInvalidStoreDestinationFailure(Expression *destinationExpr, InferenceContext &context) {
+	std::string destinationText = destinationExpr && !destinationExpr->range.subString.empty()
+									  ? (std::string)destinationExpr->range.subString
+									  : "<expression>";
+	context.setTypeFailure("assignment target '" + destinationText + "' is not writable");
+}
+
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack) {
 	BindingFrameStack destinationBindingFrameStack;
 	Expression *destinationExpr =
@@ -12,12 +19,16 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}
+	if (!valueType.isDeduced())
+		return;
 
-	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable && valueType.isDeduced()) {
+	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable) {
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
 		Variable *variable = section ? section->findVariable(destinationExpr->variable->name) : nullptr;
-		if (!variable)
+		if (!variable) {
+			setInvalidStoreDestinationFailure(destinationExpr, context);
 			return;
+		}
 
 		if (!variable->type.isDeduced() || isVariableAssignmentCompatible(variable->type, valueType)) {
 			if (context.trial && context.trialJournal)
@@ -48,8 +59,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	}
 
 	if (destinationExpr->kind != Expression::Kind::IntrinsicCall ||
-		intrinsicKind(destinationExpr->intrinsicName) != IntrinsicKind::Property || !valueType.isDeduced())
+		intrinsicKind(destinationExpr->intrinsicName) != IntrinsicKind::Property) {
+		setInvalidStoreDestinationFailure(destinationExpr, context);
 		return;
+	}
 
 	BindingFrameStack resolvedBindingFrameStack = macroBindingFrameStack;
 	destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
@@ -59,15 +72,19 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	Expression *ownerExpr =
 		resolveThroughBindingsDeep(destinationExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack);
 	DataType instanceType = ownerExpr ? concretizeClassType(ownerExpr->type) : DataType{};
-	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0)
+	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0) {
+		setInvalidStoreDestinationFailure(destinationExpr, context);
 		return;
+	}
 
 	Expression *propertyExpr = resolveThroughBindings(destinationExpr->arguments[2], resolvedBindingFrameStack);
 	std::string fieldName;
 	if (auto *str = std::get_if<std::string>(&propertyExpr->literalValue))
 		fieldName = *str;
-	if (fieldName.empty())
+	if (fieldName.empty()) {
+		setInvalidStoreDestinationFailure(destinationExpr, context);
 		return;
+	}
 
 	ClassDefinition *classDefinition = instanceType.classDefinition;
 	for (size_t i = 0; i < classDefinition->fields.size(); i++) {
@@ -89,4 +106,6 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		}
 		return;
 	}
+
+	setInvalidStoreDestinationFailure(destinationExpr, context);
 }

@@ -225,7 +225,9 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		}
 
 		if (line->expression) {
-			if (!inferExpression(line->expression, context, alreadyOrdered, bindingFrameStack)) {
+			if (!inferExpression(
+					line->expression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
+				)) {
 				context.typesValid = false;
 				return false;
 			}

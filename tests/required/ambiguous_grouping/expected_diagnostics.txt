@@ -1,0 +1,1 @@
+tests/required/ambiguous_grouping/main.dl:7:7-30: Warning: Expression 'combine 1 + 2 and 3 + 4' has multiple valid operand groupings. Using '(combine (1 + 2) and 3) + 4' instead of 'combine (1 + 2) and (3 + 4)'.

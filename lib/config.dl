@@ -62,6 +62,7 @@ dynlex options:
             message: "Expression '{expression}' parses successfully without types, but not with types"
             with detail: "Expression '{expression}' parses successfully without types, but not with types: {detail}"
         too many ambiguous operand groupings: "Too many ambiguous operand groupings"
+        ambiguous operand grouping: "Expression '{expression}' has multiple valid operand groupings. Using '{chosen}' instead of '{alternative}'."
         unknown variable: "Unknown variable: {name}"
         unresolved pending expression: "Unresolved pending expression"
         spirv target not available: "SPIR-V target not available: {error}"

@@ -23,11 +23,13 @@ For each code line (in execution order):
      - **Macros:** Return type = return type of the macro's first expression (macros are code replacement; a macro returning a value always has exactly one expression that returns it; a void macro can have multiple void statements).
      - **Functions:** Instantiate with the argument types passed. Infer the function body recursively (same algorithm). The instantiation's return type is the result.
    - **Check argument types against constraints:** Void arguments are valid at the pattern level — patterns like `do this and do that` (e.g., `set x to 4 and set y to 5`) accept Void submatches. Rejection happens at the **intrinsic level**: if an intrinsic expects numeric operands and receives Void, that grouping is invalid. Example: `(set x to y) + z` — the `add` intrinsic doesn't accept Void and Float, so this ordering is rejected.
-   - **If all checks pass:** This grouping is valid. Commit to it and move to the next line.
+   - **If all checks pass:** Keep the first valid grouping as the selected result, then continue scanning until either all remaining groupings fail or a second distinct valid grouping is found.
 
 5. **If no grouping is valid:** Emit a type error diagnostic.
 
-6. **Top-level return type check:** In DynLex, return values cannot be ignored. If the line's top-level expression returns a non-Void type, it's an error. The fix is to wrap it in a `discard` expression pattern which calls `@intrinsic("discard", value)`.
+6. **If another valid grouping exists:** Emit a warning and keep the first valid grouping.
+
+7. **Top-level return type check:** In DynLex, return values cannot be ignored. If the line's top-level expression returns a non-Void type, it's an error. The fix is to wrap it in a `discard` expression pattern which calls `@intrinsic("discard", value)`.
 
 ## Example: `simple` test
 
@@ -56,7 +58,7 @@ print z             → One pattern, no reordering possible.
 - **Intrinsic-level type rejection:** Void arguments are valid at the pattern level, but intrinsics reject incompatible types (e.g., `add(Void, Float)` is invalid). This is the primary mechanism for rejecting wrong groupings.
 - **Macro return type:** Return type of the macro's first expression.
 - **Function instantiation:** Each unique argument type combination creates a new instantiation. The function body is inferred recursively using the same algorithm.
-- **One valid grouping:** If exactly one grouping is valid, use it. If multiple are valid, it's ambiguous (error). If none are valid, it's a type error.
+- **First valid grouping wins, but ambiguity is surfaced:** If exactly one grouping is valid, use it. If multiple are valid, keep the first valid grouping and emit a warning. If none are valid, it's a type error.
 - **No type inference in pattern resolution:** Pattern resolution is purely structural. `matchTypesValid` is removed. Type-based match rejection happens in this algorithm instead.
 - **Expression tree modification:** Reordering modifies the expression tree directly (swapping parent-child relationships between PatternCall nodes at shared edges).
 - **Instance-independent ordering:** The operand ordering for a given source location is the same across all instantiations of the enclosing function.

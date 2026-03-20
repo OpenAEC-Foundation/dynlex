@@ -146,6 +146,7 @@ struct ParseContext {
 	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	std::unordered_map<CodeLine *, Instantiation::IfChainSelection> inferredIfChainSelections;
+	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).

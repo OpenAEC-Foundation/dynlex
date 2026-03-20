@@ -338,8 +338,9 @@ static bool instantiateClassTypeReference(
 			return true;
 		}
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
-			if (fieldType.typeExpression->kind == Expression::Kind::Pending && field.range.line && field.range.line->section)
-				expandExpression(fieldType.typeExpression, field.range.line->section);
+			expandPendingTypeReferenceExpression(
+				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
+			);
 
 			DataType fieldTypeRef;
 			if (!resolveTypeReferenceExpression(context, fieldType.typeExpression, bindings, fieldTypeRef) ||
@@ -469,10 +470,9 @@ static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
 		for (ClassDefinition *classDef : classDefinitions) {
 			for (FieldDefinition &field : classDef->fields) {
 				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeExpression) {
-					if (field.declaredType.typeExpression->kind == Expression::Kind::Pending && field.range.line &&
-						field.range.line->section) {
-						expandExpression(field.declaredType.typeExpression, field.range.line->section);
-					}
+					expandPendingTypeReferenceExpression(
+						field.declaredType.typeExpression, field.range.line ? field.range.line->section : nullptr
+					);
 					DataType typeRef;
 					if (resolveTypeReferenceExpression(context, field.declaredType.typeExpression, {}, typeRef) &&
 						typeRef.kind == DataType::Kind::Type) {

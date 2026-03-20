@@ -1,3 +1,5 @@
+#pragma once
+
 #include "parseContext.h"
 #include <string>
 #include <string_view>
@@ -18,6 +20,13 @@ bool ensureSectionInstantiationInferred(
 );
 bool isInternalSourcePath(std::string_view path);
 void expandExpression(Expression *expr, Section *section);
+
+inline bool expandPendingTypeReferenceExpression(Expression *expr, Section *section) {
+	if (!expr || expr->kind != Expression::Kind::Pending || !section)
+		return false;
+	expandExpression(expr, section);
+	return true;
+}
 
 // Intrinsic operator checking utilities
 bool isArithmeticOperator(const std::string &name);

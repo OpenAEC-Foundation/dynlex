@@ -26,6 +26,8 @@ function discard val:
 # --- Primitive types ---
 
 function [an|a|] integer:
+    patterns:
+        int
     replacement:
         @intrinsic("type", "int", 32)
 
@@ -235,6 +237,11 @@ function [the|] maximum of a and b:
     after: default
     replacement:
         @intrinsic("max", a, b)
+
+function [the|] product of left and right:
+    after: default
+    replacement:
+        @intrinsic("multiply", left, right)
 
 # --- Comparison ---
 

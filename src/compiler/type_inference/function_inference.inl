@@ -1,5 +1,9 @@
 #pragma once
 
+#include <bit>
+#include <cstdlib>
+#include <iostream>
+
 #include "compilerUtils.h"
 #include "const_evaluation.inl"
 #include "type_resolution.inl"
@@ -129,22 +133,60 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 		it->first->instantiations.resize(it->second);
 }
 
-static Expression *cloneExpressionTree(Expression *expr) {
-	if (!expr)
-		return nullptr;
-	Expression *clone = new Expression(*expr);
-	clone->arguments.clear();
-	for (Expression *arg : expr->arguments)
-		clone->arguments.push_back(cloneExpressionTree(arg));
-	return clone;
+static std::string encodeTrialCompileTimeValue(const CompileTimeValue &value) {
+	if (std::holds_alternative<std::monostate>(value))
+		return "?";
+	if (const auto *number = std::get_if<double>(&value))
+		return "d" + std::to_string(std::bit_cast<uint64_t>(*number));
+	if (const auto *text = std::get_if<std::string>(&value))
+		return "s" + std::to_string(text->size()) + ":" + *text;
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? "b1" : "b0";
+	return "?";
 }
 
-static void deleteExpressionTree(Expression *expr) {
-	if (!expr)
+static std::vector<std::pair<std::string, CompileTimeValue>> collectTrialCompileTimeParameters(
+	ParseContext &parseContext, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	const BindingFrameStack &callerBindingFrameStack, const Instantiation *callerInstantiation
+) {
+	std::vector<std::pair<std::string, CompileTimeValue>> values;
+	values.reserve(paramBindings.size());
+	for (const auto &[name, argExpr] : paramBindings)
+		values.push_back({name, evaluateCompileTimeValue(argExpr, parseContext, callerBindingFrameStack, callerInstantiation)});
+	return values;
+}
+
+static std::string buildTrialInstantiationCacheKey(
+	Section *section, bool sectionHasCommittedOrdering, const std::vector<DataType> &argTypes,
+	const std::vector<std::pair<std::string, CompileTimeValue>> &compileTimeParameters
+) {
+	std::string key = std::to_string(reinterpret_cast<uintptr_t>(section));
+	key += sectionHasCommittedOrdering ? "|ordered" : "|unordered";
+	for (const DataType &type : argTypes) {
+		key += "|arg:";
+		key += type.toString();
+	}
+	for (const auto &[name, value] : compileTimeParameters) {
+		key += "|param:";
+		key += name;
+		key += "=";
+		key += encodeTrialCompileTimeValue(value);
+	}
+	return key;
+}
+
+static bool traceTrialInstantiationCacheEnabled() {
+	static bool enabled = std::getenv("DYNLEX_TRACE_TRIAL_INSTANTIATION_CACHE") != nullptr;
+	return enabled;
+}
+
+static void traceTrialInstantiationCacheEvent(std::string_view event, PatternDefinition *definition, const std::string &key) {
+	if (!traceTrialInstantiationCacheEnabled())
 		return;
-	for (Expression *arg : expr->arguments)
-		deleteExpressionTree(arg);
-	delete expr;
+	std::cerr << "[trial-inst-cache] " << event;
+	if (definition)
+		std::cerr << " function='" << std::string(definition->range.subString) << "'";
+	std::cerr << " key='" << key << "'\n";
 }
 
 static std::unique_ptr<Expression>
@@ -176,7 +218,8 @@ makeNonMacroParameterBinding(const std::string &parameterName, const DataType &a
 }
 
 static bool inferExpression(
-	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack
+	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack,
+	bool requireVoidResult = false
 );
 static bool
 inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
@@ -409,6 +452,8 @@ static DataType inferExpressionTypeWithoutSideEffects(
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.trialJournal = &journal;
+	trialContext.trialInstantiationCache =
+		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
 
 	(void)inferExpression(targetExpr, trialContext, false, targetBindingFrameStack);
 	if (trialContext.typesValid) {
@@ -496,6 +541,8 @@ static void inferOrderedExpression(
 	std::unordered_set<size_t> skippedArgumentIndices;
 	if (expr->kind == Expression::Kind::PatternCall && !deferArgumentInference)
 		skippedArgumentIndices = compileTimeOnlyArgumentIndices(expr);
+	if (expr->kind == Expression::Kind::IntrinsicCall && intrinsicKind(expr->intrinsicName) == IntrinsicKind::Construct)
+		skippedArgumentIndices.insert(1);
 	// Recurse into arguments first (bottom-up)
 	if (!deferArgumentInference) {
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
@@ -766,15 +813,22 @@ static void inferOrderedExpression(
 							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
 					}
 				} else if (kind == IntrinsicKind::SizeOf) {
-					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[1], macroBindingFrameStack);
-					if (typeArgType.kind == DataType::Kind::Type) {
-						if (typeArgType.referencedKind == DataType::Kind::Type ||
-							typeArgType.referencedKind == DataType::Kind::Unresolved) {
-							setConfiguredTypeFailure(expr->range, "size of type invalid");
-							break;
-						}
-						expr->type = {DataType::Kind::Int, 8};
+					markCompileTimeParameterRequirements(
+						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
+					);
+					DataType typeArgType;
+					if (!resolveCompileTimeTypeReference(
+							context.parseContext, expr->arguments[1], macroBindingFrameStack, typeArgType
+						) ||
+						typeArgType.kind != DataType::Kind::Type) {
+						break;
 					}
+					if (typeArgType.referencedKind == DataType::Kind::Type ||
+						typeArgType.referencedKind == DataType::Kind::Unresolved) {
+						setConfiguredTypeFailure(expr->range, "size of type invalid");
+						break;
+					}
+					expr->type = {DataType::Kind::Int, 8};
 				} else if (kind == IntrinsicKind::BuildInfo) {
 					Expression *keyExpr = resolveThroughMacroBindings(expr->arguments[1]);
 					if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
@@ -1119,6 +1173,28 @@ static void inferOrderedExpression(
 				argTypes.push_back(argType);
 			}
 
+			const Instantiation *callerInstantiation = context.currentInstantiation;
+			std::vector<std::pair<std::string, CompileTimeValue>> trialCompileTimeParameters;
+			std::string trialCacheKey;
+			if (context.trial) {
+				trialCompileTimeParameters = collectTrialCompileTimeParameters(
+					context.parseContext, paramBindings, macroBindingFrameStack, callerInstantiation
+				);
+				trialCacheKey = buildTrialInstantiationCacheKey(
+					matchedSection, !matchedSection->instantiations.empty(), argTypes, trialCompileTimeParameters
+				);
+				auto trialCache = context.ensureTrialInstantiationCache();
+				auto cachedTrial = trialCache->find(trialCacheKey);
+				if (cachedTrial != trialCache->end()) {
+					traceTrialInstantiationCacheEvent("hit", def, trialCacheKey);
+					context.typesValid = true;
+					if (cachedTrial->second.returnType.isDeduced())
+						expr->type = cachedTrial->second.returnType;
+					break;
+				}
+				traceTrialInstantiationCacheEvent("miss", def, trialCacheKey);
+			}
+
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordSectionInstantiationWrite(matchedSection, argTypes);
 			Instantiation &inst = matchedSection->instantiations[argTypes];
@@ -1131,7 +1207,7 @@ static void inferOrderedExpression(
 			if (!inst.inferring && !hasReusableInstantiation) {
 				Instantiation *savedInst = context.currentInstantiation;
 				auto callerKnownConstants = context.currentKnownConstants;
-				const Instantiation *callerInstantiation = savedInst;
+				callerInstantiation = savedInst;
 				bool inferenceSucceeded = runInstantiationReinferenceLoop(
 					context, inst, def, expr->range, (std::string)def->range.subString,
 					[&]() -> bool {
@@ -1152,6 +1228,11 @@ static void inferOrderedExpression(
 					BindingMap nonMacroTypeBindings;
 					std::vector<std::unique_ptr<Expression>> ownedNonMacroTypeBindings;
 					for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++) {
+						if (std::find(
+								matchedSection->globalVariables.begin(), matchedSection->globalVariables.end(),
+								paramBindings[i].first
+							) != matchedSection->globalVariables.end())
+							continue;
 						auto bindingValue = makeNonMacroParameterBinding(paramBindings[i].first, argTypes[i], inst);
 						nonMacroTypeBindings[paramBindings[i].first] = bindingValue.get();
 						ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
@@ -1182,6 +1263,15 @@ static void inferOrderedExpression(
 			// If no return intrinsic was found, default to Void
 			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
 				inst.returnType = {DataType::Kind::Void};
+			}
+			bool canCacheStableTrialInstantiation =
+				context.trial && !trialCacheKey.empty() && context.typesValid && inst.valid && !inst.inferring &&
+				!inst.needsReinfer && inst.returnType.isDeduced() && !context.observedInProgressUndeducedInstantiation;
+			if (canCacheStableTrialInstantiation) {
+				TrialInstantiationSummary summary;
+				summary.returnType = inst.returnType;
+				(*context.ensureTrialInstantiationCache())[trialCacheKey] = std::move(summary);
+				traceTrialInstantiationCacheEvent("store", def, trialCacheKey);
 			}
 			if (inst.returnType.isDeduced())
 				expr->type = inst.returnType;

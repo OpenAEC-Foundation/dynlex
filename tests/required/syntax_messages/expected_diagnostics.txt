@@ -1,0 +1,1 @@
+tests/required/syntax_messages/main.dl:2:5-11: Error: Onbekende sectie: vreemd

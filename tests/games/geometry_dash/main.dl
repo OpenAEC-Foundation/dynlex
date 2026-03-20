@@ -26,7 +26,7 @@ loop while not the window should close:
 		start a jump on player_velocity
 
 	apply gravity to player_y and player_velocity
-	clamp player_y and velocity to the ground
+	clamp player_y and player_velocity to the ground
 
 	set scroll_offset to scroll_offset + the scroll speed
 
@@ -39,7 +39,7 @@ loop while not the window should close:
 				start a jump on reference_velocity
 		else:
 			apply gravity to reference_y and reference_velocity
-			clamp reference_y and velocity to the ground
+			clamp reference_y and reference_velocity to the ground
 			set reference_phase_ms to reference_phase_ms + the frame time in milliseconds
 			if reference_phase_ms >= item reference_step of jump_ms:
 				set reference_phase_ms to 0

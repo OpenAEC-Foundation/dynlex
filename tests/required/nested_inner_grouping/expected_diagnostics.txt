@@ -1,0 +1,1 @@
+tests/required/nested_inner_grouping/main.dl:13:9-58: Warning: Expression 'number / (10 raised to the power of index) mod 10' has multiple valid operand groupings. Using '(number / (10 raised to the power of index)) mod 10' instead of 'number / ((10 raised to the power of index) mod 10)'.
