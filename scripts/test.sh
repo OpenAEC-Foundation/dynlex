@@ -56,7 +56,27 @@ normalize_output() {
 }
 
 normalize_diagnostics() {
-    printf "%s" "$1" | tr -d '\r' | sed "s|$PROJECT_DIR/||g" | sed 's/[[:space:]]*$//'
+    PYTHON_DIAGNOSTICS="$1" python3 - "$PROJECT_DIR" <<'PY'
+import re
+import sys
+import os
+
+project_dir = sys.argv[1].replace("\\", "/").rstrip("/")
+text = os.environ["PYTHON_DIAGNOSTICS"].replace("\r", "")
+
+path_prefixes = {project_dir}
+match = re.match(r"^/([A-Za-z])/(.*)$", project_dir)
+if match:
+    drive = match.group(1)
+    rest = match.group(2)
+    path_prefixes.add(f"{drive.upper()}:/{rest}")
+    path_prefixes.add(f"{drive.lower()}:/{rest}")
+
+for prefix in sorted(path_prefixes, key=len, reverse=True):
+    text = text.replace(prefix + "/", "")
+
+sys.stdout.write("\n".join(line.rstrip() for line in text.splitlines()).rstrip())
+PY
 }
 
 run_with_timeout() {
