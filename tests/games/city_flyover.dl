@@ -12,9 +12,9 @@ import lib/graphics.dl
 #   0 final shading
 #   1 normals
 #   2 hit distance
-#   3 cell hash
+#   3 district density
 #   4 fog
-#   5 footprint extents
+#   5 roads / parks
 # Build:
 #   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
 #   ./build/dynlex tests/games/city_flyover_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/city_flyover.spv
@@ -34,15 +34,20 @@ set cam_z_ubo to a uniform buffer
 set yaw_ubo to a uniform buffer
 set step_ubo to a uniform buffer
 set debug_ubo to a uniform buffer
+set framebuffer_width_ubo to a uniform buffer
+set framebuffer_height_ubo to a uniform buffer
 bind uniform buffer cam_x_ubo to 0
 bind uniform buffer cam_y_ubo to 1
 bind uniform buffer cam_z_ubo to 2
 bind uniform buffer yaw_ubo to 3
 bind uniform buffer step_ubo to 4
 bind uniform buffer debug_ubo to 5
+bind uniform buffer framebuffer_width_ubo to 6
+bind uniform buffer framebuffer_height_ubo to 7
 
 use shader program prog
 
+set window_handle to window as cstring
 set cam_x to 0.0
 set cam_y to 16.0
 set cam_z to 0.0
@@ -95,12 +100,17 @@ while not the window should close:
 
     clamp step_scale between 0.10 and 1.00
 
+    set framebuffer_width to query the framebuffer width of window_handle
+    set framebuffer_height to query the framebuffer height of window_handle
+
     update uniform buffer cam_x_ubo with cam_x
     update uniform buffer cam_y_ubo with cam_y
     update uniform buffer cam_z_ubo with cam_z
     update uniform buffer yaw_ubo with yaw
     update uniform buffer step_ubo with step_scale
     update uniform buffer debug_ubo with debug_mode
+    update uniform buffer framebuffer_width_ubo with framebuffer_width
+    update uniform buffer framebuffer_height_ubo with framebuffer_height
 
     clear the screen
     draw a fullscreen quad

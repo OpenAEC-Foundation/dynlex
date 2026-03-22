@@ -232,7 +232,8 @@ bool isInternalSourcePath(std::string_view path) {
 		   normalized.starts_with(projectLibPrefix);
 }
 
-PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
+std::vector<PatternDefinition *>
+findDefinitionsBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
 	std::string converted(signature);
 	for (char &c : converted) {
 		if (c == '$')
@@ -243,7 +244,7 @@ PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType 
 	PatternTreeNode *node = context.patternTrees[(int)sectionType];
 	for (const auto &elem : elements) {
 		if (!node)
-			return nullptr;
+			return {};
 		if (elem.type == PatternElement::Type::Variable) {
 			node = node->argumentChild;
 		} else {
@@ -252,7 +253,12 @@ PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType 
 		}
 	}
 
-	return (node && !node->matchingDefinitions.empty()) ? node->matchingDefinitions[0] : nullptr;
+	return node ? node->matchingDefinitions : std::vector<PatternDefinition *>{};
+}
+
+PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
+	std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, sectionType, signature);
+	return !matches.empty() ? matches[0] : nullptr;
 }
 
 static DataType concretizeClassType(DataType type) {

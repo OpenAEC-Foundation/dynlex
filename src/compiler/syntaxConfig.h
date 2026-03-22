@@ -31,6 +31,7 @@ struct SyntaxConfig {
 	std::string className = "class";
 	std::string macroName = "macro";
 	std::string localName = "local";
+	std::string exposedName = "exposed";
 
 	std::string executeSectionName = "execute";
 	std::string replacementSectionName = "replacement";

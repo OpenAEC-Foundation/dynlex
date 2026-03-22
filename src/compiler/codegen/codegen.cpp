@@ -134,8 +134,7 @@ void generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
-	bool restoredFunctionBindingScope = popBindingScope(context.macroBindingFrames);
-	assert(restoredFunctionBindingScope && "Missing macro binding scope when restoring codegen state");
+	popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope when restoring codegen state");
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
@@ -145,6 +144,214 @@ void generateSpecializedFunction(
 		builder.SetInsertPoint(savedBlock, savedPoint);
 		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
+}
+
+static DataType concretizeCallableType(DataType type) {
+	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
+		!type.classDefinition->instantiations.empty()) {
+		type.classInstIndex = 0;
+	}
+	return type;
+}
+
+static void collectCallablePatternParameters(
+	const std::vector<DefinitionPatternElement> &elements, std::vector<std::pair<std::string, DataType>> &outParameters
+) {
+	for (const DefinitionPatternElement &element : elements) {
+		switch (element.type) {
+		case PatternElement::Type::Choice:
+			if (!element.alternatives.empty())
+				collectCallablePatternParameters(element.alternatives[0], outParameters);
+			break;
+		case PatternElement::Type::Variable:
+			outParameters.push_back({element.text, concretizeCallableType(element.resolvedTypeConstraint)});
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+static bool buildCallableFunctionSignature(
+	ParseContext &context, PatternDefinition *definition, std::vector<std::pair<std::string, DataType>> &outParameters
+) {
+	if (!definition || !definition->section)
+		return false;
+
+	outParameters.clear();
+	collectCallablePatternParameters(definition->patternElements, outParameters);
+	for (const auto &[parameterName, parameterType] : outParameters) {
+		if (!parameterType.isDeduced()) {
+			Diagnostic diagnostic;
+			diagnostic.level = Diagnostic::Level::Error;
+			diagnostic.range = definition->range;
+			diagnostic.message = "function reference requires concrete parameter types: " + definition->toString() +
+								 " parameter '" + parameterName + "'";
+			context.addDiagnostic(std::move(diagnostic));
+			return false;
+		}
+		if (parameterType.kind == DataType::Kind::Type || parameterType.kind == DataType::Kind::Void) {
+			Diagnostic diagnostic;
+			diagnostic.level = Diagnostic::Level::Error;
+			diagnostic.range = definition->range;
+			diagnostic.message = "function reference requires runtime parameters: " + definition->toString() + " parameter '" +
+								 parameterName + "'";
+			context.addDiagnostic(std::move(diagnostic));
+			return false;
+		}
+	}
+	return true;
+}
+
+static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argTypes) {
+	std::string name = getPatternFunctionName(definition->section) + "_callable";
+	for (const DataType &type : argTypes)
+		name += "_" + type.toString();
+	return name;
+}
+
+static std::unique_ptr<Expression> makeCallablePlaceholderExpression(const DataType &type) {
+	auto expression = std::make_unique<Expression>();
+	expression->type = type;
+	return expression;
+}
+
+llvm::Function *
+ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage) {
+	if (!definition || !definition->section || definition->section->type != SectionType::Function ||
+		definition->section->isMacro) {
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "function reference requires non-macro function",
+			definition ? definition->range : Range()
+		));
+		return nullptr;
+	}
+	if (context.options.emitSPIRV) {
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "function references are unavailable for SPIR-V targets", definition->range
+		));
+		return nullptr;
+	}
+
+	std::vector<std::pair<std::string, DataType>> parameters;
+	if (!buildCallableFunctionSignature(context, definition, parameters))
+		return nullptr;
+
+	std::vector<std::pair<std::string, Expression *>> paramBindings;
+	std::vector<std::unique_ptr<Expression>> ownedBindings;
+	std::vector<DataType> argTypes;
+	paramBindings.reserve(parameters.size());
+	ownedBindings.reserve(parameters.size());
+	argTypes.reserve(parameters.size());
+	for (const auto &[parameterName, parameterType] : parameters) {
+		argTypes.push_back(parameterType);
+		auto placeholder = makeCallablePlaceholderExpression(parameterType);
+		paramBindings.push_back({parameterName, placeholder.get()});
+		ownedBindings.push_back(std::move(placeholder));
+	}
+
+	Section *section = definition->section;
+	Instantiation &inst = section->instantiations[argTypes];
+	if (inst.argumentTypes.empty()) {
+		inst.argumentTypes = argTypes;
+	} else {
+		assert(inst.argumentTypes == argTypes && "Callable signature diverged from instantiation key");
+	}
+	if (!inst.llvmFunction)
+		generateSpecializedFunction(context, section, paramBindings, argTypes, inst);
+	if (!inst.returnType.isDeduced() || !inst.valid) {
+		Diagnostic diagnostic;
+		diagnostic.level = Diagnostic::Level::Error;
+		diagnostic.range = definition->range;
+		diagnostic.message = "callable function inference failed: " + definition->toString();
+		context.addDiagnostic(std::move(diagnostic));
+		return nullptr;
+	}
+	if (inst.needsReinfer || !inst.requiredCompileTimeParameters.empty()) {
+		Diagnostic diagnostic;
+		diagnostic.level = Diagnostic::Level::Error;
+		diagnostic.range = definition->range;
+		diagnostic.message = "callable function cannot require compile-time parameters: " + definition->toString();
+		context.addDiagnostic(std::move(diagnostic));
+		return nullptr;
+	}
+	if (inst.llvmCallableFunction) {
+		if (requireExternalLinkage)
+			inst.llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return inst.llvmCallableFunction;
+	}
+
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	std::vector<llvm::Type *> parameterTypes;
+	parameterTypes.reserve(argTypes.size());
+	for (const DataType &parameterType : argTypes)
+		parameterTypes.push_back(getLLVMType(context, parameterType));
+	llvm::Type *returnType = getLLVMType(context, inst.returnType);
+	llvm::FunctionType *callableType = llvm::FunctionType::get(returnType, parameterTypes, false);
+	std::string callableName = buildCallableFunctionName(definition, argTypes);
+	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
+												  ? llvm::GlobalValue::ExternalLinkage
+												  : llvm::GlobalValue::InternalLinkage;
+	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
+	inst.llvmCallableFunction = callableFunction;
+
+	size_t argumentIndex = 0;
+	for (llvm::Argument &argument : callableFunction->args())
+		argument.setName(parameters[argumentIndex++].first);
+
+	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", callableFunction);
+	llvm::BasicBlock *savedBlock = builder.GetInsertBlock();
+	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
+	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
+	builder.SetInsertPoint(entry);
+
+	std::vector<llvm::Value *> callArguments;
+	callArguments.reserve(argTypes.size());
+	argumentIndex = 0;
+	for (llvm::Argument &argument : callableFunction->args()) {
+		llvm::AllocaInst *parameterAlloca =
+			createEntryAlloca(context, parameters[argumentIndex].first, argTypes[argumentIndex]);
+		builder.CreateAlignedStore(&argument, parameterAlloca, llvm::Align(8));
+		callArguments.push_back(parameterAlloca);
+		argumentIndex++;
+	}
+
+	llvm::CallInst *call = builder.CreateCall(inst.llvmFunction, callArguments);
+	if (inst.returnType.kind == DataType::Kind::Void) {
+		builder.CreateRetVoid();
+	} else {
+		builder.CreateRet(call);
+	}
+
+	if (savedBlock) {
+		builder.SetInsertPoint(savedBlock, savedPoint);
+		builder.SetCurrentDebugLocation(savedDebugLoc);
+	}
+
+	return callableFunction;
+}
+
+static bool generateExposedFunctions(ParseContext &context, Section *section) {
+	if (!section)
+		return true;
+
+	if (section->isExposed) {
+		if (section->type != SectionType::Function || section->isMacro || section->patternDefinitions.empty()) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "exposed applies only to non-macro functions",
+				section->openingLine ? Range(section->openingLine, section->openingLine->patternText) : Range()
+			));
+			return false;
+		}
+		if (!ensureCallableFunctionGenerated(context, section->patternDefinitions.front(), true))
+			return false;
+	}
+
+	for (Section *child : section->children) {
+		if (!generateExposedFunctions(context, child))
+			return false;
+	}
+	return true;
 }
 
 // Generate code for an expression
@@ -304,8 +511,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 				}
 			}
 
-			bool restoredMacroScope = popBindingScope(context.macroBindingFrames);
-			assert(restoredMacroScope && "Missing macro binding scope after macro pattern call");
+			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after macro pattern call");
 			context.currentBodySection = savedBodySection;
 			return result;
 		}
@@ -559,6 +765,9 @@ bool generateCode(ParseContext &context) {
 	builder.SetInsertPoint(entry);
 
 	if (!generateSectionCode(context, context.mainSection))
+		return false;
+
+	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
 
 	if (context.options.emitSPIRV) {

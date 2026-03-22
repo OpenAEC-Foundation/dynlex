@@ -73,7 +73,7 @@ static bool runInstantiationReinferenceLoop(
 			return false;
 		}
 		context.typesValid = true;
-		context.typeFailureDetail.clear();
+		context.clearTypeFailure();
 	}
 }
 
@@ -323,6 +323,144 @@ static void resetSectionLocalVariableTypes(Section *section) {
 	}
 }
 
+static DefinitionPatternElement *
+findParameterElement(std::vector<DefinitionPatternElement> &elements, const std::string &parameterName) {
+	for (auto &element : elements) {
+		if (element.type == PatternElement::Type::Choice) {
+			for (auto &alternative : element.alternatives) {
+				if (DefinitionPatternElement *found = findParameterElement(alternative, parameterName))
+					return found;
+			}
+			continue;
+		}
+		if (element.type == PatternElement::Type::Variable && element.text == parameterName)
+			return &element;
+	}
+	return nullptr;
+}
+
+static bool expressionContainsTargetExpression(Expression *expr, Expression *target) {
+	if (!expr || !target)
+		return false;
+	if (expr == target)
+		return true;
+	for (Expression *arg : expr->arguments) {
+		if (expressionContainsTargetExpression(arg, target))
+			return true;
+	}
+	return false;
+}
+
+static Expression *findExpressionWithExactRange(Expression *expr, const Range &range) {
+	if (!expr || !range.line)
+		return nullptr;
+	if (expr->range.line == range.line && expr->range.start() == range.start() && expr->range.end() == range.end())
+		return expr;
+	for (Expression *arg : expr->arguments) {
+		if (Expression *found = findExpressionWithExactRange(arg, range))
+			return found;
+	}
+	return nullptr;
+}
+
+struct ImplicitPromotionTraceTarget {
+	PatternDefinition *definition{};
+	std::string parameterName;
+};
+
+static void collectImplicitPromotionTraceTargets(
+	Expression *patternCallExpr, Expression *targetExpression, std::vector<ImplicitPromotionTraceTarget> &outTargets
+) {
+	if (!patternCallExpr || patternCallExpr->kind != Expression::Kind::PatternCall || !patternCallExpr->patternMatch ||
+		!patternCallExpr->patternMatch->matchedEndNode || !targetExpression)
+		return;
+
+	std::vector<PatternDefinition *> candidateDefinitions;
+	if (patternCallExpr->selectedPatternDefinition)
+		candidateDefinitions.push_back(patternCallExpr->selectedPatternDefinition);
+	else
+		candidateDefinitions = patternCallExpr->patternMatch->matchedEndNode->matchingDefinitions;
+
+	for (PatternDefinition *definition : candidateDefinitions) {
+		if (!definition)
+			continue;
+		std::vector<std::pair<std::string, Expression *>> paramBindings;
+		collectPatternCallBindingPairs(patternCallExpr, definition, paramBindings);
+		for (const auto &[parameterName, argumentExpression] : paramBindings) {
+			if (!expressionContainsTargetExpression(argumentExpression, targetExpression))
+				continue;
+			DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
+			if (!parameterElement || !parameterElement->promotedFromVariableLike ||
+				!parameterElement->firstImplicitPromotionUseRange.line)
+				continue;
+			bool duplicate = false;
+			for (const auto &existing : outTargets) {
+				if (existing.definition == definition && existing.parameterName == parameterName) {
+					duplicate = true;
+					break;
+				}
+			}
+			if (!duplicate)
+				outTargets.push_back({definition, parameterName});
+		}
+	}
+}
+
+static bool findDirectImplicitPromotionTraceTargets(
+	Expression *expr, Expression *targetExpression, std::vector<ImplicitPromotionTraceTarget> &outTargets
+) {
+	if (!expr || !targetExpression)
+		return false;
+	for (Expression *arg : expr->arguments) {
+		if (findDirectImplicitPromotionTraceTargets(arg, targetExpression, outTargets))
+			return true;
+	}
+	if (expr->kind == Expression::Kind::PatternCall) {
+		collectImplicitPromotionTraceTargets(expr, targetExpression, outTargets);
+		if (!outTargets.empty())
+			return true;
+	}
+	return false;
+}
+
+static Range traceDeepestImplicitPromotionUseRange(
+	PatternDefinition *definition, const std::string &parameterName, std::unordered_set<std::string> &visited
+) {
+	if (!definition)
+		return {};
+	DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
+	if (!parameterElement || !parameterElement->promotedFromVariableLike ||
+		!parameterElement->firstImplicitPromotionUseRange.line)
+		return {};
+
+	Range currentRange = parameterElement->firstImplicitPromotionUseRange;
+	Expression *lineExpression = currentRange.line->expression;
+	if (!lineExpression)
+		return currentRange;
+
+	std::string visitKey = std::to_string(reinterpret_cast<uintptr_t>(definition)) + "|" + parameterName;
+	if (!visited.insert(visitKey).second)
+		return currentRange;
+
+	Expression *targetExpression = findExpressionWithExactRange(lineExpression, currentRange);
+	if (!targetExpression)
+		return currentRange;
+
+	std::vector<ImplicitPromotionTraceTarget> nestedTargets;
+	findDirectImplicitPromotionTraceTargets(lineExpression, targetExpression, nestedTargets);
+	if (nestedTargets.size() != 1)
+		return currentRange;
+
+	Range nestedRange =
+		traceDeepestImplicitPromotionUseRange(nestedTargets.front().definition, nestedTargets.front().parameterName, visited);
+	return nestedRange.line ? nestedRange : currentRange;
+}
+
+static Range traceDeepestImplicitPromotionUseRange(PatternDefinition *definition, const std::string &parameterName) {
+	std::unordered_set<std::string> visited;
+	return traceDeepestImplicitPromotionUseRange(definition, parameterName, visited);
+}
+
 static DataType derivePatternCallType(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return {};
@@ -461,8 +599,7 @@ static DataType inferExpressionTypeWithoutSideEffects(
 		if (!type.isDeduced())
 			type = derivePatternCallType(targetExpr, trialContext, targetBindingFrameStack);
 	}
-	if (!type.isDeduced() && context.typeFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
-		context.typeFailureDetail = trialContext.typeFailureDetail;
+	context.inheritTypeFailureFrom(trialContext);
 
 	rollbackTrialJournal(journal);
 	if (type.isDeduced() && !bindingDependentProbe)
@@ -742,6 +879,14 @@ static void inferOrderedExpression(
 						break;
 					if (retTypeRef.kind == DataType::Kind::Type)
 						expr->type = retTypeRef.toReferencedType();
+				} else if (kind == IntrinsicKind::Function) {
+					Expression *functionExpr = resolveThroughMacroBindings(expr->arguments[1]);
+					if (!std::holds_alternative<std::string>(functionExpr->literalValue)) {
+						setConfiguredTypeFailure(expr->range, "function intrinsic requires string literal");
+						break;
+					}
+					expr->type = {DataType::Kind::Int, 1};
+					expr->type.pointerDepth = 1;
 				} else if (kind == IntrinsicKind::Cast) {
 					DataType valueType = resolveTypeThroughBindings(expr->arguments[1], macroBindingFrameStack);
 					DataType typeArgType = resolveTypeThroughBindings(expr->arguments[2], macroBindingFrameStack);
@@ -1164,6 +1309,17 @@ static void inferOrderedExpression(
 					}
 					if (context.trial) {
 						setConfiguredTypeFailure(expr->range, "undeduced argument type in trial inference");
+						DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
+						if (parameterElement && parameterElement->promotedFromVariableLike && argumentExpression &&
+							argumentExpression->kind == Expression::Kind::Variable && argumentExpression->variable &&
+							!argumentExpression->variable->definition && argumentExpression->variable->name == parameterName &&
+							parameterElement->firstImplicitPromotionUseRange.line) {
+							Range tracedRange = traceDeepestImplicitPromotionUseRange(def, parameterName);
+							context.typeFailureRelatedInfo.push_back(
+								{"'" + parameterName + "' is a parameter because it was used here:",
+								 tracedRange.line ? tracedRange : parameterElement->firstImplicitPromotionUseRange}
+							);
+						}
 						return;
 					}
 					assert(

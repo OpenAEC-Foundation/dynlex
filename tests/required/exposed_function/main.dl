@@ -1,0 +1,17 @@
+import lib/std.dl
+
+exposed function add one to {integer:value}:
+    execute:
+        return value + 1
+
+function subtract one from {integer:value}:
+    execute:
+        return value - 1
+
+set exposed_fn to the function named "add one to $"
+set internal_fn to the function named "subtract one from $"
+
+print ((exposed_fn as a 64 bit integer) > 0) as line
+print add one to 41 as line
+print ((internal_fn as a 64 bit integer) > 0) as line
+print subtract one from 41 as line

@@ -97,9 +97,30 @@ PatternMatch *ParseContext::match(PatternReference *reference) {
 	return nullptr;
 }
 
+void ParseContext::registerShaderUniformName(const std::string &uniformName, CodeLine *line, int column) {
+	if (uniformName.empty())
+		return;
+	if (line && line->mergedLineIndex >= 0 && column >= 0) {
+		ShaderUniformSourceOrder incomingOrder{line->mergedLineIndex, column};
+		auto it = shaderUniformSourceOrder.find(uniformName);
+		if (it == shaderUniformSourceOrder.end() || std::tie(incomingOrder.mergedLineIndex, incomingOrder.column) <
+														std::tie(it->second.mergedLineIndex, it->second.column))
+			shaderUniformSourceOrder[uniformName] = incomingOrder;
+		return;
+	}
+
+	if (std::find(shaderUniformNames.begin(), shaderUniformNames.end(), uniformName) == shaderUniformNames.end())
+		shaderUniformNames.push_back(uniformName);
+}
+
 void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (!intrinsicExpr)
 		return;
+
+	if (intrinsicKind(intrinsicExpr->intrinsicName) == IntrinsicKind::ShaderUniform && intrinsicExpr->arguments.size() > 1) {
+		if (auto *uniformName = std::get_if<std::string>(&intrinsicExpr->arguments[1]->literalValue))
+			registerShaderUniformName(*uniformName, intrinsicExpr->range.line, intrinsicExpr->range.start());
+	}
 
 	CodeLine *line = intrinsicExpr->range.line;
 	if (!line || !line->section)

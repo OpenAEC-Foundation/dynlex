@@ -3,6 +3,8 @@
 #include "expression.h"
 #include "variableReference.h"
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -131,6 +133,16 @@ inline bool popBindingScope(BindingFrameStack &bindingFrameStack, BindingScopeTr
 	return true;
 }
 
+inline void popBindingScopeOrFail(
+	BindingFrameStack &bindingFrameStack, const char *failureMessage, BindingScopeTrail *scopeTrail = nullptr
+) {
+	if (popBindingScope(bindingFrameStack, scopeTrail))
+		return;
+	std::fputs(failureMessage, stderr);
+	std::fputc('\n', stderr);
+	std::abort();
+}
+
 inline void pushBindingScope(BindingFrameStack &bindingFrameStack, BindingMap nextBindings) {
 	bindingFrameStack.pushFrame(std::move(nextBindings));
 }
@@ -152,8 +164,9 @@ inline Expression *resolveVariableBindingAcrossScopes(
 		if (resolvedExpression == expr)
 			return expr;
 		expr = resolvedExpression;
-		bool poppedScope = popBindingScope(bindingFrameStack, scopeTrail);
-		assert(poppedScope && "Variable binding crossed scope without a parent binding frame");
+		popBindingScopeOrFail(
+			bindingFrameStack, "Variable binding crossed scope without a parent binding frame", scopeTrail
+		);
 	}
 	return expr;
 }

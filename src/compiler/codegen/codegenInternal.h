@@ -16,6 +16,7 @@ class DIFile;
 namespace lsp {
 struct SourceFile;
 }
+struct PatternDefinition;
 
 // Shared codegen utilities (codegenTypes.cpp)
 llvm::Type *getLLVMType(ParseContext &context, DataType type);
@@ -56,6 +57,8 @@ void generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	const std::vector<DataType> &argTypes, Instantiation &inst
 );
+llvm::Function *
+ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage);
 
 // Intrinsic code generation (codegenIntrinsics.cpp)
 llvm::Value *generateIntrinsicCode(

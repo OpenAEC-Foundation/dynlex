@@ -9,6 +9,7 @@
 #include "syntaxConfig.h"
 #include <algorithm>
 #include <cassert>
+#include <limits>
 #include <list>
 #include <map>
 #include <stack>
@@ -31,6 +32,11 @@ class DIScope;
 } // namespace llvm
 
 struct ParseContext {
+	struct ShaderUniformSourceOrder {
+		int mergedLineIndex = std::numeric_limits<int>::max();
+		int column = std::numeric_limits<int>::max();
+	};
+
 	enum class ShaderStage { Fragment, Vertex };
 	// Highest compilation phase that completed successfully.
 	// Guarantees by stage:
@@ -117,8 +123,10 @@ struct ParseContext {
 	// String constants (maps string content to global variable)
 	std::unordered_map<std::string, llvm::GlobalVariable *> stringConstants;
 
-	// Shader uniform names (collected during codegen from @intrinsic("shader uniform", ...) calls)
+	// Shader uniform names with stable parse-time source ordering metadata.
+	// SPIR-V UBO fallback bindings are assigned from source location order, not codegen use order.
 	std::vector<std::string> shaderUniformNames;
+	std::unordered_map<std::string, ShaderUniformSourceOrder> shaderUniformSourceOrder;
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
@@ -168,6 +176,7 @@ struct ParseContext {
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference);
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
+	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 };
 

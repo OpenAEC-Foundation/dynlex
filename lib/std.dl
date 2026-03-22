@@ -99,6 +99,10 @@ function [the|] build platform:
     replacement:
         the build info "platform"
 
+function [the|] function named name:
+    replacement:
+        @intrinsic("function", name)
+
 # --- Class properties ---
 
 function:

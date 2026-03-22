@@ -9,6 +9,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cstdio>
+#include <cstdlib>
 
 // Helper to extract string literal from an expression
 std::string getStringLiteral(Expression *expr) {
@@ -523,8 +525,10 @@ llvm::Value *generateIntrinsicCode(
 		DataType leftType = getEffectiveType(context, args[0]);
 		DataType rightType = getEffectiveType(context, args[1]);
 		DataType promoted;
-		bool compatible = DataType::promoteArithmetic(leftType, rightType, promoted);
-		assert(compatible && "min/max operands must be arithmetic-compatible before codegen");
+		if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
+			std::fputs("min/max operands must be arithmetic-compatible before codegen\n", stderr);
+			std::abort();
+		}
 		left = ensureType(context, left, leftType, promoted);
 		right = ensureType(context, right, rightType, promoted);
 
@@ -875,6 +879,49 @@ llvm::Value *generateIntrinsicCode(
 		return callResult;
 	}
 
+	if (kind == IntrinsicKind::Function) {
+		Expression *nameExpr = resolveVariableBinding(context, args[0]);
+		std::string signature = getStringLiteral(nameExpr);
+		if (signature.empty()) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "function intrinsic requires constant string literal", args[0]->range
+			));
+			return nullptr;
+		}
+
+		std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, SectionType::Function, signature);
+		std::vector<PatternDefinition *> callableMatches;
+		for (PatternDefinition *definition : matches) {
+			if (definition && definition->section && definition->section->type == SectionType::Function &&
+				!definition->section->isMacro)
+				callableMatches.push_back(definition);
+		}
+		if (callableMatches.empty()) {
+			Diagnostic diagnostic;
+			diagnostic.level = Diagnostic::Level::Error;
+			diagnostic.range = args[0]->range;
+			diagnostic.message = "unknown function reference: " + signature;
+			context.addDiagnostic(std::move(diagnostic));
+			return nullptr;
+		}
+		if (callableMatches.size() > 1) {
+			Diagnostic diagnostic;
+			diagnostic.level = Diagnostic::Level::Error;
+			diagnostic.range = args[0]->range;
+			diagnostic.message = "ambiguous function reference: " + signature;
+			context.addDiagnostic(std::move(diagnostic));
+			return nullptr;
+		}
+
+		llvm::Function *callableFunction =
+			ensureCallableFunctionGenerated(context, callableMatches.front(), callableMatches.front()->section->isExposed);
+		if (!callableFunction)
+			return nullptr;
+		if (callableFunction->getType() == builder.getPtrTy())
+			return callableFunction;
+		return builder.CreateBitCast(callableFunction, builder.getPtrTy(), "function_ptr");
+	}
+
 	if (kind == IntrinsicKind::Cast) {
 		// Format: args[0]=value, args[1]=type (TypeReference)
 		// Class-value cast: reinterpret integer handles as class pointers.
@@ -1108,7 +1155,7 @@ llvm::Value *generateIntrinsicCode(
 				llvm::GlobalValue::NotThreadLocal, 3
 			);
 			global->setInitializer(llvm::Constant::getNullValue(f32Ty));
-			context.shaderUniformNames.push_back(uniformName);
+			context.registerShaderUniformName(uniformName);
 		}
 		return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
 	}

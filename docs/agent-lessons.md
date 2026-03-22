@@ -83,6 +83,11 @@ Corpus used for these lessons:
 - If an intrinsic returns a value and the result is intentionally ignored, use `discard`.
 - Library code should not rely on the compiler to implicitly drop return values from calls like `glfwInit`, `fseek`, `fread`, or `fclose`.
 
+11. Stable callable ABI is a separate concern from normal DynLex calls.
+
+- Internal DynLex functions can keep using whatever monomorphized ABI the compiler needs.
+- Anything exposed outside the program, or referenced through a function-pointer feature, needs its own stable wrapper instead of reusing the internal call path.
+
 ## Repeated Operational Preferences
 
 These showed up repeatedly across the corpus.
@@ -163,3 +168,9 @@ Across DynLex chats, the strongest repeated instruction is this:
 Act like a careful compiler debugger, not a patch bot.
 
 Find the real cause. Make a small repro. Use the right debugging tools. Be conservative with git. Verify that tests are genuinely meaningful. Improve diagnostics when they are weak. And follow the explicit workflow the user gave you, not the workflow you wish they had given you.
+
+For GLFW resize handling in `lib/graphics.dl`, wire `glfwSetFramebufferSizeCallback` to an exposed DynLex callback and call `glViewport` from that callback with framebuffer dimensions. Do not paper over viewport bugs by polling window size in draw code.
+
+When a plain pattern word like `width` is implicitly promoted into a parameter because the function body uses that name, failed calls should keep the normal call-site undeduced-argument error and add related info pointing at the first body use that caused the promotion. That distinguishes accidental implicit parameters from truly missing caller variables.
+
+SPIR-V shader uniform fallback bindings must be derived from parse-time source location order, not codegen use order. Reading a new uniform earlier in shader `main` must never renumber existing UBO bindings.

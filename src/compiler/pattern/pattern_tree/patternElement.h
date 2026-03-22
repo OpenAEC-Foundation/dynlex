@@ -41,6 +41,10 @@ struct DefinitionPatternElement : public PatternElement {
 	std::string typeConstraintName;
 	// resolved type constraint (set during type constraint resolution step, Undeduced if unconstrained)
 	DataType resolvedTypeConstraint;
+	// true when a plain VariableLike word was implicitly promoted into a parameter by body usage
+	bool promotedFromVariableLike = false;
+	// the first body reference range that caused the implicit promotion
+	Range firstImplicitPromotionUseRange;
 
 	using PatternElement::PatternElement;
 	// Construct from a base PatternElement (for converting getPatternElements results)

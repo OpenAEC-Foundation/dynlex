@@ -53,6 +53,7 @@ enum class IntrinsicReturnKind {
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float)                                                              \
 	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float)                                                          \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Float)                                                        \
+	X(Function, "function", 2, IntrinsicReturnKind::Custom)                                                                    \
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom)                                                                 \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom)                                                              \
 	X(LoadAt, "load at", 3, IntrinsicReturnKind::Custom)                                                                       \
@@ -190,6 +191,8 @@ inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argI
 		return argIndex == 3;
 	case IntrinsicKind::Property:
 		return argIndex == 2; // field name token
+	case IntrinsicKind::Function:
+		return argIndex == 1;
 	default:
 		return false;
 	}

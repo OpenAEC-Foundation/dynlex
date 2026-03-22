@@ -115,6 +115,55 @@ static void traceResolution(const std::string &message) {
 	std::cerr << "[res] " << message << '\n';
 }
 
+static std::vector<std::pair<std::string, Range>> collectImplicitlyPromotedParameters(const PatternDefinition *definition) {
+	std::vector<std::pair<std::string, Range>> result;
+	if (!definition)
+		return result;
+	std::function<void(const std::vector<DefinitionPatternElement> &)> visit =
+		[&](const std::vector<DefinitionPatternElement> &elements) {
+		for (const DefinitionPatternElement &element : elements) {
+			if (element.type == PatternElement::Type::Choice) {
+				for (const auto &alternative : element.alternatives)
+					visit(alternative);
+				continue;
+			}
+			if (element.type != PatternElement::Type::Variable || !element.promotedFromVariableLike ||
+				!element.firstImplicitPromotionUseRange.line)
+				continue;
+			auto existing = std::find_if(result.begin(), result.end(), [&](const auto &entry) {
+				return entry.first == element.text;
+			});
+			if (existing == result.end())
+				result.push_back({element.text, element.firstImplicitPromotionUseRange});
+		}
+	};
+	visit(definition->patternElements);
+	return result;
+}
+
+static void
+appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDefinition *left, const PatternDefinition *right) {
+	std::vector<std::pair<std::string, Range>> leftPromoted = collectImplicitlyPromotedParameters(left);
+	std::vector<std::pair<std::string, Range>> rightPromoted = collectImplicitlyPromotedParameters(right);
+
+	auto hasName = [](const std::vector<std::pair<std::string, Range>> &entries, const std::string &name) {
+		return std::any_of(entries.begin(), entries.end(), [&](const auto &entry) {
+			return entry.first == name;
+		});
+	};
+	auto appendIfDifferent = [&](const std::vector<std::pair<std::string, Range>> &source,
+								 const std::vector<std::pair<std::string, Range>> &other) {
+		for (const auto &[name, range] : source) {
+			if (hasName(other, name))
+				continue;
+			diagnostic.relatedInfo.push_back({"'" + name + "' is a parameter because it was used here:", range});
+		}
+	};
+
+	appendIfDifferent(leftPromoted, rightPromoted);
+	appendIfDifferent(rightPromoted, leftPromoted);
+}
+
 static void appendUniqueSection(std::vector<Section *> &sections, Section *section) {
 	if (!section)
 		return;
@@ -864,6 +913,7 @@ bool resolvePatterns(ParseContext &context) {
 			diag.relatedInfo.push_back(
 				{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), existing->range}
 			);
+			appendImplicitPromotionDuplicateDetails(diag, definition, existing);
 			context.diagnostics.push_back(std::move(diag));
 			traceResolution("duplicate " + definitionTraceId(definition) + " vs " + definitionTraceId(existing));
 		}

@@ -603,7 +603,23 @@ bool emitSPIRVModule(ParseContext &context) {
 	// Add uniform variables as UBOs (Uniform storage class with Block decoration)
 	// SPIR-V shaders in OpenGL require buffer-backed uniforms, not UniformConstant
 	uint32_t nextBinding = 0;
-	for (const auto &uniformName : context.shaderUniformNames) {
+	std::vector<std::string> orderedUniformNames = context.shaderUniformNames;
+	std::stable_sort(
+		orderedUniformNames.begin(), orderedUniformNames.end(),
+		[&](const std::string &left, const std::string &right) {
+		auto leftIt = context.shaderUniformSourceOrder.find(left);
+		auto rightIt = context.shaderUniformSourceOrder.find(right);
+		bool leftHasSource = leftIt != context.shaderUniformSourceOrder.end();
+		bool rightHasSource = rightIt != context.shaderUniformSourceOrder.end();
+		if (leftHasSource != rightHasSource)
+			return leftHasSource;
+		if (!leftHasSource)
+			return false;
+		return std::tie(leftIt->second.mergedLineIndex, leftIt->second.column) <
+			   std::tie(rightIt->second.mergedLineIndex, rightIt->second.column);
+	}
+	);
+	for (const auto &uniformName : orderedUniformNames) {
 		std::string globalName = "ubo_" + uniformName;
 		ShaderIoVar uboVar;
 		uboVar.name = globalName;

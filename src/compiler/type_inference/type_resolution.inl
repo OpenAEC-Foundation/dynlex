@@ -241,6 +241,8 @@ static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameS
 					return {};
 			}
 			return concretizeClassType(retTypeRef.toReferencedType());
+		} else if (kind == IntrinsicKind::Function) {
+			return {DataType::Kind::Int, 1, 1};
 		} else if (kind == IntrinsicKind::Return) {
 			return {DataType::Kind::Void};
 		} else if (kind == IntrinsicKind::Cast) {
@@ -801,18 +803,24 @@ static DiagnosticExpressionSnapshot captureDiagnosticExpressionSnapshot(Expressi
 }
 
 static Diagnostic buildTypeFailureDiagnostic(
-	const ParseContext &parseContext, const DiagnosticExpressionSnapshot &snapshot, const std::string &detail
+	const ParseContext &parseContext, const DiagnosticExpressionSnapshot &snapshot, const std::string &detail,
+	const std::vector<RelatedInfo> &relatedInfo = {}
 ) {
 	std::string expressionText = snapshot.text;
-	if (detail.empty())
-		return Diagnostic(
+	Diagnostic diagnostic;
+	if (detail.empty()) {
+		diagnostic = Diagnostic(
 			parseContext, Diagnostic::Level::Error, "expression type inference failed", snapshot.range, "expression",
 			expressionText
 		);
-	return Diagnostic(
-		parseContext, Diagnostic::Level::Error, "expression type inference failed", "with detail", snapshot.range, "expression",
-		expressionText, "detail", detail
-	);
+	} else {
+		diagnostic = Diagnostic(
+			parseContext, Diagnostic::Level::Error, "expression type inference failed", "with detail", snapshot.range,
+			"expression", expressionText, "detail", detail
+		);
+	}
+	diagnostic.relatedInfo = relatedInfo;
+	return diagnostic;
 }
 
 // Must stay in sync with codegen's ensureType conversion support.
@@ -932,6 +940,7 @@ struct InferenceContext {
 	bool suppressReinferPassDiagnostics = false;
 	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
+	std::vector<RelatedInfo> typeFailureRelatedInfo;
 	TrialJournal *trialJournal{};
 	std::shared_ptr<TrialInstantiationCache> trialInstantiationCache;
 	const std::unordered_set<Expression *> *fixedGroupingRoots{};
@@ -951,6 +960,18 @@ struct InferenceContext {
 		typesValid = false;
 		if (typeFailureDetail.empty())
 			typeFailureDetail = std::move(detail);
+	}
+
+	void clearTypeFailure() {
+		typeFailureDetail.clear();
+		typeFailureRelatedInfo.clear();
+	}
+
+	void inheritTypeFailureFrom(const InferenceContext &other) {
+		if (!typeFailureDetail.empty() || other.typeFailureDetail.empty())
+			return;
+		typeFailureDetail = other.typeFailureDetail;
+		typeFailureRelatedInfo = other.typeFailureRelatedInfo;
 	}
 
 	std::shared_ptr<TrialInstantiationCache> ensureTrialInstantiationCache() {

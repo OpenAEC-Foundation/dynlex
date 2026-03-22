@@ -3,10 +3,12 @@
 #include "parseContext.h"
 #include <string>
 #include <string_view>
+#include <vector>
 
 struct Variable;
 struct Section;
 struct Instantiation;
+struct PatternDefinition;
 
 bool compile(const std::string &path, ParseContext &context);
 bool importSourceFile(const std::string &path, ParseContext &context);
@@ -33,6 +35,8 @@ bool isArithmeticOperator(const std::string &name);
 bool isPointerArithmeticOperator(const std::string &name);
 bool isComparisonOperator(const std::string &name);
 bool isMathFunction(const std::string &name);
+std::vector<PatternDefinition *>
+findDefinitionsBySignature(ParseContext &context, SectionType sectionType, std::string_view signature);
 PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature);
 
 // Select the best overload from multiple definitions at the same trie endpoint.

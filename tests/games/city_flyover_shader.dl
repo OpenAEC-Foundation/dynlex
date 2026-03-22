@@ -24,15 +24,17 @@ function [the|] shader debug mode:
     replacement:
         @intrinsic("shader uniform", "debug_mode")
 
+function [the|] shader framebuffer width:
+    replacement:
+        @intrinsic("shader uniform", "framebuffer_width")
+
+function [the|] shader framebuffer height:
+    replacement:
+        @intrinsic("shader uniform", "framebuffer_height")
+
 function fract of value:
     execute:
         return value - the floor of value
-
-function hash from x and z:
-    execute:
-        set n to x * 127.1 + z * 311.7
-        set s to (the sine of n) * 43758.5453
-        return fract of s
 
 function clamp01 of value:
     execute:
@@ -40,70 +42,186 @@ function clamp01 of value:
         clamp result between 0.0 and 1.0
         return result
 
-function building height at cell_x cell_z:
+function hash from x and z:
     execute:
-        set base to hash from cell_x and cell_z
-        set accent to hash from (cell_x + 13.0) and (cell_z + 7.0)
-        return (6.0 + (base * 18.0)) + (accent * 10.0)
+        set n to x * 127.1 + z * 311.7
+        set s to (the sine of n) * 43758.5453
+        return fract of s
 
-function building width at cell_x cell_z:
+function warped city east coordinate at world_x world_z:
     execute:
-        return 1.8 + (hash from (cell_x + 5.0) and (cell_z + 19.0)) * 2.2
+        set bend to (the sine of (world_z * 0.010)) * 7.0
+        set detail to (the sine of (world_z * 0.037)) * 2.0
+        return world_x + bend + detail
 
-function building depth at cell_x cell_z:
+function warped city north coordinate at world_x world_z:
     execute:
-        return 1.8 + (hash from (cell_x + 29.0) and (cell_z + 11.0)) * 2.2
+        set bend to (the sine of (world_x * 0.011)) * 6.0
+        set detail to (the sine of (world_x * 0.029)) * 2.0
+        return world_z + bend + detail
 
-function building distance at x y z for cell cell_x cell_z:
+function distance to repeated boundary at value with spacing repeat_span:
     execute:
-        set local_x to (x - (cell_x * 18.0)) - 9.0
-        set local_z to (z - (cell_z * 18.0)) - 9.0
-        set local_y to y
+        set cell_position to fract of (value / repeat_span)
+        set cell_position to cell_position * repeat_span
+        return the minimum of cell_position and (repeat_span - cell_position)
 
-        set half_x to building width at cell_x cell_z
-        set half_y to building height at cell_x cell_z
-        set half_z to building depth at cell_x cell_z
+function avenue distance at x z:
+    execute:
+        set axis_x to distance to repeated boundary at x with spacing 96.0
+        set axis_z to distance to repeated boundary at z with spacing 96.0
+        return the minimum of axis_x and axis_z
 
-        set ax to the absolute value of local_x
-        set ay to the absolute value of (local_y - half_y)
-        set az to the absolute value of local_z
+function street distance at x z:
+    execute:
+        set axis_x to distance to repeated boundary at (x + 24.0) with spacing 48.0
+        set axis_z to distance to repeated boundary at (z + 24.0) with spacing 48.0
+        return the minimum of axis_x and axis_z
 
-        set dx to ax - half_x
-        set dy to ay - half_y
-        set dz to az - half_z
+function district [density] at x z:
+    execute:
+        set center_distance to the square root of (x * x + z * z)
+        set center_density to clamp01 of (1.0 - center_distance / 360.0)
 
-        set outside_x to the maximum of dx and 0.0
-        set outside_y to the maximum of dy and 0.0
-        set outside_z to the maximum of dz and 0.0
-        set outside_distance to the square root of (outside_x * outside_x + outside_y * outside_y + outside_z * outside_z)
-        set inside_distance to the minimum of (the maximum of dx and (the maximum of dy and dz)) and 0.0
-        return outside_distance + inside_distance
+        set hub_x to x - 190.0
+        set hub_z to z + 130.0
+        set hub_distance to the square root of (hub_x * hub_x + hub_z * hub_z)
+        set hub_density to clamp01 of (1.0 - hub_distance / 200.0)
+        set hub_density to hub_density * 0.72
+
+        set corridor to clamp01 of (1.0 - (the absolute value of (z + (the sine of (x * 0.009)) * 42.0)) / 150.0)
+        set corridor to corridor * 0.35
+
+        set density to center_density
+        if hub_density > density:
+            set density to hub_density
+        if corridor > density:
+            set density to corridor
+        return density
+
+function park factor at block block_x block_z:
+    execute:
+        set park_seed to hash from (block_x + 17.0) and (block_z + 29.0)
+        set park_seed to clamp01 of ((park_seed - 0.78) * 4.6)
+        return park_seed
+
+function road clearance at x z:
+    execute:
+        set avenue_clear to avenue distance at x z
+        set avenue_clear to avenue_clear - 9.5
+        set street_clear to street distance at x z
+        set street_clear to street_clear - 4.5
+        return the minimum of avenue_clear and street_clear
+
+function box distance at x y z with center center_x center_y center_z and half size half_x half_y half_z:
+    execute:
+        set axis_x to (the absolute value of (x - center_x)) - half_x
+        set axis_y to (the absolute value of (y - center_y)) - half_y
+        set axis_z to (the absolute value of (z - center_z)) - half_z
+
+        set outer_x to the maximum of axis_x and 0.0
+        set outer_y to the maximum of axis_y and 0.0
+        set outer_z to the maximum of axis_z and 0.0
+        set outer to the square root of (outer_x * outer_x + outer_y * outer_y + outer_z * outer_z)
+        set inner to the minimum of (the maximum of axis_x and (the maximum of axis_y and axis_z)) and 0.0
+        return outer + inner
+
+function grounded box distance at x y z with center center_x center_z footprint half_x half_z and top top_y:
+    execute:
+        set box_center_y to top_y * 0.5
+        set box_half_y to the maximum of (top_y * 0.5) and 0.05
+        return box distance at x y z with center center_x box_center_y center_z and half size half_x box_half_y half_z
+
+function parcel building distance at x y z for parcel cell_x cell_z:
+    execute:
+        set center_x to cell_x * 12.0 + 6.0
+        set center_z to cell_z * 12.0 + 6.0
+
+        set major_x to the floor of (center_x / 96.0)
+        set major_z to the floor of (center_z / 96.0)
+        set density to district density at center_x center_z
+        set park_mix to park factor at block major_x major_z
+
+        if park_mix > 0.05:
+            if density < 0.72:
+                return 1000.0
+
+        if road clearance at center_x center_z < 1.1:
+            return 1000.0
+
+        set parcel_fill to hash from (cell_x + 31.0) and (cell_z + 47.0)
+        set vacancy to 0.42 - density * 0.24
+        if parcel_fill < vacancy:
+            return 1000.0
+
+        set offset_x to (hash from (cell_x + 7.0) and (cell_z + 13.0)) - 0.5
+        set offset_z to (hash from (cell_x + 19.0) and (cell_z + 3.0)) - 0.5
+        set offset_x to offset_x * 1.6
+        set offset_z to offset_z * 1.6
+        set center_x to center_x + offset_x
+        set center_z to center_z + offset_z
+
+        set width_seed to hash from (cell_x + 5.0) and (cell_z + 11.0)
+        set depth_seed to hash from (cell_x + 23.0) and (cell_z + 17.0)
+        set tower_seed to hash from (cell_x + 41.0) and (cell_z + 59.0)
+        set crown_seed to hash from (cell_x + 73.0) and (cell_z + 37.0)
+        set height_seed to hash from (cell_x + 61.0) and (cell_z + 89.0)
+
+        set podium_half_x to 2.8 + density * 1.2 + width_seed * 0.8
+        set podium_half_z to 2.8 + density * 1.2 + depth_seed * 0.8
+        set podium_top to 7.0 + density * 15.0 + height_seed * 8.0
+
+        set tower_strength to clamp01 of ((tower_seed - (0.56 - density * 0.28)) * 2.8)
+        set tower_half_x to podium_half_x * (0.44 + width_seed * 0.16)
+        set tower_half_z to podium_half_z * (0.44 + depth_seed * 0.16)
+        set tower_top to podium_top + tower_strength * (20.0 + density * 64.0 + crown_seed * 24.0)
+
+        set crown_strength to clamp01 of ((crown_seed - 0.62) * 2.8)
+        set crown_half_x to tower_half_x * (0.56 + crown_seed * 0.10)
+        set crown_half_z to tower_half_z * (0.56 + width_seed * 0.10)
+        set crown_top to tower_top + crown_strength * tower_strength * (8.0 + density * 18.0)
+
+        set podium_distance to grounded box distance at x y z with center center_x center_z footprint podium_half_x podium_half_z and top podium_top
+        set tower_distance to grounded box distance at x y z with center center_x center_z footprint tower_half_x tower_half_z and top tower_top
+        set crown_distance to grounded box distance at x y z with center center_x center_z footprint crown_half_x crown_half_z and top crown_top
+
+        set parcel_distance to podium_distance
+        set parcel_distance to the minimum of parcel_distance and tower_distance
+        set parcel_distance to the minimum of parcel_distance and crown_distance
+        return parcel_distance
+
+function structure distance at x y z:
+    execute:
+        set city_x to warped city east coordinate at x z
+        set city_z to warped city north coordinate at x z
+        set parcel_x to the floor of (city_x / 12.0)
+        set parcel_z to the floor of (city_z / 12.0)
+
+        set nearest to parcel building distance at city_x y city_z for parcel (parcel_x - 1.0) (parcel_z - 1.0)
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel parcel_x (parcel_z - 1.0))
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel (parcel_x + 1.0) (parcel_z - 1.0))
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel (parcel_x - 1.0) parcel_z)
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel parcel_x parcel_z)
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel (parcel_x + 1.0) parcel_z)
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel (parcel_x - 1.0) (parcel_z + 1.0))
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel parcel_x (parcel_z + 1.0))
+        set nearest to the minimum of nearest and (parcel building distance at city_x y city_z for parcel (parcel_x + 1.0) (parcel_z + 1.0))
+        return nearest
 
 function scene distance at x y z:
     execute:
         set ground to y
-
-        set cell_x to the floor of (x / 18.0)
-        set cell_z to the floor of (z / 18.0)
-
-        set building to building distance at x y z for cell (cell_x - 1.0) (cell_z - 1.0)
-        set building to the minimum of building and (building distance at x y z for cell cell_x (cell_z - 1.0))
-        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) (cell_z - 1.0))
-        set building to the minimum of building and (building distance at x y z for cell (cell_x - 1.0) cell_z)
-        set building to the minimum of building and (building distance at x y z for cell cell_x cell_z)
-        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) cell_z)
-        set building to the minimum of building and (building distance at x y z for cell (cell_x - 1.0) (cell_z + 1.0))
-        set building to the minimum of building and (building distance at x y z for cell cell_x (cell_z + 1.0))
-        set building to the minimum of building and (building distance at x y z for cell (cell_x + 1.0) (cell_z + 1.0))
-
-        return the minimum of ground and building
+        set buildings to structure distance at x y z
+        return the minimum of ground and buildings
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate
 
-set uv_x to ((px / 800.0) * 2.0) - 1.0
-set uv_y to ((py / 600.0) * 2.0) - 1.0
-set uv_x to uv_x * 1.3333333
+set screen_width to the maximum of the shader framebuffer width and 1.0
+set screen_height to the maximum of the shader framebuffer height and 1.0
+set uv_x to ((px / screen_width) * 2.0) - 1.0
+set uv_y to ((py / screen_height) * 2.0) - 1.0
+set uv_x to uv_x * (screen_width / screen_height)
 
 set cam_x to the shader camera x
 set cam_y to the shader camera y
@@ -115,8 +233,8 @@ set cos_yaw to the cosine of yaw
 set sin_yaw to the sine of yaw
 
 set local_dir_x to uv_x
-set local_dir_y to uv_y * 0.38 - 0.22
-set local_dir_z to 1.25
+set local_dir_y to uv_y * 0.36 - 0.18
+set local_dir_z to 1.18
 set dir_x to local_dir_x * cos_yaw + local_dir_z * sin_yaw
 set dir_y to local_dir_y
 set dir_z to local_dir_z * cos_yaw - local_dir_x * sin_yaw
@@ -131,8 +249,9 @@ set hit_x to cam_x
 set hit_y to cam_y
 set hit_z to cam_z
 set steps to 0
+set max_travel to 900.0
 
-while ((steps < 120) and (hit = 0)) and (travel < 260.0):
+while ((steps < 260) and (hit = 0)) and (travel < max_travel):
     set sample_x to cam_x + dir_x * travel
     set sample_y to cam_y + dir_y * travel
     set sample_z to cam_z + dir_z * travel
@@ -143,20 +262,21 @@ while ((steps < 120) and (hit = 0)) and (travel < 260.0):
         set hit_y to sample_y
         set hit_z to sample_z
     else:
-        if distance < 0.2:
-            set travel to travel + distance * 0.25
+        if distance < 0.25:
+            set travel to travel + distance * 0.35
         else:
             set travel to travel + distance * step_scale
     increment steps
 
 if hit = 0:
-    set horizon to clamp01 of (0.58 - dir_y * 1.15)
-    set r to 0.44 + horizon * 0.18
-    set g to 0.60 + horizon * 0.12
+    set horizon to clamp01 of (0.56 - dir_y * 1.10)
+    set glow to clamp01 of (0.38 + dir_y * 0.9)
+    set r to 0.44 + horizon * 0.20 + glow * 0.04
+    set g to 0.58 + horizon * 0.15 + glow * 0.02
     set b to 0.82 + horizon * 0.08
     set the fragment color to r g b 1.0
 else:
-    set eps to 0.25
+    set eps to 0.18
     set nxp to scene distance at hit_x + eps hit_y hit_z
     set nxn to scene distance at hit_x - eps hit_y hit_z
     set nyp to scene distance at hit_x hit_y + eps hit_z
@@ -177,9 +297,21 @@ else:
         set normal_y to normal_y / normal_len
         set normal_z to normal_z / normal_len
 
-    set light_x to 0.55
-    set light_y to 0.78
-    set light_z to 0.30
+    set scene_x to warped city east coordinate at hit_x hit_z
+    set scene_z to warped city north coordinate at hit_x hit_z
+    set parcel_x to the floor of (scene_x / 12.0)
+    set parcel_z to the floor of (scene_z / 12.0)
+    set major_x to the floor of (scene_x / 96.0)
+    set major_z to the floor of (scene_z / 96.0)
+    set density to district density at scene_x scene_z
+    set park_mix to park factor at block major_x major_z
+    set avenue_gap to avenue distance at scene_x scene_z
+    set street_gap to street distance at scene_x scene_z
+    set building_gap to structure distance at hit_x hit_y hit_z
+
+    set light_x to 0.52
+    set light_y to 0.77
+    set light_z to 0.36
     set light_len to the square root of (light_x * light_x + light_y * light_y + light_z * light_z)
     set light_x to light_x / light_len
     set light_y to light_y / light_len
@@ -187,60 +319,114 @@ else:
 
     set diffuse to ((normal_x * light_x) + (normal_y * light_y)) + (normal_z * light_z)
     set diffuse to clamp01 of diffuse
+    set shade to 0.20 + diffuse * 0.74
 
-    set cell_x to the floor of (hit_x / 18.0)
-    set cell_z to the floor of (hit_z / 18.0)
-    set half_x to building width at cell_x cell_z
-    set half_z to building depth at cell_x cell_z
-    set variation to hash from cell_x and cell_z
-    set accent to hash from (cell_x + 21.0) and (cell_z + 9.0)
-
-    set base_r to 0.16 + variation * 0.12
-    set base_g to 0.17 + accent * 0.11
-    set base_b to 0.20 + variation * 0.09
-
-    if normal_y > 0.85:
-        set base_r to 0.10
-        set base_g to 0.11
-        set base_b to 0.12
-
-    set fog to clamp01 of (travel / 260.0)
+    set fog to clamp01 of (travel / max_travel)
     set fog to fog * fog
     set sky_r to 0.44
-    set sky_g to 0.60
+    set sky_g to 0.58
     set sky_b to 0.82
 
-    if debug_mode < 0.5:
-        set shade to 0.18 + diffuse * 0.72
+    if building_gap < 0.03:
+        set facade_seed to hash from parcel_x and parcel_z
+        set facade_accent to hash from (parcel_x + 13.0) and (parcel_z + 19.0)
+        set base_r to 0.18 + density * 0.10 + facade_seed * 0.06
+        set base_g to 0.19 + facade_accent * 0.06
+        set base_b to 0.22 + facade_seed * 0.08
+
+        if normal_y > 0.82:
+            set base_r to 0.11 + density * 0.04
+            set base_g to 0.12 + density * 0.05
+            set base_b to 0.14 + density * 0.05
+        else:
+            set facade_coord to scene_z
+            if (the absolute value of normal_z) > (the absolute value of normal_x):
+                set facade_coord to scene_x
+
+            set window_u to fract of ((facade_coord + 1000.0) / 2.6)
+            set window_v to fract of ((hit_y + 0.8) / 3.4)
+            set pane_x to clamp01 of ((0.23 - (the absolute value of (window_u - 0.5))) * 9.0)
+            set pane_y to clamp01 of ((0.26 - (the absolute value of (window_v - 0.5))) * 8.0)
+            set window_mask to pane_x * pane_y
+
+            set lit_seed to hash from (the floor of ((facade_coord + 1000.0) / 2.6)) and (the floor of ((hit_y + 0.4) / 3.4))
+            set lit_mix to clamp01 of ((lit_seed - 0.34) * 2.2)
+            set warm_r to 0.95
+            set warm_g to 0.78
+            set warm_b to 0.46
+            set base_r to base_r + warm_r * window_mask * lit_mix * 0.70
+            set base_g to base_g + warm_g * window_mask * lit_mix * 0.66
+            set base_b to base_b + warm_b * window_mask * lit_mix * 0.54
+
         set r to base_r * shade
         set g to base_g * shade
         set b to base_b * shade
-        set r to r * (1.0 - fog) + sky_r * fog
-        set g to g * (1.0 - fog) + sky_g * fog
-        set b to b * (1.0 - fog) + sky_b * fog
+    else:
+        set r to 0.36
+        set g to 0.37
+        set b to 0.39
+
+        if avenue_gap < 9.5:
+            set r to 0.11
+            set g to 0.12
+            set b to 0.14
+        else:
+            if street_gap < 4.5:
+                set r to 0.15
+                set g to 0.15
+                set b to 0.17
+            else:
+                if park_mix > 0.05:
+                    if density < 0.72:
+                        set grass to 0.20 + park_mix * 0.18
+                        set r to 0.10 + grass * 0.20
+                        set g to 0.22 + grass * 0.46
+                        set b to 0.10 + grass * 0.16
+
+        set curb_mix to clamp01 of ((1.7 - road clearance at scene_x scene_z) * 0.7)
+        set r to r * (1.0 - curb_mix) + 0.54 * curb_mix
+        set g to g * (1.0 - curb_mix) + 0.53 * curb_mix
+        set b to b * (1.0 - curb_mix) + 0.50 * curb_mix
+
+        set lane_u to fract of ((scene_x + scene_z * 0.07) / 6.0)
+        set stripe to clamp01 of ((0.08 - (the absolute value of (lane_u - 0.5))) * 20.0)
+        if avenue_gap < 9.5:
+            set r to r + stripe * 0.05
+            set g to g + stripe * 0.04
+            set b to b + stripe * 0.01
+
+        set r to r * (0.50 + diffuse * 0.50)
+        set g to g * (0.50 + diffuse * 0.50)
+        set b to b * (0.50 + diffuse * 0.50)
+
+    set r to r * (1.0 - fog) + sky_r * fog
+    set g to g * (1.0 - fog) + sky_g * fog
+    set b to b * (1.0 - fog) + sky_b * fog
+
+    if debug_mode < 0.5:
         set the fragment color to r g b 1.0
     else:
         if debug_mode < 1.5:
-            set r to normal_x * 0.5 + 0.5
-            set g to normal_y * 0.5 + 0.5
-            set b to normal_z * 0.5 + 0.5
-            set the fragment color to r g b 1.0
+            set out_r to normal_x * 0.5 + 0.5
+            set out_g to normal_y * 0.5 + 0.5
+            set out_b to normal_z * 0.5 + 0.5
+            set the fragment color to out_r out_g out_b 1.0
         else:
             if debug_mode < 2.5:
-                set gray to clamp01 of (travel / 80.0)
+                set gray to clamp01 of (travel / 260.0)
                 set the fragment color to gray gray gray 1.0
             else:
                 if debug_mode < 3.5:
-                    set r to variation
-                    set g to accent
-                    set b to 1.0 - variation
-                    set the fragment color to r g b 1.0
+                    set district_r to density
+                    set district_g to 0.25 + density * 0.35
+                    set district_b to 1.0 - density * 0.65
+                    set the fragment color to district_r district_g district_b 1.0
                 else:
                     if debug_mode < 4.5:
                         set gray to fog
                         set the fragment color to gray gray gray 1.0
                     else:
-                        set r to (half_x - 1.8) / 2.2
-                        set g to (half_z - 1.8) / 2.2
-                        set b to 0.0
-                        set the fragment color to r g b 1.0
+                        set land_r to clamp01 of ((4.5 - street_gap) * 0.5)
+                        set land_g to clamp01 of (park_mix * 2.2)
+                        set land_b to clamp01 of ((9.5 - avenue_gap) * 0.25)
+                        set the fragment color to land_r land_g land_b 1.0

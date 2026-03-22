@@ -183,8 +183,7 @@ void MacroScopeGuard::popToCallerScope() {
 	ensureMacroBindingRootFrame(context);
 	assert(context.macroBindingFrames.hasParentScope());
 	savedBindingFrames = context.macroBindingFrames;
-	bool poppedMacroScope = popBindingScope(context.macroBindingFrames);
-	assert(poppedMacroScope && "Missing macro binding scope for MacroScopeGuard");
+	popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope for MacroScopeGuard");
 	active = true;
 }
 
@@ -305,6 +304,8 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			);
 			return retTypeRef.toReferencedType();
 		}
+		if (kind == IntrinsicKind::Function)
+			return {DataType::Kind::Int, 1, 1};
 		if (kind == IntrinsicKind::Construct)
 			return expr->type; // DataType fully determined during inference
 		if (kind == IntrinsicKind::Type) {
@@ -418,8 +419,9 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 
 			pushBindingScope(context.macroBindingFrames, std::move(innerBindings));
 			DataType result = getEffectiveType(context, bodyExpr);
-			bool restoredMacroScope = popBindingScope(context.macroBindingFrames);
-			assert(restoredMacroScope && "Missing macro binding scope while restoring effective-type context");
+			popBindingScopeOrFail(
+				context.macroBindingFrames, "Missing macro binding scope while restoring effective-type context"
+			);
 			return concretizeClassType(result);
 		}
 

@@ -420,9 +420,8 @@ static bool validateGroupingInTrial(
 	if ((!trialSucceeded || !trialContext.typesValid) && trialFailureDetail && trialFailureDetail->empty() &&
 		!trialContext.typeFailureDetail.empty())
 		*trialFailureDetail = trialContext.typeFailureDetail;
-	if ((!trialSucceeded || !trialContext.typesValid) && context.typeFailureDetail.empty() &&
-		!trialContext.typeFailureDetail.empty())
-		context.typeFailureDetail = trialContext.typeFailureDetail;
+	if (!trialSucceeded || !trialContext.typesValid)
+		context.inheritTypeFailureFrom(trialContext);
 	if (trialSucceeded && trialContext.typesValid && resolvedGroupingRoots)
 		*resolvedGroupingRoots = std::move(trialFixedGroupingRoots);
 	rollbackTrialJournal(journal);
@@ -549,8 +548,8 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 			);
 			if (!stopRequested && !result.stopRequested)
 				current = savedCurrent;
-			if (!result.foundValid && context.typeFailureDetail.empty() && !trialContext.typeFailureDetail.empty())
-				context.typeFailureDetail = trialContext.typeFailureDetail;
+			if (!result.foundValid)
+				context.inheritTypeFailureFrom(trialContext);
 			rollbackTrialJournal(journal);
 			return result;
 		}
@@ -794,7 +793,7 @@ static bool inferExpression(
 		}
 	};
 	auto tryInfer = [&](bool collectGroupingAmbiguity = true) -> bool {
-		context.typeFailureDetail.clear();
+		context.clearTypeFailure();
 		auto *savedFixedGroupingRoots = context.fixedGroupingRoots;
 		auto *savedResolvedGroupingRoots = context.resolvedGroupingRoots;
 		bool savedDetectGroupingAmbiguityDuringInfer = context.detectGroupingAmbiguity;
@@ -829,9 +828,9 @@ static bool inferExpression(
 		if (!tryInfer()) {
 			context.typesValid = false;
 			if (!context.trial)
-				context.addDiagnostic(
-					buildTypeFailureDiagnostic(context.parseContext, originalDiagnostic, context.typeFailureDetail)
-				);
+				context.addDiagnostic(buildTypeFailureDiagnostic(
+					context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+				));
 			return false;
 		}
 		emitOwnedGroupingWarnings();
@@ -873,11 +872,11 @@ static bool inferExpression(
 			if (!tryInfer(false)) {
 				context.typesValid = false;
 				if (context.typeFailureDetail.empty())
-					context.typeFailureDetail = trialFailureDetail;
+					context.setTypeFailure(trialFailureDetail);
 				if (!context.trial)
-					context.addDiagnostic(
-						buildTypeFailureDiagnostic(context.parseContext, originalDiagnostic, context.typeFailureDetail)
-					);
+					context.addDiagnostic(buildTypeFailureDiagnostic(
+						context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+					));
 				return false;
 			}
 			queueSelectedGroupingWarnings();
@@ -890,9 +889,11 @@ static bool inferExpression(
 		resetExpressionTypes(expr);
 		context.typesValid = false;
 		if (context.typeFailureDetail.empty())
-			context.typeFailureDetail = trialFailureDetail;
+			context.setTypeFailure(trialFailureDetail);
 		if (!context.trial)
-			context.addDiagnostic(buildTypeFailureDiagnostic(context.parseContext, originalDiagnostic, trialFailureDetail));
+			context.addDiagnostic(buildTypeFailureDiagnostic(
+				context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+			));
 		return false;
 	}
 
@@ -943,11 +944,11 @@ static bool inferExpression(
 		if (!tryInfer(false)) {
 			context.typesValid = false;
 			if (context.typeFailureDetail.empty())
-				context.typeFailureDetail = trialFailureDetail;
+				context.setTypeFailure(trialFailureDetail);
 			if (!context.trial)
-				context.addDiagnostic(
-					buildTypeFailureDiagnostic(context.parseContext, originalDiagnostic, context.typeFailureDetail)
-				);
+				context.addDiagnostic(buildTypeFailureDiagnostic(
+					context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+				));
 			return false;
 		}
 		queueSelectedGroupingWarnings();
@@ -962,8 +963,10 @@ static bool inferExpression(
 	resetExpressionTypes(expr);
 	context.typesValid = false;
 	if (context.typeFailureDetail.empty())
-		context.typeFailureDetail = trialFailureDetail;
+		context.setTypeFailure(trialFailureDetail);
 	if (!context.trial)
-		context.addDiagnostic(buildTypeFailureDiagnostic(context.parseContext, originalDiagnostic, trialFailureDetail));
+		context.addDiagnostic(buildTypeFailureDiagnostic(
+			context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+		));
 	return false;
 }

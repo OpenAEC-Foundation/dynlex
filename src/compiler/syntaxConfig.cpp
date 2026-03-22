@@ -289,6 +289,9 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "local") {
 		return assignNameValue(context, path, node, config.localName);
 	}
+	if (node.key == "exposed") {
+		return assignNameValue(context, path, node, config.exposedName);
+	}
 	if (node.key == "class") {
 		if (!assignNameValue(context, path, node, config.className, true, false))
 			return false;

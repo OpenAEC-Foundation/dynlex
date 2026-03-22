@@ -24,6 +24,14 @@ class:
 		blue_bits as i32
 		refresh_rate as i32
 
+exposed function resize the graphics viewport of {cstring:raw_window} to {integer:width} and {integer:height}:
+	execute:
+		@intrinsic("call", "GL", "glViewport", void, 0, 0, width, height)
+
+function register [the|] graphics viewport resize callback [of|for] window:
+	execute:
+		discard @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer to a byte, window, the function named "resize the graphics viewport of $ to $ and $")
+
 function a new window with width w and height h:
 	execute:
 		discard @intrinsic("call", "glfw", "glfwInit", an integer)
@@ -37,6 +45,8 @@ function a new window with width w and height h:
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
+		@intrinsic("call", "GL", "glViewport", void, 0, 0, w, h)
+		register the graphics viewport resize callback of new_window
 		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
 		@intrinsic("call", "GL", "glLoadIdentity", void)
 		set wf to w as a 64 bit float
@@ -56,6 +66,8 @@ function a new fullscreen window:
 		set h to the height of video_mode
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", monitor, 0 as a pointer to a byte)
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
+		@intrinsic("call", "GL", "glViewport", void, 0, 0, w, h)
+		register the graphics viewport resize callback of new_window
 		@intrinsic("call", "GL", "glMatrixMode", void, 5889)
 		@intrinsic("call", "GL", "glLoadIdentity", void)
 		set wf to w as a 64 bit float
@@ -117,6 +129,20 @@ function [the|] [last|] pressed key [of|in] window:
 function [the|] window should close:
 	execute:
 		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window)
+
+function query [the|] framebuffer [width] of {cstring:window}:
+	execute:
+		set framebuffer_width to 0
+		set framebuffer_height to 0
+		@intrinsic("call", "glfw", "glfwGetFramebufferSize", void, window, address of framebuffer_width, address of framebuffer_height)
+		return framebuffer_width
+
+function query [the|] framebuffer [height] of {cstring:window}:
+	execute:
+		set framebuffer_width to 0
+		set framebuffer_height to 0
+		@intrinsic("call", "glfw", "glfwGetFramebufferSize", void, window, address of framebuffer_width, address of framebuffer_height)
+		return framebuffer_height
 
 function sleep [for|] ms milliseconds:
 	execute:

@@ -56,6 +56,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	Section *newSection{};
 	bool isMacro = false;
 	bool isLocal = false;
+	bool isExposed = false;
 
 	// Parse keywords until we hit a section type keyword (function, section)
 	while (!remaining.empty()) {
@@ -67,6 +68,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 			isMacro = true;
 		} else if (current == syntax.localName) {
 			isLocal = true;
+		} else if (current == syntax.exposedName) {
+			isExposed = true;
 		} else if (current == syntax.functionName) {
 			newSection = new FunctionSection(this);
 			break;
@@ -85,6 +88,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	if (newSection) {
 		newSection->isMacro = isMacro;
 		newSection->isLocal = isLocal;
+		newSection->isExposed = isExposed;
 		// Remaining contains the pattern after the section type keyword
 		if (!remaining.empty()) {
 			newSection->patternDefinitions.push_back(new PatternDefinition(Range(line, remaining), newSection));
@@ -561,7 +565,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	bool found = false;
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
-		forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
+		forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
 			if (element.text != reference->name)
 				return;
 			auto markFound = [&] {
@@ -585,8 +589,12 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 				found = true;
 			};
 			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
-				if (element.type != PatternElement::Type::Variable)
+				if (element.type != PatternElement::Type::Variable) {
+					element.promotedFromVariableLike = true;
+					if (!element.firstImplicitPromotionUseRange.line)
+						element.firstImplicitPromotionUseRange = reference->range;
 					element.type = PatternElement::Type::Variable;
+				}
 				markFound();
 			} else if (element.type == PatternElement::Type::Word) {
 				// Word captures match by name but stay as Word — the parameter
