@@ -164,9 +164,7 @@ inline Expression *resolveVariableBindingAcrossScopes(
 		if (resolvedExpression == expr)
 			return expr;
 		expr = resolvedExpression;
-		popBindingScopeOrFail(
-			bindingFrameStack, "Variable binding crossed scope without a parent binding frame", scopeTrail
-		);
+		popBindingScopeOrFail(bindingFrameStack, "Variable binding crossed scope without a parent binding frame", scopeTrail);
 	}
 	return expr;
 }

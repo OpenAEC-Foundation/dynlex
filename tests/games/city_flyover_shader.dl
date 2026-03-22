@@ -52,13 +52,17 @@ function warped city east coordinate at world_x world_z:
     execute:
         set bend to (the sine of (world_z * 0.010)) * 7.0
         set detail to (the sine of (world_z * 0.037)) * 2.0
-        return world_x + bend + detail
+        set warped_x to world_x + bend
+        set warped_x to warped_x + detail
+        return warped_x
 
 function warped city north coordinate at world_x world_z:
     execute:
         set bend to (the sine of (world_x * 0.011)) * 6.0
         set detail to (the sine of (world_x * 0.029)) * 2.0
-        return world_z + bend + detail
+        set warped_z to world_z + bend
+        set warped_z to warped_z + detail
+        return warped_z
 
 function distance to repeated boundary at value with spacing repeat_span:
     execute:
@@ -78,7 +82,7 @@ function street distance at x z:
         set axis_z to distance to repeated boundary at (z + 24.0) with spacing 48.0
         return the minimum of axis_x and axis_z
 
-function district [density] at x z:
+function district intensity at x z:
     execute:
         set center_distance to the square root of (x * x + z * z)
         set center_density to clamp01 of (1.0 - center_distance / 360.0)
@@ -92,12 +96,12 @@ function district [density] at x z:
         set corridor to clamp01 of (1.0 - (the absolute value of (z + (the sine of (x * 0.009)) * 42.0)) / 150.0)
         set corridor to corridor * 0.35
 
-        set density to center_density
-        if hub_density > density:
-            set density to hub_density
-        if corridor > density:
-            set density to corridor
-        return density
+        set district_intensity to center_density
+        if hub_density > district_intensity:
+            set district_intensity to hub_density
+        if corridor > district_intensity:
+            set district_intensity to corridor
+        return district_intensity
 
 function park factor at block block_x block_z:
     execute:
@@ -139,7 +143,7 @@ function parcel building distance at x y z for parcel cell_x cell_z:
 
         set major_x to the floor of (center_x / 96.0)
         set major_z to the floor of (center_z / 96.0)
-        set density to district density at center_x center_z
+        set density to district intensity at center_x center_z
         set park_mix to park factor at block major_x major_z
 
         if park_mix > 0.05:
@@ -167,9 +171,12 @@ function parcel building distance at x y z for parcel cell_x cell_z:
         set crown_seed to hash from (cell_x + 73.0) and (cell_z + 37.0)
         set height_seed to hash from (cell_x + 61.0) and (cell_z + 89.0)
 
-        set podium_half_x to 2.8 + density * 1.2 + width_seed * 0.8
-        set podium_half_z to 2.8 + density * 1.2 + depth_seed * 0.8
-        set podium_top to 7.0 + density * 15.0 + height_seed * 8.0
+        set podium_half_x to 2.8 + density * 1.2
+        set podium_half_x to podium_half_x + width_seed * 0.8
+        set podium_half_z to 2.8 + density * 1.2
+        set podium_half_z to podium_half_z + depth_seed * 0.8
+        set podium_top to 7.0 + density * 15.0
+        set podium_top to podium_top + height_seed * 8.0
 
         set tower_strength to clamp01 of ((tower_seed - (0.56 - density * 0.28)) * 2.8)
         set tower_half_x to podium_half_x * (0.44 + width_seed * 0.16)
@@ -179,7 +186,9 @@ function parcel building distance at x y z for parcel cell_x cell_z:
         set crown_strength to clamp01 of ((crown_seed - 0.62) * 2.8)
         set crown_half_x to tower_half_x * (0.56 + crown_seed * 0.10)
         set crown_half_z to tower_half_z * (0.56 + width_seed * 0.10)
-        set crown_top to tower_top + crown_strength * tower_strength * (8.0 + density * 18.0)
+        set crown_rise to crown_strength * tower_strength
+        set crown_rise to crown_rise * (8.0 + density * 18.0)
+        set crown_top to tower_top + crown_rise
 
         set podium_distance to grounded box distance at x y z with center center_x center_z footprint podium_half_x podium_half_z and top podium_top
         set tower_distance to grounded box distance at x y z with center center_x center_z footprint tower_half_x tower_half_z and top tower_top
@@ -271,8 +280,10 @@ while ((steps < 260) and (hit = 0)) and (travel < max_travel):
 if hit = 0:
     set horizon to clamp01 of (0.56 - dir_y * 1.10)
     set glow to clamp01 of (0.38 + dir_y * 0.9)
-    set r to 0.44 + horizon * 0.20 + glow * 0.04
-    set g to 0.58 + horizon * 0.15 + glow * 0.02
+    set r to 0.44 + horizon * 0.20
+    set r to r + glow * 0.04
+    set g to 0.58 + horizon * 0.15
+    set g to g + glow * 0.02
     set b to 0.82 + horizon * 0.08
     set the fragment color to r g b 1.0
 else:
@@ -303,7 +314,7 @@ else:
     set parcel_z to the floor of (scene_z / 12.0)
     set major_x to the floor of (scene_x / 96.0)
     set major_z to the floor of (scene_z / 96.0)
-    set density to district density at scene_x scene_z
+    set density to district intensity at scene_x scene_z
     set park_mix to park factor at block major_x major_z
     set avenue_gap to avenue distance at scene_x scene_z
     set street_gap to street distance at scene_x scene_z

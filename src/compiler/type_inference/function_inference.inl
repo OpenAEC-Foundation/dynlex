@@ -351,25 +351,65 @@ static bool expressionContainsTargetExpression(Expression *expr, Expression *tar
 	return false;
 }
 
-static Expression *findExpressionWithExactRange(Expression *expr, const Range &range) {
-	if (!expr || !range.line)
-		return nullptr;
-	if (expr->range.line == range.line && expr->range.start() == range.start() && expr->range.end() == range.end())
-		return expr;
-	for (Expression *arg : expr->arguments) {
-		if (Expression *found = findExpressionWithExactRange(arg, range))
-			return found;
-	}
-	return nullptr;
+static bool rangeStartsEarlier(const Range &candidate, const Range &currentBest) {
+	if (!candidate.line)
+		return false;
+	if (!currentBest.line)
+		return true;
+	if (candidate.line->mergedLineIndex != currentBest.line->mergedLineIndex)
+		return candidate.line->mergedLineIndex < currentBest.line->mergedLineIndex;
+	return candidate.start() < currentBest.start();
 }
 
-struct ImplicitPromotionTraceTarget {
+static void findFirstNamedReferenceInExpression(Expression *expr, const std::string &name, Expression *&bestReference) {
+	if (!expr)
+		return;
+	if (expr->kind == Expression::Kind::Variable && expr->variable && expr->variable->name == name &&
+		rangeStartsEarlier(expr->range, bestReference ? bestReference->range : Range()))
+		bestReference = expr;
+	for (Expression *arg : expr->arguments) {
+		findFirstNamedReferenceInExpression(arg, name, bestReference);
+	}
+}
+
+static void findFirstNamedReferenceInSection(Section *section, const std::string &name, Expression *&bestReference) {
+	if (!section)
+		return;
+	for (CodeLine *line : section->codeLines) {
+		if (line && line->expression)
+			findFirstNamedReferenceInExpression(line->expression, name, bestReference);
+	}
+	for (Section *child : section->children)
+		findFirstNamedReferenceInSection(child, name, bestReference);
+}
+
+static Expression *findFirstNamedReferenceInSection(Section *section, const std::string &name) {
+	Expression *bestReference = nullptr;
+	findFirstNamedReferenceInSection(section, name, bestReference);
+	return bestReference;
+}
+
+static bool findExpressionPath(Expression *root, Expression *target, std::vector<Expression *> &path) {
+	if (!root || !target)
+		return false;
+	path.push_back(root);
+	if (root == target)
+		return true;
+	for (Expression *arg : root->arguments) {
+		if (findExpressionPath(arg, target, path))
+			return true;
+	}
+	path.pop_back();
+	return false;
+}
+
+struct PatternCallTraceTarget {
 	PatternDefinition *definition{};
 	std::string parameterName;
 };
 
-static void collectImplicitPromotionTraceTargets(
-	Expression *patternCallExpr, Expression *targetExpression, std::vector<ImplicitPromotionTraceTarget> &outTargets
+static void collectPatternCallTraceTargets(
+	Expression *patternCallExpr, Expression *targetExpression, std::vector<PatternCallTraceTarget> &outTargets
 ) {
 	if (!patternCallExpr || patternCallExpr->kind != Expression::Kind::PatternCall || !patternCallExpr->patternMatch ||
 		!patternCallExpr->patternMatch->matchedEndNode || !targetExpression)
@@ -389,10 +429,6 @@ static void collectImplicitPromotionTraceTargets(
 		for (const auto &[parameterName, argumentExpression] : paramBindings) {
 			if (!expressionContainsTargetExpression(argumentExpression, targetExpression))
 				continue;
-			DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
-			if (!parameterElement || !parameterElement->promotedFromVariableLike ||
-				!parameterElement->firstImplicitPromotionUseRange.line)
-				continue;
 			bool duplicate = false;
 			for (const auto &existing : outTargets) {
 				if (existing.definition == definition && existing.parameterName == parameterName) {
@@ -406,59 +442,74 @@ static void collectImplicitPromotionTraceTargets(
 	}
 }
 
-static bool findDirectImplicitPromotionTraceTargets(
-	Expression *expr, Expression *targetExpression, std::vector<ImplicitPromotionTraceTarget> &outTargets
-) {
-	if (!expr || !targetExpression)
-		return false;
-	for (Expression *arg : expr->arguments) {
-		if (findDirectImplicitPromotionTraceTargets(arg, targetExpression, outTargets))
-			return true;
-	}
-	if (expr->kind == Expression::Kind::PatternCall) {
-		collectImplicitPromotionTraceTargets(expr, targetExpression, outTargets);
-		if (!outTargets.empty())
-			return true;
-	}
-	return false;
-}
+struct ImplicitPromotionTraceResult {
+	bool reachesStore = false;
+	Range reportRange;
+	Range firstNameMismatchReferenceRange;
+};
 
-static Range traceDeepestImplicitPromotionUseRange(
-	PatternDefinition *definition, const std::string &parameterName, std::unordered_set<std::string> &visited
+static ImplicitPromotionTraceResult traceImplicitPromotionUse(
+	PatternDefinition *definition, const std::string &parameterName, const Range &firstNameMismatchReferenceRange,
+	const Range &deepestNonMacroReferenceRange, std::unordered_set<std::string> &visited
 ) {
-	if (!definition)
+	if (!definition || !definition->section)
 		return {};
-	DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
-	if (!parameterElement || !parameterElement->promotedFromVariableLike ||
-		!parameterElement->firstImplicitPromotionUseRange.line)
-		return {};
-
-	Range currentRange = parameterElement->firstImplicitPromotionUseRange;
-	Expression *lineExpression = currentRange.line->expression;
-	if (!lineExpression)
-		return currentRange;
 
 	std::string visitKey = std::to_string(reinterpret_cast<uintptr_t>(definition)) + "|" + parameterName;
 	if (!visited.insert(visitKey).second)
-		return currentRange;
+		return {};
 
-	Expression *targetExpression = findExpressionWithExactRange(lineExpression, currentRange);
-	if (!targetExpression)
-		return currentRange;
+	Expression *firstReference = findFirstNamedReferenceInSection(definition->section, parameterName);
+	if (!firstReference || !firstReference->range.line || !firstReference->range.line->expression)
+		return {};
 
-	std::vector<ImplicitPromotionTraceTarget> nestedTargets;
-	findDirectImplicitPromotionTraceTargets(lineExpression, targetExpression, nestedTargets);
-	if (nestedTargets.size() != 1)
-		return currentRange;
+	Range currentDeepestNonMacroReferenceRange = deepestNonMacroReferenceRange;
+	if (!definition->section->isMacro && definition->section->type == SectionType::Function)
+		currentDeepestNonMacroReferenceRange = firstReference->range;
 
-	Range nestedRange =
-		traceDeepestImplicitPromotionUseRange(nestedTargets.front().definition, nestedTargets.front().parameterName, visited);
-	return nestedRange.line ? nestedRange : currentRange;
+	std::vector<Expression *> path;
+	if (!findExpressionPath(firstReference->range.line->expression, firstReference, path))
+		return {};
+
+	for (auto it = path.rbegin(); it != path.rend(); ++it) {
+		Expression *consumer = *it;
+		if (consumer == firstReference)
+			continue;
+		if (consumer->kind == Expression::Kind::IntrinsicCall) {
+			if (intrinsicKind(consumer->intrinsicName) == IntrinsicKind::Store && consumer->arguments.size() > 1 &&
+				expressionContainsTargetExpression(consumer->arguments[1], firstReference)) {
+				ImplicitPromotionTraceResult result;
+				result.reachesStore = true;
+				result.reportRange =
+					currentDeepestNonMacroReferenceRange.line ? currentDeepestNonMacroReferenceRange : firstReference->range;
+				result.firstNameMismatchReferenceRange = firstNameMismatchReferenceRange;
+				return result;
+			}
+			return {};
+		}
+		if (consumer->kind == Expression::Kind::PatternCall) {
+			std::vector<PatternCallTraceTarget> targets;
+			collectPatternCallTraceTargets(consumer, firstReference, targets);
+			if (targets.size() != 1)
+				return {};
+
+			Range nextFirstNameMismatchReferenceRange = firstNameMismatchReferenceRange;
+			if (!nextFirstNameMismatchReferenceRange.line && targets.front().parameterName != parameterName)
+				nextFirstNameMismatchReferenceRange = firstReference->range;
+
+			return traceImplicitPromotionUse(
+				targets.front().definition, targets.front().parameterName, nextFirstNameMismatchReferenceRange,
+				currentDeepestNonMacroReferenceRange, visited
+			);
+		}
+	}
+
+	return {};
 }
 
-static Range traceDeepestImplicitPromotionUseRange(PatternDefinition *definition, const std::string &parameterName) {
+static ImplicitPromotionTraceResult traceImplicitPromotionUse(PatternDefinition *definition, const std::string &parameterName) {
 	std::unordered_set<std::string> visited;
-	return traceDeepestImplicitPromotionUseRange(definition, parameterName, visited);
+	return traceImplicitPromotionUse(definition, parameterName, {}, {}, visited);
 }
 
 static DataType derivePatternCallType(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
@@ -1312,13 +1363,20 @@ static void inferOrderedExpression(
 						DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
 						if (parameterElement && parameterElement->promotedFromVariableLike && argumentExpression &&
 							argumentExpression->kind == Expression::Kind::Variable && argumentExpression->variable &&
-							!argumentExpression->variable->definition && argumentExpression->variable->name == parameterName &&
-							parameterElement->firstImplicitPromotionUseRange.line) {
-							Range tracedRange = traceDeepestImplicitPromotionUseRange(def, parameterName);
-							context.typeFailureRelatedInfo.push_back(
-								{"'" + parameterName + "' is a parameter because it was used here:",
-								 tracedRange.line ? tracedRange : parameterElement->firstImplicitPromotionUseRange}
-							);
+							argumentExpression->variable->name == parameterName) {
+							ImplicitPromotionTraceResult traceResult = traceImplicitPromotionUse(def, parameterName);
+							if (traceResult.reachesStore && traceResult.reportRange.line) {
+								context.typeFailureRelatedInfo.push_back(
+									{"'" + parameterName + "' is a parameter because it was used here:",
+									 traceResult.reportRange}
+								);
+								if (traceResult.firstNameMismatchReferenceRange.line) {
+									context.typeFailureRelatedInfo.push_back(
+										{"The first nested parameter name mismatch was here:",
+										 traceResult.firstNameMismatchReferenceRange}
+									);
+								}
+							}
 						}
 						return;
 					}
