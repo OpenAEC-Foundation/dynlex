@@ -82,8 +82,8 @@ void ParseContext::printDiagnostics() {
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference) {
-	MatchProgress progress = MatchProgress(this, reference);
+PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options) {
+	MatchProgress progress = MatchProgress(this, reference, options);
 	std::vector<MatchProgress> queue = {progress};
 	while (queue.size()) {
 		MatchProgress &currentProgress = queue.back();

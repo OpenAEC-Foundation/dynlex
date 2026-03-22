@@ -2,6 +2,14 @@
 #include "patternTreeNode.h"
 #include "variableMatch.h"
 
+struct MatchOptions {
+	bool acceptLiterals = false;
+};
+
+struct AcceptedLiteralMatch {
+	PatternTreeNode *node{};
+};
+
 struct PatternMatch {
 	PatternTreeNode *matchedEndNode;
 	size_t lineStartPos;
@@ -9,6 +17,7 @@ struct PatternMatch {
 	std::vector<PatternTreeNode *> nodesPassed{};
 	std::vector<VariableMatch> discoveredVariables{};
 	std::vector<WordMatch> discoveredWords{};
+	std::vector<AcceptedLiteralMatch> acceptedLiterals{};
 	std::vector<PatternMatch> subMatches{};
 	// the arguments
 	std::vector<Expression *> arguments;

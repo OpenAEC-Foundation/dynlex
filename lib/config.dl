@@ -38,7 +38,10 @@ dynlex options:
         duplicate pattern definition: "Duplicate pattern definition"
         duplicate pattern definition related existing: "Conflicts with this definition"
         unresolved pattern definition: "This pattern definition couldn't be resolved: {pattern}"
-        unresolved pattern: "This pattern couldn't be resolved"
+        unresolved pattern:
+            message: "This pattern couldn't be resolved"
+            related unused parameter candidate: "'{parameter}' isn't a parameter because it is not used:"
+            quick fix unused parameter candidate: "Wrap '{parameter}' in curly braces"
         unknown type constraint: "Type constraint '{type_constraint}' does not refer to a known type"
         precedence target not found: "Precedence target not found: {target}"
         precedence cycle detected: "Cycle detected in precedence declarations"

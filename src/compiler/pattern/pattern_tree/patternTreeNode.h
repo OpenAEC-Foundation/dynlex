@@ -15,6 +15,8 @@ struct PatternTreeNode : public PatternElement {
 	// for argument/word nodes: maps pattern definition to parameter name
 	// (multiple definitions can share the same argument node with different parameter names)
 	std::unordered_map<PatternDefinition *, std::string> parameterNames{};
+	// maps a definition to the pattern-token start offset represented by this node for that definition
+	std::unordered_map<PatternDefinition *, size_t> definitionStartPositions{};
 	using PatternElement::PatternElement;
 	// Add a definition to the tree. Returns an existing conflicting definition (same path, no type
 	// constraints distinguishing them) or nullptr if no conflict.

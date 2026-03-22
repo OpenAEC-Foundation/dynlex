@@ -522,7 +522,12 @@ Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 			if (!fix.range.line)
 				continue;
 			quickFixes.push_back(
-				Json{{"title", fix.title}, {"replacement", fix.replacement}, {"range", convertRange(fix.range)}}
+				Json{
+					{"title", fix.title},
+					{"replacement", fix.replacement},
+					{"range", convertRange(fix.range)},
+					{"uri", pathutil::toAbsoluteUri(fix.range.line->sourceFile->uri)},
+				}
 			);
 		}
 		if (!quickFixes.empty())
@@ -1679,7 +1684,10 @@ std::vector<CodeAction> DynLexServer::onCodeAction(const CodeActionParams &param
 			TextEdit textEdit;
 			textEdit.range = fix.at("range").get<Range>();
 			textEdit.newText = fix.at("replacement").get<std::string>();
-			edit.changes[params.textDocument.uri] = Json::array({textEdit});
+			std::string targetUri = params.textDocument.uri;
+			if (fix.contains("uri") && !fix.at("uri").is_null())
+				targetUri = fix.at("uri").get<std::string>();
+			edit.changes[targetUri] = Json::array({textEdit});
 			action.edit = std::move(edit);
 			actions.push_back(std::move(action));
 		}

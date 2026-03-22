@@ -43,6 +43,7 @@ static std::vector<PatternTreeNode *> addSharedChild(
 
 		if (child) {
 			// parent already has a child for this element — reuse it
+			child->definitionStartPositions[definition] = elem.startPos;
 			if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
 				child->parameterNames[definition] = elem.text;
 			if (seen.insert(child).second)
@@ -51,6 +52,7 @@ static std::vector<PatternTreeNode *> addSharedChild(
 			// parent doesn't have a child — share one new node across all such parents
 			if (!sharedNew)
 				sharedNew = new PatternTreeNode(elem.type, elem.text);
+			sharedNew->definitionStartPositions[definition] = elem.startPos;
 			if (elem.type == PatternElement::Type::Variable) {
 				parent->argumentChild = sharedNew;
 				sharedNew->parameterNames[definition] = elem.text;
@@ -316,6 +318,7 @@ static void removeDefinitionPath(
 		auto &defs = current->matchingDefinitions;
 		defs.erase(std::remove(defs.begin(), defs.end(), definition), defs.end());
 		current->parameterNames.erase(definition);
+		current->definitionStartPositions.erase(definition);
 		return;
 	}
 
@@ -346,6 +349,7 @@ static void removeDefinitionPath(
 		return;
 
 	// Clean parameterNames on argument/word nodes
+	child->definitionStartPositions.erase(definition);
 	if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
 		child->parameterNames.erase(definition);
 

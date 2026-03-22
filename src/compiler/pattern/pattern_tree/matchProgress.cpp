@@ -2,10 +2,25 @@
 #include "parseContext.h"
 #include "patternReference.h"
 #include <algorithm>
+#include <limits>
+
+namespace {
+static std::tuple<size_t, std::string> literalFallbackSortKey(const PatternTreeNode *node) {
+	if (!node)
+		return {std::numeric_limits<size_t>::max(), ""};
+	size_t firstStartPos = std::numeric_limits<size_t>::max();
+	for (const auto &[ignoredDefinition, startPos] : node->definitionStartPositions)
+		firstStartPos = std::min(firstStartPos, startPos);
+	return {firstStartPos, node->text};
+}
+} // namespace
 
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)
-	: context(context), patternReference(patternReference), type(patternReference->patternType) {
+	: MatchProgress(context, patternReference, {}) {}
 
+MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference, MatchOptions options)
+	: context(context), patternReference(patternReference), type(patternReference->patternType) {
+	this->options = options;
 	rootNode = context->patternTrees[(int)patternReference->patternType];
 	currentNode = rootNode;
 }
@@ -17,6 +32,7 @@ MatchProgress::MatchProgress(const MatchProgress &other) {
 	match = other.match;
 	patternReference = other.patternReference;
 	type = other.type;
+	options = other.options;
 	sourceElementIndex = other.sourceElementIndex;
 	sourceCharIndex = other.sourceCharIndex;
 	patternStartPos = other.patternStartPos;
@@ -27,7 +43,7 @@ MatchProgress::MatchProgress(const MatchProgress &other) {
 
 MatchProgress::MatchProgress(MatchProgress &&other) noexcept
 	: parent(other.parent), context(other.context), rootNode(other.rootNode), currentNode(other.currentNode),
-	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type),
+	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type), options(other.options),
 	  sourceElementIndex(other.sourceElementIndex), sourceCharIndex(other.sourceCharIndex),
 	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex) {
 	other.parent = nullptr;
@@ -45,6 +61,7 @@ MatchProgress &MatchProgress::operator=(const MatchProgress &other) {
 	match = other.match;
 	patternReference = other.patternReference;
 	type = other.type;
+	options = other.options;
 	sourceElementIndex = other.sourceElementIndex;
 	sourceCharIndex = other.sourceCharIndex;
 	patternStartPos = other.patternStartPos;
@@ -66,6 +83,7 @@ MatchProgress &MatchProgress::operator=(MatchProgress &&other) noexcept {
 	match = std::move(other.match);
 	patternReference = other.patternReference;
 	type = other.type;
+	options = other.options;
 	sourceElementIndex = other.sourceElementIndex;
 	sourceCharIndex = other.sourceCharIndex;
 	patternStartPos = other.patternStartPos;
@@ -84,6 +102,7 @@ bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr;
 std::vector<MatchProgress> MatchProgress::step() {
 	std::vector<MatchProgress> nextMatches = std::vector<MatchProgress>();
 	std::vector<MatchProgress> splitFallbackMatches;
+	std::vector<MatchProgress> acceptedLiteralMatches;
 
 	// submatch and use the result as argument for the parent progress
 	auto stepUp = [&nextMatches, this](MatchProgress &parentProgress) {
@@ -188,6 +207,34 @@ std::vector<MatchProgress> MatchProgress::step() {
 					return nextMatches;
 			}
 		}
+		if (options.acceptLiterals && elementToCompare.type == PatternElement::Type::Variable) {
+			std::vector<PatternTreeNode *> literalFallbackChildren;
+			literalFallbackChildren.reserve(currentNode->literalChildren.size());
+			for (const auto &[ignoredText, child] : currentNode->literalChildren) {
+				if (!child || child->type != PatternElement::Type::VariableLike)
+					continue;
+				literalFallbackChildren.push_back(child);
+			}
+			std::sort(
+				literalFallbackChildren.begin(), literalFallbackChildren.end(),
+				[](PatternTreeNode *left, PatternTreeNode *right) {
+				return literalFallbackSortKey(left) < literalFallbackSortKey(right);
+			}
+			);
+			for (PatternTreeNode *child : literalFallbackChildren) {
+				MatchProgress acceptedLiteralStep = *this;
+				acceptedLiteralStep.currentNode = child;
+				acceptedLiteralStep.match.nodesPassed.push_back(child);
+				acceptedLiteralStep.match.acceptedLiterals.push_back({child});
+				acceptedLiteralStep.sourceElementIndex++;
+				if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
+					continue;
+				acceptedLiteralStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+				acceptedLiteralStep.sourceArgumentIndex++;
+				acceptedLiteralStep.patternPos += elementToCompare.text.size();
+				acceptedLiteralMatches.push_back(std::move(acceptedLiteralStep));
+			}
+		}
 		// word capture: matches a single VariableLike token as a string literal
 		if (currentNode->wordChild && elementToCompare.type == PatternElement::Type::VariableLike) {
 			MatchProgress wordStep = *this;
@@ -229,6 +276,8 @@ std::vector<MatchProgress> MatchProgress::step() {
 			}
 		}
 	}
+	if (!acceptedLiteralMatches.empty())
+		nextMatches.insert(nextMatches.begin(), acceptedLiteralMatches.begin(), acceptedLiteralMatches.end());
 	if (!splitFallbackMatches.empty())
 		nextMatches.insert(nextMatches.begin(), splitFallbackMatches.begin(), splitFallbackMatches.end());
 	return nextMatches;

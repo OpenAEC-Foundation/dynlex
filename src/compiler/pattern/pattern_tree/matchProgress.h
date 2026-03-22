@@ -9,6 +9,7 @@ struct PatternReference;
 //  (which way should we search first? should we substitute a literal as variable or not?)
 struct MatchProgress {
 	MatchProgress(ParseContext *context, PatternReference *patternReference);
+	MatchProgress(ParseContext *context, PatternReference *patternReference, MatchOptions options);
 	MatchProgress(const MatchProgress &other);
 	MatchProgress(MatchProgress &&other) noexcept;
 	MatchProgress &operator=(const MatchProgress &other);
@@ -28,6 +29,7 @@ struct MatchProgress {
 
 	// the pattern type we're currently matching for
 	SectionType type{};
+	MatchOptions options{};
 
 	bool isComplete() const;
 

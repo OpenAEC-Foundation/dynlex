@@ -1,0 +1,5 @@
+import helper.dl
+
+function run:
+    execute:
+        hash from 1.0 and 2.0

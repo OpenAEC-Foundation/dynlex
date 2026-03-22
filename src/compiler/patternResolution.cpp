@@ -171,6 +171,81 @@ static void appendUniqueSection(std::vector<Section *> &sections, Section *secti
 		sections.push_back(section);
 }
 
+static Range definitionNodeRange(const PatternDefinition *definition, const PatternTreeNode *node) {
+	if (!definition || !node)
+		return {};
+	auto startIt = node->definitionStartPositions.find(const_cast<PatternDefinition *>(definition));
+	if (startIt == node->definitionStartPositions.end())
+		return {};
+	return Range(
+		definition->range.line, definition->range.start() + static_cast<int>(startIt->second),
+		definition->range.start() + static_cast<int>(startIt->second + node->text.length())
+	);
+}
+
+struct AcceptedLiteralDiagnosticInfo {
+	std::string name;
+	Range range;
+};
+
+static std::vector<AcceptedLiteralDiagnosticInfo>
+collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinition *definition) {
+	std::vector<AcceptedLiteralDiagnosticInfo> result;
+	if (!definition)
+		return result;
+
+	std::unordered_set<std::string> seen;
+	for (const AcceptedLiteralMatch &acceptedLiteral : match.acceptedLiterals) {
+		PatternTreeNode *node = acceptedLiteral.node;
+		if (!node || node->type != PatternElement::Type::VariableLike)
+			continue;
+		Range range = definitionNodeRange(definition, node);
+		if (!range.line)
+			continue;
+		std::string key = range.toString();
+		if (!seen.insert(key).second)
+			continue;
+		result.push_back({node->text, range});
+	}
+	return result;
+}
+
+static void appendUnusedLiteralParameterNotes(ParseContext &context, PatternReference *reference, Diagnostic &diagnostic) {
+	MatchOptions options;
+	options.acceptLiterals = true;
+	PatternMatch *acceptedLiteralMatch = context.match(reference, options);
+	if (!acceptedLiteralMatch || !acceptedLiteralMatch->matchedEndNode) {
+		delete acceptedLiteralMatch;
+		return;
+	}
+
+	const SyntaxConfig &syntax = syntaxConfigForRange(context, reference->range());
+	for (PatternDefinition *definition : acceptedLiteralMatch->matchedEndNode->matchingDefinitions) {
+		std::vector<AcceptedLiteralDiagnosticInfo> infos =
+			collectAcceptedLiteralDiagnosticInfo(*acceptedLiteralMatch, definition);
+		if (infos.empty())
+			continue;
+		for (const AcceptedLiteralDiagnosticInfo &info : infos) {
+			diagnostic.relatedInfo.push_back(
+				{renderConfiguredMessage(
+					 syntax, "unresolved pattern", "related unused parameter candidate", {{"parameter", info.name}}
+				 ),
+				 info.range}
+			);
+			diagnostic.quickFixes.push_back({
+				renderConfiguredMessage(
+					syntax, "unresolved pattern", "quick fix unused parameter candidate", {{"parameter", info.name}}
+				),
+				info.range,
+				"{" + info.name + "}",
+			});
+		}
+		break;
+	}
+
+	delete acceptedLiteralMatch;
+}
+
 struct AlternativePatternSuggestion {
 	PatternDefinition *definition = nullptr;
 	std::string spelling;
@@ -1157,14 +1232,16 @@ bool resolvePatterns(ParseContext &context) {
 				));
 			}
 		}
-		for (PatternReference *reference : bodyReferences)
-			context.diagnostics.push_back(
-				Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range())
-			);
-		for (PatternReference *reference : globalReferences)
-			context.diagnostics.push_back(
-				Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range())
-			);
+		for (PatternReference *reference : bodyReferences) {
+			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
+			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
+			context.diagnostics.push_back(std::move(diagnostic));
+		}
+		for (PatternReference *reference : globalReferences) {
+			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
+			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
+			context.diagnostics.push_back(std::move(diagnostic));
+		}
 		return false;
 	}
 

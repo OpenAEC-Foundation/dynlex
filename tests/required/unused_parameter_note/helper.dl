@@ -1,0 +1,5 @@
+import lib/std.dl
+
+function hash from x and z:
+    execute:
+        return x
