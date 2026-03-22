@@ -341,7 +341,8 @@ else:
     if building_gap < 0.03:
         set facade_seed to hash from parcel_x and parcel_z
         set facade_accent to hash from (parcel_x + 13.0) and (parcel_z + 19.0)
-        set base_r to 0.18 + density * 0.10 + facade_seed * 0.06
+        set base_r to 0.18 + density * 0.10
+        set base_r to base_r + facade_seed * 0.06
         set base_g to 0.19 + facade_accent * 0.06
         set base_b to 0.22 + facade_seed * 0.08
 
@@ -351,13 +352,19 @@ else:
             set base_b to 0.14 + density * 0.05
         else:
             set facade_coord to scene_z
-            if (the absolute value of normal_z) > (the absolute value of normal_x):
+            set abs_normal_z to the square root of (normal_z * normal_z)
+            set abs_normal_x to the square root of (normal_x * normal_x)
+            if abs_normal_z > abs_normal_x:
                 set facade_coord to scene_x
 
             set window_u to fract of ((facade_coord + 1000.0) / 2.6)
             set window_v to fract of ((hit_y + 0.8) / 3.4)
-            set pane_x to clamp01 of ((0.23 - (the absolute value of (window_u - 0.5))) * 9.0)
-            set pane_y to clamp01 of ((0.26 - (the absolute value of (window_v - 0.5))) * 8.0)
+            set pane_offset_x to window_u - 0.5
+            set pane_offset_x to the square root of (pane_offset_x * pane_offset_x)
+            set pane_offset_y to window_v - 0.5
+            set pane_offset_y to the square root of (pane_offset_y * pane_offset_y)
+            set pane_x to clamp01 of ((0.23 - pane_offset_x) * 9.0)
+            set pane_y to clamp01 of ((0.26 - pane_offset_y) * 8.0)
             set window_mask to pane_x * pane_y
 
             set lit_seed to hash from (the floor of ((facade_coord + 1000.0) / 2.6)) and (the floor of ((hit_y + 0.4) / 3.4))
@@ -365,9 +372,18 @@ else:
             set warm_r to 0.95
             set warm_g to 0.78
             set warm_b to 0.46
-            set base_r to base_r + warm_r * window_mask * lit_mix * 0.70
-            set base_g to base_g + warm_g * window_mask * lit_mix * 0.66
-            set base_b to base_b + warm_b * window_mask * lit_mix * 0.54
+            set warm_mix_r to warm_r * window_mask
+            set warm_mix_r to warm_mix_r * lit_mix
+            set warm_mix_r to warm_mix_r * 0.70
+            set warm_mix_g to warm_g * window_mask
+            set warm_mix_g to warm_mix_g * lit_mix
+            set warm_mix_g to warm_mix_g * 0.66
+            set warm_mix_b to warm_b * window_mask
+            set warm_mix_b to warm_mix_b * lit_mix
+            set warm_mix_b to warm_mix_b * 0.54
+            set base_r to base_r + warm_mix_r
+            set base_g to base_g + warm_mix_g
+            set base_b to base_b + warm_mix_b
 
         set r to base_r * shade
         set g to base_g * shade
@@ -400,7 +416,9 @@ else:
         set b to b * (1.0 - curb_mix) + 0.50 * curb_mix
 
         set lane_u to fract of ((scene_x + scene_z * 0.07) / 6.0)
-        set stripe to clamp01 of ((0.08 - (the absolute value of (lane_u - 0.5))) * 20.0)
+        set lane_delta to lane_u - 0.5
+        set lane_offset to the square root of (lane_delta * lane_delta)
+        set stripe to clamp01 of ((0.08 - lane_offset) * 20.0)
         if avenue_gap < 9.5:
             set r to r + stripe * 0.05
             set g to g + stripe * 0.04
