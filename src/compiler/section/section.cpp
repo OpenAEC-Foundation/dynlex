@@ -565,9 +565,9 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 	bool found = false;
 	// check if this variable name exists in our patterns
 	for (PatternDefinition *definition : patternDefinitions) {
-		forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-			if (element.text != reference->name)
-				return;
+		visitPatternNameWithFoundState(
+			definition->patternElements, reference->name, false,
+			[&](DefinitionPatternElement &element) {
 			auto markFound = [&] {
 				if (!found) {
 					auto existing = variableDefinitions.find(element.text);
@@ -590,18 +590,24 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 			};
 			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
 				if (element.type != PatternElement::Type::Variable) {
+					if (!canPromoteVariableLikeElement(element))
+						return false;
 					element.promotedFromVariableLike = true;
 					if (!element.firstImplicitPromotionUseRange.line)
 						element.firstImplicitPromotionUseRange = reference->range;
 					element.type = PatternElement::Type::Variable;
 				}
 				markFound();
+				return true;
 			} else if (element.type == PatternElement::Type::Word) {
 				// Word captures match by name but stay as Word — the parameter
 				// is bound to a string literal at call time via parameterNames on the tree node
 				markFound();
+				return true;
 			}
-		});
+			return false;
+		}
+		);
 	}
 	if (!found) {
 		// propagate to parent

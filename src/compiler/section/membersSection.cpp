@@ -1,8 +1,10 @@
 #include "membersSection.h"
 #include "classSection.h"
 #include "expression.h"
+#include "paddingSection.h"
 #include "parseContext.h"
 #include "patternReference.h"
+#include "syntaxConfig.h"
 
 // Parse a single field declaration, handling optional "name as type" syntax
 bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection *section) {
@@ -42,29 +44,14 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 	return true;
 }
 
-bool MembersSection::processLine(ParseContext &context, CodeLine *line) {
-	auto *cls = static_cast<ClassSection *>(parent);
+bool MembersSection::processLine(ParseContext &context, CodeLine *line) { return ListingSection::processLine(context, line); }
 
-	// Handle alignment directive: "padding: N"
-	std::string_view text = line->patternText;
-	if (text.starts_with("padding:")) {
-		size_t colonPos = text.find(':');
-		std::string_view numStr = text.substr(colonPos + 1);
-		size_t start = numStr.find_first_not_of(" \t");
-		if (start != std::string_view::npos)
-			numStr = numStr.substr(start);
-		int alignment = std::stoi(std::string(numStr));
-		context.addSourceToken(Range(line, text.substr(0, colonPos + 1)), ParseContext::SourceTokenKind::Keyword);
-		if (!numStr.empty())
-			context.addSourceToken(Range(line, numStr), ParseContext::SourceTokenKind::Number);
-		if (alignment > cls->classDefinition->alignment)
-			cls->classDefinition->alignment = alignment;
-		line->resolved = true;
-		return true;
+Section *MembersSection::createSection(ParseContext &context, CodeLine *line) {
+	if (line->patternText == "padding") {
+		return new PaddingSection(this);
 	}
 
-	// Delegate to base class for comma-separated parsing
-	return ListingSection::processLine(context, line);
+	return ListingSection::createSection(context, line);
 }
 
 bool MembersSection::addItem(ParseContext &context, Range itemRange) {

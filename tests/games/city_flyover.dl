@@ -1,119 +1,363 @@
 import lib/graphics.dl
 
-# Procedural city flyover
+# Modular low-poly city flyover
 # Controls:
 #   W/S: move forward/backward
 #   A/D: strafe left/right
 #   Q/E: move down/up
 #   Left/Right: turn
-#   Z/X: decrease/increase march step scale
-#   C: cycle debug view
-# Views:
-#   0 final shading
-#   1 normals
-#   2 hit distance
-#   3 district density
-#   4 fog
-#   5 roads / parks
 # Build:
-#   ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
-#   ./build/dynlex tests/games/city_flyover_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/city_flyover.spv
 #   ./build/dynlex tests/games/city_flyover.dl -o tests/games/city_flyover
 # Run:
 #   ./tests/games/city_flyover
 
-set window to a new window with width 800 and height 600
+function fract of value:
+    execute:
+        return value - the floor of value
 
-set vert to a vertex shader from "tests/games/passthrough.spv"
-set frag to a fragment shader from "tests/games/city_flyover.spv"
-set prog to a shader program with vertex vert and fragment frag
+function clamp01 of value:
+    execute:
+        set result to value
+        clamp result between 0.0 and 1.0
+        return result
 
-set cam_x_ubo to a uniform buffer
-set cam_y_ubo to a uniform buffer
-set cam_z_ubo to a uniform buffer
-set yaw_ubo to a uniform buffer
-set step_ubo to a uniform buffer
-set debug_ubo to a uniform buffer
-set framebuffer_width_ubo to a uniform buffer
-set framebuffer_height_ubo to a uniform buffer
-bind uniform buffer cam_x_ubo to 0
-bind uniform buffer cam_y_ubo to 1
-bind uniform buffer cam_z_ubo to 2
-bind uniform buffer yaw_ubo to 3
-bind uniform buffer step_ubo to 4
-bind uniform buffer debug_ubo to 5
-bind uniform buffer framebuffer_width_ubo to 6
-bind uniform buffer framebuffer_height_ubo to 7
+function hash from x and z:
+    execute:
+        set n to x * 127.1 + z * 311.7
+        set s to (the sine of n) * 43758.5453
+        return fract of s
 
-use shader program prog
+function set city perspective with width viewport_width and height viewport_height:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5889)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        set safe_height to the maximum of viewport_height and 1
+        set aspect to (viewport_width as a float) / (safe_height as a float)
+        set near_plane to 0.8
+        set far_plane to 1400.0
+        set top_plane to 0.18
+        set bottom_plane to 0.0 - top_plane
+        set right_plane to top_plane * aspect
+        set left_plane to 0.0 - right_plane
+        @intrinsic("call", "GL", "glFrustum", void, left_plane, right_plane, bottom_plane, top_plane, near_plane, far_plane)
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
 
+function clear [the|] city screen:
+    execute:
+        @intrinsic("call", "GL", "glClear", void, 16640)
+
+function enable [the|] city render state:
+    execute:
+        @intrinsic("call", "GL", "glEnable", void, 2929)
+        @intrinsic("call", "GL", "glEnable", void, 2884)
+        @intrinsic("call", "GL", "glCullFace", void, 1029)
+        @intrinsic("call", "GL", "glShadeModel", void, 7424)
+
+function set [the|] city clear color to r g b:
+    execute:
+        @intrinsic("call", "GL", "glClearColor", void, r as a 32 bit float, g as a 32 bit float, b as a 32 bit float, 1.0 as a 32 bit float)
+
+function apply flyover camera at x y z yaw degrees:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        @intrinsic("call", "GL", "glRotated", void, 0.0 - degrees, 0.0, 1.0, 0.0)
+        @intrinsic("call", "GL", "glTranslated", void, 0.0 - x, 0.0 - y, 0.0 - z)
+
+function draw box centered at x y z with size width height depth and color r g b:
+    execute:
+        set half_width to width / 2.0
+        set half_height to height / 2.0
+        set half_depth to depth / 2.0
+
+        set top_r to r + 18
+        set top_g to g + 18
+        set top_b to b + 18
+        clamp top_r between 0 and 255
+        clamp top_g between 0 and 255
+        clamp top_b between 0 and 255
+
+        set side_r to r - 14
+        set side_g to g - 14
+        set side_b to b - 14
+        clamp side_r between 0 and 255
+        clamp side_g between 0 and 255
+        clamp side_b between 0 and 255
+
+        set dark_r to r - 28
+        set dark_g to g - 28
+        set dark_b to b - 28
+        clamp dark_r between 0 and 255
+        clamp dark_g between 0 and 255
+        clamp dark_b between 0 and 255
+
+        @intrinsic("call", "GL", "glPushMatrix", void)
+        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
+        @intrinsic("call", "GL", "glBegin", void, 7)
+
+        @intrinsic("call", "GL", "glColor3ub", void, top_r, top_g, top_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, dark_r, dark_g, dark_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
+
+        @intrinsic("call", "GL", "glEnd", void)
+        @intrinsic("call", "GL", "glPopMatrix", void)
+
+function district intensity at x z:
+    execute:
+        set center_distance to the square root of (x * x + z * z)
+        set center_intensity to clamp01 of (1.0 - center_distance / 520.0)
+
+        set secondary_x to x - 220.0
+        set secondary_z to z + 180.0
+        set secondary_distance to the square root of (secondary_x * secondary_x + secondary_z * secondary_z)
+        set secondary_intensity to clamp01 of (1.0 - secondary_distance / 260.0)
+        set secondary_intensity to secondary_intensity * 0.60
+
+        set corridor_curve to the sine of (x * 0.008)
+        set corridor_z to z + corridor_curve * 120.0
+        set corridor_abs to the square root of (corridor_z * corridor_z)
+        set corridor_intensity to clamp01 of (1.0 - corridor_abs / 150.0)
+        set corridor_intensity to corridor_intensity * 0.40
+
+        set result_intensity to center_intensity
+        if secondary_intensity > result_intensity:
+            set result_intensity to secondary_intensity
+        if corridor_intensity > result_intensity:
+            set result_intensity to corridor_intensity
+        return result_intensity
+
+function squared distance from x1 z1 to x2 z2:
+    execute:
+        set delta_x to x1 - x2
+        set delta_z to z1 - z2
+        return delta_x * delta_x + delta_z * delta_z
+
+function draw story module at x y z with width story_width and depth story_depth and color r g b:
+    execute:
+        draw box centered at x y z with size story_width 2.8 story_depth and color r g b
+
+function draw rooftop unit at x y z with width roof_width and depth roof_depth and color r g b:
+    execute:
+        draw box centered at x y z with size roof_width 1.2 roof_depth and color r g b
+
+function draw vehicle module at x y z heading angle and color r g b:
+    execute:
+        @intrinsic("call", "GL", "glPushMatrix", void)
+        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
+        @intrinsic("call", "GL", "glRotated", void, angle, 0.0, 1.0, 0.0)
+        draw box centered at 0.0 0.55 0.0 with size 3.6 0.9 1.7 and color r g b
+        draw box centered at 0.35 1.12 0.0 with size 1.4 0.55 1.45 and color r + 18 g + 18 b + 18
+        @intrinsic("call", "GL", "glPopMatrix", void)
+
+function draw traffic light module at x and z:
+    execute:
+        draw box centered at x 2.1 z with size 0.18 4.2 0.18 and color 86 90 94
+        draw box centered at x + 0.72 3.86 z with size 1.44 0.12 0.12 and color 86 90 94
+        draw box centered at x + 1.34 3.52 z with size 0.34 0.86 0.34 and color 42 44 46
+        draw box centered at x + 1.34 3.72 z + 0.08 with size 0.10 0.10 0.10 and color 216 48 48
+        draw box centered at x + 1.34 3.52 z + 0.08 with size 0.10 0.10 0.10 and color 224 182 44
+        draw box centered at x + 1.34 3.32 z + 0.08 with size 0.10 0.10 0.10 and color 56 202 78
+
+function draw street slab at x z with width slab_width and depth slab_depth and color r g b:
+    execute:
+        draw box centered at x 0.03 z with size slab_width 0.06 slab_depth and color r g b
+
+function draw sidewalk slab at x z with width slab_width and depth slab_depth and color r g b:
+    execute:
+        draw box centered at x 0.11 z with size slab_width 0.14 slab_depth and color r g b
+
+function draw lot scene at lot_x lot_z in detail detail_level:
+    execute:
+        set lot_center_x to lot_x * 18.0 + 21.0
+        set lot_center_z to lot_z * 18.0 + 21.0
+        set occupancy_seed to hash from lot_x and lot_z
+        set color_seed to hash from (lot_x + 13.0) and (lot_z + 19.0)
+        set accent_seed to hash from (lot_x + 31.0) and (lot_z + 41.0)
+        set intensity to district intensity at lot_center_x lot_center_z
+
+        if occupancy_seed < 0.12:
+            draw sidewalk slab at lot_center_x lot_center_z with width 12.0 and depth 12.0 and color 82 118 78
+            draw box centered at lot_center_x 1.2 lot_center_z with size 1.4 2.4 1.4 and color 92 86 70
+            draw box centered at lot_center_x 3.4 lot_center_z with size 4.4 2.2 4.4 and color 84 128 82
+        else:
+            if occupancy_seed < 0.22:
+                draw sidewalk slab at lot_center_x lot_center_z with width 12.0 and depth 12.0 and color 118 116 110
+                if detail_level > 0.5:
+                    draw vehicle module at lot_center_x - 2.2 0.0 lot_center_z - 2.0 heading 0.0 and color 182 64 52
+                    draw vehicle module at lot_center_x + 2.2 0.0 lot_center_z + 2.0 heading 180.0 and color 66 108 184
+            else:
+                set footprint_x to 7.2 + color_seed * 3.4
+                set footprint_z to 7.2 + accent_seed * 3.4
+                set center_story_boost to 2.0 + (intensity * 11.0)
+                set base_stories to center_story_boost + (occupancy_seed * 6.0)
+                set story_count to the floor of base_stories
+                if story_count < 2.0:
+                    set story_count to 2.0
+                set facade_r to (110 + (color_seed * 95.0)) as an integer
+                set facade_g to (104 + (accent_seed * 88.0)) as an integer
+                set facade_b to (116 + (color_seed * 72.0)) as an integer
+
+                if detail_level < 0.5:
+                    set total_height to story_count * 2.8
+                    draw box centered at lot_center_x total_height / 2.0 lot_center_z with size footprint_x total_height footprint_z and color facade_r facade_g facade_b
+                else:
+                    set story_index to 0.0
+                    while story_index < story_count:
+                        set story_y to story_index * 2.8 + 1.4
+                        draw story module at lot_center_x story_y lot_center_z with width footprint_x and depth footprint_z and color facade_r facade_g facade_b
+                        if detail_level > 1.5:
+                            if (the floor of (story_index / 4.0)) * 4.0 = story_index:
+                                draw box centered at lot_center_x story_y + 1.1 lot_center_z with size footprint_x + 0.2 0.08 footprint_z + 0.2 and color 196 186 140
+                        increment story_index
+
+                    if detail_level > 1.5:
+                        if occupancy_seed > 0.58:
+                            set roof_y to story_count * 2.8 + 0.7
+                            draw rooftop unit at lot_center_x roof_y lot_center_z with width footprint_x * 0.36 and depth footprint_z * 0.32 and color 76 82 88
+
+function draw block at block_x block_z with detail detail_level and time city_time:
+    execute:
+        set block_origin_x to block_x * 48.0
+        set block_origin_z to block_z * 48.0
+        set build_center_x to block_origin_x + 30.0
+        set build_center_z to block_origin_z + 30.0
+
+        draw street slab at block_origin_x + 24.0 block_origin_z + 6.0 with width 48.0 and depth 12.0 and color 38 40 46
+        draw street slab at block_origin_x + 6.0 block_origin_z + 24.0 with width 12.0 and depth 48.0 and color 38 40 46
+        draw sidewalk slab at block_origin_x + 30.0 block_origin_z + 30.0 with width 36.0 and depth 36.0 and color 126 122 116
+
+        draw lot scene at block_x * 2.0 block_z * 2.0 in detail detail_level
+        draw lot scene at block_x * 2.0 + 1.0 block_z * 2.0 in detail detail_level
+        draw lot scene at block_x * 2.0 block_z * 2.0 + 1.0 in detail detail_level
+        draw lot scene at block_x * 2.0 + 1.0 block_z * 2.0 + 1.0 in detail detail_level
+
+        if detail_level > 1.5:
+            set road_seed to hash from (block_x + 71.0) and (block_z + 23.0)
+            set travel_a to fract of (city_time * 0.07 + road_seed)
+            set car_x_a to block_origin_x + travel_a * 48.0
+            draw vehicle module at car_x_a 0.0 block_origin_z + 3.3 heading 0.0 and color 202 82 68
+
+            set travel_b to fract of (city_time * 0.05 + road_seed * 0.7 + 0.3)
+            set car_z_b to block_origin_z + (1.0 - travel_b) * 48.0
+            draw vehicle module at block_origin_x + 8.7 0.0 car_z_b heading 90.0 and color 78 122 208
+
+            set light_x to block_origin_x + 10.2
+            set light_z to block_origin_z + 10.2
+            draw traffic light module at light_x and light_z
+
+function print city module stats:
+    execute:
+        print "story module: 8-11 x 2.8 x 8-11, 12 triangles" as line
+        print "vehicle module: 3.6 x 1.45 x 1.7, 24 triangles" as line
+        print "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles" as line
+
+set window to a new window with width 1280 and height 720
 set window_handle to window as cstring
-set cam_x to 0.0
-set cam_y to 16.0
-set cam_z to 0.0
+enable the city render state
+set the city clear color to 0.68 0.80 0.95
+print city module stats
+
+set camera_x to 0.0
+set camera_y to 8.0
+set camera_z to 24.0
 set yaw to 0.0
-set move_speed to 0.45
-set turn_speed to 0.06
-set step_scale to 0.65
-set debug_mode to 0.0
-set cycle_pressed to 0
+set move_speed to 1.15
+set turn_speed to 2.4
+set render_radius to 11.0
 
 while not the window should close:
-    set sin_yaw to the sine of yaw
-    set cos_yaw to the cosine of yaw
-    set right_x to cos_yaw
-    set right_z to 0.0 - sin_yaw
+    set framebuffer_width to query the framebuffer width of window_handle
+    set framebuffer_height to query the framebuffer height of window_handle
+    set city perspective with width framebuffer_width and height framebuffer_height
+
+    set yaw_radians to yaw * 0.0174533
+    set forward_x to the sine of yaw_radians
+    set forward_z to the cosine of yaw_radians
+    set right_x to forward_z
+    set right_z to 0.0 - forward_x
 
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
-        add sin_yaw * move_speed to cam_x
-        add cos_yaw * move_speed to cam_z
+        add forward_x * move_speed to camera_x
+        add forward_z * move_speed to camera_z
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 83) = 1:
-        subtract sin_yaw * move_speed from cam_x
-        subtract cos_yaw * move_speed from cam_z
+        subtract forward_x * move_speed from camera_x
+        subtract forward_z * move_speed from camera_z
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 65) = 1:
-        subtract right_x * move_speed from cam_x
-        subtract right_z * move_speed from cam_z
+        subtract right_x * move_speed from camera_x
+        subtract right_z * move_speed from camera_z
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 68) = 1:
-        add right_x * move_speed to cam_x
-        add right_z * move_speed to cam_z
+        add right_x * move_speed to camera_x
+        add right_z * move_speed to camera_z
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 81) = 1:
-        subtract move_speed from cam_y
+        subtract 0.8 from camera_y
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
-        add move_speed to cam_y
+        add 0.8 to camera_y
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
         subtract turn_speed from yaw
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
         add turn_speed to yaw
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 90) = 1:
-        subtract 0.02 from step_scale
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 88) = 1:
-        add 0.02 to step_scale
 
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 67) = 1:
-        if cycle_pressed = 0:
-            add 1.0 to debug_mode
-            if debug_mode > 5.5:
-                set debug_mode to 0.0
-            set cycle_pressed to 1
-    else:
-        set cycle_pressed to 0
+    if camera_y < 2.4:
+        set camera_y to 2.4
 
-    clamp step_scale between 0.10 and 1.00
+    clear the city screen
+    apply flyover camera at camera_x camera_y camera_z yaw yaw
 
-    set framebuffer_width to query the framebuffer width of window_handle
-    set framebuffer_height to query the framebuffer height of window_handle
+    draw box centered at camera_x 0.0 camera_z with size 1400.0 0.02 1400.0 and color 92 112 88
 
-    update uniform buffer cam_x_ubo with cam_x
-    update uniform buffer cam_y_ubo with cam_y
-    update uniform buffer cam_z_ubo with cam_z
-    update uniform buffer yaw_ubo with yaw
-    update uniform buffer step_ubo with step_scale
-    update uniform buffer debug_ubo with debug_mode
-    update uniform buffer framebuffer_width_ubo with framebuffer_width
-    update uniform buffer framebuffer_height_ubo with framebuffer_height
+    set city_time to the time since start
+    set camera_block_x to the floor of (camera_x / 48.0)
+    set camera_block_z to the floor of (camera_z / 48.0)
 
-    clear the screen
-    draw a fullscreen quad
+    set block_z to camera_block_z - render_radius
+    while block_z <= camera_block_z + render_radius:
+        set block_x to camera_block_x - render_radius
+        while block_x <= camera_block_x + render_radius:
+            set block_center_x to block_x * 48.0 + 24.0
+            set block_center_z to block_z * 48.0 + 24.0
+            set block_distance_squared to squared distance from block_center_x block_center_z to camera_x camera_z
+            if block_distance_squared < 650000.0:
+                set detail_level to 0.0
+                if block_distance_squared < 150000.0:
+                    set detail_level to 1.0
+                if block_distance_squared < 52000.0:
+                    set detail_level to 2.0
+                draw block at block_x block_z with detail detail_level and time city_time
+            add 1.0 to block_x
+        add 1.0 to block_z
+
     display the frame of window
 
 close the window

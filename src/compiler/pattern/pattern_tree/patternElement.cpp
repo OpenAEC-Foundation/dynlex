@@ -2,6 +2,7 @@
 #include "parseContext.h"
 #include "transformedPattern.h"
 #include <regex>
+#include <unordered_map>
 using namespace std::literals;
 
 std::vector<PatternElement> getPatternElements(std::string_view patternString) {
@@ -98,6 +99,71 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 static bool emitPatternParseFailure(ParseContext &context, Diagnostic diagnostic) {
 	context.addDiagnostic(std::move(diagnostic));
 	return false;
+}
+
+static Range duplicateElementRange(const Range &definitionRange, const DefinitionPatternElement &element) {
+	return Range(
+		definitionRange.line, definitionRange.start() + element.startPos,
+		definitionRange.start() + element.startPos + element.text.length()
+	);
+}
+
+using SeenVariableLikes = std::unordered_map<std::string, Range>;
+
+static std::vector<SeenVariableLikes> markDuplicateVariableLikeElementsRec(
+	const Range &definitionRange, std::vector<DefinitionPatternElement> &elements, const std::vector<SeenVariableLikes> &states
+) {
+	std::vector<SeenVariableLikes> currentStates = states;
+	for (DefinitionPatternElement &element : elements) {
+		std::vector<SeenVariableLikes> nextStates;
+		for (const SeenVariableLikes &state : currentStates) {
+			if (element.type == PatternElement::Type::Choice) {
+				for (auto &alternative : element.alternatives) {
+					std::vector<SeenVariableLikes> alternativeStates =
+						markDuplicateVariableLikeElementsRec(definitionRange, alternative, {state});
+					nextStates.insert(nextStates.end(), alternativeStates.begin(), alternativeStates.end());
+				}
+				continue;
+			}
+
+			SeenVariableLikes nextState = state;
+			if (element.type == PatternElement::Type::VariableLike) {
+				auto it = nextState.find(element.text);
+				if (it != nextState.end()) {
+					if (!element.firstDuplicateVariableLikeRange.line)
+						element.firstDuplicateVariableLikeRange = it->second;
+				} else {
+					nextState.emplace(element.text, duplicateElementRange(definitionRange, element));
+				}
+			}
+			nextStates.push_back(std::move(nextState));
+		}
+		currentStates = std::move(nextStates);
+	}
+	return currentStates;
+}
+
+void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector<DefinitionPatternElement> &elements) {
+	markDuplicateVariableLikeElementsRec(definitionRange, elements, {SeenVariableLikes{}});
+}
+
+bool visitPatternNameWithFoundState(
+	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
+	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch
+) {
+	bool found = foundBefore;
+	for (DefinitionPatternElement &element : elements) {
+		if (element.type == PatternElement::Type::Choice) {
+			bool foundAfterChoice = found;
+			for (auto &alternative : element.alternatives)
+				foundAfterChoice = visitPatternNameWithFoundState(alternative, name, found, onFirstMatch) || foundAfterChoice;
+			found = foundAfterChoice;
+			continue;
+		}
+		if (!found && element.text == name && onFirstMatch(element))
+			found = true;
+	}
+	return found;
 }
 
 bool parsePatternElements(
@@ -238,5 +304,6 @@ bool parsePatternElements(
 	}
 
 	normalizePatternElements(result);
+	markDuplicateVariableLikeElements(patternRange, result);
 	return true;
 }

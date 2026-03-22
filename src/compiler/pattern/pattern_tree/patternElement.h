@@ -1,5 +1,6 @@
 #pragma once
 #include "range.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,8 @@ struct DefinitionPatternElement : public PatternElement {
 	bool promotedFromVariableLike = false;
 	// the first body reference range that caused the implicit promotion
 	Range firstImplicitPromotionUseRange;
+	// if set, this VariableLike repeats an earlier VariableLike with the same text in the same definition
+	Range firstDuplicateVariableLikeRange;
 
 	using PatternElement::PatternElement;
 	// Construct from a base PatternElement (for converting getPatternElements results)
@@ -60,6 +63,17 @@ bool parsePatternElements(
 	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &elements,
 	size_t offset = 0
 );
+
+void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector<DefinitionPatternElement> &elements);
+
+bool visitPatternNameWithFoundState(
+	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
+	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch
+);
+
+inline bool canPromoteVariableLikeElement(const DefinitionPatternElement &element) {
+	return element.type == PatternElement::Type::VariableLike && !element.firstDuplicateVariableLikeRange.line;
+}
 
 // Visit all leaf (non-Choice) elements recursively, including inside Choice alternatives
 template <typename Elem, typename F> void forEachLeafElement(std::vector<Elem> &elements, F &&callback) {

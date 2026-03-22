@@ -174,3 +174,7 @@ For GLFW resize handling in `lib/graphics.dl`, wire `glfwSetFramebufferSizeCallb
 When a plain pattern word like `width` is implicitly promoted into a parameter because the function body uses that name, failed calls should keep the normal call-site undeduced-argument error and add related info pointing at the first body use that caused the promotion. That distinguishes accidental implicit parameters from truly missing caller variables.
 
 SPIR-V shader uniform fallback bindings must be derived from parse-time source location order, not codegen use order. Reading a new uniform earlier in shader `main` must never renumber existing UBO bindings.
+
+Repeated plain `VariableLike` words inside one pattern definition must be tracked per concrete pattern path, not by flat leaf order. Choice alternatives like `[an|a|] bits bit integer` contain parallel copies of the same parameter and must keep both promotable. Only later same-path occurrences should be forced to stay literal.
+
+One-line `section: body` syntax should be desugared before `analyzeSections`, not implemented as a second execution path. The splitter must ignore `:` inside strings and nested `()`, `[]`, and `{}`. Real directives like `alignment:` and `padding:` should be promoted into actual sections instead of keeping inline special cases. Chained one-liners represent nested sections only; sibling sections still need separate physical lines.

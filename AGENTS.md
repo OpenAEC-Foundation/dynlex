@@ -8,7 +8,6 @@ These instructions apply to all coding agents working in this repository (includ
 - Keep failure handling explicit and transparent by reporting real errors instead of masking them.
 - Fail hard on internal stage inconsistencies instead of repairing invalid intermediate state.
 - Minimize complexity. Deliver clean, complete solutions.
-- Fix the root cause instead of adding a fallback.
 - Generalize reusable logic instead of duplicating one-off fixes.
 - Drive ALL language behavior through patterns and intrinsics. so NO HARDCODING.
 - Keep dependencies minimal.
@@ -22,17 +21,28 @@ These instructions apply to all coding agents working in this repository (includ
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
 - Keep bash commands on one line by chaining with `&&` or `;`.
-- When encountering ANY compiler issue while working on .dl code:
-do NOT add a workaround like internal code validation, narrow case 'fixes', etc. temporary solutions are NOT accepted.
+- When encountering ANY compiler issue:
+
+NEVER add a workaround like:
+- internal code validation
+- narrow case 'fixes'
+- temporary solutions
+- a fallback
+
+instead:
 1. identify the root cause with whatever tools you need.
-2. identify a minimal reproducible example and possible fix.
+2. identify a minimal reproducible example and possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
 3. report to the user.
+the user may discuss the bug with you.
+when the user tells you to fix it:
+4. fix the compiler bug first.
+if the compiler bug was found using buggy .dl code:
+5. fix the .dl bug after.
 - this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.
 - your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
 - be direct. don't hide anything relevant.
 - remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
 - find the broader, deterministic and simple pattern.
-- if you find a compiler bug but the dynlex code is also incorrect, keep the code incorrect until you fix how the compiler handles it. after you have verified the compiler bug is gone, fix the incorrect .dl code.
 
 ## Project Overview
 

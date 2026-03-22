@@ -1,0 +1,13 @@
+import lib/std.dl
+
+function draw rectangle with width width and depth depth:
+    execute:
+        print width as line
+        print depth as line
+
+function [branch1 width|nodup] [branch2 width|nodup]:
+    execute:
+        print width as line
+
+draw rectangle with 48 width and 12 depth
+branch1 7 nodup

@@ -1,0 +1,23 @@
+import lib/std.dl
+
+function square value: replacement: value * value
+
+function increase total by amount:
+    globals: total
+    execute: add amount to total
+
+class:
+    patterns: widget
+    alignment: 16
+    members:
+        x as a 32 bit integer, y as a 32 bit integer
+        padding: 8
+
+class:
+    patterns: pair
+    members: left as a 32 bit integer, right as a 32 bit integer
+
+set total to 0
+increase total by square 2
+print total as line
+if 1 = 1: print total as line

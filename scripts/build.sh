@@ -55,19 +55,19 @@ if [ "$LINT" = "true" ]; then
 fi
 
 mkdir -p build
-if [ -f build/CMakeCache.txt ] && rg -q "conan_toolchain\.cmake" build/CMakeCache.txt; then
+if [ -f build/CMakeCache.txt ] && grep -q "conan_toolchain\.cmake" build/CMakeCache.txt; then
     echo "Removing stale Conan-generated CMake cache..."
     rm -f build/CMakeCache.txt
     rm -rf build/CMakeFiles
 fi
 
-if [ -d build/CMakeFiles ] && rg -q "conan_toolchain\.cmake" build/CMakeFiles; then
+if [ -d build/CMakeFiles ] && grep -R -q "conan_toolchain\.cmake" build/CMakeFiles; then
     echo "Removing stale Conan-generated CMake metadata..."
     rm -f build/CMakeCache.txt
     rm -rf build/CMakeFiles
 fi
 
-if [ -f build/CMakeCache.txt ] && rg -q '^JSON_SystemInclude:BOOL=OFF$' build/CMakeCache.txt; then
+if [ -f build/CMakeCache.txt ] && grep -q '^JSON_SystemInclude:BOOL=OFF$' build/CMakeCache.txt; then
     echo "Removing unsafe fetched nlohmann_json cache..."
     rm -f build/CMakeCache.txt
     rm -rf \

@@ -20,6 +20,10 @@ enum class SectionType {
 	Replacement,
 	// members of a class
 	Members,
+	// class alignment override
+	Alignment,
+	// alignment directive inside members
+	Padding,
 	// globals declaration in a function
 	Globals,
 	// precedence declarations

@@ -47,6 +47,11 @@ struct CodeLine {
 	std::string_view rightTrimmedText{};
 	// the pattern part of the line. excludes system patterns.
 	std::string_view patternText{};
+	// extra logical indentation levels injected by preprocessing for one-line sections
+	int logicalIndentOffset = 0;
+	// whether this logical line reuses a physical indent prefix from another source line
+	bool hasIndentOverride = false;
+	std::string indentOverride{};
 
 	// when resolved, this code line doesn't need to do any form of pattern matching.
 	bool resolved{};

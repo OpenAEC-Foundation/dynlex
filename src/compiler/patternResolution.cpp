@@ -178,7 +178,7 @@ struct AlternativePatternSuggestion {
 };
 
 static bool isParameterLikeElement(const DefinitionPatternElement &element) {
-	return element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike;
+	return element.type == PatternElement::Type::Variable || canPromoteVariableLikeElement(element);
 }
 
 static bool forEachPatternSpelling(
@@ -674,7 +674,7 @@ static void removeVariableReferencesFromMatch(
 							// Only revert unconstrained Variables — typed arguments ({type:name})
 							// were never VariableLike and must not be reverted.
 							if (element.type == PatternElement::Type::Variable && element.text == name &&
-								element.typeConstraintName.empty())
+								element.typeConstraintName.empty() && element.promotedFromVariableLike)
 								needsReResolution = true;
 						});
 						if (needsReResolution && def->resolved) {
@@ -685,8 +685,10 @@ static void removeVariableReferencesFromMatch(
 						// Now revert element types (only unconstrained — typed arguments stay Variable)
 						forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
 							if (element.type == PatternElement::Type::Variable && element.text == name &&
-								element.typeConstraintName.empty()) {
+								element.typeConstraintName.empty() && element.promotedFromVariableLike) {
 								element.type = PatternElement::Type::VariableLike;
+								element.promotedFromVariableLike = false;
+								element.firstImplicitPromotionUseRange = {};
 								def->resolved = false;
 								sec->patternDefinitionsResolved = false;
 								appendUniqueSection(affectedSections, sec);
@@ -808,9 +810,14 @@ static bool resolveReferences(
 			Section *sec = reference->range().section();
 			while (sec) {
 				for (PatternDefinition *def : sec->patternDefinitions) {
-					forEachLeafElement(def->patternElements, [&](PatternElement &elem) {
-						if (elem.type == PatternElement::Type::VariableLike && elem.text == varName)
+					visitPatternNameWithFoundState(def->patternElements, varName, false, [&](DefinitionPatternElement &elem) {
+						if (elem.type != PatternElement::Type::VariableLike || !canPromoteVariableLikeElement(elem))
+							return false;
+						if (elem.text == varName) {
 							elem.type = PatternElement::Type::Variable;
+							return true;
+						}
+						return false;
 					});
 				}
 				sec = sec->parent;
@@ -945,12 +952,10 @@ bool resolvePatterns(ParseContext &context) {
 			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
 					definition->resolved = true;
-					forEachLeafElement(definition->patternElements, [&](PatternElement &element) {
+					forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
 						if (element.type == PatternElement::Type::VariableLike) {
 							if (definition->patternElements.size() > 1) {
-								if (section->variableLikeCounts[element.text] == 0) {
-									element.type = PatternElement::Type::Other;
-								} else {
+								if (section->variableLikeCounts[element.text] != 0) {
 									definition->resolved = false;
 									section->patternDefinitionsResolved = false;
 								}

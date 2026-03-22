@@ -15,6 +15,10 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Replacement;
 	if (str == "members")
 		return SectionType::Members;
+	if (str == "alignment")
+		return SectionType::Alignment;
+	if (str == "padding")
+		return SectionType::Padding;
 	if (str == "globals")
 		return SectionType::Globals;
 	if (str == "before")
@@ -40,6 +44,10 @@ std::string sectionTypeToString(SectionType type) {
 		return "replacement";
 	case SectionType::Members:
 		return "members";
+	case SectionType::Alignment:
+		return "alignment";
+	case SectionType::Padding:
+		return "padding";
 	case SectionType::Globals:
 		return "globals";
 	case SectionType::Before:
