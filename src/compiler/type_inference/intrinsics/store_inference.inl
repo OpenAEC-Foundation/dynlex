@@ -36,6 +36,8 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			if (!variable->type.isDeduced() || variable->type == valueType)
 				commitVariableTypeFromValue(variable, valueExpr, valueType);
 			CompileTimeValue assignedValue = evaluateCompileTimeValueWithKnownState(valueExpr, context, valueBindingFrameStack);
+			if (variable->isGlobal)
+				context.noteWrittenGlobalReference(variable->definition);
 			context.setKnownConstant(variable->definition, assignedValue);
 			if (context.inLoopMutationScope()) {
 				context.noteLoopMutation(variable->definition);

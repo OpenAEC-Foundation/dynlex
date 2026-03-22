@@ -342,6 +342,8 @@ bool ensureSectionInstantiationInferred(
 		return inst.returnType.isDeduced() && inst.valid;
 
 	inst.constantValuesByReference.clear();
+	inst.writtenGlobalReferences.clear();
+	inst.finalGlobalConstantValues.clear();
 	inst.selectedOverloadsByCall.clear();
 	inst.ifChainSelections.clear();
 	InferenceContext context(parseContext);
@@ -355,6 +357,11 @@ bool ensureSectionInstantiationInferred(
 	}
 	context.currentInstantiation = &inst;
 	bool inferenceSucceeded = inferSection(section, context, BindingFrameStack{});
+	for (VariableReference *reference : inst.writtenGlobalReferences) {
+		auto knownIt = context.currentKnownConstants.find(reference);
+		if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))
+			inst.finalGlobalConstantValues[reference] = knownIt->second;
+	}
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;

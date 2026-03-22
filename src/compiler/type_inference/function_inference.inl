@@ -19,6 +19,8 @@ struct InstantiationProgressSnapshot {
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_set<VariableReference *> writtenGlobalReferences;
+	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 
@@ -31,9 +33,23 @@ static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instant
 		instantiation.argumentTypes,
 		instantiation.constantParameterValues,
 		instantiation.constantValuesByReference,
+		instantiation.writtenGlobalReferences,
+		instantiation.finalGlobalConstantValues,
 		instantiation.selectedOverloadsByCall,
 		instantiation.requiredCompileTimeParameters,
 	};
+}
+
+static void mergeWrittenGlobalConstantsIntoCaller(
+	const Instantiation &inst, std::unordered_map<VariableReference *, CompileTimeValue> &callerKnownConstants
+) {
+	for (VariableReference *reference : inst.writtenGlobalReferences) {
+		auto it = inst.finalGlobalConstantValues.find(reference);
+		if (it != inst.finalGlobalConstantValues.end() && isCompileTimeKnown(it->second))
+			callerKnownConstants[reference] = it->second;
+		else
+			callerKnownConstants.erase(reference);
+	}
 }
 
 static void setRecursiveInferenceFailure(
@@ -1429,6 +1445,8 @@ static void inferOrderedExpression(
 						inst.selectedOverloadsByCall.clear();
 					if (!context.trial)
 						inst.ifChainSelections.clear();
+					inst.writtenGlobalReferences.clear();
+					inst.finalGlobalConstantValues.clear();
 					seedInstantiationCompileTimeParameters(
 						context.parseContext, inst, paramBindings, macroBindingFrameStack, callerInstantiation
 					);
@@ -1452,6 +1470,12 @@ static void inferOrderedExpression(
 						ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
 					}
 					bool passSucceeded = inferSection(matchedSection, context, makeBindingFrameStack(nonMacroTypeBindings));
+					inst.finalGlobalConstantValues.clear();
+					for (VariableReference *reference : inst.writtenGlobalReferences) {
+						auto knownIt = context.currentKnownConstants.find(reference);
+						if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))
+							inst.finalGlobalConstantValues[reference] = knownIt->second;
+					}
 					context.suppressReinferPassDiagnostics = savedReinferSuppression;
 					inst.inferring = false;
 					if (inst.requiredCompileTimeParameters.size() != requiredBeforePass)
@@ -1459,6 +1483,8 @@ static void inferOrderedExpression(
 					return passSucceeded;
 				}
 				);
+				if (!context.trial && inferenceSucceeded && context.typesValid)
+					mergeWrittenGlobalConstantsIntoCaller(inst, callerKnownConstants);
 				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.valid = inferenceSucceeded;
@@ -1473,6 +1499,8 @@ static void inferOrderedExpression(
 			}
 			if (!context.typesValid)
 				break;
+			if (!context.trial)
+				mergeWrittenGlobalConstantsIntoCaller(inst, context.currentKnownConstants);
 
 			// If no return intrinsic was found, default to Void
 			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {

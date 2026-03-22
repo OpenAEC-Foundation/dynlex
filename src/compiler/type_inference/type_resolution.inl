@@ -1016,6 +1016,14 @@ struct InferenceContext {
 			target.erase(reference);
 	}
 
+	void noteWrittenGlobalReference(VariableReference *reference) {
+		if (!currentInstantiation || !reference)
+			return;
+		VariableReference *key = normalizeReference(reference);
+		if (key)
+			currentInstantiation->writtenGlobalReferences.insert(key);
+	}
+
 	void pushLoopMutationScope() { loopMutationStack.emplace_back(); }
 
 	std::unordered_set<VariableReference *> popLoopMutationScope() {
