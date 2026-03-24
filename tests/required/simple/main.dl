@@ -18,9 +18,29 @@ function value as [a|an|] bits bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
+function true_value if condition, else false_value:
+    replacement:
+        @intrinsic("select", condition, true_value, false_value)
+
+function [the|] build info key:
+    replacement:
+        @intrinsic("build info", key)
+
+function left = right:
+    replacement:
+        @intrinsic("equal", left, right)
+
+function wasm print msg:
+    replacement:
+        @intrinsic("call", "env", "dynlex_print_i64", a 32 bit integer, msg as a 64 bit integer)
+
+function native print msg:
+    replacement:
+        @intrinsic("call", "libc", "printf", a 32 bit integer, "%ld", msg as a 64 bit integer)
+
 function print msg:
     execute:
-        discard @intrinsic("call", "libc", "printf", a 32 bit integer, "%ld", msg as a 64 bit integer)
+        discard (wasm print msg) if (the build info "platform") = "wasm", else (native print msg)
 
 function left + right:
     replacement:

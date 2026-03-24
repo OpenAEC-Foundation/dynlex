@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynLex Wiki - Terms</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+    <nav class="nav">
+        <a href="../index.html" class="nav-btn">Home</a>
+        <a href="index.html" class="nav-btn">Wiki Home</a>
+        <a href="getting-started.html" class="nav-btn">Getting Started</a>
+        <a href="sections/index.html" class="nav-btn">Sections</a>
+        <a href="terms.html" class="nav-btn primary">Terms</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="wiki-shell">
+        <header class="wiki-header">
+            <h1>DynLex Terms</h1>
+            <p>
+                These pages use the same words in the same way. If a word feels new, come back here.
+            </p>
+        </header>
+
+        <section class="terms-grid">
+            <article class="glass-card term-card" id="pattern">
+                <h2>Pattern</h2>
+                <p>
+                    A pattern is the shape of a line of DynLex code. For example, <code>print message</code> is a
+                    pattern. DynLex matches your code against patterns to decide what it means.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="parameter">
+                <h2>Parameter</h2>
+                <p>
+                    A parameter is a named part of a pattern. In <code>function square value:</code>, the word
+                    <code>value</code> is a parameter.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="argument">
+                <h2>Argument</h2>
+                <p>
+                    An argument is the real value you pass into a parameter. In <code>square 5</code>, the
+                    argument is <code>5</code>.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="condition">
+                <h2>Condition</h2>
+                <p>
+                    A condition is a piece of code that answers yes or no. DynLex uses conditions in places like
+                    <code>if</code> and <code>while</code>.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="section">
+                <h2>Section</h2>
+                <p>
+                    A section is a block that starts with a line ending in <code>:</code>. The lines below it,
+                    indented one level deeper, belong to that section.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="function">
+                <h2>Function</h2>
+                <p>
+                    A function is a named piece of behavior. You define it with <code>function</code> and call it
+                    by writing its pattern.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="variable">
+                <h2>Variable</h2>
+                <p>
+                    A variable stores a value so you can use that value again later.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="macro">
+                <h2>Macro</h2>
+                <p>
+                    A macro is a function that uses a <code>replacement:</code> section. It replaces one piece of
+                    code with another piece of code.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="class">
+                <h2>Class</h2>
+                <p>
+                    A class is a data shape with named members such as <code>x</code> and <code>y</code>.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="type">
+                <h2>Type</h2>
+                <p>
+                    A type tells DynLex what kind of value something is, such as an integer, a float, a string, or
+                    a class.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="import">
+                <h2>Import</h2>
+                <p>
+                    An import brings code from another file into the current file. You write it with
+                    <code>import</code>.
+                </p>
+            </article>
+
+            <article class="glass-card term-card" id="intrinsic">
+                <h2>Intrinsic</h2>
+                <p>
+                    An intrinsic is a built-in low-level operation. Most everyday DynLex code should use normal
+                    patterns from the standard library instead of writing intrinsics directly.
+                </p>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

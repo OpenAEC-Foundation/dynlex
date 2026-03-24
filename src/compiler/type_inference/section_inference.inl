@@ -2,13 +2,13 @@
 
 #include "operand_reordering.inl"
 
-static bool isLoopSectionOpening(CodeLine *line) {
+static bool isLoopSectionOpening(CodeLine *line, ParseContext &parseContext) {
 	if (!line || !line->expression)
 		return false;
 	Expression *header = line->expression;
 	if (header->kind == Expression::Kind::PatternCall) {
 		BindingMap innerBindings;
-		Expression *expanded = expandMacroPatternCall(header, innerBindings);
+		Expression *expanded = expandMacroPatternCall(parseContext, header, innerBindings);
 		if (expanded)
 			header = expanded;
 	}
@@ -37,7 +37,8 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			Variable *boundVar = section->findVariable(name);
 			if (!boundVar)
 				continue;
-			DataType boundType = resolveTypeThroughBindings(boundExpr, bindingFrameStack);
+			Expression *boundExprForType = boundExpr;
+			DataType boundType = inferExpressionTypeWithoutSideEffects(boundExprForType, context, bindingFrameStack);
 			if (!boundType.isDeduced())
 				continue;
 			if (context.trial && context.trialJournal)
@@ -57,7 +58,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		}
 	}
 
-	bool loopSection = isLoopSectionOpening(section->openingLine);
+	bool loopSection = isLoopSectionOpening(section->openingLine, context.parseContext);
 	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
 	if (loopSection) {
 		constantsAtLoopEntry = context.currentKnownConstants;
@@ -87,13 +88,11 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		BindingFrameStack headerBindingFrameStack = bindingFrameStack;
 		if (header->kind == Expression::Kind::PatternCall) {
 			BindingMap innerBindings;
-			Expression *expanded = expandMacroPatternCall(header, innerBindings);
+			Expression *expanded = expandMacroPatternCall(context.parseContext, header, innerBindings);
 			if (expanded) {
 				header = expanded;
-				BindingMap resolvedHeaderBindings;
-				for (const auto &[name, argExpr] : innerBindings)
-					resolvedHeaderBindings[name] = resolveThroughBindings(argExpr, bindingFrameStack);
-				headerBindingFrameStack.pushFrame(std::move(resolvedHeaderBindings));
+				materializeMacroBindingsInCallerScope(&context.parseContext, innerBindings, bindingFrameStack);
+				headerBindingFrameStack.pushFrame(std::move(innerBindings));
 			}
 		}
 		if (!header || header->kind != Expression::Kind::IntrinsicCall)
@@ -231,7 +230,8 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 				context.typesValid = false;
 				return false;
 			}
-			DataType lineType = resolveTypeThroughBindings(line->expression, bindingFrameStack);
+			Expression *lineExprForType = line->expression;
+			DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, context, bindingFrameStack);
 			if (section->type != SectionType::Replacement && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
 				context.setTypeFailure(
 					"Standalone expression '" + std::string(line->expression->range.subString) +
@@ -318,25 +318,59 @@ bool inferTypes(ParseContext &parseContext) {
 }
 
 bool ensureSectionInstantiationInferred(
-	ParseContext &parseContext, Section *section, const BindingFrameStack &callBindingFrameStack,
-	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation
+	ParseContext &parseContext, Section *section, PatternDefinition *definition, const std::vector<std::string> &parameterNames,
+	const BindingFrameStack &callerBindingFrameStack, const std::vector<DataType> &argTypes,
+	const Instantiation *callerInstantiation
 ) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!section)
 		return false;
+	(void)definition;
 
-	Instantiation &inst = section->instantiations[argTypes];
-	callBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-		for (const auto &[name, argExpr] : frame.bindings) {
-			CompileTimeValue value =
-				evaluateCompileTimeValue(argExpr, parseContext, callBindingFrameStack, callerInstantiation);
-			if (isCompileTimeKnown(value))
-				inst.constantParameterValues[name] = value;
-			else
-				inst.constantParameterValues.erase(name);
+	std::vector<std::pair<std::string, Expression *>> paramBindings;
+	paramBindings.reserve(parameterNames.size());
+	for (const std::string &parameterName : parameterNames)
+		paramBindings.push_back({parameterName, callerBindingFrameStack.lookup(parameterName)});
+	auto evaluateParameterValue = [&](Expression *argumentExpression) {
+		return argumentExpression
+				   ? evaluateCompileTimeValue(argumentExpression, parseContext, callerBindingFrameStack, callerInstantiation)
+				   : CompileTimeValue{};
+	};
+	InstantiationKey instantiationKey =
+		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
+			.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+	auto instIt = section->instantiations.find(instantiationKey);
+	if (instIt == section->instantiations.end())
+		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
+	Instantiation &inst = instIt->second;
+	if (inst.argumentTypes.empty())
+		inst.argumentTypes = argTypes;
+	else
+		assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
+	size_t parameterCount = std::min(parameterNames.size(), argTypes.size());
+	for (size_t i = 0; i < parameterCount; i++) {
+		if (parameterRequiresCompileTimeInstantiationValue(inst.requiredCompileTimeParameters, parameterNames[i], argTypes[i]))
+			inst.requiredCompileTimeParameters.insert(parameterNames[i]);
+	}
+	for (size_t i = 0; i < parameterNames.size(); i++) {
+		const std::string &parameterName = parameterNames[i];
+		Expression *argumentExpression = callerBindingFrameStack.lookup(parameterName);
+		if (!argumentExpression) {
+			inst.constantParameterValues.erase(parameterName);
+			continue;
 		}
-	});
-	if (inst.returnType.isDeduced())
+		if (i < argTypes.size() && argTypes[i].kind == DataType::Kind::Type) {
+			inst.constantParameterValues[parameterName] = argTypes[i];
+			continue;
+		}
+		CompileTimeValue value =
+			evaluateCompileTimeValue(argumentExpression, parseContext, callerBindingFrameStack, callerInstantiation);
+		if (isCompileTimeKnown(value))
+			inst.constantParameterValues[parameterName] = value;
+		else
+			inst.constantParameterValues.erase(parameterName);
+	}
+	if (inst.returnType.isDeduced() && !inst.needsReinfer)
 		return inst.valid;
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
@@ -356,7 +390,18 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	bool inferenceSucceeded = inferSection(section, context, BindingFrameStack{});
+	BindingMap nonMacroTypeBindings;
+	std::vector<std::unique_ptr<Expression>> ownedNonMacroTypeBindings;
+	size_t bindingCount = std::min(parameterNames.size(), argTypes.size());
+	for (size_t i = 0; i < bindingCount; i++) {
+		if (std::find(section->globalVariables.begin(), section->globalVariables.end(), parameterNames[i]) !=
+			section->globalVariables.end())
+			continue;
+		auto bindingValue = makeNonMacroParameterBinding(parameterNames[i], argTypes[i], inst);
+		nonMacroTypeBindings[parameterNames[i]] = bindingValue.get();
+		ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
+	}
+	bool inferenceSucceeded = inferSection(section, context, makeBindingFrameStack(nonMacroTypeBindings));
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		auto knownIt = context.currentKnownConstants.find(reference);
 		if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))
@@ -367,6 +412,39 @@ bool ensureSectionInstantiationInferred(
 	inst.valid = inferenceSucceeded;
 	if (!inst.valid || !context.typesValid)
 		return false;
+
+	bool unresolvedLocalFound = false;
+	std::function<void(Section *)> validateInstantiatedVariables = [&](Section *currentSection) {
+		if (unresolvedLocalFound || !currentSection)
+			return;
+		for (auto &[name, var] : currentSection->variables) {
+			if (var->type.isDeduced())
+				continue;
+			if (!context.suppressReinferPassDiagnostics) {
+				parseContext.diagnostics.push_back(Diagnostic(
+					parseContext, Diagnostic::Level::Error, "variable has no type", var->definition->range, "name", name
+				));
+			}
+			unresolvedLocalFound = true;
+			return;
+		}
+		for (Section *child : currentSection->children)
+			validateInstantiatedVariables(child);
+	};
+	validateInstantiatedVariables(section);
+	if (unresolvedLocalFound) {
+		inst.valid = false;
+		return false;
+	}
+
+	InstantiationKey refinedKey =
+		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
+	if (refinedKey != instIt->first) {
+		auto node = section->instantiations.extract(instIt);
+		node.key() = refinedKey;
+		auto insertResult = section->instantiations.insert(std::move(node));
+		assert(insertResult.inserted && "Refined instantiation key collided with existing entry");
+	}
 
 	if (inst.returnType.kind == DataType::Kind::Any)
 		inst.returnType = {DataType::Kind::Void};

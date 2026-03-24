@@ -1,0 +1,12 @@
+import lib/std.dl
+
+function consume value:
+    execute:
+        discard value
+
+function demo:
+    execute:
+        set s to new string from data "a" with length 1
+        consume character 0 of s
+
+demo

@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function demo len:
+    execute:
+        return new string from data allocate len bytes with length len
+
+discard demo 1

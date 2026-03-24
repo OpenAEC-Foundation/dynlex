@@ -1,0 +1,9 @@
+function bad left and right:
+    before: default
+    replacement:
+        @intrinsic("and", left, right)
+
+function also bad left and right:
+    replacement:
+        @intrinsic("and", left, right)
+    before: default

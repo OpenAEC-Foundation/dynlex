@@ -778,6 +778,44 @@ static std::string makeInstantiationSignature(const std::vector<DataType> &types
 	return out.str();
 }
 
+static std::string formatInstantiationKeyValue(const CompileTimeValue &value) {
+	if (const auto *number = std::get_if<double>(&value)) {
+		if (std::isfinite(*number)) {
+			double rounded = std::round(*number);
+			if (std::abs(*number - rounded) < 1e-9) {
+				std::ostringstream asInteger;
+				asInteger << static_cast<long long>(rounded);
+				return asInteger.str();
+			}
+		}
+		std::ostringstream asFloat;
+		asFloat << *number;
+		return asFloat.str();
+	}
+	if (const auto *text = std::get_if<std::string>(&value))
+		return *text;
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? "true" : "false";
+	if (const auto *typeRef = std::get_if<DataType>(&value))
+		return typeRef->toString();
+	return "?";
+}
+
+static std::string makeInstantiationSignature(const InstantiationKey &key) {
+	std::string signature = makeInstantiationSignature(key.argumentTypes);
+	if (key.compileTimeParameters.empty())
+		return signature;
+	signature += " {";
+	for (size_t i = 0; i < key.compileTimeParameters.size(); ++i) {
+		if (i > 0)
+			signature += ", ";
+		signature +=
+			key.compileTimeParameters[i].first + "=" + formatInstantiationKeyValue(key.compileTimeParameters[i].second);
+	}
+	signature += "}";
+	return signature;
+}
+
 static std::string typeToUserPatternName(const ParseContext &parseContext, const DataType &type) {
 	if (type.pointerDepth == 0) {
 		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
@@ -833,24 +871,7 @@ static std::string formatInstancePattern(
 		parameterIndexByName[parameters[i].name] = i;
 
 	auto formatValue = [](const CompileTimeValue &value) -> std::string {
-		if (const auto *number = std::get_if<double>(&value)) {
-			if (std::isfinite(*number)) {
-				double rounded = std::round(*number);
-				if (std::abs(*number - rounded) < 1e-9) {
-					std::ostringstream asInteger;
-					asInteger << static_cast<long long>(rounded);
-					return asInteger.str();
-				}
-			}
-			std::ostringstream asFloat;
-			asFloat << *number;
-			return asFloat.str();
-		}
-		if (const auto *text = std::get_if<std::string>(&value))
-			return *text;
-		if (const auto *boolean = std::get_if<bool>(&value))
-			return *boolean ? "true" : "false";
-		return "?";
+		return formatInstantiationKeyValue(value);
 	};
 
 	std::function<void(const std::vector<DefinitionPatternElement> &, std::string &)> appendPatternText =
@@ -903,9 +924,9 @@ static Json buildInstantiationOptions(ParseContext &parseContext, const Section 
 	const PatternDefinition *primaryDefinition =
 		(ownerSection && !ownerSection->patternDefinitions.empty()) ? ownerSection->patternDefinitions.front() : nullptr;
 	int index = 1;
-	for (const auto &[signatureTypes, inst] : ownerSection->instantiations) {
-		std::string signature = makeInstantiationSignature(signatureTypes);
-		std::string label = formatInstancePattern(parseContext, primaryDefinition, signatureTypes, inst);
+	for (const auto &[instantiationKey, inst] : ownerSection->instantiations) {
+		std::string signature = makeInstantiationSignature(instantiationKey);
+		std::string label = formatInstancePattern(parseContext, primaryDefinition, instantiationKey.argumentTypes, inst);
 		if (label.empty())
 			label = "DynLex path " + std::to_string(index) + " " + signature;
 		options.push_back({{"key", signature}, {"label", label}});
@@ -1060,6 +1081,8 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 		return "\"" + *text + "\"";
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
+	if (const auto *typeRef = std::get_if<DataType>(&value))
+		return typeRef->toString();
 	return "?";
 }
 
@@ -1119,8 +1142,8 @@ static std::optional<CompileTimeValue> lookupHoverConstantValue(
 			selectedKey = selectedIt->second;
 		else if (!ownerSection->instantiations.empty())
 			selectedKey = makeInstantiationSignature(ownerSection->instantiations.begin()->first);
-		for (const auto &[signatureTypes, inst] : ownerSection->instantiations) {
-			if (makeInstantiationSignature(signatureTypes) != selectedKey)
+		for (const auto &[instantiationKey, inst] : ownerSection->instantiations) {
+			if (makeInstantiationSignature(instantiationKey) != selectedKey)
 				continue;
 			return lookupConstantValueInInstantiation(ownerSection, inst, referenceAtHover, variableDefinition, variableName);
 		}
@@ -1233,8 +1256,15 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 		if (targetSection && targetSection->instantiations.size() > 1) {
 			std::vector<DataType> callArgTypes = argumentTypesForDefinition(resolved->expr, resolved->matchedPattern);
 			std::string key = makeInstantiationSignature(callArgTypes);
-			if (targetSection->instantiations.contains(callArgTypes))
-				storeInstantiationSelectionForSection(selectedInstantiationBySelectionKey, targetSection, key);
+			for (const auto &[instantiationKey, ignoredInstantiation] : targetSection->instantiations) {
+				(void)ignoredInstantiation;
+				if (instantiationKey.argumentTypes != callArgTypes)
+					continue;
+				storeInstantiationSelectionForSection(
+					selectedInstantiationBySelectionKey, targetSection, makeInstantiationSignature(instantiationKey)
+				);
+				break;
+			}
 		}
 	}
 	if (resolved->expr) {

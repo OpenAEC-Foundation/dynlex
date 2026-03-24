@@ -17,11 +17,15 @@ function new string from data ptr with length len:
     replacement:
         @intrinsic("construct", a string, ptr, len)
 
-function character index of str:
-    replacement:
-        @intrinsic("dereference", the data of str + index)
+function character index of {string:str}:
+    execute:
+        return @intrinsic("dereference", the data of str + index)
 
-function the length of str:
+function character index of {cstring:str}:
+    execute:
+        return @intrinsic("dereference", str + index)
+
+function the length of {cstring:str}:
     execute:
         set len to 0
         set ch to character len of str
@@ -32,54 +36,178 @@ function the length of str:
 
 # --- Conversions to string ---
 
-function {integer:value} as a string:
+function a new string buffer with length len:
     execute:
-        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 21)
-        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 21, "%ld", value as a 64 bit integer)
-        return new string from data buf with length len
+        return new string from data (allocate (len + 1) bytes) with length len
 
-function {float:value} as a string:
+function copy {string:source} into target at offset offset:
     execute:
-        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 32)
-        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 32, "%g", value as a 64 bit float)
-        return new string from data buf with length len
+        set i to 0
+        loop while i < source's length:
+            store character i of source into target at offset + i
+            set i to i + 1
 
-function {boolean:value} as a string:
+function the count of decimal digits in {integer:value}:
     execute:
-        set buf to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2)
-        set len to @intrinsic("call", "libc", "snprintf", an integer, buf, 2, "%ld", value as a 64 bit integer)
-        return new string from data buf with length len
+        set remaining to value as a 64 bit integer
+        set digit_total to 1
+        loop while remaining <= -10 or remaining >= 10:
+            set remaining to remaining / 10
+            set digit_total to digit_total + 1
+        return digit_total
 
-function {cstring:value} as a string:
+function zero pad {integer:value} to {integer:digit_count}:
     execute:
-        set len to @intrinsic("call", "libc", "strlen", an integer, value)
-        return new string from data value with length len
+        set result to a new string buffer with length digit_count
+        set data to the data of result
+        set remaining to value as a 64 bit integer
+        set index to (digit_count - 1)
+        set should_continue to true
+        loop while should_continue:
+            set digit to remaining mod 10
+            if digit < 0:
+                set digit to 0 - digit
+            set character to ((digit + 48) as a byte)
+            store character into data at index
+            set remaining to remaining / 10
+            if index = 0:
+                set should_continue to false
+            else:
+                set index to index - 1
+        return result
+
+function [the|] string form of {integer:value}:
+    execute:
+        set digits to the count of decimal digits in value
+        set is_negative to value < 0
+        set result_length to digits
+        if is_negative:
+            set result_length to result_length + 1
+        set result to a new string buffer with length result_length
+        set data to the data of result
+        set remaining to value as a 64 bit integer
+        set index to result_length - 1
+        set should_continue to true
+        loop while should_continue:
+            set digit to remaining mod 10
+            if digit < 0:
+                set digit to 0 - digit
+            set character to ((digit + 48) as a byte)
+            store character into data at index
+            set remaining to remaining / 10
+            if remaining = 0:
+                set should_continue to false
+            else:
+                set index to index - 1
+        if is_negative:
+            store 45 as a byte into data at 0
+        return result
+
+function [the|] string form of {float:value}:
+    execute:
+        set negative to value < 0.0
+        set absolute_value to the absolute value of value
+        set whole to the floor of absolute_value as a 64 bit integer
+        set whole_digits to the count of decimal digits in whole
+        set fractional_digits to the maximum of 0 and 6 - whole_digits
+        set scale to 1
+        set scale_index to 0
+        loop while scale_index < fractional_digits:
+            set scale to scale * 10
+            set scale_index to scale_index + 1
+        set rounded to (the floor of ((absolute_value * scale) as a float + 0.5)) as a 64 bit integer
+        set whole_part to rounded / scale
+        set fraction_part to rounded mod scale
+        set whole_text to the string form of whole_part
+        if fraction_part = 0:
+            if negative:
+                set minus_sign to the string form of "-"
+                return minus_sign + whole_text
+            return whole_text
+        set trimmed_fraction to fraction_part
+        set trimmed_digits to fractional_digits
+        set has_trailing_zeroes to trimmed_digits > 0
+        loop while has_trailing_zeroes:
+            set last_digit to trimmed_fraction mod 10
+            if last_digit = 0:
+                set trimmed_fraction to trimmed_fraction / 10
+                set trimmed_digits to trimmed_digits - 1
+                set has_trailing_zeroes to trimmed_digits > 0
+            else:
+                set has_trailing_zeroes to false
+        set fractional_text to zero pad trimmed_fraction to trimmed_digits
+        set dot to the string form of "."
+        set result to whole_text + dot
+        set result to result + fractional_text
+        if negative:
+            set minus_sign to the string form of "-"
+            return minus_sign + result
+        return result
+
+function [the|] string form of {boolean:value}:
+    execute:
+        return the string form of value as a 64 bit integer
+
+function [the|] string form of {string:value}:
+    execute:
+        return value
+
+function [the|] string form of {cstring:value}:
+    execute:
+        return new string from data value with length the length of value
 
 # --- Line suffix ---
 
 function value as [a|] line:
     execute:
-        return value as a string + new string from data "\n" with length 1
+        set result to the string form of value
+        set newline to new string from data "\n" with length 1
+        return result + newline
 
 # --- Output ---
 
-function print {string:msg}:
+function write {string:msg}:
     execute:
-        discard @intrinsic("call", "libc", "printf", an integer, "%s", the data of msg)
+        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if (the build info "platform") = "wasm", else @intrinsic("call", "libc", "printf", an integer, "%.*s", msg's length, the data of msg)
 
 function print msg:
     execute:
-        print msg as a string
+        set text to the string form of msg
+        write text
 
 # --- Concatenation ---
 
 function {string:left} + {string:right}:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
-        set left_len to the length of left
-        set right_len to the length of right
-        set total to left_len + right_len
-        set result to @intrinsic("call", "libc", "malloc", a pointer to a byte, total + 1)
-        discard @intrinsic("call", "libc", "memcpy", a pointer to a byte, result, the data of left, left_len)
-        discard @intrinsic("call", "libc", "memcpy", a pointer to a byte, result + left_len, the data of right, right_len + 1)
-        return new string from data result with length total
+        set left_length to left's length
+        set right_length to right's length
+        set total to left_length + right_length
+        set result to a new string buffer with length total
+        set data to the data of result
+        set left_offset to left_length
+        set index to 0
+        loop while index < left_offset:
+            store character index of left into data at index
+            set index to index + 1
+        set right_index to 0
+        loop while right_index < right's length:
+            store character right_index of right into data at left_offset + right_index
+            set right_index to right_index + 1
+        return result
+
+# --- Array text ---
+
+function a string from count items of values:
+    execute:
+        set result to the string form of "["
+        set separator to the string form of ", "
+        set end to the string form of "]"
+        set i to 0
+        loop while i < count:
+            if i > 0:
+                set result to result + separator
+            set result to result + the string form of item i of the address of values
+            increment i
+        set result to result + end
+        return result

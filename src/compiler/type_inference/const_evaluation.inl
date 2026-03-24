@@ -25,6 +25,8 @@ static Expression *resolveThroughBindingsDeep(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack
 );
 
+static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
+
 static bool expressionReferencesAnyBindingName(
 	Expression *expr, const BindingMap &bindingNames, std::unordered_set<Expression *> &visited
 ) {
@@ -45,6 +47,133 @@ static bool expressionReferencesAnyBindingName(Expression *expr, const BindingMa
 	return expressionReferencesAnyBindingName(expr, bindingNames, visited);
 }
 
+static Expression *captureMacroBindingReferences(
+	ParseContext *ownerContext, Expression *expr, const BindingFrameStack &bindingFrameStack,
+	const BindingMap &shadowedBindingNames
+);
+
+static Expression *cloneCapturedBindingSubtree(Expression *expr, std::unordered_map<Expression *, Expression *> &memo) {
+	if (!expr)
+		return nullptr;
+	if (auto it = memo.find(expr); it != memo.end())
+		return it->second;
+	Expression *clone = new Expression();
+	clone->kind = expr->kind;
+	clone->range = expr->range;
+	clone->literalValue = expr->literalValue;
+	clone->variable = expr->variable;
+	clone->patternMatch = expr->patternMatch;
+	clone->patternReference = expr->patternReference;
+	clone->intrinsicName = expr->intrinsicName;
+	clone->isSubMatch = expr->isSubMatch;
+	clone->isExplicitGroup = expr->isExplicitGroup;
+	clone->groupingArgumentIndices = expr->groupingArgumentIndices;
+	clone->groupingArgumentHasAdjacentSiblingSlot = expr->groupingArgumentHasAdjacentSiblingSlot;
+	clone->groupingStartsWithArgument = expr->groupingStartsWithArgument;
+	clone->groupingEndsWithArgument = expr->groupingEndsWithArgument;
+	clone->groupingPrecedence = expr->groupingPrecedence;
+	clone->type = {};
+	clone->selectedPatternDefinition = nullptr;
+	memo[expr] = clone;
+	clone->arguments.reserve(expr->arguments.size());
+	for (Expression *argument : expr->arguments)
+		clone->arguments.push_back(cloneCapturedBindingSubtree(argument, memo));
+	return clone;
+}
+
+static Expression *captureMacroBindingReferencesImpl(
+	ParseContext *ownerContext, Expression *expr, const BindingFrameStack &bindingFrameStack,
+	const BindingMap &shadowedBindingNames, std::unordered_map<Expression *, Expression *> &memo
+) {
+	if (!expr)
+		return nullptr;
+	if (auto it = memo.find(expr); it != memo.end())
+		return it->second;
+
+	if (expr->kind == Expression::Kind::Variable && expr->variable && shadowedBindingNames.contains(expr->variable->name)) {
+		Expression *resolved = resolveThroughBindings(expr, bindingFrameStack);
+		if (resolved && resolved != expr) {
+			if (resolved->kind == Expression::Kind::TypedPlaceholder) {
+				memo[expr] = expr;
+				return expr;
+			}
+			Expression *capturedResolved =
+				captureMacroBindingReferencesImpl(ownerContext, resolved, bindingFrameStack, shadowedBindingNames, memo);
+			memo[expr] = capturedResolved;
+			return capturedResolved;
+		}
+	}
+
+	bool childChanged = false;
+	std::vector<Expression *> capturedArguments;
+	capturedArguments.reserve(expr->arguments.size());
+	for (Expression *argument : expr->arguments) {
+		Expression *capturedArgument =
+			captureMacroBindingReferencesImpl(ownerContext, argument, bindingFrameStack, shadowedBindingNames, memo);
+		if (capturedArgument != argument)
+			childChanged = true;
+		capturedArguments.push_back(capturedArgument);
+	}
+	if (!childChanged) {
+		memo[expr] = expr;
+		return expr;
+	}
+
+	std::unordered_map<Expression *, Expression *> unchangedCloneMemo;
+	for (size_t i = 0; i < expr->arguments.size(); i++) {
+		if (capturedArguments[i] == expr->arguments[i]) {
+			capturedArguments[i] = cloneCapturedBindingSubtree(expr->arguments[i], unchangedCloneMemo);
+		}
+	}
+
+	Expression *clone = new Expression();
+	clone->kind = expr->kind;
+	clone->range = expr->range;
+	clone->literalValue = expr->literalValue;
+	clone->variable = expr->variable;
+	clone->patternMatch = expr->patternMatch;
+	clone->patternReference = expr->patternReference;
+	clone->intrinsicName = expr->intrinsicName;
+	clone->arguments = std::move(capturedArguments);
+	clone->isSubMatch = expr->isSubMatch;
+	clone->isExplicitGroup = expr->isExplicitGroup;
+	clone->groupingArgumentIndices = expr->groupingArgumentIndices;
+	clone->groupingArgumentHasAdjacentSiblingSlot = expr->groupingArgumentHasAdjacentSiblingSlot;
+	clone->groupingStartsWithArgument = expr->groupingStartsWithArgument;
+	clone->groupingEndsWithArgument = expr->groupingEndsWithArgument;
+	clone->groupingPrecedence = expr->groupingPrecedence;
+	clone->type = {};
+	clone->selectedPatternDefinition = nullptr;
+	memo[expr] = clone;
+	return clone;
+}
+
+static Expression *captureMacroBindingReferences(
+	ParseContext *ownerContext, Expression *expr, const BindingFrameStack &bindingFrameStack,
+	const BindingMap &shadowedBindingNames
+) {
+	if (!expr || !expressionReferencesAnyBindingName(expr, shadowedBindingNames))
+		return expr;
+	std::unordered_map<Expression *, Expression *> memo;
+	Expression *captured = captureMacroBindingReferencesImpl(ownerContext, expr, bindingFrameStack, shadowedBindingNames, memo);
+	if (ownerContext && captured != expr)
+		ownerContext->ownedCapturedBindingRoots.push_back(captured);
+	return captured;
+}
+
+static void materializeMacroBindingsInCallerScope(
+	ParseContext *ownerContext, BindingMap &bindings, const BindingFrameStack &callerBindingFrameStack
+) {
+	for (auto &[name, argumentExpression] : bindings) {
+		Expression *resolvedArgumentExpression = resolveThroughBindings(argumentExpression, callerBindingFrameStack);
+		Expression *bindingArgument = resolvedArgumentExpression ? resolvedArgumentExpression : argumentExpression;
+		if (bindingArgument && expressionReferencesAnyBindingName(bindingArgument, bindings)) {
+			bindingArgument = captureMacroBindingReferences(ownerContext, bindingArgument, callerBindingFrameStack, bindings);
+		}
+		argumentExpression = bindingArgument;
+	}
+}
+
 // Like resolveThroughBindings, but also expands macro PatternCalls to find the
 // underlying expression. Outputs the final active bindings in outBindings so the
 // caller can resolve arguments of the returned expression. Use when inspecting
@@ -63,18 +192,12 @@ static Expression *resolveThroughBindingsDeepImpl(
 		return expr;
 	visited.insert(expr);
 	BindingMap innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	Expression *bodyExpr = activeTypeResolutionParseContext
+							   ? expandMacroPatternCall(*activeTypeResolutionParseContext, expr, innerBindings)
+							   : nullptr;
 	if (bodyExpr) {
-		BindingMap scopedMacroBindings;
-		scopedMacroBindings.reserve(innerBindings.size());
-		for (auto &[name, argExpr] : innerBindings) {
-			Expression *directArg = resolveThroughBindings(argExpr, bindingFrameStack);
-			Expression *bindingArg = directArg ? directArg : argExpr;
-			if (bindingArg && expressionReferencesAnyBindingName(bindingArg, innerBindings))
-				bindingArg = directArg ? directArg : argExpr;
-			scopedMacroBindings[name] = bindingArg;
-		}
-		bindingFrameStack.pushFrame(std::move(scopedMacroBindings));
+		materializeMacroBindingsInCallerScope(activeTypeResolutionParseContext, innerBindings, bindingFrameStack);
+		bindingFrameStack.pushFrame(std::move(innerBindings));
 		Expression *resolved = resolveThroughBindingsDeepImpl(bodyExpr, bindingFrameStack, outBindingFrameStack, visited);
 		bindingFrameStack.popFrame();
 		visited.erase(expr);
@@ -107,7 +230,7 @@ static bool evaluateCompileTimeInteger(
 static DataType concretizeClassType(DataType type);
 static std::string extractFieldName(Expression *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
-static DataType resolveTypeThroughBindings(Expression *expr, const BindingFrameStack &bindingFrameStack);
+static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack);
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged);
 static DataType
 instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack);
@@ -133,7 +256,6 @@ struct TypeResolutionKey {
 	}
 };
 
-static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
 struct TypeResolutionKeyHasher {
 	size_t operator()(const TypeResolutionKey &typeResolutionKey) const {
 		size_t hashValue = std::hash<const Expression *>{}(typeResolutionKey.expression);
@@ -204,10 +326,16 @@ static void markCompileTimeParameterRequirements(
 
 static void seedInstantiationCompileTimeParameters(
 	ParseContext &parseContext, Instantiation &instantiation,
-	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const BindingFrameStack &callerBindingFrameStack,
-	const Instantiation *callerInstantiation
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
+	const BindingFrameStack &callerBindingFrameStack, const Instantiation *callerInstantiation
 ) {
-	for (const auto &[name, argExpr] : paramBindings) {
+	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
+	for (size_t i = 0; i < bindingCount; i++) {
+		const auto &[name, argExpr] = paramBindings[i];
+		if (argTypes[i].kind == DataType::Kind::Type) {
+			instantiation.constantParameterValues[name] = argTypes[i];
+			continue;
+		}
 		CompileTimeValue value = evaluateCompileTimeValue(argExpr, parseContext, callerBindingFrameStack, callerInstantiation);
 		if (isCompileTimeKnown(value))
 			instantiation.constantParameterValues[name] = value;
@@ -216,7 +344,7 @@ static void seedInstantiationCompileTimeParameters(
 	}
 }
 
-static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Expression *expr) {
+static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Expression *expr, const BindingFrameStack &bindingFrameStack) {
 	std::unordered_set<size_t> indices;
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return indices;
@@ -226,7 +354,7 @@ static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Expression *exp
 		return indices;
 	std::vector<DataType> argTypesForOverload;
 	for (Expression *arg : expr->arguments)
-		argTypesForOverload.push_back(resolveTypeThroughBindings(arg, {}));
+		argTypesForOverload.push_back(resolveKnownExpressionType(arg, bindingFrameStack));
 	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
 	if (!def) {
 		if (defs.size() == 1)

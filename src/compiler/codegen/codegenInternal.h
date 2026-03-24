@@ -53,9 +53,9 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 // Function/section code generation (codegen.cpp)
 bool generateSectionCode(ParseContext &context, Section *section);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
-void generateSpecializedFunction(
+Instantiation *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes, Instantiation &inst
+	const std::vector<DataType> &argTypes
 );
 llvm::Function *
 ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage);

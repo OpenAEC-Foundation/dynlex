@@ -1,6 +1,5 @@
 tests/required/precedence/main.dl:9:7-16: Warning: Expression '2 + 3 + 4' has multiple valid operand groupings. Using '(2 + 3) + 4' instead of '2 + (3 + 4)'.
 tests/required/precedence/main.dl:10:7-16: Warning: Expression '2 * 3 * 4' has multiple valid operand groupings. Using '(2 * 3) * 4' instead of '2 * (3 * 4)'.
 tests/required/precedence/main.dl:14:15-58: Warning: Expression 'the square root of a + the square root of a' has multiple valid operand groupings. Using '(the square root of a) + (the square root of a)' instead of 'the square root of (a + (the square root of a))'.
-tests/required/precedence/main.dl:15:7-35: Warning: Expression 'result as an integer as line' has multiple valid operand groupings. Using '(result as an integer) as line' instead of 'result as (an integer as line)'.
 tests/required/precedence/main.dl:18:23-62: Warning: Expression 'the minimum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using '(the minimum of (1.0 + 5.0) and 2.0) + 19.0' instead of 'the minimum of (1.0 + 5.0) and (2.0 + 19.0)'.
 tests/required/precedence/main.dl:19:23-62: Warning: Expression 'the maximum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using '(the maximum of (1.0 + 5.0) and 2.0) + 19.0' instead of 'the maximum of (1.0 + 5.0) and (2.0 + 19.0)'.

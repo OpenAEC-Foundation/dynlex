@@ -73,6 +73,7 @@ struct ParseContext {
 		std::string inputPath;
 		std::string outputPath;
 		bool emitLLVM = false;
+		bool emitWASM = false;
 		bool emitSPIRV = false;
 		ShaderStage shaderStage = ShaderStage::Fragment;
 		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
@@ -151,6 +152,15 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Owns cloned macro expansion roots so call-site-specific inference and grouping
+	// never mutate shared macro definition expression trees.
+	std::vector<Expression *> ownedMacroExpansionRoots;
+	// Owns cloned macro argument captures where outer bindings must be frozen into
+	// a nested argument expression to avoid self-capture across macro scopes.
+	std::vector<Expression *> ownedCapturedBindingRoots;
+	// Owns temporary literal expressions materialized during codegen when a
+	// compile-time-only non-macro parameter must be inspected as an expression.
+	std::vector<Expression *> ownedCodegenLiteralRoots;
 	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
 	std::unordered_map<CodeLine *, Instantiation::IfChainSelection> inferredIfChainSelections;
@@ -178,6 +188,9 @@ struct ParseContext {
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
 	VariableReference *createVariableReference(Range range, const std::string &name);
+	// WARNING: This exists only for per-call macro expansion isolation.
+	// It must NOT be used for ANYTHING else without explicit approval from the user.
+	Expression *cloneMacroExpansionExpression(Expression *expression, bool ownRoot = true);
 };
 
 // Extract the body expression and parameter bindings from a macro PatternCall.
@@ -192,23 +205,35 @@ inline void forEachPatternParameterName(
 ) {
 	if (!definition)
 		return;
+	std::vector<std::tuple<size_t, PatternTreeNode *, std::string>> orderedParameters;
 	for (PatternTreeNode *node : nodesPassed) {
+		if (!node)
+			continue;
 		auto paramIt = node->parameterNames.find(definition);
-		if (paramIt != node->parameterNames.end())
-			onPatternParameterName(paramIt->second);
+		auto startIt = node->definitionStartPositions.find(definition);
+		if (paramIt == node->parameterNames.end() || startIt == node->definitionStartPositions.end())
+			continue;
+		orderedParameters.push_back({startIt->second, node, paramIt->second});
 	}
+	std::sort(orderedParameters.begin(), orderedParameters.end(), [](const auto &left, const auto &right) {
+		return std::get<0>(left) < std::get<0>(right);
+	});
+	for (const auto &[ignoredStartPos, node, parameterName] : orderedParameters)
+		onPatternParameterName(parameterName, node);
 }
 
 template <typename OnPatternBindingFn>
 inline void forEachPatternCallBinding(Expression *expr, PatternDefinition *definition, OnPatternBindingFn &&onPatternBinding) {
 	if (!expr || !definition || !expr->patternMatch)
 		return;
-	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
 	size_t argIndex = 0;
-	forEachPatternParameterName(expr->patternMatch->nodesPassed, definition, [&](const std::string &parameterName) {
-		if (argIndex < sortedArgs.size())
-			onPatternBinding(parameterName, sortedArgs[argIndex++]);
-	});
+	forEachPatternParameterName(
+		expr->patternMatch->nodesPassed, definition,
+		[&](const std::string &parameterName, PatternTreeNode *) {
+		if (argIndex < expr->arguments.size())
+			onPatternBinding(parameterName, expr->arguments[argIndex++]);
+	}
+	);
 }
 
 inline void collectPatternCallBindingPairs(
@@ -225,18 +250,13 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 	});
 }
 
-inline Expression *expandMacroPatternCall(Expression *expr, BindingMap &outBindings) {
+inline Expression *
+expandMacroPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingMap &outBindings) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	PatternDefinition *def = expr->selectedPatternDefinition;
-	if (expr->selectedPatternDefinition) {
-		assert(std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end());
-	} else {
-		if (defs.size() != 1)
-			return nullptr;
-		def = defs.front();
-	}
+	if (def)
+		assert(std::find(defs.begin(), defs.end(), def) != defs.end());
 	if (!def || !def->section || !def->section->isMacro)
 		return nullptr;
 	Expression *bodyExpr = nullptr;
@@ -249,5 +269,23 @@ inline Expression *expandMacroPatternCall(Expression *expr, BindingMap &outBindi
 	if (!bodyExpr)
 		return nullptr;
 	collectPatternCallBindings(expr, def, outBindings);
-	return bodyExpr;
+	Expression *expandedBody = context.cloneMacroExpansionExpression(bodyExpr);
+	if (expandedBody)
+		expandedBody->isExplicitGroup = true;
+	return expandedBody;
+}
+
+inline Expression *expandMacroPatternCall(ParseContext &context, Expression *expr, BindingMap &outBindings) {
+	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
+		return nullptr;
+	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	PatternDefinition *def = expr->selectedPatternDefinition;
+	if (expr->selectedPatternDefinition) {
+		assert(std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end());
+	} else {
+		if (defs.size() != 1)
+			return nullptr;
+		def = defs.front();
+	}
+	return expandMacroPatternCall(context, expr, def, outBindings);
 }

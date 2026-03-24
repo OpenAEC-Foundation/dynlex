@@ -225,7 +225,19 @@ add_executable (${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS}
 # LLVM 20+ includes the SPIR-V backend as an official target.
 # We use the static component libraries for codegen, optimization, native compilation,
 # and SPIR-V emission.
-llvm_map_components_to_libnames(llvm_libs core support irreader passes native SPIRV)
+llvm_map_components_to_libnames(
+    llvm_libs
+    core
+    support
+    irreader
+    passes
+    native
+    SPIRV
+    WebAssemblyCodeGen
+    WebAssemblyDesc
+    WebAssemblyInfo
+    WebAssemblyUtils
+)
 
 target_link_libraries (${PROJECT_NAME}
 PRIVATE

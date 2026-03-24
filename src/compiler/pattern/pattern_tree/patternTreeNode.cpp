@@ -1,6 +1,7 @@
 #include "patternTreeNode.h"
 #include "patternDefinition.h"
 #include <algorithm>
+#include <cassert>
 #include <climits>
 #include <tuple>
 #include <unordered_set>
@@ -262,47 +263,21 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 	return result;
 }
 
-PatternDefinition *
-PatternTreeNode::addPatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition, size_t index) {
+void PatternTreeNode::addPatternPart(
+	std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition, size_t index
+) {
+	assert(definition && "pattern tree insertion requires a definition");
 	std::vector<DefinitionPatternElement> remaining(elements.begin() + index, elements.end());
 	auto endpoints = addElementSequence({this}, remaining, definition);
-
-	// Check if the new definition has any type constraints
-	bool hasTypeConstraints = false;
-	for (auto &elem : elements) {
-		if (!elem.typeConstraintName.empty()) {
-			hasTypeConstraints = true;
-			break;
-		}
-	}
+	definition->endNodes = endpoints;
 
 	for (auto *node : endpoints) {
-		// Check for conflicts: a duplicate exists if an existing definition at this endpoint
-		// has no type constraints AND the new definition has no type constraints.
-		// Type-constrained overloads are allowed to coexist.
-		if (!hasTypeConstraints) {
-			for (auto *existingDef : node->matchingDefinitions) {
-				if (existingDef == definition)
-					continue;
-				// Check if the existing definition also has no type constraints
-				bool existingHasConstraints = false;
-				for (auto &elem : existingDef->patternElements) {
-					if (!elem.typeConstraintName.empty()) {
-						existingHasConstraints = true;
-						break;
-					}
-				}
-				if (!existingHasConstraints)
-					return existingDef;
-			}
-		}
 		// Add this definition to the endpoint
 		if (std::find(node->matchingDefinitions.begin(), node->matchingDefinitions.end(), definition) ==
 			node->matchingDefinitions.end()) {
 			node->matchingDefinitions.push_back(definition);
 		}
 	}
-	return nullptr;
 }
 
 // Recursively remove a definition from the tree, walking the element path.
@@ -357,5 +332,7 @@ static void removeDefinitionPath(
 }
 
 void PatternTreeNode::removePatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition) {
+	assert(definition && "pattern tree removal requires a definition");
 	removeDefinitionPath(this, elements, 0, definition);
+	definition->endNodes.clear();
 }

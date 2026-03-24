@@ -10,6 +10,15 @@ struct AcceptedLiteralMatch {
 	PatternTreeNode *node{};
 };
 
+struct MatchedArgument {
+	enum class Kind { Expression, SubMatch, Variable, Word };
+
+	size_t argumentIndex{};
+	Kind kind{};
+	Expression *expression{};
+	size_t itemIndex{};
+};
+
 struct PatternMatch {
 	PatternTreeNode *matchedEndNode;
 	size_t lineStartPos;
@@ -19,8 +28,7 @@ struct PatternMatch {
 	std::vector<WordMatch> discoveredWords{};
 	std::vector<AcceptedLiteralMatch> acceptedLiterals{};
 	std::vector<PatternMatch> subMatches{};
-	// the arguments
-	std::vector<Expression *> arguments;
+	std::vector<MatchedArgument> orderedArguments{};
 
 	// Format signature from nodesPassed, e.g. "$ + $", "print $"
 	std::string toString() const {

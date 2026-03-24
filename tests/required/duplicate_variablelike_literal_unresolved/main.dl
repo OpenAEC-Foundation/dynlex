@@ -1,0 +1,9 @@
+function a zero padded string from value with width width:
+    replacement:
+        width
+
+function wrap value:
+    replacement:
+        value
+
+wrap a zero padded string from 1 with width 2

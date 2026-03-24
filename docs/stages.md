@@ -37,15 +37,23 @@ since we are fully agnostic, we will make all left expressions subexpressions:
 (print x) as line.
 ((x + x) + x) + x.
 
+we sort all expression arguments by their source position, since they didn't get added in order. after this, NO sorting is done.
+
+# macro expansion stage
+we expand all macro's. after this stage, no macro calls are found anymore.
+
+# validation stage
+
 # type resolution stage
 
 we loop over the code like it would get executed.
 we track each variable that would possibly be a constant. a variable reference can be constant. constant means compile time evaluated here. it doesn't guarantee that the value doesn't change, later.
-we can reorder expressions based on types, but we cannot change what's a variable and what not.
+we can reorder expressions based on types if this is the first valid instantiation, but we cannot change what's a variable and what not.
+ALL types of each previous line have to be deduced when right away except in recursive function code.
 
 we only go over loops once. variables modified in there are marked as non-constant.
 
-(print x) as line is incorrect, since void as argument is not allowed unless explicitly specified in the pattern and print x returns void. we know this because we expand print x, which is a macro pattern, to the intrinsic("print") and that intrinsic returns void. when encountering a non-macro function, we do the same, but instead of expanding it, we instantiate it and walk over the code just like we do with the code in the main section. we store the return type of non-macro functions so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume non-macro functions always return the same type for the same argument types and constants.
+(print x) as line is incorrect, since void as argument is not allowed unless explicitly specified in the pattern and print x returns void. we know this because we instantiate print x and walk over the code just like we do with the code in the main section. we store the return type so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume  functions always return the same type for the same argument types and constants.
 
 all instantiations of a function have the same operand reordering for each code line, but can use different overloads. the first valid instantiation determines reordering.
 
@@ -54,7 +62,7 @@ all instantiations of a function have the same operand reordering for each code 
 we iterate over all possible operand orders until we find a valid one.
 
 all instantiation types are known when instantiating a function and do not change. we use this fact for reordering.
-the only exception is the store intrinsic: it takes a value whose first arguments type should be determined by its second arguments type. this only affects macros.
+the only exception is the store intrinsic: it takes a value whose first arguments type should be determined by its second arguments type. therefore, a store intrinsic wrapper has to be a macro function, so it expands before types are checked.
 
 we prefer depth-first, just like pattern matching.
 

@@ -5,4 +5,5 @@ struct FunctionSection : public DefinitionSection {
 	inline FunctionSection(Section *parent = {}) : DefinitionSection(SectionType::Function, parent) {}
 
 	virtual Section *createSection(ParseContext &context, CodeLine *line) override;
+	virtual bool finalize(ParseContext &context) override;
 };

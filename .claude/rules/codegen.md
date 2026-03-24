@@ -47,6 +47,13 @@ paths:
 - Fragment: `gl_FragCoord` (input, BuiltIn FragCoord), `gl_FragColor` (output, Location 0)
 - Vertex: `in_Position` (input, Location 0), `gl_Position` (output, BuiltIn Position)
 
+## WebAssembly Compilation
+- `--emit-wasm` emits a WebAssembly binary artifact through LLVM's WebAssembly backend
+- The wasm emitter is a separate backend path like SPIR-V, not an extension of native linking
+- The first-stage wasm output is emitted directly from LLVM; browser runtime imports and final playground wiring are separate concerns
+- The wasm emitter patches the emitted module to export `main` and strips object-only custom sections like `linking` / `reloc.*` from the final runtime artifact
+- Web-facing output should funnel through string writes, not per-type print overload explosions. Keep formatting/conversion in DynLex (`as a string`), and keep the wasm host ABI to environment functions like `dynlex_print_string` plus the libc-shaped imports the current stdlib/tests still use (`malloc`, `memcpy`, `snprintf`, `strlen`, `printf`, etc.).
+
 ## Sized Type System
 - `int byteSize` on Type: Integer 1/2/4/8, Float 4/8, others 0
 - `toLLVM()`: i8/i16/i32/i64, f32/f64. Default: Numeric → i32, float literals → f64

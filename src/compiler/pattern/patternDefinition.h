@@ -5,6 +5,7 @@
 #include <climits>
 #include <string_view>
 struct Section;
+struct PatternTreeNode;
 struct PatternDefinition {
 	Range range;
 	// the section that contains this pattern definition
@@ -13,6 +14,8 @@ struct PatternDefinition {
 	std::vector<DefinitionPatternElement> patternElements;
 	// when resolved, this pattern has been added to the pattern tree
 	bool resolved{};
+	// the exact trie endpoint nodes this definition currently ends at
+	std::vector<PatternTreeNode *> endNodes;
 	// precedence level (higher = evaluated first). 0 = no precedence declared.
 	int precedence = 0;
 	PatternDefinition(Range range, Section *section);

@@ -7,11 +7,14 @@
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
+#include "pattern/patternReference.h"
 #include "pattern/pattern_tree/patternElement.h"
+#include "pattern/pattern_tree/patternMatch.h"
 #include "pattern/pattern_tree/patternTreeNode.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
+#include <cassert>
 #include <cctype>
 #include <filesystem>
 #include <regex>
@@ -489,6 +492,134 @@ static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &
 static bool
 resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef);
 
+static Expression *createTemporaryTypeReferenceExpression(Range sourceRange) {
+	Expression *expr = new Expression();
+	expr->range = sourceRange;
+	expr->kind = Expression::Kind::Pending;
+	PatternReference *reference = new PatternReference(expr, SectionType::Function);
+	expr->patternReference = reference;
+
+	std::string patternSnapshot = reference->pattern.text;
+	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
+	for (size_t pos = 0; pos < patternSnapshot.size();) {
+		size_t start = pos;
+		if (pos > 0) {
+			unsigned char prev = static_cast<unsigned char>(patternSnapshot[pos - 1]);
+			if (std::isalnum(prev) || prev == '_') {
+				pos = start + 1;
+				continue;
+			}
+		}
+		if (pos >= patternSnapshot.size() || !std::isdigit(static_cast<unsigned char>(patternSnapshot[pos]))) {
+			pos = start + 1;
+			continue;
+		}
+		size_t intStart = pos;
+		while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+			pos++;
+		if (pos < patternSnapshot.size() && patternSnapshot[pos] == '.') {
+			size_t dotPos = pos;
+			pos++;
+			size_t fracStart = pos;
+			while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+				pos++;
+			if (fracStart == pos)
+				pos = dotPos;
+		}
+		if (pos < patternSnapshot.size() && std::isalnum(static_cast<unsigned char>(patternSnapshot[pos]))) {
+			pos = intStart + 1;
+			continue;
+		}
+		numMatches.emplace_back(intStart, pos, std::string(patternSnapshot.substr(intStart, pos - intStart)));
+	}
+
+	std::vector<Expression *> numExprs;
+	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
+		auto &[pos, endPos, numStr] = *it;
+		Expression *numExpr = new Expression();
+		size_t lineStart = reference->pattern.getLinePos(pos);
+		size_t lineEnd = reference->pattern.getLinePos(endPos);
+		numExpr->range = sourceRange.subRange(static_cast<int>(lineStart), static_cast<int>(lineEnd));
+		numExpr->kind = Expression::Kind::Literal;
+		numExpr->literalValue = std::stod(numStr);
+		numExprs.push_back(numExpr);
+		reference->pattern.replacePattern(pos, endPos);
+	}
+	std::reverse(numExprs.begin(), numExprs.end());
+	for (Expression *numExpr : numExprs)
+		expr->arguments.push_back(numExpr);
+	expr->arguments = sortArgumentsByPosition(expr->arguments);
+	reference->patternElements = getPatternElements(reference->pattern.text);
+	return expr;
+}
+
+bool resolveTypeConstraintExpression(
+	ParseContext &context, Section *section, Range sourceRange, std::string_view typeConstraintExpression, DataType &outTypeRef
+) {
+	if (!section || !sourceRange.line || typeConstraintExpression.empty())
+		return false;
+
+	size_t diagnosticCount = context.diagnostics.size();
+	Expression *typeExpr = createTemporaryTypeReferenceExpression(sourceRange);
+	auto deleteTemporaryExpressionTree = [](Expression *root) {
+		std::unordered_set<Expression *> visited;
+		std::function<void(Expression *)> visit = [&](Expression *expression) {
+			if (!expression || !visited.insert(expression).second)
+				return;
+			for (Expression *argument : expression->arguments)
+				visit(argument);
+			delete expression->patternReference;
+			delete expression;
+		};
+		visit(root);
+	};
+
+	if (!typeExpr) {
+		context.diagnostics.resize(diagnosticCount);
+		return false;
+	}
+
+	auto materializeTemporaryVariableReferences =
+		[&context](PatternReference *reference, PatternMatch &match, auto &self) -> void {
+		int offset = reference->range().start();
+		for (VariableMatch &varMatch : match.discoveredVariables) {
+			if (varMatch.variableReference)
+				continue;
+			varMatch.variableReference = context.createVariableReference(
+				Range(reference->range().line, offset + varMatch.lineStartPos, offset + varMatch.lineEndPos), varMatch.name
+			);
+		}
+		for (PatternMatch &subMatch : match.subMatches)
+			self(reference, subMatch, self);
+	};
+
+	std::function<void(Expression *)> prepareMatches = [&](Expression *expression) {
+		if (!expression)
+			return;
+		for (Expression *argument : expression->arguments)
+			prepareMatches(argument);
+		if (expression->kind != Expression::Kind::Pending || !expression->patternReference)
+			return;
+		PatternReference *reference = expression->patternReference;
+		reference->patternElements = getPatternElements(reference->pattern.text);
+		if (!reference->match)
+			reference->match = context.match(reference);
+		if (reference->match)
+			materializeTemporaryVariableReferences(reference, *reference->match, materializeTemporaryVariableReferences);
+	};
+
+	prepareMatches(typeExpr);
+	if (typeExpr->kind == Expression::Kind::Pending)
+		expandPendingTypeReferenceExpression(typeExpr, section);
+
+	bool resolved =
+		resolveTypeReferenceExpression(context, typeExpr, {}, outTypeRef) && outTypeRef.kind == DataType::Kind::Type;
+	deleteTemporaryExpressionTree(typeExpr);
+	if (!resolved)
+		context.diagnostics.resize(diagnosticCount);
+	return resolved;
+}
+
 static bool instantiateClassTypeReference(
 	ParseContext &context, ClassDefinition *classDef, const BindingMap &bindings, DataType &outTypeRef
 ) {
@@ -510,8 +641,10 @@ static bool instantiateClassTypeReference(
 
 			DataType fieldTypeRef;
 			if (!resolveTypeReferenceExpression(context, fieldType.typeExpression, bindings, fieldTypeRef) ||
-				fieldTypeRef.kind != DataType::Kind::Type)
-				return false;
+				fieldTypeRef.kind != DataType::Kind::Type) {
+				outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+				return true;
+			}
 			fieldType = concretizeClassType(fieldTypeRef.toReferencedType());
 		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
 			fieldType = concretizeClassType(fieldType);
@@ -529,10 +662,44 @@ static bool instantiateClassTypeReference(
 	return true;
 }
 
+static std::string_view singleTokenPendingName(Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::Pending || !expr->patternReference)
+		return {};
+	auto &elements = expr->patternReference->patternElements;
+	if (elements.empty())
+		elements = getPatternElements(expr->patternReference->pattern.text);
+	if (elements.size() != 1)
+		return {};
+	if (elements[0].type != PatternElement::Type::Variable && elements[0].type != PatternElement::Type::VariableLike)
+		return {};
+	return elements[0].text;
+}
+
 static bool
 resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef) {
 	if (!expr)
 		return false;
+
+	if (std::string_view pendingName = singleTokenPendingName(expr); !pendingName.empty()) {
+		auto it = bindings.find(std::string(pendingName));
+		if (it != bindings.end())
+			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
+		if (pendingName == "pointer") {
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Int;
+			outTypeRef.numericSize = 1;
+			outTypeRef.pointerDepth = 1;
+			return true;
+		}
+		DataType shorthandType = DataType::fromString(std::string(pendingName));
+		if (shorthandType.isDeduced()) {
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = shorthandType.kind;
+			outTypeRef.numericSize = shorthandType.numericSize;
+			outTypeRef.pointerDepth = shorthandType.pointerDepth;
+			return true;
+		}
+	}
 
 	if (expr->kind == Expression::Kind::Variable && expr->variable) {
 		auto it = bindings.find(expr->variable->name);
@@ -607,7 +774,7 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 	}
 
 	BindingMap innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+	Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
 	if (!bodyExpr)
 		return false;
 
@@ -776,6 +943,10 @@ bool analyzeSections(ParseContext &context) {
 	IndentData data{};
 	Section *currentSection = context.mainSection = new Section(SectionType::Custom);
 	int compiledLineIndex = 0;
+	auto closeSection = [&](Section *section, int endLineIndex) {
+		section->endLineIndex = endLineIndex;
+		return section->finalize(context);
+	};
 	// code lines are added in import order, meaning lines get replaced with
 	// code from imported files. we assume that the indent level of the code of
 	// imported files and the import statements both match.
@@ -850,8 +1021,10 @@ bool analyzeSections(ParseContext &context) {
 			} else {
 				// exit some sections
 				for (int popIndentLevel = oldIndentLevel; popIndentLevel != data.indentLevel; popIndentLevel--) {
+					Section *closingSection = currentSection;
 					currentSection = currentSection->parent;
-					currentSection->endLineIndex = compiledLineIndex + 1;
+					if (!closeSection(closingSection, compiledLineIndex + 1))
+						return false;
 				}
 			}
 		}
@@ -886,6 +1059,12 @@ bool analyzeSections(ParseContext &context) {
 			}
 		}
 		++compiledLineIndex;
+	}
+	while (currentSection != context.mainSection) {
+		Section *closingSection = currentSection;
+		currentSection = currentSection->parent;
+		if (!closeSection(closingSection, compiledLineIndex + 1))
+			return false;
 	}
 
 	// Create instantiations for class definitions where all fields have declared types
@@ -946,18 +1125,13 @@ PatternDefinition *selectOverload(
 		int score = 0;
 		bool constraintFailed = false;
 
-		// Walk nodesPassed to map arguments to parameters for this candidate
 		size_t argIdx = 0;
-		for (PatternTreeNode *node : nodesPassed) {
-			auto paramIt = node->parameterNames.find(candidate);
-			if (paramIt == node->parameterNames.end() || argIdx >= argTypes.size()) {
-				if (paramIt != node->parameterNames.end())
-					argIdx++; // still counts as parameter slot
-				continue;
+		forEachPatternParameterName(nodesPassed, candidate, [&](const std::string &paramName, PatternTreeNode *) {
+			if (constraintFailed || argIdx >= argTypes.size()) {
+				argIdx++;
+				return;
 			}
-
 			// Find the corresponding element in the candidate's definition to get its type constraint
-			const std::string &paramName = paramIt->second;
 			for (auto &elem : candidate->patternElements) {
 				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
 					const DataType &argType = argTypes[argIdx];
@@ -1004,7 +1178,7 @@ PatternDefinition *selectOverload(
 				}
 			}
 			argIdx++;
-		}
+		});
 
 		if (constraintFailed)
 			continue;

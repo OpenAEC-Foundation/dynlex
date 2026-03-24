@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function probe {string:left}:
+    execute:
+        set ch to character 0 of left
+        set result to a new string buffer with length 1
+        set data to the data of result
+        store ch into data at 0
+
+function demo:
+    execute:
+        set s to new string from data "a" with length 1
+        probe s
+
+demo

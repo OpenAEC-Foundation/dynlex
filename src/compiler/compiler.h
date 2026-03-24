@@ -16,9 +16,13 @@ bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);
 bool inferTypes(ParseContext &context);
+bool resolveTypeConstraintExpression(
+	ParseContext &context, Section *section, Range sourceRange, std::string_view typeConstraintExpression, DataType &outTypeRef
+);
 bool ensureSectionInstantiationInferred(
-	ParseContext &context, Section *section, const BindingFrameStack &callBindingFrameStack,
-	const std::vector<DataType> &argTypes, const Instantiation *callerInstantiation = nullptr
+	ParseContext &context, Section *section, PatternDefinition *definition, const std::vector<std::string> &parameterNames,
+	const BindingFrameStack &callerBindingFrameStack, const std::vector<DataType> &argTypes,
+	const Instantiation *callerInstantiation = nullptr
 );
 bool isInternalSourcePath(std::string_view path);
 void expandExpression(Expression *expr, Section *section);

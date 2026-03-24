@@ -924,16 +924,6 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Cast) {
 		// Format: args[0]=value, args[1]=type (TypeReference)
-		// Class-value cast: reinterpret integer handles as class pointers.
-		// Pointer-to-class casts should use ensureType below.
-		if (resultType.kind == DataType::Kind::Class && !resultType.isPointer()) {
-			llvm::Value *val = generateExpressionCode(context, args[0]);
-			DataType fromType = getEffectiveType(context, args[0]);
-			if (val && !fromType.isPointer() && fromType.kind == DataType::Kind::Int)
-				val = builder.CreateIntToPtr(val, llvm::PointerType::getUnqual(*context.llvmContext), "itop_class");
-			return val;
-		}
-
 		llvm::Value *val = generateExpressionCode(context, args[0]);
 		DataType fromType = getEffectiveType(context, args[0]);
 

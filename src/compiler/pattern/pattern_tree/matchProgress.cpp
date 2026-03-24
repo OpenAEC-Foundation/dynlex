@@ -38,6 +38,7 @@ MatchProgress::MatchProgress(const MatchProgress &other) {
 	patternStartPos = other.patternStartPos;
 	patternPos = other.patternPos;
 	sourceArgumentIndex = other.sourceArgumentIndex;
+	matchedArgumentIndex = other.matchedArgumentIndex;
 	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
 }
 
@@ -45,7 +46,8 @@ MatchProgress::MatchProgress(MatchProgress &&other) noexcept
 	: parent(other.parent), context(other.context), rootNode(other.rootNode), currentNode(other.currentNode),
 	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type), options(other.options),
 	  sourceElementIndex(other.sourceElementIndex), sourceCharIndex(other.sourceCharIndex),
-	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex) {
+	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex),
+	  matchedArgumentIndex(other.matchedArgumentIndex) {
 	other.parent = nullptr;
 }
 
@@ -67,6 +69,7 @@ MatchProgress &MatchProgress::operator=(const MatchProgress &other) {
 	patternStartPos = other.patternStartPos;
 	patternPos = other.patternPos;
 	sourceArgumentIndex = other.sourceArgumentIndex;
+	matchedArgumentIndex = other.matchedArgumentIndex;
 	return *this;
 }
 
@@ -89,6 +92,7 @@ MatchProgress &MatchProgress::operator=(MatchProgress &&other) noexcept {
 	patternStartPos = other.patternStartPos;
 	patternPos = other.patternPos;
 	sourceArgumentIndex = other.sourceArgumentIndex;
+	matchedArgumentIndex = other.matchedArgumentIndex;
 	return *this;
 }
 
@@ -110,11 +114,16 @@ std::vector<MatchProgress> MatchProgress::step() {
 		MatchProgress stepUp = parentProgress;
 		PatternMatch subMatch = match;
 		addMatchData(subMatch);
-		stepUp.match.subMatches.push_back(subMatch);
+		size_t subMatchIndex = stepUp.match.subMatches.size();
+		stepUp.match.subMatches.push_back(std::move(subMatch));
+		stepUp.match.orderedArguments.push_back(
+			{stepUp.matchedArgumentIndex, MatchedArgument::Kind::SubMatch, nullptr, subMatchIndex}
+		);
 		// sourceElementIndex stays the same when stepping up, we are already past the last node
 		// (we have compared the last element already, the sourceElementIndex was increased then)
 		stepUp.sourceElementIndex = sourceElementIndex;
 		stepUp.sourceArgumentIndex = sourceArgumentIndex;
+		stepUp.matchedArgumentIndex++;
 		stepUp.patternPos = patternPos;
 		nextMatches.push_back(stepUp);
 	};
@@ -135,6 +144,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 				clone.currentNode = rootNode->argumentChild;
 				clone.match = {};
 				clone.match.nodesPassed.push_back(clone.currentNode);
+				clone.matchedArgumentIndex = 0;
 
 				clone.type = SectionType::Function;
 				stepUp(clone);
@@ -168,13 +178,21 @@ std::vector<MatchProgress> MatchProgress::step() {
 				if (elementToCompare.type == PatternElement::Type::VariableLike) {
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
+					size_t variableIndex = substituteStep.match.discoveredVariables.size();
 					substituteStep.match.discoveredVariables.push_back({elementToCompare.text, lineStart, lineEnd});
+					substituteStep.match.orderedArguments.push_back(
+						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
+					);
 				} else {
 					if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
 						return false;
-					substituteStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+					substituteStep.match.orderedArguments.push_back(
+						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
+						 patternReference->expression->arguments[sourceArgumentIndex], 0}
+					);
 					substituteStep.sourceArgumentIndex++;
 				}
+				substituteStep.matchedArgumentIndex++;
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(substituteStep);
 				return true;
@@ -229,8 +247,12 @@ std::vector<MatchProgress> MatchProgress::step() {
 				acceptedLiteralStep.sourceElementIndex++;
 				if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
 					continue;
-				acceptedLiteralStep.match.arguments.push_back(patternReference->expression->arguments[sourceArgumentIndex]);
+				acceptedLiteralStep.match.orderedArguments.push_back(
+					{acceptedLiteralStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
+					 patternReference->expression->arguments[sourceArgumentIndex], 0}
+				);
 				acceptedLiteralStep.sourceArgumentIndex++;
+				acceptedLiteralStep.matchedArgumentIndex++;
 				acceptedLiteralStep.patternPos += elementToCompare.text.size();
 				acceptedLiteralMatches.push_back(std::move(acceptedLiteralStep));
 			}
@@ -243,7 +265,12 @@ std::vector<MatchProgress> MatchProgress::step() {
 			wordStep.sourceElementIndex++;
 			size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 			size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementToCompare.text.size());
+			size_t wordIndex = wordStep.match.discoveredWords.size();
 			wordStep.match.discoveredWords.push_back({elementToCompare.text, lineStart, lineEnd});
+			wordStep.match.orderedArguments.push_back(
+				{wordStep.matchedArgumentIndex, MatchedArgument::Kind::Word, nullptr, wordIndex}
+			);
+			wordStep.matchedArgumentIndex++;
 			wordStep.patternPos += elementToCompare.text.size();
 			nextMatches.push_back(wordStep);
 		}

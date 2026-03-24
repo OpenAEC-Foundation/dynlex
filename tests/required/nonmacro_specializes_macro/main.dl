@@ -1,0 +1,9 @@
+import lib/std.dl
+
+function consume value:
+    replacement:
+        discard value
+
+function consume {integer:value}:
+    execute:
+        discard value

@@ -1,0 +1,4 @@
+import lib/std.dl
+import lib/string.dl
+
+print the string form of 1 as line

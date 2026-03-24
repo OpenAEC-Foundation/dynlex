@@ -112,65 +112,6 @@ static void collectVariableReferences(Section *section, const std::string &name,
 		collectVariableReferences(child, name, refs);
 }
 
-static Range definitionElementRange(const PatternDefinition *definition, const DefinitionPatternElement &element) {
-	return Range(
-		definition->range.line, definition->range.start() + element.startPos,
-		definition->range.start() + element.startPos + element.text.length()
-	);
-}
-
-static void validateDuplicatePatternWords(ParseContext &context, PatternDefinition *definition) {
-	using FoundRanges = std::unordered_map<std::string, Range>;
-	std::function<FoundRanges(std::vector<DefinitionPatternElement> &, const FoundRanges &)> visit =
-		[&](std::vector<DefinitionPatternElement> &elements, const FoundRanges &incomingFound) {
-		FoundRanges found = incomingFound;
-		for (DefinitionPatternElement &element : elements) {
-			if (element.type == PatternElement::Type::Choice) {
-				FoundRanges foundAfterChoice = found;
-				for (auto &alternative : element.alternatives) {
-					FoundRanges alternativeFound = visit(alternative, found);
-					for (const auto &[name, range] : alternativeFound)
-						foundAfterChoice.try_emplace(name, range);
-				}
-				found = std::move(foundAfterChoice);
-				continue;
-			}
-			if (element.type == PatternElement::Type::Variable) {
-				found.try_emplace(element.text, definitionElementRange(definition, element));
-				continue;
-			}
-			if (element.type != PatternElement::Type::VariableLike)
-				continue;
-			auto foundIt = found.find(element.text);
-			if (foundIt == found.end())
-				continue;
-
-			Diagnostic diagnostic;
-			diagnostic.level = Diagnostic::Level::Warning;
-			diagnostic.range = definitionElementRange(definition, element);
-			diagnostic.message =
-				"Repeated pattern word '" + element.text + "' stays literal because it already became a parameter";
-			diagnostic.relatedInfo.push_back({"The first parameter occurrence was here:", foundIt->second});
-			context.diagnostics.push_back(std::move(diagnostic));
-		}
-		return found;
-	};
-	visit(definition->patternElements, {});
-}
-
-static void validateDuplicatePatternWordsInSection(ParseContext &context, Section *root) {
-	std::list<PatternReference *> bodyReferences;
-	std::list<PatternReference *> globalReferences;
-	std::list<Section *> sections;
-	root->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections);
-	for (Section *section : sections) {
-		if (isInternalSection(section))
-			continue;
-		for (PatternDefinition *definition : section->patternDefinitions)
-			validateDuplicatePatternWords(context, definition);
-	}
-}
-
 static void validateSection(ParseContext &context, Section *section) {
 	if (isInternalSection(section))
 		return;
@@ -238,7 +179,6 @@ static void validateSection(ParseContext &context, Section *section) {
 }
 
 bool validate(ParseContext &context) {
-	validateDuplicatePatternWordsInSection(context, context.mainSection);
 	validateSection(context, context.mainSection);
 	return true;
 }

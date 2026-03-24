@@ -16,3 +16,18 @@ Section *FunctionSection::createSection(ParseContext &context, CodeLine *line) {
 	// Fall back to base class (handles "replacement" for macros, or gives error)
 	return DefinitionSection::createSection(context, line);
 }
+
+bool FunctionSection::finalize(ParseContext &context) {
+	if (!isMacro)
+		return true;
+
+	for (Section *child : children) {
+		if (child->type != SectionType::Before && child->type != SectionType::After)
+			continue;
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "macro functions cannot declare precedence",
+			Range(child->openingLine, child->openingLine->patternText)
+		));
+	}
+	return true;
+}

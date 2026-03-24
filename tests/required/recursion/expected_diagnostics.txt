@@ -1,6 +1,5 @@
-tests/required/recursion/main.dl:25:16-29: Warning: Expression 'n - 1 is even' has multiple valid operand groupings. Using '(n - 1) is even' instead of 'n - (1 is even)'.
-tests/required/recursion/main.dl:19:16-28: Warning: Expression 'n - 1 is odd' has multiple valid operand groupings. Using '(n - 1) is odd' instead of 'n - (1 is odd)'.
-tests/required/recursion/main.dl:40:20-42: Warning: Expression 'n - 1 is even inverted' has multiple valid operand groupings. Using '(n - 1) is even inverted' instead of 'n - (1 is even inverted)'.
-tests/required/recursion/main.dl:34:20-41: Warning: Expression 'n - 1 is odd inverted' has multiple valid operand groupings. Using '(n - 1) is odd inverted' instead of 'n - (1 is odd inverted)'.
-tests/required/recursion/main.dl:59:20-40: Warning: Expression 'n - 1 is even nested' has multiple valid operand groupings. Using '(n - 1) is even nested' instead of 'n - (1 is even nested)'.
-tests/required/recursion/main.dl:50:16-35: Warning: Expression 'n - 1 is odd nested' has multiple valid operand groupings. Using '(n - 1) is odd nested' instead of 'n - (1 is odd nested)'.
+tests/required/recursion/main.dl:25:16-29: Warning: Expression 'n - 1 is even' has multiple valid operand groupings. Using '(n - 1) is even' instead of 'n - (1 is even)'. 
+tests/required/recursion/main.dl:19:16-28: Warning: Expression 'n - 1 is odd' has multiple valid operand groupings. Using '(n - 1) is odd' instead of 'n - (1 is odd)'. 
+tests/required/recursion/main.dl:40:20-42: Warning: Expression 'n - 1 is even inverted' has multiple valid operand groupings. Using '(n - 1) is even inverted' instead of 'n - (1 is even inverted)'. 
+tests/required/recursion/main.dl:34:20-41: Warning: Expression 'n - 1 is odd inverted' has multiple valid operand groupings. Using '(n - 1) is odd inverted' instead of 'n - (1 is odd inverted)'. 
+tests/required/recursion/main.dl:50:16-35: Warning: Expression 'n - 1 is odd nested' has multiple valid operand groupings. Using '(n - 1) is odd nested' instead of 'n - (1 is odd nested)'. 

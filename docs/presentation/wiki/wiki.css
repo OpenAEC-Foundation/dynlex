@@ -1,0 +1,164 @@
+.wiki-shell {
+    position: relative;
+    z-index: 1;
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 6rem 1.25rem 3rem;
+}
+
+.nav {
+    justify-content: center;
+}
+
+.hero-card,
+.doc-card,
+.try-card,
+.section-link-card,
+.term-card {
+    padding: 1.5rem;
+}
+
+.hero-card {
+    margin-bottom: 1.25rem;
+}
+
+.hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.78);
+    margin-bottom: 0.85rem;
+}
+
+.hero-card h1,
+.wiki-header h1 {
+    font-size: clamp(2.2rem, 8vw, 4rem);
+    margin-bottom: 0.8rem;
+    background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.75));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero-card p,
+.doc-card p,
+.doc-card li,
+.try-card p,
+.wiki-header p,
+.term-card p,
+.section-link-card p {
+    color: var(--text-secondary);
+    line-height: 1.75;
+}
+
+.hero-card p + p,
+.doc-card p + p,
+.doc-card p + ul,
+.doc-card ul + p,
+.doc-card .code-block,
+.doc-card .pattern-box,
+.doc-card .related-grid,
+.try-card,
+.section-link-card .pattern-box {
+    margin-top: 1rem;
+}
+
+.doc-stack,
+.terms-grid,
+.section-links,
+.related-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.wiki-header {
+    margin-bottom: 2rem;
+}
+
+.doc-card h2,
+.section-link-card h2,
+.term-card h2 {
+    font-size: 1.55rem;
+    margin-bottom: 0.75rem;
+}
+
+.doc-card h3,
+.try-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.55rem;
+}
+
+.doc-card ul {
+    padding-left: 1.25rem;
+}
+
+.code-block,
+.pattern-box {
+    margin: 0;
+}
+
+.code-block pre,
+.pattern-box pre {
+    white-space: pre-wrap;
+}
+
+.step-label {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.78);
+    margin-bottom: 0.85rem;
+}
+
+.try-card {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.17), rgba(245, 87, 108, 0.14));
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 18px;
+}
+
+.note {
+    font-size: 0.95rem;
+}
+
+a.inline-link,
+.section-link-card a,
+.related-grid a {
+    color: #ffffff;
+    text-decoration-color: rgba(255, 255, 255, 0.35);
+}
+
+a.inline-link:hover,
+.section-link-card a:hover,
+.related-grid a:hover {
+    text-decoration-color: rgba(255, 255, 255, 0.7);
+}
+
+.pattern-box {
+    background: var(--code-bg);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 1rem 1.1rem;
+}
+
+.section-links {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.section-link-card h2 {
+    font-size: 1.2rem;
+}
+
+.related-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}

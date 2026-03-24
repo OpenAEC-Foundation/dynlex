@@ -1,0 +1,22 @@
+import lib/std.dl
+
+function wasm output msg:
+    replacement:
+        @intrinsic("call", "env", "dynlex_print_i64", an integer, msg as a 64 bit integer)
+
+function native output msg:
+    replacement:
+        @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
+
+function output msg:
+    execute:
+        discard (wasm output msg) if (the build platform) = "wasm", else (native output msg)
+
+set one to 1 as a boolean
+set zero to 0 as a boolean
+
+output one
+output zero
+
+if 2 as a boolean:
+    output 1

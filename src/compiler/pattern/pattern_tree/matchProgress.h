@@ -38,6 +38,7 @@ struct MatchProgress {
 	size_t patternStartPos{}; // where this match started in pattern
 	size_t patternPos{};	  // current position in pattern
 	size_t sourceArgumentIndex{};
+	size_t matchedArgumentIndex{};
 	// returns a vector containing alternative steps we could take through the pattern tree, ordered from least important ([0])
 	// to most important ([length() - 1])
 	std::vector<MatchProgress> step();

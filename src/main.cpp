@@ -44,7 +44,7 @@ static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &ou
 // if no arguments are given, the program will print its arguments to the console
 // --lsp flag starts the language server on TCP port 5007 by default
 // --stdio flag starts the language server on stdin/stdout (for MCP integration)
-// --emit-llvm outputs .ll file instead of executable
+// --emit-llvm outputs .ll, --emit-wasm outputs a wasm artifact, otherwise native executable
 // --version prints DynLex version and exits
 int main(int argumentCount, char *argumentValues[]) {
 	std::vector<std::string> args(argumentValues + 1, argumentValues + argumentCount);
@@ -111,6 +111,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			emitCompletions = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
+		} else if (arg == "--emit-wasm") {
+			context.options.emitWASM = true;
 		} else if (arg == "--emit-spirv") {
 			context.options.emitSPIRV = true;
 		} else if (arg == "--shader-stage=vertex") {
@@ -136,6 +138,15 @@ int main(int argumentCount, char *argumentValues[]) {
 		} else if (!arg.starts_with("-")) {
 			inputFile = arg;
 		}
+	}
+
+	int explicitOutputModes = 0;
+	explicitOutputModes += context.options.emitLLVM ? 1 : 0;
+	explicitOutputModes += context.options.emitWASM ? 1 : 0;
+	explicitOutputModes += context.options.emitSPIRV ? 1 : 0;
+	if (explicitOutputModes > 1) {
+		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-wasm, or --emit-spirv" << std::endl;
+		return 1;
 	}
 
 	if (waitDebugger) {
@@ -187,7 +198,7 @@ int main(int argumentCount, char *argumentValues[]) {
 		if (hasErrors)
 			return 1;
 	} else {
-		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-spirv] [--emit-completions line:column] "
+		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-wasm] [--emit-spirv] [--emit-completions line:column] "
 					 "[--shader-stage=vertex|fragment] "
 					 "[-O0|-O1|-O2|-O3] "
 					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]] [--version]"

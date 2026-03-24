@@ -7,8 +7,10 @@
 #include "stringHierarchy.h"
 #include "type.h"
 #include "variableReference.h"
+#include <compare>
 #include <list>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -23,6 +25,42 @@ struct ParseContext;
 struct Variable;
 struct Expression;
 struct PatternDefinition;
+
+struct InstantiationKey {
+	std::vector<DataType> argumentTypes;
+	std::vector<std::pair<std::string, CompileTimeValue>> compileTimeParameters;
+
+	auto operator<=>(const InstantiationKey &) const = default;
+};
+
+inline bool parameterRequiresCompileTimeInstantiationValue(
+	const std::unordered_set<std::string> &requiredCompileTimeParameters, const std::string &parameterName,
+	const DataType &argType
+) {
+	return argType.kind == DataType::Kind::Type || requiredCompileTimeParameters.contains(parameterName);
+}
+
+template <typename EvaluateCompileTimeFn>
+inline InstantiationKey buildInstantiationKey(
+	const std::unordered_set<std::string> &requiredCompileTimeParameters,
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
+	EvaluateCompileTimeFn &&evaluateCompileTime
+) {
+	InstantiationKey key;
+	key.argumentTypes = argTypes;
+	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
+	for (size_t i = 0; i < bindingCount; i++) {
+		if (!parameterRequiresCompileTimeInstantiationValue(requiredCompileTimeParameters, paramBindings[i].first, argTypes[i]))
+			continue;
+		if (argTypes[i].kind == DataType::Kind::Type) {
+			key.compileTimeParameters.push_back({paramBindings[i].first, argTypes[i]});
+			continue;
+		}
+		key.compileTimeParameters.push_back({paramBindings[i].first, evaluateCompileTime(paramBindings[i].second)});
+	}
+	return key;
+}
+
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
@@ -63,8 +101,9 @@ struct Section {
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
 	std::unordered_map<std::string, Variable *> variables;
-	// Monomorphization: each argument type combination gets its own instantiation
-	std::map<std::vector<DataType>, Instantiation> instantiations;
+	// Monomorphization: each unique combination of runtime argument types and
+	// compile-time parameter values gets its own instantiation.
+	std::map<InstantiationKey, Instantiation> instantiations;
 	// the start and end index of this section in compiled lines.
 	int startLineIndex, endLineIndex;
 	// count of unresolved pattern references + unresolved child sections
@@ -99,6 +138,7 @@ struct Section {
 	);
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
+	virtual bool finalize(ParseContext &context);
 	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
 	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
@@ -118,3 +158,21 @@ struct Section {
 
 	virtual std::string toString() const { return openingLine ? std::string(openingLine->patternText) : "main"; }
 };
+
+template <typename EvaluateCompileTimeFn>
+inline std::optional<InstantiationKey> findMatchingInstantiationKey(
+	Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	const std::vector<DataType> &argTypes, EvaluateCompileTimeFn &&evaluateCompileTime
+) {
+	if (!section)
+		return std::nullopt;
+	for (const auto &[candidateKey, instantiation] : section->instantiations) {
+		if (candidateKey.argumentTypes != argTypes)
+			continue;
+		if (buildInstantiationKey(instantiation.requiredCompileTimeParameters, paramBindings, argTypes, evaluateCompileTime) ==
+			candidateKey) {
+			return candidateKey;
+		}
+	}
+	return std::nullopt;
+}

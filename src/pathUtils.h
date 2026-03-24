@@ -21,4 +21,19 @@ inline std::string toAbsoluteUri(std::string_view uriOrPath) {
 	return std::string(fileUriScheme) + std::filesystem::absolute(toFilesystemPath(uriOrPath)).string();
 }
 
+inline std::string toDisplayPath(std::string_view uriOrPath) {
+	std::filesystem::path filesystemPath = std::filesystem::absolute(toFilesystemPath(uriOrPath)).lexically_normal();
+	std::error_code error;
+	std::filesystem::path currentPath = std::filesystem::current_path(error);
+	if (!error) {
+		std::filesystem::path relativePath = std::filesystem::relative(filesystemPath, currentPath, error);
+		if (!error && !relativePath.empty()) {
+			std::string relative = relativePath.generic_string();
+			if (!relative.starts_with(".."))
+				return relative;
+		}
+	}
+	return filesystemPath.generic_string();
+}
+
 } // namespace pathutil

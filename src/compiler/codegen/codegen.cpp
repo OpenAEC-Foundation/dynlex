@@ -14,6 +14,7 @@
 #include "spirv.h"
 #include "type.h"
 #include "variable.h"
+#include "wasm.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -28,32 +29,65 @@
 #include <algorithm>
 #include <unordered_map>
 
+static std::vector<size_t> collectRuntimeParameterIndices(
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const Instantiation &inst
+) {
+	std::vector<size_t> runtimeIndices;
+	runtimeIndices.reserve(paramBindings.size());
+	for (size_t i = 0; i < paramBindings.size(); i++) {
+		if (inst.requiredCompileTimeParameters.contains(paramBindings[i].first))
+			continue;
+		runtimeIndices.push_back(i);
+	}
+	return runtimeIndices;
+}
+
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
-void generateSpecializedFunction(
+Instantiation *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes, Instantiation &inst
+	const std::vector<DataType> &argTypes
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	PatternDefinition *definition = section->patternDefinitions.empty() ? nullptr : section->patternDefinitions.front();
+	auto evaluateParameterValue = [&](Expression *argumentExpression) {
+		return argumentExpression
+				   ? evaluateCompileTimeValue(
+						 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
+					 )
+				   : CompileTimeValue{};
+	};
+	InstantiationKey instantiationKey =
+		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
+			.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+	auto instIt = section->instantiations.find(instantiationKey);
+	if (instIt == section->instantiations.end())
+		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
+	Instantiation &inst = instIt->second;
+	if (inst.argumentTypes.empty())
+		inst.argumentTypes = argTypes;
+	else
+		assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
 
-	std::vector<std::string> varNames;
-	for (const auto &[name, expr] : paramBindings) {
-		varNames.push_back(name);
-	}
-
-	// All parameters are opaque pointers
-	std::vector<llvm::Type *> paramTypes(varNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
-
-	auto it = section->instantiations.find(argTypes);
-	assert(it != section->instantiations.end() && "Missing instantiation for arg types");
-	if (!it->second.returnType.isDeduced()) {
+	if (!inst.returnType.isDeduced() || inst.needsReinfer) {
 		BindingMap callBindings;
+		std::vector<std::string> parameterNames;
 		for (const auto &[name, expr] : paramBindings)
 			callBindings[name] = expr;
-		ensureSectionInstantiationInferred(context, section, makeBindingFrameStack(callBindings), argTypes);
-		it = section->instantiations.find(argTypes);
+		for (const auto &[name, ignoredExpr] : paramBindings) {
+			(void)ignoredExpr;
+			parameterNames.push_back(name);
+		}
+		ensureSectionInstantiationInferred(
+			context, section, definition, parameterNames, makeBindingFrameStack(callBindings), argTypes
+		);
+		instantiationKey = findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
+							   .value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+		instIt = section->instantiations.find(instantiationKey);
+		assert(instIt != section->instantiations.end() && "Missing instantiation after inference");
 	}
-	if (!it->second.returnType.isDeduced()) {
+	Instantiation &activeInst = instIt->second;
+	if (!activeInst.returnType.isDeduced()) {
 		fprintf(
 			stderr, "UNDEDUCED: '%s' args=[",
 			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString).c_str()
@@ -64,7 +98,16 @@ void generateSpecializedFunction(
 		fflush(stderr);
 		assert(false && "Return type must be deduced before codegen");
 	}
-	llvm::Type *returnType = getLLVMType(context, it->second.returnType);
+	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(paramBindings, activeInst);
+	std::vector<std::string> runtimeParameterNames;
+	runtimeParameterNames.reserve(runtimeParameterIndices.size());
+	for (size_t runtimeParameterIndex : runtimeParameterIndices)
+		runtimeParameterNames.push_back(paramBindings[runtimeParameterIndex].first);
+
+	// All runtime parameters are opaque pointers. Compile-time-only parameters
+	// stay in patternParamTypes but do not become LLVM function arguments.
+	std::vector<llvm::Type *> paramTypes(runtimeParameterNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
+	llvm::Type *returnType = getLLVMType(context, activeInst.returnType);
 
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
 
@@ -75,11 +118,11 @@ void generateSpecializedFunction(
 	}
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
-	inst.llvmFunction = func;
+	activeInst.llvmFunction = func;
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
-		arg.setName(varNames[argIdx++]);
+		arg.setName(runtimeParameterNames[argIdx++]);
 	}
 
 	// Create debug info subprogram
@@ -114,14 +157,16 @@ void generateSpecializedFunction(
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
 	context.patternParamTypes.clear();
-	assert(inst.argumentTypes == argTypes && "Codegen argTypes diverged from instantiation signature");
+	assert(activeInst.argumentTypes == argTypes && "Codegen argTypes diverged from instantiation signature");
+	for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++)
+		context.patternParamTypes[paramBindings[i].first] = argTypes[i];
 	argIdx = 0;
 	for (auto &arg : func->args()) {
-		context.patternBindings[varNames[argIdx]] = &arg;
-		context.patternParamTypes[varNames[argIdx]] = argTypes[argIdx];
+		size_t parameterIndex = runtimeParameterIndices[argIdx];
+		context.patternBindings[paramBindings[parameterIndex].first] = &arg;
 		argIdx++;
 	}
-	context.currentCodegenInstantiation = &inst;
+	context.currentCodegenInstantiation = &activeInst;
 
 	// Generate function body
 	for (Section *child : section->children) {
@@ -129,7 +174,7 @@ void generateSpecializedFunction(
 	}
 
 	// Add implicit void return if the function returns void
-	if (inst.returnType.kind == DataType::Kind::Void) {
+	if (activeInst.returnType.kind == DataType::Kind::Void) {
 		builder.CreateRetVoid();
 	}
 
@@ -144,6 +189,7 @@ void generateSpecializedFunction(
 		builder.SetInsertPoint(savedBlock, savedPoint);
 		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
+	return &activeInst;
 }
 
 static DataType concretizeCallableType(DataType type) {
@@ -251,15 +297,20 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 	}
 
 	Section *section = definition->section;
-	Instantiation &inst = section->instantiations[argTypes];
-	if (inst.argumentTypes.empty()) {
-		inst.argumentTypes = argTypes;
+	InstantiationKey instantiationKey = buildInstantiationKey({}, paramBindings, argTypes, [](Expression *) {
+		return CompileTimeValue{};
+	});
+	Instantiation *inst = &section->instantiations[instantiationKey];
+	if (inst->argumentTypes.empty()) {
+		inst->argumentTypes = argTypes;
 	} else {
-		assert(inst.argumentTypes == argTypes && "Callable signature diverged from instantiation key");
+		assert(inst->argumentTypes == argTypes && "Callable signature diverged from instantiation key");
 	}
-	if (!inst.llvmFunction)
-		generateSpecializedFunction(context, section, paramBindings, argTypes, inst);
-	if (!inst.returnType.isDeduced() || !inst.valid) {
+	if (!inst->llvmFunction) {
+		inst = generateSpecializedFunction(context, section, paramBindings, argTypes);
+		assert(inst && "Missing generated instantiation");
+	}
+	if (!inst->returnType.isDeduced() || !inst->valid) {
 		Diagnostic diagnostic;
 		diagnostic.level = Diagnostic::Level::Error;
 		diagnostic.range = definition->range;
@@ -267,7 +318,7 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 		context.addDiagnostic(std::move(diagnostic));
 		return nullptr;
 	}
-	if (inst.needsReinfer || !inst.requiredCompileTimeParameters.empty()) {
+	if (inst->needsReinfer || !inst->requiredCompileTimeParameters.empty()) {
 		Diagnostic diagnostic;
 		diagnostic.level = Diagnostic::Level::Error;
 		diagnostic.range = definition->range;
@@ -275,10 +326,10 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 		context.addDiagnostic(std::move(diagnostic));
 		return nullptr;
 	}
-	if (inst.llvmCallableFunction) {
+	if (inst->llvmCallableFunction) {
 		if (requireExternalLinkage)
-			inst.llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
-		return inst.llvmCallableFunction;
+			inst->llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return inst->llvmCallableFunction;
 	}
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -286,14 +337,14 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 	parameterTypes.reserve(argTypes.size());
 	for (const DataType &parameterType : argTypes)
 		parameterTypes.push_back(getLLVMType(context, parameterType));
-	llvm::Type *returnType = getLLVMType(context, inst.returnType);
+	llvm::Type *returnType = getLLVMType(context, inst->returnType);
 	llvm::FunctionType *callableType = llvm::FunctionType::get(returnType, parameterTypes, false);
 	std::string callableName = buildCallableFunctionName(definition, argTypes);
 	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
 												  ? llvm::GlobalValue::ExternalLinkage
 												  : llvm::GlobalValue::InternalLinkage;
 	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
-	inst.llvmCallableFunction = callableFunction;
+	inst->llvmCallableFunction = callableFunction;
 
 	size_t argumentIndex = 0;
 	for (llvm::Argument &argument : callableFunction->args())
@@ -316,8 +367,8 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 		argumentIndex++;
 	}
 
-	llvm::CallInst *call = builder.CreateCall(inst.llvmFunction, callArguments);
-	if (inst.returnType.kind == DataType::Kind::Void) {
+	llvm::CallInst *call = builder.CreateCall(inst->llvmFunction, callArguments);
+	if (inst->returnType.kind == DataType::Kind::Void) {
 		builder.CreateRetVoid();
 	} else {
 		builder.CreateRet(call);
@@ -471,6 +522,18 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Build parameter name → argument expression mapping
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
+		if (matchedSection->isMacro && matchedSection->type == SectionType::Function) {
+			BindingMap innerBindings;
+			Expression *bodyExpr = expandMacroPatternCall(context, expr, matchedDef, innerBindings);
+			if (!bodyExpr)
+				return nullptr;
+
+			pushBindingScope(context.macroBindingFrames, std::move(innerBindings));
+			llvm::Value *result = generateExpressionCode(context, bodyExpr);
+			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after function macro codegen");
+			return result;
+		}
+
 		if (matchedSection->isMacro) {
 			// Macro: inline the body with expression substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
@@ -535,31 +598,44 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		}
 
 		// Look up or generate the specialized function
-		Instantiation &inst = matchedSection->instantiations[argTypes];
-		if (inst.argumentTypes.empty()) {
-			inst.argumentTypes = argTypes;
+		auto evaluateParameterValue = [&](Expression *argumentExpression) {
+			return argumentExpression
+					   ? evaluateCompileTimeValue(
+							 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
+						 )
+					   : CompileTimeValue{};
+		};
+		InstantiationKey instantiationKey =
+			findMatchingInstantiationKey(matchedSection, paramBindings, argTypes, evaluateParameterValue)
+				.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+		Instantiation *inst = &matchedSection->instantiations[instantiationKey];
+		if (inst->argumentTypes.empty()) {
+			inst->argumentTypes = argTypes;
 		} else {
-			assert(inst.argumentTypes == argTypes && "Codegen instantiation signature diverged from lookup key");
+			assert(inst->argumentTypes == argTypes && "Codegen instantiation signature diverged from lookup key");
 		}
-		if (!inst.llvmFunction) {
-			generateSpecializedFunction(context, matchedSection, paramBindings, argTypes, inst);
+		if (!inst->llvmFunction) {
+			inst = generateSpecializedFunction(context, matchedSection, paramBindings, argTypes);
+			assert(inst && "Missing generated instantiation");
 		}
-		llvm::Function *func = inst.llvmFunction;
+		llvm::Function *func = inst->llvmFunction;
 
 		// Build call arguments: pass variable pointers or temp allocas
 		std::vector<llvm::Value *> args;
 		for (size_t i = 0; i < paramBindings.size(); i++) {
+			if (inst->requiredCompileTimeParameters.contains(paramBindings[i].first))
+				continue;
 			Expression *argExpr = paramBindings[i].second;
 			llvm::Value *ptr = getVariablePointer(context, argExpr);
 			if (ptr) {
 				args.push_back(ptr);
 			} else {
 				llvm::Value *argVal = generateExpressionCode(context, argExpr);
-				if (argVal) {
-					llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[i]);
-					builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
-					args.push_back(tempAlloca);
-				}
+				if (!argVal)
+					crashCompilerBug("Runtime call argument produced no code");
+				llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[i]);
+				builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
+				args.push_back(tempAlloca);
 			}
 		}
 
@@ -574,6 +650,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	case Expression::Kind::Pending:
 		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pending expression", expr->range));
 		return nullptr;
+
+	case Expression::Kind::TypedPlaceholder:
+		crashCompilerBug("Typed placeholder reached codegen");
 	}
 
 	return nullptr;
@@ -595,7 +674,7 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 		});
 		if (header->kind == Expression::Kind::PatternCall) {
 			BindingMap innerBindings;
-			Expression *expanded = expandMacroPatternCall(header, innerBindings);
+			Expression *expanded = expandMacroPatternCall(context, header, innerBindings);
 			if (expanded) {
 				header = expanded;
 				for (const auto &[name, argExpr] : innerBindings)
@@ -688,6 +767,16 @@ bool generateCode(ParseContext &context) {
 			return false;
 		}
 		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	} else if (context.options.emitWASM) {
+		std::string error;
+		std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, error);
+		if (!targetMachine) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", error)
+			);
+			return false;
+		}
+		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 	} else {
 		context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 	}
@@ -738,7 +827,7 @@ bool generateCode(ParseContext &context) {
 		// "shader uniform" intrinsics are encountered (see generateIntrinsicCode).
 	}
 
-	// Create main function: void main() for shaders, int main() for native
+	// Create main function: void main() for shaders, int main() for CPU/WASM
 	llvm::Function *mainFunc;
 	if (context.options.emitSPIRV) {
 		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getVoidTy(), false);
@@ -845,6 +934,9 @@ bool generateCode(ParseContext &context) {
 	// Output
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
+			return false;
+	} else if (context.options.emitWASM) {
+		if (!emitWASMModule(context))
 			return false;
 	} else if (context.options.emitLLVM) {
 		std::string outputPath = context.options.outputPath;

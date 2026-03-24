@@ -103,6 +103,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	return newSection;
 }
 
+bool Section::finalize(ParseContext & /*context*/) { return true; }
+
 StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 	std::stack<StringHierarchy *> nodeStack;
 	StringHierarchy *base = new StringHierarchy(0, 0);
@@ -277,8 +279,6 @@ static Expression *createArrayLiteral(Section *section, ParseContext &context, R
 				return nullptr;
 		}
 	}
-
-	arrayExpr->arguments = sortArgumentsByPosition(arrayExpr->arguments);
 	return arrayExpr;
 }
 
@@ -340,6 +340,8 @@ Section::detectPatternsRecursively(ParseContext &context, Range range, StringHie
 					}
 					if (!argExpr)
 						return false;
+					if (argNode->character == '(')
+						argExpr->isExplicitGroup = true;
 
 					// First string argument becomes the intrinsic name
 					if (intrinsicExpr->intrinsicName.empty() && argExpr->kind == Expression::Kind::Literal) {

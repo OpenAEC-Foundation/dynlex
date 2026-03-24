@@ -2,6 +2,7 @@
 #include "classDefinition.h"
 #include "classSection.h"
 #include "codegenInternal.h"
+#include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
@@ -160,7 +161,39 @@ static void ensureMacroBindingRootFrame(ParseContext &context) {
 // Returns the bound expression (which lives in the caller's scope), or expr unchanged
 // if no binding exists. Each resolution crosses one scope boundary — the caller must
 // pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
+static Expression *materializeCodegenCompileTimeLiteral(ParseContext &context, const CompileTimeValue &value) {
+	Expression *literal = new Expression();
+	if (const auto *number = std::get_if<double>(&value)) {
+		literal->kind = Expression::Kind::Literal;
+		literal->literalValue = *number;
+	} else if (const auto *text = std::get_if<std::string>(&value)) {
+		literal->kind = Expression::Kind::Literal;
+		literal->literalValue = *text;
+	} else if (const auto *boolean = std::get_if<bool>(&value)) {
+		literal->kind = Expression::Kind::Literal;
+		literal->literalValue = *boolean ? 1.0 : 0.0;
+	} else if (const auto *typeRef = std::get_if<DataType>(&value)) {
+		literal->kind = Expression::Kind::TypedPlaceholder;
+		literal->type = *typeRef;
+	} else {
+		delete literal;
+		return nullptr;
+	}
+	context.ownedCodegenLiteralRoots.push_back(literal);
+	return literal;
+}
+
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
+	if (expr && expr->kind == Expression::Kind::Variable && expr->variable && context.currentCodegenInstantiation) {
+		const std::string &name = expr->variable->name;
+		if (context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)) {
+			auto constIt = context.currentCodegenInstantiation->constantParameterValues.find(name);
+			if (constIt != context.currentCodegenInstantiation->constantParameterValues.end()) {
+				if (Expression *literal = materializeCodegenCompileTimeLiteral(context, constIt->second))
+					return literal;
+			}
+		}
+	}
 	ensureMacroBindingRootFrame(context);
 	return resolveVariableBindingAcrossFrames(expr, context.macroBindingFrames);
 }
@@ -173,8 +206,8 @@ Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 // underlying expression kind (e.g., detecting a property intrinsic inside a store).
 void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
 	ensureMacroBindingRootFrame(context);
-	resolveThroughBindingLayers(expr, context.macroBindingFrames, [](Expression *expression, BindingMap &innerBindings) {
-		return expandMacroPatternCall(expression, innerBindings);
+	resolveThroughBindingLayers(expr, context.macroBindingFrames, [&](Expression *expression, BindingMap &innerBindings) {
+		return expandMacroPatternCall(context, expression, innerBindings);
 	});
 }
 
@@ -413,7 +446,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 
 		if (matchedSection->isMacro) {
 			BindingMap innerBindings;
-			Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+			Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
 			if (!bodyExpr)
 				return expr->type;
 
@@ -436,7 +469,15 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			argTypes.push_back(argType);
 		}
 
-		auto instIt = matchedSection->instantiations.find(argTypes);
+		auto evaluateParameterValue = [&](Expression *argumentExpression) {
+			return argumentExpression
+					   ? evaluateCompileTimeValue(
+							 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
+						 )
+					   : CompileTimeValue{};
+		};
+		auto instKey = findMatchingInstantiationKey(matchedSection, orderedBindings, argTypes, evaluateParameterValue);
+		auto instIt = instKey ? matchedSection->instantiations.find(*instKey) : matchedSection->instantiations.end();
 		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
 			return concretizeClassType(instIt->second.returnType);
 		assert(
@@ -629,6 +670,10 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 			return builder.CreateSIToFP(val, targetLLVM, "itof");
 		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
 	}
+
+	// Numeric -> Bool
+	if (fromType.isNumeric() && toType.kind == DataType::Kind::Bool)
+		return convertConditionToBool(context, val, fromType, "tobool");
 
 	if (toType.kind == DataType::Kind::Vector && fromType.isNumeric()) {
 		llvm::Value *scalar = ensureType(context, val, fromType, toType.vectorElementType());

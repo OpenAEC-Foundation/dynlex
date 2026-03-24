@@ -1,15 +1,15 @@
 import lib/std.dl
 
 function [the|] text of {integer:value}:
-    replacement:
-        value as a string
+    execute:
+        return the string form of value
 
 function {string:text} at character {integer:index}:
-    replacement:
-        character index of text
+    execute:
+        return character index of text
 
 function {integer:number} at character {integer:index}:
-    replacement:
-        number / (10 raised to the power of index) mod 10
+    execute:
+        return number / (10 raised to the power of index) mod 10
 
 print the length of (the text of 123 at character 0) as line

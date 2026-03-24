@@ -5,7 +5,6 @@ import lib/string.dl
 # --- Basic patterns ---
 
 function return value:
-    after: default
     replacement:
         @intrinsic("return", value)
 
@@ -51,6 +50,14 @@ function [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
+function true:
+    replacement:
+        1 as a boolean
+
+function false:
+    replacement:
+        0 as a boolean
+
 function [a|] type:
 	replacement:
 		@intrinsic("type", "type")
@@ -73,11 +80,15 @@ function [an|a|] elementtype array of n [item|items]:
     replacement:
         @intrinsic("array", n, elementtype)
 
+function [an|a|] n elementtype array:
+    replacement:
+        @intrinsic("array", n, elementtype)
+
 # --- Type casts ---
 
 function value as destinationtype:
-    replacement:
-        @intrinsic("cast", value, destinationtype)
+    execute:
+        return @intrinsic("cast", value, destinationtype)
 
 function true_value if condition, else false_value:
     replacement:
@@ -110,8 +121,8 @@ function:
         the {word:propertyname} of ownername
         ownername's {word:propertyname}
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ + $, $ - $, $ * $, $ / $, $ mod $
-    replacement:
-        @intrinsic("property", ownername, propertyname)
+    execute:
+        return @intrinsic("property", ownername, propertyname)
 
 # --- Pointers ---
 
@@ -134,57 +145,57 @@ function element index of ptr:
 
 function left[ |]+[ |]right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
-    replacement:
-        @intrinsic("add", left, right)
+    execute:
+        return @intrinsic("add", left, right)
 
 function left[ |]-[ |]right:
     before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
-    replacement:
-        @intrinsic("subtract", left, right)
+    execute:
+        return @intrinsic("subtract", left, right)
 
 function left[ |]*[ |]right:
     before: $ + $, $ - $
-    replacement:
-        @intrinsic("multiply", left, right)
+    execute:
+        return @intrinsic("multiply", left, right)
 
 function left[ |]/[ |]right:
     before: $ + $, $ - $
-    replacement:
-        @intrinsic("divide", left, right)
+    execute:
+        return @intrinsic("divide", left, right)
 
 function left mod right:
     before: $ + $, $ - $
-    replacement:
-        @intrinsic("modulo", left, right)
+    execute:
+        return @intrinsic("modulo", left, right)
 
 function [the |][negative [of ]|opposite [of ]|-]value:
     before: $ * $, $ / $, $ mod $
-    replacement:
-        @intrinsic("negate", value)
+    execute:
+        return @intrinsic("negate", value)
 
 function multiply value by factor:
 	replacement:
-		set value to @intrinsic("multiply", value, factor)
+		set value to value * factor
 
 function divide value by divisor:
 	replacement:
-		set value to @intrinsic("divide", value, divisor)
+		set value to value / divisor
 
 function add value to target:
 	replacement:
-		set target to @intrinsic("add", target, value)
+		set target to target + value
 
 function subtract value from target:
 	replacement:
-		set target to @intrinsic("subtract", target, value)
+		set target to target - value
 
 function increment val:
 	replacement:
-		set val to @intrinsic("add", val, 1)
+		set val to val + 1
 
 function decrement val:
 	replacement:
-		set val to @intrinsic("subtract", val, 1)
+		set val to val - 1
 
 # --- Clamping ---
 
@@ -199,53 +210,53 @@ function clamp val between low and high:
 
 function [the|] sine of value:
     after: default
-    replacement:
-        @intrinsic("sin", value)
+    execute:
+        return @intrinsic("sin", value)
 
 function [the|] cosine of value:
     after: default
-    replacement:
-        @intrinsic("cos", value)
+    execute:
+        return @intrinsic("cos", value)
 
 function [the|] square root of value:
     after: default
-    replacement:
-        @intrinsic("sqrt", value)
+    execute:
+        return @intrinsic("sqrt", value)
 
 function [the|] absolute value of value:
     after: default
-    replacement:
-        @intrinsic("abs", value)
+    execute:
+        return @intrinsic("abs", value)
 
 function [the|] floor of value:
     after: default
-    replacement:
-        @intrinsic("floor", value)
+    execute:
+        return @intrinsic("floor", value)
 
 function [the|] ceiling of value:
     after: default
-    replacement:
-        @intrinsic("ceil", value)
+    execute:
+        return @intrinsic("ceil", value)
 
 function value [raised|] to the power [of|] exponent:
     after: default
-    replacement:
-        @intrinsic("pow", value, exponent)
+    execute:
+        return @intrinsic("pow", value, exponent)
 
 function [the|] minimum of a and b:
     after: default
-    replacement:
-        @intrinsic("min", a, b)
+    execute:
+        return @intrinsic("min", a, b)
 
 function [the|] maximum of a and b:
     after: default
-    replacement:
-        @intrinsic("max", a, b)
+    execute:
+        return @intrinsic("max", a, b)
 
 function [the|] product of left and right:
     after: default
-    replacement:
-        @intrinsic("multiply", left, right)
+    execute:
+        return @intrinsic("multiply", left, right)
 
 # --- Comparison ---
 
@@ -288,18 +299,18 @@ function left [is greater than or equal to|>=] right:
 
 function not value:
     before: $ or $, $ and $
-    replacement:
-        @intrinsic("not", value)
+    execute:
+        return @intrinsic("not", value)
 
 function left and right:
     before: $ or $
-    replacement:
-        @intrinsic("and", left, right)
+    execute:
+        return @intrinsic("and", left, right)
 
 function left or right:
     before: default
-    replacement:
-        @intrinsic("or", left, right)
+    execute:
+        return @intrinsic("or", left, right)
 
 # --- Control flow ---
 

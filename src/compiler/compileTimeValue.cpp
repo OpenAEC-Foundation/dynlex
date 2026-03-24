@@ -4,6 +4,7 @@
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "parseContext.h"
+#include "pattern/pattern_tree/patternElement.h"
 #include "section.h"
 #include <cmath>
 #include <unordered_set>
@@ -31,12 +32,22 @@ static Expression *resolveCompileTimeBinding(
 ) {
 	if (outBindingFrameStack)
 		*outBindingFrameStack = bindingFrameStack;
+	if (expr && expr->kind == Expression::Kind::Pending && expr->patternReference) {
+		auto &elements = expr->patternReference->patternElements;
+		if (elements.empty())
+			elements = getPatternElements(expr->patternReference->pattern.text);
+		if (elements.size() == 1 &&
+			(elements[0].type == PatternElement::Type::Variable || elements[0].type == PatternElement::Type::VariableLike)) {
+			if (Expression *boundExpression = bindingFrameStack.lookup(elements[0].text))
+				return boundExpression;
+		}
+	}
 	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 }
 
 static std::string currentBuildInfo(ParseContext &context, std::string_view key) {
 	if (key == "platform")
-		return context.options.emitSPIRV ? "gpu" : "cpu";
+		return context.options.emitSPIRV ? "gpu" : context.options.emitWASM ? "wasm" : "cpu";
 	if (key == "shader stage") {
 		if (!context.options.emitSPIRV)
 			return "";
@@ -47,10 +58,31 @@ static std::string currentBuildInfo(ParseContext &context, std::string_view key)
 
 static std::optional<double> currentBuildInfoNumber(ParseContext &context, std::string_view key) {
 	if (key == "word size")
-		return context.options.emitSPIRV ? 32.0 : static_cast<double>(sizeof(void *) * 8);
+		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(void *) * 8);
 	if (key == "optimization level")
 		return static_cast<double>(context.options.optimizationLevel);
 	return std::nullopt;
+}
+
+static CompileTimeValue
+evaluateCompileTimeCast(const CompileTimeValue &value, Expression *typeExpr, const BindingFrameStack &bindingFrameStack) {
+	if (!typeExpr)
+		return {};
+	typeExpr = resolveCompileTimeBinding(typeExpr, bindingFrameStack);
+	if (!typeExpr || typeExpr->type.kind != DataType::Kind::Type)
+		return {};
+	DataType targetType = typeExpr->type.toReferencedType();
+	if (targetType.kind == DataType::Kind::Bool) {
+		std::optional<bool> truthy = compileTimeTruthiness(value);
+		return truthy.has_value() ? CompileTimeValue(*truthy) : CompileTimeValue{};
+	}
+	if (!targetType.isNumeric())
+		return {};
+	if (const auto *number = std::get_if<double>(&value))
+		return *number;
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? 1.0 : 0.0;
+	return {};
 }
 
 static CompileTimeValue evaluateIntrinsic(
@@ -89,6 +121,12 @@ static CompileTimeValue evaluateIntrinsic(
 
 	if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
 		return evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
+	if (kind == IntrinsicKind::Cast && expr->arguments.size() > 2) {
+		CompileTimeValue value = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
+		if (!isCompileTimeKnown(value))
+			return {};
+		return evaluateCompileTimeCast(value, expr->arguments[2], bindingFrameStack);
+	}
 
 	auto lhs = [&]() -> CompileTimeValue {
 		return expr->arguments.size() >= 2
@@ -206,7 +244,7 @@ static CompileTimeValue evaluatePatternCall(
 
 	if (def->section->isMacro) {
 		BindingMap innerBindings;
-		Expression *bodyExpr = expandMacroPatternCall(expr, innerBindings);
+		Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
 		if (!bodyExpr)
 			return {};
 		for (const auto &[name, argExpr] : innerBindings)
@@ -231,6 +269,8 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 	expr = resolveCompileTimeBinding(expr, bindingFrameStack, &effectiveBindingFrameStack);
 	if (!expr)
 		return {};
+	if (expr->type.kind == DataType::Kind::Type)
+		return expr->type;
 	if (activeCompileTimeFunctions.contains(expr))
 		return {};
 
@@ -260,6 +300,7 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 		}
 		return {};
 	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::TypedPlaceholder:
 	case Expression::Kind::Pending:
 		return {};
 	case Expression::Kind::IntrinsicCall:

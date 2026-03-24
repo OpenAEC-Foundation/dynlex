@@ -11,23 +11,27 @@ function a new quaternion with w vw, x vx, y vy and z vz:
     replacement:
         @intrinsic("construct", quaternion, vw, vx, vy, vz)
 
-function add value to {quaternion:target}:
+function {quaternion:left} + right:
     execute:
-        add value to the w of target
-        add value to the x of target
-        add value to the y of target
-        add value to the z of target
+        return a new quaternion with w the w of left + right, x the x of left + right, y the y of left + right and z the z of left + right
 
-function multiply {quaternion:value} by factor:
+function {quaternion:left} * factor:
     execute:
-        multiply the w of value by factor
-        multiply the x of value by factor
-        multiply the y of value by factor
-        multiply the z of value by factor
+        return a new quaternion with w the w of left * factor, x the x of left * factor, y the y of left * factor and z the z of left * factor
 
-function print {quaternion:msg}:
+function [the|] string form of {quaternion:msg}:
     execute:
-        discard @intrinsic("call", "libc", "printf", an integer, "[%g, %g, %g, %g]\n", the w of msg as a float, the x of msg as a float, the y of msg as a float, the z of msg as a float)
+        set result to the string form of "["
+        set separator to the string form of ", "
+        set result to (result + the string form of the w of msg)
+        set result to (result + separator)
+        set result to (result + the string form of the x of msg)
+        set result to (result + separator)
+        set result to (result + the string form of the y of msg)
+        set result to (result + separator)
+        set result to (result + the string form of the z of msg)
+        set result to (result + the string form of "]")
+        return result
 
 function [the|] dot product of {vector:left} and {vector:right}:
     execute:

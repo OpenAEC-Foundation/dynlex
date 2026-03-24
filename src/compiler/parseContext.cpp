@@ -156,12 +156,53 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 	return ownedVariableReferences.back().get();
 }
 
+namespace {
+Expression *cloneMacroExpansionExpressionImpl(Expression *expression) {
+	if (!expression)
+		return nullptr;
+	Expression *clone = new Expression();
+	clone->kind = expression->kind;
+	clone->range = expression->range;
+	clone->literalValue = expression->literalValue;
+	clone->variable = expression->variable;
+	clone->patternMatch = expression->patternMatch;
+	clone->patternReference = expression->patternReference;
+	clone->intrinsicName = expression->intrinsicName;
+	clone->isSubMatch = expression->isSubMatch;
+	clone->isExplicitGroup = expression->isExplicitGroup;
+	clone->groupingArgumentIndices = expression->groupingArgumentIndices;
+	clone->groupingArgumentHasAdjacentSiblingSlot = expression->groupingArgumentHasAdjacentSiblingSlot;
+	clone->groupingStartsWithArgument = expression->groupingStartsWithArgument;
+	clone->groupingEndsWithArgument = expression->groupingEndsWithArgument;
+	clone->groupingPrecedence = expression->groupingPrecedence;
+	clone->type = {};
+	clone->selectedPatternDefinition = nullptr;
+	clone->arguments.reserve(expression->arguments.size());
+	for (Expression *argument : expression->arguments)
+		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(argument));
+	return clone;
+}
+} // namespace
+
+Expression *ParseContext::cloneMacroExpansionExpression(Expression *expression, bool ownRoot) {
+	Expression *clone = cloneMacroExpansionExpressionImpl(expression);
+	if (clone && ownRoot)
+		ownedMacroExpansionRoots.push_back(clone);
+	return clone;
+}
+
 ParseContext::~ParseContext() {
 	std::unordered_set<Expression *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
 		if (line && line->expression)
 			deleteExpressionTree(line->expression, visitedFunctions);
 	}
+	for (Expression *expression : ownedMacroExpansionRoots)
+		deleteExpressionTree(expression, visitedFunctions);
+	for (Expression *expression : ownedCapturedBindingRoots)
+		deleteExpressionTree(expression, visitedFunctions);
+	for (Expression *expression : ownedCodegenLiteralRoots)
+		deleteExpressionTree(expression, visitedFunctions);
 
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;

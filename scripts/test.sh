@@ -113,10 +113,8 @@ sys.exit(completed.returncode)
 PY
 }
 
-if [[ ! -x "$COMPILER" ]]; then
-    echo -e "${YELLOW}Compiler not found, building...${NC}"
-    "$SCRIPT_DIR/build.sh"
-fi
+echo -e "${YELLOW}Building compiler...${NC}"
+"$SCRIPT_DIR/build.sh"
 
 total_start_ms=$(now_ms)
 

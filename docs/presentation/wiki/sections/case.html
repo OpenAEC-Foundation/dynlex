@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynLex Wiki - Case</title>
+    <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../wiki.css">
+</head>
+<body>
+    <nav class="nav">
+        <a href="../../index.html" class="nav-btn">Home</a>
+        <a href="../index.html" class="nav-btn">Wiki Home</a>
+        <a href="../getting-started.html" class="nav-btn">Getting Started</a>
+        <a href="index.html" class="nav-btn primary">Sections</a>
+        <a href="../terms.html" class="nav-btn">Terms</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="wiki-shell">
+        <section class="glass-card hero-card">
+            <div class="hero-eyebrow">DynLex Sections</div>
+            <h1>Case</h1>
+            <p>
+                Use <code>case</code> inside a <code>match</code> or <code>switch</code> section to define one branch.
+            </p>
+        </section>
+
+        <section class="doc-stack">
+            <article class="glass-card doc-card">
+                <div class="step-label">Pattern</div>
+                <div class="pattern-box">
+<pre><code>case value:</code></pre>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Example</div>
+                <div class="code-block glass-card">
+<pre><code>import lib/std.dl
+
+set number to 3
+
+match based on number:
+    case 1:
+        print "one" as line
+    case 3:
+        print "three" as line</code></pre>
+                </div>
+                <p>
+                    A case belongs inside a match or switch section. It is not used on its own.
+                </p>
+                <div class="try-card">
+                    <h3>Try yourself</h3>
+                    <p>
+                        Add a new case for <code>2</code>. Then change <code>number</code> and run the file again.
+                    </p>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Related</div>
+                <div class="related-grid">
+                    <a href="match.html">Match / Switch</a>
+                    <a href="if.html">If</a>
+                    <a href="../terms.html#section">Section</a>
+                </div>
+            </article>
+        </section>
+    </main>
+</body>
+</html>

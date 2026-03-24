@@ -8,6 +8,7 @@
 #include "type.h"
 #include "variable.h"
 #include <algorithm>
+#include <cassert>
 #include <climits>
 #include <cstdlib>
 #include <functional>
@@ -115,6 +116,169 @@ static void traceResolution(const std::string &message) {
 	std::cerr << "[res] " << message << '\n';
 }
 
+static bool isInternalSection(Section *section) {
+	if (!section)
+		return false;
+	for (CodeLine *line : section->codeLines) {
+		if (line && line->sourceFile && !line->sourceFile->uri.empty())
+			return isInternalSourcePath(line->sourceFile->uri);
+	}
+	return section->openingLine && section->openingLine->sourceFile &&
+		   isInternalSourcePath(section->openingLine->sourceFile->uri);
+}
+
+static bool isMacroFunctionDefinition(const PatternDefinition *definition) {
+	assert(definition && "macro specialization checks require a real pattern definition");
+	assert(definition->section && "pattern definition must belong to a section");
+	return definition->section->type == SectionType::Function && definition->section->isMacro;
+}
+
+static bool definitionHasTypeConstraints(const PatternDefinition &definition) {
+	bool hasTypeConstraint = false;
+	std::function<void(const std::vector<DefinitionPatternElement> &)> visit =
+		[&](const std::vector<DefinitionPatternElement> &elements) {
+		for (const DefinitionPatternElement &element : elements) {
+			if (element.type == PatternElement::Type::Choice) {
+				for (const auto &alternative : element.alternatives)
+					visit(alternative);
+				continue;
+			}
+			if (element.type == PatternElement::Type::Variable && !element.typeConstraintName.empty())
+				hasTypeConstraint = true;
+		}
+	};
+	visit(definition.patternElements);
+	return hasTypeConstraint;
+}
+
+static void
+appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDefinition *left, const PatternDefinition *right);
+
+struct DefinitionConflict {
+	enum class Kind {
+		TypedMacroParameters,
+		NonMacroSpecializesMacro,
+		DuplicatePatternDefinition,
+	};
+
+	Kind kind;
+	PatternDefinition *primary;
+	PatternDefinition *related{};
+};
+
+static bool definitionConflictComesBefore(const DefinitionConflict &left, const DefinitionConflict &right) {
+	if (definitionComesBefore(left.primary, right.primary))
+		return true;
+	if (definitionComesBefore(right.primary, left.primary))
+		return false;
+	if (definitionComesBefore(left.related, right.related))
+		return true;
+	if (definitionComesBefore(right.related, left.related))
+		return false;
+	return static_cast<int>(left.kind) < static_cast<int>(right.kind);
+}
+
+static bool emitDefinitionConflicts(ParseContext &context) {
+	struct DefinitionPairHash {
+		size_t operator()(const std::pair<PatternDefinition *, PatternDefinition *> &pair) const {
+			return std::hash<PatternDefinition *>{}(pair.first) ^ (std::hash<PatternDefinition *>{}(pair.second) << 1);
+		}
+	};
+
+	std::vector<PatternDefinition *> definitions;
+	std::function<void(Section *)> collectDefinitions = [&](Section *section) {
+		for (PatternDefinition *definition : section->patternDefinitions) {
+			assert(definition && "section pattern definition list must not contain null entries");
+			assert(definition->section == section && "pattern definition must point back to its owning section");
+			assert(definition->resolved && "definition conflict checks require resolved pattern definitions");
+			definitions.push_back(definition);
+		}
+		for (Section *child : section->children)
+			collectDefinitions(child);
+	};
+	collectDefinitions(context.mainSection);
+	std::sort(definitions.begin(), definitions.end(), definitionComesBefore);
+
+	std::vector<DefinitionConflict> conflicts;
+	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenMixedMacroPairs;
+	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
+
+	for (PatternDefinition *definition : definitions) {
+		if (isMacroFunctionDefinition(definition) && definitionHasTypeConstraints(*definition))
+			conflicts.push_back({DefinitionConflict::Kind::TypedMacroParameters, definition, nullptr});
+
+		for (PatternTreeNode *endNode : definition->endNodes) {
+			assert(endNode && "definition endpoint nodes must be valid");
+			for (PatternDefinition *other : endNode->matchingDefinitions) {
+				assert(other && "pattern tree endpoint definitions must be valid");
+				assert(other->section && "pattern tree endpoint definitions must have sections");
+				if (other == definition)
+					continue;
+
+				bool mixedMacroFunctionPair = definition->section->type == SectionType::Function &&
+											  other->section->type == SectionType::Function &&
+											  definition->section->isMacro != other->section->isMacro;
+				if (mixedMacroFunctionPair) {
+					PatternDefinition *nonMacroDefinition = definition->section->isMacro ? other : definition;
+					PatternDefinition *macroDefinition = definition->section->isMacro ? definition : other;
+					if (seenMixedMacroPairs.insert({nonMacroDefinition, macroDefinition}).second) {
+						conflicts.push_back(
+							{DefinitionConflict::Kind::NonMacroSpecializesMacro, nonMacroDefinition, macroDefinition}
+						);
+					}
+					continue;
+				}
+
+				if (definitionHasTypeConstraints(*definition) || definitionHasTypeConstraints(*other))
+					continue;
+
+				PatternDefinition *earlierDefinition = definitionComesBefore(definition, other) ? definition : other;
+				PatternDefinition *laterDefinition = earlierDefinition == definition ? other : definition;
+				if (seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
+					conflicts.push_back(
+						{DefinitionConflict::Kind::DuplicatePatternDefinition, laterDefinition, earlierDefinition}
+					);
+			}
+		}
+	}
+
+	if (conflicts.empty())
+		return true;
+
+	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
+	const DefinitionConflict &conflict = conflicts.front();
+	switch (conflict.kind) {
+	case DefinitionConflict::Kind::TypedMacroParameters:
+		context.diagnostics.push_back(Diagnostic(
+			context, Diagnostic::Level::Error,
+			"macro parameters cannot have type constraints; convert this replacement pattern to execute:",
+			conflict.primary->range
+		));
+		return false;
+	case DefinitionConflict::Kind::NonMacroSpecializesMacro: {
+		Diagnostic diagnostic(
+			context, Diagnostic::Level::Error, "non-macro function cannot specialize macro function", conflict.primary->range
+		);
+		diagnostic.relatedInfo.push_back({"This macro function shares the same pattern endpoint:", conflict.related->range});
+		context.diagnostics.push_back(std::move(diagnostic));
+		return false;
+	}
+	case DefinitionConflict::Kind::DuplicatePatternDefinition: {
+		const SyntaxConfig &syntax = syntaxConfigForRange(context, conflict.primary->range);
+		Diagnostic diagnostic(context, Diagnostic::Level::Error, "duplicate pattern definition", conflict.primary->range);
+		diagnostic.relatedInfo.push_back(
+			{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), conflict.related->range}
+		);
+		appendImplicitPromotionDuplicateDetails(diagnostic, conflict.primary, conflict.related);
+		context.diagnostics.push_back(std::move(diagnostic));
+		return false;
+	}
+	}
+
+	assert(false && "unhandled definition conflict kind");
+	return false;
+}
+
 static std::vector<std::pair<std::string, Range>> collectImplicitlyPromotedParameters(const PatternDefinition *definition) {
 	std::vector<std::pair<std::string, Range>> result;
 	if (!definition)
@@ -180,6 +344,13 @@ static Range definitionNodeRange(const PatternDefinition *definition, const Patt
 	return Range(
 		definition->range.line, definition->range.start() + static_cast<int>(startIt->second),
 		definition->range.start() + static_cast<int>(startIt->second + node->text.length())
+	);
+}
+
+static Range definitionElementRange(const PatternDefinition *definition, const DefinitionPatternElement &element) {
+	return Range(
+		definition->range.line, definition->range.start() + static_cast<int>(element.startPos),
+		definition->range.start() + static_cast<int>(element.startPos + element.text.length())
 	);
 }
 
@@ -451,36 +622,47 @@ void addVariableReferencesFromMatch(ParseContext &context, PatternReference *ref
 	}
 }
 
-void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
-	expr->arguments = match->arguments;
-	// move arguments to the appropriate submatches
-	expr->kind = Expression::Kind::PatternCall;
-	expr->patternMatch = match;
-	expr->selectedPatternDefinition = (match->matchedEndNode && !match->matchedEndNode->matchingDefinitions.empty())
-										  ? match->matchedEndNode->matchingDefinitions.front()
-										  : nullptr;
-	for (const PatternMatch &subMatch : match->subMatches) {
+static void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match);
+
+static VariableReference *findVisibleVariableReference(Section *section, const std::string &name) {
+	for (Section *current = section; current; current = current->parent) {
+		auto it = current->variableReferences.find(name);
+		if (it != current->variableReferences.end() && !it->second.empty())
+			return it->second.front();
+	}
+	return nullptr;
+}
+
+static Expression *
+materializeMatchedArgument(Expression *rootExpression, PatternMatch *match, const MatchedArgument &argument) {
+	switch (argument.kind) {
+	case MatchedArgument::Kind::Expression: {
+		Expression *capturedExpression = argument.expression;
+		if (capturedExpression && rootExpression && rootExpression->range.line && rootExpression->range.line->section)
+			expandExpression(capturedExpression, rootExpression->range.line->section);
+		return capturedExpression;
+	}
+	case MatchedArgument::Kind::SubMatch: {
+		PatternMatch &subMatch = match->subMatches[argument.itemIndex];
 		Expression *arg = new Expression();
 		arg->isSubMatch = true;
 		arg->range = Range(
-			expr->range.line, rootExpression->range.start() + subMatch.lineStartPos,
+			rootExpression->range.line, rootExpression->range.start() + subMatch.lineStartPos,
 			rootExpression->range.start() + subMatch.lineEndPos
 		);
-		expandMatch(rootExpression, arg, const_cast<PatternMatch *>(&subMatch));
-		expr->arguments.push_back(arg);
+		expandMatch(rootExpression, arg, &subMatch);
+		return arg;
 	}
-
-	// Handle discoveredVariables - add variable expressions using stored references
-	for (const VariableMatch &varMatch : match->discoveredVariables) {
+	case MatchedArgument::Kind::Variable: {
+		const VariableMatch &varMatch = match->discoveredVariables[argument.itemIndex];
 		Expression *arg = new Expression();
 		arg->kind = Expression::Kind::Variable;
 		arg->variable = varMatch.variableReference;
 		arg->range = varMatch.variableReference->range;
-		expr->arguments.push_back(arg);
+		return arg;
 	}
-
-	// Handle discoveredWords - add string literal expressions
-	for (const WordMatch &wordMatch : match->discoveredWords) {
+	case MatchedArgument::Kind::Word: {
+		const WordMatch &wordMatch = match->discoveredWords[argument.itemIndex];
 		Expression *arg = new Expression();
 		arg->kind = Expression::Kind::Literal;
 		arg->literalValue = wordMatch.text;
@@ -488,7 +670,30 @@ void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *mat
 			rootExpression->range.line, rootExpression->range.start() + wordMatch.lineStartPos,
 			rootExpression->range.start() + wordMatch.lineEndPos
 		);
-		expr->arguments.push_back(arg);
+		return arg;
+	}
+	}
+	return nullptr;
+}
+
+static void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
+	expr->kind = Expression::Kind::PatternCall;
+	expr->patternMatch = match;
+	expr->selectedPatternDefinition = (match->matchedEndNode && match->matchedEndNode->matchingDefinitions.size() == 1)
+										  ? match->matchedEndNode->matchingDefinitions.front()
+										  : nullptr;
+	std::vector<MatchedArgument> orderedArguments = match->orderedArguments;
+	std::stable_sort(
+		orderedArguments.begin(), orderedArguments.end(),
+		[](const MatchedArgument &left, const MatchedArgument &right) {
+		return left.argumentIndex < right.argumentIndex;
+	}
+	);
+	expr->arguments.clear();
+	expr->arguments.reserve(orderedArguments.size());
+	for (const MatchedArgument &argument : orderedArguments) {
+		if (Expression *materialized = materializeMatchedArgument(rootExpression, match, argument))
+			expr->arguments.push_back(materialized);
 	}
 }
 
@@ -512,12 +717,8 @@ void expandExpression(Expression *expr, Section *section) {
 		} else if (ref->patternElements.size() == 1 && ref->patternElements[0].type == PatternElement::Type::Variable) {
 			// Resolved to a variable reference
 			expr->kind = Expression::Kind::Variable;
-			// Find the variable reference in the section
 			std::string varName = ref->patternElements[0].text;
-			auto it = section->variableReferences.find(varName);
-			if (it != section->variableReferences.end() && !it->second.empty()) {
-				expr->variable = it->second.front();
-			}
+			expr->variable = findVisibleVariableReference(section, varName);
 		} else if (expr->arguments.size() == 1 && expr->arguments[0]->kind == Expression::Kind::IntrinsicCall) {
 			// If the pattern is just an argument placeholder and we have a single intrinsic call,
 			// promote the intrinsic to be this expression
@@ -686,6 +887,58 @@ static void emitExplicitDefinitionParameterAmbiguityWarnings(ParseContext &conte
 	};
 
 	visitSection(context.mainSection);
+}
+
+static void emitDuplicatePatternWordWarnings(ParseContext &context) {
+	std::list<PatternReference *> bodyReferences;
+	std::list<PatternReference *> globalReferences;
+	std::list<Section *> sections;
+	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections);
+
+	for (Section *section : sections) {
+		if (isInternalSection(section))
+			continue;
+
+		for (PatternDefinition *definition : section->patternDefinitions) {
+			using FoundRanges = std::unordered_map<std::string, Range>;
+			std::function<FoundRanges(std::vector<DefinitionPatternElement> &, const FoundRanges &)> visit =
+				[&](std::vector<DefinitionPatternElement> &elements, const FoundRanges &incomingFound) {
+				FoundRanges found = incomingFound;
+				for (DefinitionPatternElement &element : elements) {
+					if (element.type == PatternElement::Type::Choice) {
+						FoundRanges foundAfterChoice = found;
+						for (auto &alternative : element.alternatives) {
+							FoundRanges alternativeFound = visit(alternative, found);
+							for (const auto &[name, range] : alternativeFound)
+								foundAfterChoice.try_emplace(name, range);
+						}
+						found = std::move(foundAfterChoice);
+						continue;
+					}
+					if (element.type == PatternElement::Type::Variable) {
+						found.try_emplace(element.text, definitionElementRange(definition, element));
+						continue;
+					}
+					if (element.type != PatternElement::Type::VariableLike)
+						continue;
+
+					auto foundIt = found.find(element.text);
+					if (foundIt == found.end())
+						continue;
+
+					Diagnostic diagnostic;
+					diagnostic.level = Diagnostic::Level::Warning;
+					diagnostic.range = definitionElementRange(definition, element);
+					diagnostic.message =
+						"Repeated pattern word '" + element.text + "' stays literal because it already became a parameter";
+					diagnostic.relatedInfo.push_back({"The first parameter occurrence was here:", foundIt->second});
+					context.diagnostics.push_back(std::move(diagnostic));
+				}
+				return found;
+			};
+			visit(definition->patternElements, {});
+		}
+	}
 }
 
 // Remove VariableReferences created from a match, undoing addVariableReferencesFromMatch and searchParentPatterns effects.
@@ -984,21 +1237,10 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	};
 
-	// Helper: add a definition to the pattern tree and emit a diagnostic if a duplicate exists.
+	// Helper: add a definition to the pattern tree.
 	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
-		PatternDefinition *existing =
-			context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
+		context.patternTrees[(size_t)treeType]->addPatternPart(definition->patternElements, definition);
 		traceResolution("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
-		if (existing) {
-			const SyntaxConfig &syntax = syntaxConfigForRange(context, definition->range);
-			Diagnostic diag(context, Diagnostic::Level::Error, "duplicate pattern definition", definition->range);
-			diag.relatedInfo.push_back(
-				{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), existing->range}
-			);
-			appendImplicitPromotionDuplicateDetails(diag, definition, existing);
-			context.diagnostics.push_back(std::move(diag));
-			traceResolution("duplicate " + definitionTraceId(definition) + " vs " + definitionTraceId(existing));
-		}
 		invalidateStaleMatches(definition, treeType);
 	};
 
@@ -1078,71 +1320,23 @@ bool resolvePatterns(ParseContext &context) {
 		}
 
 		// Resolve type constraints on definition elements ({type:name} syntax).
-		// Walk all definitions and resolve typeConstraintName strings to DataTypes
-		// by looking up the type name in the function pattern tree.
+		// Resolve capture constraints through the normal type-expression parser so
+		// compound constraints like "4 float array" work the same as declared types.
 		{
-			PatternTreeNode *exprTree = context.patternTrees[(size_t)SectionType::Function];
 			std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
 				for (PatternDefinition *def : section->patternDefinitions) {
 					for (auto &elem : def->patternElements) {
 						if (elem.typeConstraintName.empty() || elem.resolvedTypeConstraint.isDeduced())
 							continue;
-						PatternTreeNode *node = exprTree;
-						std::string_view remaining = elem.typeConstraintName;
-						while (!remaining.empty() && node) {
-							size_t space = remaining.find(' ');
-							std::string_view word = (space != std::string_view::npos) ? remaining.substr(0, space) : remaining;
-							auto it = node->literalChildren.find(std::string(word));
-							node = (it != node->literalChildren.end()) ? it->second : nullptr;
-							remaining = (space != std::string_view::npos) ? remaining.substr(space + 1) : std::string_view{};
-						}
-						if (!node || node->matchingDefinitions.empty())
-							continue;
-						for (auto *d : node->matchingDefinitions) {
-							if (d->section->type == SectionType::Class && !d->section->isMacro) {
-								auto *classSec = static_cast<ClassSection *>(d->section);
-								elem.resolvedTypeConstraint = {DataType::Kind::Class, 0, 0, classSec->classDefinition};
-								break;
-							}
-							if (d->section->isMacro) {
-								// Macro type (e.g., integer, float, boolean) — evaluate the type intrinsic
-								for (Section *child : d->section->children) {
-									for (CodeLine *cl : child->codeLines) {
-										if (cl->expression && cl->expression->kind == Expression::Kind::IntrinsicCall &&
-											intrinsicKind(cl->expression->intrinsicName) == IntrinsicKind::Type) {
-											auto &args = cl->expression->arguments;
-											if (auto *kindStr = std::get_if<std::string>(&args[1]->literalValue)) {
-												if (*kindStr == "int") {
-													int bits = 32;
-													if (args.size() >= 3)
-														if (auto *b = std::get_if<double>(&args[2]->literalValue))
-															bits = (int)*b;
-													elem.resolvedTypeConstraint = {DataType::Kind::Int, bits / 8};
-												} else if (*kindStr == "float") {
-													int bits = 64;
-													if (args.size() >= 3)
-														if (auto *b = std::get_if<double>(&args[2]->literalValue))
-															bits = (int)*b;
-													elem.resolvedTypeConstraint = {DataType::Kind::Float, bits / 8};
-												} else if (*kindStr == "bool") {
-													elem.resolvedTypeConstraint = {DataType::Kind::Bool};
-												} else if (*kindStr == "string") {
-													elem.resolvedTypeConstraint = {DataType::Kind::Int, 1};
-													elem.resolvedTypeConstraint.pointerDepth = 1;
-												} else if (*kindStr == "type") {
-													elem.resolvedTypeConstraint = {DataType::Kind::Type};
-												}
-											}
-											break;
-										}
-									}
-									if (elem.resolvedTypeConstraint.isDeduced())
-										break;
-								}
-								if (elem.resolvedTypeConstraint.isDeduced())
-									break;
-							}
-						}
+
+						int constraintEnd = def->range.start() + static_cast<int>(elem.startPos) - 1;
+						int constraintStart = constraintEnd - static_cast<int>(elem.typeConstraintName.size());
+						Range constraintRange(def->range.line, constraintStart, constraintEnd);
+						DataType typeRef;
+						if (resolveTypeConstraintExpression(
+								context, def->section, constraintRange, elem.typeConstraintName, typeRef
+							))
+							elem.resolvedTypeConstraint = typeRef.toReferencedType();
 						if (elem.resolvedTypeConstraint.isDeduced())
 							madeProgress = true;
 					}
@@ -1212,7 +1406,39 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	}
 
+	for (int stabilizeIteration = 0; stabilizeIteration < context.options.maxResolutionIterations; stabilizeIteration++) {
+		if (!pendingRequeueSections.empty()) {
+			std::sort(pendingRequeueSections.begin(), pendingRequeueSections.end(), sectionComesBefore);
+			for (Section *section : pendingRequeueSections) {
+				if (std::find(unResolvedSections.begin(), unResolvedSections.end(), section) == unResolvedSections.end())
+					unResolvedSections.push_back(section);
+			}
+			pendingRequeueSections.clear();
+		}
+		if (unResolvedSections.empty())
+			break;
+
+		std::vector<Section *> remainingSections(unResolvedSections.begin(), unResolvedSections.end());
+		std::sort(remainingSections.begin(), remainingSections.end(), sectionComesBefore);
+		unResolvedSections.clear();
+		for (Section *section : remainingSections) {
+			section->patternDefinitionsResolved = true;
+			for (PatternDefinition *definition : section->patternDefinitions) {
+				if (!definition->resolved) {
+					definition->resolved = true;
+					SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+					addDefinitionToTree(definition, treeType);
+				}
+			}
+		}
+	}
+
 	// Phase 2: resolve global references (all definitions are now in the tree)
+	if (!emitDefinitionConflicts(context))
+		return false;
+
+	emitDuplicatePatternWordWarnings(context);
+
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
 		resolveReferences(context, globalReferences, false, nullptr, "global");
 		if (globalReferences.empty())

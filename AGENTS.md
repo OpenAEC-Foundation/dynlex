@@ -12,6 +12,7 @@ These instructions apply to all coding agents working in this repository (includ
 - Drive ALL language behavior through patterns and intrinsics. so NO HARDCODING.
 - Keep dependencies minimal.
 - Always answer direct user questions instead of doing. if the user didn't ask you to do something, propose it.
+- if you need information about the code you can get yourself, just get it. you don't have to ask the user if they want you to root-cause a problem. gathering info can never hurt, since you aren't making changes.
 - Suggest better approaches when you see one.
 - Verify before assuming package/version/tool availability.
 - Document important fixes in repository docs/rules so all agents share the same context.
@@ -28,14 +29,16 @@ NEVER add a workaround like:
 - narrow case 'fixes'
 - temporary solutions
 - a fallback
+- using bad or slow alternatives because 'the best one isn't implemented yet'
 
 instead:
+1. identify a minimal reproducible example. minimize the amount of reproducing code. imported code is counted too. so NO 'import std.dl'!
 1. identify the root cause with whatever tools you need.
-2. identify a minimal reproducible example and possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
+2. identify a possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
 3. report to the user.
 the user may discuss the bug with you.
 when the user tells you to fix it:
-4. fix the compiler bug first.
+4. fix the compiler bug first. verify it fixed it by building and the running repro and test script. if it didn't fix it and you don't know why, go back to 1. when you are at step 3 again, you don't have to report if it's a trivial fix following agents.md.
 if the compiler bug was found using buggy .dl code:
 5. fix the .dl bug after.
 - this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.

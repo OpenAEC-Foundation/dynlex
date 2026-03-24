@@ -28,6 +28,11 @@ static void recomputeRanges(Expression *expr, std::unordered_set<Expression *> &
 	for (Expression *arg : expr->arguments)
 		recomputeRanges(arg, visited);
 	if (expr->kind == Expression::Kind::PatternCall && !expr->arguments.empty()) {
+		bool allArgumentsHaveSourceRanges = std::all_of(expr->arguments.begin(), expr->arguments.end(), [](Expression *arg) {
+			return arg && arg->range.line && !arg->range.subString.empty();
+		});
+		if (!allArgumentsHaveSourceRanges)
+			return;
 		int originalStart = expr->range.start();
 		int originalEnd = expr->range.end();
 		int minStart = expr->arguments.front()->range.start();
@@ -84,22 +89,6 @@ static void resetExpressionTypes(Expression *expr) {
 	resetExpressionTypes(expr, visited);
 }
 
-static void sortArgumentsRecursive(Expression *expr, std::unordered_set<Expression *> &visited) {
-	if (!expr)
-		return;
-	if (!visited.insert(expr).second)
-		return;
-	for (Expression *arg : expr->arguments)
-		sortArgumentsRecursive(arg, visited);
-	if (expr->kind == Expression::Kind::PatternCall)
-		expr->arguments = sortArgumentsByPosition(expr->arguments);
-}
-
-static void sortArgumentsRecursive(Expression *expr) {
-	std::unordered_set<Expression *> visited;
-	sortArgumentsRecursive(expr, visited);
-}
-
 static bool expressionNeedsGroupingParens(Expression *expr) {
 	return expr && (expr->kind == Expression::Kind::PatternCall || expr->kind == Expression::Kind::IntrinsicCall) &&
 		   !expr->arguments.empty();
@@ -148,6 +137,8 @@ static std::string renderResolvedExpression(Expression *expr) {
 	}
 	case Expression::Kind::Pending:
 		return !expr->range.subString.empty() ? (std::string)expr->range.subString : "<pending>";
+	case Expression::Kind::TypedPlaceholder:
+		return "<typed placeholder>";
 	case Expression::Kind::PatternCall:
 		break;
 	}
@@ -223,6 +214,32 @@ static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
 		expression->arguments = arguments;
 }
 
+static bool expressionHasGroupingShape(Expression *expression) {
+	if (!expression)
+		return false;
+	if (expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty())
+		return true;
+	return !expression->groupingArgumentIndices.empty();
+}
+
+static size_t groupingArgumentCount(Expression *expression) {
+	if (!expression)
+		return 0;
+	if (expression->kind == Expression::Kind::PatternCall)
+		return expression->arguments.size();
+	return expression->groupingArgumentIndices.size();
+}
+
+static int groupingArgumentIndex(Expression *expression, size_t sourceArgumentIndex) {
+	if (!expression)
+		return -1;
+	if (expression->kind == Expression::Kind::PatternCall)
+		return static_cast<int>(sourceArgumentIndex);
+	if (sourceArgumentIndex >= expression->groupingArgumentIndices.size())
+		return -1;
+	return expression->groupingArgumentIndices[sourceArgumentIndex];
+}
+
 static bool startsWithArgument(Expression *expression);
 static bool endsWithArgument(Expression *expression);
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex);
@@ -237,10 +254,8 @@ static bool snapshotsHaveSameLocalOrdering(
 	const GroupingSnapshot &left, const GroupingSnapshot &right, Expression *leftExpr, Expression *rightExpr, bool isOnBoundary,
 	bool isRoot, bool forceLocal
 ) {
-	auto isOpaqueAtCurrentLevel = [&](Expression *expression, const GroupingSnapshot &snapshot) -> bool {
-		bool isPatternCall =
-			expression && expression->kind == Expression::Kind::PatternCall && !snapshotArguments(snapshot, expression).empty();
-		if (!isPatternCall)
+	auto isOpaqueAtCurrentLevel = [&](Expression *expression, const GroupingSnapshot & /*snapshot*/) -> bool {
+		if (!expressionHasGroupingShape(expression))
 			return true;
 		return !isRoot && (forceLocal || expression->isExplicitGroup || !isOnBoundary);
 	};
@@ -259,12 +274,17 @@ static bool snapshotsHaveSameLocalOrdering(
 
 	bool hasLeftEdge = startsWithArgument(leftExpr);
 	bool hasRightEdge = endsWithArgument(leftExpr);
-	for (size_t argumentIndex = 0; argumentIndex < leftArguments.size(); argumentIndex++) {
-		bool isLeftBoundaryArgument = hasLeftEdge && argumentIndex == 0;
-		bool isRightBoundaryArgument = hasRightEdge && argumentIndex + 1 == leftArguments.size();
-		bool childForceLocal = argumentHasAdjacentSiblingSlot(leftExpr, argumentIndex);
+	size_t sourceArgumentCount = groupingArgumentCount(leftExpr);
+	for (size_t sourceArgumentIndex = 0; sourceArgumentIndex < sourceArgumentCount; sourceArgumentIndex++) {
+		int leftArgumentIndex = groupingArgumentIndex(leftExpr, sourceArgumentIndex);
+		int rightArgumentIndex = groupingArgumentIndex(rightExpr, sourceArgumentIndex);
+		if (leftArgumentIndex < 0 || rightArgumentIndex < 0)
+			return false;
+		bool isLeftBoundaryArgument = hasLeftEdge && sourceArgumentIndex == 0;
+		bool isRightBoundaryArgument = hasRightEdge && sourceArgumentIndex + 1 == sourceArgumentCount;
+		bool childForceLocal = argumentHasAdjacentSiblingSlot(leftExpr, sourceArgumentIndex);
 		if (!snapshotsHaveSameLocalOrdering(
-				left, right, leftArguments[argumentIndex], rightArguments[argumentIndex],
+				left, right, leftArguments[leftArgumentIndex], rightArguments[rightArgumentIndex],
 				isLeftBoundaryArgument || isRightBoundaryArgument, false, childForceLocal
 			))
 			return false;
@@ -281,7 +301,7 @@ static void collectSelectedGroupingRoots(
 ) {
 	if (!expr || !visited.insert(expr).second)
 		return;
-	if (expr->kind == Expression::Kind::PatternCall && !expr->arguments.empty())
+	if (expressionHasGroupingShape(expr))
 		roots.insert(expr);
 	for (Expression *arg : expr->arguments)
 		collectSelectedGroupingRoots(arg, roots, visited);
@@ -313,14 +333,29 @@ static int countMatchedParameters(Expression *expression, PatternDefinition *def
 // the middle "$" is interior even though it is also a variable element.
 // There can never be multiple left or right boundary slots.
 static bool startsWithArgument(Expression *expression) {
-	return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
+	if (!expression)
+		return false;
+	if (expression->kind == Expression::Kind::PatternCall)
+		return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
+	return expression->groupingStartsWithArgument;
 }
 
 static bool endsWithArgument(Expression *expression) {
-	return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
+	if (!expression)
+		return false;
+	if (expression->kind == Expression::Kind::PatternCall)
+		return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
+	return expression->groupingEndsWithArgument;
 }
 
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex) {
+	if (!expression)
+		return false;
+	if (expression->kind != Expression::Kind::PatternCall) {
+		if (argumentIndex >= expression->groupingArgumentHasAdjacentSiblingSlot.size())
+			return false;
+		return expression->groupingArgumentHasAdjacentSiblingSlot[argumentIndex];
+	}
 	if (!expression || !expression->patternMatch || !expression->patternMatch->matchedEndNode)
 		return false;
 	for (PatternDefinition *definition : expression->patternMatch->matchedEndNode->matchingDefinitions) {
@@ -345,8 +380,12 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 }
 
 static int expressionPrecedence(Expression *expression) {
-	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
-		!expression->patternMatch->matchedEndNode || expression->patternMatch->matchedEndNode->matchingDefinitions.empty())
+	if (!expression)
+		return 0;
+	if (expression->kind != Expression::Kind::PatternCall)
+		return expression->groupingPrecedence;
+	if (!expression->patternMatch || !expression->patternMatch->matchedEndNode ||
+		expression->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return 0;
 	int precedence = 0;
 	for (PatternDefinition *def : expression->patternMatch->matchedEndNode->matchingDefinitions) {
@@ -378,6 +417,7 @@ static bool validateGroupingInTrial(
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
+	trialContext.currentKnownConstants = context.currentKnownConstants;
 	trialContext.trialJournal = &journal;
 	trialContext.trialInstantiationCache =
 		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
@@ -387,29 +427,20 @@ static bool validateGroupingInTrial(
 	std::unordered_set<Expression *> trialFixedGroupingRoots = fixedGroupingRoots;
 	trialContext.fixedGroupingRoots = &trialFixedGroupingRoots;
 	trialContext.resolvedGroupingRoots = &trialFixedGroupingRoots;
-	bool trialSucceeded = true;
-	if (trialContext.currentInstantiation) {
-		trialSucceeded = runInstantiationReinferenceLoop(
-			trialContext, *trialContext.currentInstantiation, nullptr, expr->range, (std::string)expr->range.subString,
-			[&]() -> bool {
-			resetExpressionTypes(expr);
-			inferOrderedExpression(expr, trialContext, macroBindingFrameStack, true);
-			return trialContext.typesValid;
-		}
-		);
-	} else {
-		inferOrderedExpression(expr, trialContext, macroBindingFrameStack, true);
-		trialSucceeded = trialContext.typesValid;
-	}
+	inferOrderedExpression(expr, trialContext, macroBindingFrameStack, true);
+	bool trialSucceeded = trialContext.typesValid;
+	bool trialDeferredToReinfer =
+		trialSucceeded && trialContext.currentInstantiation && trialContext.currentInstantiation->needsReinfer;
 	if (trialSucceeded && trialContext.typesValid && requireVoidResult) {
-		DataType lineType = resolveTypeThroughBindings(expr, macroBindingFrameStack);
-		if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {
+		Expression *lineExprForType = expr;
+		DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, trialContext, macroBindingFrameStack);
+		if (!trialDeferredToReinfer && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
 			if (trialFailureDetail && trialFailureDetail->empty())
 				*trialFailureDetail = detail;
-			if (context.typeFailureDetail.empty())
-				context.typeFailureDetail = detail;
+			if (trialContext.typeFailureDetail.empty())
+				trialContext.typeFailureDetail = detail;
 			trialSucceeded = false;
 		}
 	}
@@ -428,7 +459,6 @@ static bool validateGroupingInTrial(
 	applyGroupingSnapshot(originalGrouping);
 	expr = originalGrouping.root;
 	recomputeRanges(expr);
-	sortArgumentsRecursive(expr);
 	resetExpressionTypes(expr);
 	return trialSucceeded && trialContext.typesValid;
 }
@@ -442,7 +472,7 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 	bool stopRequested = false;
 	auto withFixedRoot = [&](Expression *candidate,
 							 const std::function<GroupingEnumerationResult()> &continuation) -> GroupingEnumerationResult {
-		bool shouldFix = candidate && candidate->kind == Expression::Kind::PatternCall && !candidate->arguments.empty();
+		bool shouldFix = expressionHasGroupingShape(candidate);
 		bool inserted = shouldFix && fixedGroupingRoots.insert(candidate).second;
 		GroupingEnumerationResult result = continuation();
 		if (inserted)
@@ -461,7 +491,7 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 			return false;
 		std::vector<DataType> argTypesForOverload;
 		for (Expression *arg : candidate->arguments)
-			argTypesForOverload.push_back(resolveTypeThroughBindings(arg, macroBindingFrameStack));
+			argTypesForOverload.push_back(inferExpressionTypeWithoutSideEffects(arg, context, macroBindingFrameStack));
 		PatternDefinition *def =
 			selectOverload(defs, candidate->arguments, candidate->patternMatch->nodesPassed, argTypesForOverload);
 		return def && def->section && def->section->isMacro;
@@ -485,7 +515,6 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 		return {};
 	}
 	recomputeRanges(expr);
-	sortArgumentsRecursive(expr);
 
 	if (alreadyOrdered)
 		return withFixedRoot(expr, [&]() -> GroupingEnumerationResult {
@@ -500,8 +529,7 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 		enumerateOpaqueChoices;
 	enumerateOpaqueChoices = [&](Expression *&current, bool isOnBoundary, bool isRoot, bool forceLocal,
 								 const std::function<GroupingEnumerationResult()> &continuation) -> GroupingEnumerationResult {
-		bool isPatternCall = current->kind == Expression::Kind::PatternCall && !current->arguments.empty();
-		if (!isPatternCall)
+		if (!expressionHasGroupingShape(current))
 			return continuation();
 
 		if (isOpaqueGroupingNode(current, isOnBoundary, isRoot, forceLocal)) {
@@ -556,23 +584,27 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 
 		bool hasLeftEdge = startsWithArgument(current);
 		bool hasRightEdge = endsWithArgument(current);
+		size_t sourceArgumentCount = groupingArgumentCount(current);
 		Expression *parentExpression = current;
-		std::function<GroupingEnumerationResult(size_t)> enumerateArguments = [&](size_t argumentIndex
+		std::function<GroupingEnumerationResult(size_t)> enumerateArguments = [&](size_t sourceArgumentIndex
 																			  ) -> GroupingEnumerationResult {
-			if (argumentIndex >= parentExpression->arguments.size())
+			if (sourceArgumentIndex >= sourceArgumentCount)
 				return continuation();
-			bool isLeftBoundaryArgument = hasLeftEdge && argumentIndex == 0;
-			bool isRightBoundaryArgument = hasRightEdge && argumentIndex + 1 == parentExpression->arguments.size();
-			bool forceLocalArgument = argumentHasAdjacentSiblingSlot(parentExpression, argumentIndex);
-			Expression *argumentExpr = parentExpression->arguments[argumentIndex];
+			int actualArgumentIndex = groupingArgumentIndex(parentExpression, sourceArgumentIndex);
+			if (actualArgumentIndex < 0)
+				return enumerateArguments(sourceArgumentIndex + 1);
+			bool isLeftBoundaryArgument = hasLeftEdge && sourceArgumentIndex == 0;
+			bool isRightBoundaryArgument = hasRightEdge && sourceArgumentIndex + 1 == sourceArgumentCount;
+			bool forceLocalArgument = argumentHasAdjacentSiblingSlot(parentExpression, sourceArgumentIndex);
+			Expression *argumentExpr = parentExpression->arguments[actualArgumentIndex];
 			GroupingEnumerationResult result = enumerateOpaqueChoices(
 				argumentExpr, isLeftBoundaryArgument || isRightBoundaryArgument, false, forceLocalArgument,
 				[&]() -> GroupingEnumerationResult {
-				parentExpression->arguments[argumentIndex] = argumentExpr;
-				return enumerateArguments(argumentIndex + 1);
+				parentExpression->arguments[actualArgumentIndex] = argumentExpr;
+				return enumerateArguments(sourceArgumentIndex + 1);
 			}
 			);
-			parentExpression->arguments[argumentIndex] = argumentExpr;
+			parentExpression->arguments[actualArgumentIndex] = argumentExpr;
 			return result;
 		};
 		return enumerateArguments(0);
@@ -584,9 +616,7 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 		size_t operatorCount = 0;
 		std::function<void(Expression *, bool, bool)> collectFlatNodes = [&](Expression *expression, bool isOnBoundary,
 																			 bool isRoot) {
-			bool isPatternCall = expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty();
-
-			if (!isPatternCall) {
+			if (!expressionHasGroupingShape(expression)) {
 				flatNodes.push_back(expression);
 				return;
 			}
@@ -600,20 +630,21 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 			bool hasLeftEdge = startsWithArgument(expression);
 			bool hasRightEdge = endsWithArgument(expression);
 
-			for (size_t i = 0; i < expression->arguments.size(); i++) {
-				bool isLeftBoundaryArgument = hasLeftEdge && i == 0;
-				bool isRightBoundaryArgument = hasRightEdge && i + 1 == expression->arguments.size();
-				if (isRightBoundaryArgument)
-					continue;
-				if (isLeftBoundaryArgument)
-					collectFlatNodes(expression->arguments[i], true, false);
+			size_t sourceArgumentCount = groupingArgumentCount(expression);
+			if (hasLeftEdge && sourceArgumentCount > 0) {
+				int leftArgumentIndex = groupingArgumentIndex(expression, 0);
+				if (leftArgumentIndex >= 0)
+					collectFlatNodes(expression->arguments[leftArgumentIndex], true, false);
 			}
 
 			operatorCount++;
 			flatNodes.push_back(expression);
 
-			if (hasRightEdge)
-				collectFlatNodes(expression->arguments.back(), true, false);
+			if (hasRightEdge && sourceArgumentCount > 0) {
+				int rightArgumentIndex = groupingArgumentIndex(expression, sourceArgumentCount - 1);
+				if (rightArgumentIndex >= 0)
+					collectFlatNodes(expression->arguments[rightArgumentIndex], true, false);
+			}
 		};
 
 		collectFlatNodes(expr, true, true);
@@ -641,12 +672,13 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 			GroupingEnumerationResult result;
 			for (int rootIndex = end; rootIndex >= start; rootIndex--) {
 				Expression *rootExpression = flatNodes[rootIndex];
-				bool isPatternCall =
-					rootExpression->kind == Expression::Kind::PatternCall && !rootExpression->arguments.empty();
-				if (!isPatternCall || opaqueNodes.contains(rootExpression))
+				if (!expressionHasGroupingShape(rootExpression) || opaqueNodes.contains(rootExpression))
 					continue;
 				bool hasLeftEdge = startsWithArgument(rootExpression);
 				bool hasRightEdge = endsWithArgument(rootExpression);
+				size_t sourceArgumentCount = groupingArgumentCount(rootExpression);
+				if ((hasLeftEdge || hasRightEdge) && sourceArgumentCount == 0)
+					continue;
 				if (hasLeftEdge && rootIndex == start)
 					continue;
 				if (hasRightEdge && rootIndex == end)
@@ -662,8 +694,7 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 						if (otherIndex == rootIndex)
 							continue;
 						Expression *otherExpression = flatNodes[otherIndex];
-						if (opaqueNodes.contains(otherExpression) || otherExpression->kind != Expression::Kind::PatternCall ||
-							otherExpression->arguments.empty())
+						if (opaqueNodes.contains(otherExpression) || !expressionHasGroupingShape(otherExpression))
 							continue;
 						if (!startsWithArgument(otherExpression) || !endsWithArgument(otherExpression))
 							continue;
@@ -677,15 +708,17 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 						continue;
 				}
 
-				Expression *savedLeft = hasLeftEdge ? rootExpression->arguments.front() : nullptr;
-				Expression *savedRight = hasRightEdge ? rootExpression->arguments.back() : nullptr;
+				int leftArgumentIndex = hasLeftEdge ? groupingArgumentIndex(rootExpression, 0) : -1;
+				int rightArgumentIndex = hasRightEdge ? groupingArgumentIndex(rootExpression, sourceArgumentCount - 1) : -1;
+				Expression *savedLeft = leftArgumentIndex >= 0 ? rootExpression->arguments[leftArgumentIndex] : nullptr;
+				Expression *savedRight = rightArgumentIndex >= 0 ? rootExpression->arguments[rightArgumentIndex] : nullptr;
 				auto tryRight = [&]() -> GroupingEnumerationResult {
 					if (!hasRightEdge)
 						return onResult(rootExpression);
 					return tryGroupings(rootIndex + 1, end, [&](Expression *rightResult) -> GroupingEnumerationResult {
 						if (expressionContains(rightResult, rootExpression))
 							return {};
-						rootExpression->arguments.back() = rightResult;
+						rootExpression->arguments[rightArgumentIndex] = rightResult;
 						return onResult(rootExpression);
 					});
 				};
@@ -695,16 +728,16 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 						tryGroupings(start, rootIndex - 1, [&](Expression *leftResult) -> GroupingEnumerationResult {
 						if (expressionContains(leftResult, rootExpression))
 							return {};
-						rootExpression->arguments.front() = leftResult;
+						rootExpression->arguments[leftArgumentIndex] = leftResult;
 						return tryRight();
 					});
 				} else {
 					candidateResult = tryRight();
 				}
-				if (hasLeftEdge)
-					rootExpression->arguments.front() = savedLeft;
-				if (hasRightEdge)
-					rootExpression->arguments.back() = savedRight;
+				if (leftArgumentIndex >= 0)
+					rootExpression->arguments[leftArgumentIndex] = savedLeft;
+				if (rightArgumentIndex >= 0)
+					rootExpression->arguments[rightArgumentIndex] = savedRight;
 				result.foundValid = result.foundValid || candidateResult.foundValid;
 				if (candidateResult.stopRequested) {
 					stopRequested = true;
@@ -719,7 +752,6 @@ static GroupingEnumerationResult enumerateExpressionGroupings(
 		return tryGroupings(0, lastIndex, [&](Expression *rootExpression) -> GroupingEnumerationResult {
 			expr = rootExpression;
 			recomputeRanges(expr);
-			sortArgumentsRecursive(expr);
 			return withFixedRoot(expr, [&]() -> GroupingEnumerationResult {
 				GroupingCandidateDecision decision = onCandidate(expr, fixedGroupingRoots);
 				if (decision == GroupingCandidateDecision::AcceptStop)
@@ -811,7 +843,8 @@ static bool inferExpression(
 		if (context.typesValid)
 			snapshotExpressionVariableReferences(expr, context);
 		if (context.typesValid && requireVoidResult) {
-			DataType lineType = resolveTypeThroughBindings(expr, macroBindingFrameStack);
+			Expression *lineExprForType = expr;
+			DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, context, macroBindingFrameStack);
 			if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {
 				context.typesValid = false;
 				context.typeFailureDetail = "Standalone expression '" + std::string(expr->range.subString) +
@@ -867,7 +900,6 @@ static bool inferExpression(
 			expr = selectedGrouping.root;
 			selectedFixedGroupingRoots = collectSelectedGroupingRoots(expr);
 			recomputeRanges(expr);
-			sortArgumentsRecursive(expr);
 			resetExpressionTypes(expr);
 			if (!tryInfer(false)) {
 				context.typesValid = false;
@@ -939,7 +971,6 @@ static bool inferExpression(
 		expr = selectedGrouping.root;
 		selectedFixedGroupingRoots = collectSelectedGroupingRoots(expr);
 		recomputeRanges(expr);
-		sortArgumentsRecursive(expr);
 		resetExpressionTypes(expr);
 		if (!tryInfer(false)) {
 			context.typesValid = false;

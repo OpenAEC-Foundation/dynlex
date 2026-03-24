@@ -1,5 +1,6 @@
 #include "range.h"
 #include "codeLine.h"
+#include "pathUtils.h"
 #include "sourceFile.h"
 
 Range::Range(CodeLine *line, int start, int end) : line(line), subString(line->fullText.substr(start, end - start)) {}
@@ -16,8 +17,8 @@ std::string Range::toString() const {
 	}
 	// link should be clickable in vs code
 	// one-based index
-	return mappedStart.sourceFile->uri + ":" + std::to_string(mappedStart.sourceFileLineIndex + 1) + ":" +
-		   std::to_string(mappedStart.column + 1) + "-" + std::to_string(mappedEnd.column + 1);
+	return pathutil::toDisplayPath(mappedStart.sourceFile->uri) + ":" + std::to_string(mappedStart.sourceFileLineIndex + 1) +
+		   ":" + std::to_string(mappedStart.column + 1) + "-" + std::to_string(mappedEnd.column + 1);
 }
 
 int Range::start() const { return subString.begin() - line->fullText.begin(); }
