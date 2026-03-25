@@ -116,6 +116,81 @@ static void traceResolution(const std::string &message) {
 	std::cerr << "[res] " << message << '\n';
 }
 
+static bool sectionContainsOrIsAncestorOf(Section *section, Section *candidate) {
+	for (Section *current = candidate; current; current = current->parent) {
+		if (current == section)
+			return true;
+	}
+	return false;
+}
+
+static void collectPromotablePatternNames(
+	Section *section, std::unordered_set<std::string> &names, std::unordered_set<Section *> &visited
+) {
+	if (!section || !visited.insert(section).second)
+		return;
+	for (PatternDefinition *definition : section->patternDefinitions) {
+		forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
+			if (element.type == PatternElement::Type::VariableLike && canPromoteVariableLikeElement(element))
+				names.insert(element.text);
+		});
+	}
+	for (Section *child : section->children)
+		collectPromotablePatternNames(child, names, visited);
+}
+
+static bool
+promotePatternNameInSectionChain(ParseContext &context, Section *section, const std::string &name, const Range &useRange) {
+	for (Section *current = section; current; current = current->parent) {
+		bool foundInCurrent = false;
+		for (PatternDefinition *definition : current->patternDefinitions) {
+			visitPatternNameWithFoundState(definition->patternElements, name, false, [&](DefinitionPatternElement &element) {
+				if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::VariableLike)
+					return false;
+				if (element.type != PatternElement::Type::VariableLike) {
+					foundInCurrent = true;
+					return true;
+				}
+				if (!canPromoteVariableLikeElement(element))
+					return false;
+				element.promotedFromVariableLike = true;
+				if (!element.firstImplicitPromotionUseRange.line)
+					element.firstImplicitPromotionUseRange = useRange;
+				element.type = PatternElement::Type::Variable;
+				foundInCurrent = true;
+				return true;
+			});
+		}
+		if (!foundInCurrent)
+			continue;
+		if (!current->variableDefinitions.contains(name)) {
+			for (PatternDefinition *definition : current->patternDefinitions) {
+				bool created = visitPatternNameWithFoundState(
+					definition->patternElements, name, false,
+					[&](DefinitionPatternElement &element) {
+					if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+						return false;
+					VariableReference *varRef = context.createVariableReference(
+						Range(
+							definition->range.line, definition->range.start() + element.startPos,
+							definition->range.start() + element.startPos + element.text.length()
+						),
+						element.text
+					);
+					current->variableDefinitions[element.text] = varRef;
+					current->variableReferences[element.text].push_back(varRef);
+					return true;
+				}
+				);
+				if (created)
+					break;
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
 static bool isInternalSection(Section *section) {
 	if (!section)
 		return false;
@@ -1356,6 +1431,40 @@ bool resolvePatterns(ParseContext &context) {
 		// The cyclic body references will then resolve against the newly-added definitions
 		// in the next iteration.
 		if (!madeProgress) {
+			bool promotedCyclicParameter = false;
+			for (Section *section : unResolvedSections) {
+				std::unordered_set<std::string> promotableNames;
+				std::unordered_set<Section *> visitedSections;
+				collectPromotablePatternNames(section, promotableNames, visitedSections);
+				if (promotableNames.empty())
+					continue;
+				for (PatternReference *reference : bodyReferences) {
+					if (!reference)
+						continue;
+					Section *referenceSection = reference->range().section();
+					if (!sectionContainsOrIsAncestorOf(section, referenceSection))
+						continue;
+					// Deadlock recovery must not reinterpret multi-word call literals as
+					// parameters; only unresolved single-token references are valid
+					// evidence for implicit parameter promotion here.
+					if (reference->patternElements.size() != 1)
+						continue;
+					const PatternElement &element = reference->patternElements.front();
+					if (element.type != PatternElement::Type::VariableLike || !promotableNames.contains(element.text))
+						continue;
+					if (promotePatternNameInSectionChain(context, referenceSection, element.text, reference->range())) {
+						promotedCyclicParameter = true;
+						traceResolution(
+							"iter " + std::to_string(resolutionIteration) + " cyclic promote '" + element.text + "' from " +
+							referenceTraceId(reference)
+						);
+					}
+				}
+			}
+			if (promotedCyclicParameter) {
+				computeVariableLikeCounts(unResolvedSections);
+				continue;
+			}
 			traceResolution("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
 			if (unResolvedSections.empty())
 				break; // no sections to force-resolve and no progress — truly stuck
