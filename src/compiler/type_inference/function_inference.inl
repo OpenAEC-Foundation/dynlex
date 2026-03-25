@@ -261,6 +261,33 @@ inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context,
 static bool inferSection(Section *section, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static DataType derivePatternCallType(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 
+struct ProbeGroupingSnapshot {
+	Expression *root{};
+	std::unordered_map<Expression *, std::vector<Expression *>> argumentsByExpression;
+};
+
+static void
+captureProbeGroupingSnapshot(Expression *expr, ProbeGroupingSnapshot &snapshot, std::unordered_set<Expression *> &visited) {
+	if (!expr || !visited.insert(expr).second)
+		return;
+	snapshot.argumentsByExpression[expr] = expr->arguments;
+	for (Expression *arg : expr->arguments)
+		captureProbeGroupingSnapshot(arg, snapshot, visited);
+}
+
+static ProbeGroupingSnapshot captureProbeGroupingSnapshot(Expression *expr) {
+	ProbeGroupingSnapshot snapshot;
+	snapshot.root = expr;
+	std::unordered_set<Expression *> visited;
+	captureProbeGroupingSnapshot(expr, snapshot, visited);
+	return snapshot;
+}
+
+static void applyProbeGroupingSnapshot(const ProbeGroupingSnapshot &snapshot) {
+	for (const auto &[expression, arguments] : snapshot.argumentsByExpression)
+		expression->arguments = arguments;
+}
+
 static Expression *expandFunctionMacroBodyForInference(
 	Expression *expr, PatternDefinition *definition, InferenceContext &context, const BindingFrameStack &bindingFrameStack,
 	BindingFrameStack &expandedBindingFrameStack
@@ -706,6 +733,8 @@ static DataType inferExpressionTypeWithoutSideEffects(
 		~ActiveTypeProbeGuard() { active.erase(expr); }
 	} activeProbe(activeTypeProbes, targetExpr);
 
+	ProbeGroupingSnapshot groupingSnapshot = captureProbeGroupingSnapshot(targetExpr);
+	Expression *originalProbeRoot = targetExpr;
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
@@ -722,6 +751,10 @@ static DataType inferExpressionTypeWithoutSideEffects(
 	context.inheritTypeFailureFrom(trialContext);
 
 	rollbackTrialJournal(journal);
+	applyProbeGroupingSnapshot(groupingSnapshot);
+	targetExpr = originalProbeRoot;
+	recomputeRanges(targetExpr);
+	resetExpressionTypes(targetExpr);
 	if (type.isDeduced() && !bindingDependentProbe)
 		expr->type = type;
 	return type;
@@ -1356,6 +1389,14 @@ static void inferOrderedExpression(
 			argTypesForOverload.push_back(
 				inferExpressionTypeWithoutSideEffects(expr->arguments[ai], context, macroBindingFrameStack)
 			);
+		auto overloadFailurePriority = [&](Range diagnosticRange) {
+			(void)diagnosticRange;
+			for (const DataType &argType : argTypesForOverload) {
+				if (argType.kind == DataType::Kind::Void)
+					return 0;
+			}
+			return 1;
+		};
 
 		// Select the best overload based on argument types
 		PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
@@ -1371,13 +1412,15 @@ static void inferOrderedExpression(
 					uniqueCandidates.insert(pattern);
 				}
 			}
-			context.setTypeFailure(renderConfiguredMessage(
+			std::string detail = renderConfiguredMessage(
 				syntaxConfigForRange(context.parseContext, expr->range), "no overload matches call",
 				candidates.empty() ? "message" : "with overloads",
 				{{"call", (std::string)expr->range.subString},
 				 {"argument_types", formatTypeList(argTypesForOverload, context.parseContext)},
 				 {"overloads", candidates}}
-			));
+			);
+			context.setTypeFailure(detail);
+			context.fail(buildFailureDetailDiagnostic(expr->range, detail), overloadFailurePriority(expr->range));
 			break;
 		}
 		for (size_t ai = 0; ai < argTypesForOverload.size(); ai++) {
@@ -1385,11 +1428,13 @@ static void inferOrderedExpression(
 				continue;
 			if (definitionParameterAcceptsVoid(def, expr->patternMatch->nodesPassed, ai))
 				continue;
-			context.setTypeFailure(renderConfiguredMessage(
+			std::string detail = renderConfiguredMessage(
 				syntaxConfigForRange(context.parseContext, expr->arguments[ai]->range), "no overload matches call", "message",
 				{{"call", (std::string)expr->range.subString},
 				 {"argument_types", formatTypeList(argTypesForOverload, context.parseContext)}}
-			));
+			);
+			context.setTypeFailure(detail);
+			context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
 			break;
 		}
 		if (!context.typesValid)
@@ -1422,9 +1467,11 @@ static void inferOrderedExpression(
 				context.setTypeFailure("macro body expansion failed during type inference");
 				break;
 			}
-			DataType resolvedType = ensureExpressionType(bodyExpr, context, expandedBindingFrameStack);
-			if (!context.typesValid)
+			if (!inferExpression(bodyExpr, context, false, expandedBindingFrameStack))
 				break;
+			if (!context.trial)
+				expr->inferredMacroExpansion = bodyExpr;
+			DataType resolvedType = bodyExpr->type;
 			if (resolvedType.isDeduced())
 				expr->type = resolvedType;
 		} else if (matchedSection->isMacro) {

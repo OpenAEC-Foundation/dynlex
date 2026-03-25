@@ -64,15 +64,61 @@ we iterate over all possible operand orders until we find a valid one.
 all instantiation types are known when instantiating a function and do not change. we use this fact for reordering.
 the only exception is the store intrinsic: it takes a value whose first arguments type should be determined by its second arguments type. therefore, a store intrinsic wrapper has to be a macro function, so it expands before types are checked.
 
-we prefer depth-first, just like pattern matching.
+we prefer sub-first aka left = subexpression, just like pattern matching.
 
 
 a functions return value may never be unused. this prevents wrong groupings. if we want to discard a functions return value, we can use a discard intrinsic.
 
 enclosed expressions like '1 + 4' in 'the minimum of 1 + 4 and 5 + 6' are inferred first. when an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
 
+so:
+(x + y squared) * z + 2
+initial sub-first order:
+(((x + y) squared) * z) + 2
+inner increment:
+((x + (y squared)) * z) + 2
+all inner orderings have been tried. all inner orderings reset. outer increment:
+((x + y) squared) * (z + 2)
+inner increment:
+(x + (y squared)) * (z + 2)
+
+with multiple separate sub expressions, iterate over 1 first, reset 1 and step 2, iterate 1 again, step 2 again, when 2 is finished reset both and do the same with the outer expression.
+
+so outer innerright innerleft
+000
+001
+010
+011
+100
+101
+etc.
+
+for every increment, we need to reset and revalidate the whole expression tree. this is because some intrinsics have side effects. for example, the store intrinsic has a side effect:
+'set x to y and print x' <-- second x's type isn't know at first and should be set by the load intrinsic.
+
+therefore, we sadly can't just use a recursive 'increment until next valid option'
+
+therefore, we have to separate increments, validation and clearing.
+an increment changes a grouping somewhere (or potentially multiple groupings, as long as groupings have finished iterating).
+validation infers the whole tree recursively
+clearing clears all types from the tree recursively.
+
+to detect ambiguity, we have to keep incrementing until we found another fully passing tree or we finished. when encountering the first valid state, we save this state by saving the expression pointers.
+
 we don't clone the expression tree for reordering, but reorder it. even when storing correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
-we don't use pointers to expression locations, since those can be dangling pointers.
+we don't use pointers to expression pointers locations (expression**), since those can be dangling pointers.
+
+ALL functions can be seen as one of these 4 categories of operators.
+the ONLY thing we check for this is does the operator START with an argument? and does it END with an argument?
+all other arguments are IRRELEVANT. we can never start or end with 2 arguments, since '$$' would just merge to one name when the user supplies two concatenated names 'arg1' and 'arg2' as 'arg1arg2'. ' ' is a SEPARATOR, a pattern element of type 'other'.
+prefix operator:
+not $, set $ to $, vector of $ $ #
+postfix operator:
+$ doubled, $%
+infix operator:
+$ + $
+other operator:
+true, a $ bit integer
 
 some orderings are ambigous.
 for example:

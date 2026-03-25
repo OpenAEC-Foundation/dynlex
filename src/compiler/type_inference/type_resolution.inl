@@ -827,6 +827,15 @@ static Diagnostic buildTypeFailureDiagnostic(
 	return diagnostic;
 }
 
+static Diagnostic buildFailureDetailDiagnostic(Range range, std::string detail, std::vector<RelatedInfo> relatedInfo = {}) {
+	Diagnostic diagnostic;
+	diagnostic.level = Diagnostic::Level::Error;
+	diagnostic.message = std::move(detail);
+	diagnostic.range = range;
+	diagnostic.relatedInfo = std::move(relatedInfo);
+	return diagnostic;
+}
+
 static bool isValidCastRuntimeType(const DataType &type) {
 	if (!type.isDeduced() || type.kind == DataType::Kind::Void || type.kind == DataType::Kind::Type)
 		return false;
@@ -984,6 +993,9 @@ struct InferenceContext {
 	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	std::vector<RelatedInfo> typeFailureRelatedInfo;
+	Diagnostic typeFailureDiagnostic;
+	int typeFailurePriority = -1;
+	bool hasTypeFailureDiagnostic = false;
 	TrialJournal *trialJournal{};
 	std::shared_ptr<TrialInstantiationCache> trialInstantiationCache;
 	const std::unordered_set<Expression *> *fixedGroupingRoots{};
@@ -1005,12 +1017,29 @@ struct InferenceContext {
 			typeFailureDetail = std::move(detail);
 	}
 
+	void fail(Diagnostic diagnostic, int priority = 1) {
+		typesValid = false;
+		if (hasTypeFailureDiagnostic && typeFailurePriority >= priority)
+			return;
+		typeFailureDiagnostic = std::move(diagnostic);
+		typeFailurePriority = priority;
+		hasTypeFailureDiagnostic = true;
+	}
+
 	void clearTypeFailure() {
 		typeFailureDetail.clear();
 		typeFailureRelatedInfo.clear();
+		typeFailureDiagnostic = Diagnostic();
+		typeFailurePriority = -1;
+		hasTypeFailureDiagnostic = false;
 	}
 
 	void inheritTypeFailureFrom(const InferenceContext &other) {
+		if (!hasTypeFailureDiagnostic && other.hasTypeFailureDiagnostic) {
+			typeFailureDiagnostic = other.typeFailureDiagnostic;
+			typeFailurePriority = other.typeFailurePriority;
+			hasTypeFailureDiagnostic = true;
+		}
 		if (!typeFailureDetail.empty() || other.typeFailureDetail.empty())
 			return;
 		typeFailureDetail = other.typeFailureDetail;

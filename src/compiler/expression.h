@@ -38,6 +38,10 @@ struct Expression {
 	PatternMatch *patternMatch{};
 	// For PatternCall: overload selected during type inference.
 	PatternDefinition *selectedPatternDefinition{};
+	// For function-macro PatternCalls: the call-site-specific expanded body
+	// shape selected during type inference. Codegen clones this grouped tree so
+	// it does not fall back to the raw ungrouped replacement source.
+	Expression *inferredMacroExpansion{};
 
 	// For Pending: the pattern reference (used during resolution)
 	PatternReference *patternReference{};

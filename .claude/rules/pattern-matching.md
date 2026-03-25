@@ -35,3 +35,4 @@ paths:
 - **Submatch patternPos**: not propagated to parent after submatch completion. Fix: `stepUp.patternPos = patternPos`
 - **Keyframe shift**: `replaceLocal()` used `+` instead of `-`. Over-shifted keyframes by `2 * replacement.length()`
 - **Precedence levels**: Sequential numbering gave `*`/`/` different levels. Fix: wave-based BFS assignment.
+- **Function submatch recursion guard must stay strict**: relaxing `MatchProgress::canStartSubmatch()` to walk ancestor state explodes the DFS search space during ordinary stdlib matching, causing runaway compile-time memory growth. The guard must keep blocking fresh function-root submatches from another function-root state; recursive pattern-resolution fixes belong in the deadlock/classification logic, not the matcher.

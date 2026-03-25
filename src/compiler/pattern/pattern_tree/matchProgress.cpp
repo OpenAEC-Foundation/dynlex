@@ -13,6 +13,7 @@ static std::tuple<size_t, std::string> literalFallbackSortKey(const PatternTreeN
 		firstStartPos = std::min(firstStartPos, startPos);
 	return {firstStartPos, node->text};
 }
+
 } // namespace
 
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)

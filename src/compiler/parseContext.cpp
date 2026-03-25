@@ -168,6 +168,7 @@ Expression *cloneMacroExpansionExpressionImpl(Expression *expression) {
 	clone->patternMatch = expression->patternMatch;
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
+	clone->inferredMacroExpansion = nullptr;
 	clone->isSubMatch = expression->isSubMatch;
 	clone->isExplicitGroup = expression->isExplicitGroup;
 	clone->groupingArgumentIndices = expression->groupingArgumentIndices;

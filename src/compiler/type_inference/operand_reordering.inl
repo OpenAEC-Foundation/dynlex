@@ -180,23 +180,45 @@ buildOperandGroupingWarningKey(const Range &range, std::string_view chosenGroupi
 struct GroupingSnapshot {
 	Expression *root{};
 	std::unordered_map<Expression *, std::vector<Expression *>> argumentsByExpression;
+	std::unordered_map<Expression *, bool> explicitGroupByExpression;
 };
 
-enum class GroupingCandidateDecision {
-	Reject,
-	AcceptContinue,
-	AcceptStop,
+enum class GroupingEnumerationProgress {
+	NoCandidate,
+	EmittedContinue,
+	Stop,
 };
 
-struct GroupingEnumerationResult {
-	bool foundValid{};
-	bool stopRequested{};
+static GroupingEnumerationProgress
+mergeGroupingEnumerationProgress(GroupingEnumerationProgress current, GroupingEnumerationProgress next) {
+	if (next == GroupingEnumerationProgress::Stop)
+		return GroupingEnumerationProgress::Stop;
+	if (next == GroupingEnumerationProgress::EmittedContinue)
+		return GroupingEnumerationProgress::EmittedContinue;
+	return current;
+}
+
+struct GroupingFailure {
+	Diagnostic diagnostic;
+	bool hasDiagnostic = false;
+	int priority = -1;
 };
+
+static void considerGroupingFailure(GroupingFailure *currentBest, Diagnostic diagnostic, int priority) {
+	if (!currentBest)
+		return;
+	if (currentBest->priority >= priority)
+		return;
+	currentBest->diagnostic = std::move(diagnostic);
+	currentBest->hasDiagnostic = true;
+	currentBest->priority = priority;
+}
 
 static void captureGroupingSnapshot(Expression *expr, GroupingSnapshot &snapshot, std::unordered_set<Expression *> &visited) {
 	if (!expr || !visited.insert(expr).second)
 		return;
 	snapshot.argumentsByExpression[expr] = expr->arguments;
+	snapshot.explicitGroupByExpression[expr] = expr->isExplicitGroup;
 	for (Expression *arg : expr->arguments)
 		captureGroupingSnapshot(arg, snapshot, visited);
 }
@@ -212,6 +234,8 @@ static GroupingSnapshot captureGroupingSnapshot(Expression *expr) {
 static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
 	for (const auto &[expression, arguments] : snapshot.argumentsByExpression)
 		expression->arguments = arguments;
+	for (const auto &[expression, explicitGroup] : snapshot.explicitGroupByExpression)
+		expression->isExplicitGroup = explicitGroup;
 }
 
 static bool expressionHasGroupingShape(Expression *expression) {
@@ -220,6 +244,17 @@ static bool expressionHasGroupingShape(Expression *expression) {
 	if (expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty())
 		return true;
 	return !expression->groupingArgumentIndices.empty();
+}
+
+static bool isSectionPatternCall(Expression *expression) {
+	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
+		!expression->patternMatch->matchedEndNode)
+		return false;
+	for (PatternDefinition *definition : expression->patternMatch->matchedEndNode->matchingDefinitions) {
+		if (definition && definition->section && definition->section->type == SectionType::Section)
+			return true;
+	}
+	return false;
 }
 
 static size_t groupingArgumentCount(Expression *expression) {
@@ -401,16 +436,16 @@ static int expressionPrecedence(Expression *expression) {
 
 static bool validateGroupingInTrial(
 	Expression *expr, InferenceContext &context, const std::unordered_set<Expression *> &fixedGroupingRoots,
-	const BindingFrameStack &macroBindingFrameStack, bool requireVoidResult = false, std::string *trialFailureDetail = nullptr,
+	const BindingFrameStack &macroBindingFrameStack, const DiagnosticExpressionSnapshot &failureSnapshot,
+	bool requireVoidResult = false, GroupingFailure *trialFailure = nullptr,
 	std::unordered_set<Expression *> *resolvedGroupingRoots = nullptr, GroupingSnapshot *resolvedGroupingSnapshot = nullptr,
 	std::vector<InferenceContext::OperandGroupingWarning> *resolvedGroupingWarnings = nullptr
 ) {
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(expr);
 	if (expressionTreeHasCycle(expr)) {
-		if (trialFailureDetail && trialFailureDetail->empty())
-			*trialFailureDetail = "internal operand regrouping cycle detected";
-		if (context.typeFailureDetail.empty())
-			context.typeFailureDetail = "internal operand regrouping cycle detected";
+		considerGroupingFailure(
+			trialFailure, buildFailureDetailDiagnostic(failureSnapshot.range, "internal operand regrouping cycle detected"), 1
+		);
 		return false;
 	}
 	resetExpressionTypes(expr);
@@ -437,10 +472,9 @@ static bool validateGroupingInTrial(
 		if (!trialDeferredToReinfer && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
-			if (trialFailureDetail && trialFailureDetail->empty())
-				*trialFailureDetail = detail;
-			if (trialContext.typeFailureDetail.empty())
-				trialContext.typeFailureDetail = detail;
+			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
+			considerGroupingFailure(trialFailure, diagnostic, 0);
+			trialContext.fail(std::move(diagnostic), 0);
 			trialSucceeded = false;
 		}
 	}
@@ -448,11 +482,19 @@ static bool validateGroupingInTrial(
 		*resolvedGroupingSnapshot = captureGroupingSnapshot(expr);
 	if (trialSucceeded && trialContext.typesValid && resolvedGroupingWarnings)
 		*resolvedGroupingWarnings = std::move(trialGroupingWarnings);
-	if ((!trialSucceeded || !trialContext.typesValid) && trialFailureDetail && trialFailureDetail->empty() &&
-		!trialContext.typeFailureDetail.empty())
-		*trialFailureDetail = trialContext.typeFailureDetail;
-	if (!trialSucceeded || !trialContext.typesValid)
-		context.inheritTypeFailureFrom(trialContext);
+	if (!trialSucceeded || !trialContext.typesValid) {
+		if (trialContext.hasTypeFailureDiagnostic) {
+			considerGroupingFailure(trialFailure, trialContext.typeFailureDiagnostic, trialContext.typeFailurePriority);
+		} else {
+			considerGroupingFailure(
+				trialFailure,
+				buildFailureDetailDiagnostic(
+					failureSnapshot.range, trialContext.typeFailureDetail, trialContext.typeFailureRelatedInfo
+				),
+				1
+			);
+		}
+	}
 	if (trialSucceeded && trialContext.typesValid && resolvedGroupingRoots)
 		*resolvedGroupingRoots = std::move(trialFixedGroupingRoots);
 	rollbackTrialJournal(journal);
@@ -463,302 +505,322 @@ static bool validateGroupingInTrial(
 	return trialSucceeded && trialContext.typesValid;
 }
 
-static GroupingEnumerationResult enumerateExpressionGroupings(
+static GroupingEnumerationProgress enumerateExpressionGroupings(
 	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack,
-	const std::function<GroupingCandidateDecision(Expression *&, const std::unordered_set<Expression *> &)> &onCandidate
+	const std::function<GroupingEnumerationProgress(Expression *&, const std::unordered_set<Expression *> &)> &onCandidate
 ) {
-	static bool traceNestedMacroType = std::getenv("DYNLEX_TRACE_NESTED_MACRO_TYPE") != nullptr;
 	std::unordered_set<Expression *> fixedGroupingRoots;
-	bool stopRequested = false;
 	auto withFixedRoot = [&](Expression *candidate,
-							 const std::function<GroupingEnumerationResult()> &continuation) -> GroupingEnumerationResult {
+							 const std::function<GroupingEnumerationProgress()> &continuation) -> GroupingEnumerationProgress {
 		bool shouldFix = expressionHasGroupingShape(candidate);
 		bool inserted = shouldFix && fixedGroupingRoots.insert(candidate).second;
-		GroupingEnumerationResult result = continuation();
+		GroupingEnumerationProgress progress = continuation();
 		if (inserted)
 			fixedGroupingRoots.erase(candidate);
-		return result;
+		return progress;
 	};
 	auto isOpaqueGroupingNode = [&](Expression *expression, bool isOnBoundary, bool isRoot, bool forceLocal) -> bool {
 		return !isRoot && (forceLocal || expression->isExplicitGroup || !isOnBoundary);
 	};
-	auto isMacroPatternCall = [&](Expression *candidate) -> bool {
-		if (!candidate || candidate->kind != Expression::Kind::PatternCall || !candidate->patternMatch ||
-			!candidate->patternMatch->matchedEndNode)
-			return false;
-		auto &defs = candidate->patternMatch->matchedEndNode->matchingDefinitions;
-		if (defs.empty())
-			return false;
-		std::vector<DataType> argTypesForOverload;
-		for (Expression *arg : candidate->arguments)
-			argTypesForOverload.push_back(inferExpressionTypeWithoutSideEffects(arg, context, macroBindingFrameStack));
-		PatternDefinition *def =
-			selectOverload(defs, candidate->arguments, candidate->patternMatch->nodesPassed, argTypesForOverload);
-		return def && def->section && def->section->isMacro;
-	};
-	auto nestedGroupingHasResolvedType = [&](Expression *candidate) -> bool {
-		DataType resolvedType = inferExpressionTypeWithoutSideEffects(candidate, context, macroBindingFrameStack);
-		if (traceNestedMacroType && isMacroPatternCall(candidate) && !resolvedType.isDeduced()) {
-			std::cerr << "[nested-macro-type] unresolved expr='" << std::string(candidate->range.subString)
-					  << "' binding_depth=" << macroBindingFrameStack.depth() << "\n";
-		}
-		if (!resolvedType.isDeduced() && context.typeFailureDetail.empty()) {
-			context.typeFailureDetail = "nested grouped expression '" + std::string(candidate->range.subString) +
-										"' could not be resolved during operand regrouping";
-		}
-		return resolvedType.isDeduced();
-	};
 
 	if (expressionTreeHasCycle(expr)) {
-		if (context.typeFailureDetail.empty())
-			context.typeFailureDetail = "internal operand regrouping cycle detected";
-		return {};
+		if (!context.hasTypeFailureDiagnostic)
+			context.fail(
+				buildFailureDetailDiagnostic(
+					captureDiagnosticExpressionSnapshot(expr).range, "internal operand regrouping cycle detected"
+				),
+				1
+			);
+		return GroupingEnumerationProgress::NoCandidate;
 	}
 	recomputeRanges(expr);
 
 	if (alreadyOrdered)
-		return withFixedRoot(expr, [&]() -> GroupingEnumerationResult {
-			GroupingCandidateDecision decision = onCandidate(expr, fixedGroupingRoots);
-			if (decision == GroupingCandidateDecision::AcceptStop)
-				stopRequested = true;
-			return {decision != GroupingCandidateDecision::Reject, decision == GroupingCandidateDecision::AcceptStop};
+		return withFixedRoot(expr, [&]() {
+			return onCandidate(expr, fixedGroupingRoots);
 		});
 
-	std::function<
-		GroupingEnumerationResult(Expression *&, bool, bool, bool, const std::function<GroupingEnumerationResult()> &)>
+	std::function<GroupingEnumerationProgress(
+		Expression *&, bool, bool, bool, bool, const std::function<GroupingEnumerationProgress()> &
+	)>
+		enumeratePrioritizedChoices;
+	std::function<GroupingEnumerationProgress(Expression *&, const std::function<GroupingEnumerationProgress()> &)>
 		enumerateOpaqueChoices;
-	enumerateOpaqueChoices = [&](Expression *&current, bool isOnBoundary, bool isRoot, bool forceLocal,
-								 const std::function<GroupingEnumerationResult()> &continuation) -> GroupingEnumerationResult {
+	std::function<GroupingEnumerationProgress(Expression *&, const std::unordered_set<Expression *> &)> emitStructuralCandidate;
+	emitStructuralCandidate = [&](Expression *&candidateRoot,
+								  const std::unordered_set<Expression *> &candidateFixedGroupingRoots
+							  ) -> GroupingEnumerationProgress {
+		return onCandidate(candidateRoot, candidateFixedGroupingRoots);
+	};
+	enumerateOpaqueChoices = [&](Expression *&current, const std::function<GroupingEnumerationProgress()> &continuation
+							 ) -> GroupingEnumerationProgress {
+		Expression *savedCurrent = current;
+		bool preserveExplicitGroup = current && current->isExplicitGroup;
+		Expression *groupedCurrent = current;
+		GroupingSnapshot savedCurrentSnapshot;
+		bool hasSavedCurrentSnapshot = false;
+		if (savedCurrent) {
+			savedCurrentSnapshot = captureGroupingSnapshot(savedCurrent);
+			hasSavedCurrentSnapshot = true;
+		}
+		GroupingEnumerationProgress result = GroupingEnumerationProgress::NoCandidate;
+		enumerateExpressionGroupings(
+			groupedCurrent, context, false, macroBindingFrameStack,
+			[&](Expression *&groupedExpr,
+				const std::unordered_set<Expression *> &childFixedGroupingRoots) -> GroupingEnumerationProgress {
+			if (preserveExplicitGroup && groupedExpr)
+				groupedExpr->isExplicitGroup = true;
+			current = groupedExpr;
+			std::vector<Expression *> insertedRoots;
+			insertedRoots.reserve(childFixedGroupingRoots.size());
+			for (Expression *root : childFixedGroupingRoots) {
+				if (fixedGroupingRoots.insert(root).second)
+					insertedRoots.push_back(root);
+			}
+			GroupingEnumerationProgress childProgress =
+				enumeratePrioritizedChoices(current, true, true, false, true, continuation);
+			GroupingEnumerationProgress propagatedChildProgress = childProgress;
+			// Keep iterating enclosed opaque choices before bubbling a stop
+			// from outer continuations. This preserves enclosed-first ordering.
+			if (propagatedChildProgress == GroupingEnumerationProgress::Stop)
+				propagatedChildProgress = GroupingEnumerationProgress::EmittedContinue;
+			for (Expression *root : insertedRoots)
+				fixedGroupingRoots.erase(root);
+			if (propagatedChildProgress != GroupingEnumerationProgress::Stop) {
+				if (hasSavedCurrentSnapshot)
+					applyGroupingSnapshot(savedCurrentSnapshot);
+				if (preserveExplicitGroup && savedCurrent)
+					savedCurrent->isExplicitGroup = true;
+				groupedCurrent = savedCurrent;
+				current = savedCurrent;
+			}
+			result = mergeGroupingEnumerationProgress(result, childProgress);
+			return propagatedChildProgress;
+		}
+		);
+		if (result != GroupingEnumerationProgress::Stop)
+			current = savedCurrent;
+		return result;
+	};
+	enumeratePrioritizedChoices =
+		[&](Expression *&current, bool isOnBoundary, bool isRoot, bool forceLocal, bool includeBoundaryArguments,
+			const std::function<GroupingEnumerationProgress()> &continuation) -> GroupingEnumerationProgress {
 		if (!expressionHasGroupingShape(current))
 			return continuation();
 
-		if (isOpaqueGroupingNode(current, isOnBoundary, isRoot, forceLocal)) {
-			InferenceContext::TrialJournal journal;
-			InferenceContext trialContext(context.parseContext, true);
-			trialContext.currentInstantiation = context.currentInstantiation;
-			trialContext.trialJournal = &journal;
-			trialContext.trialInstantiationCache =
-				context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
-			Expression *savedCurrent = current;
-			bool preserveExplicitGroup = current->isExplicitGroup;
-			Expression *groupedCurrent = current;
-			GroupingEnumerationResult result = enumerateExpressionGroupings(
-				groupedCurrent, trialContext, false, macroBindingFrameStack,
-				[&](Expression *&groupedExpr,
-					const std::unordered_set<Expression *> &childFixedGroupingRoots) -> GroupingCandidateDecision {
-				if (preserveExplicitGroup && groupedExpr)
-					groupedExpr->isExplicitGroup = true;
-				std::string childFailureDetail;
-				bool childValid = validateGroupingInTrial(
-					groupedExpr, trialContext, childFixedGroupingRoots, macroBindingFrameStack, false, &childFailureDetail
-				);
-				if (!childValid)
-					return GroupingCandidateDecision::Reject;
-				if (!nestedGroupingHasResolvedType(groupedExpr))
-					return GroupingCandidateDecision::Reject;
-				current = groupedExpr;
-				std::vector<Expression *> insertedRoots;
-				insertedRoots.reserve(childFixedGroupingRoots.size());
-				for (Expression *root : childFixedGroupingRoots) {
-					if (fixedGroupingRoots.insert(root).second)
-						insertedRoots.push_back(root);
-				}
-				GroupingEnumerationResult continuationResult = continuation();
-				for (Expression *root : insertedRoots)
-					fixedGroupingRoots.erase(root);
-				if (!stopRequested && !continuationResult.stopRequested)
-					current = savedCurrent;
-				if (!continuationResult.foundValid)
-					return GroupingCandidateDecision::Reject;
-				return continuationResult.stopRequested ? GroupingCandidateDecision::AcceptStop
-														: GroupingCandidateDecision::AcceptContinue;
-			}
-			);
-			if (!stopRequested && !result.stopRequested)
-				current = savedCurrent;
-			if (!result.foundValid)
-				context.inheritTypeFailureFrom(trialContext);
-			rollbackTrialJournal(journal);
-			return result;
-		}
+		if (isOpaqueGroupingNode(current, isOnBoundary, isRoot, forceLocal))
+			return enumerateOpaqueChoices(current, continuation);
 
 		bool hasLeftEdge = startsWithArgument(current);
 		bool hasRightEdge = endsWithArgument(current);
 		size_t sourceArgumentCount = groupingArgumentCount(current);
 		Expression *parentExpression = current;
-		std::function<GroupingEnumerationResult(size_t)> enumerateArguments = [&](size_t sourceArgumentIndex
-																			  ) -> GroupingEnumerationResult {
-			if (sourceArgumentIndex >= sourceArgumentCount)
+		std::function<GroupingEnumerationProgress(int)> enumerateArguments = [&](int sourceArgumentIndex
+																			 ) -> GroupingEnumerationProgress {
+			if (sourceArgumentIndex < 0)
 				return continuation();
 			int actualArgumentIndex = groupingArgumentIndex(parentExpression, sourceArgumentIndex);
 			if (actualArgumentIndex < 0)
-				return enumerateArguments(sourceArgumentIndex + 1);
+				return enumerateArguments(sourceArgumentIndex - 1);
 			bool isLeftBoundaryArgument = hasLeftEdge && sourceArgumentIndex == 0;
-			bool isRightBoundaryArgument = hasRightEdge && sourceArgumentIndex + 1 == sourceArgumentCount;
+			bool isRightBoundaryArgument = hasRightEdge && sourceArgumentIndex + 1 == (int)sourceArgumentCount;
+			if (!includeBoundaryArguments && (isLeftBoundaryArgument || isRightBoundaryArgument))
+				return enumerateArguments(sourceArgumentIndex - 1);
 			bool forceLocalArgument = argumentHasAdjacentSiblingSlot(parentExpression, sourceArgumentIndex);
 			Expression *argumentExpr = parentExpression->arguments[actualArgumentIndex];
-			GroupingEnumerationResult result = enumerateOpaqueChoices(
-				argumentExpr, isLeftBoundaryArgument || isRightBoundaryArgument, false, forceLocalArgument,
-				[&]() -> GroupingEnumerationResult {
+			GroupingEnumerationProgress progress = enumeratePrioritizedChoices(
+				argumentExpr, isLeftBoundaryArgument || isRightBoundaryArgument, false, forceLocalArgument, true,
+				[&]() -> GroupingEnumerationProgress {
 				parentExpression->arguments[actualArgumentIndex] = argumentExpr;
-				return enumerateArguments(sourceArgumentIndex + 1);
+				return enumerateArguments(sourceArgumentIndex - 1);
 			}
 			);
 			parentExpression->arguments[actualArgumentIndex] = argumentExpr;
-			return result;
+			return progress;
 		};
-		return enumerateArguments(0);
+		return enumerateArguments((int)sourceArgumentCount - 1);
 	};
 
-	return enumerateOpaqueChoices(expr, true, true, false, [&]() -> GroupingEnumerationResult {
-		std::vector<Expression *> flatNodes;
-		std::unordered_set<Expression *> opaqueNodes;
-		size_t operatorCount = 0;
-		std::function<void(Expression *, bool, bool)> collectFlatNodes = [&](Expression *expression, bool isOnBoundary,
-																			 bool isRoot) {
-			if (!expressionHasGroupingShape(expression)) {
-				flatNodes.push_back(expression);
-				return;
-			}
+	auto emitCandidate = [&](Expression *&candidateRoot) -> GroupingEnumerationProgress {
+		expr = candidateRoot;
+		recomputeRanges(expr);
+		return withFixedRoot(expr, [&]() {
+			return emitStructuralCandidate(expr, fixedGroupingRoots);
+		});
+	};
 
-			if (isOpaqueGroupingNode(expression, isOnBoundary, isRoot, false)) {
-				opaqueNodes.insert(expression);
-				flatNodes.push_back(expression);
-				return;
-			}
-
-			bool hasLeftEdge = startsWithArgument(expression);
-			bool hasRightEdge = endsWithArgument(expression);
-
-			size_t sourceArgumentCount = groupingArgumentCount(expression);
-			if (hasLeftEdge && sourceArgumentCount > 0) {
-				int leftArgumentIndex = groupingArgumentIndex(expression, 0);
-				if (leftArgumentIndex >= 0)
-					collectFlatNodes(expression->arguments[leftArgumentIndex], true, false);
-			}
-
-			operatorCount++;
-			flatNodes.push_back(expression);
-
-			if (hasRightEdge && sourceArgumentCount > 0) {
-				int rightArgumentIndex = groupingArgumentIndex(expression, sourceArgumentCount - 1);
-				if (rightArgumentIndex >= 0)
-					collectFlatNodes(expression->arguments[rightArgumentIndex], true, false);
-			}
-		};
-
-		collectFlatNodes(expr, true, true);
-		if (operatorCount <= 1)
-			return withFixedRoot(expr, [&]() -> GroupingEnumerationResult {
-				GroupingCandidateDecision decision = onCandidate(expr, fixedGroupingRoots);
-				if (decision == GroupingCandidateDecision::AcceptStop)
-					stopRequested = true;
-				return {decision != GroupingCandidateDecision::Reject, decision == GroupingCandidateDecision::AcceptStop};
-			});
-		if (operatorCount > 8) {
-			if (context.typeFailureDetail.empty())
-				context.typeFailureDetail = "too many ambiguous operand groupings";
-			return {};
-		}
-
-		std::function<GroupingEnumerationResult(int, int, std::function<GroupingEnumerationResult(Expression *)>)>
-			tryGroupings = [&](int start, int end,
-							   std::function<GroupingEnumerationResult(Expression *)> onResult) -> GroupingEnumerationResult {
-			if (start > end)
-				return {};
-			if (start == end)
-				return onResult(flatNodes[start]);
-
-			GroupingEnumerationResult result;
-			for (int rootIndex = end; rootIndex >= start; rootIndex--) {
-				Expression *rootExpression = flatNodes[rootIndex];
-				if (!expressionHasGroupingShape(rootExpression) || opaqueNodes.contains(rootExpression))
-					continue;
-				bool hasLeftEdge = startsWithArgument(rootExpression);
-				bool hasRightEdge = endsWithArgument(rootExpression);
-				size_t sourceArgumentCount = groupingArgumentCount(rootExpression);
-				if ((hasLeftEdge || hasRightEdge) && sourceArgumentCount == 0)
-					continue;
-				if (hasLeftEdge && rootIndex == start)
-					continue;
-				if (hasRightEdge && rootIndex == end)
-					continue;
-				if (!hasLeftEdge && rootIndex > start)
-					continue;
-				if (!hasRightEdge && rootIndex < end)
-					continue;
-				int rootPrecedence = expressionPrecedence(rootExpression);
-				if (rootPrecedence > 0 && hasLeftEdge && hasRightEdge) {
-					bool lowerPrecedenceExists = false;
-					for (int otherIndex = start; otherIndex <= end; otherIndex++) {
-						if (otherIndex == rootIndex)
-							continue;
-						Expression *otherExpression = flatNodes[otherIndex];
-						if (opaqueNodes.contains(otherExpression) || !expressionHasGroupingShape(otherExpression))
-							continue;
-						if (!startsWithArgument(otherExpression) || !endsWithArgument(otherExpression))
-							continue;
-						int otherPrecedence = expressionPrecedence(otherExpression);
-						if (otherPrecedence > 0 && otherPrecedence < rootPrecedence) {
-							lowerPrecedenceExists = true;
-							break;
-						}
-					}
-					if (lowerPrecedenceExists)
-						continue;
-				}
-
-				int leftArgumentIndex = hasLeftEdge ? groupingArgumentIndex(rootExpression, 0) : -1;
-				int rightArgumentIndex = hasRightEdge ? groupingArgumentIndex(rootExpression, sourceArgumentCount - 1) : -1;
-				Expression *savedLeft = leftArgumentIndex >= 0 ? rootExpression->arguments[leftArgumentIndex] : nullptr;
-				Expression *savedRight = rightArgumentIndex >= 0 ? rootExpression->arguments[rightArgumentIndex] : nullptr;
-				auto tryRight = [&]() -> GroupingEnumerationResult {
-					if (!hasRightEdge)
-						return onResult(rootExpression);
-					return tryGroupings(rootIndex + 1, end, [&](Expression *rightResult) -> GroupingEnumerationResult {
-						if (expressionContains(rightResult, rootExpression))
-							return {};
-						rootExpression->arguments[rightArgumentIndex] = rightResult;
-						return onResult(rootExpression);
-					});
-				};
-				GroupingEnumerationResult candidateResult;
-				if (hasLeftEdge) {
-					candidateResult =
-						tryGroupings(start, rootIndex - 1, [&](Expression *leftResult) -> GroupingEnumerationResult {
-						if (expressionContains(leftResult, rootExpression))
-							return {};
-						rootExpression->arguments[leftArgumentIndex] = leftResult;
-						return tryRight();
-					});
-				} else {
-					candidateResult = tryRight();
-				}
-				if (leftArgumentIndex >= 0)
-					rootExpression->arguments[leftArgumentIndex] = savedLeft;
-				if (rightArgumentIndex >= 0)
-					rootExpression->arguments[rightArgumentIndex] = savedRight;
-				result.foundValid = result.foundValid || candidateResult.foundValid;
-				if (candidateResult.stopRequested) {
-					stopRequested = true;
-					result.stopRequested = true;
-					return result;
-				}
-			}
-			return result;
-		};
-
-		int lastIndex = (int)flatNodes.size() - 1;
-		return tryGroupings(0, lastIndex, [&](Expression *rootExpression) -> GroupingEnumerationResult {
-			expr = rootExpression;
-			recomputeRanges(expr);
-			return withFixedRoot(expr, [&]() -> GroupingEnumerationResult {
-				GroupingCandidateDecision decision = onCandidate(expr, fixedGroupingRoots);
-				if (decision == GroupingCandidateDecision::AcceptStop)
-					stopRequested = true;
-				return {decision != GroupingCandidateDecision::Reject, decision == GroupingCandidateDecision::AcceptStop};
+	auto evaluateCompletedGrouping = [&](Expression *&candidateRoot,
+										 const std::function<GroupingEnumerationProgress(Expression *&)> &onResult
+									 ) -> GroupingEnumerationProgress {
+		return withFixedRoot(candidateRoot, [&]() {
+			return enumeratePrioritizedChoices(candidateRoot, true, true, false, true, [&]() -> GroupingEnumerationProgress {
+				return onResult(candidateRoot);
 			});
 		});
+	};
+
+	std::vector<Expression *> flatNodes;
+	std::unordered_set<Expression *> opaqueNodes;
+	size_t operatorCount = 0;
+	std::function<void(Expression *, bool, bool)> collectFlatNodes = [&](Expression *expression, bool isOnBoundary,
+																		 bool isRoot) {
+		if (!expressionHasGroupingShape(expression)) {
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		if (isSectionPatternCall(expression)) {
+			operatorCount++;
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		if (isOpaqueGroupingNode(expression, isOnBoundary, isRoot, false)) {
+			opaqueNodes.insert(expression);
+			flatNodes.push_back(expression);
+			return;
+		}
+
+		bool hasLeftEdge = startsWithArgument(expression);
+		bool hasRightEdge = endsWithArgument(expression);
+
+		size_t sourceArgumentCount = groupingArgumentCount(expression);
+		if (hasLeftEdge && sourceArgumentCount > 0) {
+			int leftArgumentIndex = groupingArgumentIndex(expression, 0);
+			if (leftArgumentIndex >= 0)
+				collectFlatNodes(expression->arguments[leftArgumentIndex], true, false);
+		}
+
+		operatorCount++;
+		flatNodes.push_back(expression);
+
+		if (hasRightEdge && sourceArgumentCount > 0) {
+			int rightArgumentIndex = groupingArgumentIndex(expression, sourceArgumentCount - 1);
+			if (rightArgumentIndex >= 0)
+				collectFlatNodes(expression->arguments[rightArgumentIndex], true, false);
+		}
+	};
+
+	collectFlatNodes(expr, true, true);
+	if (operatorCount <= 1) {
+		return emitCandidate(expr);
+	}
+	if (operatorCount > 8) {
+		if (!context.hasTypeFailureDiagnostic)
+			context.fail(
+				buildFailureDetailDiagnostic(
+					captureDiagnosticExpressionSnapshot(expr).range, "too many ambiguous operand groupings"
+				),
+				1
+			);
+		return GroupingEnumerationProgress::NoCandidate;
+	}
+
+	std::function<GroupingEnumerationProgress(int, int, const std::function<GroupingEnumerationProgress(Expression *&)> &)>
+		tryGroupings = [&](int start, int end, const std::function<GroupingEnumerationProgress(Expression *&)> &onResult
+					   ) -> GroupingEnumerationProgress {
+		if (start > end)
+			return GroupingEnumerationProgress::NoCandidate;
+		if (start == end) {
+			Expression *singleExpression = flatNodes[start];
+			if (opaqueNodes.contains(singleExpression))
+				return enumerateOpaqueChoices(singleExpression, [&]() -> GroupingEnumerationProgress {
+					return evaluateCompletedGrouping(singleExpression, onResult);
+				});
+			return evaluateCompletedGrouping(singleExpression, onResult);
+		}
+
+		GroupingEnumerationProgress result = GroupingEnumerationProgress::NoCandidate;
+		for (int rootIndex = end; rootIndex >= start; rootIndex--) {
+			Expression *rootExpression = flatNodes[rootIndex];
+			if (!expressionHasGroupingShape(rootExpression) || opaqueNodes.contains(rootExpression))
+				continue;
+			bool hasLeftEdge = startsWithArgument(rootExpression);
+			bool hasRightEdge = endsWithArgument(rootExpression);
+			size_t sourceArgumentCount = groupingArgumentCount(rootExpression);
+			if ((hasLeftEdge || hasRightEdge) && sourceArgumentCount == 0)
+				continue;
+			if (hasLeftEdge && rootIndex == start)
+				continue;
+			if (hasRightEdge && rootIndex == end)
+				continue;
+			if (!hasLeftEdge && rootIndex > start)
+				continue;
+			if (!hasRightEdge && rootIndex < end)
+				continue;
+			int rootPrecedence = expressionPrecedence(rootExpression);
+			if (rootPrecedence > 0 && hasLeftEdge && hasRightEdge) {
+				bool lowerPrecedenceExists = false;
+				for (int otherIndex = start; otherIndex <= end; otherIndex++) {
+					if (otherIndex == rootIndex)
+						continue;
+					Expression *otherExpression = flatNodes[otherIndex];
+					if (opaqueNodes.contains(otherExpression) || !expressionHasGroupingShape(otherExpression))
+						continue;
+					if (!startsWithArgument(otherExpression) || !endsWithArgument(otherExpression))
+						continue;
+					int otherPrecedence = expressionPrecedence(otherExpression);
+					if (otherPrecedence > 0 && otherPrecedence < rootPrecedence) {
+						lowerPrecedenceExists = true;
+						break;
+					}
+				}
+				if (lowerPrecedenceExists)
+					continue;
+			}
+
+			int leftArgumentIndex = hasLeftEdge ? groupingArgumentIndex(rootExpression, 0) : -1;
+			int rightArgumentIndex = hasRightEdge ? groupingArgumentIndex(rootExpression, sourceArgumentCount - 1) : -1;
+			Expression *savedLeft = leftArgumentIndex >= 0 ? rootExpression->arguments[leftArgumentIndex] : nullptr;
+			Expression *savedRight = rightArgumentIndex >= 0 ? rootExpression->arguments[rightArgumentIndex] : nullptr;
+			GroupingEnumerationProgress progress = withFixedRoot(rootExpression, [&]() {
+				auto tryRight = [&]() -> GroupingEnumerationProgress {
+					if (!hasRightEdge)
+						return enumeratePrioritizedChoices(
+							// Once a parent root is fixed, enclosed boundary expressions
+							// still need to advance before this parent root does.
+							rootExpression, true, true, false, true,
+							[&]() -> GroupingEnumerationProgress {
+							return onResult(rootExpression);
+						}
+						);
+					return tryGroupings(rootIndex + 1, end, [&](Expression *&rightResult) -> GroupingEnumerationProgress {
+						if (expressionContains(rightResult, rootExpression))
+							return GroupingEnumerationProgress::NoCandidate;
+						rootExpression->arguments[rightArgumentIndex] = rightResult;
+						GroupingEnumerationProgress rightProgress = enumeratePrioritizedChoices(
+							rootExpression, true, true, false, true,
+							[&]() -> GroupingEnumerationProgress {
+							return onResult(rootExpression);
+						}
+						);
+						return rightProgress;
+					});
+				};
+				if (hasLeftEdge) {
+					return tryGroupings(start, rootIndex - 1, [&](Expression *&leftResult) -> GroupingEnumerationProgress {
+						if (expressionContains(leftResult, rootExpression))
+							return GroupingEnumerationProgress::NoCandidate;
+						rootExpression->arguments[leftArgumentIndex] = leftResult;
+						GroupingEnumerationProgress leftProgress = tryRight();
+						return leftProgress;
+					});
+				}
+				return tryRight();
+			});
+			if (leftArgumentIndex >= 0)
+				rootExpression->arguments[leftArgumentIndex] = savedLeft;
+			if (rightArgumentIndex >= 0)
+				rootExpression->arguments[rightArgumentIndex] = savedRight;
+			if (progress == GroupingEnumerationProgress::Stop)
+				return GroupingEnumerationProgress::Stop;
+			result = mergeGroupingEnumerationProgress(result, progress);
+		}
+		return result;
+	};
+
+	return tryGroupings(0, (int)flatNodes.size() - 1, [&](Expression *&rootExpression) {
+		return emitCandidate(rootExpression);
 	});
 }
 
@@ -824,6 +886,20 @@ static bool inferExpression(
 			}
 		}
 	};
+	auto emitTypeFailureDiagnostic = [&]() {
+		if (context.trial)
+			return;
+		if (context.hasTypeFailureDiagnostic) {
+			context.addDiagnostic(buildTypeFailureDiagnostic(
+				context.parseContext, originalDiagnostic, context.typeFailureDiagnostic.message,
+				context.typeFailureDiagnostic.relatedInfo
+			));
+			return;
+		}
+		context.addDiagnostic(buildTypeFailureDiagnostic(
+			context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+		));
+	};
 	auto tryInfer = [&](bool collectGroupingAmbiguity = true) -> bool {
 		context.clearTypeFailure();
 		auto *savedFixedGroupingRoots = context.fixedGroupingRoots;
@@ -846,9 +922,13 @@ static bool inferExpression(
 			Expression *lineExprForType = expr;
 			DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, context, macroBindingFrameStack);
 			if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {
-				context.typesValid = false;
-				context.typeFailureDetail = "Standalone expression '" + std::string(expr->range.subString) +
-											"' must return nothing; use discard if you want to ignore a value";
+				context.fail(
+					buildFailureDetailDiagnostic(
+						originalDiagnostic.range, "Standalone expression '" + std::string(expr->range.subString) +
+													  "' must return nothing; use discard if you want to ignore a value"
+					),
+					0
+				);
 				return false;
 			}
 		}
@@ -860,42 +940,41 @@ static bool inferExpression(
 	if (alreadyOrdered) {
 		if (!tryInfer()) {
 			context.typesValid = false;
-			if (!context.trial)
-				context.addDiagnostic(buildTypeFailureDiagnostic(
-					context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
-				));
+			emitTypeFailureDiagnostic();
 			return false;
 		}
 		emitOwnedGroupingWarnings();
 		return true;
 	}
 
-	std::string trialFailureDetail;
+	GroupingFailure trialFailure;
 	if (!detectAmbiguity) {
-		GroupingEnumerationResult groupingResult = enumerateExpressionGroupings(
+		bool foundAcceptedGrouping = false;
+		enumerateExpressionGroupings(
 			expr, context, alreadyOrdered, macroBindingFrameStack,
 			[&](Expression *&candidateExpr,
-				const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingCandidateDecision {
+				const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingEnumerationProgress {
 			expr = candidateExpr;
 			std::unordered_set<Expression *> resolvedGroupingRoots;
 			GroupingSnapshot candidateGrouping;
 			std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
 			bool accepted = validateGroupingInTrial(
-				expr, context, fixedGroupingRoots, macroBindingFrameStack, requireVoidResult, &trialFailureDetail,
+				expr, context, fixedGroupingRoots, macroBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
 				&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings
 			);
 			if (!accepted)
-				return GroupingCandidateDecision::Reject;
+				return GroupingEnumerationProgress::EmittedContinue;
 			if (accepted) {
 				selectedGrouping = std::move(candidateGrouping);
 				selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
 				selectedGroupingWarnings = std::move(candidateGroupingWarnings);
+				foundAcceptedGrouping = true;
 			}
-			return GroupingCandidateDecision::AcceptStop;
+			return GroupingEnumerationProgress::Stop;
 		}
 		);
 
-		if (groupingResult.foundValid) {
+		if (foundAcceptedGrouping) {
 			applyGroupingSnapshot(selectedGrouping);
 			expr = selectedGrouping.root;
 			selectedFixedGroupingRoots = collectSelectedGroupingRoots(expr);
@@ -903,12 +982,9 @@ static bool inferExpression(
 			resetExpressionTypes(expr);
 			if (!tryInfer(false)) {
 				context.typesValid = false;
-				if (context.typeFailureDetail.empty())
-					context.setTypeFailure(trialFailureDetail);
-				if (!context.trial)
-					context.addDiagnostic(buildTypeFailureDiagnostic(
-						context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
-					));
+				if (!context.hasTypeFailureDiagnostic && trialFailure.hasDiagnostic)
+					context.fail(trialFailure.diagnostic, trialFailure.priority);
+				emitTypeFailureDiagnostic();
 				return false;
 			}
 			queueSelectedGroupingWarnings();
@@ -920,29 +996,26 @@ static bool inferExpression(
 		expr = initialGrouping.root;
 		resetExpressionTypes(expr);
 		context.typesValid = false;
-		if (context.typeFailureDetail.empty())
-			context.setTypeFailure(trialFailureDetail);
-		if (!context.trial)
-			context.addDiagnostic(buildTypeFailureDiagnostic(
-				context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
-			));
+		if (trialFailure.hasDiagnostic)
+			context.fail(trialFailure.diagnostic, trialFailure.priority);
+		emitTypeFailureDiagnostic();
 		return false;
 	}
 
 	enumerateExpressionGroupings(
 		expr, context, alreadyOrdered, macroBindingFrameStack,
 		[&](Expression *&candidateExpr,
-			const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingCandidateDecision {
+			const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingEnumerationProgress {
 		expr = candidateExpr;
 		std::unordered_set<Expression *> resolvedGroupingRoots;
 		GroupingSnapshot candidateGrouping;
 		std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
 		bool accepted = validateGroupingInTrial(
-			expr, context, fixedGroupingRoots, macroBindingFrameStack, requireVoidResult, &trialFailureDetail,
+			expr, context, fixedGroupingRoots, macroBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
 			&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings
 		);
 		if (!accepted)
-			return GroupingCandidateDecision::Reject;
+			return GroupingEnumerationProgress::EmittedContinue;
 
 		applyGroupingSnapshot(candidateGrouping);
 		expr = candidateGrouping.root;
@@ -956,13 +1029,13 @@ static bool inferExpression(
 			storedValidRendered = candidateRendered;
 			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
 			foundValidGrouping = true;
-			return GroupingCandidateDecision::AcceptContinue;
+			return GroupingEnumerationProgress::EmittedContinue;
 		}
 		if (snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping))
-			return GroupingCandidateDecision::AcceptContinue;
+			return GroupingEnumerationProgress::EmittedContinue;
 		ambiguousAlternativeRendered = candidateRendered;
 		groupingAmbiguous = true;
-		return GroupingCandidateDecision::AcceptStop;
+		return GroupingEnumerationProgress::Stop;
 	}
 	);
 
@@ -974,12 +1047,9 @@ static bool inferExpression(
 		resetExpressionTypes(expr);
 		if (!tryInfer(false)) {
 			context.typesValid = false;
-			if (context.typeFailureDetail.empty())
-				context.setTypeFailure(trialFailureDetail);
-			if (!context.trial)
-				context.addDiagnostic(buildTypeFailureDiagnostic(
-					context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
-				));
+			if (!context.hasTypeFailureDiagnostic && trialFailure.hasDiagnostic)
+				context.fail(trialFailure.diagnostic, trialFailure.priority);
+			emitTypeFailureDiagnostic();
 			return false;
 		}
 		queueSelectedGroupingWarnings();
@@ -993,11 +1063,8 @@ static bool inferExpression(
 	expr = initialGrouping.root;
 	resetExpressionTypes(expr);
 	context.typesValid = false;
-	if (context.typeFailureDetail.empty())
-		context.setTypeFailure(trialFailureDetail);
-	if (!context.trial)
-		context.addDiagnostic(buildTypeFailureDiagnostic(
-			context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
-		));
+	if (trialFailure.hasDiagnostic)
+		context.fail(trialFailure.diagnostic, trialFailure.priority);
+	emitTypeFailureDiagnostic();
 	return false;
 }

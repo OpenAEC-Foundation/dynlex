@@ -44,6 +44,147 @@ static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std:
 	return {};
 }
 
+static bool instantiateClassFromCodegenArgumentTypes(
+	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex
+) {
+	if (!classDef || classDef->fields.size() != argumentTypes.size())
+		return false;
+
+	std::vector<DataType> fieldTypes;
+	fieldTypes.reserve(argumentTypes.size());
+	for (size_t i = 0; i < argumentTypes.size(); i++) {
+		DataType fieldType = classDef->fields[i].declaredType;
+		if (baseClassInstIndex >= 0 && static_cast<size_t>(baseClassInstIndex) < classDef->instantiations.size() &&
+			i < classDef->instantiations[baseClassInstIndex].fieldTypes.size()) {
+			fieldType = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
+		}
+		if (fieldType.kind == DataType::Kind::Any) {
+			if (!argumentTypes[i].isDeduced())
+				return false;
+			fieldType = argumentTypes[i];
+		} else if (fieldType.kind == DataType::Kind::Array && fieldType.arraySize >= 0 && !fieldType.arrayElementType) {
+			if (!argumentTypes[i].isDeduced() || argumentTypes[i].kind != DataType::Kind::Array ||
+				argumentTypes[i].arraySize != fieldType.arraySize)
+				return false;
+			fieldType = argumentTypes[i];
+		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
+			fieldType = concretizeClassType(fieldType);
+		}
+
+		if (!fieldType.isDeduced())
+			return false;
+		fieldTypes.push_back(fieldType);
+	}
+
+	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	outTypeRef = {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
+	return true;
+}
+
+static DataType resolveConstructResultType(ParseContext &context, Expression *expr) {
+	if (!expr || expr->kind != Expression::Kind::IntrinsicCall || expr->arguments.size() < 2)
+		return {};
+
+	DataType typeRefType = getEffectiveType(context, expr->arguments[1]);
+	if (typeRefType.kind != DataType::Kind::Type)
+		return {};
+
+	if (typeRefType.referencedKind == DataType::Kind::Array) {
+		DataType arrayType = typeRefType.toReferencedType();
+		if (arrayType.arraySize != static_cast<int>(expr->arguments.size()) - 2)
+			return {};
+
+		DataType elementType = arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
+		bool allDeduced = true;
+		for (size_t i = 2; i < expr->arguments.size(); i++) {
+			DataType argType = getEffectiveType(context, expr->arguments[i]);
+			if (!argType.isDeduced())
+				allDeduced = false;
+			if (!arrayType.arrayElementType) {
+				if (!elementType.isDeduced())
+					elementType = argType;
+				else if (elementType != argType)
+					allDeduced = false;
+			}
+		}
+		if (allDeduced && elementType.isDeduced()) {
+			arrayType.arrayElementType = std::make_shared<DataType>(elementType);
+			return arrayType;
+		}
+		return {};
+	}
+
+	if (typeRefType.referencedKind == DataType::Kind::Vector) {
+		DataType vectorType = typeRefType.toReferencedType();
+		if (vectorType.arraySize != static_cast<int>(expr->arguments.size()) - 2)
+			return {};
+		for (size_t i = 2; i < expr->arguments.size(); i++) {
+			DataType argType = getEffectiveType(context, expr->arguments[i]);
+			if (!argType.isDeduced())
+				return {};
+			DataType promoted;
+			if (!DataType::promoteArithmetic(argType, *vectorType.arrayElementType, promoted) ||
+				promoted != *vectorType.arrayElementType)
+				return {};
+		}
+		return vectorType;
+	}
+
+	if (typeRefType.referencedKind == DataType::Kind::Matrix) {
+		DataType matrixType = typeRefType.toReferencedType();
+		if (expr->arguments.size() == 3) {
+			DataType valueType = getEffectiveType(context, expr->arguments[2]);
+			if (valueType.kind == DataType::Kind::Array && valueType.arrayElementType &&
+				valueType.arraySize == matrixType.matrixRows() * matrixType.matrixColumns()) {
+				DataType promoted;
+				if (DataType::promoteArithmetic(*valueType.arrayElementType, matrixType.matrixElementType(), promoted) &&
+					promoted == matrixType.matrixElementType())
+					return matrixType;
+			}
+		}
+		return {};
+	}
+
+	if (typeRefType.classDefinition) {
+		std::vector<DataType> argumentTypes;
+		argumentTypes.reserve(expr->arguments.size() - 2);
+		for (size_t i = 2; i < expr->arguments.size(); i++) {
+			DataType argumentType = getEffectiveType(context, expr->arguments[i]);
+			if (!argumentType.isDeduced())
+				return {};
+			argumentTypes.push_back(argumentType);
+		}
+
+		DataType instantiatedTypeRef;
+		if (instantiateClassFromCodegenArgumentTypes(
+				typeRefType.classDefinition, argumentTypes, instantiatedTypeRef, typeRefType.classInstIndex
+			))
+			return concretizeClassType(instantiatedTypeRef.toReferencedType());
+
+		DataType targetType = concretizeClassType(typeRefType.toReferencedType());
+		if (expr->arguments.size() == targetType.classDefinition->fields.size() + 2 && targetType.classInstIndex >= 0) {
+			const auto &fieldTypes = targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
+			if (argumentTypes.size() != fieldTypes.size())
+				return {};
+			for (size_t i = 0; i < fieldTypes.size(); i++) {
+				if (argumentTypes[i] != fieldTypes[i])
+					return {};
+			}
+			return targetType;
+		}
+		return {};
+	}
+
+	if (expr->arguments.size() == 3) {
+		DataType targetType = typeRefType.toReferencedType();
+		DataType valueType = getEffectiveType(context, expr->arguments[2]);
+		if (valueType.isDeduced())
+			return concretizeClassType(targetType);
+	}
+
+	return {};
+}
+
 // Get the DWARF debug type for a given DataType
 llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (!context.diBuilder)
@@ -339,8 +480,11 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		}
 		if (kind == IntrinsicKind::Function)
 			return {DataType::Kind::Int, 1, 1};
-		if (kind == IntrinsicKind::Construct)
-			return expr->type; // DataType fully determined during inference
+		if (kind == IntrinsicKind::Construct) {
+			if (expr->type.isDeduced())
+				return concretizeClassType(expr->type);
+			return resolveConstructResultType(context, expr);
+		}
 		if (kind == IntrinsicKind::Type) {
 			Expression *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
 			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {

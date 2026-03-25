@@ -524,7 +524,10 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
 		if (matchedSection->isMacro && matchedSection->type == SectionType::Function) {
 			BindingMap innerBindings;
-			Expression *bodyExpr = expandMacroPatternCall(context, expr, matchedDef, innerBindings);
+			collectPatternCallBindings(expr, matchedDef, innerBindings);
+			Expression *bodyExpr = expr->inferredMacroExpansion
+									   ? context.cloneMacroExpansionExpression(expr->inferredMacroExpansion)
+									   : expandMacroPatternCall(context, expr, matchedDef, innerBindings);
 			if (!bodyExpr)
 				return nullptr;
 
