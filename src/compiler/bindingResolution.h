@@ -111,17 +111,13 @@ resolveVariableBindingChain(Expression *expr, const BindingMap &bindings, size_t
 inline Expression *resolveVariableBindingAcrossFrames(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, size_t maxBindingResolutionDepth = 256
 ) {
-	size_t bindingResolutionDepth = 0;
-	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
-		Expression *boundExpression = bindingFrameStack.lookup(expr->variable->name);
-		if (!boundExpression || boundExpression == expr)
-			return expr;
-		expr = boundExpression;
-		bindingResolutionDepth++;
-		if (bindingResolutionDepth > maxBindingResolutionDepth)
-			return expr;
-	}
-	return expr;
+	(void)maxBindingResolutionDepth;
+	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
+		return expr;
+	Expression *boundExpression = bindingFrameStack.lookup(expr->variable->name);
+	if (!boundExpression || boundExpression == expr)
+		return expr;
+	return boundExpression;
 }
 
 inline bool popBindingScope(BindingFrameStack &bindingFrameStack, BindingScopeTrail *scopeTrail = nullptr) {

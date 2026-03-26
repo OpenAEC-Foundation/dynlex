@@ -21,6 +21,14 @@ std::string getStringLiteral(Expression *expr) {
 	return "";
 }
 
+static bool isSectionDescendantOrSame(Section *section, Section *ancestor) {
+	for (Section *current = section; current; current = current->parent) {
+		if (current == ancestor)
+			return true;
+	}
+	return false;
+}
+
 static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *indexVal, DataType indexType) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Type *sizeTy = builder.getInt64Ty();
@@ -274,7 +282,8 @@ static DataType mathComputationType(DataType resultType, int mathFloatBytes) {
 // Generate code for an intrinsic call.
 // All type decisions use getEffectiveType to resolve through macro/pattern bindings.
 llvm::Value *generateIntrinsicCode(
-	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &args,
+	DataType resultType
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	IntrinsicKind kind = intrinsicKind(name);
@@ -651,6 +660,76 @@ llvm::Value *generateIntrinsicCode(
 			elementPtr = builder.CreateGEP(elemLLVMType, ptr, index, "elem_ptr");
 		}
 		return builder.CreateAlignedLoad(getLLVMType(context, elementType), elementPtr, llvm::Align(8));
+	}
+
+	if (kind == IntrinsicKind::ExecuteBody) {
+		Section *callSection = callExpr && callExpr->range.line ? callExpr->range.line->section : nullptr;
+		if (!callSection)
+			crashCompilerBug("execute body call is missing source section context");
+		if (context.sectionMacroBodyFrames.empty())
+			crashCompilerBug("execute body used outside of section macro expansion");
+
+		ParseContext::SectionMacroBodyFrame *targetFrame = nullptr;
+		for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+			 ++frameIt) {
+			if (frameIt->definitionSection && isSectionDescendantOrSame(callSection, frameIt->definitionSection)) {
+				targetFrame = &*frameIt;
+				break;
+			}
+		}
+
+		if (!targetFrame) {
+			for (auto ownerIt = context.macroCallSiteSectionStack.rbegin(); ownerIt != context.macroCallSiteSectionStack.rend();
+				 ++ownerIt) {
+				Section *ownerSection = *ownerIt;
+				if (!ownerSection)
+					continue;
+				for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+					 ++frameIt) {
+					if (frameIt->definitionSection && isSectionDescendantOrSame(ownerSection, frameIt->definitionSection)) {
+						targetFrame = &*frameIt;
+						break;
+					}
+				}
+				if (targetFrame)
+					break;
+			}
+		}
+
+		if (!targetFrame) {
+			for (auto macroIt = context.activeMacroDefinitionStack.rbegin();
+				 macroIt != context.activeMacroDefinitionStack.rend(); ++macroIt) {
+				Section *activeDefinition = *macroIt;
+				if (!activeDefinition || activeDefinition->type != SectionType::Section)
+					continue;
+				for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+					 ++frameIt) {
+					if (frameIt->definitionSection == activeDefinition) {
+						targetFrame = &*frameIt;
+						break;
+					}
+				}
+				if (targetFrame)
+					break;
+			}
+		}
+
+		if (!targetFrame || !targetFrame->bodySection) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "execute body has no matching section macro body", callExpr->range
+			));
+			return nullptr;
+		}
+
+		if (targetFrame->bodyEmitted) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "execute body can only run once per section macro call", callExpr->range
+			));
+			return nullptr;
+		}
+		targetFrame->bodyEmitted = true;
+		emitMacroBodySection(context, targetFrame->bodySection, false);
+		return nullptr;
 	}
 
 	if (kind == IntrinsicKind::LoopWhile) {

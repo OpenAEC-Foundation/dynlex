@@ -851,6 +851,49 @@ static std::string formatInferenceTraceType(const DataType &type, ParseContext &
 	return typeToUserName(type, parseContext);
 }
 
+static std::string encodeDataTypeForCacheKey(const DataType &type) {
+	std::string key;
+	key.reserve(96);
+	key += "k";
+	key += std::to_string(static_cast<int>(type.kind));
+	key += "|n";
+	key += std::to_string(type.numericSize);
+	key += "|p";
+	key += std::to_string(type.pointerDepth);
+	key += "|r";
+	key += std::to_string(static_cast<int>(type.referencedKind));
+	key += "|a";
+	key += std::to_string(type.arraySize);
+	key += "|m";
+	key += std::to_string(type.matrixRowCount);
+	key += "|ci";
+	key += std::to_string(type.classInstIndex);
+	key += "|cd";
+	key += std::to_string(reinterpret_cast<uintptr_t>(type.classDefinition));
+	key += "|te";
+	key += std::to_string(reinterpret_cast<uintptr_t>(type.typeExpression));
+	key += "|e";
+	if (type.arrayElementType)
+		key += "(" + encodeDataTypeForCacheKey(*type.arrayElementType) + ")";
+	else
+		key += "()";
+	return key;
+}
+
+static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &value) {
+	if (std::holds_alternative<std::monostate>(value))
+		return "?";
+	if (const auto *number = std::get_if<double>(&value))
+		return "d" + std::to_string(std::bit_cast<uint64_t>(*number));
+	if (const auto *text = std::get_if<std::string>(&value))
+		return "s" + std::to_string(text->size()) + ":" + *text;
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? "b1" : "b0";
+	if (const auto *typeRef = std::get_if<DataType>(&value))
+		return "t" + encodeDataTypeForCacheKey(*typeRef);
+	return "?";
+}
+
 static bool expressionParticipatesInInferenceTrace(Expression *expr) {
 	if (!expr)
 		return false;
@@ -1006,20 +1049,11 @@ struct InferenceContext {
 				return;
 			std::string keyString = std::to_string(reinterpret_cast<uintptr_t>(section)) + "|";
 			for (const DataType &type : key.argumentTypes)
-				keyString += type.toString() + ";";
+				keyString += encodeDataTypeForCacheKey(type) + ";";
 			keyString += "|";
 			for (const auto &[name, value] : key.compileTimeParameters) {
 				keyString += name + "=";
-				if (std::holds_alternative<std::monostate>(value))
-					keyString += "?";
-				else if (const auto *number = std::get_if<double>(&value))
-					keyString += "d" + std::to_string(std::bit_cast<uint64_t>(*number));
-				else if (const auto *text = std::get_if<std::string>(&value))
-					keyString += "s" + std::to_string(text->size()) + ":" + *text;
-				else if (const auto *boolean = std::get_if<bool>(&value))
-					keyString += *boolean ? "b1" : "b0";
-				else if (const auto *typeRef = std::get_if<DataType>(&value))
-					keyString += "t" + typeRef->toString();
+				keyString += encodeCompileTimeValueForCacheKey(value);
 				keyString += ";";
 			}
 			if (seenSectionInstantiations.contains(keyString))

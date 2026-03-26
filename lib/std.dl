@@ -314,9 +314,52 @@ function left or right:
 
 # --- Control flow ---
 
-macro section [loop |]while condition:
+macro function loop while condition:
     replacement:
         @intrinsic("loop while", condition)
+
+macro function execute [the |]body:
+    replacement:
+        @intrinsic("execute body")
+
+macro section [loop |]while condition:
+    replacement:
+        loop while condition
+
+macro section loop iterationcount [time|times]:
+    replacement:
+        set iteration to 0
+        loop while iteration < iterationcount
+        execute the body
+        increment iteration
+
+macro section loop index from start to end:
+    replacement:
+        set index to start
+        loop while index < end
+        execute the body
+        increment index
+
+macro section loop index from start through end:
+    replacement:
+        set index to start
+        loop while index <= end
+        execute the body
+        increment index
+
+macro section loop index from start down to end:
+    replacement:
+        set index to start
+        loop while index > end
+        execute the body
+        decrement index
+
+macro section loop index from start down through end:
+    replacement:
+        set index to start
+        loop while index >= end
+        execute the body
+        decrement index
 
 macro section if condition:
     replacement:

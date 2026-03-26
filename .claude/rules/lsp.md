@@ -36,6 +36,12 @@ paths:
 - PatternCall tokens map `SectionType::Expression` → Expression, `SectionType::Class` → Type, others → Effect
 - Token type IDs must match the legend order in `semanticTokens.h` and `package.json`
 
+## Browser WASM LSP bridge
+- The browser compiler reuses `DynLexServer` directly in-process (`src/web/webApi.cpp`) instead of duplicating hover/definition/token logic.
+- Web LSP exports are JSON C ABI functions (`dynlex_web_get_lsp_hover_json`, `dynlex_web_get_lsp_definition_json`, `dynlex_web_get_lsp_semantic_tokens_json`) and must stay aligned with Monaco worker parsing in `web/src/worker/compilerWorker.js`.
+- `DYNLEX_WEB` builds include LSP analysis sources, but `languageServer.cpp` must avoid TCP server mode in web builds.
+- Browser-runner WASM imports must use `env.__memory_base = 0`; non-zero bases leave static string literal bytes unreadable in the worker runtime, causing empty `print` output.
+
 ## Diagnostic related information
 - Compiler `Diagnostic` has a `relatedInfo` vector (`RelatedInfo{message, range}`) for linking to related source locations.
 - The LSP converts these to `DiagnosticRelatedInformation` with proper absolute URIs, rendered as clickable links in VS Code.

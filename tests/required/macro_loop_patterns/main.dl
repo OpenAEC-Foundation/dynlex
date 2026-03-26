@@ -1,0 +1,27 @@
+import lib/std.dl
+
+set total to 0
+
+macro section repeat count:
+    replacement:
+        set i to 0
+        loop while i < count
+        execute the body
+        add 1 to i
+
+repeat 4:
+    add 2 to total
+
+print total as a line
+
+set nested to 0
+
+macro section repeat nested count:
+    replacement:
+        loop count times:
+            execute the body
+
+repeat nested 3:
+    add 5 to nested
+
+print nested as a line

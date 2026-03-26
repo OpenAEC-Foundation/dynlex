@@ -153,6 +153,13 @@
 			"outFiles": [
 				"${workspaceFolder}/vscode-extension/dist/**/*.js"
 			]
+		},
+		{
+			"name": "DynLex Web (Vite + Chrome)",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "npm --prefix web run dev -- --host 127.0.0.1 --port 5173 --open",
+			"cwd": "${workspaceFolder}"
 		}
 	],
 	"compounds": [

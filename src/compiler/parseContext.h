@@ -37,6 +37,12 @@ struct ParseContext {
 		int column = std::numeric_limits<int>::max();
 	};
 
+	struct SectionMacroBodyFrame {
+		Section *definitionSection = nullptr;
+		Section *bodySection = nullptr;
+		bool bodyEmitted = false;
+	};
+
 	enum class ShaderStage { Fragment, Vertex };
 	// Highest compilation phase that completed successfully.
 	// Guarantees by stage:
@@ -110,6 +116,15 @@ struct ParseContext {
 	BindingFrameStack macroBindingFrames;
 	// Current body section for macro expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
+	// Active macro definition sections currently being expanded (outermost to innermost).
+	// Used by execute-body ownership resolution when the intrinsic is wrapped through helper macros.
+	std::vector<Section *> activeMacroDefinitionStack;
+	// Source sections for active macro call sites (outermost to innermost). This preserves
+	// caller ownership when helper macros wrap ownership-sensitive intrinsics.
+	std::vector<Section *> macroCallSiteSectionStack;
+	// Active section-macro call frames. `execute body` resolves against this stack by
+	// source ownership so nested section-macro expansions can emit the correct caller body.
+	std::vector<SectionMacroBodyFrame> sectionMacroBodyFrames;
 	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
 	const Instantiation *currentCodegenInstantiation{};
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)

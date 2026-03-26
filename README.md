@@ -50,6 +50,8 @@ The web app uses:
 - single editable source file at `/workspace/main.dl`
 - bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
 - live debounced compile with diagnostics markers
+- LSP-powered Monaco interactions (hover, go-to-definition, semantic tokens)
+- built-in light and dark themes
 - `Run` executing the latest successful emitted program WASM
 
 Compiler WASM C ABI exports:
@@ -60,6 +62,9 @@ Compiler WASM C ABI exports:
 - `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
 - `dynlex_web_get_output_wasm_base64`
 - `dynlex_web_get_compiler_log_json`
+- `dynlex_web_get_lsp_hover_json`
+- `dynlex_web_get_lsp_definition_json`
+- `dynlex_web_get_lsp_semantic_tokens_json`
 
 ## Install Dependencies
 

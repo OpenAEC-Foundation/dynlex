@@ -156,17 +156,7 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 }
 
 static std::string encodeTrialCompileTimeValue(const CompileTimeValue &value) {
-	if (std::holds_alternative<std::monostate>(value))
-		return "?";
-	if (const auto *number = std::get_if<double>(&value))
-		return "d" + std::to_string(std::bit_cast<uint64_t>(*number));
-	if (const auto *text = std::get_if<std::string>(&value))
-		return "s" + std::to_string(text->size()) + ":" + *text;
-	if (const auto *boolean = std::get_if<bool>(&value))
-		return *boolean ? "b1" : "b0";
-	if (const auto *typeRef = std::get_if<DataType>(&value))
-		return "t" + typeRef->toString();
-	return "?";
+	return encodeCompileTimeValueForCacheKey(value);
 }
 
 static std::vector<std::pair<std::string, CompileTimeValue>> collectTrialCompileTimeParameters(
@@ -188,7 +178,7 @@ static std::string buildTrialInstantiationCacheKey(
 	key += sectionHasCommittedOrdering ? "|ordered" : "|unordered";
 	for (const DataType &type : argTypes) {
 		key += "|arg:";
-		key += type.toString();
+		key += encodeDataTypeForCacheKey(type);
 	}
 	for (const auto &[name, value] : compileTimeParameters) {
 		key += "|param:";

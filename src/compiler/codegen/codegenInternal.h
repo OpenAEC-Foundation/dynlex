@@ -53,6 +53,7 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 // Function/section code generation (codegen.cpp)
 bool generateSectionCode(ParseContext &context, Section *section);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
+void emitMacroBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow = true);
 Instantiation *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	const std::vector<DataType> &argTypes
@@ -62,6 +63,7 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 
 // Intrinsic code generation (codegenIntrinsics.cpp)
 llvm::Value *generateIntrinsicCode(
-	ParseContext &context, const std::string &name, const std::vector<Expression *> &args, DataType resultType
+	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &args,
+	DataType resultType
 );
 std::string getStringLiteral(Expression *expr);

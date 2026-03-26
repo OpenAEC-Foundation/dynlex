@@ -28,6 +28,7 @@
 #include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 static std::vector<size_t> collectRuntimeParameterIndices(
 	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const Instantiation &inst
@@ -41,6 +42,78 @@ static std::vector<size_t> collectRuntimeParameterIndices(
 	}
 	return runtimeIndices;
 }
+
+namespace {
+struct VariableAllocaSnapshotEntry {
+	VariableReference *reference = nullptr;
+	llvm::AllocaInst *alloca = nullptr;
+};
+
+static void collectVariableAllocaSnapshotEntries(
+	Section *section, std::unordered_set<VariableReference *> &visitedReferences,
+	std::vector<VariableAllocaSnapshotEntry> &entries
+) {
+	if (!section)
+		return;
+	for (const auto &[ignoredName, definitionReference] : section->variableDefinitions) {
+		(void)ignoredName;
+		if (!definitionReference || !visitedReferences.insert(definitionReference).second)
+			continue;
+		entries.push_back({definitionReference, definitionReference->alloca});
+	}
+	for (Section *child : section->children)
+		collectVariableAllocaSnapshotEntries(child, visitedReferences, entries);
+}
+
+struct ScopedVariableAllocaRestore {
+	std::vector<VariableAllocaSnapshotEntry> entries;
+
+	explicit ScopedVariableAllocaRestore(Section *section) {
+		std::unordered_set<VariableReference *> visitedReferences;
+		collectVariableAllocaSnapshotEntries(section, visitedReferences, entries);
+	}
+
+	~ScopedVariableAllocaRestore() {
+		for (const VariableAllocaSnapshotEntry &entry : entries) {
+			assert(entry.reference && "ScopedVariableAllocaRestore contains null definition reference");
+			entry.reference->alloca = entry.alloca;
+		}
+	}
+};
+
+struct ScopedActiveMacroDefinition {
+	ParseContext &context;
+
+	ScopedActiveMacroDefinition(ParseContext &ctx, Section *section) : context(ctx) {
+		assert(section && "ScopedActiveMacroDefinition requires a section");
+		context.activeMacroDefinitionStack.push_back(section);
+	}
+
+	~ScopedActiveMacroDefinition() {
+		assert(!context.activeMacroDefinitionStack.empty() && "Missing active macro definition to pop");
+		context.activeMacroDefinitionStack.pop_back();
+	}
+};
+
+struct ScopedMacroCallSiteSection {
+	ParseContext &context;
+	bool pushed = false;
+
+	ScopedMacroCallSiteSection(ParseContext &ctx, Section *callSiteSection) : context(ctx) {
+		if (!callSiteSection)
+			return;
+		context.macroCallSiteSectionStack.push_back(callSiteSection);
+		pushed = true;
+	}
+
+	~ScopedMacroCallSiteSection() {
+		if (!pushed)
+			return;
+		assert(!context.macroCallSiteSectionStack.empty() && "Missing macro call-site section to pop");
+		context.macroCallSiteSectionStack.pop_back();
+	}
+};
+} // namespace
 
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
@@ -149,8 +222,9 @@ Instantiation *generateSpecializedFunction(
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
-	// Push macro bindings — function bodies must not see caller's macro bindings.
-	pushClearedBindingScope(context.macroBindingFrames);
+	BindingFrameStack savedMacroBindingFrames = context.macroBindingFrames;
+	// Function bodies must not see caller-side macro bindings.
+	context.macroBindingFrames = makeBindingFrameStack({});
 
 	builder.SetInsertPoint(entry);
 
@@ -179,7 +253,7 @@ Instantiation *generateSpecializedFunction(
 	}
 
 	// Restore all codegen state
-	popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope when restoring codegen state");
+	context.macroBindingFrames = savedMacroBindingFrames;
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
@@ -405,6 +479,27 @@ static bool generateExposedFunctions(ParseContext &context, Section *section) {
 	return true;
 }
 
+static void finalizeMacroBodySectionControlFlow(ParseContext &context, Section *bodySection) {
+	if (!bodySection)
+		return;
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	if (bodySection->exitBlock) {
+		if (!builder.GetInsertBlock()->getTerminator()) {
+			llvm::BasicBlock *target = bodySection->branchBackBlock ? bodySection->branchBackBlock : bodySection->exitBlock;
+			builder.CreateBr(target);
+		}
+		builder.SetInsertPoint(bodySection->exitBlock);
+	}
+}
+
+void emitMacroBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow) {
+	if (!bodySection)
+		return;
+	generateSectionCode(context, bodySection);
+	if (finalizeControlFlow)
+		finalizeMacroBodySectionControlFlow(context, bodySection);
+}
+
 // Generate code for an expression
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
@@ -531,6 +626,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			if (!bodyExpr)
 				return nullptr;
 
+			ScopedActiveMacroDefinition activeMacroScope(context, matchedSection);
+			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
+			ScopedMacroCallSiteSection callSiteScope(context, callSiteSection);
 			pushBindingScope(context.macroBindingFrames, std::move(innerBindings));
 			llvm::Value *result = generateExpressionCode(context, bodyExpr);
 			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after function macro codegen");
@@ -541,6 +639,10 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			// Macro: inline the body with expression substitution.
 			// Push current bindings and set only this macro's parameters (scoped).
 			pushClearedBindingScope(context.macroBindingFrames);
+			ScopedVariableAllocaRestore macroVariableAllocas(matchedSection);
+			ScopedActiveMacroDefinition activeMacroScope(context, matchedSection);
+			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
+			ScopedMacroCallSiteSection callSiteScope(context, callSiteSection);
 			Section *savedBodySection = context.currentBodySection;
 
 			for (const auto &[paramName, argExpr] : paramBindings) {
@@ -555,10 +657,13 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			if (matchedSection->type == SectionType::Section) {
 				bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
 				context.currentBodySection = bodySection;
+				if (bodySection)
+					context.sectionMacroBodyFrames.push_back({matchedSection, bodySection, false});
 			}
 
 			llvm::Value *result = nullptr;
 			for (Section *child : matchedSection->children) {
+				allocateSectionVariables(context, child);
 				for (CodeLine *line : child->codeLines) {
 					if (line->expression)
 						result = generateExpressionCode(context, line->expression);
@@ -566,15 +671,21 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 
 			if (bodySection) {
-				generateSectionCode(context, bodySection);
-				if (bodySection->exitBlock) {
-					if (!builder.GetInsertBlock()->getTerminator()) {
-						llvm::BasicBlock *target =
-							bodySection->branchBackBlock ? bodySection->branchBackBlock : bodySection->exitBlock;
-						builder.CreateBr(target);
-					}
-					builder.SetInsertPoint(bodySection->exitBlock);
+				assert(
+					!context.sectionMacroBodyFrames.empty() && "Missing section macro body frame when leaving section macro"
+				);
+				ParseContext::SectionMacroBodyFrame &frame = context.sectionMacroBodyFrames.back();
+				assert(
+					frame.definitionSection == matchedSection &&
+					"Section macro body frame stack diverged from active macro expansion"
+				);
+				if (!frame.bodyEmitted) {
+					frame.bodyEmitted = true;
+					emitMacroBodySection(context, frame.bodySection);
+				} else {
+					finalizeMacroBodySectionControlFlow(context, frame.bodySection);
 				}
+				context.sectionMacroBodyFrames.pop_back();
 			}
 
 			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after macro pattern call");
@@ -647,7 +758,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 	case Expression::Kind::IntrinsicCall: {
 		std::vector<Expression *> args(expr->arguments.begin() + 1, expr->arguments.end());
-		return generateIntrinsicCode(context, expr->intrinsicName, args, getEffectiveType(context, expr));
+		return generateIntrinsicCode(context, expr, expr->intrinsicName, args, getEffectiveType(context, expr));
 	}
 
 	case Expression::Kind::Pending:

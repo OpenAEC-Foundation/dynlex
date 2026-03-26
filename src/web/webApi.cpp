@@ -1,11 +1,15 @@
 #include "codegen/codegen.h"
 #include "compiler/compiler.h"
+#include "lsp/dynlexServer.h"
 #include "lsp/fileSystem.h"
 #include "parseContext.h"
+#include "pathUtils.h"
 #include <algorithm>
 #include <cstdint>
+#include <exception>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -34,6 +38,86 @@ struct CompilerLogEntry {
 	std::string message;
 };
 
+class WebLspServer final : public lsp::DynLexServer {
+  public:
+	WebLspServer() : lsp::DynLexServer(0) {
+		lsp::InitializeParams params;
+		params.rootUri = pathutil::toAbsoluteUri("/workspace");
+		(void)onInitialize(params);
+	}
+
+	void resetMainDocument() {
+		if (!documentOpen)
+			return;
+		lsp::DidCloseTextDocumentParams closeParams;
+		closeParams.textDocument.uri = documentUri;
+		onDidClose(closeParams);
+		documentOpen = false;
+		documentVersion = 0;
+		syncedSource.clear();
+		documentUri.clear();
+	}
+
+	void syncMainDocument(const std::string &uri, const std::string &source) {
+		if (!documentOpen || documentUri != uri) {
+			resetMainDocument();
+			lsp::DidOpenTextDocumentParams openParams;
+			openParams.textDocument.uri = uri;
+			openParams.textDocument.languageId = "dynlex";
+			openParams.textDocument.version = 1;
+			openParams.textDocument.text = source;
+			onDidOpen(openParams);
+			documentOpen = true;
+			documentUri = uri;
+			documentVersion = 1;
+			syncedSource = source;
+			return;
+		}
+
+		if (syncedSource == source)
+			return;
+
+		lsp::DidChangeTextDocumentParams changeParams;
+		changeParams.textDocument.uri = uri;
+		changeParams.textDocument.version = documentVersion + 1;
+		lsp::TextDocumentContentChangeEvent change;
+		change.text = source;
+		changeParams.contentChanges.push_back(std::move(change));
+		onDidChange(changeParams);
+
+		documentVersion = changeParams.textDocument.version;
+		syncedSource = source;
+	}
+
+	std::optional<lsp::Location> definitionAt(const std::string &uri, int zeroBasedLine, int zeroBasedCharacter) {
+		lsp::TextDocumentPositionParams params;
+		params.textDocument.uri = uri;
+		params.position.line = std::max(0, zeroBasedLine);
+		params.position.character = std::max(0, zeroBasedCharacter);
+		return onDefinition(params);
+	}
+
+	std::optional<lsp::Hover> hoverAt(const std::string &uri, int zeroBasedLine, int zeroBasedCharacter) {
+		lsp::TextDocumentPositionParams params;
+		params.textDocument.uri = uri;
+		params.position.line = std::max(0, zeroBasedLine);
+		params.position.character = std::max(0, zeroBasedCharacter);
+		return onHover(params);
+	}
+
+	lsp::SemanticTokens semanticTokensFor(const std::string &uri) {
+		lsp::SemanticTokensParams params;
+		params.textDocument.uri = uri;
+		return onSemanticTokensFull(params);
+	}
+
+  private:
+	bool documentOpen = false;
+	std::string documentUri;
+	int documentVersion = 0;
+	std::string syncedSource;
+};
+
 struct WebCompilerState {
 	bool initialized = false;
 	std::string mainSource;
@@ -42,6 +126,11 @@ struct WebCompilerState {
 	std::vector<CompilerLogEntry> compilerLog;
 	std::string diagnosticsJson = R"({"diagnostics":[]})";
 	std::string compilerLogJson = R"({"messages":[]})";
+	std::string lspMainUri;
+	std::string lspHoverJson = "null";
+	std::string lspDefinitionJson = "null";
+	std::string lspSemanticTokensJson = R"({"data":[],"legend":{"tokenTypes":[],"tokenModifiers":[]}})";
+	std::unique_ptr<WebLspServer> lspServer;
 };
 
 WebCompilerState &webState() {
@@ -64,6 +153,43 @@ void flushCompilerLogJson() {
 	nlohmann::json root;
 	root["messages"] = std::move(messages);
 	webState().compilerLogJson = root.dump();
+}
+
+nlohmann::json lspLegendJson() {
+	nlohmann::json legend;
+	legend["tokenTypes"] = lsp::getSemanticTokenTypes();
+	legend["tokenModifiers"] = lsp::getSemanticTokenModifiers();
+	return legend;
+}
+
+std::string defaultLspSemanticTokensJson() {
+	nlohmann::json root;
+	root["data"] = nlohmann::json::array();
+	root["legend"] = lspLegendJson();
+	return root.dump();
+}
+
+std::string makeLspErrorJson(std::string message) {
+	nlohmann::json error;
+	error["error"] = std::move(message);
+	return error.dump();
+}
+
+bool ensureLspDocumentReady(std::string &errorMessage) {
+	WebCompilerState &state = webState();
+	if (!state.initialized) {
+		errorMessage = "compiler state is not initialized";
+		return false;
+	}
+	if (!state.lspServer)
+		state.lspServer = std::make_unique<WebLspServer>();
+	try {
+		state.lspServer->syncMainDocument(state.lspMainUri, state.mainSource);
+		return true;
+	} catch (const std::exception &error) {
+		errorMessage = error.what();
+		return false;
+	}
 }
 
 std::string diagnosticSeverity(Diagnostic::Level level) {
@@ -159,8 +285,7 @@ bool readBinaryFile(const std::string &path, std::vector<uint8_t> &bytes, std::s
 }
 
 std::string encodeBase64(const std::vector<uint8_t> &bytes) {
-	static constexpr char kBase64Alphabet[] =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	static constexpr char kBase64Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	if (bytes.empty())
 		return {};
 
@@ -186,8 +311,7 @@ std::string encodeBase64(const std::vector<uint8_t> &bytes) {
 		encoded.push_back('=');
 		encoded.push_back('=');
 	} else if (remaining == 2) {
-		uint32_t chunk =
-			(static_cast<uint32_t>(bytes[index]) << 16) | (static_cast<uint32_t>(bytes[index + 1]) << 8);
+		uint32_t chunk = (static_cast<uint32_t>(bytes[index]) << 16) | (static_cast<uint32_t>(bytes[index + 1]) << 8);
 		encoded.push_back(kBase64Alphabet[(chunk >> 18) & 0x3f]);
 		encoded.push_back(kBase64Alphabet[(chunk >> 12) & 0x3f]);
 		encoded.push_back(kBase64Alphabet[(chunk >> 6) & 0x3f]);
@@ -266,6 +390,60 @@ int compileAndEmitWasm() {
 	return WebCompileStatusOk;
 }
 
+const char *lspHoverJson(int zeroBasedLine, int zeroBasedColumn) {
+	WebCompilerState &state = webState();
+	std::string errorMessage;
+	if (!ensureLspDocumentReady(errorMessage)) {
+		state.lspHoverJson = makeLspErrorJson("hover request failed: " + errorMessage);
+		return state.lspHoverJson.c_str();
+	}
+
+	try {
+		std::optional<lsp::Hover> hover = state.lspServer->hoverAt(state.lspMainUri, zeroBasedLine, zeroBasedColumn);
+		state.lspHoverJson = hover ? nlohmann::json(*hover).dump() : "null";
+	} catch (const std::exception &error) {
+		state.lspHoverJson = makeLspErrorJson("hover request failed: " + std::string(error.what()));
+	}
+	return state.lspHoverJson.c_str();
+}
+
+const char *lspDefinitionJson(int zeroBasedLine, int zeroBasedColumn) {
+	WebCompilerState &state = webState();
+	std::string errorMessage;
+	if (!ensureLspDocumentReady(errorMessage)) {
+		state.lspDefinitionJson = makeLspErrorJson("definition request failed: " + errorMessage);
+		return state.lspDefinitionJson.c_str();
+	}
+
+	try {
+		std::optional<lsp::Location> location = state.lspServer->definitionAt(state.lspMainUri, zeroBasedLine, zeroBasedColumn);
+		state.lspDefinitionJson = location ? nlohmann::json(*location).dump() : "null";
+	} catch (const std::exception &error) {
+		state.lspDefinitionJson = makeLspErrorJson("definition request failed: " + std::string(error.what()));
+	}
+	return state.lspDefinitionJson.c_str();
+}
+
+const char *lspSemanticTokensJson() {
+	WebCompilerState &state = webState();
+	std::string errorMessage;
+	if (!ensureLspDocumentReady(errorMessage)) {
+		state.lspSemanticTokensJson = makeLspErrorJson("semantic token request failed: " + errorMessage);
+		return state.lspSemanticTokensJson.c_str();
+	}
+
+	try {
+		lsp::SemanticTokens tokens = state.lspServer->semanticTokensFor(state.lspMainUri);
+		nlohmann::json root;
+		root["data"] = std::move(tokens.data);
+		root["legend"] = lspLegendJson();
+		state.lspSemanticTokensJson = root.dump();
+	} catch (const std::exception &error) {
+		state.lspSemanticTokensJson = makeLspErrorJson("semantic token request failed: " + std::string(error.what()));
+	}
+	return state.lspSemanticTokensJson.c_str();
+}
+
 } // namespace
 
 extern "C" {
@@ -276,8 +454,13 @@ EMSCRIPTEN_KEEPALIVE void dynlex_web_init() {
 	state = {};
 	state.initialized = true;
 	state.mainSource = "print \"\"";
+	state.lspMainUri = pathutil::toAbsoluteUri(kMainSourcePath);
 	state.diagnosticsJson = R"({"diagnostics":[]})";
 	state.compilerLogJson = R"({"messages":[{"level":"info","message":"compiler initialized"}]})";
+	state.lspHoverJson = "null";
+	state.lspDefinitionJson = "null";
+	state.lspSemanticTokensJson = defaultLspSemanticTokensJson();
+	state.lspServer = std::make_unique<WebLspServer>();
 }
 
 EMSCRIPTEN_KEEPALIVE void dynlex_web_set_main_source(const char *utf8Source) {
@@ -307,6 +490,16 @@ EMSCRIPTEN_KEEPALIVE int dynlex_web_get_output_wasm_len() {
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_output_wasm_base64() { return webState().outputWasmBase64.c_str(); }
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_compiler_log_json() { return webState().compilerLogJson.c_str(); }
+
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_lsp_hover_json(int zeroBasedLine, int zeroBasedColumn) {
+	return lspHoverJson(zeroBasedLine, zeroBasedColumn);
+}
+
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_lsp_definition_json(int zeroBasedLine, int zeroBasedColumn) {
+	return lspDefinitionJson(zeroBasedLine, zeroBasedColumn);
+}
+
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_lsp_semantic_tokens_json() { return lspSemanticTokensJson(); }
 // NOLINTEND(readability-identifier-naming)
 
 } // extern "C"

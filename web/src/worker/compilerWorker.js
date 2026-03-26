@@ -29,7 +29,9 @@ const state = {
   compilerModule: null,
   initialized: false,
   lastSuccessfulWasm: null,
-  artifactVersion: 0
+  artifactVersion: 0,
+  syncedSource: "",
+  syncedVersion: -1
 };
 
 function postResponse(id, ok, payload, error) {
@@ -116,9 +118,23 @@ async function ensureCompilerInitialized() {
   state.initialized = true;
 }
 
-function compileSource(source) {
+function syncCompilerSource(source, version) {
   const module = state.compilerModule;
-  module.ccall("dynlex_web_set_main_source", null, ["string"], [source]);
+  const nextSource = typeof source === "string" ? source : "";
+  const nextVersion = Number.isInteger(version) ? version : -1;
+  const sourceChanged = nextSource !== state.syncedSource;
+  const versionChanged = nextVersion !== state.syncedVersion;
+  if (!sourceChanged && !versionChanged) {
+    return;
+  }
+  module.ccall("dynlex_web_set_main_source", null, ["string"], [nextSource]);
+  state.syncedSource = nextSource;
+  state.syncedVersion = nextVersion;
+}
+
+function compileSource(source, version) {
+  const module = state.compilerModule;
+  syncCompilerSource(source, version);
   const status = module.ccall("dynlex_web_compile_and_emit_wasm", "number", [], []);
 
   const diagnosticsPayload = parseJsonOr(
@@ -146,6 +162,67 @@ function compileSource(source) {
     hasArtifact: !!state.lastSuccessfulWasm,
     artifactVersion: state.artifactVersion
   };
+}
+
+function extractLspError(payload) {
+  if (payload && typeof payload === "object" && typeof payload.error === "string" && payload.error.length > 0) {
+    return payload.error;
+  }
+  return "";
+}
+
+function getLspHover(source, version, line, column) {
+  const module = state.compilerModule;
+  syncCompilerSource(source, version);
+  const hoverPayload = parseJsonOr(
+    module.ccall("dynlex_web_get_lsp_hover_json", "string", ["number", "number"], [line, column]),
+    null
+  );
+  const error = extractLspError(hoverPayload);
+  if (error) {
+    throw new Error(error);
+  }
+  return hoverPayload;
+}
+
+function getLspDefinition(source, version, line, column) {
+  const module = state.compilerModule;
+  syncCompilerSource(source, version);
+  const definitionPayload = parseJsonOr(
+    module.ccall("dynlex_web_get_lsp_definition_json", "string", ["number", "number"], [line, column]),
+    null
+  );
+  const error = extractLspError(definitionPayload);
+  if (error) {
+    throw new Error(error);
+  }
+  return definitionPayload;
+}
+
+function getLspSemanticTokens(source, version) {
+  const module = state.compilerModule;
+  syncCompilerSource(source, version);
+  const semanticPayload = parseJsonOr(
+    module.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []),
+    { data: [], legend: { tokenTypes: [], tokenModifiers: [] } }
+  );
+  const error = extractLspError(semanticPayload);
+  if (error) {
+    throw new Error(error);
+  }
+  if (!Array.isArray(semanticPayload.data)) {
+    semanticPayload.data = [];
+  }
+  if (!semanticPayload.legend || typeof semanticPayload.legend !== "object") {
+    semanticPayload.legend = { tokenTypes: [], tokenModifiers: [] };
+  }
+  if (!Array.isArray(semanticPayload.legend.tokenTypes)) {
+    semanticPayload.legend.tokenTypes = [];
+  }
+  if (!Array.isArray(semanticPayload.legend.tokenModifiers)) {
+    semanticPayload.legend.tokenModifiers = [];
+  }
+  return semanticPayload;
 }
 
 function isSupportedImport(importSpec) {
@@ -254,7 +331,9 @@ function buildRuntimeImports(importSpecs, stdoutChunks) {
   const memory = new WebAssembly.Memory({ initial: 256, maximum: 2048 });
   const indirectFunctionTable = new WebAssembly.Table({ initial: 64, maximum: 2048, element: "anyfunc" });
   const stackPointer = new WebAssembly.Global({ value: "i32", mutable: true }, 8 * 1024 * 1024);
-  const memoryBase = new WebAssembly.Global({ value: "i32", mutable: false }, 1024);
+  // DynLex emitted WASM expects static data to be based at offset 0 in host memory.
+  // Using a non-zero base leaves string literals uninitialized for browser runtime execution.
+  const memoryBase = new WebAssembly.Global({ value: "i32", mutable: false }, 0);
   const tableBase = new WebAssembly.Global({ value: "i32", mutable: false }, 0);
 
   let heapPointer = 12 * 1024 * 1024;
@@ -447,12 +526,12 @@ async function runLastSuccessfulProgram() {
 }
 
 // Worker protocol.
-// Phase 1 messages:
 // - init -> initResult
-// - compile { source } -> compileResult
+// - compile { source, version } -> compileResult
 // - run -> runResult
-// Phase 2 extension point:
-// - reserve "lsp.*" message namespace for richer editor features.
+// - lsp.hover { source, version, line, column } -> hover|null
+// - lsp.definition { source, version, line, column } -> location|null
+// - lsp.semanticTokens { source, version } -> { data, legend }
 self.onmessage = async (event) => {
   const { id, type, payload } = event.data ?? {};
   if (typeof id !== "number" || typeof type !== "string") {
@@ -469,7 +548,8 @@ self.onmessage = async (event) => {
     if (type === "compile") {
       await ensureCompilerInitialized();
       const source = typeof payload?.source === "string" ? payload.source : "";
-      const result = compileSource(source);
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const result = compileSource(source, version);
       postResponse(id, true, result);
       return;
     }
@@ -478,6 +558,37 @@ self.onmessage = async (event) => {
       await ensureCompilerInitialized();
       const result = await runLastSuccessfulProgram();
       postResponse(id, true, result);
+      return;
+    }
+
+    if (type === "lsp.hover") {
+      await ensureCompilerInitialized();
+      const source = typeof payload?.source === "string" ? payload.source : "";
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const line = toNonNegativeInteger(payload?.line);
+      const column = toNonNegativeInteger(payload?.column);
+      const hover = getLspHover(source, version, line, column);
+      postResponse(id, true, hover);
+      return;
+    }
+
+    if (type === "lsp.definition") {
+      await ensureCompilerInitialized();
+      const source = typeof payload?.source === "string" ? payload.source : "";
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const line = toNonNegativeInteger(payload?.line);
+      const column = toNonNegativeInteger(payload?.column);
+      const definition = getLspDefinition(source, version, line, column);
+      postResponse(id, true, definition);
+      return;
+    }
+
+    if (type === "lsp.semanticTokens") {
+      await ensureCompilerInitialized();
+      const source = typeof payload?.source === "string" ? payload.source : "";
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const tokens = getLspSemanticTokens(source, version);
+      postResponse(id, true, tokens);
       return;
     }
 

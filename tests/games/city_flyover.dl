@@ -33,9 +33,9 @@ function set city perspective with width viewport_width and height viewport_heig
         @intrinsic("call", "GL", "glLoadIdentity", void)
         set safe_height to the maximum of viewport_height and 1
         set aspect to (viewport_width as a float) / (safe_height as a float)
-        set near_plane to 0.8
+        set near_plane to 0.4
         set far_plane to 1400.0
-        set top_plane to 0.18
+        set top_plane to 0.28
         set bottom_plane to 0.0 - top_plane
         set right_plane to top_plane * aspect
         set left_plane to 0.0 - right_plane
@@ -172,6 +172,52 @@ function draw rooftop unit at x y z with width roof_width and depth roof_depth a
     execute:
         draw box centered at x y z with size roof_width 1.2 roof_depth and color r g b
 
+function draw low poly roof cap at x y z with width roof_width and depth roof_depth and height roof_height and color r g b:
+    execute:
+        set half_width to roof_width / 2.0
+        set half_depth to roof_depth / 2.0
+
+        set light_r to r + 18
+        set light_g to g + 18
+        set light_b to b + 18
+        clamp light_r between 0 and 255
+        clamp light_g between 0 and 255
+        clamp light_b between 0 and 255
+
+        set dark_r to r - 18
+        set dark_g to g - 18
+        set dark_b to b - 18
+        clamp dark_r between 0 and 255
+        clamp dark_g between 0 and 255
+        clamp dark_b between 0 and 255
+
+        @intrinsic("call", "GL", "glPushMatrix", void)
+        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
+        @intrinsic("call", "GL", "glBegin", void, 4)
+
+        @intrinsic("call", "GL", "glColor3ub", void, light_r, light_g, light_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, 0.0 - half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, dark_r, dark_g, dark_b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, 0.0 - half_depth)
+
+        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, half_depth)
+
+        @intrinsic("call", "GL", "glEnd", void)
+        @intrinsic("call", "GL", "glPopMatrix", void)
+
 function draw vehicle module at x y z heading angle and color r g b:
     execute:
         @intrinsic("call", "GL", "glPushMatrix", void)
@@ -197,6 +243,39 @@ function draw street slab at x z with width slab_width and depth slab_depth and 
 function draw sidewalk slab at x z with width slab_width and depth slab_depth and color r g b:
     execute:
         draw box centered at x 0.11 z with size slab_width 0.14 slab_depth and color r g b
+
+function draw distant block silhouette at block_x and block_z:
+    execute:
+        set block_origin_x to block_x * 48.0
+        set block_origin_z to block_z * 48.0
+        set block_center_x to block_origin_x + 24.0
+        set block_center_z to block_origin_z + 24.0
+
+        set seed_a to hash from (block_x + 17.0) and (block_z + 11.0)
+        set seed_b to hash from (block_x + 29.0) and (block_z + 37.0)
+
+        set tower_width to 14.0 + seed_a * 10.0
+        set tower_depth to 14.0 + seed_b * 10.0
+        set tower_height to 18.0 + seed_a * 74.0
+
+        set tower_r to (98 + seed_b * 90.0) as an integer
+        set tower_g to (96 + seed_a * 80.0) as an integer
+        set tower_b to (110 + seed_b * 70.0) as an integer
+
+        draw box centered at block_center_x tower_height / 2.0 block_center_z with size tower_width tower_height tower_depth and color tower_r tower_g tower_b
+
+        if seed_a > 0.34:
+            set roof_r to tower_r + 22
+            set roof_g to tower_g + 22
+            set roof_b to tower_b + 22
+            clamp roof_r between 0 and 255
+            clamp roof_g between 0 and 255
+            clamp roof_b between 0 and 255
+            draw low poly roof cap at block_center_x tower_height block_center_z with width tower_width * 0.9 and depth tower_depth * 0.9 and height (2.4 + seed_b * 4.2) and color roof_r roof_g roof_b
+
+        if seed_b > 0.66:
+            set annex_height to tower_height * 0.55
+            draw box centered at block_center_x + 9.0 annex_height / 2.0 block_center_z - 7.0 with size 8.0 annex_height 8.0 and color tower_r - 8 tower_g - 8 tower_b - 8
 
 function draw lot scene at lot_x lot_z in detail detail_level:
     execute:
@@ -232,6 +311,15 @@ function draw lot scene at lot_x lot_z in detail detail_level:
                 if detail_level < 0.5:
                     set total_height to story_count * 2.8
                     draw box centered at lot_center_x total_height / 2.0 lot_center_z with size footprint_x total_height footprint_z and color facade_r facade_g facade_b
+                    if occupancy_seed > 0.44:
+                        set roof_height to 1.2 + accent_seed * 2.4
+                        set roof_r to facade_r + 18
+                        set roof_g to facade_g + 18
+                        set roof_b to facade_b + 18
+                        clamp roof_r between 0 and 255
+                        clamp roof_g between 0 and 255
+                        clamp roof_b between 0 and 255
+                        draw low poly roof cap at lot_center_x total_height lot_center_z with width footprint_x * 0.92 and depth footprint_z * 0.92 and height roof_height and color roof_r roof_g roof_b
                 else:
                     set story_index to 0.0
                     while story_index < story_count:
@@ -269,7 +357,7 @@ function draw block at block_x block_z with detail detail_level and time city_ti
             set car_x_a to block_origin_x + travel_a * 48.0
             draw vehicle module at car_x_a 0.0 block_origin_z + 3.3 heading 0.0 and color 202 82 68
 
-            set travel_b to fract of (city_time * 0.05 + road_seed * 0.7 + 0.3)
+            set travel_b to fract of (((city_time * 0.05) + (road_seed * 0.7)) + 0.3)
             set car_z_b to block_origin_z + (1.0 - travel_b) * 48.0
             draw vehicle module at block_origin_x + 8.7 0.0 car_z_b heading 90.0 and color 78 122 208
 
@@ -295,7 +383,8 @@ set camera_z to 24.0
 set yaw to 0.0
 set move_speed to 1.15
 set turn_speed to 2.4
-set render_radius to 11.0
+set near_render_radius to 1.0
+set far_render_radius to 4.0
 
 while not the window should close:
     set framebuffer_width to query the framebuffer width of window_handle
@@ -303,10 +392,10 @@ while not the window should close:
     set city perspective with width framebuffer_width and height framebuffer_height
 
     set yaw_radians to yaw * 0.0174533
-    set forward_x to the sine of yaw_radians
-    set forward_z to the cosine of yaw_radians
-    set right_x to forward_z
-    set right_z to 0.0 - forward_x
+    set forward_x to 0.0 - (the sine of yaw_radians)
+    set forward_z to 0.0 - (the cosine of yaw_radians)
+    set right_x to 0.0 - forward_z
+    set right_z to forward_x
 
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
         add forward_x * move_speed to camera_x
@@ -325,9 +414,9 @@ while not the window should close:
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
         add 0.8 to camera_y
     if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
-        subtract turn_speed from yaw
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
         add turn_speed to yaw
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
+        subtract turn_speed from yaw
 
     if camera_y < 2.4:
         set camera_y to 2.4
@@ -341,20 +430,19 @@ while not the window should close:
     set camera_block_x to the floor of (camera_x / 48.0)
     set camera_block_z to the floor of (camera_z / 48.0)
 
-    set block_z to camera_block_z - render_radius
-    while block_z <= camera_block_z + render_radius:
-        set block_x to camera_block_x - render_radius
-        while block_x <= camera_block_x + render_radius:
+    set block_z to camera_block_z - far_render_radius
+    while block_z <= camera_block_z + far_render_radius:
+        set block_x to camera_block_x - far_render_radius
+        while block_x <= camera_block_x + far_render_radius:
             set block_center_x to block_x * 48.0 + 24.0
             set block_center_z to block_z * 48.0 + 24.0
             set block_distance_squared to squared distance from block_center_x block_center_z to camera_x camera_z
-            if block_distance_squared < 650000.0:
-                set detail_level to 0.0
-                if block_distance_squared < 150000.0:
-                    set detail_level to 1.0
-                if block_distance_squared < 52000.0:
-                    set detail_level to 2.0
-                draw block at block_x block_z with detail detail_level and time city_time
+            if block_distance_squared < 1100000.0:
+                if ((block_x >= camera_block_x - near_render_radius) and (block_x <= camera_block_x + near_render_radius)) and ((block_z >= camera_block_z - near_render_radius) and (block_z <= camera_block_z + near_render_radius)):
+                    set detail_level to 0.0
+                    draw block at block_x block_z with detail detail_level and time city_time
+                else:
+                    draw distant block silhouette at block_x and block_z
             add 1.0 to block_x
         add 1.0 to block_z
 

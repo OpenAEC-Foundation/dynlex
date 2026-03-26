@@ -280,10 +280,12 @@ bool inferTypes(ParseContext &parseContext) {
 		return false;
 
 	// Validate variables — all must have deduced types
-	// Skip non-macro function body sections: their variables only get types during monomorphization
+	// Skip definition body sections: their variables are inferred when the definition is instantiated/expanded.
 	bool valid = true;
 	std::function<void(Section *)> validateVariables = [&](Section *section) {
-		if (section->parent && !section->parent->isMacro && !section->parent->patternDefinitions.empty())
+		if (!section->patternDefinitions.empty())
+			return;
+		if (section->parent && !section->parent->patternDefinitions.empty())
 			return;
 		for (auto &[name, var] : section->variables) {
 			if (!var->type.isDeduced()) {

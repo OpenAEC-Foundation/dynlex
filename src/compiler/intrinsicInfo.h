@@ -44,6 +44,7 @@ enum class IntrinsicReturnKind {
 	X(Store, "store", 3, IntrinsicReturnKind::Void)                                                                            \
 	X(StoreAt, "store at", 4, IntrinsicReturnKind::Void)                                                                       \
 	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void)                                                                   \
+	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void)                                                               \
 	X(If, "if", 2, IntrinsicReturnKind::Void)                                                                                  \
 	X(ElseIf, "else if", 2, IntrinsicReturnKind::Void)                                                                         \
 	X(Else, "else", 1, IntrinsicReturnKind::Void)                                                                              \

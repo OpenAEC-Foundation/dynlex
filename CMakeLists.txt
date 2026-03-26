@@ -284,16 +284,8 @@ if(DYNLEX_WEB)
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/dap/.*\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/dynlexServer\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/languageServer\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/tcpTransport\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/stdioTransport\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/completion\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/lspFileSystem\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/configDocument\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/semanticTokenBuilder\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/semanticTokenDebug\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/textDocument\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/native\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/spirv\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/pexlit/rendering/.*\\.cpp$")
@@ -309,7 +301,7 @@ if(DYNLEX_WEB)
     target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json ${dynlex_llvm_libs_web})
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS
-        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json']"
+        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json','_dynlex_web_get_lsp_hover_json','_dynlex_web_get_lsp_definition_json','_dynlex_web_get_lsp_semantic_tokens_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
     target_link_options(dynlex_web PRIVATE

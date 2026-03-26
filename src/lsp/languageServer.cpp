@@ -1,6 +1,8 @@
 #include "languageServer.h"
 #include "lspProtocol.h"
+#ifndef DYNLEX_WEB
 #include "tcpTransport.h"
+#endif
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -41,6 +43,7 @@ void LanguageServer::run() {
 		log("Language server running on provided transport");
 		handleConnection();
 	} else {
+#ifndef DYNLEX_WEB
 		// TCP server mode
 		TcpServer server(port);
 		if (!server.setup()) {
@@ -59,6 +62,9 @@ void LanguageServer::run() {
 				log("Client disconnected");
 			}
 		}
+#else
+		logError("TCP transport mode is unavailable in web builds.");
+#endif
 	}
 
 	running = false;

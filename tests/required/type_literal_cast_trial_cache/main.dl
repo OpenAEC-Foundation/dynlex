@@ -1,0 +1,8 @@
+import lib/std.dl
+
+set marker to 0 as a byte
+set x to true
+if marker = (0 as a byte):
+    set x to false
+if marker = (0 as a byte):
+    set x to (0 as a boolean)

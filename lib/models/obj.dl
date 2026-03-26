@@ -1,0 +1,192 @@
+# DynLex OBJ Model Library
+#
+# Scope:
+# - Loads Wavefront OBJ files with vertex positions ("v x y z")
+# - Supports triangulated faces and polygon fan triangulation from "f" lines
+# - Ignores normals/uv/material directives
+#
+# Usage:
+#   import lib/models/obj.dl
+#   set mesh to a loaded obj mesh from "path/to/model.obj"
+#   draw obj mesh mesh at 0.0 0.0 0.0 with scale 1.0 and color 220 220 220
+#   free obj mesh mesh
+
+import lib/array.dl
+
+class:
+    patterns:
+        [an|a|] obj vertex
+    members:
+        x as a float
+        y as a float
+        z as a float
+
+class:
+    patterns:
+        [an|a|] obj triangle
+    members:
+        a as i32
+        b as i32
+        c as i32
+
+class:
+    patterns:
+        [an|a|] obj mesh
+        [a|] model mesh
+    members:
+        vertices as a pointer to obj vertex
+        vertex_count as i32
+        triangles as a pointer to obj triangle
+        triangle_count as i32
+
+function a new obj vertex from x y z:
+    replacement:
+        @intrinsic("construct", an obj vertex, x, y, z)
+
+function a new obj triangle from a b c:
+    replacement:
+        @intrinsic("construct", an obj triangle, a, b, c)
+
+function a new obj mesh with vertices verts count vertex_total and triangles tris count triangle_total:
+    replacement:
+        @intrinsic("construct", an obj mesh, verts, vertex_total, tris, triangle_total)
+
+function an empty obj mesh:
+    execute:
+        return a new obj mesh with vertices (0 as a pointer to obj vertex) count 0 and triangles (0 as a pointer to obj triangle) count 0
+
+function a loaded obj mesh from path:
+    execute:
+        set file to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if file = 0 as a pointer to a byte:
+            return an empty obj mesh
+
+        set vertex_capacity to 256
+        set triangle_capacity to 512
+        set vertex_count to 0
+        set triangle_count to 0
+        set vertices to @intrinsic("call", "libc", "malloc", a pointer to obj vertex, vertex_capacity * the size of an obj vertex)
+        set triangles to @intrinsic("call", "libc", "malloc", a pointer to obj triangle, triangle_capacity * the size of an obj triangle)
+
+        set line_capacity to 4096
+        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, line_capacity)
+        set end_ptr_out to allocate 1 slots of a pointer to a byte
+
+        set has_line to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, line_capacity, file)
+        while has_line != 0 as a pointer to a byte:
+            if (character 0 of line = 118 as a byte) and (character 1 of line = 32 as a byte):
+                set vx to @intrinsic("call", "libc", "strtod", a float, line + 2, end_ptr_out)
+                set vy to @intrinsic("call", "libc", "strtod", a float, item 0 of end_ptr_out, end_ptr_out)
+                set vz to @intrinsic("call", "libc", "strtod", a float, item 0 of end_ptr_out, end_ptr_out)
+
+                if vertex_count >= vertex_capacity:
+                    multiply vertex_capacity by 2
+                    set vertices to @intrinsic("call", "libc", "realloc", a pointer to obj vertex, vertices, vertex_capacity * the size of an obj vertex)
+
+                store a new obj vertex from vx vy vz into vertices at vertex_count
+                increment vertex_count
+
+            if (character 0 of line = 102 as a byte) and (character 1 of line = 32 as a byte):
+                set cursor to line + 2
+                set parsed to 0
+                set first_index to 0
+                set prev_index to 0
+                set parsing to 1
+
+                while parsing > 0:
+                    while (character 0 of cursor = 32 as a byte) or (character 0 of cursor = 9 as a byte):
+                        set cursor to cursor + 1
+
+                    set marker to character 0 of cursor
+                    if ((marker = 0 as a byte) or (marker = 10 as a byte)) or (marker = 13 as a byte):
+                        set parsing to 0
+                    else:
+                        set raw_index to @intrinsic("call", "libc", "strtol", a 64 bit integer, cursor, end_ptr_out, 10)
+                        set next_ptr to item 0 of end_ptr_out
+
+                        if next_ptr = cursor:
+                            set parsing to 0
+                        else:
+                            set cursor to next_ptr
+
+                            while ((character 0 of cursor != 0 as a byte) and (character 0 of cursor != 32 as a byte)) and ((character 0 of cursor != 9 as a byte) and ((character 0 of cursor != 10 as a byte) and (character 0 of cursor != 13 as a byte))):
+                                set cursor to cursor + 1
+
+                            set index to raw_index as an integer
+                            if index > 0:
+                                decrement index
+                                if parsed = 0:
+                                    set first_index to index
+                                if parsed = 1:
+                                    set prev_index to index
+                                if parsed > 1:
+                                    if triangle_count >= triangle_capacity:
+                                        multiply triangle_capacity by 2
+                                        set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, triangle_capacity * the size of an obj triangle)
+
+                                    store @intrinsic("construct", an obj triangle, first_index, prev_index, index) into triangles at triangle_count
+                                    increment triangle_count
+                                    set prev_index to index
+                                increment parsed
+
+            set has_line to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, line_capacity, file)
+
+        discard @intrinsic("call", "libc", "fclose", an integer, file)
+        @intrinsic("call", "libc", "free", void, line)
+        @intrinsic("call", "libc", "free", void, end_ptr_out)
+
+        if vertex_count = 0:
+            @intrinsic("call", "libc", "free", void, vertices)
+            set vertices to (0 as a pointer to obj vertex)
+        else:
+            set vertices to @intrinsic("call", "libc", "realloc", a pointer to obj vertex, vertices, vertex_count * the size of an obj vertex)
+
+        if triangle_count = 0:
+            @intrinsic("call", "libc", "free", void, triangles)
+            set triangles to (0 as a pointer to obj triangle)
+        else:
+            set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, triangle_count * the size of an obj triangle)
+
+        return a new obj mesh with vertices vertices count vertex_count and triangles triangles count triangle_count
+
+function draw obj mesh mesh at x y z with scale model_scale and color r g b:
+    execute:
+        if mesh's triangle_count <= 0:
+            return
+
+        set vertices to mesh's vertices
+        set triangles to mesh's triangles
+
+        @intrinsic("call", "GL", "glPushMatrix", void)
+        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
+        @intrinsic("call", "GL", "glScaled", void, model_scale, model_scale, model_scale)
+        @intrinsic("call", "GL", "glBegin", void, 4)
+        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+
+        set tri_index to 0
+        while tri_index < mesh's triangle_count:
+            set tri to item tri_index of triangles
+
+            set ia to tri's a
+            set ib to tri's b
+            set ic to tri's c
+
+            set va to item ia of vertices
+            set vb to item ib of vertices
+            set vc to item ic of vertices
+
+            @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
+            @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
+            @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
+
+            increment tri_index
+
+        @intrinsic("call", "GL", "glEnd", void)
+        @intrinsic("call", "GL", "glPopMatrix", void)
+
+function free obj mesh mesh:
+    execute:
+        if mesh's vertices != 0 as a pointer to obj vertex:
+            @intrinsic("call", "libc", "free", void, mesh's vertices)
+        if mesh's triangles != 0 as a pointer to obj triangle:
+            @intrinsic("call", "libc", "free", void, mesh's triangles)
