@@ -1,2 +1,3 @@
-tests/required/duplicate_variablelike_literal_unresolved/main.dl:1:53-58: Warning: Repeated pattern word 'width' stays literal because it already became a parameter (The first parameter occurrence was here: tests/required/duplicate_variablelike_literal_unresolved/main.dl:1:47-52)
+tests/required/duplicate_variablelike_literal_unresolved/main.dl:1:53-58: Warning: Repeated pattern word 'width' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal_unresolved/main.dl:1:47-52
 tests/required/duplicate_variablelike_literal_unresolved/main.dl:9:1-46: Error: This pattern couldn't be resolved

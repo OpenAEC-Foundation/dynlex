@@ -11,6 +11,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <sstream>
 
@@ -559,7 +560,7 @@ collectMatcherFrontier(const CompletionContext &context, SectionType sectionType
 			frontier.push_back(current);
 		}
 		std::vector<MatchProgress> nextSteps = current.step();
-		queue.insert(queue.end(), nextSteps.begin(), nextSteps.end());
+		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
 	}
 
 	return frontier;

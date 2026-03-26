@@ -55,7 +55,9 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			 {"to_type", typeToUserName(valueType, context.parseContext)}}
 		));
 		if (!context.trial) {
-			context.addDiagnostic(buildVariableTypeChangeDiagnostic(variable, valueExpr, valueType, context.parseContext));
+			context.addDiagnosticWithCurrentTrace(
+				buildVariableTypeChangeDiagnostic(variable, valueExpr, valueType, context.parseContext)
+			);
 		}
 		return;
 	}

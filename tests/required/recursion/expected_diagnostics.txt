@@ -1,5 +1,27 @@
-tests/required/recursion/main.dl:25:16-29: Warning: Expression 'n - 1 is even' has multiple valid operand groupings. Using '(n - 1) is even' instead of 'n - (1 is even)'. 
-tests/required/recursion/main.dl:19:16-28: Warning: Expression 'n - 1 is odd' has multiple valid operand groupings. Using '(n - 1) is odd' instead of 'n - (1 is odd)'. 
-tests/required/recursion/main.dl:40:20-42: Warning: Expression 'n - 1 is even inverted' has multiple valid operand groupings. Using '(n - 1) is even inverted' instead of 'n - (1 is even inverted)'. 
-tests/required/recursion/main.dl:34:20-41: Warning: Expression 'n - 1 is odd inverted' has multiple valid operand groupings. Using '(n - 1) is odd inverted' instead of 'n - (1 is odd inverted)'. 
-tests/required/recursion/main.dl:50:16-35: Warning: Expression 'n - 1 is odd nested' has multiple valid operand groupings. Using '(n - 1) is odd nested' instead of 'n - (1 is odd nested)'. 
+tests/required/recursion/main.dl:25:9-29: Warning: Expression 'return n - 1 is even' has multiple valid operand groupings. Using 'return ((n - 1) is even)' instead of 'return (n - (1 is even))'.
+  note: while inferring call 'return n - 1 is even' with arguments [a 32 bit integer] -> nothing tests/required/recursion/main.dl:25:9-29
+  note: while inferring call 'return n - 1 is odd' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:19:16-28
+  note: while inferring call 'return n - 1 is odd' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:19:9-28
+  note: while inferring call '4 is even' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:27:7-16
+  note: while inferring call 'print 4 is even as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:27:7-24
+  note: while inferring call 'print 4 is even as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:27:1-24
+tests/required/recursion/main.dl:19:9-28: Warning: Expression 'return n - 1 is odd' has multiple valid operand groupings. Using 'return ((n - 1) is odd)' instead of 'return (n - (1 is odd))'.
+  note: while inferring call 'return n - 1 is odd' with arguments [a 32 bit integer] -> nothing tests/required/recursion/main.dl:19:9-28
+  note: while inferring call '4 is even' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:27:7-16
+  note: while inferring call 'print 4 is even as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:27:7-24
+  note: while inferring call 'print 4 is even as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:27:1-24
+tests/required/recursion/main.dl:40:13-42: Warning: Expression 'return n - 1 is even inverted' has multiple valid operand groupings. Using 'return ((n - 1) is even inverted)' instead of 'return (n - (1 is even inverted))'.
+  note: while inferring call 'return n - 1 is even inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursion/main.dl:40:13-42
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:34:20-41
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:34:13-41
+  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:43:7-25
+  note: while inferring call 'print 4 is even inverted as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:43:7-33
+  note: while inferring call 'print 4 is even inverted as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:43:1-33
+tests/required/recursion/main.dl:34:13-41: Warning: Expression 'return n - 1 is odd inverted' has multiple valid operand groupings. Using 'return ((n - 1) is odd inverted)' instead of 'return (n - (1 is odd inverted))'.
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursion/main.dl:34:13-41
+  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:43:7-25
+  note: while inferring call 'print 4 is even inverted as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:43:7-33
+  note: while inferring call 'print 4 is even inverted as line' with arguments [unresolved(?)] -> undeduced tests/required/recursion/main.dl:43:1-33
+tests/required/recursion/main.dl:50:16-35: Warning: Expression 'if n - 1 is odd nested' has multiple valid operand groupings. Using '(n - 1) is odd nested' instead of 'n - (1 is odd nested)'.
+  note: while inferring call 'if n - 1 is odd nested' with arguments [a 32 bit integer] -> a 32 bit integer tests/required/recursion/main.dl:50:16-35
+  note: while inferring call 'if n - 1 is odd nested' with arguments [a 32 bit integer] -> undeduced tests/required/recursion/main.dl:50:13-35

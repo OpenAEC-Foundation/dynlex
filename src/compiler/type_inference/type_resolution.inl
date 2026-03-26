@@ -836,6 +836,53 @@ static Diagnostic buildFailureDetailDiagnostic(Range range, std::string detail, 
 	return diagnostic;
 }
 
+static std::string formatInferenceTraceType(const DataType &type, ParseContext &parseContext) {
+	if (!type.isDeduced())
+		return "undeduced";
+	if (type.kind == DataType::Kind::Type) {
+		DataType referencedType = type.toReferencedType();
+		if (referencedType.kind == DataType::Kind::Unresolved)
+			return "type";
+		return "type(" + typeToUserName(referencedType, parseContext) + ")";
+	}
+	return typeToUserName(type, parseContext);
+}
+
+static bool expressionParticipatesInInferenceTrace(Expression *expr) {
+	if (!expr)
+		return false;
+	return expr->kind == Expression::Kind::PatternCall || expr->kind == Expression::Kind::IntrinsicCall;
+}
+
+static std::string describeInferenceTraceFrame(Expression *expr, ParseContext &parseContext) {
+	if (!expr)
+		return "while inferring <expression>";
+
+	std::string expressionText = diagnosticExpressionText(expr);
+	if (expressionText.empty())
+		expressionText = "<expression>";
+
+	std::vector<DataType> argumentTypes;
+	argumentTypes.reserve(expr->arguments.size());
+	for (Expression *argument : expr->arguments)
+		argumentTypes.push_back(argument ? argument->type : DataType{});
+	std::string resultType = formatInferenceTraceType(expr->type, parseContext);
+
+	if (expr->kind == Expression::Kind::IntrinsicCall) {
+		std::string frame = "while inferring intrinsic '" + expr->intrinsicName + "' in '" + expressionText + "'";
+		if (!argumentTypes.empty())
+			frame += " with arguments [" + formatTypeList(argumentTypes, parseContext) + "]";
+		frame += " -> " + resultType;
+		return frame;
+	}
+
+	std::string frame = "while inferring call '" + expressionText + "'";
+	if (!argumentTypes.empty())
+		frame += " with arguments [" + formatTypeList(argumentTypes, parseContext) + "]";
+	frame += " -> " + resultType;
+	return frame;
+}
+
 static bool isValidCastRuntimeType(const DataType &type) {
 	if (!type.isDeduced() || type.kind == DataType::Kind::Void || type.kind == DataType::Kind::Type)
 		return false;
@@ -903,6 +950,7 @@ struct InferenceContext {
 		std::string expressionText;
 		std::string chosenGrouping;
 		std::string alternativeGrouping;
+		std::vector<RelatedInfo> relatedInfo;
 	};
 
 	struct TrialJournal {
@@ -993,6 +1041,7 @@ struct InferenceContext {
 	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	std::vector<RelatedInfo> typeFailureRelatedInfo;
+	DiagnosticExpressionSnapshot typeFailureSnapshot;
 	Diagnostic typeFailureDiagnostic;
 	int typeFailurePriority = -1;
 	bool hasTypeFailureDiagnostic = false;
@@ -1002,6 +1051,7 @@ struct InferenceContext {
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
+	std::vector<Expression *> expressionStack;
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
@@ -1011,16 +1061,58 @@ struct InferenceContext {
 			parseContext.addDiagnostic(std::move(diagnostic));
 	}
 
+	Expression *currentExpression() const { return expressionStack.empty() ? nullptr : expressionStack.back(); }
+
+	void pushExpression(Expression *expression) { expressionStack.push_back(expression); }
+
+	void popExpression() {
+		assert(!expressionStack.empty() && "Expression stack underflow during type inference");
+		expressionStack.pop_back();
+	}
+
+	std::vector<RelatedInfo> captureInferenceTraceRelatedInfo(Expression *currentExpressionOverride = nullptr) const {
+		std::vector<RelatedInfo> relatedInfo;
+		if (currentExpressionOverride && expressionParticipatesInInferenceTrace(currentExpressionOverride) &&
+			currentExpressionOverride->range.line) {
+			relatedInfo.push_back(
+				{describeInferenceTraceFrame(currentExpressionOverride, parseContext), currentExpressionOverride->range}
+			);
+		}
+		for (auto it = expressionStack.rbegin(); it != expressionStack.rend(); ++it) {
+			Expression *expression = *it;
+			if (!expressionParticipatesInInferenceTrace(expression) || !expression->range.line)
+				continue;
+			if (expression == currentExpressionOverride)
+				continue;
+			relatedInfo.push_back({describeInferenceTraceFrame(expression, parseContext), expression->range});
+		}
+		return relatedInfo;
+	}
+
+	void appendCurrentInferenceTrace(Diagnostic &diagnostic) const {
+		std::vector<RelatedInfo> trace = captureInferenceTraceRelatedInfo();
+		diagnostic.relatedInfo.insert(diagnostic.relatedInfo.end(), trace.begin(), trace.end());
+	}
+
+	void addDiagnosticWithCurrentTrace(Diagnostic diagnostic) {
+		appendCurrentInferenceTrace(diagnostic);
+		addDiagnostic(std::move(diagnostic));
+	}
+
 	void setTypeFailure(std::string detail) {
 		typesValid = false;
-		if (typeFailureDetail.empty())
+		if (typeFailureDetail.empty()) {
 			typeFailureDetail = std::move(detail);
+			typeFailureRelatedInfo = captureInferenceTraceRelatedInfo();
+			typeFailureSnapshot = captureDiagnosticExpressionSnapshot(currentExpression());
+		}
 	}
 
 	void fail(Diagnostic diagnostic, int priority = 1) {
 		typesValid = false;
 		if (hasTypeFailureDiagnostic && typeFailurePriority >= priority)
 			return;
+		appendCurrentInferenceTrace(diagnostic);
 		typeFailureDiagnostic = std::move(diagnostic);
 		typeFailurePriority = priority;
 		hasTypeFailureDiagnostic = true;
@@ -1029,6 +1121,7 @@ struct InferenceContext {
 	void clearTypeFailure() {
 		typeFailureDetail.clear();
 		typeFailureRelatedInfo.clear();
+		typeFailureSnapshot = {};
 		typeFailureDiagnostic = Diagnostic();
 		typeFailurePriority = -1;
 		hasTypeFailureDiagnostic = false;
@@ -1044,6 +1137,7 @@ struct InferenceContext {
 			return;
 		typeFailureDetail = other.typeFailureDetail;
 		typeFailureRelatedInfo = other.typeFailureRelatedInfo;
+		typeFailureSnapshot = other.typeFailureSnapshot;
 	}
 
 	std::shared_ptr<TrialInstantiationCache> ensureTrialInstantiationCache() {

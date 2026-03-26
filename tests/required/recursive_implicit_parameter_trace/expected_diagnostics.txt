@@ -1,1 +1,4 @@
-tests/required/recursive_implicit_parameter_trace/main.dl:11:1-20: Error: Expression 'cache profile width' parses successfully without types, but not with types: Undeduced argument type encountered during trial pattern-call inference ('width' is a parameter because it was used here: tests/required/recursive_implicit_parameter_trace/main.dl:9:13-18) (The first nested parameter name mismatch was here: tests/required/recursive_implicit_parameter_trace/main.dl:9:13-18)
+tests/required/recursive_implicit_parameter_trace/main.dl:11:1-20: Error: Undeduced argument type encountered during trial pattern-call inference
+  note: while inferring call 'cache profile width' with arguments [unresolved(?)] -> undeduced tests/required/recursive_implicit_parameter_trace/main.dl:11:1-20
+  note: 'width' is a parameter because it was used here: tests/required/recursive_implicit_parameter_trace/main.dl:9:13-18
+  note: The first nested parameter name mismatch was here: tests/required/recursive_implicit_parameter_trace/main.dl:9:13-18

@@ -1,1 +1,2 @@
-tests/required/duplicate_pattern/main.dl:13:10-17: Error: Duplicate pattern definition (Conflicts with this definition tests/required/duplicate_pattern/main.dl:9:10-14)
+tests/required/duplicate_pattern/main.dl:13:10-17: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/duplicate_pattern/main.dl:9:10-14

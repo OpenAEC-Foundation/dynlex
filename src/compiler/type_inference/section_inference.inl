@@ -2,6 +2,13 @@
 
 #include "operand_reordering.inl"
 
+static Variable *findOwnSectionVariable(Section *section, const std::string &name) {
+	if (!section)
+		return nullptr;
+	auto it = section->variables.find(name);
+	return it != section->variables.end() ? it->second : nullptr;
+}
+
 static bool isLoopSectionOpening(CodeLine *line, ParseContext &parseContext) {
 	if (!line || !line->expression)
 		return false;
@@ -32,27 +39,27 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 	}
 	resetSectionExpressionTypes(section);
 	resetSectionLocalVariableTypes(section);
-	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-		for (const auto &[name, boundExpr] : frame.bindings) {
-			Variable *boundVar = section->findVariable(name);
-			if (!boundVar)
-				continue;
-			Expression *boundExprForType = boundExpr;
-			DataType boundType = inferExpressionTypeWithoutSideEffects(boundExprForType, context, bindingFrameStack);
-			if (!boundType.isDeduced())
-				continue;
-			if (context.trial && context.trialJournal)
-				context.trialJournal->recordVariableWrite(boundVar);
-			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
-			CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindingFrameStack);
-			context.setKnownConstant(boundVar->definition, boundValue);
-			context.snapshotReferenceConstant(boundVar->definition);
-		}
-	});
+	for (auto &[name, boundVar] : section->variables) {
+		if (!boundVar)
+			continue;
+		Expression *boundExpr = bindingFrameStack.lookup(name);
+		if (!boundExpr)
+			continue;
+		Expression *boundExprForType = boundExpr;
+		DataType boundType = inferExpressionTypeWithoutSideEffects(boundExprForType, context, bindingFrameStack);
+		if (!boundType.isDeduced())
+			continue;
+		if (context.trial && context.trialJournal)
+			context.trialJournal->recordVariableWrite(boundVar);
+		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
+		CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindingFrameStack);
+		context.setKnownConstant(boundVar->definition, boundValue);
+		context.snapshotReferenceConstant(boundVar->definition);
+	}
 
 	if (context.currentInstantiation) {
 		for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
-			Variable *var = section->findVariable(name);
+			Variable *var = findOwnSectionVariable(section, name);
 			if (var)
 				context.setKnownConstant(var->definition, value);
 		}
@@ -385,7 +392,7 @@ bool ensureSectionInstantiationInferred(
 	Instantiation *savedInst = context.currentInstantiation;
 	context.currentKnownConstants.clear();
 	for (const auto &[name, value] : inst.constantParameterValues) {
-		Variable *var = section->findVariable(name);
+		Variable *var = findOwnSectionVariable(section, name);
 		if (var)
 			context.setKnownConstant(var->definition, value);
 	}

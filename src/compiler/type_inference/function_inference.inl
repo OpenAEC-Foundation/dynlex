@@ -801,6 +801,13 @@ static void inferOrderedExpression(
 	bool preserveCurrentGrouping = false
 ) {
 	context.typesValid = true;
+	struct ExpressionTraceGuard {
+		InferenceContext &context;
+		explicit ExpressionTraceGuard(InferenceContext &context, Expression *expression) : context(context) {
+			context.pushExpression(expression);
+		}
+		~ExpressionTraceGuard() { context.popExpression(); }
+	} expressionTraceGuard(context, expr);
 	auto resolveThroughMacroBindings = [&](Expression *expression) {
 		return resolveThroughBindings(expression, macroBindingFrameStack);
 	};
@@ -912,7 +919,7 @@ static void inferOrderedExpression(
 					syntaxConfigForRange(context.parseContext, expr->range), "unknown variable", "message", {{"name", varName}}
 				));
 				if (!context.trial)
-					context.addDiagnostic(Diagnostic(
+					context.addDiagnosticWithCurrentTrace(Diagnostic(
 						context.parseContext, Diagnostic::Level::Error, "unknown variable", expr->range, "name", varName
 					));
 				return;

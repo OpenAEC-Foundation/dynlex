@@ -473,8 +473,8 @@ static bool validateGroupingInTrial(
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
-			considerGroupingFailure(trialFailure, diagnostic, 0);
 			trialContext.fail(std::move(diagnostic), 0);
+			considerGroupingFailure(trialFailure, trialContext.typeFailureDiagnostic, 0);
 			trialSucceeded = false;
 		}
 	}
@@ -486,11 +486,11 @@ static bool validateGroupingInTrial(
 		if (trialContext.hasTypeFailureDiagnostic) {
 			considerGroupingFailure(trialFailure, trialContext.typeFailureDiagnostic, trialContext.typeFailurePriority);
 		} else {
+			Range failureRange =
+				trialContext.typeFailureSnapshot.range.line ? trialContext.typeFailureSnapshot.range : failureSnapshot.range;
 			considerGroupingFailure(
 				trialFailure,
-				buildFailureDetailDiagnostic(
-					failureSnapshot.range, trialContext.typeFailureDetail, trialContext.typeFailureRelatedInfo
-				),
+				buildFailureDetailDiagnostic(failureRange, trialContext.typeFailureDetail, trialContext.typeFailureRelatedInfo),
 				1
 			);
 		}
@@ -867,9 +867,10 @@ static bool inferExpression(
 			return;
 		context.pendingOperandGroupingWarnings->push_back({
 			expr ? expr->range : Range(),
-			(std::string)originalDiagnostic.range.subString,
+			originalDiagnostic.text,
 			std::move(chosenGrouping),
 			std::move(alternativeGrouping),
+			context.captureInferenceTraceRelatedInfo(expr),
 		});
 	};
 	auto emitOwnedGroupingWarnings = [&]() {
@@ -879,10 +880,12 @@ static bool inferExpression(
 			std::string warningKey =
 				buildOperandGroupingWarningKey(warning.range, warning.chosenGrouping, warning.alternativeGrouping);
 			if (context.parseContext.emittedOperandGroupingWarnings.insert(warningKey).second) {
-				context.addDiagnostic(Diagnostic(
+				Diagnostic diagnostic(
 					context.parseContext, Diagnostic::Level::Warning, "ambiguous operand grouping", warning.range, "expression",
 					warning.expressionText, "chosen", warning.chosenGrouping, "alternative", warning.alternativeGrouping
-				));
+				);
+				diagnostic.relatedInfo = warning.relatedInfo;
+				context.addDiagnostic(std::move(diagnostic));
 			}
 		}
 	};
@@ -890,14 +893,13 @@ static bool inferExpression(
 		if (context.trial)
 			return;
 		if (context.hasTypeFailureDiagnostic) {
-			context.addDiagnostic(buildTypeFailureDiagnostic(
-				context.parseContext, originalDiagnostic, context.typeFailureDiagnostic.message,
-				context.typeFailureDiagnostic.relatedInfo
-			));
+			context.addDiagnostic(context.typeFailureDiagnostic);
 			return;
 		}
+		DiagnosticExpressionSnapshot failureSnapshot =
+			context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot : originalDiagnostic;
 		context.addDiagnostic(buildTypeFailureDiagnostic(
-			context.parseContext, originalDiagnostic, context.typeFailureDetail, context.typeFailureRelatedInfo
+			context.parseContext, failureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
 		));
 	};
 	auto tryInfer = [&](bool collectGroupingAmbiguity = true) -> bool {

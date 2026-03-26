@@ -107,9 +107,9 @@ function [the|] string form of {float:value}:
     execute:
         set negative to value < 0.0
         set absolute_value to the absolute value of value
-        set whole to the floor of absolute_value as a 64 bit integer
+        set whole to (the floor of absolute_value) as a 64 bit integer
         set whole_digits to the count of decimal digits in whole
-        set fractional_digits to the maximum of 0 and 6 - whole_digits
+        set fractional_digits to the maximum of 0 and (6 - whole_digits)
         set scale to 1
         set scale_index to 0
         loop while scale_index < fractional_digits:

@@ -14,6 +14,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/ManagedStatic.h"
 #include <iostream>
+#include <iterator>
 #include <unordered_set>
 
 namespace {
@@ -92,7 +93,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			return new PatternMatch(currentProgress.match);
 		}
 		queue.pop_back();
-		queue.insert(queue.end(), nextSteps.begin(), nextSteps.end());
+		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
 	}
 	return nullptr;
 }
