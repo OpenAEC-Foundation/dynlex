@@ -139,16 +139,6 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     expected_diagnostics_file="$test_dir/expected_diagnostics.txt"
-    legacy_expected_error_file="$test_dir/expected_error.txt"
-    if [[ ! -f "$expected_diagnostics_file" && -f "$legacy_expected_error_file" ]]; then
-        expected_diagnostics_file="$legacy_expected_error_file"
-    fi
-
-    if [[ ! -f "$expected_file" && ! -f "$expected_diagnostics_file" ]]; then
-        test_output+="${YELLOW}SKIP${NC} $test_name (no expected.txt or expected_diagnostics.txt)\n"
-        ((skipped++))
-        continue
-    fi
 
     # Compile (5 second timeout)
     compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
@@ -179,22 +169,16 @@ for test_dir in "$TESTS_DIR"/*/; do
         has_expected_diagnostics=true
     fi
 
-    if [[ "$has_expected_diagnostics" == "true" ]]; then
-        if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
-            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        if [[ "$has_expected_diagnostics" == "true" ]]; then
             test_output+="${RED}FAIL${NC} $test_name (diagnostics mismatch)\n"
             test_output+="  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")\n"
             test_output+="  Actual diagnostics:   $(head -c 400 <<< "$compile_output")\n"
-            test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
-            ((failed++))
-            failures+=("$test_name")
-            failure_timings+=("$test_name:${test_elapsed_ms}")
-            continue
+        else
+            test_output+="${RED}FAIL${NC} $test_name (unexpected diagnostics)\n"
+            test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
         fi
-    elif [[ -n "$normalized_compile_output" ]]; then
-        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (unexpected diagnostics)\n"
-        test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
         test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
         ((failed++))
         failures+=("$test_name")
@@ -253,7 +237,10 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Compare
-    expected_output=$(normalize_output "$(cat "$expected_file")")
+    expected_output=""
+    if [[ -f "$expected_file" ]]; then
+        expected_output=$(normalize_output "$(cat "$expected_file")")
+    fi
     normalized_actual_output=$(normalize_output "$actual_output")
     if [[ "$normalized_actual_output" == "$expected_output" ]]; then
         test_output+="${GREEN}PASS${NC} $test_name\n"

@@ -25,11 +25,17 @@ function a new vector from x y z:
 
 function {vector:left} + right:
     execute:
-        return a new vector from the x of left + right the y of left + right the z of left + right
+        set x_component to the x of left + right
+        set y_component to the y of left + right
+        set z_component to the z of left + right
+        return a new vector from x_component y_component z_component
 
 function {vector:left} * factor:
     execute:
-        return a new vector from the x of left * factor the y of left * factor the z of left * factor
+        set x_component to the x of left * factor
+        set y_component to the y of left * factor
+        set z_component to the z of left * factor
+        return a new vector from x_component y_component z_component
 
 function [the|] string form of {vector:msg}:
     execute:

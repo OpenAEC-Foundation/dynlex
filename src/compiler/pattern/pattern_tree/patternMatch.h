@@ -1,9 +1,11 @@
 #pragma once
 #include "patternTreeNode.h"
 #include "variableMatch.h"
+#include <cstddef>
 
 struct MatchOptions {
 	bool acceptLiterals = false;
+	size_t maxSteps = 0; // 0 means unbounded
 };
 
 struct AcceptedLiteralMatch {

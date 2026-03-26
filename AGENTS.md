@@ -100,7 +100,7 @@ Implementation details are documented in `.claude/rules/` (`compiler.md`, `codeg
 ```
 
 - Compiled test binaries use `.out` extension.
-- Tests may include `expected.txt` (output match) or `expected_error.txt` (compile-fail substring match).
+- Tests may include `expected.txt` (output match) or `expected_diagnostics.txt` (exact diagnostics match).
 
 ## Key Design Decisions
 

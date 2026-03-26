@@ -3,6 +3,7 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "sectionType.h"
+#include <memory>
 struct ParseContext;
 struct PatternReference;
 // traversing the tree will also output a tree of possibilities
@@ -10,14 +11,14 @@ struct PatternReference;
 struct MatchProgress {
 	MatchProgress(ParseContext *context, PatternReference *patternReference);
 	MatchProgress(ParseContext *context, PatternReference *patternReference, MatchOptions options);
-	MatchProgress(const MatchProgress &other);
-	MatchProgress(MatchProgress &&other) noexcept;
-	MatchProgress &operator=(const MatchProgress &other);
-	MatchProgress &operator=(MatchProgress &&other) noexcept;
-	~MatchProgress();
+	MatchProgress(const MatchProgress &other) = default;
+	MatchProgress(MatchProgress &&other) noexcept = default;
+	MatchProgress &operator=(const MatchProgress &other) = default;
+	MatchProgress &operator=(MatchProgress &&other) noexcept = default;
+	~MatchProgress() = default;
 	// the parent match we continue matching when this match is finished (can be promoted to grandparent)
 	// we don't need child nodes, since the youngest node is always the matching once.
-	MatchProgress *parent{};
+	std::shared_ptr<const MatchProgress> parent{};
 	ParseContext *context{};
 	// the root node of the current node
 	PatternTreeNode *rootNode{};

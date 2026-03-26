@@ -478,6 +478,19 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			);
 			return retTypeRef.toReferencedType();
 		}
+		if (kind == IntrinsicKind::Select && expr->arguments.size() > 3) {
+			CompileTimeValue conditionValue = evaluateCompileTimeValue(
+				expr->arguments[1], context, context.macroBindingFrames, context.currentCodegenInstantiation
+			);
+			std::optional<bool> condition = compileTimeTruthiness(conditionValue);
+			if (condition.has_value())
+				return getEffectiveType(context, expr->arguments[*condition ? 2 : 3]);
+			DataType trueType = getEffectiveType(context, expr->arguments[2]);
+			DataType falseType = getEffectiveType(context, expr->arguments[3]);
+			if (trueType.isDeduced() && falseType.isDeduced() && trueType == falseType)
+				return trueType;
+			return expr->type;
+		}
 		if (kind == IntrinsicKind::Function)
 			return {DataType::Kind::Int, 1, 1};
 		if (kind == IntrinsicKind::Construct) {
@@ -644,6 +657,8 @@ PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	if (defs.empty())
 		return nullptr;
+	if (defs.size() == 1)
+		return defs.front();
 
 	std::vector<DataType> argTypes;
 	argTypes.reserve(expr->arguments.size());

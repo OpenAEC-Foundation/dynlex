@@ -2,16 +2,17 @@
 #include "parseContext.h"
 #include "patternReference.h"
 #include <algorithm>
+#include <iterator>
 #include <limits>
 
 namespace {
-static std::tuple<size_t, std::string> literalFallbackSortKey(const PatternTreeNode *node) {
+static size_t firstDefinitionStartPos(const PatternTreeNode *node) {
 	if (!node)
-		return {std::numeric_limits<size_t>::max(), ""};
+		return std::numeric_limits<size_t>::max();
 	size_t firstStartPos = std::numeric_limits<size_t>::max();
 	for (const auto &[ignoredDefinition, startPos] : node->definitionStartPositions)
 		firstStartPos = std::min(firstStartPos, startPos);
-	return {firstStartPos, node->text};
+	return firstStartPos;
 }
 
 } // namespace
@@ -26,82 +27,6 @@ MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternRef
 	currentNode = rootNode;
 }
 
-MatchProgress::MatchProgress(const MatchProgress &other) {
-	context = other.context;
-	rootNode = other.rootNode;
-	currentNode = other.currentNode;
-	match = other.match;
-	patternReference = other.patternReference;
-	type = other.type;
-	options = other.options;
-	sourceElementIndex = other.sourceElementIndex;
-	sourceCharIndex = other.sourceCharIndex;
-	patternStartPos = other.patternStartPos;
-	patternPos = other.patternPos;
-	sourceArgumentIndex = other.sourceArgumentIndex;
-	matchedArgumentIndex = other.matchedArgumentIndex;
-	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
-}
-
-MatchProgress::MatchProgress(MatchProgress &&other) noexcept
-	: parent(other.parent), context(other.context), rootNode(other.rootNode), currentNode(other.currentNode),
-	  match(std::move(other.match)), patternReference(other.patternReference), type(other.type), options(other.options),
-	  sourceElementIndex(other.sourceElementIndex), sourceCharIndex(other.sourceCharIndex),
-	  patternStartPos(other.patternStartPos), patternPos(other.patternPos), sourceArgumentIndex(other.sourceArgumentIndex),
-	  matchedArgumentIndex(other.matchedArgumentIndex) {
-	other.parent = nullptr;
-}
-
-MatchProgress &MatchProgress::operator=(const MatchProgress &other) {
-	if (this == &other)
-		return *this;
-
-	delete parent;
-	parent = other.parent ? new MatchProgress(*other.parent) : nullptr;
-	context = other.context;
-	rootNode = other.rootNode;
-	currentNode = other.currentNode;
-	match = other.match;
-	patternReference = other.patternReference;
-	type = other.type;
-	options = other.options;
-	sourceElementIndex = other.sourceElementIndex;
-	sourceCharIndex = other.sourceCharIndex;
-	patternStartPos = other.patternStartPos;
-	patternPos = other.patternPos;
-	sourceArgumentIndex = other.sourceArgumentIndex;
-	matchedArgumentIndex = other.matchedArgumentIndex;
-	return *this;
-}
-
-MatchProgress &MatchProgress::operator=(MatchProgress &&other) noexcept {
-	if (this == &other)
-		return *this;
-
-	delete parent;
-	parent = other.parent;
-	other.parent = nullptr;
-	context = other.context;
-	rootNode = other.rootNode;
-	currentNode = other.currentNode;
-	match = std::move(other.match);
-	patternReference = other.patternReference;
-	type = other.type;
-	options = other.options;
-	sourceElementIndex = other.sourceElementIndex;
-	sourceCharIndex = other.sourceCharIndex;
-	patternStartPos = other.patternStartPos;
-	patternPos = other.patternPos;
-	sourceArgumentIndex = other.sourceArgumentIndex;
-	matchedArgumentIndex = other.matchedArgumentIndex;
-	return *this;
-}
-
-MatchProgress::~MatchProgress() {
-	delete parent;
-	parent = nullptr;
-}
-
 bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr; }
 
 std::vector<MatchProgress> MatchProgress::step() {
@@ -110,7 +35,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 	std::vector<MatchProgress> acceptedLiteralMatches;
 
 	// submatch and use the result as argument for the parent progress
-	auto stepUp = [&nextMatches, this](MatchProgress &parentProgress) {
+	auto stepUp = [&nextMatches, this](const MatchProgress &parentProgress) {
 		// this submatch finished, so we convert it to a PatternMatch and add it to the parent progress
 		MatchProgress stepUp = parentProgress;
 		PatternMatch subMatch = match;
@@ -126,7 +51,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 		stepUp.sourceArgumentIndex = sourceArgumentIndex;
 		stepUp.matchedArgumentIndex++;
 		stepUp.patternPos = patternPos;
-		nextMatches.push_back(stepUp);
+		nextMatches.push_back(std::move(stepUp));
 	};
 
 	if (!currentNode->matchingDefinitions.empty()) {
@@ -195,7 +120,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 				}
 				substituteStep.matchedArgumentIndex++;
 				substituteStep.patternPos += elementToCompare.text.size();
-				nextMatches.push_back(substituteStep);
+				nextMatches.push_back(std::move(substituteStep));
 				return true;
 			};
 
@@ -209,11 +134,11 @@ std::vector<MatchProgress> MatchProgress::step() {
 				subMatch.patternStartPos = patternPos;
 				subMatch.match = {};
 
-				delete subMatch.parent;
-				subMatch.parent = new MatchProgress(*this);
-				subMatch.parent->currentNode = currentNode->argumentChild;
-				subMatch.parent->match.nodesPassed.push_back(subMatch.parent->currentNode);
-				nextMatches.push_back(subMatch);
+				MatchProgress parentStep = *this;
+				parentStep.currentNode = currentNode->argumentChild;
+				parentStep.match.nodesPassed.push_back(parentStep.currentNode);
+				subMatch.parent = std::make_shared<MatchProgress>(std::move(parentStep));
+				nextMatches.push_back(std::move(subMatch));
 			};
 
 			if (preferFunctionSubmatch) {
@@ -227,20 +152,27 @@ std::vector<MatchProgress> MatchProgress::step() {
 			}
 		}
 		if (options.acceptLiterals && elementToCompare.type == PatternElement::Type::Variable) {
-			std::vector<PatternTreeNode *> literalFallbackChildren;
+			struct LiteralFallbackCandidate {
+				PatternTreeNode *node{};
+				size_t firstStartPos{std::numeric_limits<size_t>::max()};
+			};
+			std::vector<LiteralFallbackCandidate> literalFallbackChildren;
 			literalFallbackChildren.reserve(currentNode->literalChildren.size());
 			for (const auto &[ignoredText, child] : currentNode->literalChildren) {
 				if (!child || child->type != PatternElement::Type::VariableLike)
 					continue;
-				literalFallbackChildren.push_back(child);
+				literalFallbackChildren.push_back({child, firstDefinitionStartPos(child)});
 			}
 			std::sort(
 				literalFallbackChildren.begin(), literalFallbackChildren.end(),
-				[](PatternTreeNode *left, PatternTreeNode *right) {
-				return literalFallbackSortKey(left) < literalFallbackSortKey(right);
+				[](const LiteralFallbackCandidate &left, const LiteralFallbackCandidate &right) {
+				if (left.firstStartPos != right.firstStartPos)
+					return left.firstStartPos < right.firstStartPos;
+				return left.node->text < right.node->text;
 			}
 			);
-			for (PatternTreeNode *child : literalFallbackChildren) {
+			for (const LiteralFallbackCandidate &candidate : literalFallbackChildren) {
+				PatternTreeNode *child = candidate.node;
 				MatchProgress acceptedLiteralStep = *this;
 				acceptedLiteralStep.currentNode = child;
 				acceptedLiteralStep.match.nodesPassed.push_back(child);
@@ -273,7 +205,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 			);
 			wordStep.matchedArgumentIndex++;
 			wordStep.patternPos += elementToCompare.text.size();
-			nextMatches.push_back(wordStep);
+			nextMatches.push_back(std::move(wordStep));
 		}
 		// most priority: text match
 		bool hasFullLiteralMatch = elementToCompare.type != PatternElement::Type::Variable &&
@@ -285,7 +217,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 			elemStep.sourceElementIndex++;
 			elemStep.sourceCharIndex = 0;
 			elemStep.patternPos += elementToCompare.text.size();
-			nextMatches.push_back(elemStep);
+			nextMatches.push_back(std::move(elemStep));
 		}
 
 		// Lowest-priority fallback: if a full literal did not match, split only Other
@@ -300,14 +232,20 @@ std::vector<MatchProgress> MatchProgress::step() {
 				splitStep.match.nodesPassed.push_back(splitStep.currentNode);
 				splitStep.sourceCharIndex += prefixLength;
 				splitStep.patternPos += prefixLength;
-				splitFallbackMatches.push_back(splitStep);
+				splitFallbackMatches.push_back(std::move(splitStep));
 			}
 		}
 	}
 	if (!acceptedLiteralMatches.empty())
-		nextMatches.insert(nextMatches.begin(), acceptedLiteralMatches.begin(), acceptedLiteralMatches.end());
+		nextMatches.insert(
+			nextMatches.begin(), std::make_move_iterator(acceptedLiteralMatches.begin()),
+			std::make_move_iterator(acceptedLiteralMatches.end())
+		);
 	if (!splitFallbackMatches.empty())
-		nextMatches.insert(nextMatches.begin(), splitFallbackMatches.begin(), splitFallbackMatches.end());
+		nextMatches.insert(
+			nextMatches.begin(), std::make_move_iterator(splitFallbackMatches.begin()),
+			std::make_move_iterator(splitFallbackMatches.end())
+		);
 	return nextMatches;
 }
 
