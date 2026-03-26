@@ -152,6 +152,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set (CMAKE_VERBOSE_MAKEFILE 0) # 1 should be used for debugging
 set (CMAKE_SUPPRESS_REGENERATION TRUE) # Suppresses ZERO_CHECK
 set(CMAKE_CXX_STANDARD 23)
+option(DYNLEX_WEB "Build browser compiler target (Emscripten)" OFF)
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
@@ -216,46 +217,124 @@ source_group ("sources" FILES ${PROJECT_SOURCES})
 #
 add_definitions (-DGLFW_INCvLUDE_NONE
                  -DPROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
-add_executable (${PROJECT_NAME} ${PROJECT_SOURCES} ${PROJECT_HEADERS}
-                                ${PROJECT_CONFIGS})
 
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-# LLVM 20+ includes the SPIR-V backend as an official target.
-# We use the static component libraries for codegen, optimization, native compilation,
-# and SPIR-V emission.
+# LLVM 20+ includes the SPIR-V and WebAssembly backends as official targets.
+# Resolve native backend components only for native builds.
+if(NOT EMSCRIPTEN)
+    llvm_map_components_to_libnames(
+        dynlex_llvm_libs_native
+        core
+        support
+        irreader
+        passes
+        native
+        SPIRV
+        WebAssemblyCodeGen
+        WebAssemblyDesc
+        WebAssemblyInfo
+        WebAssemblyUtils
+    )
+endif()
+
 llvm_map_components_to_libnames(
-    llvm_libs
+    dynlex_llvm_libs_web
     core
     support
     irreader
     passes
-    native
-    SPIRV
     WebAssemblyCodeGen
     WebAssemblyDesc
     WebAssemblyInfo
     WebAssemblyUtils
 )
 
-target_link_libraries (${PROJECT_NAME}
-PRIVATE
-nlohmann_json::nlohmann_json
-${llvm_libs}
-)
-set_target_properties (${PROJECT_NAME} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-    DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-)
-target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
+set(DYNLEX_NATIVE_SOURCES ${PROJECT_SOURCES})
+
+# Web-only host bridge should only be part of the web module.
+list(FILTER DYNLEX_NATIVE_SOURCES EXCLUDE REGEX "src/web/.*\\.cpp$")
+
+if(EMSCRIPTEN AND NOT DYNLEX_WEB)
+    message(FATAL_ERROR "Emscripten builds must enable DYNLEX_WEB=ON.")
+endif()
+
+if(NOT EMSCRIPTEN)
+    add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
+                                    ${PROJECT_CONFIGS})
+
+    target_link_libraries (${PROJECT_NAME}
+    PRIVATE
+    nlohmann_json::nlohmann_json
+    ${dynlex_llvm_libs_native}
+    )
+    set_target_properties (${PROJECT_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+        DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
+endif()
+
+if(DYNLEX_WEB)
+    if(NOT EMSCRIPTEN)
+        message(FATAL_ERROR "DYNLEX_WEB requires the Emscripten toolchain. Configure with emcmake.")
+    endif()
+
+    set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/dap/.*\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/dynlexServer\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/languageServer\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/tcpTransport\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/stdioTransport\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/completion\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/lspFileSystem\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/configDocument\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/semanticTokenBuilder\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/semanticTokenDebug\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/textDocument\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/native\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/spirv\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/pexlit/rendering/.*\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/pexlit/safeInclude/implementations\\.cpp$")
+
+    add_executable(dynlex_web ${DYNLEX_WEB_SOURCES} ${PROJECT_HEADERS} ${PROJECT_CONFIGS})
+    set_target_properties(dynlex_web PROPERTIES
+        OUTPUT_NAME "dynlex_web"
+        SUFFIX ".js"
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    target_compile_definitions(dynlex_web PRIVATE DYNLEX_WEB=1 DYNLEX_VERSION="${PROJECT_VERSION}")
+    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json ${dynlex_llvm_libs_web})
+
+    set(DYNLEX_WEB_EXPORTED_FUNCTIONS
+        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json']"
+    )
+    set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
+    target_link_options(dynlex_web PRIVATE
+        "-sWASM=1"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sSTACK_SIZE=8388608"
+        "-sMODULARIZE=1"
+        "-sEXPORT_ES6=1"
+        "-sENVIRONMENT=web,worker,node"
+        "-sNO_EXIT_RUNTIME=1"
+        "-sFILESYSTEM=1"
+        "-sEXPORTED_FUNCTIONS=${DYNLEX_WEB_EXPORTED_FUNCTIONS}"
+        "-sEXPORTED_RUNTIME_METHODS=${DYNLEX_WEB_EXPORTED_RUNTIME_METHODS}"
+        "--embed-file" "${CMAKE_SOURCE_DIR}/lib@/lib"
+    )
+endif()
 
 #
 # Install targets
 #
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(TARGET ${PROJECT_NAME})
+    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
-if(WIN32)
+if(WIN32 AND TARGET ${PROJECT_NAME})
     # Bundle runtime DLLs (LLVM/MSVC deps) so the MSI installation is self-contained.
     install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${CMAKE_INSTALL_BINDIR})
 

@@ -17,64 +17,78 @@
 #include <cassert>
 #include <cctype>
 #include <filesystem>
-#include <regex>
 using namespace std::literals;
 
 // Search paths for library imports (e.g., "lib/std.dl")
 // Tries: original path, then installed location, then source tree
 static std::string
 resolveImportPath(const std::string &path, const std::string &importingFileDir, lsp::FileSystem *fileSystem) {
+	auto resolveCandidate = [fileSystem](const std::string &candidate, std::string &resolved) -> bool {
+		if (candidate.empty())
+			return false;
+		if (!fileSystem->getFile(candidate))
+			return false;
+		resolved = candidate;
+		return true;
+	};
+
+	std::string resolvedPath;
+
 	// Try relative to the importing file's directory first
 	if (!importingFileDir.empty()) {
 		std::string relativePath = importingFileDir + "/" + path;
-		if (fileSystem->getFile(relativePath)) {
-			return relativePath;
-		}
+		if (resolveCandidate(relativePath, resolvedPath))
+			return resolvedPath;
 	}
 
 	// Try the path as-is (relative to CWD)
-	if (fileSystem->getFile(path)) {
-		return path;
+	if (resolveCandidate(path, resolvedPath))
+		return resolvedPath;
+
+#ifdef DYNLEX_WEB
+	// Browser mode uses a virtual root. Keep imports deterministic for in-memory and preloaded files.
+	if (!path.empty() && path[0] != '/') {
+		if (resolveCandidate("/" + path, resolvedPath))
+			return resolvedPath;
+		if (resolveCandidate("/workspace/" + path, resolvedPath))
+			return resolvedPath;
+		if (resolveCandidate("/lib/" + path, resolvedPath))
+			return resolvedPath;
 	}
+#endif
 
 	// Try relative to the project source directory (for development builds)
 	// These come before system paths so dev builds use the source tree's libraries
 	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
-	if (fileSystem->getFile(devPath)) {
-		return devPath;
-	}
+	if (resolveCandidate(devPath, resolvedPath))
+		return resolvedPath;
 
 	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
 	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
-	if (fileSystem->getFile(devLibPath)) {
-		return devLibPath;
-	}
+	if (resolveCandidate(devLibPath, resolvedPath))
+		return resolvedPath;
 
 	// Try installed system path
 	std::string systemPath = "/usr/share/dynlex/" + path;
-	if (fileSystem->getFile(systemPath)) {
-		return systemPath;
-	}
+	if (resolveCandidate(systemPath, resolvedPath))
+		return resolvedPath;
 
 	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
 	std::string systemLibPath = "/usr/share/dynlex/lib/" + path;
-	if (fileSystem->getFile(systemLibPath)) {
-		return systemLibPath;
-	}
+	if (resolveCandidate(systemLibPath, resolvedPath))
+		return resolvedPath;
 
 	return path; // Return original path (will fail with proper error)
 }
-
-// regex for line terminators - matches each line including its terminator
-const std::regex lineWithTerminatorRegex("([^\r\n]*(?:\r\n|\r|\n))|([^\r\n]+$)");
 
 static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
 	size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
 	std::string_view withoutComment =
 		(commentPos != std::string_view::npos) ? line->fullText.substr(0, commentPos) : line->fullText;
-	std::cmatch match;
-	std::regex_search(withoutComment.begin(), withoutComment.end(), match, std::regex("[\\s]+$"));
-	line->rightTrimmedText = match.empty() ? withoutComment : withoutComment.substr(0, match.position());
+	size_t trimmedEnd = withoutComment.size();
+	while (trimmedEnd > 0 && std::isspace(static_cast<unsigned char>(withoutComment[trimmedEnd - 1])) != 0)
+		trimmedEnd--;
+	line->rightTrimmedText = withoutComment.substr(0, trimmedEnd);
 }
 
 static CodeLine *createMappedLine(
@@ -391,8 +405,8 @@ bool isInternalSourcePath(std::string_view path) {
 	std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
 	const std::string projectLibPrefix = std::string(PROJECT_SOURCE_DIR) + "/lib/";
-	return normalized.starts_with("lib/") || normalized.starts_with("/usr/share/dynlex/lib/") ||
-		   normalized.starts_with(projectLibPrefix);
+	return normalized.starts_with("lib/") || normalized.starts_with("/lib/") ||
+		   normalized.starts_with("/usr/share/dynlex/lib/") || normalized.starts_with(projectLibPrefix);
 }
 
 std::vector<PatternDefinition *>
@@ -902,15 +916,25 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 	if (!context.mainSourceFile)
 		context.mainSourceFile = sourceFile;
 
-	// iterate over lines, each match includes the line terminator
+	// Iterate over lines, preserving line terminators for exact source mapping.
 	std::string_view fileView{sourceFile->content};
 	const SyntaxConfig &syntax = syntaxConfigForSourcePath(context, sourceFile->uri.empty() ? path : sourceFile->uri);
 
-	std::cregex_iterator iter(fileView.begin(), fileView.end(), lineWithTerminatorRegex);
-	std::cregex_iterator end;
 	int sourceFileLineIndex = 0;
-	for (; iter != end; ++iter, ++sourceFileLineIndex) {
-		std::string_view lineString = fileView.substr(iter->position(), iter->length());
+	size_t lineStart = 0;
+	while (lineStart < fileView.size()) {
+		size_t contentEnd = lineStart;
+		while (contentEnd < fileView.size() && fileView[contentEnd] != '\r' && fileView[contentEnd] != '\n')
+			contentEnd++;
+		size_t lineEnd = contentEnd;
+		if (lineEnd < fileView.size()) {
+			if (fileView[lineEnd] == '\r' && lineEnd + 1 < fileView.size() && fileView[lineEnd + 1] == '\n')
+				lineEnd += 2;
+			else
+				lineEnd += 1;
+		}
+
+		std::string_view lineString = fileView.substr(lineStart, lineEnd - lineStart);
 		CodeLine *line = createSourceLine(context, sourceFile, sourceFileLineIndex, lineString);
 
 		// check if the line is an import statement
@@ -934,6 +958,8 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 		}
 		line->mergedLineIndex = context.codeLines.size();
 		context.codeLines.push_back(line);
+		lineStart = lineEnd;
+		sourceFileLineIndex++;
 	}
 	return true;
 }
@@ -968,9 +994,11 @@ bool analyzeSections(ParseContext &context) {
 		if (line->hasIndentOverride) {
 			indentString = line->indentOverride;
 		} else {
-			std::cmatch match;
-			std::regex_search(line->rightTrimmedText.begin(), line->rightTrimmedText.end(), match, std::regex("^(\\s*)"));
-			indentString = match[0];
+			size_t indentLength = 0;
+			while (indentLength < line->rightTrimmedText.size() &&
+				   std::isspace(static_cast<unsigned char>(line->rightTrimmedText[indentLength])) != 0)
+				indentLength++;
+			indentString = std::string(line->rightTrimmedText.substr(0, indentLength));
 		}
 		int physicalIndentLevel = 0;
 		if (data.indentString.empty()) {

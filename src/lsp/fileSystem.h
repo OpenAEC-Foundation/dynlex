@@ -29,4 +29,22 @@ class LocalFileSystem : public FileSystem {
 	std::unordered_map<std::string, std::unique_ptr<SourceFile>> cache;
 };
 
+// In-memory file system implementation with optional fallback file system.
+// Intended for environments where the host pushes source text directly (e.g. browser worker).
+class MemoryFileSystem : public FileSystem {
+  public:
+	explicit MemoryFileSystem(std::unique_ptr<FileSystem> fallback = nullptr) : fallback(std::move(fallback)) {}
+
+	SourceFile *getFile(const std::string &path) override;
+
+	void setFile(const std::string &path, std::string content);
+	void removeFile(const std::string &path);
+	void clear();
+	void setFallback(std::unique_ptr<FileSystem> nextFallback) { fallback = std::move(nextFallback); }
+
+  private:
+	std::unordered_map<std::string, std::unique_ptr<SourceFile>> files;
+	std::unique_ptr<FileSystem> fallback;
+};
+
 } // namespace lsp

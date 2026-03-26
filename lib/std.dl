@@ -223,10 +223,10 @@ function [the|] square root of value:
     execute:
         return @intrinsic("sqrt", value)
 
-function [the|] absolute value of value:
+function [the|] absolute value of magnitude:
     after: default
     execute:
-        return @intrinsic("abs", value)
+        return @intrinsic("abs", magnitude)
 
 function [the|] floor of value:
     after: default

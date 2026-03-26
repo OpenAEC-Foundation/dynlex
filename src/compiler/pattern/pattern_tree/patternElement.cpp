@@ -1,7 +1,7 @@
 #include "patternElement.h"
 #include "parseContext.h"
 #include "transformedPattern.h"
-#include <regex>
+#include <cctype>
 #include <unordered_map>
 using namespace std::literals;
 
@@ -12,30 +12,34 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 		return elements;
 
 	PatternElement::Type currentType = PatternElement::Type::Count;
-
-	const char *currentStart = nullptr;
-	const char *it;
-	for (it = patternString.begin(); it != patternString.end(); it++) {
-		PatternElement::Type newType = *it == argumentChar								? PatternElement::Type::Variable
-									   : std::regex_match(""s + *it, std::regex("\\w")) ? PatternElement::Type::VariableLike
-																						: PatternElement::Type::Other;
+	size_t currentStart = std::string_view::npos;
+	auto isWordChar = [](char c) {
+		return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+	};
+	for (size_t i = 0; i < patternString.size(); i++) {
+		char currentChar = patternString[i];
+		PatternElement::Type newType = currentChar == argumentChar ? PatternElement::Type::Variable
+									   : isWordChar(currentChar)   ? PatternElement::Type::VariableLike
+																   : PatternElement::Type::Other;
 		// Split Other-type sequences at space boundaries so spaces are always separate elements.
 		// Without this, "% " would merge into one element, preventing sub-expression matching
 		// (e.g. "10%" where "%" is part of an expression pattern but followed by a space).
 		bool splitAtSpace =
 			(newType == PatternElement::Type::Other && currentType == PatternElement::Type::Other &&
-			 ((*it == ' ') != (*currentStart == ' ')));
+			 currentStart != std::string_view::npos && ((currentChar == ' ') != (patternString[currentStart] == ' ')));
 		if (newType != currentType || splitAtSpace) {
-			if (currentStart) {
+			if (currentStart != std::string_view::npos) {
 				elements.push_back(
-					PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin())
+					PatternElement(currentType, std::string(patternString.substr(currentStart, i - currentStart)), currentStart)
 				);
 			}
-			currentStart = it;
+			currentStart = i;
 			currentType = newType;
 		}
 	}
-	elements.push_back(PatternElement(currentType, std::string(currentStart, it), currentStart - patternString.begin()));
+	elements.push_back(PatternElement(
+		currentType, std::string(patternString.substr(currentStart, patternString.size() - currentStart)), currentStart
+	));
 
 	return elements;
 }

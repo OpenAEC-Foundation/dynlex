@@ -15,8 +15,10 @@ paths:
 ## Build & Test
 - `./scripts/build.sh` to build
 - `./scripts/test.sh` to run all tests
-- `./scripts/test.sh` enforces exact compile diagnostics via `expected_diagnostics.txt` (with `expected_error.txt` only as a legacy alias). Tests without an expected diagnostics file must compile cleanly without warnings or errors.
+- `./scripts/test.sh` enforces exact compile diagnostics via `expected_diagnostics.txt`. Tests without an expected diagnostics file must compile cleanly without warnings or errors.
 - `--emit-llvm` to inspect generated IR, `--emit-wasm` to emit a WebAssembly artifact, `--emit-spirv` for SPIR-V shaders
+- Browser compiler build: `./scripts/build_web.sh` (Emscripten, `-DDYNLEX_WEB=ON`), with web host ABI in `src/web/webApi.cpp`
+- Web compiler builds must use a wasm-linkable LLVM toolchain (`LLVM_DIR` from a wasm-target LLVM build). Host-native LLVM archives cannot link into `dynlex_web`.
 - Build lint stage (`scripts/build.sh`) must only classify clang-tidy errors from real diagnostic lines (`file:line:column: error:`), not substring matches like `parse_error::...`.
 - Third-party headers must stay system includes. In particular, fetched `nlohmann_json` must never be exposed as a normal `-I` include or auto-fixed in place by clang-tidy, because that corrupts `build/_deps/nlohmann_json-src` and breaks later compiles.
 
@@ -77,7 +79,7 @@ paths:
 - Adding a new intrinsic: add to registry in `intrinsicInfo.h` → type inference and codegen helpers (`isMathFunction`, `isComparisonOperator`, etc.) automatically pick it up
 
 ## Import Resolution Order
-- Relative to importing file → CWD → `PROJECT_SOURCE_DIR/` → `PROJECT_SOURCE_DIR/lib/` → `/usr/share/dynlex/` → `/usr/share/dynlex/lib/`
+- Relative to importing file → CWD → (web mode: `/<path>` → `/workspace/<path>` → `/lib/<path>`) → `PROJECT_SOURCE_DIR/` → `PROJECT_SOURCE_DIR/lib/` → `/usr/share/dynlex/` → `/usr/share/dynlex/lib/`
 - Dev paths come before system paths so debug builds use source tree libraries, not stale installed copies
 
 ## Bugs Fixed

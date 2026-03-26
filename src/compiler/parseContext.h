@@ -257,6 +257,7 @@ expandMacroPatternCall(ParseContext &context, Expression *expr, PatternDefinitio
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	if (def)
 		assert(std::find(defs.begin(), defs.end(), def) != defs.end());
+	(void)defs;
 	if (!def || !def->section || !def->section->isMacro)
 		return nullptr;
 	Expression *bodyExpr = nullptr;

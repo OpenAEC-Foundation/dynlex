@@ -1,6 +1,7 @@
 # Build output
 build/
 build-*/
+build-web/
 vscode-extension/out/
 vscode-extension/*.vsix
 
@@ -19,6 +20,10 @@ tests/games/mandelbrot
 tests/required/*/main
 
 node_modules
+web/node_modules/
+web/dist/
+web/public/compiler/*
+!web/public/compiler/.gitkeep
 .cache
 packaging/launchpad/out/
 vscode-extension/LICENSE.md

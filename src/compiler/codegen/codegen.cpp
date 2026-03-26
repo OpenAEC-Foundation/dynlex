@@ -760,6 +760,23 @@ bool generateCode(ParseContext &context) {
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
+#ifdef DYNLEX_WEB
+	if (!context.options.emitWASM) {
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "web build only supports --emit-wasm output mode", Range())
+		);
+		return false;
+	}
+	std::string targetError;
+	std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, targetError);
+	if (!targetMachine) {
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", targetError)
+		);
+		return false;
+	}
+	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+#else
 	if (context.options.emitSPIRV) {
 		std::string error;
 		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
@@ -783,6 +800,7 @@ bool generateCode(ParseContext &context) {
 	} else {
 		context.llvmModule->setTargetTriple(llvm::sys::getDefaultTargetTriple());
 	}
+#endif
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	if (context.macroBindingFrames.empty())
@@ -935,6 +953,16 @@ bool generateCode(ParseContext &context) {
 	}
 
 	// Output
+#ifdef DYNLEX_WEB
+	if (!context.options.emitWASM) {
+		context.addDiagnostic(
+			Diagnostic(context, Diagnostic::Level::Error, "web build only supports --emit-wasm output mode", Range())
+		);
+		return false;
+	}
+	if (!emitWASMModule(context))
+		return false;
+#else
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
 			return false;
@@ -958,6 +986,7 @@ bool generateCode(ParseContext &context) {
 		if (!emitNativeExecutable(context))
 			return false;
 	}
+#endif
 
 	return true;
 }

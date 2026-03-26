@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b6f95'/%3E%3Ctext x='32' y='41' font-size='30' text-anchor='middle' fill='white' font-family='monospace'%3ED%3C/text%3E%3C/svg%3E"
+    />
+    <title>DynLex Web Compiler</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div class="header-copy">
+          <h1>DynLex Browser Compiler</h1>
+          <p>Compiler runs in browser WASM. Edit <code>/workspace/main.dl</code>, compile live, run latest successful output.</p>
+        </div>
+        <div class="header-actions">
+          <button id="compile-button" type="button">Compile</button>
+          <button id="run-button" type="button" disabled>Run</button>
+          <span id="status-pill">Initializing</span>
+        </div>
+      </header>
+      <main class="workspace">
+        <section class="editor-panel">
+          <div class="panel-title">main.dl</div>
+          <div id="editor"></div>
+        </section>
+        <section class="side-panels">
+          <section class="panel">
+            <h2>Diagnostics</h2>
+            <div id="diagnostics-empty" class="empty">No diagnostics.</div>
+            <ul id="diagnostics-list"></ul>
+          </section>
+          <section class="panel">
+            <h2>Compiler Log</h2>
+            <pre id="compiler-log"></pre>
+          </section>
+          <section class="panel">
+            <h2>Program Output</h2>
+            <pre id="runtime-output"></pre>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

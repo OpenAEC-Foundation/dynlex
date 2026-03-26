@@ -404,6 +404,10 @@ std::string findProjectSyntaxConfigPath(ParseContext &context, const std::string
 bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath) {
 	context.builtinSyntax = {};
 	std::vector<std::string> builtinCandidates = {
+#ifdef DYNLEX_WEB
+		"/lib/config.dl",
+		"lib/config.dl",
+#endif
 		std::string(PROJECT_SOURCE_DIR) + "/lib/config.dl",
 		"/usr/share/dynlex/lib/config.dl",
 	};

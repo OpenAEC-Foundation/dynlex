@@ -18,6 +18,49 @@ A natural-language-like programming language that compiles to native code via LL
 
 Requires C++23, CMake, Ninja, `nlohmann_json`, and LLVM 20+.
 
+## Browser Compiler (Phase 1)
+
+DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.
+This target requires Emscripten (`emcmake`, `emcc`) and an LLVM build/toolchain compatible with the Emscripten target (`LLVM_DIR` if needed).
+Host-native LLVM installs (for example `/usr/lib/llvm-*`) are not wasm-linkable for this target.
+
+Build compiler WASM artifacts and copy them into the web app:
+
+```bash
+source ~/emsdk/emsdk_env.sh
+export LLVM_DIR="$HOME/toolchains/llvm-wasm-20/install/lib/cmake/llvm"
+./scripts/build_web.sh
+```
+
+Run the compiler WASM smoke test:
+
+```bash
+./scripts/test_web_smoke.sh
+```
+
+Run the web app:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The web app uses:
+- single editable source file at `/workspace/main.dl`
+- bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
+- live debounced compile with diagnostics markers
+- `Run` executing the latest successful emitted program WASM
+
+Compiler WASM C ABI exports:
+- `dynlex_web_init`
+- `dynlex_web_set_main_source`
+- `dynlex_web_compile_and_emit_wasm`
+- `dynlex_web_get_diagnostics_json`
+- `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
+- `dynlex_web_get_output_wasm_base64`
+- `dynlex_web_get_compiler_log_json`
+
 ## Install Dependencies
 
 Linux (apt/dnf/pacman/zypper):

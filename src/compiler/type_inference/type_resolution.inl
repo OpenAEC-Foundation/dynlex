@@ -31,7 +31,10 @@ resolveCompileTimeSelectBranch(Expression *selectExpr, ParseContext &parseContex
 
 static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameStack) {
 	BindingContext bindingContext;
-	bindingContext.fingerprint = 1469598103934665603ull;
+	if constexpr (sizeof(size_t) == 8)
+		bindingContext.fingerprint = 1469598103934665603ull;
+	else
+		bindingContext.fingerprint = 2166136261u;
 	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
 		for (const auto &[bindingName, expression] : frame.bindings) {
 			bindingContext.bindingEntries[bindingName] = expression;
