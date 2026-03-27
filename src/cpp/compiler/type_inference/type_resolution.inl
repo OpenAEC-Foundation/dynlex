@@ -578,6 +578,30 @@ static bool resolveCompileTimeTypeReference(
 			}
 			return true;
 		}
+		if (kind == IntrinsicKind::Multiply && resolved->arguments.size() > 2) {
+			DataType arrayTypeRef;
+			int factor = 0;
+			if (resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arrayTypeRef
+				) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindingFrameStack, factor) &&
+				factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+			if (resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[2], effectiveBindingFrameStack, arrayTypeRef
+				) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, factor) &&
+				factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+		}
 		if (kind == IntrinsicKind::Vector) {
 			int vectorSize = 0;
 			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, vectorSize) ||
@@ -651,6 +675,26 @@ static bool resolveCompileTimeTypeReference(
 
 		BindingMap callBindings;
 		appendPatternCallBindings(resolved, def, callBindings);
+		std::unordered_set<std::string> fallbackParameterNames;
+		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
+			[&](const std::vector<DefinitionPatternElement> &elements) {
+				for (const auto &element : elements) {
+					if (element.type == PatternElement::Type::Choice) {
+						for (const auto &alternative : element.alternatives)
+							collectFallbackParameterNames(alternative);
+						continue;
+					}
+					if (element.type == PatternElement::Type::Variable)
+						fallbackParameterNames.insert(element.text);
+				}
+			};
+		collectFallbackParameterNames(def->patternElements);
+		for (const std::string &parameterName : fallbackParameterNames) {
+			if (callBindings.contains(parameterName))
+				continue;
+			if (Expression *fallbackBinding = effectiveBindingFrameStack.lookup(parameterName))
+				callBindings[parameterName] = fallbackBinding;
+		}
 		for (auto &[name, boundExpr] : callBindings) {
 			Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
 			if (resolvedExpr)

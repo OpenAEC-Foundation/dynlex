@@ -766,6 +766,24 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 			}
 			return true;
 		}
+		if (kind == IntrinsicKind::Multiply && expr->arguments.size() > 2) {
+			DataType arrayTypeRef;
+			int factor = 0;
+			if (resolveTypeReferenceExpression(context, expr->arguments[1], bindings, arrayTypeRef) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				evaluateCompileTimeInteger(context, expr->arguments[2], bindings, factor) && factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+			if (resolveTypeReferenceExpression(context, expr->arguments[2], bindings, arrayTypeRef) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				evaluateCompileTimeInteger(context, expr->arguments[1], bindings, factor) && factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+		}
 		return false;
 	}
 

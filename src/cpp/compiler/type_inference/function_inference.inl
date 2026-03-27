@@ -1454,6 +1454,26 @@ static void inferOrderedExpression(
 		// Build parameter bindings from call-site arguments
 		BindingMap callBindings;
 		appendPatternCallBindings(expr, def, callBindings);
+		std::unordered_set<std::string> fallbackParameterNames;
+		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
+			[&](const std::vector<DefinitionPatternElement> &elements) {
+				for (const auto &element : elements) {
+					if (element.type == PatternElement::Type::Choice) {
+						for (const auto &alternative : element.alternatives)
+							collectFallbackParameterNames(alternative);
+						continue;
+					}
+					if (element.type == PatternElement::Type::Variable)
+						fallbackParameterNames.insert(element.text);
+				}
+			};
+		collectFallbackParameterNames(def->patternElements);
+		for (const std::string &parameterName : fallbackParameterNames) {
+			if (callBindings.contains(parameterName))
+				continue;
+			if (Expression *fallbackBinding = macroBindingFrameStack.lookup(parameterName))
+				callBindings[parameterName] = fallbackBinding;
+		}
 		if (matchedSection->isMacro) {
 			materializeMacroBindingsInCallerScope(&context.parseContext, callBindings, macroBindingFrameStack);
 		} else if (matchedSection->type == SectionType::Class) {
