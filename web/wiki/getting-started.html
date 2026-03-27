@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynLex Wiki - Getting Started</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+    <nav class="nav">
+        <a href="../index.html" class="nav-btn">Home</a>
+        <a href="/ide/" class="nav-btn">IDE</a>
+        <a href="index.html" class="nav-btn">Wiki Home</a>
+        <a href="getting-started.html" class="nav-btn primary">Getting Started</a>
+        <a href="sections/index.html" class="nav-btn">Sections</a>
+        <a href="terms.html" class="nav-btn">Terms</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="wiki-shell">
+        <section class="glass-card hero-card">
+            <h1>Getting Started with DynLex</h1>
+            <p>
+                DynLex lets you write code in clear words. You write your program in a <code>.dl</code> file, build
+                it, and then run it.
+            </p>
+            <p>
+                This page shows the smallest steps first. It uses the same words you will see in the rest of the
+                documentation, such as <a class="inline-link" href="terms.html#pattern">pattern</a>,
+                <a class="inline-link" href="terms.html#parameter">parameter</a>, and
+                <a class="inline-link" href="terms.html#section">section</a>.
+            </p>
+        </section>
+
+        <section class="doc-stack">
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 1</div>
+                <h2>Write your first DynLex file</h2>
+                <p>
+                    Make a file named <code>hello.dl</code>. Start by
+                    <a class="inline-link" href="terms.html#import">importing</a> the standard library:
+                </p>
+                <div class="code-block glass-card">
+<pre><code>import lib/std.dl
+
+print "Hello, world!" as line</code></pre>
+                </div>
+                <p>
+                    The line <code>print "Hello, world!" as line</code> matches a
+                    <a class="inline-link" href="terms.html#pattern">pattern</a> from the standard library.
+                </p>
+                <div class="try-card">
+                    <h3>Try yourself</h3>
+                    <p>
+                        Change the text and run the file again. Try your name, a question, or a full sentence.
+                    </p>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 2</div>
+                <h2>Build and run your file</h2>
+                <p>
+                    Build the file into a program and run it:
+                </p>
+                <div class="code-block glass-card">
+<pre><code>dynlex hello.dl -o hello
+./hello</code></pre>
+                </div>
+                <p>
+                    If you are on Windows, your output file may be named <code>hello.exe</code>.
+                </p>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 3</div>
+                <h2>Store values in variables</h2>
+                <p>
+                    A <a class="inline-link" href="terms.html#variable">variable</a> lets you keep a value and use it again later:
+                </p>
+                <div class="code-block glass-card">
+<pre><code>import lib/std.dl
+
+set apples to 3
+set oranges to 2
+set total to apples + oranges
+
+print total as line</code></pre>
+                </div>
+                <p>
+                    Here, <code>set ... to ...</code> and <code>...</code> <code>+</code> <code>...</code> are both
+                    standard DynLex patterns.
+                </p>
+                <div class="try-card">
+                    <h3>Try yourself</h3>
+                    <p>
+                        Change the numbers. Then add one more line that prints <code>total + 10</code>.
+                    </p>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 4</div>
+                <h2>Write your first function</h2>
+                <p>
+                    A <a class="inline-link" href="terms.html#function">function</a> gives a name to a piece of
+                    behavior. The words on the first line are its
+                    <a class="inline-link" href="terms.html#pattern">pattern</a>.
+                </p>
+                <div class="code-block glass-card">
+<pre><code>import lib/std.dl
+
+function square value:
+    execute:
+        return value * value
+
+print square 5 as line</code></pre>
+                </div>
+                <p>
+                    In this example, <code>value</code> is a
+                    <a class="inline-link" href="terms.html#parameter">parameter</a>. When you write
+                    <code>square 5</code>, the number <code>5</code> is the
+                    <a class="inline-link" href="terms.html#argument">argument</a>.
+                </p>
+                <p>
+                    DynLex also detects plain-word parameters by usage: if a plain word from a function pattern is used
+                    in the body, that word is treated as a parameter.
+                </p>
+                <p>
+                    The <code>execute:</code> line opens a
+                    <a class="inline-link" href="terms.html#section">section</a>. The code inside that section is
+                    indented one level deeper.
+                </p>
+                <div class="try-card">
+                    <h3>Try yourself</h3>
+                    <p>
+                        Change <code>square</code> into <code>double</code>. Then make it return <code>value + value</code>.
+                    </p>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 5</div>
+                <h2>Use a loop</h2>
+                <p>
+                    A loop lets you repeat a block of code. The loop body is another
+                    <a class="inline-link" href="terms.html#section">section</a>.
+                </p>
+                <div class="code-block glass-card">
+<pre><code>import lib/std.dl
+
+set count to 1
+
+loop while count <= 3:
+    print count as line
+    increment count</code></pre>
+                </div>
+                <p>
+                    This prints the numbers 1, 2, and 3. The line under <code>loop while</code> runs again and again
+                    until the condition becomes false.
+                </p>
+                <div class="try-card">
+                    <h3>Try yourself</h3>
+                    <p>
+                        Change <code>3</code> to <code>5</code>. Then change the start value from <code>1</code> to <code>2</code>.
+                    </p>
+                </div>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Step 6</div>
+                <h2>Stay with the standard library at first</h2>
+                <p>
+                    You may notice <code>@intrinsic(...)</code> in some library code. That is an
+                    <a class="inline-link" href="terms.html#intrinsic">intrinsic</a>.
+                </p>
+                <p>
+                    For normal DynLex programs, use standard library patterns first. They read better, and they are
+                    the usual way to write DynLex code.
+                </p>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Next</div>
+                <h2>What to read after this</h2>
+                <p>
+                    If a word feels unclear, open the <a class="inline-link" href="terms.html">terms page</a>.
+                </p>
+                <p>
+                    After that, the next useful step is to read more examples and build small functions of your own.
+                </p>
+            </article>
+        </section>
+    </main>
+    <script src="wiki-actions.js"></script>
+</body>
+</html>

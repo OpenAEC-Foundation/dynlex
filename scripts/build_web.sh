@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_DIR/build-web"
-WEB_COMPILER_DIR="$PROJECT_DIR/web/public/compiler"
+WEB_COMPILER_DIR="$PROJECT_DIR/src/web/ide/public/compiler"
 
 for dep in emcmake emcc cmake ninja; do
     if ! command -v "$dep" >/dev/null 2>&1; then

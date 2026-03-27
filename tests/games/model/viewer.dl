@@ -1,0 +1,224 @@
+import lib/graphics.dl
+import lib/models/fbx.dl
+
+# FBX Model Viewer (via pre-converted OBJ)
+#
+# Input pipeline:
+#   1) ./build/fbx_to_obj tests/games/model/assets/source/city.fbx tests/games/model/assets/generated/city.obj --triangle-step 1
+#   2) ./build/dynlex tests/games/model/viewer.dl -o tests/games/model/viewer
+#   3) ./tests/games/model/viewer
+#
+# Controls:
+#   W/S: move forward/backward
+#   A/D: strafe right/left
+#   Q/E: move down/up
+#   Left/Right: yaw left/right
+#   1: textured/material mode
+#   2: UV debug mode
+#   3: vertex-color mode
+
+function set model viewer perspective with width viewport_width and height viewport_height:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5889)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        set safe_height to the maximum of viewport_height and 1
+        set aspect to (viewport_width as a float) / (safe_height as a float)
+        set near_plane to 0.8
+        set far_plane to 24000.0
+        # fov = 88 degrees, so top = near * tan(44 deg)
+        set top_plane to near_plane * 0.96568877
+        set bottom_plane to 0.0 - top_plane
+        set right_plane to top_plane * aspect
+        set left_plane to 0.0 - right_plane
+        @intrinsic("call", "GL", "glFrustum", void, left_plane, right_plane, bottom_plane, top_plane, near_plane, far_plane)
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+
+function clear [the|] model viewer screen:
+    execute:
+        @intrinsic("call", "GL", "glClear", void, 16640)
+
+function enable [the|] model viewer render state:
+    execute:
+        @intrinsic("call", "GL", "glEnable", void, 2929)
+        @intrinsic("call", "GL", "glEnable", void, 2884)
+        @intrinsic("call", "GL", "glCullFace", void, 1029)
+        @intrinsic("call", "GL", "glShadeModel", void, 7424)
+
+function set [the|] model viewer clear color to r g b:
+    execute:
+        @intrinsic("call", "GL", "glClearColor", void, r as a 32 bit float, g as a 32 bit float, b as a 32 bit float, 1.0 as a 32 bit float)
+
+function apply model viewer camera at x y z yaw degrees:
+    execute:
+        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+        @intrinsic("call", "GL", "glLoadIdentity", void)
+        @intrinsic("call", "GL", "glRotated", void, 0.0 - degrees, 0.0, 1.0, 0.0)
+        @intrinsic("call", "GL", "glTranslated", void, 0.0 - x, 0.0 - y, 0.0 - z)
+
+set window to a new window with width 1400 and height 900
+if window = 0 as a pointer to byte:
+    print "failed to create viewer window" as line
+else:
+    set model_path to "tests/games/model/assets/generated/city.obj"
+    set override_model_path to @intrinsic("call", "libc", "getenv", a pointer to byte, "DYNLEX_MODEL_PATH")
+    if override_model_path != 0 as a pointer to byte:
+        set model_path to override_model_path
+
+    set mesh to a loaded fbx mesh from model_path
+
+    if mesh's vertex_count <= 0:
+        print "failed to load mesh. convert city.fbx to city.obj first" as line
+
+    set min_x to 0.0
+    set min_y to 0.0
+    set min_z to 0.0
+    set max_x to 0.0
+    set max_y to 0.0
+    set max_z to 0.0
+
+    if mesh's vertex_count > 0:
+        set first_vertex to item 0 of mesh's vertices
+        set min_x to first_vertex's x
+        set min_y to first_vertex's y
+        set min_z to first_vertex's z
+        set max_x to first_vertex's x
+        set max_y to first_vertex's y
+        set max_z to first_vertex's z
+
+        set vertex_index to 1
+        while vertex_index < mesh's vertex_count:
+            set vertex to item vertex_index of mesh's vertices
+            if vertex's x < min_x:
+                set min_x to vertex's x
+            if vertex's y < min_y:
+                set min_y to vertex's y
+            if vertex's z < min_z:
+                set min_z to vertex's z
+
+            if vertex's x > max_x:
+                set max_x to vertex's x
+            if vertex's y > max_y:
+                set max_y to vertex's y
+            if vertex's z > max_z:
+                set max_z to vertex's z
+
+            increment vertex_index
+
+    set extent_x to max_x - min_x
+    set extent_y to max_y - min_y
+    set extent_z to max_z - min_z
+    set max_extent to the maximum of extent_x and extent_y
+    set max_extent to the maximum of max_extent and extent_z
+
+    set model_scale to 1.0
+    if max_extent > 0.0001:
+        set model_scale to 160.0 / max_extent
+
+    set center_x to (min_x + max_x) / 2.0
+    set center_z to (min_z + max_z) / 2.0
+
+    set model_offset_x to 0.0 - center_x * model_scale
+    set model_offset_y to 0.0 - min_y * model_scale
+    set model_offset_z to 0.0 - center_z * model_scale
+
+    set mesh_stats to the string form of "mesh vertices: "
+    set mesh_stats to mesh_stats + (the string form of (mesh's vertex_count))
+    set mesh_stats to mesh_stats + (the string form of ", triangles: ")
+    set mesh_stats to mesh_stats + (the string form of (mesh's triangle_count))
+    print mesh_stats as line
+
+    set bounds_x_text to the string form of "bounds x: "
+    set bounds_x_text to bounds_x_text + (the string form of min_x)
+    set bounds_x_text to bounds_x_text + (the string form of " .. ")
+    set bounds_x_text to bounds_x_text + (the string form of max_x)
+    print bounds_x_text as line
+
+    set bounds_y_text to the string form of "bounds y: "
+    set bounds_y_text to bounds_y_text + (the string form of min_y)
+    set bounds_y_text to bounds_y_text + (the string form of " .. ")
+    set bounds_y_text to bounds_y_text + (the string form of max_y)
+    print bounds_y_text as line
+
+    set bounds_z_text to the string form of "bounds z: "
+    set bounds_z_text to bounds_z_text + (the string form of min_z)
+    set bounds_z_text to bounds_z_text + (the string form of " .. ")
+    set bounds_z_text to bounds_z_text + (the string form of max_z)
+    print bounds_z_text as line
+
+    set scale_text to the string form of "model scale: "
+    set scale_text to scale_text + (the string form of model_scale)
+    print scale_text as line
+    print "render modes: 1=textured/material, 2=uv debug, 3=vertex colors" as line
+
+    enable the model viewer render state
+    set the model viewer clear color to 0.74 0.84 0.95
+
+    set camera_x to 0.0
+    set camera_y to the maximum of 50.0 and ((extent_y * model_scale) * 0.8)
+    set camera_z to the maximum of 180.0 and ((max_extent * model_scale) * 1.8)
+    set yaw to 0.0
+    set move_speed to the maximum of 1.4 and ((max_extent * model_scale) * 0.005)
+    set turn_speed to 1.6
+    set render_mode to 0
+
+    while not the window should close:
+        set framebuffer_width to query the framebuffer width of window
+        set framebuffer_height to query the framebuffer height of window
+        set model viewer perspective with width framebuffer_width and height framebuffer_height
+
+        set yaw_radians to yaw * 0.0174533
+        set forward_x to 0.0 - (the sine of yaw_radians)
+        set forward_z to 0.0 - (the cosine of yaw_radians)
+        set right_x to 0.0 - forward_z
+        set right_z to forward_x
+
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
+            add forward_x * move_speed to camera_x
+            add forward_z * move_speed to camera_z
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 83) = 1:
+            subtract forward_x * move_speed from camera_x
+            subtract forward_z * move_speed from camera_z
+
+        # Requested mapping: A moves right, D moves left
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 65) = 1:
+            add right_x * move_speed to camera_x
+            add right_z * move_speed to camera_z
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 68) = 1:
+            subtract right_x * move_speed from camera_x
+            subtract right_z * move_speed from camera_z
+
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 81) = 1:
+            subtract 1.1 from camera_y
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
+            add 1.1 to camera_y
+
+        # Left rotates left, right rotates right
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
+            add turn_speed to yaw
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
+            subtract turn_speed from yaw
+
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 49) = 1:
+            if render_mode != 0:
+                set render_mode to 0
+                print "render mode: textured/material" as line
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 50) = 1:
+            if render_mode != 1:
+                set render_mode to 1
+                print "render mode: uv debug" as line
+        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 51) = 1:
+            if render_mode != 2:
+                set render_mode to 2
+                print "render mode: vertex colors" as line
+
+        if camera_y < 4.0:
+            set camera_y to 4.0
+
+        clear the model viewer screen
+        apply model viewer camera at camera_x camera_y camera_z yaw yaw
+        draw fbx mesh mesh at model_offset_x model_offset_y model_offset_z with scale model_scale and color 152 176 196 and render mode render_mode
+
+        display the frame of window
+
+    free fbx mesh mesh
+    close the window

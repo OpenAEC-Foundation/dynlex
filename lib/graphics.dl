@@ -34,7 +34,10 @@ function register [the|] graphics viewport resize callback [of|for] window:
 
 function a new window with width w and height h:
 	execute:
-		discard @intrinsic("call", "glfw", "glfwInit", an integer)
+		set glfw_initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
+		if glfw_initialized = 0:
+			print "failed to initialize GLFW" as line
+			return 0 as a pointer to byte
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
 		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
 		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
@@ -44,6 +47,10 @@ function a new window with width w and height h:
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
+		if new_window = 0 as a pointer to byte:
+			print "failed to create GLFW window with OpenGL 4.6 compatibility profile" as line
+			@intrinsic("call", "glfw", "glfwTerminate", void)
+			return 0 as a pointer to byte
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
 		@intrinsic("call", "GL", "glViewport", void, 0, 0, w, h)
 		register the graphics viewport resize callback of new_window
@@ -59,12 +66,18 @@ function a new window with width w and height h:
 
 function a new fullscreen window:
 	execute:
-		initialize fullscreen window hints
+		set fullscreen_hints_ready to initialize fullscreen window hints
+		if not fullscreen_hints_ready:
+			return 0 as a pointer to byte
 		set monitor to the primary monitor
 		set video_mode to the primary video mode of monitor
 		set w to the width of video_mode
 		set h to the height of video_mode
 		set new_window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, w, h, "DynLex", monitor, 0 as a pointer to a byte)
+		if new_window = 0 as a pointer to byte:
+			print "failed to create fullscreen GLFW window with OpenGL 4.6 compatibility profile" as line
+			@intrinsic("call", "glfw", "glfwTerminate", void)
+			return 0 as a pointer to byte
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", void, new_window)
 		@intrinsic("call", "GL", "glViewport", void, 0, 0, w, h)
 		register the graphics viewport resize callback of new_window
@@ -80,7 +93,10 @@ function a new fullscreen window:
 
 function initialize fullscreen window hints:
 	execute:
-		discard @intrinsic("call", "glfw", "glfwInit", an integer)
+		set glfw_initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
+		if glfw_initialized = 0:
+			print "failed to initialize GLFW" as line
+			return false
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
 		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
 		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
@@ -89,6 +105,7 @@ function initialize fullscreen window hints:
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139266, 4)
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139267, 6)
 		@intrinsic("call", "glfw", "glfwWindowHint", void, 139272, 204802)
+		return true
 
 function [the|] primary monitor:
 	execute:

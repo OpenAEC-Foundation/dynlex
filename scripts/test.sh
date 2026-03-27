@@ -151,6 +151,16 @@ for test_dir in "$TESTS_DIR"/*/; do
         failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
+    if [[ $compile_exit -ge 128 ]]; then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        signal=$((compile_exit - 128))
+        test_output+="${RED}FAIL${NC} $test_name (compiler crashed with signal ${signal}, ${test_elapsed_ms} ms)\n"
+        [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
+        ((failed++))
+        failures+=("$test_name")
+        failure_timings+=("$test_name:${test_elapsed_ms}")
+        continue
+    fi
     output_binary_exists=false
     if [[ -f "$output_binary" ]]; then
         output_binary_exists=true

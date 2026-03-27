@@ -180,3 +180,5 @@ Repeated plain `VariableLike` words inside one pattern definition must be tracke
 One-line `section: body` syntax should be desugared before `analyzeSections`, not implemented as a second execution path. The splitter must ignore `:` inside strings and nested `()`, `[]`, and `{}`. Real directives like `alignment:` and `padding:` should be promoted into actual sections instead of keeping inline special cases. Chained one-liners represent nested sections only; sibling sections still need separate physical lines.
 
 Avoid defining a parameter with the same plain token as a required literal word in the same pattern (for example `absolute value of value`). In larger imports this can collapse back to a literal-only path (`... of value`) and reject real arguments. Use a distinct parameter token (for example `magnitude`) or an explicit typed capture.
+
+Wiki example actions are injected by `web/wiki/wiki-actions.js` on `.code-block pre code` snippets and target `/ide/` with `code64` (+ optional `autorun=1`) query params. Keep this shared mechanism instead of duplicating per-page button markup.

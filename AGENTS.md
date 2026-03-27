@@ -66,11 +66,13 @@ Dependencies: C++23, Conan (`nlohmann_json`), LLVM 20.
 
 ## Project Structure
 
-- `src/main.cpp`: Entry point (`--lsp`, `--dap`)
-- `src/compiler/`: Core compiler (import, section analysis, pattern resolution, type inference, codegen)
-- `src/compiler/codegen/`: LLVM codegen, intrinsics, SPIR-V/native backends
-- `src/dap/`: Debug Adapter Protocol server (GDB MI backend)
-- `src/lsp/`: Language server
+- `src/cpp/main.cpp`: Entry point (`--lsp`, `--dap`)
+- `src/cpp/compiler/`: Core compiler (import, section analysis, pattern resolution, type inference, codegen)
+- `src/cpp/compiler/codegen/`: LLVM codegen, intrinsics, SPIR-V/native backends
+- `src/cpp/dap/`: Debug Adapter Protocol server (GDB MI backend)
+- `src/cpp/lsp/`: Language server
+- `src/web/ide/`: Browser IDE source (Vite + Monaco)
+- `web/`: Static web root (site/wiki source + deployed assets)
 - `vscode-extension/`: VS Code extension (TypeScript)
 - `tests/required/`: Required test cases
 

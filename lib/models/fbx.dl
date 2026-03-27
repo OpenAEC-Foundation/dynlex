@@ -1,0 +1,22 @@
+# DynLex FBX Model Library
+#
+# Runtime mesh type is OBJ-backed.
+# Convert FBX to OBJ first using `build/fbx_to_obj`, then load with this library.
+
+import lib/models/obj.dl
+
+function a loaded fbx mesh from obj_path:
+    execute:
+        return a loaded obj mesh from obj_path
+
+function draw fbx mesh mesh at x y z with scale model_scale and color r g b:
+    execute:
+        draw obj mesh mesh at x y z with scale model_scale and color r g b and render mode 0
+
+function draw fbx mesh mesh at x y z with scale model_scale and color r g b and render mode render_mode:
+    execute:
+        draw obj mesh mesh at x y z with scale model_scale and color r g b and render mode render_mode
+
+function free fbx mesh mesh:
+    execute:
+        free obj mesh mesh

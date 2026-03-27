@@ -41,10 +41,20 @@ Run the compiler WASM smoke test:
 Run the web app:
 
 ```bash
-cd web
+cd src/web/ide
 npm install
 npm run dev
 ```
+
+Refresh the deployable static web root (`web/`) after IDE changes:
+
+```bash
+./scripts/build_web_root.sh
+```
+
+Web layout:
+- `src/web/ide/`: IDE source (Vite + Monaco)
+- `web/`: deployable web root (site/wiki source + built IDE assets)
 
 The web app uses:
 - single editable source file at `/workspace/main.dl`

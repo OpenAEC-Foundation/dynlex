@@ -20,12 +20,17 @@ tests/games/mandelbrot
 tests/required/*/main
 
 node_modules
-web/node_modules/
-web/dist/
-web/public/compiler/*
-!web/public/compiler/.gitkeep
+src/web/ide/node_modules/
+src/web/ide/dist/
+src/web/ide/.vite/
+src/web/ide/public/compiler/*
+!src/web/ide/public/compiler/.gitkeep
+web/assets/
+web/compiler/
+web/ide/
 .cache
 packaging/launchpad/out/
 vscode-extension/LICENSE.md
 
 __pycache__/
+assets/

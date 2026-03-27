@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynLex - Download</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .download-shell {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 1rem 3rem;
+        }
+
+        .download-main {
+            width: min(780px, 100%);
+            text-align: center;
+        }
+
+        .download-main h1 {
+            font-size: clamp(2rem, 8vw, 3.5rem);
+            margin-bottom: 0.8rem;
+            background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.75));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .download-main p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .primary-actions {
+            margin-top: 1.6rem;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 12px;
+            padding: 0.9rem 1.2rem;
+            font-weight: 700;
+            font-size: 0.95rem;
+            border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.14);
+            color: var(--text-primary);
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        .download-btn.primary {
+            background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+            border-color: transparent;
+            min-width: 360px;
+            font-size: 1.08rem;
+            padding: 1.1rem 1.7rem;
+            gap: 0.55rem;
+        }
+
+        .download-icon {
+            font-size: 1.15rem;
+            line-height: 1;
+        }
+
+        .small-note {
+            margin-top: 0.9rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+
+        .release-link {
+            margin-top: 1.1rem;
+            display: inline-flex;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.26);
+            padding-bottom: 0.08rem;
+            font-size: 0.9rem;
+        }
+
+        .release-link:hover {
+            color: var(--text-primary);
+            border-bottom-color: rgba(255, 255, 255, 0.55);
+        }
+
+        .bottom-switch {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 1rem;
+            z-index: 4;
+            display: flex;
+            justify-content: center;
+            padding: 0 0.8rem;
+            pointer-events: none;
+        }
+
+        .chooser {
+            width: min(920px, 100%);
+            pointer-events: auto;
+        }
+
+        .chooser summary {
+            list-style: none;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-weight: 700;
+            text-align: center;
+            margin: 0 auto;
+            width: fit-content;
+            background: rgba(255, 255, 255, 0.14);
+            border: 1px solid var(--glass-border);
+            border-radius: 999px;
+            padding: 0.52rem 1rem;
+            font-size: 0.86rem;
+        }
+
+        .chooser summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .chooser-panel {
+            margin-top: 0.65rem;
+            background: rgba(17, 20, 44, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 14px;
+            padding: 0.85rem;
+            backdrop-filter: blur(12px);
+        }
+
+        .other-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .linux-one-liner {
+            margin-top: 1.4rem;
+            text-align: left;
+            background: var(--code-bg);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 0.72rem;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+            font-size: 0.82rem;
+            color: #e2e8f0;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <a href="index.html" class="nav-btn">Home</a>
+        <a href="/ide/" class="nav-btn">IDE</a>
+        <a href="wiki/index.html" class="nav-btn">Learn More</a>
+        <a href="download.html" class="nav-btn primary">Download</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="download-shell">
+        <section class="download-main">
+            <h1 id="hero-title">Downloading DynLex</h1>
+            <p class="small-note" id="status-line">If nothing downloaded, click 'Download'.</p>
+
+            <div class="primary-actions">
+                <a id="primary-download" class="download-btn primary" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest" target="_blank" rel="noopener noreferrer">
+                    <span>Download DynLex</span>
+                    <span class="download-icon">⬇</span>
+                </a>
+            </div>
+            <a class="release-link" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest" target="_blank" rel="noopener noreferrer">Open latest release</a>
+        </section>
+    </main>
+
+    <div class="bottom-switch">
+        <details class="chooser">
+            <summary>Not your platform?</summary>
+            <div class="chooser-panel">
+                <div class="other-grid">
+                    <a id="alt-windows" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Windows (.msi)</a>
+                    <a id="alt-macos" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">macOS (.pkg)</a>
+                    <a id="alt-linux-deb" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Linux (.deb)</a>
+                    <a id="alt-linux-tar" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Linux (.tar.gz)</a>
+                </div>
+                <div class="linux-one-liner">Linux quick install:
+curl -fsSL https://dynlex.com/install.sh | sh</div>
+            </div>
+        </details>
+    </div>
+
+    <script>
+        (function () {
+            var ua = navigator.userAgent || "";
+            var platform = "Linux";
+            var label = "Linux";
+            var fallbackReleaseUrl = "https://github.com/OpenAEC-Foundation/dynlex/releases/latest";
+
+            if (ua.indexOf("Windows") >= 0) {
+                platform = "Windows";
+                label = "Windows";
+            } else if (ua.indexOf("Mac") >= 0) {
+                platform = "macOS";
+                label = "macOS";
+            }
+
+            var title = document.getElementById("hero-title");
+            var primary = document.getElementById("primary-download");
+            var status = document.getElementById("status-line");
+            var altWindows = document.getElementById("alt-windows");
+            var altMacos = document.getElementById("alt-macos");
+            var altLinuxDeb = document.getElementById("alt-linux-deb");
+            var altLinuxTar = document.getElementById("alt-linux-tar");
+
+            title.textContent = "Download DynLex for " + label;
+            primary.href = fallbackReleaseUrl;
+            primary.querySelector("span").textContent = "Download for " + label;
+            status.textContent = "If nothing downloaded, click 'Download for " + label + "'.";
+
+            function pickAsset(assets, options) {
+                return assets.find(function (asset) {
+                    if (!options.extRegex.test(asset.name)) {
+                        return false;
+                    }
+                    return options.nameRegex ? options.nameRegex.test(asset.name) : true;
+                }) || null;
+            }
+
+            function configureAndDownload(assets) {
+                var windowsAsset = pickAsset(assets, { extRegex: /\.msi$/i, nameRegex: /windows/i });
+                var macAsset = pickAsset(assets, { extRegex: /\.pkg$/i, nameRegex: /mac/i });
+                var linuxDebAsset = pickAsset(assets, { extRegex: /\.deb$/i });
+                var linuxTarAsset = pickAsset(assets, { extRegex: /\.tar\.gz$/i });
+
+                if (windowsAsset) altWindows.href = windowsAsset.browser_download_url;
+                if (macAsset) altMacos.href = macAsset.browser_download_url;
+                if (linuxDebAsset) altLinuxDeb.href = linuxDebAsset.browser_download_url;
+                if (linuxTarAsset) altLinuxTar.href = linuxTarAsset.browser_download_url;
+
+                var primaryUrl = fallbackReleaseUrl;
+                if (platform === "Windows" && windowsAsset) {
+                    primaryUrl = windowsAsset.browser_download_url;
+                } else if (platform === "macOS" && macAsset) {
+                    primaryUrl = macAsset.browser_download_url;
+                } else if (platform === "Linux") {
+                    primaryUrl = linuxDebAsset ? linuxDebAsset.browser_download_url : (linuxTarAsset ? linuxTarAsset.browser_download_url : fallbackReleaseUrl);
+                }
+
+                primary.href = primaryUrl;
+                setTimeout(function () {
+                    window.location.assign(primaryUrl);
+                }, 550);
+            }
+
+            fetch("https://api.github.com/repos/OpenAEC-Foundation/dynlex/releases/latest", {
+                headers: { "Accept": "application/vnd.github+json" }
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error("release metadata fetch failed");
+                }
+                return response.json();
+            }).then(function (release) {
+                var assets = Array.isArray(release.assets) ? release.assets : [];
+                configureAndDownload(assets);
+            }).catch(function () {
+                status.textContent = "Could not resolve platform installer automatically. Click 'Download for " + label + "'.";
+                setTimeout(function () {
+                    window.location.assign(fallbackReleaseUrl);
+                }, 550);
+            });
+        })();
+    </script>
+</body>
+</html>

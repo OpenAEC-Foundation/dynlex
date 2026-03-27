@@ -1,0 +1,19 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [an|a|] padded data
+    members:
+        first as a pointer to a byte
+        count as i32
+        second as a pointer to a byte
+        total as i32
+
+set zero to 0
+set one to 1
+set p0 to zero as a pointer to a byte
+set p1 to one as a pointer to a byte
+set value to @intrinsic("construct", a padded data, p0, 11, p1, 22)
+
+print the count of value as line
+print the total of value as line

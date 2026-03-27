@@ -174,7 +174,7 @@ option (GLFW_BUILD_TESTS OFF)
 #add_subdirectory (gloom/vendor/glfw)
 
 MACRO(HEADER_DIRECTORIES return_list)
-    FILE(GLOB_RECURSE new_list src/*.h)
+    FILE(GLOB_RECURSE new_list src/cpp/*.h)
     SET(dir_list "")
     FOREACH(file_path ${new_list})
         GET_FILENAME_COMPONENT(dir_path ${file_path} PATH)
@@ -190,18 +190,18 @@ HEADER_DIRECTORIES(header_dir_list)
 # Set include paths
 #
 include_directories (${header_dir_list})
-include_directories (src)
+include_directories (src/cpp)
 
 
 #
 # Add files
 #
-file (GLOB_RECURSE PROJECT_HEADERS src/*.hpp
-                                   src/*.h)
-file (GLOB_RECURSE PROJECT_SOURCES src/*.cpp
-                                   src/*.cxx
-                                   src/*.cc
-                                   src/*.c)
+file (GLOB_RECURSE PROJECT_HEADERS src/cpp/*.hpp
+                                   src/cpp/*.h)
+file (GLOB_RECURSE PROJECT_SOURCES src/cpp/*.cpp
+                                   src/cpp/*.cxx
+                                   src/cpp/*.cc
+                                   src/cpp/*.c)
 file (GLOB         PROJECT_CONFIGS CMakeLists.txt
                                    README.md
                                   .gitignore)
@@ -254,7 +254,7 @@ llvm_map_components_to_libnames(
 set(DYNLEX_NATIVE_SOURCES ${PROJECT_SOURCES})
 
 # Web-only host bridge should only be part of the web module.
-list(FILTER DYNLEX_NATIVE_SOURCES EXCLUDE REGEX "src/web/.*\\.cpp$")
+list(FILTER DYNLEX_NATIVE_SOURCES EXCLUDE REGEX "src/cpp/web/.*\\.cpp$")
 
 if(EMSCRIPTEN AND NOT DYNLEX_WEB)
     message(FATAL_ERROR "Emscripten builds must enable DYNLEX_WEB=ON.")
@@ -274,6 +274,14 @@ if(NOT EMSCRIPTEN)
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
+
+    add_executable(fbx_to_obj tools/fbx_to_obj.cpp third_party/ufbx/ufbx.c)
+    target_include_directories(
+        fbx_to_obj SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ufbx ${CMAKE_SOURCE_DIR}/third_party/stb
+    )
+    set_target_properties(fbx_to_obj PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
 endif()
 
 if(DYNLEX_WEB)
@@ -282,14 +290,14 @@ if(DYNLEX_WEB)
     endif()
 
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/dap/.*\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/tcpTransport\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/lsp/stdioTransport\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/native\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/compiler/codegen/spirv\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/pexlit/rendering/.*\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/pexlit/safeInclude/implementations\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/dap/.*\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/tcpTransport\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/stdioTransport\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/codegen/native\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/codegen/spirv\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/pexlit/rendering/.*\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/pexlit/safeInclude/implementations\\.cpp$")
 
     add_executable(dynlex_web ${DYNLEX_WEB_SOURCES} ${PROJECT_HEADERS} ${PROJECT_CONFIGS})
     set_target_properties(dynlex_web PROPERTIES

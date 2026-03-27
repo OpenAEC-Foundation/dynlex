@@ -112,6 +112,14 @@
     "configurationDefaults": {
       "editor.semanticTokenColorCustomizations": {
         "rules": {
+          "section": {
+            "bold": true,
+            "foreground": "#D08A2E"
+          },
+          "keyword": {
+            "bold": true,
+            "foreground": "#4A86E8"
+          },
           "patternDefinition": {
             "italic": true
           },
