@@ -621,7 +621,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			BindingMap innerBindings;
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
 			Expression *bodyExpr = expr->inferredMacroExpansion
-									   ? context.cloneMacroExpansionExpression(expr->inferredMacroExpansion)
+									   ? context.cloneMacroExpansionExpression(
+											 expr->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+										 )
 									   : expandMacroPatternCall(context, expr, matchedDef, innerBindings);
 			if (!bodyExpr)
 				return nullptr;
@@ -801,7 +803,6 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 			return std::nullopt;
 		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindings)));
 	};
-
 	for (size_t i = 0; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
 		auto headerInfo = controlHeaderInfo(line);

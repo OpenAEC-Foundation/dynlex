@@ -65,6 +65,33 @@ static std::optional<double> currentBuildInfoNumber(ParseContext &context, std::
 	return std::nullopt;
 }
 
+static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
+	if (token.empty())
+		return std::nullopt;
+	bool sawDigit = false;
+	bool sawDot = false;
+	for (char c : token) {
+		if (c >= '0' && c <= '9') {
+			sawDigit = true;
+			continue;
+		}
+		if (c == '.') {
+			if (sawDot)
+				return std::nullopt;
+			sawDot = true;
+			continue;
+		}
+		return std::nullopt;
+	}
+	if (!sawDigit)
+		return std::nullopt;
+	try {
+		return std::stod(std::string(token));
+	} catch (...) {
+		return std::nullopt;
+	}
+}
+
 static CompileTimeValue
 evaluateCompileTimeCast(const CompileTimeValue &value, Expression *typeExpr, const BindingFrameStack &bindingFrameStack) {
 	if (!typeExpr)
@@ -247,6 +274,12 @@ static CompileTimeValue evaluatePatternCall(
 			callBindings[bindingName] = expression;
 	});
 	collectPatternCallBindings(expr, def, callBindings);
+	for (auto &[bindingName, expression] : callBindings) {
+		(void)bindingName;
+		Expression *resolved = resolveCompileTimeBinding(expression, bindingFrameStack);
+		if (resolved)
+			expression = resolved;
+	}
 
 	if (def->section->isMacro) {
 		BindingMap innerBindings;
@@ -303,6 +336,10 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 			auto it = instantiation->constantParameterValues.find(expr->variable->name);
 			if (it != instantiation->constantParameterValues.end())
 				return it->second;
+		}
+		if (expr->variable) {
+			if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
+				return *numericLiteral;
 		}
 		return {};
 	case Expression::Kind::ArrayLiteral:

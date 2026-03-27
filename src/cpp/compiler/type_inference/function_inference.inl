@@ -76,11 +76,13 @@ static bool runInstantiationReinferenceLoop(
 	while (true) {
 		InstantiationProgressSnapshot beforePass = snapshotInstantiationProgress(instantiation);
 		bool inferenceSucceeded = inferPass();
-		if (!inferenceSucceeded || !context.typesValid)
-			return false;
-		if (!instantiation.needsReinfer)
-			return true;
 		InstantiationProgressSnapshot afterPass = snapshotInstantiationProgress(instantiation);
+		if (!inferenceSucceeded || !context.typesValid) {
+			if (!instantiation.needsReinfer)
+				return false;
+		} else if (!instantiation.needsReinfer) {
+			return true;
+		}
 		if (afterPass == beforePass) {
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
 			return false;
@@ -146,17 +148,38 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 		it->variable->typeOriginFloatLiteralReplacement = it->typeOriginFloatLiteralReplacement;
 	}
 	for (auto it = journal.sectionInstantiationUndo.rbegin(); it != journal.sectionInstantiationUndo.rend(); ++it) {
-		if (it->existed)
-			it->section->instantiations[it->key] = it->value;
-		else
-			it->section->instantiations.erase(it->key);
+		auto instantiationIt = it->section->instantiations.find(it->key);
+		if (it->existed) {
+			if (instantiationIt == it->section->instantiations.end()) {
+				crashCompilerBug(
+					"trial rollback lost a previously-existing section instantiation; instantiation map changed unexpectedly"
+				);
+			}
+			instantiationIt->second = it->value;
+			continue;
+		}
+		if (instantiationIt == it->section->instantiations.end())
+			crashCompilerBug("trial rollback expected to erase a provisional section instantiation, but it was missing");
+		it->section->instantiations.erase(instantiationIt);
 	}
-	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it)
+	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it) {
+		if (it->first->instantiations.size() < it->second)
+			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");
 		it->first->instantiations.resize(it->second);
+	}
 }
 
 static std::string encodeTrialCompileTimeValue(const CompileTimeValue &value) {
 	return encodeCompileTimeValueForCacheKey(value);
+}
+
+static bool instantiationKeyHasOnlyKnownCompileTimeParameters(const InstantiationKey &key) {
+	for (const auto &[parameterName, value] : key.compileTimeParameters) {
+		(void)parameterName;
+		if (!isCompileTimeKnown(value))
+			return false;
+	}
+	return true;
 }
 
 static std::vector<std::pair<std::string, CompileTimeValue>> collectTrialCompileTimeParameters(
@@ -1457,16 +1480,16 @@ static void inferOrderedExpression(
 		std::unordered_set<std::string> fallbackParameterNames;
 		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
 			[&](const std::vector<DefinitionPatternElement> &elements) {
-				for (const auto &element : elements) {
-					if (element.type == PatternElement::Type::Choice) {
-						for (const auto &alternative : element.alternatives)
-							collectFallbackParameterNames(alternative);
-						continue;
-					}
-					if (element.type == PatternElement::Type::Variable)
-						fallbackParameterNames.insert(element.text);
+			for (const auto &element : elements) {
+				if (element.type == PatternElement::Type::Choice) {
+					for (const auto &alternative : element.alternatives)
+						collectFallbackParameterNames(alternative);
+					continue;
 				}
-			};
+				if (element.type == PatternElement::Type::Variable)
+					fallbackParameterNames.insert(element.text);
+			}
+		};
 		collectFallbackParameterNames(def->patternElements);
 		for (const std::string &parameterName : fallbackParameterNames) {
 			if (callBindings.contains(parameterName))
@@ -1706,6 +1729,39 @@ static void inferOrderedExpression(
 			if (inst.returnType.isDeduced())
 				expr->type = inst.returnType;
 			if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
+				if (context.trial) {
+					if (!instantiationKeyHasOnlyKnownCompileTimeParameters(*refinedInstantiationKey)) {
+						crashCompilerBug(
+							"trial inference refined a non-macro instantiation key with non-constant compile-time parameters"
+						);
+					}
+					if (!context.trialJournal) {
+						crashCompilerBug(
+							"trial inference refined a non-macro instantiation key without an active trial journal"
+						);
+					}
+					InferenceContext::TrialJournal::SectionInstantiationRetargetResult retargetResult =
+						context.trialJournal->retargetSectionInstantiationWrite(
+							matchedSection, instantiationKey, *refinedInstantiationKey
+						);
+					switch (retargetResult) {
+					case InferenceContext::TrialJournal::SectionInstantiationRetargetResult::Updated:
+						break;
+					case InferenceContext::TrialJournal::SectionInstantiationRetargetResult::MissingSourceRecord:
+						crashCompilerBug(
+							"trial inference refined a non-macro instantiation key, but the provisional key was not journaled"
+						);
+					case InferenceContext::TrialJournal::SectionInstantiationRetargetResult::SourceWasPreexisting:
+						crashCompilerBug(
+							"trial inference attempted to retarget a preexisting non-macro instantiation journal entry"
+						);
+					case InferenceContext::TrialJournal::SectionInstantiationRetargetResult::TargetAlreadyRecorded:
+						crashCompilerBug(
+							"trial inference attempted to retarget a non-macro instantiation journal entry to an already "
+							"tracked key"
+						);
+					}
+				}
 				auto instIt = matchedSection->instantiations.find(instantiationKey);
 				assert(instIt != matchedSection->instantiations.end() && "Missing provisional instantiation to refine");
 				auto node = matchedSection->instantiations.extract(instIt);

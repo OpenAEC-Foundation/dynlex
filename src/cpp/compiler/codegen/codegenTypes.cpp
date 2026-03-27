@@ -644,7 +644,6 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			instIt != matchedSection->instantiations.end() &&
 			"Missing inferred instantiation for deduced non-macro pattern call in getEffectiveType"
 		);
-
 		return expr->type;
 	}
 

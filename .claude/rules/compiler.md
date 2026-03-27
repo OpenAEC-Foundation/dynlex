@@ -26,7 +26,8 @@ paths:
 - Macro body expression nodes are **shared mutable state** — reset types before each `inferMacroBody` call (macro sections only)
 - Type inference: execution-order processing (top to bottom), with per-instantiation recursive re-inference when undeduced recursive dependencies are observed.
 - Instantiation argTypes vector must be built in `nodesPassed` order (both inference and codegen)
-- Non-macro instantiation signatures are immutable. The map key `argTypes` is canonical, and any duplicated `Instantiation.argumentTypes` copy must remain identical to that key. Callee inference must not rewrite caller argument types.
+- Non-macro instantiation `argTypes` are immutable and canonical (built in `nodesPassed` order); callee inference must not rewrite caller argument types.
+- Non-macro instantiation keys may only be retargeted when newly discovered required compile-time parameters are all compile-time constants. During trial inference, that retarget must also update the trial journal undo key; missing/mismatched journal state is a hard compiler bug (no fallback, no silent ignore).
 - `macroBindingStack` (`std::stack`): macros only see their own bindings. `MacroScopeGuard` pops to caller scope for argument evaluation
 - `getVariablePointer` recursively resolves through multiple macro binding scopes (for nested macros like `add value to target` → `set var to val`)
 - Operator precedence uses wave-based BFS level assignment — same-wave operators get same precedence, enforcing left-to-right associativity

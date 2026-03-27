@@ -205,7 +205,8 @@ struct ParseContext {
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	// WARNING: This exists only for per-call macro expansion isolation.
 	// It must NOT be used for ANYTHING else without explicit approval from the user.
-	Expression *cloneMacroExpansionExpression(Expression *expression, bool ownRoot = true);
+	Expression *
+	cloneMacroExpansionExpression(Expression *expression, bool ownRoot = true, bool preserveInferenceMetadata = false);
 };
 
 // Extract the body expression and parameter bindings from a macro PatternCall.

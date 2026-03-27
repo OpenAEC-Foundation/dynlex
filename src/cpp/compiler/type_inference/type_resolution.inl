@@ -3,6 +3,31 @@
 #include "compiler.h"
 #include "const_evaluation.inl"
 
+static std::optional<DataType> parseNumericTokenType(std::string_view token, bool emitSPIRV) {
+	if (token.empty())
+		return std::nullopt;
+	bool sawDigit = false;
+	bool sawDot = false;
+	for (char c : token) {
+		if (c >= '0' && c <= '9') {
+			sawDigit = true;
+			continue;
+		}
+		if (c == '.') {
+			if (sawDot)
+				return std::nullopt;
+			sawDot = true;
+			continue;
+		}
+		return std::nullopt;
+	}
+	if (!sawDigit)
+		return std::nullopt;
+	if (sawDot)
+		return DataType{DataType::Kind::Float, emitSPIRV ? 4 : 8};
+	return DataType{DataType::Kind::Int, 4};
+}
+
 static Expression *prepareCompileTimeTypeReferenceExpression(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &effectiveBindingFrameStack
 ) {
@@ -132,6 +157,11 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				resolved->range.line->section ? resolved->range.line->section->findVariable(resolved->variable->name) : nullptr;
 		if (var && var->type.isDeduced())
 			return concretizeClassType(var->type);
+		if (std::optional<DataType> numericTokenType = parseNumericTokenType(
+				resolved->variable->name,
+				activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV
+			))
+			return *numericTokenType;
 	}
 	if (resolved->kind == Expression::Kind::TypedPlaceholder && resolved->type.isDeduced())
 		return concretizeClassType(resolved->type);
@@ -678,16 +708,16 @@ static bool resolveCompileTimeTypeReference(
 		std::unordered_set<std::string> fallbackParameterNames;
 		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
 			[&](const std::vector<DefinitionPatternElement> &elements) {
-				for (const auto &element : elements) {
-					if (element.type == PatternElement::Type::Choice) {
-						for (const auto &alternative : element.alternatives)
-							collectFallbackParameterNames(alternative);
-						continue;
-					}
-					if (element.type == PatternElement::Type::Variable)
-						fallbackParameterNames.insert(element.text);
+			for (const auto &element : elements) {
+				if (element.type == PatternElement::Type::Choice) {
+					for (const auto &alternative : element.alternatives)
+						collectFallbackParameterNames(alternative);
+					continue;
 				}
-			};
+				if (element.type == PatternElement::Type::Variable)
+					fallbackParameterNames.insert(element.text);
+			}
+		};
 		collectFallbackParameterNames(def->patternElements);
 		for (const std::string &parameterName : fallbackParameterNames) {
 			if (callBindings.contains(parameterName))
@@ -1088,6 +1118,13 @@ struct InferenceContext {
 	};
 
 	struct TrialJournal {
+		enum class SectionInstantiationRetargetResult {
+			Updated,
+			MissingSourceRecord,
+			SourceWasPreexisting,
+			TargetAlreadyRecorded,
+		};
+
 		struct VariableUndo {
 			Variable *variable;
 			DataType type;
@@ -1110,6 +1147,19 @@ struct InferenceContext {
 		std::unordered_set<Section *> seenSections;
 		std::vector<SectionInstantiationUndo> sectionInstantiationUndo;
 		std::unordered_set<std::string> seenSectionInstantiations;
+
+		static std::string sectionInstantiationUndoId(Section *section, const InstantiationKey &key) {
+			std::string keyString = std::to_string(reinterpret_cast<uintptr_t>(section)) + "|";
+			for (const DataType &type : key.argumentTypes)
+				keyString += encodeDataTypeForCacheKey(type) + ";";
+			keyString += "|";
+			for (const auto &[name, value] : key.compileTimeParameters) {
+				keyString += name + "=";
+				keyString += encodeCompileTimeValueForCacheKey(value);
+				keyString += ";";
+			}
+			return keyString;
+		}
 
 		void recordVariableWrite(Variable *var) {
 			if (!var || seenVariables.contains(var))
@@ -1135,15 +1185,7 @@ struct InferenceContext {
 		void recordSectionInstantiationWrite(Section *section, const InstantiationKey &key) {
 			if (!section)
 				return;
-			std::string keyString = std::to_string(reinterpret_cast<uintptr_t>(section)) + "|";
-			for (const DataType &type : key.argumentTypes)
-				keyString += encodeDataTypeForCacheKey(type) + ";";
-			keyString += "|";
-			for (const auto &[name, value] : key.compileTimeParameters) {
-				keyString += name + "=";
-				keyString += encodeCompileTimeValueForCacheKey(value);
-				keyString += ";";
-			}
+			std::string keyString = sectionInstantiationUndoId(section, key);
 			if (seenSectionInstantiations.contains(keyString))
 				return;
 			seenSectionInstantiations.insert(keyString);
@@ -1152,6 +1194,35 @@ struct InferenceContext {
 				sectionInstantiationUndo.push_back({section, key, false, {}});
 			else
 				sectionInstantiationUndo.push_back({section, key, true, it->second});
+		}
+
+		SectionInstantiationRetargetResult
+		retargetSectionInstantiationWrite(Section *section, const InstantiationKey &fromKey, const InstantiationKey &toKey) {
+			if (!section)
+				return SectionInstantiationRetargetResult::MissingSourceRecord;
+			if (fromKey == toKey)
+				return SectionInstantiationRetargetResult::Updated;
+			std::string fromId = sectionInstantiationUndoId(section, fromKey);
+			auto fromSeenIt = seenSectionInstantiations.find(fromId);
+			if (fromSeenIt == seenSectionInstantiations.end())
+				return SectionInstantiationRetargetResult::MissingSourceRecord;
+			auto undoIt = std::find_if(
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
+				[&](const SectionInstantiationUndo &undo) {
+				return undo.section == section && undo.key == fromKey;
+			}
+			);
+			if (undoIt == sectionInstantiationUndo.end())
+				return SectionInstantiationRetargetResult::MissingSourceRecord;
+			if (undoIt->existed)
+				return SectionInstantiationRetargetResult::SourceWasPreexisting;
+			std::string toId = sectionInstantiationUndoId(section, toKey);
+			if (seenSectionInstantiations.contains(toId))
+				return SectionInstantiationRetargetResult::TargetAlreadyRecorded;
+			seenSectionInstantiations.erase(fromSeenIt);
+			seenSectionInstantiations.insert(std::move(toId));
+			undoIt->key = toKey;
+			return SectionInstantiationRetargetResult::Updated;
 		}
 	};
 

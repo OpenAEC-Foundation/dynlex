@@ -162,7 +162,7 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 namespace {
-Expression *cloneMacroExpansionExpressionImpl(Expression *expression) {
+Expression *cloneMacroExpansionExpressionImpl(Expression *expression, bool preserveInferenceMetadata) {
 	if (!expression)
 		return nullptr;
 	Expression *clone = new Expression();
@@ -181,17 +181,17 @@ Expression *cloneMacroExpansionExpressionImpl(Expression *expression) {
 	clone->groupingStartsWithArgument = expression->groupingStartsWithArgument;
 	clone->groupingEndsWithArgument = expression->groupingEndsWithArgument;
 	clone->groupingPrecedence = expression->groupingPrecedence;
-	clone->type = {};
-	clone->selectedPatternDefinition = nullptr;
+	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
+	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(argument));
+		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(argument, preserveInferenceMetadata));
 	return clone;
 }
 } // namespace
 
-Expression *ParseContext::cloneMacroExpansionExpression(Expression *expression, bool ownRoot) {
-	Expression *clone = cloneMacroExpansionExpressionImpl(expression);
+Expression *ParseContext::cloneMacroExpansionExpression(Expression *expression, bool ownRoot, bool preserveInferenceMetadata) {
+	Expression *clone = cloneMacroExpansionExpressionImpl(expression, preserveInferenceMetadata);
 	if (clone && ownRoot)
 		ownedMacroExpansionRoots.push_back(clone);
 	return clone;

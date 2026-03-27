@@ -57,6 +57,18 @@ struct BindingFrameStack {
 		return nullptr;
 	}
 
+	Expression *lookupSkippingExpression(const std::string &bindingName, const Expression *ignoredExpression) const {
+		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
+			auto bindingIt = frameIt->bindings.find(bindingName);
+			if (bindingIt == frameIt->bindings.end())
+				continue;
+			if (bindingIt->second == ignoredExpression)
+				continue;
+			return bindingIt->second;
+		}
+		return nullptr;
+	}
+
 	template <typename Visitor> void forEachFrame(Visitor &&visitor) const {
 		for (const BindingFrame &frame : frames)
 			visitor(frame);
@@ -114,8 +126,8 @@ inline Expression *resolveVariableBindingAcrossFrames(
 	(void)maxBindingResolutionDepth;
 	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
 		return expr;
-	Expression *boundExpression = bindingFrameStack.lookup(expr->variable->name);
-	if (!boundExpression || boundExpression == expr)
+	Expression *boundExpression = bindingFrameStack.lookupSkippingExpression(expr->variable->name, expr);
+	if (!boundExpression)
 		return expr;
 	return boundExpression;
 }
