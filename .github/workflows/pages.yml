@@ -12,6 +12,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      LLVM_DIR: ${{ vars.DYNLEX_WEB_LLVM_DIR }}
+      DYNLEX_LLVM_VERSION: ${{ vars.DYNLEX_WEB_LLVM_VERSION }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -20,10 +23,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+      - name: Build web compiler artifacts
+        run: ./scripts/build_web.sh
       - name: Install IDE dependencies
         run: cd src/web/ide && npm ci
       - name: Build IDE and refresh web root
         run: ./scripts/build_web_root.sh
+      - name: Verify web compiler artifacts are in deploy root
+        run: |
+          test -f web/compiler/dynlex_web.js
+          test -f web/compiler/dynlex_web.wasm
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
