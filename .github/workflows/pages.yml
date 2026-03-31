@@ -32,12 +32,15 @@ jobs:
             exit 1
           fi
           LLVM_CMAKE_DIR="$EMSDK/upstream/lib/cmake/llvm"
-          LLVM_CONFIG="$EMSDK/upstream/bin/llvm-config"
-          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
-          test -x "$LLVM_CONFIG"
-          LLVM_VERSION="$("$LLVM_CONFIG" --version | cut -d. -f1)"
+          if [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
+            LLVM_CONFIG_CMAKE="$(find "$EMSDK" -type f -path "*/cmake/llvm/LLVMConfig.cmake" -print -quit)"
+            if [ -z "$LLVM_CONFIG_CMAKE" ]; then
+              echo "Could not locate LLVMConfig.cmake under EMSDK at: $EMSDK"
+              exit 1
+            fi
+            LLVM_CMAKE_DIR="$(dirname "$LLVM_CONFIG_CMAKE")"
+          fi
           echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
-          echo "DYNLEX_LLVM_VERSION=$LLVM_VERSION" >> "$GITHUB_ENV"
       - name: Build web compiler artifacts
         run: ./scripts/build_web.sh
       - name: Install IDE dependencies
