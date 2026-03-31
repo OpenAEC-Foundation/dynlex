@@ -4,6 +4,7 @@
 #include "patternTreeNode.h"
 #include "sectionType.h"
 #include <memory>
+#include <string>
 struct ParseContext;
 struct PatternReference;
 // traversing the tree will also output a tree of possibilities
@@ -48,4 +49,5 @@ struct MatchProgress {
 	// whether this progress can be a submatch
 	bool canBeSubmatch() const;
 	void addMatchData(PatternMatch &match);
+	std::string toString() const;
 };

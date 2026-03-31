@@ -3,8 +3,12 @@
 These instructions apply to all coding agents working in this repository (including Codex and Claude).
 
 ## Core Rules
-
-- If an implementation gets stuck, stop and report the exact blocker to the user.
+- this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.
+- your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
+- be direct. don't hide anything relevant.
+- remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
+- find the broader, deterministic and simple pattern.
+- don't add code for debugging. debugging information gathering should NEVER hurt performance. handy optional built-in tools which can help debugging are allowed, but only on the users request.
 - Keep failure handling explicit and transparent by reporting real errors instead of masking them.
 - Fail hard on internal stage inconsistencies instead of repairing invalid intermediate state.
 - Minimize complexity. Deliver clean, complete solutions.
@@ -13,7 +17,10 @@ These instructions apply to all coding agents working in this repository (includ
 - Keep dependencies minimal.
 - Always answer direct user questions instead of doing. if the user didn't ask you to do something, propose it.
 - if you need information about the code you can get yourself, just get it. you don't have to ask the user if they want you to root-cause a problem. gathering info can never hurt, since you aren't making changes.
-- Suggest better approaches when you see one.
+- don't assume the user knows everything.
+ - when the user asks an explanation, give the context as well. the user might have read past it.
+ - suggest better approaches when you see one.
+ - immediately point out any inconsistencies in what the user is saying. this helps making things clear.
 - Verify before assuming package/version/tool availability.
 - Document important fixes in repository docs/rules so all agents share the same context.
 - Be cautious with git; other agents may work in the same tree. if the user tells you to revert that doesn't mean git revert or git checkout. verify no other agents edited a file before deleting or editing it.
@@ -33,7 +40,7 @@ NEVER add a workaround like:
 
 instead:
 1. identify a minimal reproducible example. minimize the amount of reproducing code. imported code is counted too. so NO 'import std.dl'!
-1. identify the root cause with whatever tools you need.
+1. identify the root cause with whatever tools you need. stay open for any root cause. to find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
 2. identify a possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
 3. report to the user.
 the user may discuss the bug with you.
@@ -41,11 +48,6 @@ when the user tells you to fix it:
 4. fix the compiler bug first. verify it fixed it by building and the running repro and test script. if it didn't fix it and you don't know why, go back to 1. when you are at step 3 again, you don't have to report if it's a trivial fix following agents.md.
 if the compiler bug was found using buggy .dl code:
 5. fix the .dl bug after.
-- this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.
-- your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
-- be direct. don't hide anything relevant.
-- remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
-- find the broader, deterministic and simple pattern.
 
 ## Project Overview
 

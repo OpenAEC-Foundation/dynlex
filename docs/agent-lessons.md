@@ -182,3 +182,13 @@ One-line `section: body` syntax should be desugared before `analyzeSections`, no
 Avoid defining a parameter with the same plain token as a required literal word in the same pattern (for example `absolute value of value`). In larger imports this can collapse back to a literal-only path (`... of value`) and reject real arguments. Use a distinct parameter token (for example `magnitude`) or an explicit typed capture.
 
 Wiki example actions are injected by `web/wiki/wiki-actions.js` on `.code-block pre code` snippets and target `/ide/` with `code64` (+ optional `autorun=1`) query params. Keep this shared mechanism instead of duplicating per-page button markup.
+
+Native debugger rendering should come from the GDB pretty-printers in `scripts/gdb/dynlex_pretty_printers.py`, loaded by `.vscode/launch.json`. Do not add NatVis files or cached debug-only fields to feed debugger views.
+
+## Agent Messaging MCP Setup
+
+- Shared messaging MCP server path: `/home/johnheikens/Documents/Github/mcp-servers/agent_messaging/server.py`.
+- Codex config must include `mcp_servers.agent_messaging` using:
+  `bash -lc "cd /home/johnheikens/Documents/Github/mcp-servers/agent_messaging && exec uv run server.py"`.
+- Workspace `.mcp.json` should include matching `agent_messaging` entry so project-local agents inherit the same server config.
+- Runtime note: existing Codex sessions may not pick up newly-added MCP servers. Restart the session to load new server registrations.

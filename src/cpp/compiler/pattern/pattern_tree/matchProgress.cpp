@@ -15,6 +15,22 @@ static size_t firstDefinitionStartPos(const PatternTreeNode *node) {
 	return firstStartPos;
 }
 
+static std::string consumedSourcePrefix(const PatternReference *reference, size_t elementIndex, size_t charIndex) {
+	if (!reference)
+		return {};
+	const std::vector<PatternElement> &elements = reference->patternElements;
+	size_t boundedElementIndex = std::min(elementIndex, elements.size());
+	std::string result;
+	for (size_t i = 0; i < boundedElementIndex; i++)
+		result += elements[i].text;
+	if (boundedElementIndex < elements.size() && charIndex > 0) {
+		const std::string &currentText = elements[boundedElementIndex].text;
+		size_t prefixLength = std::min(charIndex, currentText.size());
+		result += currentText.substr(0, prefixLength);
+	}
+	return result;
+}
+
 } // namespace
 
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)
@@ -82,6 +98,7 @@ std::vector<MatchProgress> MatchProgress::step() {
 			}
 		}
 	}
+
 	if (sourceElementIndex < patternReference->patternElements.size()) {
 		PatternElement elementToCompare = patternReference->patternElements[sourceElementIndex];
 		if (sourceCharIndex > 0 && sourceCharIndex < elementToCompare.text.size())
@@ -89,14 +106,11 @@ std::vector<MatchProgress> MatchProgress::step() {
 
 		// less priority: arguments
 		if (currentNode->argumentChild) {
-			bool preferFunctionSubmatch =
-				elementToCompare.type == PatternElement::Type::VariableLike &&
-				context->patternTrees[(int)SectionType::Function] &&
-				context->patternTrees[(int)SectionType::Function]->literalChildren.contains(elementToCompare.text);
 
-			auto pushArgumentCapture = [&]() -> bool {
-				if (elementToCompare.type == PatternElement::Type::Other)
-					return true;
+			auto pushArgumentCapture = [&]() -> void {
+				if (elementToCompare.type != PatternElement::Type::Variable &&
+					elementToCompare.type != PatternElement::Type::VariableLike)
+					return;
 				MatchProgress substituteStep = *this;
 				substituteStep.currentNode = currentNode->argumentChild;
 				substituteStep.match.nodesPassed.push_back(substituteStep.currentNode);
@@ -110,8 +124,6 @@ std::vector<MatchProgress> MatchProgress::step() {
 						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
 				} else {
-					if (!patternReference->expression || sourceArgumentIndex >= patternReference->expression->arguments.size())
-						return false;
 					substituteStep.match.orderedArguments.push_back(
 						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
 						 patternReference->expression->arguments[sourceArgumentIndex], 0}
@@ -121,7 +133,6 @@ std::vector<MatchProgress> MatchProgress::step() {
 				substituteStep.matchedArgumentIndex++;
 				substituteStep.patternPos += elementToCompare.text.size();
 				nextMatches.push_back(std::move(substituteStep));
-				return true;
 			};
 
 			auto pushSubmatch = [&]() {
@@ -141,15 +152,8 @@ std::vector<MatchProgress> MatchProgress::step() {
 				nextMatches.push_back(std::move(subMatch));
 			};
 
-			if (preferFunctionSubmatch) {
-				if (!pushArgumentCapture())
-					return nextMatches;
-				pushSubmatch();
-			} else {
-				pushSubmatch();
-				if (!pushArgumentCapture())
-					return nextMatches;
-			}
+			pushArgumentCapture();
+			pushSubmatch();
 		}
 		if (options.acceptLiterals && elementToCompare.type == PatternElement::Type::Variable) {
 			struct LiteralFallbackCandidate {
@@ -260,4 +264,19 @@ void MatchProgress::addMatchData(PatternMatch &match) {
 	match.matchedEndNode = currentNode;
 	match.lineStartPos = patternReference->pattern.getLinePos(patternStartPos);
 	match.lineEndPos = patternReference->pattern.getLinePos(patternPos);
+}
+
+std::string MatchProgress::toString() const {
+	const std::string currentConsumed = consumedSourcePrefix(patternReference, sourceElementIndex, sourceCharIndex);
+	if (!parent)
+		return currentConsumed;
+
+	const std::string parentRendered = parent->toString();
+	const std::string parentConsumed =
+		consumedSourcePrefix(parent->patternReference, parent->sourceElementIndex, parent->sourceCharIndex);
+	std::string submatchConsumed = currentConsumed;
+	if (currentConsumed.size() >= parentConsumed.size() &&
+		currentConsumed.compare(0, parentConsumed.size(), parentConsumed) == 0)
+		submatchConsumed = currentConsumed.substr(parentConsumed.size());
+	return parentRendered + "(" + submatchConsumed;
 }

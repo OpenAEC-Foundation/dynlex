@@ -15,12 +15,15 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
 					"text": "-enable-pretty-printing",
 					"ignoreFailures": true
+				},
+				{
+					"description": "Load DynLex GDB pretty-printers",
+					"text": "-interpreter-exec console \"source ${workspaceFolder}/scripts/gdb/dynlex_pretty_printers.gdb\""
 				},
 				{
 					"description": "Skip library files",
@@ -43,12 +46,15 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
 					"text": "-enable-pretty-printing",
 					"ignoreFailures": true
+				},
+				{
+					"description": "Load DynLex GDB pretty-printers",
+					"text": "-interpreter-exec console \"source ${workspaceFolder}/scripts/gdb/dynlex_pretty_printers.gdb\""
 				},
 				{
 					"description": "Skip library files",
@@ -69,12 +75,15 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
 					"text": "-enable-pretty-printing",
 					"ignoreFailures": true
+				},
+				{
+					"description": "Load DynLex GDB pretty-printers",
+					"text": "-interpreter-exec console \"source ${workspaceFolder}/scripts/gdb/dynlex_pretty_printers.gdb\""
 				},
 				{
 					"description": "Skip library files",
@@ -95,12 +104,15 @@
 			"environment": [],
 			"externalConsole": false,
 			"MIMode": "gdb",
-			"visualizerFile": "${workspaceFolder}/.vscode/dynlex.natvis",
 			"setupCommands": [
 				{
 					"description": "Enable pretty-printing for gdb",
 					"text": "-enable-pretty-printing",
 					"ignoreFailures": true
+				},
+				{
+					"description": "Load DynLex GDB pretty-printers",
+					"text": "-interpreter-exec console \"source ${workspaceFolder}/scripts/gdb/dynlex_pretty_printers.gdb\""
 				},
 				{
 					"description": "Skip library files",

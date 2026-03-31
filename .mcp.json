@@ -1,5 +1,18 @@
 {
   "mcpServers": {
+    "agent_messaging": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd /home/johnheikens/Documents/Github/mcp-servers/agent_messaging && exec uv run server.py"
+      ],
+      "env": {
+        "AGENT_MESSAGING_DB_PATH": "/home/johnheikens/Documents/Github/mcp-servers/agent_messaging/messages.sqlite3",
+        "AGENT_MESSAGING_LOG_PATH": "/home/johnheikens/Documents/Github/mcp-servers/agent_messaging/messages.log.jsonl",
+        "AGENT_MESSAGING_DIRECT_DISPATCH_MODE": "codex_exec_resume",
+        "AGENT_MESSAGING_DIRECT_DISPATCH_LOG_PATH": "/home/johnheikens/Documents/Github/mcp-servers/agent_messaging/direct_dispatch.log"
+      }
+    },
     "lsp": {
       "command": "bash",
       "args": [
