@@ -24,7 +24,7 @@ static std::optional<DataType> parseNumericTokenType(std::string_view token, boo
 	if (!sawDigit)
 		return std::nullopt;
 	if (sawDot)
-		return DataType{DataType::Kind::Float, emitSPIRV ? 4 : 8};
+		return defaultFloatType(emitSPIRV);
 	return DataType{DataType::Kind::Int, 4};
 }
 
@@ -45,9 +45,19 @@ static Expression *prepareCompileTimeTypeReferenceExpression(
 	return resolved;
 }
 
-static Expression *
-resolveCompileTimeSelectBranch(Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack) {
-	CompileTimeValue conditionValue = evaluateCompileTimeValue(selectExpr->arguments[1], parseContext, bindingFrameStack);
+static Expression *resolveCompileTimeSelectBranch(
+	Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack,
+	InferenceContext *inferenceContext = nullptr
+) {
+	Expression *conditionExpr = selectExpr->arguments[1];
+	if (inferenceContext) {
+		Expression *activeConditionExpr = conditionExpr;
+		if (!inferExpressionWithCurrentGrouping(activeConditionExpr, *inferenceContext, bindingFrameStack))
+			return nullptr;
+		selectExpr->arguments[1] = activeConditionExpr;
+		conditionExpr = activeConditionExpr;
+	}
+	CompileTimeValue conditionValue = evaluateCompileTimeValue(conditionExpr, parseContext, bindingFrameStack);
 	std::optional<bool> condition = compileTimeTruthiness(conditionValue);
 	if (!condition.has_value())
 		return nullptr;
@@ -118,10 +128,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 								   literalText.find('E') != std::string_view::npos;
 			if (!explicitlyFloat && std::trunc(value) == value)
 				return {DataType::Kind::Int, 4};
-			return {
-				DataType::Kind::Float,
-				activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV ? 4 : 8
-			};
+			return defaultFloatType(activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV);
 		}
 		if (std::holds_alternative<std::string>(resolved->literalValue)) {
 			DataType strType{DataType::Kind::Int, 1};
@@ -208,6 +215,21 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 					DataType result;
 					if (DataType::promoteArithmetic(leftType, rightType, result))
+						return result;
+				}
+				return {};
+			case IntrinsicReturnKind::SameAsInts:
+				if (resolved->arguments.size() == 2) {
+					DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					if (valueType.isInteger())
+						return valueType;
+					return {};
+				}
+				if (resolved->arguments.size() > 2) {
+					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType result;
+					if (DataType::promoteBitwise(leftType, rightType, result))
 						return result;
 				}
 				return {};
@@ -305,7 +327,9 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 					typeRef.numericSize = 4;
 				} else if (kindStr == "float") {
 					typeRef.referencedKind = DataType::Kind::Float;
-					typeRef.numericSize = 8;
+					typeRef.numericSize = defaultFloatByteSize(
+						activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV
+					);
 				} else if (kindStr == "bool") {
 					typeRef.referencedKind = DataType::Kind::Bool;
 				} else if (kindStr == "void") {
@@ -495,7 +519,13 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 	}
 	BindingMap innerBindings;
 	Expression *bodyExpr = nullptr;
-	if (activeTypeResolutionParseContext && selectedPatternDefinition)
+	if (activeTypeResolutionParseContext && resolved->inferredMacroExpansion && selectedPatternDefinition) {
+		collectPatternCallBindings(resolved, selectedPatternDefinition, innerBindings);
+		bodyExpr = activeTypeResolutionParseContext->cloneMacroExpansionExpression(
+			resolved->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+		);
+	}
+	if (!bodyExpr && activeTypeResolutionParseContext && selectedPatternDefinition)
 		bodyExpr =
 			expandMacroPatternCall(*activeTypeResolutionParseContext, resolved, selectedPatternDefinition, innerBindings);
 	if (!bodyExpr && activeTypeResolutionParseContext)
@@ -547,13 +577,24 @@ static DataType toTypeReference(const DataType &valueType) {
 }
 
 static bool resolveCompileTimeTypeReference(
-	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef
+	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef,
+	InferenceContext *inferenceContext = nullptr
 ) {
+	auto isConcreteTypeReferenceValue = [](const DataType &type) {
+		return type.kind == DataType::Kind::Type && type.referencedKind != DataType::Kind::Type &&
+			   type.referencedKind != DataType::Kind::Unresolved;
+	};
+	if (!expr)
+		return false;
+	if (isConcreteTypeReferenceValue(expr->type)) {
+		outTypeRef = expr->type;
+		return true;
+	}
 	BindingFrameStack effectiveBindingFrameStack;
 	Expression *resolved = prepareCompileTimeTypeReferenceExpression(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return false;
-	if (resolved->type.kind == DataType::Kind::Type) {
+	if (isConcreteTypeReferenceValue(resolved->type)) {
 		outTypeRef = resolved->type;
 		return true;
 	}
@@ -582,7 +623,7 @@ static bool resolveCompileTimeTypeReference(
 		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
 			if (!resolveCompileTimeTypeReference(
-					parseContext, resolved->arguments[1], effectiveBindingFrameStack, innerTypeRef
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, innerTypeRef, inferenceContext
 				) ||
 				innerTypeRef.kind != DataType::Kind::Type)
 				return false;
@@ -600,7 +641,7 @@ static bool resolveCompileTimeTypeReference(
 			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(
-						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef, inferenceContext
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
@@ -612,7 +653,7 @@ static bool resolveCompileTimeTypeReference(
 			DataType arrayTypeRef;
 			int factor = 0;
 			if (resolveCompileTimeTypeReference(
-					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arrayTypeRef
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
 				) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
 				evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindingFrameStack, factor) &&
@@ -622,7 +663,7 @@ static bool resolveCompileTimeTypeReference(
 				return true;
 			}
 			if (resolveCompileTimeTypeReference(
-					parseContext, resolved->arguments[2], effectiveBindingFrameStack, arrayTypeRef
+					parseContext, resolved->arguments[2], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
 				) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
 				evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, factor) &&
@@ -644,7 +685,7 @@ static bool resolveCompileTimeTypeReference(
 			if (resolved->arguments.size() > 2) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(
-						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef, inferenceContext
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
@@ -667,7 +708,7 @@ static bool resolveCompileTimeTypeReference(
 			if (resolved->arguments.size() > 3) {
 				DataType elementTypeRef;
 				if (!resolveCompileTimeTypeReference(
-						parseContext, resolved->arguments[3], effectiveBindingFrameStack, elementTypeRef
+						parseContext, resolved->arguments[3], effectiveBindingFrameStack, elementTypeRef, inferenceContext
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
@@ -676,9 +717,12 @@ static bool resolveCompileTimeTypeReference(
 			return true;
 		}
 		if (kind == IntrinsicKind::Select) {
-			Expression *selectedBranch = resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack);
+			Expression *selectedBranch =
+				resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack, inferenceContext);
 			if (selectedBranch)
-				return resolveCompileTimeTypeReference(parseContext, selectedBranch, effectiveBindingFrameStack, outTypeRef);
+				return resolveCompileTimeTypeReference(
+					parseContext, selectedBranch, effectiveBindingFrameStack, outTypeRef, inferenceContext
+				);
 		}
 	}
 
@@ -734,7 +778,8 @@ static bool resolveCompileTimeTypeReference(
 		callBindingFrameStack.pushFrame(std::move(callBindings));
 		if (!def->section->isMacro && def->section->type == SectionType::Class) {
 			outTypeRef = instantiateBoundClassType(
-				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack
+				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack,
+				inferenceContext
 			);
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
@@ -755,7 +800,7 @@ static bool resolveCompileTimeTypeReference(
 			}
 
 			if (!ensureSectionInstantiationInferred(
-					parseContext, def->section, def, parameterNames, callBindingFrameStack, argTypes, nullptr
+					parseContext, def->section, def, parameterNames, callBindingFrameStack, argTypes, nullptr, inferenceContext
 				))
 				return false;
 
@@ -776,18 +821,28 @@ static bool resolveCompileTimeTypeReference(
 		}
 
 		BindingMap innerBindings;
-		Expression *bodyExpr = expandMacroPatternCall(parseContext, resolved, def, innerBindings);
+		Expression *bodyExpr = nullptr;
+		if (resolved->inferredMacroExpansion) {
+			collectPatternCallBindings(resolved, def, innerBindings);
+			bodyExpr = parseContext.cloneMacroExpansionExpression(
+				resolved->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+			);
+		}
+		if (!bodyExpr)
+			bodyExpr = expandMacroPatternCall(parseContext, resolved, def, innerBindings);
 		if (!bodyExpr)
 			return false;
 		materializeMacroBindingsInCallerScope(&parseContext, innerBindings, callBindingFrameStack);
 		callBindingFrameStack.pushFrame(std::move(innerBindings));
-		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindingFrameStack, outTypeRef);
+		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindingFrameStack, outTypeRef, inferenceContext);
 	}
 	return false;
 }
 
-static DataType
-instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack) {
+static DataType instantiateBoundClassType(
+	ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack,
+	InferenceContext *inferenceContext
+) {
 	if (!classDef)
 		return {};
 
@@ -802,7 +857,9 @@ instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef,
 				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
 			);
 			DataType resolvedTypeRef;
-			if (!resolveCompileTimeTypeReference(parseContext, fieldType.typeExpression, bindingFrameStack, resolvedTypeRef) ||
+			if (!resolveCompileTimeTypeReference(
+					parseContext, fieldType.typeExpression, bindingFrameStack, resolvedTypeRef, inferenceContext
+				) ||
 				resolvedTypeRef.kind != DataType::Kind::Type)
 				return {};
 			fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
@@ -901,6 +958,8 @@ static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std:
 }
 
 static bool isLogicalOperandType(const DataType &type) { return type.kind == DataType::Kind::Bool || type.isNumeric(); }
+
+static bool isBitwiseOperandType(const DataType &type) { return type.isInteger(); }
 
 static std::string extractFieldName(Expression *expr) {
 	if (!expr)

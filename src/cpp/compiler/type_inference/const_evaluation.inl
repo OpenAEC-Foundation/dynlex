@@ -130,8 +130,6 @@ static Expression *captureMacroBindingReferencesImpl(
 			// destroyed before ParseContext teardown.
 			std::unordered_map<Expression *, Expression *> frozenMemo;
 			Expression *frozenResolved = cloneFrozenBindingSubtree(capturedResolved, frozenMemo);
-			if (frozenResolved)
-				frozenResolved->range = expr->range;
 			memo[expr] = frozenResolved;
 			return frozenResolved;
 		}
@@ -265,8 +263,10 @@ static std::string extractFieldName(Expression *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
 static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack);
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged);
-static DataType
-instantiateBoundClassType(ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack);
+static DataType instantiateBoundClassType(
+	ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack,
+	InferenceContext *inferenceContext = nullptr
+);
 static bool instantiateClassFromArgumentTypes(
 	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex = -1
 );
@@ -320,20 +320,6 @@ struct ActiveTypeResolutionParseContextGuard {
 
 	~ActiveTypeResolutionParseContextGuard() { activeTypeResolutionParseContext = previous; }
 };
-
-static Expression *selectCompileTimeBranch(
-	Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack,
-	const Instantiation *instantiation = nullptr
-) {
-	if (!selectExpr || selectExpr->intrinsicName != "select" || selectExpr->arguments.size() < 4)
-		return nullptr;
-	CompileTimeValue conditionValue =
-		evaluateCompileTimeValue(selectExpr->arguments[1], parseContext, bindingFrameStack, instantiation);
-	std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-	if (!condition.has_value())
-		return nullptr;
-	return selectExpr->arguments[*condition ? 2 : 3];
-}
 
 static void markCompileTimeParameterRequirements(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, Instantiation *instantiation

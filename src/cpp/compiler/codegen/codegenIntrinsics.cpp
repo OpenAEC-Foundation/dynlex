@@ -46,6 +46,71 @@ static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *index
 	return indexVal;
 }
 
+static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<Expression *> &args, DataType resultType) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Function *function = builder.GetInsertBlock() ? builder.GetInsertBlock()->getParent() : nullptr;
+	if (!function)
+		return nullptr;
+
+	DataType conditionType = getEffectiveType(context, args[0]);
+	llvm::Value *conditionValue = generateExpressionCode(context, args[0]);
+	if (!conditionValue)
+		return nullptr;
+	llvm::Value *conditionBool = convertConditionToBool(context, conditionValue, conditionType, "select_cond");
+
+	if (resultType.kind == DataType::Kind::Type) {
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "compile time type value used at runtime", args[0]->range)
+		);
+		return nullptr;
+	}
+
+	llvm::BasicBlock *trueBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.true", function);
+	llvm::BasicBlock *falseBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.false", function);
+	llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.merge", function);
+	builder.CreateCondBr(conditionBool, trueBlock, falseBlock);
+
+	struct PhiIncoming {
+		llvm::Value *value;
+		llvm::BasicBlock *block;
+	};
+	std::vector<PhiIncoming> incomingValues;
+	incomingValues.reserve(2);
+
+	builder.SetInsertPoint(trueBlock);
+	llvm::Value *trueValue = generateExpressionCode(context, args[1]);
+	llvm::BasicBlock *trueEndBlock = builder.GetInsertBlock();
+	if (!trueEndBlock->getTerminator()) {
+		if (resultType.kind != DataType::Kind::Void) {
+			DataType trueType = getEffectiveType(context, args[1]);
+			trueValue = ensureType(context, trueValue, trueType, resultType);
+			incomingValues.push_back({trueValue, trueEndBlock});
+		}
+		builder.CreateBr(mergeBlock);
+	}
+
+	builder.SetInsertPoint(falseBlock);
+	llvm::Value *falseValue = generateExpressionCode(context, args[2]);
+	llvm::BasicBlock *falseEndBlock = builder.GetInsertBlock();
+	if (!falseEndBlock->getTerminator()) {
+		if (resultType.kind != DataType::Kind::Void) {
+			DataType falseType = getEffectiveType(context, args[2]);
+			falseValue = ensureType(context, falseValue, falseType, resultType);
+			incomingValues.push_back({falseValue, falseEndBlock});
+		}
+		builder.CreateBr(mergeBlock);
+	}
+
+	builder.SetInsertPoint(mergeBlock);
+	if (resultType.kind == DataType::Kind::Void || incomingValues.empty())
+		return nullptr;
+
+	auto *phi = builder.CreatePHI(getLLVMType(context, resultType), static_cast<unsigned>(incomingValues.size()), "select");
+	for (const PhiIncoming &incoming : incomingValues)
+		phi->addIncoming(incoming.value, incoming.block);
+	return phi;
+}
+
 static llvm::Value *
 buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<Expression *> &args, size_t startIndex) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -227,6 +292,24 @@ static llvm::Value *generateScalarOrVectorArithmetic(
 		return builder.CreateSDiv(left, right, "div");
 	case ArithmeticIntrinsicKind::Modulo:
 		return builder.CreateSRem(left, right, "mod");
+	default:
+		return nullptr;
+	}
+}
+
+static llvm::Value *generateScalarBitwise(ParseContext &context, IntrinsicKind kind, llvm::Value *left, llvm::Value *right) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	switch (kind) {
+	case IntrinsicKind::BitwiseAnd:
+		return builder.CreateAnd(left, right, "band");
+	case IntrinsicKind::BitwiseOr:
+		return builder.CreateOr(left, right, "bor");
+	case IntrinsicKind::BitwiseXor:
+		return builder.CreateXor(left, right, "bxor");
+	case IntrinsicKind::ShiftLeft:
+		return builder.CreateShl(left, right, "shl");
+	case IntrinsicKind::ShiftRight:
+		return builder.CreateAShr(left, right, "shr");
 	default:
 		return nullptr;
 	}
@@ -438,6 +521,25 @@ llvm::Value *generateIntrinsicCode(
 		return generateScalarOrVectorArithmetic(context, arithmeticOp, left, right, resultType);
 	}
 
+	if (kind == IntrinsicKind::BitwiseNot) {
+		llvm::Value *value = generateExpressionCode(context, args[0]);
+		DataType valueType = getEffectiveType(context, args[0]);
+		value = ensureType(context, value, valueType, resultType);
+		return builder.CreateNot(value, "bnot");
+	}
+
+	if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
+		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+		llvm::Value *left = generateExpressionCode(context, args[0]);
+		llvm::Value *right = generateExpressionCode(context, args[1]);
+		DataType leftType = getEffectiveType(context, args[0]);
+		DataType rightType = getEffectiveType(context, args[1]);
+
+		left = ensureType(context, left, leftType, resultType);
+		right = ensureType(context, right, rightType, resultType);
+		return generateScalarBitwise(context, kind, left, right);
+	}
+
 	// Comparison intrinsics
 	if (isComparisonIntrinsicKind(kind)) {
 		llvm::Value *left = generateExpressionCode(context, args[0]);
@@ -559,7 +661,7 @@ llvm::Value *generateIntrinsicCode(
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
 			// Compute in float and convert back to the inferred result type.
-			int mathFloatBytes = context.options.emitSPIRV ? 4 : 8;
+			int mathFloatBytes = defaultFloatByteSize(context.options.emitSPIRV);
 			DataType computationType = mathComputationType(resultType, mathFloatBytes);
 			if (args.size() == 1) {
 				llvm::Value *val = generateExpressionCode(context, args[0]);
@@ -589,7 +691,7 @@ llvm::Value *generateIntrinsicCode(
 			DataType xType = getEffectiveType(context, args[1]);
 			DataType promoted;
 			DataType::promoteArithmetic(yType, xType, promoted);
-			promoted = mathComputationType(promoted, context.options.emitSPIRV ? 4 : 8);
+			promoted = mathComputationType(promoted, defaultFloatByteSize(context.options.emitSPIRV));
 			y = ensureType(context, y, yType, promoted);
 			x = ensureType(context, x, xType, promoted);
 			llvm::Type *floatType = promoted.toLLVM(*context.llvmContext);
@@ -1041,13 +1143,9 @@ llvm::Value *generateIntrinsicCode(
 		CompileTimeValue conditionValue =
 			evaluateCompileTimeValue(args[0], context, context.macroBindingFrames, context.currentCodegenInstantiation);
 		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-		if (!condition.has_value()) {
-			context.diagnostics.push_back(
-				Diagnostic(context, Diagnostic::Level::Error, "select condition must be compile time known", args[0]->range)
-			);
-			return nullptr;
-		}
-		return generateExpressionCode(context, args[*condition ? 1 : 2]);
+		if (condition.has_value())
+			return generateExpressionCode(context, args[*condition ? 1 : 2]);
+		return buildRuntimeSelect(context, args, resultType);
 	}
 
 	if (kind == IntrinsicKind::AddPointerDepth) {

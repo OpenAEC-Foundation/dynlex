@@ -24,6 +24,7 @@ paths:
 ## Intrinsics Reference
 - **Memory**: `@intrinsic("store", var, val)` / `@intrinsic("store at", ptr, index, val)` / `@intrinsic("load at", ptr, index)` / `@intrinsic("address of", var)` / `@intrinsic("dereference", ptr)`
 - **Arithmetic**: `@intrinsic("add", a, b)`, `"subtract"`, `"multiply"`, `"divide"`, `"modulo"` / `@intrinsic("negate", v)`
+- **Bitwise**: `@intrinsic("bitwise and", a, b)`, `"bitwise or"`, `"bitwise xor"` / `@intrinsic("bitwise not", v)` / `@intrinsic("shift left", value, amount)`, `"shift right"`
 - **Comparison**: `@intrinsic("less than", a, b)`, `"greater than"`, `"equal"`, `"not equal"`, `"less than or equal"`, `"greater than or equal"`
 - **Logical**: `@intrinsic("and", a, b)` / `@intrinsic("or", a, b)` / `@intrinsic("not", v)`
 - **Math**: `@intrinsic("sin", v)`, `"cos"`, `"sqrt"`, `"abs"`, `"floor"`, `"ceil"`, `"round"`, `"exp"`, `"log"` (unary), `"pow"`, `"min"`, `"max"`, `"atan2"` (binary)
@@ -46,6 +47,7 @@ paths:
 - Shader I/O globals created at module setup when `emitSPIRV` is set
 - Fragment: `gl_FragCoord` (input, BuiltIn FragCoord), `gl_FragColor` (output, Location 0)
 - Vertex: `in_Position` (input, Location 0), `gl_Position` (output, BuiltIn Position)
+- Default float width must come from one target-aware rule everywhere. CPU `float` defaults to `f64`; SPIR-V `float` defaults to `f32`. Do not hardcode separate `float` widths in stdlib, type inference, type aliases, or codegen-side type reconstruction.
 
 ## WebAssembly Compilation
 - `--emit-wasm` emits a WebAssembly binary artifact through LLVM's WebAssembly backend

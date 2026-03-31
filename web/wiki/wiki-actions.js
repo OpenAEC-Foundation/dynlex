@@ -14,8 +14,19 @@
     return source.replace(/\u00a0/g, " ").replace(/\s+$/g, "");
   }
 
+  function resolveIdeBase() {
+    const path = (window.location.pathname || "").replace(/\\/g, "/");
+    if (path.includes("/wiki/sections/")) {
+      return "../../ide/index.html";
+    }
+    if (path.includes("/wiki/")) {
+      return "../ide/index.html";
+    }
+    return "ide/index.html";
+  }
+
   function buildIdeUrl(code, autorun) {
-    const url = new URL("/ide/", window.location.origin);
+    const url = new URL(resolveIdeBase(), window.location.href);
     url.searchParams.set("code64", toBase64Url(code));
     if (autorun) {
       url.searchParams.set("autorun", "1");

@@ -39,9 +39,6 @@ since we are fully agnostic, we will make all left expressions subexpressions:
 
 we sort all expression arguments by their source position, since they didn't get added in order. after this, NO sorting is done.
 
-# macro expansion stage
-we expand all macro's. after this stage, no macro calls are found anymore.
-
 # validation stage
 
 # type resolution stage
@@ -53,9 +50,23 @@ ALL types of each previous line have to be deduced when right away except in rec
 
 we only go over loops once. variables modified in there are marked as non-constant.
 
+we infer top-down, left to right. so we infer the top level expression. that expression needs to know about its arguments, so we infer the arguments. if those arguments are expressions with arguments as well, no problem, since we infer recursively.
+the store intrinsic doesn't break this, since store should always be used left from where the value is used.
+
+example:
+set x to 1 and increment x
+first, we infer
+{void:expr1} and {void:expr2}. while inferring, we need expr1 and expr2.
+so we infer expr1 and expr2 after. x has a type when we get to expr2.
+
+when processing a function call, we infer that function right away so we can know return types. we do the same with macros. when a (macro) function fails on typing, we just reorder the expression that's calling it, since we're still inferring that one.
+
 (print x) as line is incorrect, since void as argument is not allowed unless explicitly specified in the pattern and print x returns void. we know this because we instantiate print x and walk over the code just like we do with the code in the main section. we store the return type so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume  functions always return the same type for the same argument types and constants.
 
 all instantiations of a function have the same operand reordering for each code line, but can use different overloads. the first valid instantiation determines reordering.
+
+we reuse the same strategy(code) for macro functions where possible, keeping it DRY.
+
 
 ## operand reordering
 

@@ -36,7 +36,7 @@ function [an|a|] bits bit integer:
 
 function [a|] float:
     replacement:
-        @intrinsic("type", "float", 64)
+        @intrinsic("type", "float")
 
 function [a|] bits bit float:
     replacement:
@@ -120,7 +120,7 @@ function:
     patterns:
         the {word:propertyname} of ownername
         ownername's {word:propertyname}
-    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ + $, $ - $, $ * $, $ / $, $ mod $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $, $ + $, $ - $, $ * $, $ / $, $ mod $
     execute:
         return @intrinsic("property", ownername, propertyname)
 
@@ -141,15 +141,65 @@ function element index of ptr:
 # --- Arithmetic (with precedence) ---
 
 # Precedence chain (lowest to highest):
-#   or < and < not < comparisons < +,- < *,/,mod < negative
+#   or < and < not < | < ^ < & < comparisons < <<,>> < +,- < *,/,mod < negative, bitwise not
+
+function left[ |]|[ |]right:
+    before: $ or $, $ and $, not $
+    execute:
+        return @intrinsic("bitwise or", left, right)
+
+function left bitwise or right:
+    before: $ or $, $ and $, not $
+    execute:
+        return @intrinsic("bitwise or", left, right)
+
+function left[ |]^[ |]right:
+    before: $ or $, $ and $, not $, $ | $
+    execute:
+        return @intrinsic("bitwise xor", left, right)
+
+function left bitwise xor right:
+    before: $ or $, $ and $, not $, $ | $
+    execute:
+        return @intrinsic("bitwise xor", left, right)
+
+function left[ |]&[ |]right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $
+    execute:
+        return @intrinsic("bitwise and", left, right)
+
+function left bitwise and right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $
+    execute:
+        return @intrinsic("bitwise and", left, right)
+
+function left[ |]<<[ |]right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    execute:
+        return @intrinsic("shift left", left, right)
+
+function left shifted left by right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    execute:
+        return @intrinsic("shift left", left, right)
+
+function left[ |]>>[ |]right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    execute:
+        return @intrinsic("shift right", left, right)
+
+function left shifted right by right:
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    execute:
+        return @intrinsic("shift right", left, right)
 
 function left[ |]+[ |]right:
-    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("add", left, right)
 
 function left[ |]-[ |]right:
-    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("subtract", left, right)
 
@@ -172,6 +222,16 @@ function [the |][negative [of ]|opposite [of ]|-]value:
     before: $ * $, $ / $, $ mod $
     execute:
         return @intrinsic("negate", value)
+
+function [the |]~value:
+    before: $ * $, $ / $, $ mod $
+    execute:
+        return @intrinsic("bitwise not", value)
+
+function [the|] bitwise not [of|] value:
+    before: $ * $, $ / $, $ mod $
+    execute:
+        return @intrinsic("bitwise not", value)
 
 function multiply value by factor:
 	replacement:
@@ -261,37 +321,37 @@ function [the|] product of left and right:
 # --- Comparison ---
 
 function left < right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than", left, right)
 
 function left > right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than", left, right)
 
 function left = right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left is right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left [!=|is not] right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("not equal", left, right)
 
 function left [is less than or equal to|<=] right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than or equal", left, right)
 
 function left [is greater than or equal to|>=] right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than or equal", left, right)
 

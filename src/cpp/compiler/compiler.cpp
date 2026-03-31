@@ -459,7 +459,7 @@ void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, 
 	collectPatternCallBindings(expr, definition, bindings);
 }
 
-static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef) {
+static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef, bool emitSPIRV) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
 		return false;
@@ -476,7 +476,7 @@ static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &
 		typeRef.numericSize = 4;
 	} else if (*kindStr == "float") {
 		typeRef.referencedKind = DataType::Kind::Float;
-		typeRef.numericSize = 8;
+		typeRef.numericSize = defaultFloatByteSize(emitSPIRV);
 	} else if (*kindStr == "bool") {
 		typeRef.referencedKind = DataType::Kind::Bool;
 	} else if (*kindStr == "void") {
@@ -739,7 +739,7 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 
 	if (expr->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-		if (tryParseIntrinsicTypeReference(expr, outTypeRef))
+		if (tryParseIntrinsicTypeReference(expr, outTypeRef, context.options.emitSPIRV))
 			return true;
 		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;

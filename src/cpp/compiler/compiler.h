@@ -9,6 +9,7 @@ struct Variable;
 struct Section;
 struct Instantiation;
 struct PatternDefinition;
+struct InferenceContext;
 
 bool compile(const std::string &path, ParseContext &context);
 bool importSourceFile(const std::string &path, ParseContext &context);
@@ -22,7 +23,7 @@ bool resolveTypeConstraintExpression(
 bool ensureSectionInstantiationInferred(
 	ParseContext &context, Section *section, PatternDefinition *definition, const std::vector<std::string> &parameterNames,
 	const BindingFrameStack &callerBindingFrameStack, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation = nullptr
+	const Instantiation *callerInstantiation = nullptr, InferenceContext *callerContext = nullptr
 );
 bool isInternalSourcePath(std::string_view path);
 void expandExpression(Expression *expr, Section *section);

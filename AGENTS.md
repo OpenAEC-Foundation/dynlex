@@ -40,14 +40,14 @@ NEVER add a workaround like:
 
 instead:
 1. identify a minimal reproducible example. minimize the amount of reproducing code. imported code is counted too. so NO 'import std.dl'!
-1. identify the root cause with whatever tools you need. stay open for any root cause. to find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
-2. identify a possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
-3. report to the user.
+2. identify the root cause with whatever tools you need. stay open for any root cause. to find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
+3. identify a possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
+4. report to the user.
 the user may discuss the bug with you.
 when the user tells you to fix it:
-4. fix the compiler bug first. verify it fixed it by building and the running repro and test script. if it didn't fix it and you don't know why, go back to 1. when you are at step 3 again, you don't have to report if it's a trivial fix following agents.md.
+5. fix the compiler bug first. verify it fixed it by building and the running repro and test script. if it didn't fix it and you don't know why, go back to 1. when you are at step 3 again, you don't have to report if it's a trivial fix following agents.md.
 if the compiler bug was found using buggy .dl code:
-5. fix the .dl bug after.
+6. fix the .dl bug after.
 
 ## Project Overview
 

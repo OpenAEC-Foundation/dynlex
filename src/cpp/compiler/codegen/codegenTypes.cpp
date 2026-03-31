@@ -388,7 +388,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 								   literalText.find('E') != std::string_view::npos;
 			if (!explicitlyFloat && std::trunc(value) == value)
 				return {DataType::Kind::Int, 4};
-			return {DataType::Kind::Float, context.options.emitSPIRV ? 4 : 8};
+			return defaultFloatType(context.options.emitSPIRV);
 		}
 		if (std::holds_alternative<std::string>(expr->literalValue)) {
 			DataType stringType{DataType::Kind::Int, 1};
@@ -441,6 +441,16 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 					DataType rightType = getEffectiveType(context, expr->arguments[2]);
 					DataType result;
 					DataType::promoteArithmetic(leftType, rightType, result);
+					return result;
+				}
+			case IntrinsicReturnKind::SameAsInts:
+				if (expr->arguments.size() == 2)
+					return getEffectiveType(context, expr->arguments[1]);
+				else {
+					DataType leftType = getEffectiveType(context, expr->arguments[1]);
+					DataType rightType = getEffectiveType(context, expr->arguments[2]);
+					DataType result;
+					DataType::promoteBitwise(leftType, rightType, result);
 					return result;
 				}
 			case IntrinsicReturnKind::Bool:
@@ -511,7 +521,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 					typeRef.numericSize = 4;
 				} else if (*kindStr == "float") {
 					typeRef.referencedKind = DataType::Kind::Float;
-					typeRef.numericSize = 8;
+					typeRef.numericSize = defaultFloatByteSize(context.options.emitSPIRV);
 				} else if (*kindStr == "bool") {
 					typeRef.referencedKind = DataType::Kind::Bool;
 				} else if (*kindStr == "void") {

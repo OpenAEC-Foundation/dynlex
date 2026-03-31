@@ -55,6 +55,12 @@ Refresh the deployable static web root (`web/`) after IDE changes:
 ./scripts/build_web_root.sh
 ```
 
+View the deployable web site (`web/`) locally and open it in your browser:
+
+```bash
+./scripts/view_web.sh
+```
+
 Web layout:
 - `src/web/ide/`: IDE source (Vite + Monaco)
 - `web/`: deployable web root (site/wiki source + built IDE assets)

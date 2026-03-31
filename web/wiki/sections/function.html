@@ -10,8 +10,9 @@
 <body>
     <nav class="nav">
         <a href="../../index.html" class="nav-btn">Home</a>
-        <a href="/ide/" class="nav-btn">IDE</a>
+        <a href="../../ide/index.html" class="nav-btn">IDE</a>
         <a href="../index.html" class="nav-btn">Wiki Home</a>
+        <a href="../core-rules.html" class="nav-btn">Core Rules</a>
         <a href="../getting-started.html" class="nav-btn">Getting Started</a>
         <a href="index.html" class="nav-btn primary">Sections</a>
         <a href="../terms.html" class="nav-btn">Terms</a>
@@ -32,6 +33,15 @@
             </p>
         </section>
 
+        <section class="glass-card tldr-card">
+            <div class="step-label">TL;DR</div>
+            <ul class="tldr-list">
+                <li>A function is a reusable named pattern.</li>
+                <li>Plain pattern words used in the body become variables.</li>
+                <li>Call the function by writing the same pattern words.</li>
+            </ul>
+        </section>
+
         <section class="doc-stack">
             <article class="glass-card doc-card">
                 <div class="step-label">Pattern</div>
@@ -46,8 +56,8 @@
                     <a class="inline-link" href="../terms.html#parameter">parameters</a>.
                 </p>
                 <p>
-                    Parameters are detected by usage for plain words. If the function body uses a plain pattern word
-                    name, DynLex treats that pattern element as a parameter.
+                    For plain words, DynLex detects parameters by usage. If the function body uses a plain pattern
+                    word, that word becomes a parameter variable.
                 </p>
             </article>
 
@@ -63,8 +73,9 @@ function square value:
 print square 5 as line</code></pre>
                 </div>
                 <p>
-                    In this example, <code>value</code> is a parameter. When you write <code>square 5</code>, the
-                    number <code>5</code> is the <a class="inline-link" href="../terms.html#argument">argument</a>.
+                    In this example, <code>value</code> is a parameter variable. When you write <code>square 5</code>,
+                    the number <code>5</code> is the <a class="inline-link" href="../terms.html#argument">argument</a>
+                    (the real value passed in).
                 </p>
                 <div class="try-card">
                     <h3>Try yourself</h3>

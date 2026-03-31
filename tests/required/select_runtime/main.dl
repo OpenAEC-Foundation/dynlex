@@ -1,0 +1,33 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function [an|a|] bits bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+function value as [a|an|] bits bit integer:
+    replacement:
+        @intrinsic("cast", value, @intrinsic("type", "int", bits))
+
+function true_value if condition, else false_value:
+    replacement:
+        @intrinsic("select", condition, true_value, false_value)
+
+function left = right:
+    replacement:
+        @intrinsic("equal", left, right)
+
+function print msg:
+    execute:
+        discard @intrinsic("call", "libc", "printf", a 32 bit integer, "%d\n", msg as a 32 bit integer)
+
+set runtime_true to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
+set runtime_false to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 2)
+
+print 10 if runtime_true, else 20
+print 10 if runtime_false, else 20

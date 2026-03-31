@@ -10,8 +10,9 @@
 <body>
     <nav class="nav">
         <a href="../index.html" class="nav-btn">Home</a>
-        <a href="/ide/" class="nav-btn">IDE</a>
+        <a href="../ide/index.html" class="nav-btn">IDE</a>
         <a href="index.html" class="nav-btn">Wiki Home</a>
+        <a href="core-rules.html" class="nav-btn">Core Rules</a>
         <a href="getting-started.html" class="nav-btn primary">Getting Started</a>
         <a href="sections/index.html" class="nav-btn">Sections</a>
         <a href="terms.html" class="nav-btn">Terms</a>
@@ -36,6 +37,16 @@
                 <a class="inline-link" href="terms.html#parameter">parameter</a>, and
                 <a class="inline-link" href="terms.html#section">section</a>.
             </p>
+        </section>
+
+        <section class="glass-card tldr-card">
+            <div class="step-label">TL;DR</div>
+            <ul class="tldr-list">
+                <li>Start every file by importing what you need, usually <code>lib/std.dl</code>.</li>
+                <li>Write code as readable patterns, then run often.</li>
+                <li>In function patterns, words used in the body become variable words.</li>
+                <li>Use <a class="inline-link" href="core-rules.html">Core Rules</a> when a behavior feels unclear.</li>
+            </ul>
         </section>
 
         <section class="doc-stack">
@@ -123,14 +134,13 @@ function square value:
 print square 5 as line</code></pre>
                 </div>
                 <p>
-                    In this example, <code>value</code> is a
-                    <a class="inline-link" href="terms.html#parameter">parameter</a>. When you write
-                    <code>square 5</code>, the number <code>5</code> is the
-                    <a class="inline-link" href="terms.html#argument">argument</a>.
+                    In this example, <code>value</code> is the variable word in the pattern. When you write
+                    <code>square 5</code>, the number <code>5</code> is the real value passed to that slot
+                    (called an <a class="inline-link" href="terms.html#argument">argument</a>).
                 </p>
                 <p>
-                    DynLex also detects plain-word parameters by usage: if a plain word from a function pattern is used
-                    in the body, that word is treated as a parameter.
+                    DynLex also detects plain-word variables by usage: if a plain word from a function pattern is used
+                    in the body, that word becomes a variable.
                 </p>
                 <p>
                     The <code>execute:</code> line opens a
@@ -147,7 +157,7 @@ print square 5 as line</code></pre>
 
             <article class="glass-card doc-card">
                 <div class="step-label">Step 5</div>
-                <h2>Use a loop</h2>
+                <h2>Use a <a class="inline-link" href="sections/loop.html">loop</a></h2>
                 <p>
                     A loop lets you repeat a block of code. The loop body is another
                     <a class="inline-link" href="terms.html#section">section</a>.

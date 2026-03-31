@@ -10,8 +10,9 @@
 <body>
     <nav class="nav">
         <a href="../index.html" class="nav-btn">Home</a>
-        <a href="/ide/" class="nav-btn">IDE</a>
+        <a href="../ide/index.html" class="nav-btn">IDE</a>
         <a href="index.html" class="nav-btn">Wiki Home</a>
+        <a href="core-rules.html" class="nav-btn">Core Rules</a>
         <a href="getting-started.html" class="nav-btn">Getting Started</a>
         <a href="sections/index.html" class="nav-btn">Sections</a>
         <a href="terms.html" class="nav-btn primary">Terms</a>
@@ -31,6 +32,16 @@
             </p>
         </header>
 
+        <section class="glass-card tldr-card">
+            <div class="step-label">TL;DR</div>
+            <ul class="tldr-list">
+                <li>A <code>pattern</code> is the sentence shape DynLex understands.</li>
+                <li>A <code>parameter</code> is a named slot in that pattern.</li>
+                <li>An <code>argument</code> is the real value you put into that slot.</li>
+                <li>A <code>section</code> is a grouped block with deeper-indented child lines.</li>
+            </ul>
+        </section>
+
         <section class="terms-grid">
             <article class="glass-card term-card" id="pattern">
                 <h2>Pattern</h2>
@@ -43,20 +54,20 @@
             <article class="glass-card term-card" id="parameter">
                 <h2>Parameter</h2>
                 <p>
-                    A parameter is a named part of a pattern. In <code>function square value:</code>, the word
-                    <code>value</code> is a parameter.
+                    A parameter is a named slot in a pattern. In <code>function square value:</code>, the word
+                    <code>value</code> is that slot.
                 </p>
                 <p>
-                    In plain-word patterns, DynLex detects parameters by usage. If your function body uses a pattern
-                    word name, that pattern element becomes a parameter.
+                    In plain-word patterns, DynLex finds these by usage. If your function body uses a pattern word,
+                    that word becomes a parameter.
                 </p>
             </article>
 
             <article class="glass-card term-card" id="argument">
                 <h2>Argument</h2>
                 <p>
-                    An argument is the real value you pass into a parameter. In <code>square 5</code>, the
-                    argument is <code>5</code>.
+                    An argument is the real value you put into a parameter slot. In <code>square 5</code>, the
+                    argument is <code>5</code> because it fills the <code>value</code> slot.
                 </p>
             </article>
 
@@ -71,8 +82,7 @@
             <article class="glass-card term-card" id="section">
                 <h2>Section</h2>
                 <p>
-                    A section is a block that starts with a line ending in <code>:</code>. The lines below it,
-                    indented one level deeper, belong to that section.
+                    A section is a grouped block. Lines that are indented one level deeper belong to that section.
                 </p>
             </article>
 

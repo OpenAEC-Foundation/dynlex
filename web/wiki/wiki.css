@@ -13,6 +13,7 @@
 .hero-card,
 .doc-card,
 .try-card,
+.tldr-card,
 .section-link-card,
 .term-card {
     padding: 1.5rem;
@@ -63,6 +64,7 @@
 .doc-card .code-block,
 .doc-card .pattern-box,
 .doc-card .related-grid,
+.hero-card + .tldr-card,
 .try-card,
 .section-link-card .pattern-box {
     margin-top: 1rem;
@@ -95,6 +97,26 @@
 
 .doc-card ul {
     padding-left: 1.25rem;
+}
+
+.tldr-card {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(88, 101, 242, 0.14), rgba(12, 206, 180, 0.1));
+}
+
+.tldr-card p {
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+.tldr-list {
+    margin: 0;
+    padding-left: 1.15rem;
+}
+
+.tldr-list li + li {
+    margin-top: 0.45rem;
 }
 
 .code-block,

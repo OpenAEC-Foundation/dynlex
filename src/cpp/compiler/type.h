@@ -112,6 +112,7 @@ struct DataType {
 	}
 
 	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int) && pointerDepth == 0; }
+	bool isInteger() const { return kind == Kind::Int && pointerDepth == 0; }
 	bool isVector() const { return kind == Kind::Vector && pointerDepth == 0; }
 	bool isMatrix() const { return kind == Kind::Matrix && pointerDepth == 0; }
 	int vectorSize() const { return arraySize; }
@@ -272,6 +273,18 @@ struct DataType {
 		return false;
 	}
 
+	// Promote for bitwise operators: integers only, using the wider integer width.
+	static bool promoteBitwise(const DataType &a, const DataType &b, DataType &result) {
+		if (a.kind == Kind::Unresolved || b.kind == Kind::Unresolved) {
+			result = {Kind::Unresolved};
+			return true;
+		}
+		if (!a.isInteger() || !b.isInteger())
+			return false;
+		result = {Kind::Int, std::max(a.numericSize, b.numericSize)};
+		return true;
+	}
+
 	// Convert a Type literal to the type it references
 	DataType toReferencedType() const {
 		assert(kind == Kind::Type && "Can only convert Type literals");
@@ -309,3 +322,7 @@ struct DataType {
 
 	std::string toString() const;
 };
+
+inline int defaultFloatByteSize(bool emitSPIRV) { return emitSPIRV ? 4 : 8; }
+
+inline DataType defaultFloatType(bool emitSPIRV) { return {DataType::Kind::Float, defaultFloatByteSize(emitSPIRV)}; }

@@ -467,8 +467,7 @@ static bool validateGroupingInTrial(
 	bool trialDeferredToReinfer =
 		trialSucceeded && trialContext.currentInstantiation && trialContext.currentInstantiation->needsReinfer;
 	if (trialSucceeded && trialContext.typesValid && requireVoidResult) {
-		Expression *lineExprForType = expr;
-		DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, trialContext, macroBindingFrameStack);
+		DataType lineType = expr ? expr->type : DataType{};
 		if (!trialDeferredToReinfer && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
@@ -921,8 +920,7 @@ static bool inferExpression(
 		if (context.typesValid)
 			snapshotExpressionVariableReferences(expr, context);
 		if (context.typesValid && requireVoidResult) {
-			Expression *lineExprForType = expr;
-			DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, context, macroBindingFrameStack);
+			DataType lineType = expr ? expr->type : DataType{};
 			if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {
 				context.fail(
 					buildFailureDetailDiagnostic(

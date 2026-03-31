@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DynLex Wiki - Core Rules</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="wiki.css">
+</head>
+<body>
+    <nav class="nav">
+        <a href="../index.html" class="nav-btn">Home</a>
+        <a href="../ide/index.html" class="nav-btn">IDE</a>
+        <a href="index.html" class="nav-btn">Wiki Home</a>
+        <a href="core-rules.html" class="nav-btn primary">Core Rules</a>
+        <a href="getting-started.html" class="nav-btn">Getting Started</a>
+        <a href="sections/index.html" class="nav-btn">Sections</a>
+        <a href="terms.html" class="nav-btn">Terms</a>
+    </nav>
+
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="wiki-shell">
+        <section class="glass-card hero-card">
+            <div class="hero-eyebrow">DynLex Wiki</div>
+            <h1>Core Rules</h1>
+            <p>
+                This page is the short version of how DynLex works. Start here when code feels confusing.
+            </p>
+        </section>
+
+        <section class="glass-card tldr-card">
+            <div class="step-label">TL;DR</div>
+            <ul class="tldr-list">
+                <li>DynLex code reads like clear sentences.</li>
+                <li>Each sentence shape is a <a class="inline-link" href="terms.html#pattern">pattern</a>.</li>
+                <li>Use <a class="inline-link" href="terms.html#import">imports</a> to bring in more patterns.</li>
+                <li>A <a class="inline-link" href="terms.html#function">function</a> gives a reusable name to a pattern.</li>
+                <li>If a plain word from a function pattern is used in that function body, that word becomes a variable.</li>
+                <li><a class="inline-link" href="terms.html#section">Sections</a> group lines. Child lines are indented deeper.</li>
+                <li>Some short sections can be written on one line.</li>
+                <li>Keep one variable as one value kind (type) during its lifetime.</li>
+                <li>Be specific with wording so your line has one clear meaning.</li>
+            </ul>
+        </section>
+
+        <section class="doc-stack">
+            <article class="glass-card doc-card">
+                <div class="step-label">Pattern Words Become Variables</div>
+                <p>
+                    In a plain-word function pattern, DynLex decides variable words by usage.
+                    If you use a pattern word inside the function body, DynLex treats that word as a variable.
+                </p>
+                <div class="code-block glass-card">
+<pre><code>function square value:
+    execute:
+        return value * value</code></pre>
+                </div>
+                <p>
+                    Here, <code>value</code> becomes a variable because it is used in the body.
+                </p>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Argument, In Simple Words</div>
+                <p>
+                    An argument is the real value you give to that variable slot when calling a function.
+                </p>
+                <div class="code-block glass-card">
+<pre><code>square 5</code></pre>
+                </div>
+                <p>
+                    In this call, <code>5</code> is the argument for <code>value</code>.
+                </p>
+            </article>
+
+            <article class="glass-card doc-card">
+                <div class="step-label">Not Core, But Useful</div>
+                <p>
+                    These are common tools you will use often:
+                    <a class="inline-link" href="sections/loop.html">loop</a>,
+                    <a class="inline-link" href="sections/if.html">if</a>,
+                    <a class="inline-link" href="sections/match.html">match</a>,
+                    and <a class="inline-link" href="terms.html#class">class</a>.
+                </p>
+                <p>
+                    Open those pages when troubleshooting specific behavior.
+                </p>
+            </article>
+        </section>
+    </main>
+    <script src="wiki-actions.js"></script>
+</body>
+</html>

@@ -107,6 +107,8 @@ dynlex options:
         incompatible operand types: "Incompatible operand types '{left_type}' and '{right_type}'"
         logical operator operands invalid: "Logical operator '{operator}' requires boolean or numeric operands, got '{left_type}' and '{right_type}'"
         logical operator operand invalid: "Logical operator '{operator}' requires a boolean or numeric operand, got '{value_type}'"
+        bitwise operator operands invalid: "Bitwise operator '{operator}' requires integer operands, got '{left_type}' and '{right_type}'"
+        bitwise operator operand invalid: "Bitwise operator '{operator}' requires an integer operand, got '{value_type}'"
         invalid cast source type: "Invalid cast source type '{source_type}'"
         unsupported cast: "Unsupported cast from '{from_type}' to '{to_type}'"
         no overload matches call:

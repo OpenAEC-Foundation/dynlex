@@ -13,7 +13,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		resolveThroughBindingsDeep(expr->arguments[1], macroBindingFrameStack, destinationBindingFrameStack);
 	BindingFrameStack valueBindingFrameStack;
 	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindingFrameStack, valueBindingFrameStack);
-	DataType valueType = ensureExpressionType(valueExpr, context, valueBindingFrameStack);
+	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 
 	if (valueType.kind == DataType::Kind::Type) {
 		context.setTypeFailure("compile time type value used at runtime");
@@ -75,7 +75,9 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	BindingFrameStack ignoredBindingFrameStack;
 	Expression *ownerExpr =
 		resolveThroughBindingsDeep(destinationExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack);
-	DataType instanceType = ownerExpr ? concretizeClassType(ownerExpr->type) : DataType{};
+	DataType instanceType =
+		ownerExpr ? concretizeClassType(ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, resolvedBindingFrameStack))
+				  : DataType{};
 	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0) {
 		setInvalidStoreDestinationFailure(destinationExpr, context);
 		return;

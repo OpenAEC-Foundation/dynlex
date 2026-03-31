@@ -1,0 +1,15 @@
+import lib/std.dl
+
+print 6 & 3 as line
+print 6 | 3 as line
+print 6 ^ 3 as line
+print ~6 as line
+print 1 << 5 as line
+print 64 >> 3 as line
+print 12 bitwise and 10 as line
+print 12 bitwise or 10 as line
+print 12 bitwise xor 10 as line
+print bitwise not 12 as line
+print 1 << 2 + 1 as line
+print 1 | 2 ^ 3 as line
+print 1 | 2 & 0 as line

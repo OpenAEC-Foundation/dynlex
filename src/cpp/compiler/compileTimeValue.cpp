@@ -8,6 +8,8 @@
 #include "pattern/pattern_tree/patternElement.h"
 #include "section.h"
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <unordered_set>
 
 bool isCompileTimeKnown(const CompileTimeValue &value) { return !std::holds_alternative<std::monostate>(value); }
@@ -90,6 +92,41 @@ static std::optional<double> parseCompileTimeNumericToken(std::string_view token
 	} catch (...) {
 		return std::nullopt;
 	}
+}
+
+static std::optional<std::int64_t> extractCompileTimeInteger(const CompileTimeValue &value) {
+	auto *number = std::get_if<double>(&value);
+	if (!number || !std::isfinite(*number))
+		return std::nullopt;
+	double truncated = std::trunc(*number);
+	if (*number != truncated)
+		return std::nullopt;
+	constexpr std::uint64_t maxExactMagnitude = std::uint64_t{1} << std::numeric_limits<double>::digits;
+	if (truncated < -static_cast<double>(maxExactMagnitude) || truncated > static_cast<double>(maxExactMagnitude))
+		return std::nullopt;
+	if (truncated < static_cast<double>(std::numeric_limits<std::int64_t>::min()) ||
+		truncated > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+		return std::nullopt;
+	}
+	return static_cast<std::int64_t>(truncated);
+}
+
+static std::int64_t compileTimeBitwiseNot(std::int64_t value) {
+	return static_cast<std::int64_t>(~static_cast<std::uint64_t>(value));
+}
+
+static std::int64_t compileTimeShiftLeft(std::int64_t value, unsigned amount) {
+	return static_cast<std::int64_t>(static_cast<std::uint64_t>(value) << amount);
+}
+
+static std::int64_t compileTimeShiftRight(std::int64_t value, unsigned amount) {
+	if (amount == 0)
+		return value;
+	std::uint64_t bits = static_cast<std::uint64_t>(value);
+	bits >>= amount;
+	if (value < 0)
+		bits |= (~std::uint64_t{0}) << (64 - amount);
+	return static_cast<std::int64_t>(bits);
 }
 
 static CompileTimeValue
@@ -176,6 +213,10 @@ static CompileTimeValue evaluateIntrinsic(
 		std::optional<bool> value = compileTimeTruthiness(lhs());
 		return value.has_value() ? CompileTimeValue(!*value) : CompileTimeValue{};
 	}
+	if (kind == IntrinsicKind::BitwiseNot) {
+		std::optional<std::int64_t> value = extractCompileTimeInteger(lhs());
+		return value.has_value() ? CompileTimeValue(static_cast<double>(compileTimeBitwiseNot(*value))) : CompileTimeValue{};
+	}
 	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		std::optional<bool> left = compileTimeTruthiness(lhs());
 		std::optional<bool> right = compileTimeTruthiness(rhs());
@@ -209,6 +250,28 @@ static CompileTimeValue evaluateIntrinsic(
 			result = *leftNumber == *rightNumber;
 		}
 		return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
+	}
+
+	if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
+		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+		std::optional<std::int64_t> leftInteger = extractCompileTimeInteger(leftValue);
+		std::optional<std::int64_t> rightInteger = extractCompileTimeInteger(rightValue);
+		if (!leftInteger.has_value() || !rightInteger.has_value())
+			return {};
+		if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+			if (*rightInteger < 0 || *rightInteger >= 64)
+				return {};
+			unsigned shiftAmount = static_cast<unsigned>(*rightInteger);
+			std::int64_t result = kind == IntrinsicKind::ShiftLeft ? compileTimeShiftLeft(*leftInteger, shiftAmount)
+																   : compileTimeShiftRight(*leftInteger, shiftAmount);
+			return static_cast<double>(result);
+		}
+		std::uint64_t leftBits = static_cast<std::uint64_t>(*leftInteger);
+		std::uint64_t rightBits = static_cast<std::uint64_t>(*rightInteger);
+		std::uint64_t result = kind == IntrinsicKind::BitwiseAnd  ? (leftBits & rightBits)
+							   : kind == IntrinsicKind::BitwiseOr ? (leftBits | rightBits)
+																  : (leftBits ^ rightBits);
+		return static_cast<double>(static_cast<std::int64_t>(result));
 	}
 
 	auto *leftNumber = std::get_if<double>(&leftValue);

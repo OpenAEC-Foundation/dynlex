@@ -46,7 +46,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		if (!boundExpr)
 			continue;
 		Expression *boundExprForType = boundExpr;
-		DataType boundType = inferExpressionTypeWithoutSideEffects(boundExprForType, context, bindingFrameStack);
+		DataType boundType = ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, bindingFrameStack);
 		if (!boundType.isDeduced())
 			continue;
 		if (context.trial && context.trialJournal)
@@ -241,8 +241,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 				context.typesValid = false;
 				return false;
 			}
-			Expression *lineExprForType = line->expression;
-			DataType lineType = inferExpressionTypeWithoutSideEffects(lineExprForType, context, bindingFrameStack);
+			DataType lineType = line->expression ? line->expression->type : DataType{};
 			if (section->type != SectionType::Replacement && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
 				context.setTypeFailure(
 					"Standalone expression '" + std::string(line->expression->range.subString) +
@@ -333,7 +332,7 @@ bool inferTypes(ParseContext &parseContext) {
 bool ensureSectionInstantiationInferred(
 	ParseContext &parseContext, Section *section, PatternDefinition *definition, const std::vector<std::string> &parameterNames,
 	const BindingFrameStack &callerBindingFrameStack, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation
+	const Instantiation *callerInstantiation, InferenceContext *callerContext
 ) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!section)
@@ -352,6 +351,11 @@ bool ensureSectionInstantiationInferred(
 	InstantiationKey instantiationKey =
 		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
 			.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+	if (callerContext && callerContext->trial) {
+		if (!callerContext->trialJournal)
+			crashCompilerBug("trial section-instantiation inference started without an active trial journal");
+		callerContext->trialJournal->recordSectionInstantiationWrite(section, instantiationKey);
+	}
 	auto instIt = section->instantiations.find(instantiationKey);
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
@@ -393,10 +397,19 @@ bool ensureSectionInstantiationInferred(
 	inst.finalGlobalConstantValues.clear();
 	inst.selectedOverloadsByCall.clear();
 	inst.ifChainSelections.clear();
-	InferenceContext context(parseContext);
+	InferenceContext context(parseContext, callerContext && callerContext->trial);
+	if (callerContext) {
+		context.currentKnownConstants = callerContext->currentKnownConstants;
+		context.trialJournal = callerContext->trialJournal;
+		context.trialInstantiationCache =
+			callerContext->trialInstantiationCache
+				? callerContext->trialInstantiationCache
+				: (callerContext->trial ? callerContext->ensureTrialInstantiationCache() : nullptr);
+		context.suppressDiagnostics = callerContext->suppressDiagnostics;
+		context.suppressReinferPassDiagnostics = callerContext->suppressReinferPassDiagnostics;
+	}
 	inst.inferring = true;
 	Instantiation *savedInst = context.currentInstantiation;
-	context.currentKnownConstants.clear();
 	for (const auto &[name, value] : inst.constantParameterValues) {
 		Variable *var = findOwnSectionVariable(section, name);
 		if (var)
@@ -423,6 +436,11 @@ bool ensureSectionInstantiationInferred(
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;
+	if (callerContext) {
+		callerContext->observedInProgressUndeducedInstantiation =
+			callerContext->observedInProgressUndeducedInstantiation || context.observedInProgressUndeducedInstantiation;
+		callerContext->inheritTypeFailureFrom(context);
+	}
 	if (!inst.valid || !context.typesValid)
 		return false;
 
@@ -434,7 +452,7 @@ bool ensureSectionInstantiationInferred(
 			if (var->type.isDeduced())
 				continue;
 			if (!context.suppressReinferPassDiagnostics) {
-				parseContext.diagnostics.push_back(Diagnostic(
+				context.addDiagnostic(Diagnostic(
 					parseContext, Diagnostic::Level::Error, "variable has no type", var->definition->range, "name", name
 				));
 			}
@@ -453,6 +471,9 @@ bool ensureSectionInstantiationInferred(
 	InstantiationKey refinedKey =
 		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 	if (refinedKey != instIt->first) {
+		retargetTrialSectionInstantiationWriteOrCrash(
+			context, section, instantiationKey, refinedKey, "trial section-instantiation inference"
+		);
 		auto node = section->instantiations.extract(instIt);
 		node.key() = refinedKey;
 		auto insertResult = section->instantiations.insert(std::move(node));

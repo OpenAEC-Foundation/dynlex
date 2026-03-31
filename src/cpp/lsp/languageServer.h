@@ -86,12 +86,12 @@ class LanguageServer {
 	// Document storage
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> documents;
 
-	  private:
+  private:
 #ifndef DYNLEX_WEB
-		int port = 0;
+	int port = 0;
 #endif
-		std::unique_ptr<Transport> transport;
-		bool running = false;
+	std::unique_ptr<Transport> transport;
+	bool running = false;
 	int nextRequestId = 1;
 	std::ostream *traceStream = nullptr;
 	std::unique_ptr<std::ofstream> traceFile;

@@ -37,7 +37,7 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 }
 } // namespace
 
-static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outType) {
+static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outType, bool emitSPIRV) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
 		return false;
@@ -51,7 +51,7 @@ static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outT
 	if (*kindStr == "int") {
 		aliasType = {DataType::Kind::Int, 4};
 	} else if (*kindStr == "float") {
-		aliasType = {DataType::Kind::Float, 8};
+		aliasType = defaultFloatType(emitSPIRV);
 	} else if (*kindStr == "bool") {
 		aliasType = {DataType::Kind::Bool};
 	} else if (*kindStr == "void") {
@@ -145,7 +145,7 @@ void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 		return;
 
 	DataType aliasType;
-	if (!tryParseIntrinsicTypeAlias(intrinsicExpr, aliasType))
+	if (!tryParseIntrinsicTypeAlias(intrinsicExpr, aliasType, options.emitSPIRV))
 		return;
 
 	if (typeAliasNames.contains(aliasType))
