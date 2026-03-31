@@ -19,24 +19,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: ./scripts/install.sh
-      - name: Configure LLVM for web build
-        run: |
-          . ./scripts/llvm_version.sh
-          LLVM_VERSION="$(dynlex_install_llvm_version)"
-          LLVM_CONFIG="llvm-config-$LLVM_VERSION"
-          if ! command -v "$LLVM_CONFIG" >/dev/null 2>&1; then
-            LLVM_CONFIG="llvm-config"
-          fi
-          LLVM_CMAKE_DIR="$($LLVM_CONFIG --cmakedir)"
-          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
-          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
-          echo "DYNLEX_LLVM_VERSION=$LLVM_VERSION" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - uses: mymindstorm/setup-emsdk@v14
         with:
           version: latest
+      - name: Configure LLVM for web build
+        run: |
+          if [ -z "${EMSDK:-}" ]; then
+            echo "EMSDK is not set after setup-emsdk."
+            exit 1
+          fi
+          LLVM_CMAKE_DIR="$EMSDK/upstream/lib/cmake/llvm"
+          LLVM_CONFIG="$EMSDK/upstream/bin/llvm-config"
+          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
+          test -x "$LLVM_CONFIG"
+          LLVM_VERSION="$("$LLVM_CONFIG" --version | cut -d. -f1)"
+          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
+          echo "DYNLEX_LLVM_VERSION=$LLVM_VERSION" >> "$GITHUB_ENV"
       - name: Build web compiler artifacts
         run: ./scripts/build_web.sh
       - name: Install IDE dependencies
