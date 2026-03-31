@@ -11,7 +11,13 @@
 
 namespace lsp {
 
-LanguageServer::LanguageServer(int port) : port(port) {}
+LanguageServer::LanguageServer(int port) {
+#ifndef DYNLEX_WEB
+	this->port = port;
+#else
+	(void)port;
+#endif
+}
 
 LanguageServer::LanguageServer(std::unique_ptr<Transport> transport) : transport(std::move(transport)) {}
 

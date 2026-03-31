@@ -17,32 +17,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: ./scripts/install.sh
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: latest
-      - name: Configure LLVM for web build
+      - name: Verify committed web compiler artifacts
         run: |
-          if [ -z "${EMSDK:-}" ]; then
-            echo "EMSDK is not set after setup-emsdk."
-            exit 1
-          fi
-          LLVM_CMAKE_DIR="$EMSDK/upstream/lib/cmake/llvm"
-          if [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
-            LLVM_CONFIG_CMAKE="$(find "$EMSDK" -type f -path "*/cmake/llvm/LLVMConfig.cmake" -print -quit)"
-            if [ -z "$LLVM_CONFIG_CMAKE" ]; then
-              echo "Could not locate LLVMConfig.cmake under EMSDK at: $EMSDK"
-              exit 1
-            fi
-            LLVM_CMAKE_DIR="$(dirname "$LLVM_CONFIG_CMAKE")"
-          fi
-          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
-      - name: Build web compiler artifacts
-        run: ./scripts/build_web.sh
+          test -f src/web/ide/public/compiler/dynlex_web.js
+          test -f src/web/ide/public/compiler/dynlex_web.wasm
       - name: Install IDE dependencies
         run: cd src/web/ide && npm ci
       - name: Build IDE and refresh web root

@@ -32,6 +32,9 @@ export LLVM_DIR="$HOME/toolchains/llvm-wasm-20/install/lib/cmake/llvm"
 ./scripts/build_web.sh
 ```
 
+`./scripts/build_web.sh` refreshes `src/web/ide/public/compiler/dynlex_web.js` and
+`src/web/ide/public/compiler/dynlex_web.wasm`; commit those files when updating the deployed web compiler.
+
 Run the compiler WASM smoke test:
 
 ```bash

@@ -25,6 +25,8 @@ src/web/ide/dist/
 src/web/ide/.vite/
 src/web/ide/public/compiler/*
 !src/web/ide/public/compiler/.gitkeep
+!src/web/ide/public/compiler/dynlex_web.js
+!src/web/ide/public/compiler/dynlex_web.wasm
 web/assets/
 web/compiler/
 web/ide/
