@@ -11,15 +11,26 @@ permissions:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    env:
-      LLVM_DIR: ${{ vars.DYNLEX_WEB_LLVM_DIR }}
-      DYNLEX_LLVM_VERSION: ${{ vars.DYNLEX_WEB_LLVM_VERSION }}
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: ./scripts/install.sh
+      - name: Configure LLVM for web build
+        run: |
+          . ./scripts/llvm_version.sh
+          LLVM_VERSION="$(dynlex_install_llvm_version)"
+          LLVM_CONFIG="llvm-config-$LLVM_VERSION"
+          if ! command -v "$LLVM_CONFIG" >/dev/null 2>&1; then
+            LLVM_CONFIG="llvm-config"
+          fi
+          LLVM_CMAKE_DIR="$($LLVM_CONFIG --cmakedir)"
+          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
+          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
+          echo "DYNLEX_LLVM_VERSION=$LLVM_VERSION" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
