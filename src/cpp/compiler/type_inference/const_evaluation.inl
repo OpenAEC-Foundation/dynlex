@@ -11,7 +11,6 @@
 #include "type.h"
 #include "variable.h"
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <optional>
 #include <unordered_set>
@@ -247,9 +246,12 @@ static Expression *resolveThroughBindingsDeep(
 }
 
 static bool evaluateCompileTimeInteger(
-	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue
+	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue,
+	const Instantiation *instantiation = nullptr
 ) {
-	CompileTimeValue value = evaluateCompileTimeValue(expr, parseContext, bindingFrameStack);
+	if (!expr)
+		crashCompilerBug("compile-time integer evaluation received null expression");
+	CompileTimeValue value = evaluateCompileTimeValue(expr, parseContext, bindingFrameStack, instantiation);
 	auto *number = std::get_if<double>(&value);
 	if (!number)
 		return false;
@@ -321,94 +323,52 @@ struct ActiveTypeResolutionParseContextGuard {
 	~ActiveTypeResolutionParseContextGuard() { activeTypeResolutionParseContext = previous; }
 };
 
-static void markCompileTimeParameterRequirements(
+static bool markCompileTimeParameterRequirements(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, Instantiation *instantiation
 ) {
 	if (!expr || !instantiation)
-		return;
+		return false;
 
+	bool changed = false;
 	std::unordered_set<Expression *> visited;
 	std::function<void(Expression *)> visit = [&](Expression *current) {
 		if (!current || visited.contains(current))
 			return;
 		visited.insert(current);
 		if (current->kind == Expression::Kind::Variable && current->variable) {
-			if (bindingFrameStack.lookup(current->variable->name))
-				instantiation->requiredCompileTimeParameters.insert(current->variable->name);
+			if (bindingFrameStack.lookup(current->variable->name)) {
+				auto [it, inserted] = instantiation->requiredCompileTimeParameters.insert(current->variable->name);
+				(void)it;
+				if (inserted)
+					changed = true;
+			}
 			return;
 		}
 		for (Expression *arg : current->arguments)
 			visit(arg);
 	};
 	visit(expr);
+	return changed;
 }
 
+template <typename EvaluateCompileTimeValueFn>
 static void seedInstantiationCompileTimeParameters(
-	ParseContext &parseContext, Instantiation &instantiation,
-	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
-	const BindingFrameStack &callerBindingFrameStack, const Instantiation *callerInstantiation
+	Instantiation &instantiation, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	const std::vector<DataType> &argTypes, EvaluateCompileTimeValueFn &&evaluateCompileTimeValue
 ) {
 	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
 	for (size_t i = 0; i < bindingCount; i++) {
 		const auto &[name, argExpr] = paramBindings[i];
+		if (!argExpr)
+			crashCompilerBug("missing instantiation parameter expression while seeding compile-time values");
 		if (argTypes[i].kind == DataType::Kind::Type) {
 			instantiation.constantParameterValues[name] = argTypes[i];
 			continue;
 		}
-		CompileTimeValue value = evaluateCompileTimeValue(argExpr, parseContext, callerBindingFrameStack, callerInstantiation);
+		CompileTimeValue value = evaluateCompileTimeValue(argExpr);
 		if (isCompileTimeKnown(value))
 			instantiation.constantParameterValues[name] = value;
 		else
 			instantiation.constantParameterValues.erase(name);
 	}
-}
-
-static std::unordered_set<size_t> compileTimeOnlyArgumentIndices(Expression *expr, const BindingFrameStack &bindingFrameStack) {
-	std::unordered_set<size_t> indices;
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
-		return indices;
-
-	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	if (defs.empty())
-		return indices;
-	std::vector<DataType> argTypesForOverload;
-	for (Expression *arg : expr->arguments)
-		argTypesForOverload.push_back(resolveKnownExpressionType(arg, bindingFrameStack));
-	PatternDefinition *def = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload);
-	if (!def) {
-		if (defs.size() == 1)
-			def = defs.front();
-		else
-			return indices;
-	}
-
-	if (!def->section || !def->section->isMacro)
-		return indices;
-	Expression *bodyExpr = nullptr;
-	for (Section *child : def->section->children) {
-		for (CodeLine *line : child->codeLines) {
-			if (line->expression)
-				bodyExpr = line->expression;
-		}
-	}
-	if (!bodyExpr || bodyExpr->kind != Expression::Kind::IntrinsicCall)
-		return indices;
-
-	std::unordered_map<std::string, size_t> paramIndices;
-	std::vector<std::pair<std::string, Expression *>> orderedBindings;
-	collectPatternCallBindingPairs(expr, def, orderedBindings);
-	for (size_t argumentIndex = 0; argumentIndex < orderedBindings.size(); argumentIndex++)
-		paramIndices[orderedBindings[argumentIndex].first] = argumentIndex;
-
-	for (size_t i = 1; i < bodyExpr->arguments.size(); i++) {
-		if (!intrinsicArgumentIsCompileTimeOnly(bodyExpr->intrinsicName, static_cast<int>(i)))
-			continue;
-		Expression *arg = bodyExpr->arguments[i];
-		if (arg && arg->kind == Expression::Kind::Variable && arg->variable) {
-			auto it = paramIndices.find(arg->variable->name);
-			if (it != paramIndices.end())
-				indices.insert(it->second);
-		}
-	}
-	return indices;
 }

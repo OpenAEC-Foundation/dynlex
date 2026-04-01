@@ -34,6 +34,25 @@ function the length of {cstring:str}:
             set ch to character len of str
         return len
 
+function {cstring:left} = {cstring:right}:
+    execute:
+        if @intrinsic("equal", left, right):
+            return true
+        if @intrinsic("equal", left, 0 as a pointer to byte):
+            return false
+        if @intrinsic("equal", right, 0 as a pointer to byte):
+            return false
+        set index to 0
+        loop while index >= 0:
+            set left_character to character index of left
+            set right_character to character index of right
+            if @intrinsic("not equal", left_character, right_character):
+                return false
+            if @intrinsic("equal", left_character, 0 as a byte):
+                return true
+            set index to index + 1
+        return false
+
 # --- Conversions to string ---
 
 function a new string buffer with length len:

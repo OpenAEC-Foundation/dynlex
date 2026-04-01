@@ -73,6 +73,7 @@ struct Instantiation {
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_map<Expression *, CompileTimeValue> constantValuesByExpression;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;

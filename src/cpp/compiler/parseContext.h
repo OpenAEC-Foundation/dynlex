@@ -178,6 +178,8 @@ struct ParseContext {
 	std::vector<Expression *> ownedCodegenLiteralRoots;
 	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	// Compile-time constants captured per expression for non-instantiated flows (e.g. main section).
+	std::unordered_map<Expression *, CompileTimeValue> constantValuesByExpression;
 	std::unordered_map<CodeLine *, Instantiation::IfChainSelection> inferredIfChainSelections;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)

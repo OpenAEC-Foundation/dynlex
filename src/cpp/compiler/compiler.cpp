@@ -2,6 +2,7 @@
 #include "IndentData.h"
 #include "classSection.h"
 #include "compileTimeValue.h"
+#include "compilerUtils.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
@@ -447,7 +448,10 @@ static DataType concretizeClassType(DataType type) {
 }
 
 static bool evaluateCompileTimeInteger(ParseContext &context, Expression *expr, const BindingMap &bindings, int &outValue) {
-	CompileTimeValue value = evaluateCompileTimeValue(expr, context, makeBindingFrameStack(bindings));
+	(void)bindings;
+	if (!expr)
+		crashCompilerBug("compile-time integer evaluation received null expression");
+	CompileTimeValue value = getExpressionCompileTimeValue(context, expr);
 	auto *number = std::get_if<double>(&value);
 	if (!number)
 		return false;

@@ -45,21 +45,28 @@ static Expression *prepareCompileTimeTypeReferenceExpression(
 	return resolved;
 }
 
+static const Instantiation *inferenceContextInstantiation(const InferenceContext *inferenceContext);
+static CompileTimeValue
+lookupCompileTimeExpressionValue(ParseContext &parseContext, Expression *expression, InferenceContext *inferenceContext);
+
 static Expression *resolveCompileTimeSelectBranch(
 	Expression *selectExpr, ParseContext &parseContext, const BindingFrameStack &bindingFrameStack,
 	InferenceContext *inferenceContext = nullptr
 ) {
+	(void)parseContext;
 	Expression *conditionExpr = selectExpr->arguments[1];
 	if (inferenceContext) {
 		Expression *activeConditionExpr = conditionExpr;
-		if (!inferExpressionWithCurrentGrouping(activeConditionExpr, *inferenceContext, bindingFrameStack))
+		if (!inferExpression(activeConditionExpr, *inferenceContext, false, bindingFrameStack, false))
 			return nullptr;
 		selectExpr->arguments[1] = activeConditionExpr;
 		conditionExpr = activeConditionExpr;
 	}
-	CompileTimeValue conditionValue = evaluateCompileTimeValue(conditionExpr, parseContext, bindingFrameStack);
-	std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-	if (!condition.has_value())
+	if (!conditionExpr)
+		crashCompilerBug("compile-time select branch resolution encountered null condition expression");
+	CompileTimeValue conditionValue = lookupCompileTimeExpressionValue(parseContext, conditionExpr, inferenceContext);
+	auto *condition = std::get_if<bool>(&conditionValue);
+	if (!condition)
 		return nullptr;
 	return selectExpr->arguments[*condition ? 2 : 3];
 }
@@ -237,15 +244,14 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
-					if ((leftType.kind == DataType::Kind::Bool || leftType.isNumeric()) &&
-						(rightType.kind == DataType::Kind::Bool || rightType.isNumeric())) {
+					if (leftType.kind == DataType::Kind::Bool && rightType.kind == DataType::Kind::Bool) {
 						return {DataType::Kind::Bool};
 					}
 					return {};
 				}
 				if (kind == IntrinsicKind::Not) {
 					DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-					if (valueType.kind == DataType::Kind::Bool || valueType.isNumeric())
+					if (valueType.kind == DataType::Kind::Bool)
 						return {DataType::Kind::Bool};
 					return {};
 				}
@@ -260,6 +266,13 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				}
 				return {};
 			case IntrinsicReturnKind::Void:
+				if (kind == IntrinsicKind::If || kind == IntrinsicKind::ElseIf || kind == IntrinsicKind::LoopWhile) {
+					if (resolved->arguments.size() <= 1)
+						return {};
+					DataType conditionType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					if (conditionType.kind != DataType::Kind::Bool)
+						return {};
+				}
 				return {DataType::Kind::Void};
 			case IntrinsicReturnKind::Float:
 				return {DataType::Kind::Float, 4};
@@ -586,6 +599,14 @@ static bool resolveCompileTimeTypeReference(
 	};
 	if (!expr)
 		return false;
+	const Instantiation *activeInstantiation = inferenceContextInstantiation(inferenceContext);
+	CompileTimeValue directValue = lookupCompileTimeExpressionValue(parseContext, expr, inferenceContext);
+	if (auto *compileTimeTypeRef = std::get_if<DataType>(&directValue)) {
+		if (isConcreteTypeReferenceValue(*compileTimeTypeRef)) {
+			outTypeRef = *compileTimeTypeRef;
+			return true;
+		}
+	}
 	if (isConcreteTypeReferenceValue(expr->type)) {
 		outTypeRef = expr->type;
 		return true;
@@ -594,6 +615,13 @@ static bool resolveCompileTimeTypeReference(
 	Expression *resolved = prepareCompileTimeTypeReferenceExpression(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return false;
+	CompileTimeValue resolvedValue = lookupCompileTimeExpressionValue(parseContext, resolved, inferenceContext);
+	if (auto *compileTimeTypeRef = std::get_if<DataType>(&resolvedValue)) {
+		if (isConcreteTypeReferenceValue(*compileTimeTypeRef)) {
+			outTypeRef = *compileTimeTypeRef;
+			return true;
+		}
+	}
 	if (isConcreteTypeReferenceValue(resolved->type)) {
 		outTypeRef = resolved->type;
 		return true;
@@ -633,7 +661,9 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::Array) {
 			int arraySize = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, arraySize))
+			if (!evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arraySize, activeInstantiation
+				))
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Array;
@@ -656,7 +686,9 @@ static bool resolveCompileTimeTypeReference(
 					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
 				) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindingFrameStack, factor) &&
+				evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[2], effectiveBindingFrameStack, factor, activeInstantiation
+				) &&
 				factor >= 0) {
 				arrayTypeRef.arraySize *= factor;
 				outTypeRef = arrayTypeRef;
@@ -666,7 +698,9 @@ static bool resolveCompileTimeTypeReference(
 					parseContext, resolved->arguments[2], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
 				) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, factor) &&
+				evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, factor, activeInstantiation
+				) &&
 				factor >= 0) {
 				arrayTypeRef.arraySize *= factor;
 				outTypeRef = arrayTypeRef;
@@ -675,7 +709,9 @@ static bool resolveCompileTimeTypeReference(
 		}
 		if (kind == IntrinsicKind::Vector) {
 			int vectorSize = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, vectorSize) ||
+			if (!evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, vectorSize, activeInstantiation
+				) ||
 				vectorSize < 1)
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
@@ -696,8 +732,12 @@ static bool resolveCompileTimeTypeReference(
 		if (kind == IntrinsicKind::Matrix) {
 			int rows = 0;
 			int columns = 0;
-			if (!evaluateCompileTimeInteger(parseContext, resolved->arguments[1], effectiveBindingFrameStack, rows) ||
-				!evaluateCompileTimeInteger(parseContext, resolved->arguments[2], effectiveBindingFrameStack, columns) ||
+			if (!evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, rows, activeInstantiation
+				) ||
+				!evaluateCompileTimeInteger(
+					parseContext, resolved->arguments[2], effectiveBindingFrameStack, columns, activeInstantiation
+				) ||
 				rows < 1 || columns < 1)
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
@@ -749,26 +789,6 @@ static bool resolveCompileTimeTypeReference(
 
 		BindingMap callBindings;
 		appendPatternCallBindings(resolved, def, callBindings);
-		std::unordered_set<std::string> fallbackParameterNames;
-		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
-			[&](const std::vector<DefinitionPatternElement> &elements) {
-			for (const auto &element : elements) {
-				if (element.type == PatternElement::Type::Choice) {
-					for (const auto &alternative : element.alternatives)
-						collectFallbackParameterNames(alternative);
-					continue;
-				}
-				if (element.type == PatternElement::Type::Variable)
-					fallbackParameterNames.insert(element.text);
-			}
-		};
-		collectFallbackParameterNames(def->patternElements);
-		for (const std::string &parameterName : fallbackParameterNames) {
-			if (callBindings.contains(parameterName))
-				continue;
-			if (Expression *fallbackBinding = effectiveBindingFrameStack.lookup(parameterName))
-				callBindings[parameterName] = fallbackBinding;
-		}
 		for (auto &[name, boundExpr] : callBindings) {
 			Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
 			if (resolvedExpr)
@@ -805,9 +825,10 @@ static bool resolveCompileTimeTypeReference(
 				return false;
 
 			auto evaluateParameterValue = [&](Expression *argumentExpression) {
-				return argumentExpression
-						   ? evaluateCompileTimeValue(argumentExpression, parseContext, callBindingFrameStack, nullptr)
-						   : CompileTimeValue{};
+				(void)callBindingFrameStack;
+				if (!argumentExpression)
+					crashCompilerBug("missing non-macro argument while resolving compile-time type reference");
+				return lookupCompileTimeExpressionValue(parseContext, argumentExpression, inferenceContext);
 			};
 			auto instKey = findMatchingInstantiationKey(def->section, orderedBindings, argTypes, evaluateParameterValue);
 			auto instIt = instKey ? def->section->instantiations.find(*instKey) : def->section->instantiations.end();
@@ -957,7 +978,7 @@ static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std:
 	return {};
 }
 
-static bool isLogicalOperandType(const DataType &type) { return type.kind == DataType::Kind::Bool || type.isNumeric(); }
+static bool isLogicalOperandType(const DataType &type) { return type.kind == DataType::Kind::Bool; }
 
 static bool isBitwiseOperandType(const DataType &type) { return type.isInteger(); }
 
@@ -1307,6 +1328,8 @@ struct InferenceContext {
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 	std::vector<Expression *> expressionStack;
+	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
@@ -1407,6 +1430,35 @@ struct InferenceContext {
 		return reference->definition ? reference->definition : reference;
 	}
 
+	CompileTimeValue lookupExpressionValue(Expression *expression) const {
+		if (!expression)
+			return {};
+		if (trial) {
+			auto trialIt = trialExpressionValues.find(expression);
+			if (trialIt != trialExpressionValues.end())
+				return trialIt->second;
+			if (inheritedTrialExpressionValues) {
+				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
+				if (inheritedIt != inheritedTrialExpressionValues->end())
+					return inheritedIt->second;
+			}
+		}
+		return getExpressionCompileTimeValue(parseContext, expression, currentInstantiation);
+	}
+
+	void setExpressionValue(Expression *expression, const CompileTimeValue &value) {
+		if (!expression)
+			return;
+		if (trial) {
+			if (isCompileTimeKnown(value))
+				trialExpressionValues[expression] = value;
+			else
+				trialExpressionValues.erase(expression);
+			return;
+		}
+		setExpressionCompileTimeValue(parseContext, expression, value, currentInstantiation);
+	}
+
 	CompileTimeValue lookupKnownConstant(VariableReference *reference) const {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
@@ -1468,6 +1520,17 @@ struct InferenceContext {
 		loopMutationStack.back().insert(normalized);
 	}
 };
+
+static const Instantiation *inferenceContextInstantiation(const InferenceContext *inferenceContext) {
+	return inferenceContext ? inferenceContext->currentInstantiation : nullptr;
+}
+
+static CompileTimeValue
+lookupCompileTimeExpressionValue(ParseContext &parseContext, Expression *expression, InferenceContext *inferenceContext) {
+	if (inferenceContext)
+		return inferenceContext->lookupExpressionValue(expression);
+	return getExpressionCompileTimeValue(parseContext, expression, nullptr);
+}
 
 struct ScopedDiagnosticSuppression {
 	InferenceContext &context;

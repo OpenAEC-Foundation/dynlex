@@ -37,6 +37,8 @@ since we are fully agnostic, we will make all left expressions subexpressions:
 (print x) as line.
 ((x + x) + x) + x.
 
+intrinsic arguments are ALWAYS stored as [name, arg1, arg2] etc. so the left operand of + in the 'add' intrinsic is [1] and the right operand is [2].
+
 we sort all expression arguments by their source position, since they didn't get added in order. after this, NO sorting is done.
 
 # validation stage
@@ -50,14 +52,28 @@ ALL types of each previous line have to be deduced when right away except in rec
 
 we only go over loops once. variables modified in there are marked as non-constant.
 
-we infer top-down, left to right. so we infer the top level expression. that expression needs to know about its arguments, so we infer the arguments. if those arguments are expressions with arguments as well, no problem, since we infer recursively.
+we infer top-down, left to right. so we infer the top level expression. before inferring it, we infer the arguments. if those arguments are expressions with arguments as well, no problem, since we infer recursively.
 the store intrinsic doesn't break this, since store should always be used left from where the value is used.
+
 
 example:
 set x to 1 and increment x
-first, we infer
-{void:expr1} and {void:expr2}. while inferring, we need expr1 and expr2.
+we infer
+{void:expr1} and {void:expr2}. we infer the arguments first.
 so we infer expr1 and expr2 after. x has a type when we get to expr2.
+we infer x. if x is compile time known, we set its value to that value. if it's unset, we keep it unset but don't emit an error yet. the intrinsic checking will do that.
+we infer 1. we set the compile time value to the value of the literal.
+now we infer the set to macro.
+we infer the store intrinsic. we resolve var and val.
+we set the value of var to 1.
+we set the result of this store intrinsic to void.
+we infer increment.
+we infer the second x, which reads 1 from the variable.
+we resolve val.
+etc. etc.
+
+so we build up compile time values hierarchically. from the bottom of the tree to the top (a natural result of top-down but inferring the arguments first).
+when we encounter a value which can't be known compile time, values that build on it can also not be known compile time. from those we only track the types, not the values.
 
 when processing a function call, we infer that function right away so we can know return types. we do the same with macros. when a (macro) function fails on typing, we just reorder the expression that's calling it, since we're still inferring that one.
 
@@ -138,3 +154,7 @@ the maximum of 5 and 3 + 4. did the user mean '(the maximum of 5 and 3) + 4' or 
 # code generation stage
 
 we already know which patterns call which instantiations, the type of every variable etc. but now, we branch off into compilation target: browser, machine code, spirv etc.
+
+# lsp interaction.
+
+when hovering over an expression, the already evaluated compile time value and type are shown.

@@ -246,17 +246,6 @@ static bool expressionHasGroupingShape(Expression *expression) {
 	return !expression->groupingArgumentIndices.empty();
 }
 
-static bool isSectionPatternCall(Expression *expression) {
-	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
-		!expression->patternMatch->matchedEndNode)
-		return false;
-	for (PatternDefinition *definition : expression->patternMatch->matchedEndNode->matchingDefinitions) {
-		if (definition && definition->section && definition->section->type == SectionType::Section)
-			return true;
-	}
-	return false;
-}
-
 static size_t groupingArgumentCount(Expression *expression) {
 	if (!expression)
 		return 0;
@@ -329,24 +318,6 @@ static bool snapshotsHaveSameLocalOrdering(
 
 static bool snapshotsHaveSameLocalOrdering(const GroupingSnapshot &left, const GroupingSnapshot &right) {
 	return snapshotsHaveSameLocalOrdering(left, right, left.root, right.root, true, true, false);
-}
-
-static void collectSelectedGroupingRoots(
-	Expression *expr, std::unordered_set<Expression *> &roots, std::unordered_set<Expression *> &visited
-) {
-	if (!expr || !visited.insert(expr).second)
-		return;
-	if (expressionHasGroupingShape(expr))
-		roots.insert(expr);
-	for (Expression *arg : expr->arguments)
-		collectSelectedGroupingRoots(arg, roots, visited);
-}
-
-static std::unordered_set<Expression *> collectSelectedGroupingRoots(Expression *expr) {
-	std::unordered_set<Expression *> roots;
-	std::unordered_set<Expression *> visited;
-	collectSelectedGroupingRoots(expr, roots, visited);
-	return roots;
 }
 
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {
@@ -453,10 +424,14 @@ static bool validateGroupingInTrial(
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.currentKnownConstants = context.currentKnownConstants;
+	trialContext.inheritedTrialExpressionValues =
+		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
 	trialContext.trialJournal = &journal;
 	trialContext.trialInstantiationCache =
 		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
-	trialContext.detectGroupingAmbiguity = context.detectGroupingAmbiguity;
+	// Trial validation only needs to answer "is this grouping valid?".
+	// Ambiguity scanning belongs to the outer committed inference pass.
+	trialContext.detectGroupingAmbiguity = false;
 	std::vector<InferenceContext::OperandGroupingWarning> trialGroupingWarnings;
 	trialContext.pendingOperandGroupingWarnings = &trialGroupingWarnings;
 	std::unordered_set<Expression *> trialFixedGroupingRoots = fixedGroupingRoots;
@@ -464,11 +439,9 @@ static bool validateGroupingInTrial(
 	trialContext.resolvedGroupingRoots = &trialFixedGroupingRoots;
 	inferOrderedExpression(expr, trialContext, macroBindingFrameStack, true);
 	bool trialSucceeded = trialContext.typesValid;
-	bool trialDeferredToReinfer =
-		trialSucceeded && trialContext.currentInstantiation && trialContext.currentInstantiation->needsReinfer;
 	if (trialSucceeded && trialContext.typesValid && requireVoidResult) {
 		DataType lineType = expr ? expr->type : DataType{};
-		if (!trialDeferredToReinfer && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
+		if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
@@ -579,9 +552,10 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 			GroupingEnumerationProgress childProgress =
 				enumeratePrioritizedChoices(current, true, true, false, true, continuation);
 			GroupingEnumerationProgress propagatedChildProgress = childProgress;
-			// Keep iterating enclosed opaque choices before bubbling a stop
-			// from outer continuations. This preserves enclosed-first ordering.
-			if (propagatedChildProgress == GroupingEnumerationProgress::Stop)
+			// During ambiguity scans we keep iterating enclosed opaque choices
+			// before bubbling a stop from outer continuations. For first-valid
+			// selection passes we must honor Stop immediately.
+			if (propagatedChildProgress == GroupingEnumerationProgress::Stop && context.detectGroupingAmbiguity)
 				propagatedChildProgress = GroupingEnumerationProgress::EmittedContinue;
 			for (Expression *root : insertedRoots)
 				fixedGroupingRoots.erase(root);
@@ -668,12 +642,6 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 			return;
 		}
 
-		if (isSectionPatternCall(expression)) {
-			operatorCount++;
-			flatNodes.push_back(expression);
-			return;
-		}
-
 		if (isOpaqueGroupingNode(expression, isOnBoundary, isRoot, false)) {
 			opaqueNodes.insert(expression);
 			flatNodes.push_back(expression);
@@ -701,9 +669,6 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 	};
 
 	collectFlatNodes(expr, true, true);
-	if (operatorCount <= 1) {
-		return emitCandidate(expr);
-	}
 	if (operatorCount > 8) {
 		if (!context.hasTypeFailureDiagnostic)
 			context.fail(
@@ -977,7 +942,6 @@ static bool inferExpression(
 		if (foundAcceptedGrouping) {
 			applyGroupingSnapshot(selectedGrouping);
 			expr = selectedGrouping.root;
-			selectedFixedGroupingRoots = collectSelectedGroupingRoots(expr);
 			recomputeRanges(expr);
 			resetExpressionTypes(expr);
 			if (!tryInfer(false)) {
@@ -1042,7 +1006,6 @@ static bool inferExpression(
 	if (foundValidGrouping) {
 		applyGroupingSnapshot(selectedGrouping);
 		expr = selectedGrouping.root;
-		selectedFixedGroupingRoots = collectSelectedGroupingRoots(expr);
 		recomputeRanges(expr);
 		resetExpressionTypes(expr);
 		if (!tryInfer(false)) {

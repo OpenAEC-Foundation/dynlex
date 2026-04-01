@@ -1100,6 +1100,79 @@ static Json makeVariableHoverContents(const std::string &typeText, const std::op
 	return Json{{"kind", "markdown"}, {"value", markdown.str()}};
 }
 
+static Section *findNearestInstantiatedSectionForHover(Section *section) {
+	if (!section)
+		return nullptr;
+	for (Section *current = section; current; current = current->parent) {
+		if (!current->instantiations.empty())
+			return current;
+	}
+	return section;
+}
+
+static const Instantiation *findSelectedInstantiationForSection(
+	Section *ownerSection, const std::string &selectionKey,
+	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
+) {
+	if (!ownerSection || ownerSection->instantiations.empty())
+		return nullptr;
+	auto findBySignature = [&](const std::string &signature) -> const Instantiation * {
+		if (signature.empty())
+			return nullptr;
+		for (const auto &[instantiationKey, instantiation] : ownerSection->instantiations) {
+			if (makeInstantiationSignature(instantiationKey) == signature)
+				return &instantiation;
+		}
+		return nullptr;
+	};
+	auto selectFromSelectionKey = [&](const std::string &key) -> const Instantiation * {
+		if (key.empty())
+			return nullptr;
+		auto it = selectedInstantiationBySelectionKey.find(key);
+		if (it == selectedInstantiationBySelectionKey.end())
+			return nullptr;
+		return findBySignature(it->second);
+	};
+	if (const Instantiation *selected = selectFromSelectionKey(selectionKey))
+		return selected;
+	for (PatternDefinition *definition : ownerSection->patternDefinitions) {
+		if (!definition)
+			continue;
+		if (const Instantiation *selected = selectFromSelectionKey(makeSelectionKey(definition->range)))
+			return selected;
+	}
+	for (const auto &[_, refs] : ownerSection->variableReferences) {
+		for (VariableReference *reference : refs) {
+			if (!reference)
+				continue;
+			if (const Instantiation *selected = selectFromSelectionKey(makeSelectionKey(reference->range)))
+				return selected;
+		}
+	}
+	return &ownerSection->instantiations.begin()->second;
+}
+
+static std::optional<CompileTimeValue> lookupExpressionHoverValue(
+	ParseContext &parseContext, Expression *expr, Section *ownerSection, const std::string &selectionKey,
+	const std::unordered_map<std::string, std::string> &selectedInstantiationBySelectionKey
+) {
+	if (!expr)
+		return std::nullopt;
+	Section *instantiatedOwnerSection = findNearestInstantiatedSectionForHover(ownerSection);
+	const Instantiation *selectedInstantiation =
+		findSelectedInstantiationForSection(instantiatedOwnerSection, selectionKey, selectedInstantiationBySelectionKey);
+	if (selectedInstantiation) {
+		auto valueIt = selectedInstantiation->constantValuesByExpression.find(expr);
+		if (valueIt != selectedInstantiation->constantValuesByExpression.end() && isCompileTimeKnown(valueIt->second))
+			return valueIt->second;
+		return std::nullopt;
+	}
+	CompileTimeValue storedValue = getExpressionCompileTimeValue(parseContext, expr, nullptr);
+	if (isCompileTimeKnown(storedValue))
+		return storedValue;
+	return std::nullopt;
+}
+
 static std::optional<CompileTimeValue> lookupConstantValueInInstantiation(
 	Section *ownerSection, const Instantiation &instantiation, VariableReference *referenceAtHover,
 	VariableReference *variableDefinition, const std::string &variableName
@@ -1391,6 +1464,22 @@ std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &par
 		VariableReference *referenceAtHover = resolved->referenceAtCursor;
 		VariableReference *variableDefinition = resolved->definitionAtCursor;
 		std::string variableName = resolved->variableName;
+		if (expr && expr->kind != Expression::Kind::Variable) {
+			Section *expressionOwnerSection = resolved->codeLine ? resolved->codeLine->section : nullptr;
+			if (!expressionOwnerSection && expr->range.line)
+				expressionOwnerSection = expr->range.line->section;
+			std::string selectionKey = makeSelectionKey(expr->range);
+			std::optional<CompileTimeValue> expressionValue = lookupExpressionHoverValue(
+				*context, expr, expressionOwnerSection, selectionKey, selectedInstantiationBySelectionKey
+			);
+			bool hasKnownExpressionValue = expressionValue.has_value() && isCompileTimeKnown(*expressionValue);
+			if (hasKnownExpressionValue) {
+				Hover hover;
+				hover.contents = makeVariableHoverContents(typeToUserPatternName(*context, expr->type), expressionValue);
+				hover.range = convertRange(expr->range);
+				return hover;
+			}
+		}
 		if (!referenceAtHover || !variableDefinition) {
 			if (matchedPattern) {
 				Hover hover;

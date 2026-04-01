@@ -4,6 +4,10 @@
 #include "const_evaluation.inl"
 static bool
 inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
+static bool inferExpression(
+	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack,
+	bool requireVoidResult
+);
 #include "type_resolution.inl"
 #include <bit>
 #include <cstdlib>
@@ -19,6 +23,7 @@ struct InstantiationProgressSnapshot {
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
+	std::unordered_map<Expression *, CompileTimeValue> constantValuesByExpression;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
@@ -33,6 +38,7 @@ static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instant
 		instantiation.argumentTypes,
 		instantiation.constantParameterValues,
 		instantiation.constantValuesByReference,
+		instantiation.constantValuesByExpression,
 		instantiation.writtenGlobalReferences,
 		instantiation.finalGlobalConstantValues,
 		instantiation.selectedOverloadsByCall,
@@ -99,46 +105,13 @@ static bool runInstantiationReinferenceLoop(
 	}
 }
 
-static Expression *
-literalExpressionFromCompileTimeValue(const CompileTimeValue &value, std::vector<Expression *> &ownedLiterals) {
-	Expression *literal = new Expression();
-	if (const auto *number = std::get_if<double>(&value)) {
-		literal->kind = Expression::Kind::Literal;
-		literal->literalValue = *number;
-	} else if (const auto *text = std::get_if<std::string>(&value)) {
-		literal->kind = Expression::Kind::Literal;
-		literal->literalValue = *text;
-	} else if (const auto *typeRef = std::get_if<DataType>(&value)) {
-		literal->kind = Expression::Kind::TypedPlaceholder;
-		literal->type = *typeRef;
-	} else {
-		delete literal;
-		return nullptr;
-	}
-	ownedLiterals.push_back(literal);
-	return literal;
-}
-
 static CompileTimeValue evaluateCompileTimeValueWithKnownState(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack
 ) {
-	BindingFrameStack evalBindingFrameStack = bindingFrameStack;
-	BindingMap knownConstantBindings;
-	std::vector<Expression *> ownedLiterals;
-	for (const auto &[reference, value] : context.currentKnownConstants) {
-		if (!reference || !isCompileTimeKnown(value) || evalBindingFrameStack.lookup(reference->name))
-			continue;
-		Expression *literal = literalExpressionFromCompileTimeValue(value, ownedLiterals);
-		if (literal)
-			knownConstantBindings[reference->name] = literal;
-	}
-	if (!knownConstantBindings.empty())
-		evalBindingFrameStack.pushFrame(std::move(knownConstantBindings));
-	CompileTimeValue result =
-		evaluateCompileTimeValue(expr, context.parseContext, evalBindingFrameStack, context.currentInstantiation);
-	for (Expression *literal : ownedLiterals)
-		delete literal;
-	return result;
+	(void)bindingFrameStack;
+	if (!expr)
+		crashCompilerBug("compile-time evaluation requested for null expression");
+	return context.lookupExpressionValue(expr);
 }
 
 static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
@@ -215,13 +188,15 @@ static void retargetTrialSectionInstantiationWriteOrCrash(
 }
 
 static std::vector<std::pair<std::string, CompileTimeValue>> collectTrialCompileTimeParameters(
-	ParseContext &parseContext, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const BindingFrameStack &callerBindingFrameStack, const Instantiation *callerInstantiation
+	InferenceContext &context, const std::vector<std::pair<std::string, Expression *>> &paramBindings
 ) {
 	std::vector<std::pair<std::string, CompileTimeValue>> values;
 	values.reserve(paramBindings.size());
-	for (const auto &[name, argExpr] : paramBindings)
-		values.push_back({name, evaluateCompileTimeValue(argExpr, parseContext, callerBindingFrameStack, callerInstantiation)});
+	for (const auto &[name, argExpr] : paramBindings) {
+		if (!argExpr)
+			crashCompilerBug("missing trial argument expression while collecting compile-time parameters");
+		values.push_back({name, context.lookupExpressionValue(argExpr)});
+	}
 	return values;
 }
 
@@ -267,8 +242,10 @@ static void traceTrialInstantiationCacheEvent(std::string_view event, PatternDef
 	std::cerr << " key='" << key << "'\n";
 }
 
-static std::unique_ptr<Expression>
-makeNonMacroParameterBinding(const std::string &parameterName, const DataType &argType, const Instantiation &instantiation) {
+static std::unique_ptr<Expression> makeNonMacroParameterBinding(
+	ParseContext &parseContext, const std::string &parameterName, const DataType &argType, const Instantiation &instantiation
+) {
+	(void)parseContext;
 	if (!instantiation.requiredCompileTimeParameters.contains(parameterName)) {
 		auto typedBinding = std::make_unique<Expression>();
 		typedBinding->kind = Expression::Kind::TypedPlaceholder;
@@ -279,6 +256,12 @@ makeNonMacroParameterBinding(const std::string &parameterName, const DataType &a
 	auto constIt = instantiation.constantParameterValues.find(parameterName);
 	if (constIt != instantiation.constantParameterValues.end() && isCompileTimeKnown(constIt->second)) {
 		const CompileTimeValue &constantValue = constIt->second;
+		if (const auto *typeRef = std::get_if<DataType>(&constantValue)) {
+			auto typedBinding = std::make_unique<Expression>();
+			typedBinding->kind = Expression::Kind::TypedPlaceholder;
+			typedBinding->type = *typeRef;
+			return typedBinding;
+		}
 		auto literalBinding = std::make_unique<Expression>();
 		literalBinding->kind = Expression::Kind::Literal;
 		if (const auto *number = std::get_if<double>(&constantValue))
@@ -662,6 +645,337 @@ static int getRefinedClassInstantiationIndex(
 	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
 );
 
+static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
+	if (token.empty())
+		return std::nullopt;
+	bool sawDigit = false;
+	bool sawDot = false;
+	for (char c : token) {
+		if (c >= '0' && c <= '9') {
+			sawDigit = true;
+			continue;
+		}
+		if (c == '.') {
+			if (sawDot)
+				return std::nullopt;
+			sawDot = true;
+			continue;
+		}
+		return std::nullopt;
+	}
+	if (!sawDigit)
+		return std::nullopt;
+	try {
+		return std::stod(std::string(token));
+	} catch (...) {
+		return std::nullopt;
+	}
+}
+
+static std::optional<std::int64_t> extractCompileTimeInteger(const CompileTimeValue &value) {
+	auto *number = std::get_if<double>(&value);
+	if (!number || !std::isfinite(*number))
+		return std::nullopt;
+	double truncated = std::trunc(*number);
+	if (*number != truncated)
+		return std::nullopt;
+	constexpr std::uint64_t maxExactMagnitude = std::uint64_t{1} << std::numeric_limits<double>::digits;
+	if (truncated < -static_cast<double>(maxExactMagnitude) || truncated > static_cast<double>(maxExactMagnitude))
+		return std::nullopt;
+	if (truncated < static_cast<double>(std::numeric_limits<std::int64_t>::min()) ||
+		truncated > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+		return std::nullopt;
+	}
+	return static_cast<std::int64_t>(truncated);
+}
+
+static std::int64_t compileTimeBitwiseNot(std::int64_t value) {
+	return static_cast<std::int64_t>(~static_cast<std::uint64_t>(value));
+}
+
+static std::int64_t compileTimeShiftLeft(std::int64_t value, unsigned amount) {
+	return static_cast<std::int64_t>(static_cast<std::uint64_t>(value) << amount);
+}
+
+static std::int64_t compileTimeShiftRight(std::int64_t value, unsigned amount) {
+	if (amount == 0)
+		return value;
+	std::uint64_t bits = static_cast<std::uint64_t>(value);
+	bits >>= amount;
+	if (value < 0)
+		bits |= (~std::uint64_t{0}) << (64 - amount);
+	return static_cast<std::int64_t>(bits);
+}
+
+static std::string currentBuildInfo(ParseContext &parseContext, std::string_view key) {
+	if (key == "platform")
+		return parseContext.options.emitSPIRV ? "gpu" : parseContext.options.emitWASM ? "wasm" : "cpu";
+	if (key == "shader stage") {
+		if (!parseContext.options.emitSPIRV)
+			return "";
+		return parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment";
+	}
+	return {};
+}
+
+static std::optional<double> currentBuildInfoNumber(ParseContext &parseContext, std::string_view key) {
+	if (key == "word size")
+		return (parseContext.options.emitSPIRV || parseContext.options.emitWASM) ? 32.0
+																				 : static_cast<double>(sizeof(void *) * 8);
+	if (key == "optimization level")
+		return static_cast<double>(parseContext.options.optimizationLevel);
+	return std::nullopt;
+}
+
+static CompileTimeValue
+evaluateInferredCompileTimeCast(const CompileTimeValue &value, Expression *typeExpr, InferenceContext &context) {
+	if (!typeExpr)
+		crashCompilerBug("compile-time cast evaluation encountered null type expression");
+	CompileTimeValue typeExprValue = context.lookupExpressionValue(typeExpr);
+	auto *typeRef = std::get_if<DataType>(&typeExprValue);
+	if (!typeRef || typeRef->kind != DataType::Kind::Type)
+		return {};
+	DataType targetType = typeRef->toReferencedType();
+	if (targetType.kind == DataType::Kind::Bool) {
+		std::optional<bool> truthy = compileTimeTruthiness(value);
+		return truthy.has_value() ? CompileTimeValue(*truthy) : CompileTimeValue{};
+	}
+	if (!targetType.isNumeric())
+		return {};
+	if (const auto *number = std::get_if<double>(&value))
+		return *number;
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? 1.0 : 0.0;
+	return {};
+}
+
+static CompileTimeValue evaluateInferredIntrinsicCompileTimeValue(
+	Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack
+) {
+	if (!expr)
+		return {};
+	auto requireArgument = [&](size_t index, std::string_view intrinsicName) -> Expression * {
+		if (expr->arguments.size() <= index || !expr->arguments[index]) {
+			crashCompilerBug(
+				std::string("intrinsic '") + std::string(intrinsicName) +
+				"' is missing an argument while reading compile-time value"
+			);
+		}
+		return expr->arguments[index];
+	};
+	(void)bindingFrameStack;
+	auto compileTimeValueOf = [&](Expression *argumentExpression) {
+		return context.lookupExpressionValue(argumentExpression);
+	};
+	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+	if (kind == IntrinsicKind::BuildInfo) {
+		CompileTimeValue keyValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		if (auto *key = std::get_if<std::string>(&keyValue)) {
+			if (std::optional<double> number = currentBuildInfoNumber(context.parseContext, *key))
+				return *number;
+			std::string text = currentBuildInfo(context.parseContext, *key);
+			if (!text.empty() || *key == "shader stage")
+				return text;
+		}
+		return {};
+	}
+	if (kind == IntrinsicKind::SizeOf) {
+		CompileTimeValue typeValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		auto *typeRef = std::get_if<DataType>(&typeValue);
+		if (!typeRef || typeRef->kind != DataType::Kind::Type)
+			return {};
+		DataType valueType = typeRef->toReferencedType();
+		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
+			!valueType.classDefinition->instantiations.empty()) {
+			valueType.classInstIndex = 0;
+		}
+		return static_cast<double>(valueType.getByteSize());
+	}
+	if (kind == IntrinsicKind::Select) {
+		CompileTimeValue conditionValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		auto *condition = std::get_if<bool>(&conditionValue);
+		if (!condition)
+			return {};
+		return compileTimeValueOf(requireArgument(*condition ? 2 : 3, expr->intrinsicName));
+	}
+	if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
+		return compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+	if (kind == IntrinsicKind::Cast && expr->arguments.size() > 2) {
+		CompileTimeValue value = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		if (!isCompileTimeKnown(value))
+			return {};
+		return evaluateInferredCompileTimeCast(value, requireArgument(2, expr->intrinsicName), context);
+	}
+	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array ||
+		kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth) {
+		return compileTimeValueOf(expr);
+	}
+
+	if (kind == IntrinsicKind::Not) {
+		CompileTimeValue value = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		auto *boolean = std::get_if<bool>(&value);
+		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
+	}
+	if (kind == IntrinsicKind::BitwiseNot) {
+		CompileTimeValue value = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		std::optional<std::int64_t> integerValue = extractCompileTimeInteger(value);
+		return integerValue.has_value() ? CompileTimeValue(static_cast<double>(compileTimeBitwiseNot(*integerValue)))
+										: CompileTimeValue{};
+	}
+	if (kind == IntrinsicKind::Negate) {
+		CompileTimeValue value = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		auto *number = std::get_if<double>(&value);
+		return number ? CompileTimeValue(-*number) : CompileTimeValue{};
+	}
+
+	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or || kind == IntrinsicKind::Equal ||
+		kind == IntrinsicKind::NotEqual || kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr ||
+		kind == IntrinsicKind::BitwiseXor || kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight ||
+		kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract || kind == IntrinsicKind::Multiply ||
+		kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo || kind == IntrinsicKind::LessThan ||
+		kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
+		kind == IntrinsicKind::GreaterThanOrEqual) {
+		CompileTimeValue leftValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		CompileTimeValue rightValue = compileTimeValueOf(requireArgument(2, expr->intrinsicName));
+		if (!isCompileTimeKnown(leftValue) || !isCompileTimeKnown(rightValue))
+			return {};
+
+		if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
+			auto *leftBool = std::get_if<bool>(&leftValue);
+			auto *rightBool = std::get_if<bool>(&rightValue);
+			if (!leftBool || !rightBool)
+				return {};
+			return kind == IntrinsicKind::And ? CompileTimeValue(*leftBool && *rightBool)
+											  : CompileTimeValue(*leftBool || *rightBool);
+		}
+
+		if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
+			bool result = false;
+			if (auto *leftText = std::get_if<std::string>(&leftValue)) {
+				if (auto *rightText = std::get_if<std::string>(&rightValue))
+					result = *leftText == *rightText;
+				else
+					return {};
+			} else if (auto *leftBool = std::get_if<bool>(&leftValue)) {
+				if (auto *rightBool = std::get_if<bool>(&rightValue))
+					result = *leftBool == *rightBool;
+				else
+					return {};
+			} else {
+				auto *leftNumber = std::get_if<double>(&leftValue);
+				auto *rightNumber = std::get_if<double>(&rightValue);
+				if (!leftNumber || !rightNumber)
+					return {};
+				result = *leftNumber == *rightNumber;
+			}
+			return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
+		}
+
+		if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
+			kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+			std::optional<std::int64_t> leftInteger = extractCompileTimeInteger(leftValue);
+			std::optional<std::int64_t> rightInteger = extractCompileTimeInteger(rightValue);
+			if (!leftInteger.has_value() || !rightInteger.has_value())
+				return {};
+			if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+				if (*rightInteger < 0 || *rightInteger >= 64)
+					return {};
+				unsigned shiftAmount = static_cast<unsigned>(*rightInteger);
+				std::int64_t result = kind == IntrinsicKind::ShiftLeft ? compileTimeShiftLeft(*leftInteger, shiftAmount)
+																	   : compileTimeShiftRight(*leftInteger, shiftAmount);
+				return static_cast<double>(result);
+			}
+			std::uint64_t leftBits = static_cast<std::uint64_t>(*leftInteger);
+			std::uint64_t rightBits = static_cast<std::uint64_t>(*rightInteger);
+			std::uint64_t result = kind == IntrinsicKind::BitwiseAnd  ? (leftBits & rightBits)
+								   : kind == IntrinsicKind::BitwiseOr ? (leftBits | rightBits)
+																	  : (leftBits ^ rightBits);
+			return static_cast<double>(static_cast<std::int64_t>(result));
+		}
+
+		auto *leftNumber = std::get_if<double>(&leftValue);
+		auto *rightNumber = std::get_if<double>(&rightValue);
+		if (!leftNumber || !rightNumber)
+			return {};
+		if (kind == IntrinsicKind::Add)
+			return *leftNumber + *rightNumber;
+		if (kind == IntrinsicKind::Subtract)
+			return *leftNumber - *rightNumber;
+		if (kind == IntrinsicKind::Multiply)
+			return *leftNumber * *rightNumber;
+		if (kind == IntrinsicKind::Divide)
+			return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(*leftNumber / *rightNumber);
+		if (kind == IntrinsicKind::Modulo)
+			return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(std::fmod(*leftNumber, *rightNumber));
+		if (kind == IntrinsicKind::LessThan)
+			return *leftNumber < *rightNumber;
+		if (kind == IntrinsicKind::GreaterThan)
+			return *leftNumber > *rightNumber;
+		if (kind == IntrinsicKind::LessThanOrEqual)
+			return *leftNumber <= *rightNumber;
+		if (kind == IntrinsicKind::GreaterThanOrEqual)
+			return *leftNumber >= *rightNumber;
+	}
+
+	return {};
+}
+
+static Expression *getSingleCompileTimeBody(Section *section) {
+	if (!section)
+		return nullptr;
+	Expression *result = nullptr;
+	for (Section *child : section->children) {
+		for (CodeLine *line : child->codeLines) {
+			if (!line->expression)
+				continue;
+			if (result)
+				return nullptr;
+			result = line->expression;
+		}
+	}
+	return result;
+}
+
+static CompileTimeValue
+inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack) {
+	if (!expr || !expr->variable)
+		return {};
+	CompileTimeValue computedValue{};
+	Expression *boundExpression = macroBindingFrameStack.lookup(expr->variable->name);
+	if (boundExpression && boundExpression != expr) {
+		computedValue = context.lookupExpressionValue(boundExpression);
+		if (!isCompileTimeKnown(computedValue) && boundExpression->type.kind == DataType::Kind::Type) {
+			computedValue = boundExpression->type;
+			context.setExpressionValue(boundExpression, computedValue);
+		}
+		if (!isCompileTimeKnown(computedValue) && boundExpression->kind == Expression::Kind::Variable &&
+			boundExpression->variable) {
+			Section *boundSection = boundExpression->range.line ? boundExpression->range.line->section : nullptr;
+			Variable *boundVariable = boundSection ? boundSection->findVariable(boundExpression->variable->name) : nullptr;
+			if (!boundVariable) {
+				computedValue = boundExpression->variable->name;
+				context.setExpressionValue(boundExpression, computedValue);
+			}
+		}
+	}
+	if (!isCompileTimeKnown(computedValue))
+		computedValue = context.lookupKnownConstant(expr->variable);
+	if (!isCompileTimeKnown(computedValue) && context.currentInstantiation) {
+		if (context.currentInstantiation->requiredCompileTimeParameters.contains(expr->variable->name)) {
+			auto it = context.currentInstantiation->constantParameterValues.find(expr->variable->name);
+			if (it != context.currentInstantiation->constantParameterValues.end())
+				computedValue = it->second;
+		}
+	}
+	if (!isCompileTimeKnown(computedValue)) {
+		if (std::optional<double> numericToken = parseCompileTimeNumericToken(expr->variable->name))
+			computedValue = *numericToken;
+	}
+	if (!isCompileTimeKnown(computedValue) && expr->type.kind == DataType::Kind::Type)
+		computedValue = expr->type;
+	return computedValue;
+}
+
 #include "intrinsics/store_inference.inl"
 #include "variable_flow.inl"
 
@@ -675,8 +989,10 @@ static void inferOrderedExpression(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack = BindingFrameStack{},
 	bool preserveCurrentGrouping = false
 ) {
-	(void)preserveCurrentGrouping;
 	context.typesValid = true;
+	if (!expr)
+		return;
+	context.setExpressionValue(expr, {});
 	struct ExpressionTraceGuard {
 		InferenceContext &context;
 		explicit ExpressionTraceGuard(InferenceContext &context, Expression *expression) : context(context) {
@@ -693,29 +1009,29 @@ static void inferOrderedExpression(
 			renderConfiguredMessage(syntaxConfigForRange(context.parseContext, range), key, variant, replacements)
 		);
 	};
-	bool deferArgumentInference = false;
-	std::unordered_set<size_t> skippedArgumentIndices;
-	if (expr->kind == Expression::Kind::PatternCall && !deferArgumentInference)
-		skippedArgumentIndices = compileTimeOnlyArgumentIndices(expr, macroBindingFrameStack);
-	if (expr->kind == Expression::Kind::IntrinsicCall) {
-		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-		if (kind == IntrinsicKind::Construct)
-			skippedArgumentIndices.insert(1);
-	}
+	auto failWithDetail = [&](Range range, const std::string &detail, int priority = 1) {
+		context.setTypeFailure(detail);
+		context.fail(buildFailureDetailDiagnostic(range, detail), priority);
+	};
+	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
+		if (argumentIndex >= expr->arguments.size() || !expr->arguments[argumentIndex])
+			crashCompilerBug("intrinsic compile-time argument validation encountered a missing argument expression");
+		std::string detail = "Intrinsic '" + expr->intrinsicName + "' argument " + std::to_string(argumentIndex) + " must be " +
+							 std::string(requirement);
+		failWithDetail(expr->arguments[argumentIndex]->range, detail, 0);
+	};
 	// Recurse into arguments first (bottom-up)
-	if (!deferArgumentInference) {
-		for (size_t i = 0; i < expr->arguments.size(); i++) {
-			if (skippedArgumentIndices.contains(i))
-				continue;
-			Expression *arg = expr->arguments[i];
-			if (!inferExpression(arg, context, false, macroBindingFrameStack))
-				return;
-			expr->arguments[i] = arg;
-		}
+	for (size_t i = 0; i < expr->arguments.size(); i++) {
+		Expression *arg = expr->arguments[i];
+		bool inferred = inferExpression(arg, context, false, macroBindingFrameStack);
+		if (!inferred)
+			return;
+		expr->arguments[i] = arg;
 	}
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
+		CompileTimeValue literalValue{};
 		if (std::holds_alternative<double>(expr->literalValue)) {
 			double value = std::get<double>(expr->literalValue);
 			std::string_view literalText = expr->range.subString;
@@ -729,14 +1045,21 @@ static void inferOrderedExpression(
 				// introducing Float64 arithmetic from constants like 0.5 or 800.0.
 				expr->type = defaultFloatType(context.parseContext.options.emitSPIRV);
 			}
+			if (expr->type.kind == DataType::Kind::Bool)
+				literalValue = value != 0.0;
+			else
+				literalValue = value;
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
 			expr->type = {DataType::Kind::Int, 1};
 			expr->type.pointerDepth = 1;
+			literalValue = std::get<std::string>(expr->literalValue);
 		}
+		context.setExpressionValue(expr, literalValue);
 		break;
 	}
 
 	case Expression::Kind::ArrayLiteral: {
+		context.setExpressionValue(expr, {});
 		if (expr->arguments.empty())
 			break;
 		DataType elementType = ensureExpressionType(expr->arguments[0], context, macroBindingFrameStack);
@@ -765,10 +1088,13 @@ static void inferOrderedExpression(
 			// Check macro bindings first
 			Expression *macroBinding = macroBindingFrameStack.lookup(varName);
 			if (macroBinding) {
-				DataType boundType = ensureExpressionTypeWithCurrentGrouping(macroBinding, context, macroBindingFrameStack);
-				if (boundType.isDeduced()) {
+				DataType boundType = ensureExpressionType(macroBinding, context, macroBindingFrameStack);
+				if (boundType.isDeduced())
 					expr->type = boundType;
-				}
+				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, macroBindingFrameStack);
+				if (!isCompileTimeKnown(variableValue) && expr->type.kind == DataType::Kind::Type)
+					variableValue = expr->type;
+				context.setExpressionValue(expr, variableValue);
 				break;
 			}
 			// Look up variable in scope
@@ -785,27 +1111,52 @@ static void inferOrderedExpression(
 					));
 				return;
 			}
-			if (var->type.isDeduced()) {
+			if (var->type.isDeduced())
 				expr->type = var->type;
-			}
 		}
+		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, macroBindingFrameStack));
 		break;
 	}
 
 	case Expression::Kind::TypedPlaceholder:
+		if (expr->type.kind == DataType::Kind::Type)
+			context.setExpressionValue(expr, expr->type);
+		else
+			context.setExpressionValue(expr, {});
 		break;
 
 	case Expression::Kind::IntrinsicCall: {
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+		bool compileTimeRequirementsChanged = false;
 		if (context.currentInstantiation) {
 			for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
 				if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
 					continue;
-				markCompileTimeParameterRequirements(
-					expr->arguments[argumentIndex], macroBindingFrameStack, context.currentInstantiation
-				);
+				if (markCompileTimeParameterRequirements(
+						expr->arguments[argumentIndex], macroBindingFrameStack, context.currentInstantiation
+					)) {
+					compileTimeRequirementsChanged = true;
+				}
 			}
+			if (compileTimeRequirementsChanged && !context.trial)
+				context.currentInstantiation->needsReinfer = true;
+		}
+		if (info) {
+			for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
+				if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
+					continue;
+				Expression *argumentExpression = expr->arguments[argumentIndex];
+				if (!argumentExpression)
+					crashCompilerBug("intrinsic compile-time argument validation encountered null argument expression");
+				CompileTimeValue argumentValue = context.lookupExpressionValue(argumentExpression);
+				if (!isCompileTimeKnown(argumentValue)) {
+					failCompileTimeOnlyIntrinsicArgument(argumentIndex, "compile-time known");
+					break;
+				}
+			}
+			if (!context.typesValid)
+				break;
 		}
 		if (info) {
 			switch (info->returnKind) {
@@ -900,6 +1251,20 @@ static void inferOrderedExpression(
 					if (retType.isDeduced() && context.currentInstantiation)
 						context.currentInstantiation->returnType = retType;
 				}
+				if ((kind == IntrinsicKind::If || kind == IntrinsicKind::ElseIf || kind == IntrinsicKind::LoopWhile) &&
+					expr->arguments.size() > 1) {
+					DataType conditionType = ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack);
+					if (!isLogicalOperandType(conditionType)) {
+						std::string operatorLabel = kind == IntrinsicKind::If		? "if condition"
+													: kind == IntrinsicKind::ElseIf ? "else if condition"
+																					: "loop while condition";
+						setConfiguredTypeFailure(
+							expr->range, "logical operator operand invalid", "message",
+							{{"operator", operatorLabel}, {"value_type", typeToUserName(conditionType, context.parseContext)}}
+						);
+						break;
+					}
+				}
 				if (kind == IntrinsicKind::Store)
 					inferStoreEffects(expr, context, macroBindingFrameStack);
 				expr->type = {DataType::Kind::Void};
@@ -961,6 +1326,10 @@ static void inferOrderedExpression(
 				} else if (kind == IntrinsicKind::Cast) {
 					DataType valueType = ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack);
 					DataType typeArgType = ensureExpressionType(expr->arguments[2], context, macroBindingFrameStack);
+					if (typeArgType.kind != DataType::Kind::Type) {
+						failCompileTimeOnlyIntrinsicArgument(2, "a compile-time type reference");
+						break;
+					}
 					if (!isValidCastRuntimeType(valueType)) {
 						setConfiguredTypeFailure(
 							expr->range, "invalid cast source type", "message",
@@ -985,37 +1354,53 @@ static void inferOrderedExpression(
 					// Resolve kind string through macro bindings
 					Expression *kindExpr = resolveThroughMacroBindings(expr->arguments[1]);
 					std::string kindStr;
-					if (auto *str = std::get_if<std::string>(&kindExpr->literalValue))
+					CompileTimeValue kindValue = context.lookupExpressionValue(kindExpr);
+					if (auto *str = std::get_if<std::string>(&kindValue))
 						kindStr = *str;
-					if (!kindStr.empty()) {
-						DataType typeRef;
-						typeRef.kind = DataType::Kind::Type;
-						if (kindStr == "int") {
-							typeRef.referencedKind = DataType::Kind::Int;
-							typeRef.numericSize = 4; // default
-						} else if (kindStr == "float") {
-							typeRef.referencedKind = DataType::Kind::Float;
-							typeRef.numericSize = defaultFloatByteSize(context.parseContext.options.emitSPIRV); // default
-						} else if (kindStr == "bool") {
-							typeRef.referencedKind = DataType::Kind::Bool;
-						} else if (kindStr == "void") {
-							typeRef.referencedKind = DataType::Kind::Void;
-						} else if (kindStr == "string") {
-							// string = pointer to byte (i8*)
-							typeRef.referencedKind = DataType::Kind::Int;
-							typeRef.numericSize = 1;
-							typeRef.pointerDepth = 1;
-						} else if (kindStr == "type") {
-							typeRef.referencedKind = DataType::Kind::Type;
-						}
-						// Override byte size if bits argument provided
-						if (expr->arguments.size() > 2) {
-							Expression *bitsExpr = resolveThroughMacroBindings(expr->arguments[2]);
-							if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
-								typeRef.numericSize = (int)*bits / 8;
-						}
-						expr->type = typeRef;
+					if (kindStr.empty()) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type kind string");
+						break;
 					}
+					DataType typeRef;
+					typeRef.kind = DataType::Kind::Type;
+					if (kindStr == "int") {
+						typeRef.referencedKind = DataType::Kind::Int;
+						typeRef.numericSize = 4; // default
+					} else if (kindStr == "float") {
+						typeRef.referencedKind = DataType::Kind::Float;
+						typeRef.numericSize = defaultFloatByteSize(context.parseContext.options.emitSPIRV); // default
+					} else if (kindStr == "bool") {
+						typeRef.referencedKind = DataType::Kind::Bool;
+					} else if (kindStr == "void") {
+						typeRef.referencedKind = DataType::Kind::Void;
+					} else if (kindStr == "string") {
+						// string = pointer to byte (i8*)
+						typeRef.referencedKind = DataType::Kind::Int;
+						typeRef.numericSize = 1;
+						typeRef.pointerDepth = 1;
+					} else if (kindStr == "type") {
+						typeRef.referencedKind = DataType::Kind::Type;
+					} else {
+						failWithDetail(
+							expr->arguments[1]->range,
+							"Unknown compile-time type kind '" + kindStr + "' in intrinsic '" + expr->intrinsicName + "'", 0
+						);
+						break;
+					}
+					// Override byte size if bits argument provided
+					if (expr->arguments.size() > 2) {
+						Expression *bitsExpr = resolveThroughMacroBindings(expr->arguments[2]);
+						CompileTimeValue bitsValue = context.lookupExpressionValue(bitsExpr);
+						auto *bits = std::get_if<double>(&bitsValue);
+						if (!bits || !std::isfinite(*bits) || std::trunc(*bits) != *bits || *bits <= 0.0 ||
+							std::fmod(*bits, 8.0) != 0.0) {
+							failCompileTimeOnlyIntrinsicArgument(2, "a positive compile-time integer bit size divisible by 8");
+							break;
+						}
+						typeRef.numericSize = static_cast<int>(*bits) / 8;
+					}
+					expr->type = typeRef;
+					context.setExpressionValue(expr, expr->type);
 				} else if (kind == IntrinsicKind::TypeOf) {
 					DataType valueType = ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack);
 					if (valueType.isDeduced()) {
@@ -1028,6 +1413,7 @@ static void inferOrderedExpression(
 						expr->type.arraySize = valueType.arraySize;
 						expr->type.arrayElementType =
 							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+						context.setExpressionValue(expr, expr->type);
 					}
 				} else if (kind == IntrinsicKind::Select) {
 					DataType conditionType = expr->arguments[1]->type;
@@ -1070,6 +1456,7 @@ static void inferOrderedExpression(
 							context.parseContext, expr->arguments[1], macroBindingFrameStack, typeArgType, &context
 						) ||
 						typeArgType.kind != DataType::Kind::Type) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type reference");
 						break;
 					}
 					if (typeArgType.referencedKind == DataType::Kind::Type ||
@@ -1079,8 +1466,15 @@ static void inferOrderedExpression(
 					}
 					expr->type = {DataType::Kind::Int, 8};
 				} else if (kind == IntrinsicKind::BuildInfo) {
-					Expression *keyExpr = resolveThroughMacroBindings(expr->arguments[1]);
-					auto *key = keyExpr ? std::get_if<std::string>(&keyExpr->literalValue) : nullptr;
+					markCompileTimeParameterRequirements(
+						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
+					);
+					Expression *keyExpr = expr->arguments[1];
+					if (!inferExpression(keyExpr, context, false, macroBindingFrameStack))
+						break;
+					expr->arguments[1] = keyExpr;
+					CompileTimeValue keyValue = context.lookupExpressionValue(keyExpr);
+					auto *key = std::get_if<std::string>(&keyValue);
 					if (!key) {
 						context.setTypeFailure("build info key must be a compile-time string literal");
 						break;
@@ -1093,20 +1487,29 @@ static void inferOrderedExpression(
 					}
 				} else if (kind == IntrinsicKind::Array) {
 					Expression *sizeExpr = resolveThroughMacroBindings(expr->arguments[1]);
-					if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
-						expr->type.kind = DataType::Kind::Type;
-						expr->type.referencedKind = DataType::Kind::Array;
-						expr->type.arraySize = static_cast<int>(*size);
-						if (expr->arguments.size() > 2) {
-							DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, macroBindingFrameStack);
-							if (elemTypeRef.kind == DataType::Kind::Type)
-								expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
-						}
+					CompileTimeValue sizeValue = context.lookupExpressionValue(sizeExpr);
+					auto *size = std::get_if<double>(&sizeValue);
+					if (!size || !std::isfinite(*size) || std::trunc(*size) != *size || *size < 0.0) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a non-negative compile-time integer array size");
+						break;
 					}
+					expr->type.kind = DataType::Kind::Type;
+					expr->type.referencedKind = DataType::Kind::Array;
+					expr->type.arraySize = static_cast<int>(*size);
+					if (expr->arguments.size() > 2) {
+						DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, macroBindingFrameStack);
+						if (elemTypeRef.kind != DataType::Kind::Type) {
+							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time element type reference");
+							break;
+						}
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
+					}
+					context.setExpressionValue(expr, expr->type);
 				} else if (kind == IntrinsicKind::Vector) {
 					int vectorSize = 0;
 					if (!evaluateCompileTimeInteger(
-							context.parseContext, expr->arguments[1], macroBindingFrameStack, vectorSize
+							context.parseContext, expr->arguments[1], macroBindingFrameStack, vectorSize,
+							context.currentInstantiation
 						) ||
 						vectorSize < 1) {
 						setConfiguredTypeFailure(expr->range, "vector size invalid");
@@ -1118,15 +1521,24 @@ static void inferOrderedExpression(
 					expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 					if (expr->arguments.size() > 2) {
 						DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, macroBindingFrameStack);
-						if (elemTypeRef.kind == DataType::Kind::Type)
-							expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
+						if (elemTypeRef.kind != DataType::Kind::Type) {
+							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time vector element type reference");
+							break;
+						}
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
+					if (!context.typesValid)
+						break;
+					context.setExpressionValue(expr, expr->type);
 				} else if (kind == IntrinsicKind::Matrix) {
 					int rows = 0;
 					int columns = 0;
-					if (!evaluateCompileTimeInteger(context.parseContext, expr->arguments[1], macroBindingFrameStack, rows) ||
+					if (!evaluateCompileTimeInteger(
+							context.parseContext, expr->arguments[1], macroBindingFrameStack, rows, context.currentInstantiation
+						) ||
 						!evaluateCompileTimeInteger(
-							context.parseContext, expr->arguments[2], macroBindingFrameStack, columns
+							context.parseContext, expr->arguments[2], macroBindingFrameStack, columns,
+							context.currentInstantiation
 						) ||
 						rows < 1 || columns < 1) {
 						setConfiguredTypeFailure(expr->range, "matrix dimensions invalid");
@@ -1139,20 +1551,29 @@ static void inferOrderedExpression(
 					expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 					if (expr->arguments.size() > 3) {
 						DataType elemTypeRef = ensureExpressionType(expr->arguments[3], context, macroBindingFrameStack);
-						if (elemTypeRef.kind == DataType::Kind::Type)
-							expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
-					}
-				} else if (kind == IntrinsicKind::AddPointerDepth) {
-					DataType typeArgType = ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack);
-					if (typeArgType.kind == DataType::Kind::Type) {
-						if (typeArgType.referencedKind == DataType::Kind::Type ||
-							typeArgType.referencedKind == DataType::Kind::Unresolved) {
-							setConfiguredTypeFailure(expr->range, "pointer to type invalid");
+						if (elemTypeRef.kind != DataType::Kind::Type) {
+							failCompileTimeOnlyIntrinsicArgument(3, "a compile-time matrix element type reference");
 							break;
 						}
-						expr->type = typeArgType;
-						expr->type.pointerDepth++;
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
+					if (!context.typesValid)
+						break;
+					context.setExpressionValue(expr, expr->type);
+				} else if (kind == IntrinsicKind::AddPointerDepth) {
+					DataType typeArgType = ensureExpressionType(expr->arguments[1], context, macroBindingFrameStack);
+					if (typeArgType.kind != DataType::Kind::Type) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type reference");
+						break;
+					}
+					if (typeArgType.referencedKind == DataType::Kind::Type ||
+						typeArgType.referencedKind == DataType::Kind::Unresolved) {
+						setConfiguredTypeFailure(expr->range, "pointer to type invalid");
+						break;
+					}
+					expr->type = typeArgType;
+					expr->type.pointerDepth++;
+					context.setExpressionValue(expr, expr->type);
 				} else if (kind == IntrinsicKind::Construct) {
 					markCompileTimeParameterRequirements(
 						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
@@ -1280,6 +1701,10 @@ static void inferOrderedExpression(
 						instType = concretizeClassType(instType.dereferenced());
 					Expression *propExpr = resolveThroughMacroBindings(expr->arguments[2]);
 					std::string fieldName = extractFieldName(propExpr);
+					if (fieldName.empty()) {
+						failCompileTimeOnlyIntrinsicArgument(2, "a compile-time property name");
+						break;
+					}
 					DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
 					if (builtInPropertyType.isDeduced()) {
 						expr->type = builtInPropertyType;
@@ -1311,6 +1736,7 @@ static void inferOrderedExpression(
 				break;
 			}
 		}
+		context.setExpressionValue(expr, evaluateInferredIntrinsicCompileTimeValue(expr, context, macroBindingFrameStack));
 		break;
 	}
 
@@ -1324,7 +1750,9 @@ static void inferOrderedExpression(
 		std::vector<DataType> argTypesForOverload;
 		for (size_t ai = 0; ai < expr->arguments.size(); ai++) {
 			Expression *inferArg = expr->arguments[ai];
-			argTypesForOverload.push_back(requestKnownOrInferExpressionType(inferArg, context, macroBindingFrameStack, false));
+			argTypesForOverload.push_back(
+				requestKnownOrInferExpressionType(inferArg, context, macroBindingFrameStack, preserveCurrentGrouping)
+			);
 			expr->arguments[ai] = inferArg;
 		}
 		auto overloadFailurePriority = [&](Range diagnosticRange) {
@@ -1388,26 +1816,6 @@ static void inferOrderedExpression(
 		// Build parameter bindings from call-site arguments
 		BindingMap callBindings;
 		appendPatternCallBindings(expr, def, callBindings);
-		std::unordered_set<std::string> fallbackParameterNames;
-		std::function<void(const std::vector<DefinitionPatternElement> &)> collectFallbackParameterNames =
-			[&](const std::vector<DefinitionPatternElement> &elements) {
-			for (const auto &element : elements) {
-				if (element.type == PatternElement::Type::Choice) {
-					for (const auto &alternative : element.alternatives)
-						collectFallbackParameterNames(alternative);
-					continue;
-				}
-				if (element.type == PatternElement::Type::Variable)
-					fallbackParameterNames.insert(element.text);
-			}
-		};
-		collectFallbackParameterNames(def->patternElements);
-		for (const std::string &parameterName : fallbackParameterNames) {
-			if (callBindings.contains(parameterName))
-				continue;
-			if (Expression *fallbackBinding = macroBindingFrameStack.lookup(parameterName))
-				callBindings[parameterName] = fallbackBinding;
-		}
 		if (matchedSection->isMacro) {
 			materializeMacroBindingsInCallerScope(&context.parseContext, callBindings, macroBindingFrameStack);
 		} else if (matchedSection->type == SectionType::Class) {
@@ -1429,6 +1837,8 @@ static void inferOrderedExpression(
 			auto *classSec = static_cast<ClassSection *>(matchedSection);
 			expr->type =
 				instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindingFrameStack, &context);
+			if (expr->type.kind == DataType::Kind::Type)
+				context.setExpressionValue(expr, expr->type);
 		} else if (matchedSection->isMacro && matchedSection->type == SectionType::Function) {
 			BindingFrameStack expandedBindingFrameStack;
 			Expression *bodyExpr =
@@ -1444,6 +1854,7 @@ static void inferOrderedExpression(
 			DataType resolvedType = bodyExpr->type;
 			if (resolvedType.isDeduced())
 				expr->type = resolvedType;
+			context.setExpressionValue(expr, context.lookupExpressionValue(bodyExpr));
 		} else if (matchedSection->isMacro) {
 			// Section macros still infer their shared section structure.
 			if (!matchedSection->inferring) {
@@ -1462,6 +1873,7 @@ static void inferOrderedExpression(
 					if (resolvedType.isDeduced()) {
 						line->expression->type = resolvedType;
 						expr->type = resolvedType;
+						context.setExpressionValue(expr, context.lookupExpressionValue(line->expression));
 					}
 				}
 			}
@@ -1514,9 +1926,7 @@ static void inferOrderedExpression(
 			std::vector<std::pair<std::string, CompileTimeValue>> trialCompileTimeParameters;
 			std::string trialCacheKey;
 			if (context.trial) {
-				trialCompileTimeParameters = collectTrialCompileTimeParameters(
-					context.parseContext, paramBindings, macroBindingFrameStack, callerInstantiation
-				);
+				trialCompileTimeParameters = collectTrialCompileTimeParameters(context, paramBindings);
 				trialCacheKey = buildTrialInstantiationCacheKey(
 					matchedSection, !matchedSection->instantiations.empty(), argTypes, trialCompileTimeParameters
 				);
@@ -1533,11 +1943,10 @@ static void inferOrderedExpression(
 			}
 
 			auto evaluateParameterValue = [&](Expression *argumentExpression) {
-				return argumentExpression
-						   ? evaluateCompileTimeValue(
-								 argumentExpression, context.parseContext, macroBindingFrameStack, callerInstantiation
-							 )
-						   : CompileTimeValue{};
+				(void)macroBindingFrameStack;
+				if (!argumentExpression)
+					crashCompilerBug("missing non-macro argument while building inference instantiation key");
+				return context.lookupExpressionValue(argumentExpression);
 			};
 			InstantiationKey instantiationKey =
 				getOrCreateNonMacroInstantiationKey(matchedSection, paramBindings, argTypes, evaluateParameterValue);
@@ -1554,7 +1963,6 @@ static void inferOrderedExpression(
 			if (!inst.inferring && !hasReusableInstantiation) {
 				Instantiation *savedInst = context.currentInstantiation;
 				auto callerKnownConstants = context.currentKnownConstants;
-				callerInstantiation = savedInst;
 				bool inferenceSucceeded = runInstantiationReinferenceLoop(
 					context, inst, def, expr->range, (std::string)def->range.subString,
 					[&]() -> bool {
@@ -1562,15 +1970,26 @@ static void inferOrderedExpression(
 						inst.selectedOverloadsByCall.clear();
 					if (!context.trial)
 						inst.ifChainSelections.clear();
+					inst.constantValuesByExpression.clear();
 					inst.writtenGlobalReferences.clear();
 					inst.finalGlobalConstantValues.clear();
 					for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++) {
 						if (argTypes[i].kind == DataType::Kind::Type)
 							inst.requiredCompileTimeParameters.insert(paramBindings[i].first);
 					}
-					seedInstantiationCompileTimeParameters(
-						context.parseContext, inst, paramBindings, argTypes, macroBindingFrameStack, callerInstantiation
-					);
+					seedInstantiationCompileTimeParameters(inst, paramBindings, argTypes, [&](Expression *argumentExpression) {
+						if (context.trial) {
+							auto trialIt = context.trialExpressionValues.find(argumentExpression);
+							if (trialIt != context.trialExpressionValues.end())
+								return trialIt->second;
+							if (context.inheritedTrialExpressionValues) {
+								auto inheritedIt = context.inheritedTrialExpressionValues->find(argumentExpression);
+								if (inheritedIt != context.inheritedTrialExpressionValues->end())
+									return inheritedIt->second;
+							}
+						}
+						return getExpressionCompileTimeValue(context.parseContext, argumentExpression, callerInstantiation);
+					});
 					size_t requiredBeforePass = inst.requiredCompileTimeParameters.size();
 					inst.needsReinfer = false;
 					inst.inferring = true;
@@ -1586,7 +2005,8 @@ static void inferOrderedExpression(
 								paramBindings[i].first
 							) != matchedSection->globalVariables.end())
 							continue;
-						auto bindingValue = makeNonMacroParameterBinding(paramBindings[i].first, argTypes[i], inst);
+						auto bindingValue =
+							makeNonMacroParameterBinding(context.parseContext, paramBindings[i].first, argTypes[i], inst);
 						nonMacroTypeBindings[paramBindings[i].first] = bindingValue.get();
 						ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
 					}
@@ -1640,6 +2060,8 @@ static void inferOrderedExpression(
 			}
 			if (inst.returnType.isDeduced())
 				expr->type = inst.returnType;
+			if (Expression *bodyExpr = getSingleCompileTimeBody(matchedSection))
+				context.setExpressionValue(expr, context.lookupExpressionValue(bodyExpr));
 			if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
 				retargetTrialSectionInstantiationWriteOrCrash(
 					context, matchedSection, instantiationKey, *refinedInstantiationKey, "trial inference"
@@ -1651,14 +2073,18 @@ static void inferOrderedExpression(
 				auto insertResult = matchedSection->instantiations.insert(std::move(node));
 				assert(insertResult.inserted && "Refined instantiation key collided with existing entry");
 			}
+			context.setExpressionValue(expr, context.lookupExpressionValue(expr));
+			break;
 		}
-
-		break;
 	}
 
 	case Expression::Kind::Pending:
+		context.setExpressionValue(expr, {});
 		break;
 	}
+	CompileTimeValue inferredValue = context.lookupExpressionValue(expr);
+	if (!isCompileTimeKnown(inferredValue) && expr->type.kind == DataType::Kind::Type)
+		context.setExpressionValue(expr, expr->type);
 }
 
 static bool

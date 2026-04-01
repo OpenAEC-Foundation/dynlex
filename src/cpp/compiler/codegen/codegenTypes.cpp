@@ -310,15 +310,19 @@ static Expression *materializeCodegenCompileTimeLiteral(ParseContext &context, c
 	if (const auto *number = std::get_if<double>(&value)) {
 		literal->kind = Expression::Kind::Literal;
 		literal->literalValue = *number;
+		setExpressionCompileTimeValue(context, literal, *number);
 	} else if (const auto *text = std::get_if<std::string>(&value)) {
 		literal->kind = Expression::Kind::Literal;
 		literal->literalValue = *text;
+		setExpressionCompileTimeValue(context, literal, *text);
 	} else if (const auto *boolean = std::get_if<bool>(&value)) {
 		literal->kind = Expression::Kind::Literal;
 		literal->literalValue = *boolean ? 1.0 : 0.0;
+		setExpressionCompileTimeValue(context, literal, *boolean);
 	} else if (const auto *typeRef = std::get_if<DataType>(&value)) {
 		literal->kind = Expression::Kind::TypedPlaceholder;
 		literal->type = *typeRef;
+		setExpressionCompileTimeValue(context, literal, *typeRef);
 	} else {
 		delete literal;
 		return nullptr;
@@ -492,11 +496,12 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			return retTypeRef.toReferencedType();
 		}
 		if (kind == IntrinsicKind::Select && expr->arguments.size() > 3) {
-			CompileTimeValue conditionValue = evaluateCompileTimeValue(
-				expr->arguments[1], context, context.macroBindingFrames, context.currentCodegenInstantiation
-			);
-			std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-			if (condition.has_value())
+			if (!expr->arguments[1])
+				crashCompilerBug("select intrinsic missing condition expression while reading compile-time value");
+			CompileTimeValue conditionValue =
+				getExpressionCompileTimeValue(context, expr->arguments[1], context.currentCodegenInstantiation);
+			auto *condition = std::get_if<bool>(&conditionValue);
+			if (condition)
 				return getEffectiveType(context, expr->arguments[*condition ? 2 : 3]);
 			DataType trueType = getEffectiveType(context, expr->arguments[2]);
 			DataType falseType = getEffectiveType(context, expr->arguments[3]);
@@ -640,11 +645,9 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		}
 
 		auto evaluateParameterValue = [&](Expression *argumentExpression) {
-			return argumentExpression
-					   ? evaluateCompileTimeValue(
-							 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
-						 )
-					   : CompileTimeValue{};
+			if (!argumentExpression)
+				crashCompilerBug("missing pattern-call argument while building codegen instantiation key");
+			return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
 		};
 		auto instKey = findMatchingInstantiationKey(matchedSection, orderedBindings, argTypes, evaluateParameterValue);
 		auto instIt = instKey ? matchedSection->instantiations.find(*instKey) : matchedSection->instantiations.end();

@@ -174,8 +174,8 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 					);
 				CompileTimeValue conditionValue =
 					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindingFrameStack);
-				std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-				if (!condition.has_value()) {
+				auto *condition = std::get_if<bool>(&conditionValue);
+				if (!condition) {
 					branchKnown = false;
 					break;
 				}
@@ -277,6 +277,7 @@ bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	InferenceContext context(parseContext);
 	parseContext.constantValuesByReference.clear();
+	parseContext.constantValuesByExpression.clear();
 	parseContext.inferredIfChainSelections.clear();
 	context.currentKnownConstants.clear();
 	if (!inferSection(parseContext.mainSection, context, {}))
@@ -338,15 +339,17 @@ bool ensureSectionInstantiationInferred(
 	if (!section)
 		return false;
 	(void)definition;
+	(void)callerInstantiation;
 
 	std::vector<std::pair<std::string, Expression *>> paramBindings;
 	paramBindings.reserve(parameterNames.size());
 	for (const std::string &parameterName : parameterNames)
 		paramBindings.push_back({parameterName, callerBindingFrameStack.lookup(parameterName)});
 	auto evaluateParameterValue = [&](Expression *argumentExpression) {
-		return argumentExpression
-				   ? evaluateCompileTimeValue(argumentExpression, parseContext, callerBindingFrameStack, callerInstantiation)
-				   : CompileTimeValue{};
+		if (!argumentExpression)
+			crashCompilerBug("missing section parameter expression while building instantiation key");
+		return callerContext ? callerContext->lookupExpressionValue(argumentExpression)
+							 : getExpressionCompileTimeValue(parseContext, argumentExpression, callerInstantiation);
 	};
 	InstantiationKey instantiationKey =
 		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
@@ -380,8 +383,9 @@ bool ensureSectionInstantiationInferred(
 			inst.constantParameterValues[parameterName] = argTypes[i];
 			continue;
 		}
-		CompileTimeValue value =
-			evaluateCompileTimeValue(argumentExpression, parseContext, callerBindingFrameStack, callerInstantiation);
+		CompileTimeValue value = callerContext
+									 ? callerContext->lookupExpressionValue(argumentExpression)
+									 : getExpressionCompileTimeValue(parseContext, argumentExpression, callerInstantiation);
 		if (isCompileTimeKnown(value))
 			inst.constantParameterValues[parameterName] = value;
 		else
@@ -393,6 +397,7 @@ bool ensureSectionInstantiationInferred(
 		return inst.returnType.isDeduced() && inst.valid;
 
 	inst.constantValuesByReference.clear();
+	inst.constantValuesByExpression.clear();
 	inst.writtenGlobalReferences.clear();
 	inst.finalGlobalConstantValues.clear();
 	inst.selectedOverloadsByCall.clear();
@@ -400,6 +405,8 @@ bool ensureSectionInstantiationInferred(
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	if (callerContext) {
 		context.currentKnownConstants = callerContext->currentKnownConstants;
+		context.inheritedTrialExpressionValues =
+			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
 		context.trialJournal = callerContext->trialJournal;
 		context.trialInstantiationCache =
 			callerContext->trialInstantiationCache
@@ -423,7 +430,7 @@ bool ensureSectionInstantiationInferred(
 		if (std::find(section->globalVariables.begin(), section->globalVariables.end(), parameterNames[i]) !=
 			section->globalVariables.end())
 			continue;
-		auto bindingValue = makeNonMacroParameterBinding(parameterNames[i], argTypes[i], inst);
+		auto bindingValue = makeNonMacroParameterBinding(parseContext, parameterNames[i], argTypes[i], inst);
 		nonMacroTypeBindings[parameterNames[i]] = bindingValue.get();
 		ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
 	}

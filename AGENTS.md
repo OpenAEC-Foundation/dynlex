@@ -5,7 +5,6 @@ These instructions apply to all coding agents working in this repository (includ
 ## Core Rules
 - this is a compiler. only PERFECT code is accepted. if the existing code isn't perfect, we need to find the root cause and fix it.
 - your code should be as DRY and performant as possible. implement things FULLY, remove ALL leftovers. we don't have 'legacy'. ALL main .dl files should compile within seconds.
-- be direct. don't hide anything relevant.
 - remember, you're an agent. for you, a ' ' is a token, just like an 'e'.
 - find the broader, deterministic and simple pattern.
 - don't add code for debugging. debugging information gathering should NEVER hurt performance. handy optional built-in tools which can help debugging are allowed, but only on the users request.
@@ -17,11 +16,8 @@ These instructions apply to all coding agents working in this repository (includ
 - Keep dependencies minimal.
 - Always answer direct user questions instead of doing. if the user didn't ask you to do something, propose it.
 - if you need information about the code you can get yourself, just get it. you don't have to ask the user if they want you to root-cause a problem. gathering info can never hurt, since you aren't making changes.
+- be direct. don't hide anything relevant.
 - don't assume the user knows everything.
- - when the user asks an explanation, give the context as well. the user might have read past it.
- - suggest better approaches when you see one.
- - immediately point out any inconsistencies in what the user is saying. this helps making things clear.
-- Verify before assuming package/version/tool availability.
 - Document important fixes in repository docs/rules so all agents share the same context.
 - Be cautious with git; other agents may work in the same tree. if the user tells you to revert that doesn't mean git revert or git checkout. verify no other agents edited a file before deleting or editing it.
 - Inspect intermediates instead of binaries.
@@ -29,6 +25,19 @@ These instructions apply to all coding agents working in this repository (includ
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
 - Keep bash commands on one line by chaining with `&&` or `;`.
+
+- when you receive ANY message, follow these steps:
+1. verify everything:
+- don't bootlick. responding with 'you're right' up front is absolutely PROHIBITED. instead, start with verifying:
+- what the user said. allow yourself the time to think. maybe their assumptions are wrong. maybe there are multiple ways to interpret a message.
+- if you have all tools for the job.
+- suggest better approaches when you see one.
+point things like these out directly and stop. this will save you tons and tons of work. if the user discovers that you have not been following this prompt (f.e. hiding issues), they will not hesitate to revert all your work and make you start over from scratch.
+if working on the compiler, read docs/stages.md.
+
+2. execute the users prompt or respond to it if it is a question and stop.
+ - when the user asks an explanation, give the context as well. the user might have read past it.
+
 - When encountering ANY compiler issue:
 
 NEVER add a workaround like:
@@ -42,7 +51,7 @@ instead:
 1. identify a minimal reproducible example. minimize the amount of reproducing code. imported code is counted too. so NO 'import std.dl'!
 2. identify the root cause with whatever tools you need. stay open for any root cause. to find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
 3. identify a possible fix. use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
-4. report to the user.
+4. report to the user and stop so the user is notified. the user is not reading what you are doing continuously.
 the user may discuss the bug with you.
 when the user tells you to fix it:
 5. fix the compiler bug first. verify it fixed it by building and the running repro and test script. if it didn't fix it and you don't know why, go back to 1. when you are at step 3 again, you don't have to report if it's a trivial fix following agents.md.
@@ -88,13 +97,6 @@ Implementation details are documented in `.claude/rules/` (`compiler.md`, `codeg
   - `section`: Outermost pattern for section openings (loop/if/etc.)
 - Classes add patterns to the function tree because type literals are functions.
 - Intrinsics should stay minimal (core arithmetic/memory/comparison only); stdlib should live in DynLex.
-
-## Compilation Pipeline
-
-1. Import (read sources, handle imports)
-2. Section analysis (indentation, sections, patterns)
-3. Pattern resolution (matching and variable resolution)
-4. Codegen (LLVM IR to native executable, `.ll`, or `.spv`)
 
 ## Testing
 

@@ -1,9 +1,11 @@
 ---
 paths:
-  - "src/compiler/**"
+  - "src/cpp/compiler/**"
 ---
 
 # Compiler Core Architecture
+
+This document must stay consistent with `docs/stages.md` (source of truth for stage behavior).
 
 ## Design Principles
 - **No short-term solutions** — code must be clean and correct
@@ -25,8 +27,8 @@ paths:
 ## Key Invariants
 - Macro body expression nodes are **shared mutable state** — reset types before each `inferMacroBody` call (macro sections only)
 - Type inference: execution-order processing (top to bottom), with per-instantiation recursive re-inference when undeduced recursive dependencies are observed.
-- Instantiation argTypes vector must be built in `nodesPassed` order (both inference and codegen)
-- Non-macro instantiation `argTypes` are immutable and canonical (built in `nodesPassed` order); callee inference must not rewrite caller argument types.
+- Instantiation argTypes vectors must use one shared canonical argument order in inference and codegen.
+- Non-macro instantiation `argTypes` are immutable and canonical; callee inference must not rewrite caller argument types.
 - Non-macro instantiation keys may only be retargeted when newly discovered required compile-time parameters are all compile-time constants. During trial inference, that retarget must also update the trial journal undo key; missing/mismatched journal state is a hard compiler bug (no fallback, no silent ignore).
 - `macroBindingStack` (`std::stack`): macros only see their own bindings. `MacroScopeGuard` pops to caller scope for argument evaluation
 - `getVariablePointer` recursively resolves through multiple macro binding scopes (for nested macros like `add value to target` → `set var to val`)
@@ -52,20 +54,21 @@ paths:
 
 ## Compilation Phases
 1. **Import** — read source files (`compiler.cpp`: `importSourceFile`)
-2. **Section Analysis** — parse indentation, identify sections (`compiler.cpp`: `analyzeSections`)
-3. **Pattern Resolution** — match patterns, resolve variables, assign precedence (`patternResolution.cpp`: `resolvePatterns`)
-4. **Variable Resolution** — group variables by scope, handle globals (part of `resolvePatterns`)
-5. **Type Inference** — execution-order processing with operand reordering, plus per-instantiation recursive re-inference on undeduced recursive dependencies (`typeInference.cpp`: `inferTypes`)
-6. **Codegen** — LLVM IR generation → native executable, .ll, .wasm, or .spv (`codegen/`)
+2. **Parse** — analyze sections, indentation, and pattern skeletons without hardcoding (`compiler.cpp`: `analyzeSections`)
+3. **Pattern Matching** — iterative pattern resolution, variable/argument discovery, precedence assignment, and variable scoping (`patternResolution.cpp`: `resolvePatterns`)
+4. **Validation** — fail-fast consistency validation to prevent dependent error cascades (`validation.cpp`)
+5. **Type Resolution** — execution-order type inference with operand reordering and per-instantiation recursive re-inference on undeduced recursive dependencies (`typeInference.cpp`: `inferTypes`)
+6. **Code Generation** — LLVM IR generation to target artifacts (native executable, `.ll`, `.wasm`, or `.spv`) (`codegen/`)
 
 ## Source File Organization
 
-### Compiler core (`src/compiler/`)
-- `compiler.cpp` — import phase, section analysis, intrinsic classifier helpers (`isArithmeticOperator`, etc.)
+### Compiler core (`src/cpp/compiler/`)
+- `compiler.cpp` — import phase, parse stage (`analyzeSections`), intrinsic classifier helpers (`isArithmeticOperator`, etc.)
 - `patternResolution.cpp` — pattern matching, resolution loop, precedence assignment, variable scoping
-- `typeInference.cpp` — execution-order type inference with operand reordering and per-instantiation recursive re-inference, `InferenceContext` (trial mode for reordering), macro body inference, type validation
+- `validation.cpp` — validation stage
+- `typeInference.cpp` — type-resolution stage with operand reordering and per-instantiation recursive re-inference, `InferenceContext` (trial mode for reordering), macro body inference, type validation
 
-### Code generation (`src/compiler/codegen/`)
+### Code generation (`src/cpp/compiler/codegen/`)
 - `codegen.cpp` — expression codegen (`generateExpressionCode`), monomorphized function generation (`generateSpecializedFunction`), section codegen, main driver (`generateCode`)
 - `codegenTypes.cpp` — type utilities (`getLLVMType`, `ensureType`), macro binding infrastructure (`resolveVariableBinding`, `resolveThroughMacroLayers`, `MacroScopeGuard`, `getVariablePointer`), effective type resolution (`getEffectiveType`), variable allocation
 - `codegenIntrinsics.cpp` — all intrinsic code generation (`generateIntrinsicCode`): arithmetic, comparison, logical, math, pointer, control flow, return, call, cast, construct, property, shader I/O
@@ -76,9 +79,10 @@ paths:
 
 ## Intrinsic Registry & Type Inference
 - `intrinsicInfo.h`: central registry mapping intrinsic names → `{argCount, IntrinsicReturnKind}`. `argCount` includes the name argument (e.g. `@intrinsic("add", a, b)` → 3). Arg counts are validated at parse time in `section.cpp`; codegen and type inference do not re-check.
-- `IntrinsicReturnKind` enum: `SameAsArgs`, `Bool`, `Void`, `Float`, `Custom`
+- `IntrinsicReturnKind` enum: `SameAsArgs`, `SameAsInts`, `Bool`, `Void`, `Float`, `Custom`
 - Type inference (`typeInference.cpp`, `IntrinsicCall` case) uses registry lookup + switch on return kind:
   - **SameAsArgs**: unary (1 arg) or binary (2 args) with pointer arithmetic special case for add/subtract
+  - **SameAsInts**: unary/binary integer-only operators with shared integer-promotion rules
   - **Bool**: validates operands via `promoteArithmetic` (rejects non-numeric like Void), then `Bool` assignment
   - **Void**: direct `Void` assignment + special `store` side effects (type propagation to variables)
   - **Float**: direct `Float` assignment (e.g. shader inputs)
@@ -95,7 +99,7 @@ paths:
 - **Trial-instantiation cache/type-key encoding must include full `DataType` structure**: never key trial caches or trial-journal dedupe via `DataType::toString()` for type literals. `Type(Int8)` and `Type(Bool)` both stringify as `type`, which can alias distinct instantiations and leak wrong return types during trial inference.
 - **Global variable validation must skip pattern-definition sections and their bodies**: macro/non-macro definition locals are inferred at instantiation/expansion time, not during the top-level whole-program walk. Validating unresolved definition-body locals globally produces false positives (for example, stdlib section-macro replacement locals).
 - **Macro expansion bodies must be cloned per call site**: never reuse a macro definition's expression tree directly for expansion. Operand regrouping, inferred types, and selected overload state are mutable and call-site dependent.
-- **Argument position ordering is only a parse-time pending/pattern fixup**: parsing a pending pattern expression can collect parenthesized subexpressions before number literals, so `expr->arguments` may not initially match left-to-right source order. Normalize by source position only while building pending/pattern-reference expressions (including temporary type-reference expressions). Do not use source-position sorting as a later repair step for regrouped `PatternCall`s, arrays, or intrinsics.
+- **Expression argument ordering is normalized once, then treated as canonical**: parsing can collect arguments out of source order. Normalize argument positions by source location during parse/pattern matching setup, then do not run later source-position re-sorts as a repair step for regrouped `PatternCall`s, arrays, or intrinsics.
 - **Property store through macros**: `set the x of target to val` — the store destination resolves to `the x of target` (a PatternCall to the property macro), not directly to `@intrinsic("property", ...)`. Both codegen (`resolveThroughMacroLayers`) and type inference (`resolveThroughBindingsDeep`) must expand through macro PatternCalls to detect property stores and generate GEP+store / propagate field types.
 - **Store destinations must be writable**: `@intrinsic("store", dest, value)` is only valid when `dest` resolves to a writable variable or property. Type inference must fail hard on non-writable destinations instead of silently accepting them, otherwise operand regrouping can treat impossible assignments as valid alternatives and surface fake ambiguity warnings.
 - **Per-variable class instantiations (copy-on-assign)**: `ClassInstantiation::fieldTypes` is shared mutable state via `getOrCreateInstantiation`. When two variables are constructed with the same field types, they share an instantiation. Property stores (e.g., `multiply v1 by 4.5` promoting Numeric→Float) mutated the shared `fieldTypes`, contaminating all variables sharing that instantiation. Fix: on first assignment of a Class type to a variable (Undeduced→Class in the store handler), copy the instantiation so each variable gets its own independent `fieldTypes`. This runs exactly once per variable since `canRefineTo(Class→Class)` is false afterward. The old oscillation workaround in the construct handler (preferring existing compatible instantiations) was removed — with per-variable copies, the construct's instantiation is never mutated, so oscillation can't occur.
@@ -108,7 +112,7 @@ paths:
 - **Class `construct` must enforce declared field conversion-compatibility**: class instantiation from constructor arguments must require each argument to be runtime-convertible to the declared field type (except `Any` and array-size-only declarations). Accepting non-convertible mismatches lets bad regroupings pass inference and can crash later in `ensureType` with unsupported conversions like `Int -> Class`.
 - **Removed `get:`/`set:` section types**: Non-macro functions now use `execute:` consistently. The `SectionType::Get` and `SectionType::Set` enum values and their string mappings in `sectionType.cpp` were removed. All lib files and tests updated from `get:` to `execute:`.
 - **`currentInstantiation` moved to InferenceContext**: Removed `currentInstantiation` from `ParseContext` — it's only needed during type inference, not codegen. Now lives in `InferenceContext`.
-- **Codegen uses pre-sorted arguments**: `generateExpressionCode` no longer calls `sortArgumentsByPosition` — type inference now sorts arguments in-place, so codegen can use `expr->arguments` directly.
+- **Codegen uses canonical pre-ordered arguments**: `generateExpressionCode` does not reorder arguments. It consumes the canonical argument order established before codegen.
 - **Overload selection failure is an error**: When `selectOverload` returns null in both type inference and codegen, it's now treated as an error (with diagnostic) instead of silently falling back to `defs[0]`.
 - **Ambiguous single-word function-vs-parameter warnings now suggest concrete pattern alternatives**: During pattern resolution, the warning walks matched function section definitions in source order (starting from the matched definition), expands parsed `Choice` alternatives from `DefinitionPatternElement` trees, and suggests the first valid alternative spelling. Multi-word alternatives get both a warning suggestion and a quick-fix edit; single-word alternatives are only suggested when they don't collide with enclosing parameter names.
 - **Unresolved patterns can replay matching in diagnostic-only literal-accept mode**: normal resolution must never accept literal pattern words as parameters. For unresolved references only, rerun the same matcher with `MatchOptions.acceptLiterals = true`, allow argument-like source elements to match parent `VariableLike` literal children, record those accepted literal nodes, and use the first full replay match only to attach notes/quick fixes like `z` is not a parameter because it is not used. Cross-file quick fixes must target the definition file URI from the fix range, not the current document unconditionally.
@@ -121,13 +125,14 @@ paths:
 - **Macro type probes must derive generic intrinsic result types without shared-section inference state**: `resolveTypeThroughBindings()` now computes types for generic intrinsics (`SameAsArgs`, `Bool`, `Void`, `Float`) directly from bound argument types. Without this, nested grouped macro expressions like `the minimum of (the maximum of ...) and 0.0` could fail during operand regrouping because recursive macro type probes hit an in-progress macro section and saw an unresolved body expression.
 - **Compile-time type-reference intrinsic arguments must resolve through `resolveCompileTimeTypeReference(...)`, not runtime-type fallbacks**: intrinsics such as `@intrinsic("construct", type_ref, value...)` and `@intrinsic("size of", type_ref)` may still need normal inference on the current type-expression tree so its own grouping settles, but the final type reference must come from `resolveCompileTimeTypeReference(...)`. If the current expression is already inferred as `Type`, honor that before reopening macro/binding expansion, and do not recover failures by converting an inferred runtime value type with `toTypeReference(...)`.
 - **Compile-time-only argument detection must preserve active bindings**: helpers that inspect a pattern body to skip compile-time-only arguments still need the caller's current binding frame for overload and property/type probes. Running those probes with an empty binding stack can reintroduce placeholder names like `ownername`/`propertyname`, derail trial inference, and collapse valid runtime expressions to `nothing`.
+- **Instantiation compile-time parameter seeding must read caller-evaluated expression values from active inference state**: non-macro reinference passes must seed `constantParameterValues` from the caller expression tree's already-evaluated values (including trial-expression maps), keyed to the caller instantiation snapshot. Do not re-infer already-deduced argument types just to backfill values, and do not seed expression-storage fallback values during parameter seeding.
 - **Compile-time type-reference resolution must prepare pending expressions through one shared path**: field type expressions and other compile-time type references may still be `Expression::Kind::Pending` when inference reaches them. Expand those with the source section before resolving the type reference, and keep that preparation in a shared helper used by both parse-time declared-type resolution and inference-time class/type resolution so the two stages cannot drift.
 - **Type-constraint and type-macro bindings can appear as single-word `Pending` expressions**: replacement bodies like `@intrinsic("array", n, elementtype)` are parsed before macro parameter references become real `Variable` nodes. Compile-time integer evaluation and type-reference resolution must therefore resolve single-token pending expressions through the active binding map, not only `Variable` expressions.
 - **Type-inference diagnostics stay at the catch site and carry the inference stack as related info**: when inference discovers a failure or ambiguity, keep the primary diagnostic range on the expression where it was caught. Do not rebuild it on an enclosing root expression. Instead, attach the active inference call stack, with the current argument/result types for each traced call/intrinsic frame, as `relatedInfo`.
 - **Capture constraints must use the real source slice, not a detached string view**: type constraints such as `{4 float array:value}` need exact source-backed ranges so literal extraction and pattern/keyframe mapping stay valid. Detached `std::string_view` ranges corrupt transformed-pattern offsets and make temporary type parsing non-deterministic.
 - **Parenthesized intrinsic arguments must preserve explicit grouping**: parsing `@intrinsic(...)` arguments has to mark an argument that originated from `(...)` as `isExplicitGroup`, just like normal parenthesized subexpressions. Otherwise operand regrouping can reopen boundaries inside replacements such as `@intrinsic("dereference", (the data of str) + index)` and incorrectly try groupings like `the data of (str + index)`.
 - **Non-macro pattern-call argument typing stays in caller scope**: call-site argument expressions must be typed with the caller's active bindings, before crossing into the callee instantiation boundary. Only the callee body itself should see synthetic typed parameter bindings; passing caller expression bindings into non-macro body inference makes the function behave like a macro and causes context-dependent type failures.
-- **Pattern-call bindings must preserve argument order, not re-sort by source range**: `expr->arguments` already carries the `nodesPassed` parameter order. After operand regrouping, nested arguments can overlap in source range, so re-sorting by `range.start()` can bind parameters to larger enclosing subexpressions like `ch into data at 0` instead of the real argument `ch`.
+- **Pattern-call bindings must preserve canonical argument order, not re-sort by source range**: after regrouping, nested arguments can overlap in source range, so re-sorting by `range.start()` can bind parameters to larger enclosing subexpressions like `ch into data at 0` instead of the real argument `ch`.
 - **Nested macro arguments must capture outer bindings before reusing the same parameter names**: if a macro argument expression like `the data of left` is bound into another macro parameter also named `left`, the inner `left` must be rebound to the outer scope before the new macro frame is pushed. Otherwise nested expansions self-capture (`left` becomes `the data of left`, then `the data of (the data of left)`, etc.), leading to infinite recursion or unresolved types in helpers like `character 0 of left`.
 - **Macro capture of shadowed names must materialize typed placeholders, and typed-placeholder types must survive regrouping resets**: when a macro argument references a name that is shadowed by the callee's parameter names (for example, `return value` wrapping an expression that itself references `value`), capture that reference as a typed placeholder instead of leaving the raw variable token. Also preserve `TypedPlaceholder.type` when resetting speculative expression types; clearing it makes valid captured bindings appear unresolved and can reject otherwise-correct calls like `print "hello"` or recurse indefinitely in nested macro/type probes.
 - **Captured shadowed bindings must never borrow temporary inference nodes**: non-macro reinference builds temporary parameter-binding expressions (`makeNonMacroParameterBinding`) whose lifetime ends after the pass. If macro-capture freezes a shadowed binding, clone the resolved subtree into owned capture nodes and preserve its inferred type/state; otherwise `ownedCapturedBindingRoots` can hold dangling pointers and crash later in `ParseContext` teardown.
@@ -137,6 +142,7 @@ paths:
 - **Externally callable DynLex functions need stable wrapper thunks, not reused internal monomorphized ABI**: normal non-macro functions are internal monomorphized symbols that take pointer parameters. `exposed function` and `@intrinsic("function", "...")` must therefore lower to a separate callable wrapper with value-typed parameters and a stable symbol, while ordinary DynLex calls keep using the internal pointer-based monomorphized entry point. Only functions with fully concrete runtime parameter types can be referenced this way.
 - **Shader uniform fallback bindings must follow parse-time source location order, never codegen use order**: SPIR-V UBO bindings are part of the shader ABI. Top-level code motion or earlier reads in `main` must not renumber bindings. Collect `@intrinsic("shader uniform", "...")` names while parsing source, deduplicate by name, sort by earliest merged source location, and only use codegen-time discovery as a no-op consistency path.
 - **Class `size of` must use concrete class instantiations with initialized byte sizes**: `size of` for class types is evaluated before LLVM struct emission. If `ClassInstantiation.byteSize` stays at `0` until `toLLVM()`, `size of <class>` returns `0` and runtime allocations corrupt memory. Compute and store class layout byte size when each instantiation is created (both default declared-field instantiations and `getOrCreateInstantiation()` paths), and concretize class type refs with `classInstIndex = -1` to an existing instantiation during `size of` evaluation/codegen.
+- **CString content equality belongs in stdlib overloads, not pointer intrinsic changes**: pointer `equal/not equal` intrinsics stay address-based. Null-terminated text equality is implemented as a dedicated `{cstring:left} = {cstring:right}` pattern in `lib/string.dl` that performs byte-wise comparison with explicit null checks and pointer fast-path.
 
 ## TODO / Known Issues
 - **Argument greediness**: `factorial of n - 1` parses as `(factorial of n) - 1`. Pattern arguments greedily consume tokens. Operator precedence (wave-based) fixes associativity but not argument boundaries for non-operator patterns. The same limitation affects type-reference arguments like `an array of n * m items`; today those need an explicit boundary pattern/grouping such as `an array of the product of n and m items`.

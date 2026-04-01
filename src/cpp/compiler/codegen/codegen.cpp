@@ -124,11 +124,9 @@ Instantiation *generateSpecializedFunction(
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	PatternDefinition *definition = section->patternDefinitions.empty() ? nullptr : section->patternDefinitions.front();
 	auto evaluateParameterValue = [&](Expression *argumentExpression) {
-		return argumentExpression
-				   ? evaluateCompileTimeValue(
-						 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
-					 )
-				   : CompileTimeValue{};
+		if (!argumentExpression)
+			crashCompilerBug("missing section parameter expression while building codegen instantiation key");
+		return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
 	};
 	InstantiationKey instantiationKey =
 		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
@@ -715,11 +713,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		// Look up or generate the specialized function
 		auto evaluateParameterValue = [&](Expression *argumentExpression) {
-			return argumentExpression
-					   ? evaluateCompileTimeValue(
-							 argumentExpression, context, context.macroBindingFrames, context.currentCodegenInstantiation
-						 )
-					   : CompileTimeValue{};
+			if (!argumentExpression)
+				crashCompilerBug("missing pattern-call argument while building codegen instantiation key");
+			return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
 		};
 		InstantiationKey instantiationKey =
 			findMatchingInstantiationKey(matchedSection, paramBindings, argTypes, evaluateParameterValue)
@@ -759,8 +755,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::IntrinsicCall: {
-		std::vector<Expression *> args(expr->arguments.begin() + 1, expr->arguments.end());
-		return generateIntrinsicCode(context, expr, expr->intrinsicName, args, getEffectiveType(context, expr));
+		return generateIntrinsicCode(context, expr, expr->intrinsicName, expr->arguments, getEffectiveType(context, expr));
 	}
 
 	case Expression::Kind::Pending:

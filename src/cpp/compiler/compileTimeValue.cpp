@@ -24,6 +24,33 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 	return std::nullopt;
 }
 
+CompileTimeValue
+getExpressionCompileTimeValue(const ParseContext &context, const Expression *expr, const Instantiation *instantiation) {
+	if (!expr)
+		crashCompilerBug("compile-time value lookup received null expression");
+	if (instantiation) {
+		auto instIt = instantiation->constantValuesByExpression.find(const_cast<Expression *>(expr));
+		if (instIt != instantiation->constantValuesByExpression.end())
+			return instIt->second;
+	}
+	auto parseIt = context.constantValuesByExpression.find(const_cast<Expression *>(expr));
+	if (parseIt != context.constantValuesByExpression.end())
+		return parseIt->second;
+	return {};
+}
+
+void setExpressionCompileTimeValue(
+	ParseContext &context, Expression *expr, const CompileTimeValue &value, Instantiation *instantiation
+) {
+	if (!expr)
+		crashCompilerBug("compile-time value assignment received null expression");
+	auto &target = instantiation ? instantiation->constantValuesByExpression : context.constantValuesByExpression;
+	if (isCompileTimeKnown(value))
+		target[expr] = value;
+	else
+		target.erase(expr);
+}
+
 static CompileTimeValue evaluateCompileTimeValueImpl(
 	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
 );
@@ -183,8 +210,8 @@ static CompileTimeValue evaluateIntrinsic(
 	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue =
 			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		std::optional<bool> condition = compileTimeTruthiness(conditionValue);
-		if (!condition.has_value())
+		auto *condition = std::get_if<bool>(&conditionValue);
+		if (!condition)
 			return {};
 		return evaluateCompileTimeValueImpl(expr->arguments[*condition ? 2 : 3], context, bindingFrameStack, instantiation);
 	}
@@ -210,17 +237,20 @@ static CompileTimeValue evaluateIntrinsic(
 	};
 
 	if (kind == IntrinsicKind::Not) {
-		std::optional<bool> value = compileTimeTruthiness(lhs());
-		return value.has_value() ? CompileTimeValue(!*value) : CompileTimeValue{};
+		CompileTimeValue value = lhs();
+		auto *boolean = std::get_if<bool>(&value);
+		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::BitwiseNot) {
 		std::optional<std::int64_t> value = extractCompileTimeInteger(lhs());
 		return value.has_value() ? CompileTimeValue(static_cast<double>(compileTimeBitwiseNot(*value))) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-		std::optional<bool> left = compileTimeTruthiness(lhs());
-		std::optional<bool> right = compileTimeTruthiness(rhs());
-		if (!left.has_value() || !right.has_value())
+		CompileTimeValue leftValue = lhs();
+		CompileTimeValue rightValue = rhs();
+		auto *left = std::get_if<bool>(&leftValue);
+		auto *right = std::get_if<bool>(&rightValue);
+		if (!left || !right)
 			return {};
 		return kind == IntrinsicKind::And ? CompileTimeValue(*left && *right) : CompileTimeValue(*left || *right);
 	}
@@ -327,7 +357,9 @@ static CompileTimeValue evaluatePatternCall(
 		expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
 		return {};
 
-	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinitions.front();
+	PatternDefinition *def = expr->selectedPatternDefinition;
+	if (!def)
+		def = expr->patternMatch->matchedEndNode->matchingDefinitions.front();
 	if (!def || !def->section)
 		return {};
 
@@ -371,8 +403,9 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 	expr = resolveCompileTimeBinding(expr, bindingFrameStack, &effectiveBindingFrameStack);
 	if (!expr)
 		return {};
-	if (expr->type.kind == DataType::Kind::Type)
-		return expr->type;
+	CompileTimeValue storedValue = getExpressionCompileTimeValue(context, expr, instantiation);
+	if (isCompileTimeKnown(storedValue))
+		return storedValue;
 	if (activeCompileTimeFunctions.contains(expr))
 		return {};
 
@@ -387,8 +420,11 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
-		if (auto *number = std::get_if<double>(&expr->literalValue))
+		if (auto *number = std::get_if<double>(&expr->literalValue)) {
+			if (expr->type.kind == DataType::Kind::Bool)
+				return *number != 0.0;
 			return *number;
+		}
 		if (auto *text = std::get_if<std::string>(&expr->literalValue))
 			return *text;
 		return {};
@@ -406,7 +442,11 @@ static CompileTimeValue evaluateCompileTimeValueImpl(
 		}
 		return {};
 	case Expression::Kind::ArrayLiteral:
+		return {};
 	case Expression::Kind::TypedPlaceholder:
+		if (expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		return {};
 	case Expression::Kind::Pending:
 		return {};
 	case Expression::Kind::IntrinsicCall:
