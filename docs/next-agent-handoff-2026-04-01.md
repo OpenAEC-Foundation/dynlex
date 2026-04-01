@@ -1,54 +1,68 @@
 # Next Agent Handoff (2026-04-01)
 
-## User Instructions (Must Follow)
-- Compiler behavior must be deterministic and correct; no workarounds.
-- Do not treat compile-time values as a separate weaker path with different semantics.
-- Pointer identity comparison must remain available for raw pointers.
-- `cstring` content equality is needed, but it must not hijack all `i8* = i8*` comparisons.
-- Keep fixes minimal, explicit, and performance-safe.
-- Another agent should continue from this state.
+## Scope Completed
+- Ran full required tests with `./scripts/test.sh`.
+- Investigated the compiler crash: `FATAL: compiler bug: Runtime call argument produced no code`.
+- Added an initial stdlib `cstring` equality overload and a focused test.
 
-## Repository-Wide Rules Reiterated by User
-- This is a compiler project: only root-cause fixes, no temporary patches.
-- Fail hard on internal inconsistencies.
-- Keep behavior pattern/intrinsic driven, no hardcoding language behavior.
-- Keep code DRY and performant.
-- Document important fixes in shared rules/docs.
+## Test Snapshot
+- Full suite at investigation time: `17 passed, 36 failed, 0 skipped`.
+- Dominant crash signature: abort in call-argument lowering when an argument expression emits no runtime IR.
 
-## What Was Done In This Session
-- Ran `./scripts/test.sh`.
-- Observed widespread failures, with many crashes: `FATAL: compiler bug: Runtime call argument produced no code`.
-- Root-caused the crash path to non-macro call argument lowering in `src/cpp/compiler/codegen/codegen.cpp` when runtime code is requested for an argument whose expression emits no runtime IR.
-- Added a `cstring` equality overload in `lib/string.dl`:
-  - `function {cstring:left} = {cstring:right}`
-  - byte-wise null-terminated comparison with pointer fast-path + null checks.
-- Added test `tests/required/cstring_equality/` and it passes in isolation.
-- Added a note to `.claude/rules/compiler.md` about keeping pointer intrinsic equality address-based and implementing cstring content equality in stdlib overloads.
+## Root Cause Found (Crash)
+- Crash point: `src/cpp/compiler/codegen/codegen.cpp` around non-macro call argument lowering (`Runtime call argument produced no code`).
+- Mechanism:
+  - Codegen treats a callee parameter as runtime unless it is in `requiredCompileTimeParameters`.
+  - Some compile-time-known argument expressions are not marked as compile-time-required in the callee instantiation.
+  - Those arguments can be compile-time-only intrinsics/patterns that legitimately return no runtime IR.
+  - Codegen still attempts runtime emission and aborts when it gets `nullptr`.
 
-## Critical Current Problem
-- The new `{cstring} = {cstring}` overload reroutes generic `i8* = i8*` calls to cstring content compare.
-- This hijacks pointer identity semantics for byte pointers unless callers use `@intrinsic("equal", left, right)` directly.
+## Minimal Reproducer For Crash
 
-## Build-Info / Compile-Time Context
-- `@intrinsic("build info", key)` is currently compile-time-only in codegen (`generateIntrinsicCode` returns no runtime value for it).
-- Compile-time string equality exists in compile-time evaluation (`CompileTimeValue` string compare).
-- Crash still reproduces on:
-  - `discard 0 if (the build info "platform") = "wasm", else 1`
-- Root-cause direction already identified:
-  - compile-time-known argument values are seeded,
-  - but some call-argument paths still attempt runtime lowering when compile-time-only propagation/requirement marking does not fully align.
+```dl
+function [the|] build info key:
+    replacement:
+        @intrinsic("build info", key)
 
-## Required Next Decisions / Fix Work
-- Decide how to provide cstring content equality without hijacking all pointer equality:
-  - Option A: remove operator overload and provide explicit pattern name for cstring content compare.
-  - Option B: introduce dedicated intrinsic/pattern for cstring content compare with explicit use sites.
-  - Option C: add distinct type-level separation so raw byte pointers and cstrings are not conflated at `=` resolution.
-- Keep raw pointer identity comparison intact for `i8*` where requested.
-- Fix compile-time/runtime value propagation mismatch so compile-time-known expressions (including build-info-derived expressions) never get forced through runtime codegen paths that produce no IR.
+function echo value:
+    execute:
+        @intrinsic("return", value)
 
-## Files Touched In This Session
+@intrinsic("discard", echo (the build info "platform"))
+```
+
+Expected: compile.
+Actual: `FATAL: compiler bug: Runtime call argument produced no code`.
+
+## Changes Made
 - `lib/string.dl`
+  - Added `function {cstring:left} = {cstring:right}` with:
+    - pointer fast-path,
+    - null checks,
+    - byte-wise null-terminated compare loop.
 - `tests/required/cstring_equality/main.dl`
 - `tests/required/cstring_equality/expected.txt`
 - `.claude/rules/compiler.md`
+  - Added note that pointer intrinsic equality should remain address-based and cstring content equality should be explicit.
+
+## Validation Performed
+- `./build/dynlex tests/required/cstring_equality/main.dl -o /tmp/cstring_equality.out && /tmp/cstring_equality.out`
+- Output matched expected:
+  - `1`
+  - `0`
+
+## Important Regression Introduced
+- The new `{cstring} = {cstring}` overload currently captures generic `i8* = i8*` usage.
+- Verified by emitting LLVM IR for pointer comparisons: `a = b` with `a,b : pointer to byte` calls the new cstring overload instead of direct pointer identity.
+- Result: raw byte-pointer equality semantics are effectively hijacked unless callers use `@intrinsic("equal", left, right)` directly.
+
+## Required Next Fixes
+1. Preserve raw pointer identity semantics for `i8* = i8*`.
+2. Keep cstring content equality available without hijacking generic pointer equality.
+3. Fix compile-time/runtime argument classification so compile-time-only values are never forced through runtime lowering.
+
+## Candidate Directions
+- Replace operator overload with an explicit cstring-content comparison pattern name.
+- Or introduce a dedicated intrinsic for cstring content equality with both compile-time evaluator and runtime lowering.
+- Keep pointer `equal/not equal` intrinsics as address comparison.
 
