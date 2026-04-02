@@ -70,6 +70,8 @@ enum class IntrinsicReturnKind {
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0)                                                                 \
 	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1)                                                                 \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1)                                                           \
+	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1)                                                             \
+	X(ShaderStageIs, "shader stage is", 2, IntrinsicReturnKind::Custom, 1, 1)                                                  \
 	X(Select, "select", 4, IntrinsicReturnKind::Custom, 0, 0)                                                                  \
 	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1)
 

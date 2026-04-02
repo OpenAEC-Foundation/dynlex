@@ -22,6 +22,13 @@ paths:
 - Diagnostics are **grouped by source file URI** and published separately to each file. When multiple main documents produce diagnostics for the same file, they're merged with deduplication (same range + message = same diagnostic).
 - `generateSemanticTokens` only suppresses tokens for errors **in the requested file**, not errors in imported files.
 
+## Completion stability while editing broken lines
+- Keep **latest compile state** and **completion state** separate.
+- `parseContexts` + `importedBy` track the most recent compile attempt and drive diagnostics, hover, definition, document symbols, and semantic tokens.
+- `completionParseContexts` + `completionImportedBy` track the last context for each main document that reached `ResolvedPatterns`.
+- `textDocument/completion` must use the stable completion context together with the live current-line prefix from the open document.
+- Do not replace the stable completion context when a recompile fails before `ResolvedPatterns`; otherwise tab completions collapse as soon as the user briefly leaves and re-enters a broken line.
+
 ## Document symbols (`textDocument/documentSymbol`)
 - Returns hierarchical `DocumentSymbol[]` for VS Code outline view, breadcrumbs, and Ctrl+Shift+O navigation.
 - Walks section tree recursively. Each section with `patternDefinitions` becomes a symbol.

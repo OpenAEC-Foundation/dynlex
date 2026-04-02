@@ -10,7 +10,7 @@ function native output msg:
 
 function output msg:
     execute:
-        discard (wasm output msg) if (the build platform) = "wasm", else (native output msg)
+        discard (wasm output msg) if the build target is wasm, else (native output msg)
 
 set one to 1 as a boolean
 set zero to 0 as a boolean

@@ -383,12 +383,17 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
 			Expression *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
-			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue)) {
-				if (*key == "word size" || *key == "optimization level") {
-					return {DataType::Kind::Int, 4};
-				}
-				return {DataType::Kind::Int, 1, 1};
-			}
+			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue))
+				if (std::optional<DataType> infoType = buildInfoValueType(*key))
+					return *infoType;
+		} else if (kind == IntrinsicKind::TargetIs) {
+			Expression *targetExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			if (std::holds_alternative<std::string>(targetExpr->literalValue))
+				return {DataType::Kind::Bool};
+		} else if (kind == IntrinsicKind::ShaderStageIs) {
+			Expression *shaderStageExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			if (std::holds_alternative<std::string>(shaderStageExpr->literalValue))
+				return {DataType::Kind::Bool};
 		} else if (kind == IntrinsicKind::Select && activeTypeResolutionParseContext) {
 			Expression *selectedBranch =
 				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindingFrameStack);

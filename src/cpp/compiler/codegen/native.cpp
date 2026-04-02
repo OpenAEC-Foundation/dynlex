@@ -1,8 +1,11 @@
 #include "native.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -10,8 +13,20 @@
 #include "llvm/TargetParser/Host.h"
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <optional>
+#include <vector>
 
 bool emitNativeExecutable(ParseContext &context) {
+	auto pushPlainError = [&](std::string message) {
+		Diagnostic diagnostic;
+		diagnostic.level = Diagnostic::Level::Error;
+		diagnostic.range = Range();
+		diagnostic.message = std::move(message);
+		context.diagnostics.push_back(std::move(diagnostic));
+	};
+
 	// Initialize native target
 	llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
@@ -80,31 +95,71 @@ bool emitNativeExecutable(ParseContext &context) {
 		passManager.run(*context.llvmModule);
 	}
 
-	// Link object file to executable using system linker
-	std::string linkCommand = "cc " + objectPath + " -o " + outputPath;
+	auto linkerProgram = llvm::sys::findProgramByName("cc");
+	if (!linkerProgram) {
+		pushPlainError("failed to find linker: " + linkerProgram.getError().message());
+		return false;
+	}
 
-	// Preserve debug info sections
+	llvm::SmallString<128> stdoutPath;
+	llvm::SmallString<128> stderrPath;
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_link_stdout", "log", stdoutPath)) {
+		pushPlainError("failed to create temporary linker stdout file: " + ec.message());
+		return false;
+	}
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_link_stderr", "log", stderrPath)) {
+		llvm::sys::fs::remove(stdoutPath);
+		pushPlainError("failed to create temporary linker stderr file: " + ec.message());
+		return false;
+	}
+
+	std::vector<std::string> commandStorage;
+	commandStorage.reserve(5 + context.requiredLibraries.size());
+	commandStorage.push_back(*linkerProgram);
+	commandStorage.push_back(objectPath);
+	commandStorage.push_back("-o");
+	commandStorage.push_back(outputPath);
+
 	if (context.options.emitDebugInfo)
-		linkCommand += " -g";
+		commandStorage.push_back("-g");
 
-	// Add any required libraries
 	for (const std::string &lib : context.requiredLibraries) {
-		linkCommand += " -l" + lib;
+		commandStorage.push_back("-l" + lib);
 	}
 
-	// Capture linker output to detect missing libraries
-	std::string linkCommandWithRedirect = linkCommand + " 2>&1";
-	FILE *pipe = popen(linkCommandWithRedirect.c_str(), "r");
-	std::string linkerOutput;
-	int linkResult = -1;
-	if (pipe) {
-		char buffer[256];
-		while (fgets(buffer, sizeof(buffer), pipe)) {
-			linkerOutput += buffer;
-		}
-		linkResult = pclose(pipe);
+	std::vector<llvm::StringRef> commandArgs;
+	commandArgs.reserve(commandStorage.size());
+	for (const std::string &arg : commandStorage)
+		commandArgs.push_back(arg);
+
+	std::vector<std::optional<llvm::StringRef>> redirects = {
+		std::nullopt,
+		llvm::StringRef(stdoutPath),
+		llvm::StringRef(stderrPath),
+	};
+
+	std::string executeError;
+	bool executionFailed = false;
+	int linkResult =
+		llvm::sys::ExecuteAndWait(*linkerProgram, commandArgs, std::nullopt, redirects, 0, 0, &executeError, &executionFailed);
+
+	auto readFile = [](llvm::StringRef path) {
+		std::ifstream file(path.str(), std::ios::in | std::ios::binary);
+		if (!file)
+			return std::string{};
+		return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	};
+
+	std::string linkerOutput = readFile(stdoutPath) + readFile(stderrPath);
+	llvm::sys::fs::remove(stdoutPath);
+	llvm::sys::fs::remove(stderrPath);
+
+	if (!executeError.empty()) {
+		pushPlainError("failed to execute linker: " + executeError);
+		return false;
 	}
-	if (linkResult != 0) {
+
+	if (executionFailed || linkResult != 0) {
 		Diagnostic diagnostic(
 			context, Diagnostic::Level::Error, "linking failed", Range(), "exit_code", std::to_string(linkResult)
 		);
@@ -128,6 +183,11 @@ bool emitNativeExecutable(ParseContext &context) {
 			diagnostic.message +=
 				"\n" + renderConfiguredMessage(syntax, "linking failed", "missing libraries", {{"libraries", libraries}}) +
 				"\n" + renderConfiguredMessage(syntax, "linking failed", "install hint");
+		}
+		if (!linkerOutput.empty()) {
+			if (linkerOutput.back() == '\n')
+				linkerOutput.pop_back();
+			diagnostic.message += "\nLinker output:\n" + linkerOutput;
 		}
 
 		context.diagnostics.push_back(std::move(diagnostic));

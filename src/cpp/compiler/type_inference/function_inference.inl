@@ -707,26 +707,6 @@ static std::int64_t compileTimeShiftRight(std::int64_t value, unsigned amount) {
 	return static_cast<std::int64_t>(bits);
 }
 
-static std::string currentBuildInfo(ParseContext &parseContext, std::string_view key) {
-	if (key == "platform")
-		return parseContext.options.emitSPIRV ? "gpu" : parseContext.options.emitWASM ? "wasm" : "cpu";
-	if (key == "shader stage") {
-		if (!parseContext.options.emitSPIRV)
-			return "";
-		return parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment";
-	}
-	return {};
-}
-
-static std::optional<double> currentBuildInfoNumber(ParseContext &parseContext, std::string_view key) {
-	if (key == "word size")
-		return (parseContext.options.emitSPIRV || parseContext.options.emitWASM) ? 32.0
-																				 : static_cast<double>(sizeof(void *) * 8);
-	if (key == "optimization level")
-		return static_cast<double>(parseContext.options.optimizationLevel);
-	return std::nullopt;
-}
-
 static CompileTimeValue
 evaluateInferredCompileTimeCast(const CompileTimeValue &value, Expression *typeExpr, InferenceContext &context) {
 	if (!typeExpr)
@@ -770,13 +750,22 @@ static CompileTimeValue evaluateInferredIntrinsicCompileTimeValue(
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	if (kind == IntrinsicKind::BuildInfo) {
 		CompileTimeValue keyValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
-		if (auto *key = std::get_if<std::string>(&keyValue)) {
-			if (std::optional<double> number = currentBuildInfoNumber(context.parseContext, *key))
-				return *number;
-			std::string text = currentBuildInfo(context.parseContext, *key);
-			if (!text.empty() || *key == "shader stage")
-				return text;
-		}
+		if (auto *key = std::get_if<std::string>(&keyValue))
+			return currentBuildInfoValue(context.parseContext, *key);
+		return {};
+	}
+	if (kind == IntrinsicKind::TargetIs) {
+		CompileTimeValue targetValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		if (auto *targetName = std::get_if<std::string>(&targetValue))
+			if (std::optional<bool> result = evaluateTargetIs(context.parseContext, *targetName))
+				return *result;
+		return {};
+	}
+	if (kind == IntrinsicKind::ShaderStageIs) {
+		CompileTimeValue shaderStageValue = compileTimeValueOf(requireArgument(1, expr->intrinsicName));
+		if (auto *shaderStageName = std::get_if<std::string>(&shaderStageValue))
+			if (std::optional<bool> result = evaluateShaderStageIs(context.parseContext, *shaderStageName))
+				return *result;
 		return {};
 	}
 	if (kind == IntrinsicKind::SizeOf) {
@@ -1476,15 +1465,59 @@ static void inferOrderedExpression(
 					CompileTimeValue keyValue = context.lookupExpressionValue(keyExpr);
 					auto *key = std::get_if<std::string>(&keyValue);
 					if (!key) {
-						context.setTypeFailure("build info key must be a compile-time string literal");
+						setConfiguredTypeFailure(expr->range, "build info key must be string literal");
 						break;
 					}
-					if (*key == "word size" || *key == "optimization level") {
-						expr->type = {DataType::Kind::Int, 4};
-					} else {
-						expr->type = {DataType::Kind::Int, 1};
-						expr->type.pointerDepth = 1;
+					std::optional<DataType> infoType = buildInfoValueType(*key);
+					if (!infoType) {
+						setConfiguredTypeFailure(
+							expr->range, "unknown build info key", "message", {{"key", std::string(*key)}}
+						);
+						break;
 					}
+					expr->type = *infoType;
+				} else if (kind == IntrinsicKind::TargetIs) {
+					markCompileTimeParameterRequirements(
+						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
+					);
+					Expression *targetExpr = expr->arguments[1];
+					if (!inferExpression(targetExpr, context, false, macroBindingFrameStack))
+						break;
+					expr->arguments[1] = targetExpr;
+					CompileTimeValue targetValue = context.lookupExpressionValue(targetExpr);
+					auto *targetName = std::get_if<std::string>(&targetValue);
+					if (!targetName) {
+						setConfiguredTypeFailure(expr->range, "build target must be string literal");
+						break;
+					}
+					if (!evaluateTargetIs(context.parseContext, *targetName).has_value()) {
+						setConfiguredTypeFailure(
+							expr->range, "unknown build target", "message", {{"target", std::string(*targetName)}}
+						);
+						break;
+					}
+					expr->type = {DataType::Kind::Bool};
+				} else if (kind == IntrinsicKind::ShaderStageIs) {
+					markCompileTimeParameterRequirements(
+						expr->arguments[1], macroBindingFrameStack, context.currentInstantiation
+					);
+					Expression *shaderStageExpr = expr->arguments[1];
+					if (!inferExpression(shaderStageExpr, context, false, macroBindingFrameStack))
+						break;
+					expr->arguments[1] = shaderStageExpr;
+					CompileTimeValue shaderStageValue = context.lookupExpressionValue(shaderStageExpr);
+					auto *shaderStageName = std::get_if<std::string>(&shaderStageValue);
+					if (!shaderStageName) {
+						setConfiguredTypeFailure(expr->range, "shader stage must be string literal");
+						break;
+					}
+					if (!evaluateShaderStageIs(context.parseContext, *shaderStageName).has_value()) {
+						setConfiguredTypeFailure(
+							expr->range, "unknown shader stage", "message", {{"stage", std::string(*shaderStageName)}}
+						);
+						break;
+					}
+					expr->type = {DataType::Kind::Bool};
 				} else if (kind == IntrinsicKind::Array) {
 					Expression *sizeExpr = resolveThroughMacroBindings(expr->arguments[1]);
 					CompileTimeValue sizeValue = context.lookupExpressionValue(sizeExpr);

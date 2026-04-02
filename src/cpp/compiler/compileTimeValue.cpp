@@ -75,23 +75,36 @@ static Expression *resolveCompileTimeBinding(
 	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 }
 
-static std::string currentBuildInfo(ParseContext &context, std::string_view key) {
-	if (key == "platform")
-		return context.options.emitSPIRV ? "gpu" : context.options.emitWASM ? "wasm" : "cpu";
-	if (key == "shader stage") {
-		if (!context.options.emitSPIRV)
-			return "";
-		return context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment";
-	}
-	return {};
+static std::string_view currentBuildTargetName(const ParseContext &context) {
+	return context.options.emitSPIRV ? "gpu" : context.options.emitWASM ? "wasm" : "cpu";
 }
 
-static std::optional<double> currentBuildInfoNumber(ParseContext &context, std::string_view key) {
+std::optional<DataType> buildInfoValueType(std::string_view key) {
+	if (key == "word size" || key == "optimization level")
+		return DataType{DataType::Kind::Int, 4};
+	return std::nullopt;
+}
+
+CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key) {
 	if (key == "word size")
 		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(void *) * 8);
 	if (key == "optimization level")
 		return static_cast<double>(context.options.optimizationLevel);
-	return std::nullopt;
+	return {};
+}
+
+std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName) {
+	if (targetName != "cpu" && targetName != "wasm" && targetName != "gpu")
+		return std::nullopt;
+	return currentBuildTargetName(context) == targetName;
+}
+
+std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::string_view shaderStageName) {
+	if (shaderStageName != "vertex" && shaderStageName != "fragment")
+		return std::nullopt;
+	if (!context.options.emitSPIRV)
+		return false;
+	return (context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment") == shaderStageName;
 }
 
 static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
@@ -183,13 +196,24 @@ static CompileTimeValue evaluateIntrinsic(
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	if (kind == IntrinsicKind::BuildInfo) {
 		CompileTimeValue keyValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		if (auto *key = std::get_if<std::string>(&keyValue)) {
-			if (std::optional<double> number = currentBuildInfoNumber(context, *key))
-				return *number;
-			std::string text = currentBuildInfo(context, *key);
-			if (!text.empty() || *key == "shader stage")
-				return text;
-		}
+		if (auto *key = std::get_if<std::string>(&keyValue))
+			return currentBuildInfoValue(context, *key);
+		return {};
+	}
+	if (kind == IntrinsicKind::TargetIs) {
+		CompileTimeValue targetValue =
+			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
+		if (auto *targetName = std::get_if<std::string>(&targetValue))
+			if (std::optional<bool> result = evaluateTargetIs(context, *targetName))
+				return *result;
+		return {};
+	}
+	if (kind == IntrinsicKind::ShaderStageIs) {
+		CompileTimeValue shaderStageValue =
+			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
+		if (auto *shaderStageName = std::get_if<std::string>(&shaderStageValue))
+			if (std::optional<bool> result = evaluateShaderStageIs(context, *shaderStageName))
+				return *result;
 		return {};
 	}
 	if (kind == IntrinsicKind::SizeOf) {

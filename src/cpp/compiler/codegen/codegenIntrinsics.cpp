@@ -9,6 +9,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 
@@ -1140,7 +1141,21 @@ llvm::Value *generateIntrinsicCode(
 		return builder.getInt64(valueType.getByteSize());
 	}
 
-	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array || kind == IntrinsicKind::BuildInfo) {
+	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
+		CompileTimeValue value =
+			evaluateCompileTimeValue(callExpr, context, context.macroBindingFrames, context.currentCodegenInstantiation);
+		if (auto *number = std::get_if<double>(&value)) {
+			llvm::Type *llvmType = getLLVMType(context, resultType);
+			return llvm::ConstantInt::get(llvmType, static_cast<std::int64_t>(*number), true);
+		}
+		if (auto *boolean = std::get_if<bool>(&value)) {
+			llvm::Type *llvmType = getLLVMType(context, resultType);
+			return llvm::ConstantInt::get(llvmType, *boolean ? 1 : 0, false);
+		}
+		return nullptr;
+	}
+
+	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array) {
 		// Compile-time only — no runtime code
 		return nullptr;
 	}
@@ -1148,7 +1163,8 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Select) {
 		if (!args[1])
 			crashCompilerBug("select intrinsic missing condition argument during codegen");
-		CompileTimeValue conditionValue = getExpressionCompileTimeValue(context, args[1], context.currentCodegenInstantiation);
+		CompileTimeValue conditionValue =
+			evaluateCompileTimeValue(args[1], context, context.macroBindingFrames, context.currentCodegenInstantiation);
 		auto *condition = std::get_if<bool>(&conditionValue);
 		if (condition)
 			return generateExpressionCode(context, args[*condition ? 2 : 3]);

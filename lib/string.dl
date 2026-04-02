@@ -187,7 +187,7 @@ function value as [a|] line:
 
 function write {string:msg}:
     execute:
-        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if (the build info "platform") = "wasm", else @intrinsic("call", "libc", "printf", an integer, "%.*s", msg's length, the data of msg)
+        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if the build target is wasm, else @intrinsic("call", "libc", "printf", an integer, "%.*s", msg's length, the data of msg)
 
 function print msg:
     execute:

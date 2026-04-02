@@ -98,6 +98,22 @@ function [the|] build info key:
     replacement:
         @intrinsic("build info", key)
 
+function [the|] build word size:
+    replacement:
+        @intrinsic("build info", "word size")
+
+function [the|] build optimization level:
+    replacement:
+        @intrinsic("build info", "optimization level")
+
+function [the|] build target is {word:platform}:
+    replacement:
+        @intrinsic("target is", platform)
+
+function this is a {word:shaderstage} shader:
+    replacement:
+        @intrinsic("shader stage is", shaderstage)
+
 function [the|] size of typetomeasure:
     replacement:
         @intrinsic("size of", typetomeasure)
@@ -105,10 +121,6 @@ function [the|] size of typetomeasure:
 function [the|] type of value:
     replacement:
         @intrinsic("type of", value)
-
-function [the|] build platform:
-    replacement:
-        the build info "platform"
 
 function [the|] function named name:
     replacement:

@@ -13,7 +13,7 @@ function [a|] gpu vector:
 
 function [a|] vector type:
     replacement:
-        a gpu vector if the build info "platform" = "gpu", else a cpu vector
+        a gpu vector if the build target is gpu, else a cpu vector
 
 function a new vector with x vx, y vy and z vz:
     replacement:

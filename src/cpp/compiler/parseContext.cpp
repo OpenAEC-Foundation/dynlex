@@ -1,4 +1,5 @@
 #include "parseContext.h"
+#include "compileTimeValue.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "matchProgress.h"
@@ -162,7 +163,7 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 namespace {
-Expression *cloneMacroExpansionExpressionImpl(Expression *expression, bool preserveInferenceMetadata) {
+Expression *cloneMacroExpansionExpressionImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
 	if (!expression)
 		return nullptr;
 	Expression *clone = new Expression();
@@ -183,15 +184,22 @@ Expression *cloneMacroExpansionExpressionImpl(Expression *expression, bool prese
 	clone->groupingPrecedence = expression->groupingPrecedence;
 	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
+	if (preserveInferenceMetadata) {
+		CompileTimeValue compileTimeValue =
+			getExpressionCompileTimeValue(context, expression, context.currentCodegenInstantiation);
+		if (!isCompileTimeKnown(compileTimeValue))
+			compileTimeValue = getExpressionCompileTimeValue(context, expression);
+		setExpressionCompileTimeValue(context, clone, compileTimeValue);
+	}
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(argument, preserveInferenceMetadata));
+		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(context, argument, preserveInferenceMetadata));
 	return clone;
 }
 } // namespace
 
 Expression *ParseContext::cloneMacroExpansionExpression(Expression *expression, bool ownRoot, bool preserveInferenceMetadata) {
-	Expression *clone = cloneMacroExpansionExpressionImpl(expression, preserveInferenceMetadata);
+	Expression *clone = cloneMacroExpansionExpressionImpl(*this, expression, preserveInferenceMetadata);
 	if (clone && ownRoot)
 		ownedMacroExpansionRoots.push_back(clone);
 	return clone;

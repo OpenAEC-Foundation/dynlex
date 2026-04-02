@@ -22,9 +22,9 @@ function true_value if condition, else false_value:
     replacement:
         @intrinsic("select", condition, true_value, false_value)
 
-function [the|] build info key:
+function [the|] build target is {word:platform}:
     replacement:
-        @intrinsic("build info", key)
+        @intrinsic("target is", platform)
 
 function left = right:
     replacement:
@@ -40,7 +40,7 @@ function native print msg:
 
 function print msg:
     execute:
-        discard (wasm print msg) if (the build info "platform") = "wasm", else (native print msg)
+        discard (wasm print msg) if the build target is wasm, else (native print msg)
 
 function left + right:
     replacement:

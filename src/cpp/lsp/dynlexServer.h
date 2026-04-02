@@ -45,7 +45,8 @@ class DynLexServer : public LanguageServer {
 	};
 
 	// ParseContext per main document URI
-	std::unordered_map<std::string, std::unique_ptr<ParseContext>> parseContexts;
+	std::unordered_map<std::string, std::shared_ptr<ParseContext>> parseContexts;
+	std::unordered_map<std::string, std::shared_ptr<ParseContext>> completionParseContexts;
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> compiledDocuments;
 	std::string workspaceRootPath;
 	std::unordered_map<std::string, CursorState> activeCursors;
@@ -53,6 +54,7 @@ class DynLexServer : public LanguageServer {
 
 	// Import graph: imported file URI → set of main URIs that import it
 	std::unordered_map<std::string, std::unordered_set<std::string>> importedBy;
+	std::unordered_map<std::string, std::unordered_set<std::string>> completionImportedBy;
 
 	// Cached LSP diagnostics per main document, grouped by source file URI
 	std::unordered_map<std::string, std::unordered_map<std::string, std::vector<Diagnostic>>> diagnosticsPerMain;
@@ -81,6 +83,7 @@ class DynLexServer : public LanguageServer {
 
 	// Find the ParseContext for a URI (either as a main document or via importedBy)
 	ParseContext *findContextFor(const std::string &uri);
+	ParseContext *findCompletionContextFor(const std::string &uri);
 
 	// Generate semantic tokens for a document
 	std::vector<int> generateSemanticTokens(const std::string &uri);

@@ -12,7 +12,7 @@ function a gpu n x m matrix:
 
 function a n x m matrix:
 	replacement:
-		a gpu n x m matrix if the build platform is "gpu", else a cpu n x m matrix
+		a gpu n x m matrix if the build target is gpu, else a cpu n x m matrix
 
 function a new n x m matrix from value:
 	replacement:
