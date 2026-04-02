@@ -1,16 +1,10 @@
 #include "compileTimeValue.h"
-#include "bindingResolution.h"
-#include "classDefinition.h"
-#include "compilerUtils.h"
 #include "expression.h"
-#include "intrinsicInfo.h"
 #include "parseContext.h"
 #include "pattern/pattern_tree/patternElement.h"
-#include "section.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <unordered_set>
 
 bool isCompileTimeKnown(const CompileTimeValue &value) { return !std::holds_alternative<std::monostate>(value); }
 
@@ -22,6 +16,50 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 	if (auto *text = std::get_if<std::string>(&value))
 		return !text->empty();
 	return std::nullopt;
+}
+
+std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value) {
+	auto *number = std::get_if<double>(&value);
+	if (!number || !std::isfinite(*number))
+		return std::nullopt;
+	double truncated = std::trunc(*number);
+	if (*number != truncated)
+		return std::nullopt;
+	constexpr std::uint64_t maxExactMagnitude = std::uint64_t{1} << std::numeric_limits<double>::digits;
+	if (truncated < -static_cast<double>(maxExactMagnitude) || truncated > static_cast<double>(maxExactMagnitude))
+		return std::nullopt;
+	if (truncated < static_cast<double>(std::numeric_limits<std::int64_t>::min()) ||
+		truncated > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+		return std::nullopt;
+	}
+	return static_cast<std::int64_t>(truncated);
+}
+
+static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
+	if (token.empty())
+		return std::nullopt;
+	bool sawDigit = false;
+	bool sawDot = false;
+	for (char c : token) {
+		if (c >= '0' && c <= '9') {
+			sawDigit = true;
+			continue;
+		}
+		if (c == '.') {
+			if (sawDot)
+				return std::nullopt;
+			sawDot = true;
+			continue;
+		}
+		return std::nullopt;
+	}
+	if (!sawDigit)
+		return std::nullopt;
+	try {
+		return std::stod(std::string(token));
+	} catch (...) {
+		return std::nullopt;
+	}
 }
 
 CompileTimeValue
@@ -51,14 +89,57 @@ void setExpressionCompileTimeValue(
 		target.erase(expr);
 }
 
-static CompileTimeValue evaluateCompileTimeValueImpl(
-	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
-);
+CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
+	if (!expr)
+		crashCompilerBug("compile-time value resolution received null expression");
+	switch (expr->kind) {
+	case Expression::Kind::Literal:
+		if (const auto *number = std::get_if<double>(&expr->literalValue)) {
+			if (expr->type.kind == DataType::Kind::Bool)
+				return *number != 0.0;
+			return *number;
+		}
+		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
+			return *text;
+		return {};
+	case Expression::Kind::Variable:
+		if (expr->variable) {
+			if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
+				return *numericLiteral;
+		}
+		if (expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		return {};
+	case Expression::Kind::TypedPlaceholder:
+		if (expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		return {};
+	case Expression::Kind::Pending:
+		if (expr->patternReference) {
+			auto &elements = expr->patternReference->patternElements;
+			if (elements.empty())
+				elements = getPatternElements(expr->patternReference->pattern.text);
+			if (elements.size() == 1 && (elements[0].type == PatternElement::Type::Variable ||
+										 elements[0].type == PatternElement::Type::VariableLike)) {
+				if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(elements[0].text))
+					return *numericLiteral;
+			}
+		}
+		if (expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		return {};
+	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::IntrinsicCall:
+	case Expression::Kind::PatternCall:
+		if (expr->type.kind == DataType::Kind::Type)
+			return expr->type;
+		return {};
+	}
+	return {};
+}
 
-static thread_local std::unordered_set<const Expression *> activeCompileTimeFunctions;
-
-static Expression *resolveCompileTimeBinding(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
+Expression *resolveCompileTimeBinding(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack
 ) {
 	if (outBindingFrameStack)
 		*outBindingFrameStack = bindingFrameStack;
@@ -72,7 +153,35 @@ static Expression *resolveCompileTimeBinding(
 				return boundExpression;
 		}
 	}
-	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
+	Expression *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
+	if (resolvedExpression && resolvedExpression != expr)
+		return resolvedExpression;
+	if (expr && expr->inferredMacroExpansion)
+		return expr->inferredMacroExpansion;
+	return resolvedExpression;
+}
+
+CompileTimeValue resolveStoredCompileTimeValue(
+	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack,
+	const Instantiation *instantiation
+) {
+	return resolveCompileTimeValueFromKnownState(expr, bindingFrameStack, [&](Expression *currentExpression) {
+		return getExpressionCompileTimeValue(context, currentExpression, instantiation);
+	});
+}
+
+bool resolveStoredCompileTimeInteger(
+	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue,
+	const Instantiation *instantiation
+) {
+	std::optional<std::int64_t> integerValue =
+		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(context, expr, bindingFrameStack, instantiation));
+	if (!integerValue.has_value() || *integerValue < std::numeric_limits<int>::min() ||
+		*integerValue > std::numeric_limits<int>::max()) {
+		return false;
+	}
+	outValue = static_cast<int>(*integerValue);
+	return true;
 }
 
 static std::string_view currentBuildTargetName(const ParseContext &context) {
@@ -105,384 +214,4 @@ std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::stri
 	if (!context.options.emitSPIRV)
 		return false;
 	return (context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment") == shaderStageName;
-}
-
-static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
-	if (token.empty())
-		return std::nullopt;
-	bool sawDigit = false;
-	bool sawDot = false;
-	for (char c : token) {
-		if (c >= '0' && c <= '9') {
-			sawDigit = true;
-			continue;
-		}
-		if (c == '.') {
-			if (sawDot)
-				return std::nullopt;
-			sawDot = true;
-			continue;
-		}
-		return std::nullopt;
-	}
-	if (!sawDigit)
-		return std::nullopt;
-	try {
-		return std::stod(std::string(token));
-	} catch (...) {
-		return std::nullopt;
-	}
-}
-
-static std::optional<std::int64_t> extractCompileTimeInteger(const CompileTimeValue &value) {
-	auto *number = std::get_if<double>(&value);
-	if (!number || !std::isfinite(*number))
-		return std::nullopt;
-	double truncated = std::trunc(*number);
-	if (*number != truncated)
-		return std::nullopt;
-	constexpr std::uint64_t maxExactMagnitude = std::uint64_t{1} << std::numeric_limits<double>::digits;
-	if (truncated < -static_cast<double>(maxExactMagnitude) || truncated > static_cast<double>(maxExactMagnitude))
-		return std::nullopt;
-	if (truncated < static_cast<double>(std::numeric_limits<std::int64_t>::min()) ||
-		truncated > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
-		return std::nullopt;
-	}
-	return static_cast<std::int64_t>(truncated);
-}
-
-static std::int64_t compileTimeBitwiseNot(std::int64_t value) {
-	return static_cast<std::int64_t>(~static_cast<std::uint64_t>(value));
-}
-
-static std::int64_t compileTimeShiftLeft(std::int64_t value, unsigned amount) {
-	return static_cast<std::int64_t>(static_cast<std::uint64_t>(value) << amount);
-}
-
-static std::int64_t compileTimeShiftRight(std::int64_t value, unsigned amount) {
-	if (amount == 0)
-		return value;
-	std::uint64_t bits = static_cast<std::uint64_t>(value);
-	bits >>= amount;
-	if (value < 0)
-		bits |= (~std::uint64_t{0}) << (64 - amount);
-	return static_cast<std::int64_t>(bits);
-}
-
-static CompileTimeValue
-evaluateCompileTimeCast(const CompileTimeValue &value, Expression *typeExpr, const BindingFrameStack &bindingFrameStack) {
-	if (!typeExpr)
-		return {};
-	typeExpr = resolveCompileTimeBinding(typeExpr, bindingFrameStack);
-	if (!typeExpr || typeExpr->type.kind != DataType::Kind::Type)
-		return {};
-	DataType targetType = typeExpr->type.toReferencedType();
-	if (targetType.kind == DataType::Kind::Bool) {
-		std::optional<bool> truthy = compileTimeTruthiness(value);
-		return truthy.has_value() ? CompileTimeValue(*truthy) : CompileTimeValue{};
-	}
-	if (!targetType.isNumeric())
-		return {};
-	if (const auto *number = std::get_if<double>(&value))
-		return *number;
-	if (const auto *boolean = std::get_if<bool>(&value))
-		return *boolean ? 1.0 : 0.0;
-	return {};
-}
-
-static CompileTimeValue evaluateIntrinsic(
-	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
-) {
-	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-	if (kind == IntrinsicKind::BuildInfo) {
-		CompileTimeValue keyValue = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		if (auto *key = std::get_if<std::string>(&keyValue))
-			return currentBuildInfoValue(context, *key);
-		return {};
-	}
-	if (kind == IntrinsicKind::TargetIs) {
-		CompileTimeValue targetValue =
-			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		if (auto *targetName = std::get_if<std::string>(&targetValue))
-			if (std::optional<bool> result = evaluateTargetIs(context, *targetName))
-				return *result;
-		return {};
-	}
-	if (kind == IntrinsicKind::ShaderStageIs) {
-		CompileTimeValue shaderStageValue =
-			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		if (auto *shaderStageName = std::get_if<std::string>(&shaderStageValue))
-			if (std::optional<bool> result = evaluateShaderStageIs(context, *shaderStageName))
-				return *result;
-		return {};
-	}
-	if (kind == IntrinsicKind::SizeOf) {
-		Expression *typeExpr = resolveCompileTimeBinding(expr->arguments[1], bindingFrameStack);
-		if (!typeExpr)
-			return {};
-		DataType typeRef = typeExpr->type;
-		if (typeRef.kind != DataType::Kind::Type)
-			return {};
-		DataType valueType = typeRef.toReferencedType();
-		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
-			!valueType.classDefinition->instantiations.empty()) {
-			valueType.classInstIndex = 0;
-		}
-		return static_cast<double>(valueType.getByteSize());
-	}
-
-	if (kind == IntrinsicKind::Select) {
-		CompileTimeValue conditionValue =
-			evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		auto *condition = std::get_if<bool>(&conditionValue);
-		if (!condition)
-			return {};
-		return evaluateCompileTimeValueImpl(expr->arguments[*condition ? 2 : 3], context, bindingFrameStack, instantiation);
-	}
-
-	if (kind == IntrinsicKind::Return && expr->arguments.size() > 1)
-		return evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-	if (kind == IntrinsicKind::Cast && expr->arguments.size() > 2) {
-		CompileTimeValue value = evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation);
-		if (!isCompileTimeKnown(value))
-			return {};
-		return evaluateCompileTimeCast(value, expr->arguments[2], bindingFrameStack);
-	}
-
-	auto lhs = [&]() -> CompileTimeValue {
-		return expr->arguments.size() >= 2
-				   ? evaluateCompileTimeValueImpl(expr->arguments[1], context, bindingFrameStack, instantiation)
-				   : CompileTimeValue{};
-	};
-	auto rhs = [&]() -> CompileTimeValue {
-		return expr->arguments.size() >= 3
-				   ? evaluateCompileTimeValueImpl(expr->arguments[2], context, bindingFrameStack, instantiation)
-				   : CompileTimeValue{};
-	};
-
-	if (kind == IntrinsicKind::Not) {
-		CompileTimeValue value = lhs();
-		auto *boolean = std::get_if<bool>(&value);
-		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
-	}
-	if (kind == IntrinsicKind::BitwiseNot) {
-		std::optional<std::int64_t> value = extractCompileTimeInteger(lhs());
-		return value.has_value() ? CompileTimeValue(static_cast<double>(compileTimeBitwiseNot(*value))) : CompileTimeValue{};
-	}
-	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-		CompileTimeValue leftValue = lhs();
-		CompileTimeValue rightValue = rhs();
-		auto *left = std::get_if<bool>(&leftValue);
-		auto *right = std::get_if<bool>(&rightValue);
-		if (!left || !right)
-			return {};
-		return kind == IntrinsicKind::And ? CompileTimeValue(*left && *right) : CompileTimeValue(*left || *right);
-	}
-
-	CompileTimeValue leftValue = lhs();
-	CompileTimeValue rightValue = rhs();
-	if (!isCompileTimeKnown(leftValue) || (expr->arguments.size() >= 3 && !isCompileTimeKnown(rightValue)))
-		return {};
-
-	if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
-		bool result = false;
-		if (auto *leftText = std::get_if<std::string>(&leftValue)) {
-			if (auto *rightText = std::get_if<std::string>(&rightValue))
-				result = *leftText == *rightText;
-			else
-				return {};
-		} else if (auto *leftBool = std::get_if<bool>(&leftValue)) {
-			if (auto *rightBool = std::get_if<bool>(&rightValue))
-				result = *leftBool == *rightBool;
-			else
-				return {};
-		} else {
-			auto *leftNumber = std::get_if<double>(&leftValue);
-			auto *rightNumber = std::get_if<double>(&rightValue);
-			if (!leftNumber || !rightNumber)
-				return {};
-			result = *leftNumber == *rightNumber;
-		}
-		return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
-	}
-
-	if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
-		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-		std::optional<std::int64_t> leftInteger = extractCompileTimeInteger(leftValue);
-		std::optional<std::int64_t> rightInteger = extractCompileTimeInteger(rightValue);
-		if (!leftInteger.has_value() || !rightInteger.has_value())
-			return {};
-		if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-			if (*rightInteger < 0 || *rightInteger >= 64)
-				return {};
-			unsigned shiftAmount = static_cast<unsigned>(*rightInteger);
-			std::int64_t result = kind == IntrinsicKind::ShiftLeft ? compileTimeShiftLeft(*leftInteger, shiftAmount)
-																   : compileTimeShiftRight(*leftInteger, shiftAmount);
-			return static_cast<double>(result);
-		}
-		std::uint64_t leftBits = static_cast<std::uint64_t>(*leftInteger);
-		std::uint64_t rightBits = static_cast<std::uint64_t>(*rightInteger);
-		std::uint64_t result = kind == IntrinsicKind::BitwiseAnd  ? (leftBits & rightBits)
-							   : kind == IntrinsicKind::BitwiseOr ? (leftBits | rightBits)
-																  : (leftBits ^ rightBits);
-		return static_cast<double>(static_cast<std::int64_t>(result));
-	}
-
-	auto *leftNumber = std::get_if<double>(&leftValue);
-	if (!leftNumber)
-		return {};
-	if (kind == IntrinsicKind::Negate)
-		return -*leftNumber;
-	auto *rightNumber = std::get_if<double>(&rightValue);
-	if (!rightNumber)
-		return {};
-
-	if (kind == IntrinsicKind::Add)
-		return *leftNumber + *rightNumber;
-	if (kind == IntrinsicKind::Subtract)
-		return *leftNumber - *rightNumber;
-	if (kind == IntrinsicKind::Multiply)
-		return *leftNumber * *rightNumber;
-	if (kind == IntrinsicKind::Divide)
-		return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(*leftNumber / *rightNumber);
-	if (kind == IntrinsicKind::Modulo)
-		return *rightNumber == 0.0 ? CompileTimeValue{} : CompileTimeValue(std::fmod(*leftNumber, *rightNumber));
-	if (kind == IntrinsicKind::LessThan)
-		return *leftNumber < *rightNumber;
-	if (kind == IntrinsicKind::GreaterThan)
-		return *leftNumber > *rightNumber;
-	if (kind == IntrinsicKind::LessThanOrEqual)
-		return *leftNumber <= *rightNumber;
-	if (kind == IntrinsicKind::GreaterThanOrEqual)
-		return *leftNumber >= *rightNumber;
-	return {};
-}
-
-static Expression *getSingleCompileTimeBody(Section *section) {
-	if (!section)
-		return nullptr;
-	Expression *result = nullptr;
-	for (Section *child : section->children) {
-		for (CodeLine *line : child->codeLines) {
-			if (!line->expression)
-				continue;
-			if (result)
-				return nullptr;
-			result = line->expression;
-		}
-	}
-	return result;
-}
-
-static CompileTimeValue evaluatePatternCall(
-	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
-) {
-	if (!expr->patternMatch || !expr->patternMatch->matchedEndNode ||
-		expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
-		return {};
-
-	PatternDefinition *def = expr->selectedPatternDefinition;
-	if (!def)
-		def = expr->patternMatch->matchedEndNode->matchingDefinitions.front();
-	if (!def || !def->section)
-		return {};
-
-	BindingMap callBindings;
-	bindingFrameStack.forEachFrame([&callBindings](const BindingFrame &frame) {
-		for (const auto &[bindingName, expression] : frame.bindings)
-			callBindings[bindingName] = expression;
-	});
-	collectPatternCallBindings(expr, def, callBindings);
-	for (auto &[bindingName, expression] : callBindings) {
-		(void)bindingName;
-		Expression *resolved = resolveCompileTimeBinding(expression, bindingFrameStack);
-		if (resolved)
-			expression = resolved;
-	}
-
-	if (def->section->isMacro) {
-		BindingMap innerBindings;
-		Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
-		if (!bodyExpr)
-			return {};
-		for (const auto &[name, argExpr] : innerBindings)
-			callBindings[name] = argExpr;
-		BindingFrameStack callBindingFrameStack;
-		callBindingFrameStack.pushFrame(std::move(callBindings));
-		return evaluateCompileTimeValueImpl(bodyExpr, context, callBindingFrameStack, instantiation);
-	}
-
-	Expression *bodyExpr = getSingleCompileTimeBody(def->section);
-	if (!bodyExpr)
-		return {};
-	BindingFrameStack callBindingFrameStack;
-	callBindingFrameStack.pushFrame(std::move(callBindings));
-	return evaluateCompileTimeValueImpl(bodyExpr, context, callBindingFrameStack, instantiation);
-}
-
-static CompileTimeValue evaluateCompileTimeValueImpl(
-	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
-) {
-	BindingFrameStack effectiveBindingFrameStack;
-	expr = resolveCompileTimeBinding(expr, bindingFrameStack, &effectiveBindingFrameStack);
-	if (!expr)
-		return {};
-	CompileTimeValue storedValue = getExpressionCompileTimeValue(context, expr, instantiation);
-	if (isCompileTimeKnown(storedValue))
-		return storedValue;
-	if (activeCompileTimeFunctions.contains(expr))
-		return {};
-
-	struct ActiveCompileTimeGuard {
-		const Expression *expr;
-
-		explicit ActiveCompileTimeGuard(const Expression *expression) : expr(expression) {
-			activeCompileTimeFunctions.insert(expr);
-		}
-		~ActiveCompileTimeGuard() { activeCompileTimeFunctions.erase(expr); }
-	} guard(expr);
-
-	switch (expr->kind) {
-	case Expression::Kind::Literal:
-		if (auto *number = std::get_if<double>(&expr->literalValue)) {
-			if (expr->type.kind == DataType::Kind::Bool)
-				return *number != 0.0;
-			return *number;
-		}
-		if (auto *text = std::get_if<std::string>(&expr->literalValue))
-			return *text;
-		return {};
-	case Expression::Kind::Variable:
-		if (expr->variable && instantiation) {
-			if (!instantiation->requiredCompileTimeParameters.contains(expr->variable->name))
-				return {};
-			auto it = instantiation->constantParameterValues.find(expr->variable->name);
-			if (it != instantiation->constantParameterValues.end())
-				return it->second;
-		}
-		if (expr->variable) {
-			if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
-				return *numericLiteral;
-		}
-		return {};
-	case Expression::Kind::ArrayLiteral:
-		return {};
-	case Expression::Kind::TypedPlaceholder:
-		if (expr->type.kind == DataType::Kind::Type)
-			return expr->type;
-		return {};
-	case Expression::Kind::Pending:
-		return {};
-	case Expression::Kind::IntrinsicCall:
-		return evaluateIntrinsic(expr, context, effectiveBindingFrameStack, instantiation);
-	case Expression::Kind::PatternCall:
-		return evaluatePatternCall(expr, context, effectiveBindingFrameStack, instantiation);
-	}
-	return {};
-}
-
-CompileTimeValue evaluateCompileTimeValue(
-	Expression *expr, ParseContext &context, const BindingFrameStack &bindingFrameStack, const Instantiation *instantiation
-) {
-	return evaluateCompileTimeValueImpl(expr, context, bindingFrameStack, instantiation);
 }

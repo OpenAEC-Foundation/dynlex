@@ -1,10 +1,17 @@
-tests/required/precedence/main.dl:9:1-24: Warning: Expression 'print 2 + 3 + 4 as line' has multiple valid operand groupings. Using 'print (((2 + 3) + 4) as line)' instead of 'print ((2 + (3 + 4)) as line)'.
-  note: while inferring call 'print 2 + 3 + 4 as line' with arguments [class] -> nothing tests/required/precedence/main.dl:9:1-24
-tests/required/precedence/main.dl:10:1-24: Warning: Expression 'print 2 * 3 * 4 as line' has multiple valid operand groupings. Using 'print (((2 * 3) * 4) as line)' instead of 'print ((2 * (3 * 4)) as line)'.
-  note: while inferring call 'print 2 * 3 * 4 as line' with arguments [class] -> nothing tests/required/precedence/main.dl:10:1-24
-tests/required/precedence/main.dl:14:1-58: Warning: Expression 'set result to the square root of a + the square root of a' has multiple valid operand groupings. Using 'set result to ((the square root of a) + (the square root of a))' instead of 'set result to (the square root of (a + (the square root of a)))'.
-  note: while inferring call 'set result to the square root of a + the square root of a' with arguments [unresolved(?), a 64 bit float] -> nothing tests/required/precedence/main.dl:14:1-58
-tests/required/precedence/main.dl:18:1-62: Warning: Expression 'set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using 'set minimum_result to ((the minimum of (1.0 + 5.0) and 2.0) + 19.0)' instead of 'set minimum_result to (the minimum of (1.0 + 5.0) and (2.0 + 19.0))'.
-  note: while inferring call 'set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [unresolved(?), a 64 bit float] -> nothing tests/required/precedence/main.dl:18:1-62
-tests/required/precedence/main.dl:19:1-62: Warning: Expression 'set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using 'set maximum_result to ((the maximum of (1.0 + 5.0) and 2.0) + 19.0)' instead of 'set maximum_result to (the maximum of (1.0 + 5.0) and (2.0 + 19.0))'.
-  note: while inferring call 'set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [unresolved(?), a 64 bit float] -> nothing tests/required/precedence/main.dl:19:1-62
+tests/required/precedence/main.dl:9:7-16: Warning: Expression '2 + 3 + 4' has multiple valid operand groupings. Using '(2 + 3) + 4' instead of '2 + (3 + 4)'.
+  note: while inferring call '2 + 3 + 4' with arguments [a 32 bit integer, a 32 bit integer] -> a 32 bit integer tests/required/precedence/main.dl:9:7-16
+  note: while inferring call 'print 2 + 3 + 4 as line' with arguments [a 32 bit integer] -> undeduced tests/required/precedence/main.dl:9:7-24
+  note: while inferring call 'print 2 + 3 + 4 as line' with arguments [unresolved(?)] -> undeduced tests/required/precedence/main.dl:9:1-24
+tests/required/precedence/main.dl:10:7-16: Warning: Expression '2 * 3 * 4' has multiple valid operand groupings. Using '(2 * 3) * 4' instead of '2 * (3 * 4)'.
+  note: while inferring call '2 * 3 * 4' with arguments [a 32 bit integer, a 32 bit integer] -> a 32 bit integer tests/required/precedence/main.dl:10:7-16
+  note: while inferring call 'print 2 * 3 * 4 as line' with arguments [a 32 bit integer] -> undeduced tests/required/precedence/main.dl:10:7-24
+  note: while inferring call 'print 2 * 3 * 4 as line' with arguments [unresolved(?)] -> undeduced tests/required/precedence/main.dl:10:1-24
+tests/required/precedence/main.dl:14:15-58: Warning: Expression 'set result to the square root of a + the square root of a' has multiple valid operand groupings. Using '(the square root of a) + (the square root of a)' instead of 'the square root of (a + (the square root of a))'.
+  note: while inferring call 'set result to the square root of a + the square root of a' with arguments [a 64 bit float, a 64 bit float] -> a 64 bit float tests/required/precedence/main.dl:14:15-58
+  note: while inferring call 'set result to the square root of a + the square root of a' with arguments [unresolved(?), a 64 bit float] -> undeduced tests/required/precedence/main.dl:14:1-58
+tests/required/precedence/main.dl:18:23-62: Warning: Expression 'set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using '(the minimum of (1.0 + 5.0) and 2.0) + 19.0' instead of 'the minimum of (1.0 + 5.0) and (2.0 + 19.0)'.
+  note: while inferring call 'set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [a 64 bit float, a 64 bit float] -> a 64 bit float tests/required/precedence/main.dl:18:23-62
+  note: while inferring call 'set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [unresolved(?), a 64 bit float] -> undeduced tests/required/precedence/main.dl:18:1-62
+tests/required/precedence/main.dl:19:23-62: Warning: Expression 'set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0' has multiple valid operand groupings. Using '(the maximum of (1.0 + 5.0) and 2.0) + 19.0' instead of 'the maximum of (1.0 + 5.0) and (2.0 + 19.0)'.
+  note: while inferring call 'set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [a 64 bit float, a 64 bit float] -> a 64 bit float tests/required/precedence/main.dl:19:23-62
+  note: while inferring call 'set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0' with arguments [unresolved(?), a 64 bit float] -> undeduced tests/required/precedence/main.dl:19:1-62

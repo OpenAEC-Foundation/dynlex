@@ -447,29 +447,20 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
-static bool evaluateCompileTimeInteger(ParseContext &context, Expression *expr, const BindingMap &bindings, int &outValue) {
-	(void)bindings;
-	if (!expr)
-		crashCompilerBug("compile-time integer evaluation received null expression");
-	CompileTimeValue value = getExpressionCompileTimeValue(context, expr);
-	auto *number = std::get_if<double>(&value);
-	if (!number)
-		return false;
-	outValue = static_cast<int>(*number);
-	return *number == static_cast<double>(outValue);
-}
-
 void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings) {
 	collectPatternCallBindings(expr, definition, bindings);
 }
 
-static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &outTypeRef, bool emitSPIRV) {
+static bool tryParseIntrinsicTypeReference(
+	ParseContext &context, Expression *intrinsicExpr, const BindingMap &bindings, DataType &outTypeRef, bool emitSPIRV
+) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
 		return false;
 
-	Expression *kindExpr = intrinsicExpr->arguments[1];
-	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
+	BindingFrameStack bindingFrameStack = makeBindingFrameStack(bindings);
+	CompileTimeValue kindValue = resolveStoredCompileTimeValue(context, intrinsicExpr->arguments[1], bindingFrameStack);
+	auto *kindStr = std::get_if<std::string>(&kindValue);
 	if (!kindStr)
 		return false;
 
@@ -496,11 +487,10 @@ static bool tryParseIntrinsicTypeReference(Expression *intrinsicExpr, DataType &
 	}
 
 	if (intrinsicExpr->arguments.size() > 2) {
-		Expression *bitsExpr = intrinsicExpr->arguments[2];
-		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
-		if (!bits)
+		int bitCount = 0;
+		if (!resolveStoredCompileTimeInteger(context, intrinsicExpr->arguments[2], bindingFrameStack, bitCount))
 			return false;
-		typeRef.numericSize = (int)*bits / 8;
+		typeRef.numericSize = bitCount / 8;
 	}
 
 	outTypeRef = typeRef;
@@ -743,7 +733,7 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 
 	if (expr->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-		if (tryParseIntrinsicTypeReference(expr, outTypeRef, context.options.emitSPIRV))
+		if (tryParseIntrinsicTypeReference(context, expr, bindings, outTypeRef, context.options.emitSPIRV))
 			return true;
 		if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType innerTypeRef;
@@ -756,7 +746,7 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 		}
 		if (kind == IntrinsicKind::Array) {
 			int arraySize = 0;
-			if (!evaluateCompileTimeInteger(context, expr->arguments[1], bindings, arraySize))
+			if (!resolveStoredCompileTimeInteger(context, expr->arguments[1], makeBindingFrameStack(bindings), arraySize))
 				return false;
 			outTypeRef.kind = DataType::Kind::Type;
 			outTypeRef.referencedKind = DataType::Kind::Array;
@@ -775,14 +765,16 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 			int factor = 0;
 			if (resolveTypeReferenceExpression(context, expr->arguments[1], bindings, arrayTypeRef) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				evaluateCompileTimeInteger(context, expr->arguments[2], bindings, factor) && factor >= 0) {
+				resolveStoredCompileTimeInteger(context, expr->arguments[2], makeBindingFrameStack(bindings), factor) &&
+				factor >= 0) {
 				arrayTypeRef.arraySize *= factor;
 				outTypeRef = arrayTypeRef;
 				return true;
 			}
 			if (resolveTypeReferenceExpression(context, expr->arguments[2], bindings, arrayTypeRef) &&
 				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				evaluateCompileTimeInteger(context, expr->arguments[1], bindings, factor) && factor >= 0) {
+				resolveStoredCompileTimeInteger(context, expr->arguments[1], makeBindingFrameStack(bindings), factor) &&
+				factor >= 0) {
 				arrayTypeRef.arraySize *= factor;
 				outTypeRef = arrayTypeRef;
 				return true;

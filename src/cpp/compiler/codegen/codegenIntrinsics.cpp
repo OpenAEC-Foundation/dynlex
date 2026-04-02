@@ -1143,7 +1143,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
 		CompileTimeValue value =
-			evaluateCompileTimeValue(callExpr, context, context.macroBindingFrames, context.currentCodegenInstantiation);
+			resolveStoredCompileTimeValue(context, callExpr, context.macroBindingFrames, context.currentCodegenInstantiation);
 		if (auto *number = std::get_if<double>(&value)) {
 			llvm::Type *llvmType = getLLVMType(context, resultType);
 			return llvm::ConstantInt::get(llvmType, static_cast<std::int64_t>(*number), true);
@@ -1164,7 +1164,7 @@ llvm::Value *generateIntrinsicCode(
 		if (!args[1])
 			crashCompilerBug("select intrinsic missing condition argument during codegen");
 		CompileTimeValue conditionValue =
-			evaluateCompileTimeValue(args[1], context, context.macroBindingFrames, context.currentCodegenInstantiation);
+			resolveStoredCompileTimeValue(context, args[1], context.macroBindingFrames, context.currentCodegenInstantiation);
 		auto *condition = std::get_if<bool>(&conditionValue);
 		if (condition)
 			return generateExpressionCode(context, args[*condition ? 2 : 3]);

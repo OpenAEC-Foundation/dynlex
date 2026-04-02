@@ -63,6 +63,5 @@ Actual: `FATAL: compiler bug: Runtime call argument produced no code`.
 
 ## Candidate Directions
 - Replace operator overload with an explicit cstring-content comparison pattern name.
-- Or introduce a dedicated intrinsic for cstring content equality with both compile-time evaluator and runtime lowering.
+- Or introduce a dedicated intrinsic for cstring content equality with both compile-time inference support and runtime lowering.
 - Keep pointer `equal/not equal` intrinsics as address comparison.
-

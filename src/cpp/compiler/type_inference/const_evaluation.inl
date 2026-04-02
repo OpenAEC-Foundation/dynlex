@@ -245,20 +245,6 @@ static Expression *resolveThroughBindingsDeep(
 	return resolveThroughBindingsDeepImpl(expr, localBindingFrameStack, outBindingFrameStack, visited);
 }
 
-static bool evaluateCompileTimeInteger(
-	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue,
-	const Instantiation *instantiation = nullptr
-) {
-	if (!expr)
-		crashCompilerBug("compile-time integer evaluation received null expression");
-	CompileTimeValue value = evaluateCompileTimeValue(expr, parseContext, bindingFrameStack, instantiation);
-	auto *number = std::get_if<double>(&value);
-	if (!number)
-		return false;
-	outValue = static_cast<int>(*number);
-	return *number == static_cast<double>(outValue);
-}
-
 // Convenience: resolve an expression through bindings, then return its type.
 static DataType concretizeClassType(DataType type);
 static std::string extractFieldName(Expression *expr);
@@ -351,10 +337,10 @@ static bool markCompileTimeParameterRequirements(
 	return changed;
 }
 
-template <typename EvaluateCompileTimeValueFn>
+template <typename ReadCompileTimeValueFn>
 static void seedInstantiationCompileTimeParameters(
 	Instantiation &instantiation, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes, EvaluateCompileTimeValueFn &&evaluateCompileTimeValue
+	const std::vector<DataType> &argTypes, ReadCompileTimeValueFn &&readCompileTimeValue
 ) {
 	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
 	for (size_t i = 0; i < bindingCount; i++) {
@@ -365,7 +351,7 @@ static void seedInstantiationCompileTimeParameters(
 			instantiation.constantParameterValues[name] = argTypes[i];
 			continue;
 		}
-		CompileTimeValue value = evaluateCompileTimeValue(argExpr);
+		CompileTimeValue value = readCompileTimeValue(argExpr);
 		if (isCompileTimeKnown(value))
 			instantiation.constantParameterValues[name] = value;
 		else

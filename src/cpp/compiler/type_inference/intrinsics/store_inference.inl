@@ -35,7 +35,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				context.trialJournal->recordVariableWrite(variable);
 			if (!variable->type.isDeduced() || variable->type == valueType)
 				commitVariableTypeFromValue(variable, valueExpr, valueType);
-			CompileTimeValue assignedValue = evaluateCompileTimeValueWithKnownState(valueExpr, context, valueBindingFrameStack);
+			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
 			if (variable->isGlobal)
 				context.noteWrittenGlobalReference(variable->definition);
 			context.setKnownConstant(variable->definition, assignedValue);

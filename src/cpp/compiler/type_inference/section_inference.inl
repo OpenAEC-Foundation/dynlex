@@ -52,7 +52,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		if (context.trial && context.trialJournal)
 			context.trialJournal->recordVariableWrite(boundVar);
 		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
-		CompileTimeValue boundValue = evaluateCompileTimeValueWithKnownState(boundExpr, context, bindingFrameStack);
+		CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
 		context.setKnownConstant(boundVar->definition, boundValue);
 		context.snapshotReferenceConstant(boundVar->definition);
 	}
@@ -172,8 +172,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 					markCompileTimeParameterRequirements(
 						header->arguments[1], headerBindingFrameStack, context.currentInstantiation
 					);
-				CompileTimeValue conditionValue =
-					evaluateCompileTimeValueWithKnownState(header->arguments[1], context, headerBindingFrameStack);
+				CompileTimeValue conditionValue = context.lookupExpressionValue(header->arguments[1]);
 				auto *condition = std::get_if<bool>(&conditionValue);
 				if (!condition) {
 					branchKnown = false;

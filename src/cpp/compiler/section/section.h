@@ -40,11 +40,11 @@ inline bool parameterRequiresCompileTimeInstantiationValue(
 	return argType.kind == DataType::Kind::Type || requiredCompileTimeParameters.contains(parameterName);
 }
 
-template <typename EvaluateCompileTimeFn>
+template <typename ReadCompileTimeFn>
 inline InstantiationKey buildInstantiationKey(
 	const std::unordered_set<std::string> &requiredCompileTimeParameters,
 	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
-	EvaluateCompileTimeFn &&evaluateCompileTime
+	ReadCompileTimeFn &&readCompileTime
 ) {
 	InstantiationKey key;
 	key.argumentTypes = argTypes;
@@ -56,7 +56,7 @@ inline InstantiationKey buildInstantiationKey(
 			key.compileTimeParameters.push_back({paramBindings[i].first, argTypes[i]});
 			continue;
 		}
-		key.compileTimeParameters.push_back({paramBindings[i].first, evaluateCompileTime(paramBindings[i].second)});
+		key.compileTimeParameters.push_back({paramBindings[i].first, readCompileTime(paramBindings[i].second)});
 	}
 	return key;
 }
@@ -160,17 +160,17 @@ struct Section {
 	virtual std::string toString() const { return openingLine ? std::string(openingLine->patternText) : "main"; }
 };
 
-template <typename EvaluateCompileTimeFn>
+template <typename ReadCompileTimeFn>
 inline std::optional<InstantiationKey> findMatchingInstantiationKey(
 	Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes, EvaluateCompileTimeFn &&evaluateCompileTime
+	const std::vector<DataType> &argTypes, ReadCompileTimeFn &&readCompileTime
 ) {
 	if (!section)
 		return std::nullopt;
 	for (const auto &[candidateKey, instantiation] : section->instantiations) {
 		if (candidateKey.argumentTypes != argTypes)
 			continue;
-		if (buildInstantiationKey(instantiation.requiredCompileTimeParameters, paramBindings, argTypes, evaluateCompileTime) ==
+		if (buildInstantiationKey(instantiation.requiredCompileTimeParameters, paramBindings, argTypes, readCompileTime) ==
 			candidateKey) {
 			return candidateKey;
 		}

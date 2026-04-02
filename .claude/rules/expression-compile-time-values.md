@@ -75,7 +75,7 @@ Examples:
 ## Consequences
 
 - `resolveCompileTimeTypeReference(...)` should read stored compile-time values of type expressions instead of trying to reconstruct them from partially inferred trees.
-- `evaluateCompileTimeValue(...)` should become a reader of already inferred expression state in normal compiler flow, not a second evaluator that rebuilds the answer from scratch.
+- Compile-time readers should consume already inferred expression state in normal compiler flow, not rebuild values from syntax trees a second time.
 - Codegen should read stored compile-time values for folding decisions instead of re-evaluating expression trees.
 - Trial inference should still own rollback of variable/instantiation state, but expression-local type/value computation should remain single-pass inside that trial.
 

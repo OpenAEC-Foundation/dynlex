@@ -46,7 +46,7 @@ we sort all expression arguments by their source position, since they didn't get
 # type resolution stage
 
 we loop over the code like it would get executed.
-we track each variable that would possibly be a constant. a variable reference can be constant. constant means compile time evaluated here. it doesn't guarantee that the value doesn't change, later.
+we track each variable that would possibly be a constant. a variable reference can be constant. constant means compile-time-known here. it doesn't guarantee that the value doesn't change, later.
 we can reorder expressions based on types if this is the first valid instantiation, but we cannot change what's a variable and what not.
 ALL types of each previous line have to be deduced when right away except in recursive function code.
 

@@ -1,2 +1,3 @@
-tests/required/string_form_integer/main.dl:4:1-35: Warning: Expression 'print the string form of 1 as line' has multiple valid operand groupings. Using 'print ((the string form of 1) as line)' instead of 'print (the string form of (1 as line))'.
-  note: while inferring call 'print the string form of 1 as line' with arguments [class] -> nothing tests/required/string_form_integer/main.dl:4:1-35
+tests/required/string_form_integer/main.dl:4:7-35: Warning: Expression 'print the string form of 1 as line' has multiple valid operand groupings. Using '(the string form of 1) as line' instead of 'the string form of (1 as line)'.
+  note: while inferring call 'print the string form of 1 as line' with arguments [class] -> class tests/required/string_form_integer/main.dl:4:7-35
+  note: while inferring call 'print the string form of 1 as line' with arguments [class] -> undeduced tests/required/string_form_integer/main.dl:4:1-35
