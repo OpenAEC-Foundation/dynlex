@@ -7,7 +7,7 @@ dynlex options:
     class:
         name: "class"
         members: "members"
-    macro: "macro"
+    flex: "flex"
     local: "local"
     child sections:
         execute: "execute"

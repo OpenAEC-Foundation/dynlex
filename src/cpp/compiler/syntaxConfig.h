@@ -29,7 +29,7 @@ struct SyntaxConfig {
 	std::string sectionName = "section";
 	std::string functionName = "function";
 	std::string className = "class";
-	std::string macroName = "macro";
+	std::string flexName = "flex";
 	std::string localName = "local";
 	std::string exposedName = "exposed";
 

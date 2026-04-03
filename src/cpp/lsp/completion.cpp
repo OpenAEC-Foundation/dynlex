@@ -444,7 +444,7 @@ void addKeywordCompletions(
 		{syntax.functionName + " ", "define a function"},
 		{syntax.sectionName + " ", "define a section"},
 		{syntax.className + " ", "define a class"},
-		{syntax.macroName + " " + syntax.functionName + " ", "define a macro"},
+		{syntax.flexName + " " + syntax.functionName + " ", "define a flex"},
 		{syntax.localName + " " + syntax.functionName + " ", "define a local function"},
 	};
 

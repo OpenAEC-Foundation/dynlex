@@ -315,7 +315,7 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 	for (const auto &child : roots[0]->children) {
 		const ConfigNode &node = *child;
 		if (node.entry.key == "import" || node.entry.key == "comment" || node.entry.key == "open section" ||
-			node.entry.key == "section" || node.entry.key == "function" || node.entry.key == "macro" ||
+			node.entry.key == "section" || node.entry.key == "function" || node.entry.key == "flex" ||
 			node.entry.key == "local") {
 			if (!validateNameNode(node, diagnostics))
 				return false;
@@ -498,7 +498,7 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			{"section: \"section\"", "section keyword"},
 			{"function: \"function\"", "function keyword"},
 			{"class:", "class settings"},
-			{"macro: \"macro\"", "macro keyword"},
+			{"flex: \"flex\"", "flex keyword"},
 			{"local: \"local\"", "local keyword"},
 			{"child sections:", "child section keywords"},
 			{"messages:", "message overrides"},

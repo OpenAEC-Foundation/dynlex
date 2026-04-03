@@ -407,7 +407,7 @@ static int expressionPrecedence(Expression *expression) {
 
 static bool validateGroupingInTrial(
 	Expression *expr, InferenceContext &context, const std::unordered_set<Expression *> &fixedGroupingRoots,
-	const BindingFrameStack &macroBindingFrameStack, const DiagnosticExpressionSnapshot &failureSnapshot,
+	const BindingFrameStack &flexBindingFrameStack, const DiagnosticExpressionSnapshot &failureSnapshot,
 	bool requireVoidResult = false, GroupingFailure *trialFailure = nullptr,
 	std::unordered_set<Expression *> *resolvedGroupingRoots = nullptr, GroupingSnapshot *resolvedGroupingSnapshot = nullptr,
 	std::vector<InferenceContext::OperandGroupingWarning> *resolvedGroupingWarnings = nullptr
@@ -426,6 +426,8 @@ static bool validateGroupingInTrial(
 	trialContext.currentKnownConstants = context.currentKnownConstants;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
+	trialContext.inheritedTrialFunctionFlexExpansions =
+		context.trial ? &context.trialFunctionFlexExpansions : context.inheritedTrialFunctionFlexExpansions;
 	trialContext.trialJournal = &journal;
 	trialContext.trialInstantiationCache =
 		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
@@ -437,7 +439,7 @@ static bool validateGroupingInTrial(
 	std::unordered_set<Expression *> trialFixedGroupingRoots = fixedGroupingRoots;
 	trialContext.fixedGroupingRoots = &trialFixedGroupingRoots;
 	trialContext.resolvedGroupingRoots = &trialFixedGroupingRoots;
-	inferOrderedExpression(expr, trialContext, macroBindingFrameStack, true);
+	inferOrderedExpression(expr, trialContext, flexBindingFrameStack, true);
 	bool trialSucceeded = trialContext.typesValid;
 	if (trialSucceeded && trialContext.typesValid && requireVoidResult) {
 		DataType lineType = expr ? expr->type : DataType{};
@@ -478,7 +480,7 @@ static bool validateGroupingInTrial(
 }
 
 static GroupingEnumerationProgress enumerateExpressionGroupings(
-	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack,
+	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &flexBindingFrameStack,
 	const std::function<GroupingEnumerationProgress(Expression *&, const std::unordered_set<Expression *> &)> &onCandidate
 ) {
 	std::unordered_set<Expression *> fixedGroupingRoots;
@@ -537,7 +539,7 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 		}
 		GroupingEnumerationProgress result = GroupingEnumerationProgress::NoCandidate;
 		enumerateExpressionGroupings(
-			groupedCurrent, context, false, macroBindingFrameStack,
+			groupedCurrent, context, false, flexBindingFrameStack,
 			[&](Expression *&groupedExpr,
 				const std::unordered_set<Expression *> &childFixedGroupingRoots) -> GroupingEnumerationProgress {
 			if (preserveExplicitGroup && groupedExpr)
@@ -789,7 +791,7 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 }
 
 static bool inferExpression(
-	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &macroBindingFrameStack,
+	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &flexBindingFrameStack,
 	bool requireVoidResult
 ) {
 	GroupingSnapshot initialGrouping = captureGroupingSnapshot(expr);
@@ -876,7 +878,7 @@ static bool inferExpression(
 		std::unordered_set<Expression *> commitResolvedGroupingRoots;
 		context.fixedGroupingRoots = selectedFixedGroupingRoots.empty() ? nullptr : &selectedFixedGroupingRoots;
 		context.resolvedGroupingRoots = &commitResolvedGroupingRoots;
-		inferOrderedExpression(expr, context, macroBindingFrameStack, true);
+		inferOrderedExpression(expr, context, flexBindingFrameStack, true);
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguityDuringInfer;
@@ -916,7 +918,7 @@ static bool inferExpression(
 	if (!detectAmbiguity) {
 		bool foundAcceptedGrouping = false;
 		enumerateExpressionGroupings(
-			expr, context, alreadyOrdered, macroBindingFrameStack,
+			expr, context, alreadyOrdered, flexBindingFrameStack,
 			[&](Expression *&candidateExpr,
 				const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingEnumerationProgress {
 			expr = candidateExpr;
@@ -924,7 +926,7 @@ static bool inferExpression(
 			GroupingSnapshot candidateGrouping;
 			std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
 			bool accepted = validateGroupingInTrial(
-				expr, context, fixedGroupingRoots, macroBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
+				expr, context, fixedGroupingRoots, flexBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
 				&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings
 			);
 			if (!accepted)
@@ -967,7 +969,7 @@ static bool inferExpression(
 	}
 
 	enumerateExpressionGroupings(
-		expr, context, alreadyOrdered, macroBindingFrameStack,
+		expr, context, alreadyOrdered, flexBindingFrameStack,
 		[&](Expression *&candidateExpr,
 			const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingEnumerationProgress {
 		expr = candidateExpr;
@@ -975,7 +977,7 @@ static bool inferExpression(
 		GroupingSnapshot candidateGrouping;
 		std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
 		bool accepted = validateGroupingInTrial(
-			expr, context, fixedGroupingRoots, macroBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
+			expr, context, fixedGroupingRoots, flexBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
 			&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings
 		);
 		if (!accepted)

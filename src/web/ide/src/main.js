@@ -43,7 +43,7 @@ monaco.languages.setMonarchTokensProvider("dynlex", {
     "class",
     "members",
     "globals",
-    "macro",
+    "flex",
     "local",
     "open"
   ],

@@ -7,12 +7,12 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 	context.setTypeFailure("assignment target '" + destinationText + "' is not writable");
 }
 
-static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &macroBindingFrameStack) {
+static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	BindingFrameStack destinationBindingFrameStack;
 	Expression *destinationExpr =
-		resolveThroughBindingsDeep(expr->arguments[1], macroBindingFrameStack, destinationBindingFrameStack);
+		resolveThroughBindingsDeep(expr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
 	BindingFrameStack valueBindingFrameStack;
-	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], macroBindingFrameStack, valueBindingFrameStack);
+	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], flexBindingFrameStack, valueBindingFrameStack);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 
 	if (valueType.kind == DataType::Kind::Type) {
@@ -68,9 +68,9 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		return;
 	}
 
-	BindingFrameStack resolvedBindingFrameStack = macroBindingFrameStack;
+	BindingFrameStack resolvedBindingFrameStack = flexBindingFrameStack;
 	destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-		pushBindingScope(resolvedBindingFrameStack, frame.bindings);
+		pushBindingScope(resolvedBindingFrameStack, frame);
 	});
 	BindingFrameStack ignoredBindingFrameStack;
 	Expression *ownerExpr =

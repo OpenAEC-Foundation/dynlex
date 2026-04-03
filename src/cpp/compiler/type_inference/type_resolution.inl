@@ -97,6 +97,14 @@ static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameS
 			entryHash ^= expressionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
 			bindingContext.fingerprint ^= entryHash;
 		}
+		for (const auto &[parameterDefinition, expression] : frame.parameterBindings) {
+			bindingContext.parameterBindingEntries[parameterDefinition] = expression;
+			size_t definitionHash = std::hash<const VariableReference *>{}(parameterDefinition);
+			size_t expressionHash = std::hash<const Expression *>{}(expression);
+			size_t entryHash = definitionHash;
+			entryHash ^= expressionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
+			bindingContext.fingerprint ^= entryHash;
+		}
 	});
 	return bindingContext;
 }
@@ -211,7 +219,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				selectedPatternDefinition = def;
 			if (def && allArgTypesDeduced && !dependsOnBindings)
 				resolved->selectedPatternDefinition = def;
-			if (def && def->section && def->section->type == SectionType::Class && !def->section->isMacro &&
+			if (def && def->section && def->section->type == SectionType::Class && !def->section->isFlex &&
 				activeTypeResolutionParseContext) {
 				return instantiateBoundClassType(
 					*activeTypeResolutionParseContext, static_cast<ClassSection *>(def->section)->classDefinition,
@@ -553,22 +561,21 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			}
 		}
 	}
-	BindingMap innerBindings;
+	BindingFrame innerBindings;
 	Expression *bodyExpr = nullptr;
-	if (activeTypeResolutionParseContext && resolved->inferredMacroExpansion && selectedPatternDefinition) {
+	if (activeTypeResolutionParseContext && resolved->inferredFlexExpansion && selectedPatternDefinition) {
 		collectPatternCallBindings(resolved, selectedPatternDefinition, innerBindings);
-		bodyExpr = activeTypeResolutionParseContext->cloneMacroExpansionExpression(
-			resolved->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+		bodyExpr = activeTypeResolutionParseContext->cloneFlexExpansionExpression(
+			resolved->inferredFlexExpansion, true, /*preserveInferenceMetadata=*/true
 		);
 	}
 	if (!bodyExpr && activeTypeResolutionParseContext && selectedPatternDefinition)
-		bodyExpr =
-			expandMacroPatternCall(*activeTypeResolutionParseContext, resolved, selectedPatternDefinition, innerBindings);
+		bodyExpr = expandFlexPatternCall(*activeTypeResolutionParseContext, resolved, selectedPatternDefinition, innerBindings);
 	if (!bodyExpr && activeTypeResolutionParseContext)
-		bodyExpr = expandMacroPatternCall(*activeTypeResolutionParseContext, resolved, innerBindings);
+		bodyExpr = expandFlexPatternCall(*activeTypeResolutionParseContext, resolved, innerBindings);
 	if (bodyExpr) {
 		BindingFrameStack mergedBindingFrameStack = bindingFrameStack;
-		materializeMacroBindingsInCallerScope(activeTypeResolutionParseContext, innerBindings, bindingFrameStack);
+		materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
 		pushBindingScope(mergedBindingFrameStack, std::move(innerBindings));
 		return resolveKnownExpressionType(bodyExpr, mergedBindingFrameStack);
 	}
@@ -810,23 +817,29 @@ static bool resolveCompileTimeTypeReference(
 		if (!def || !def->section)
 			return false;
 
-		BindingMap callBindings;
-		appendPatternCallBindings(resolved, def, callBindings);
-		for (auto &[name, boundExpr] : callBindings) {
+		BindingFrame callBindings;
+		collectPatternCallBindings(resolved, def, callBindings);
+		for (auto &[name, boundExpr] : callBindings.bindings) {
+			Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
+			if (resolvedExpr)
+				boundExpr = resolvedExpr;
+		}
+		for (auto &[parameterDefinition, boundExpr] : callBindings.parameterBindings) {
+			(void)parameterDefinition;
 			Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
 			if (resolvedExpr)
 				boundExpr = resolvedExpr;
 		}
 		BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
 		callBindingFrameStack.pushFrame(std::move(callBindings));
-		if (!def->section->isMacro && def->section->type == SectionType::Class) {
+		if (!def->section->isFlex && def->section->type == SectionType::Class) {
 			outTypeRef = instantiateBoundClassType(
 				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack,
 				inferenceContext
 			);
 			return outTypeRef.kind == DataType::Kind::Type;
 		}
-		if (!def->section->isMacro) {
+		if (!def->section->isFlex) {
 			std::vector<std::pair<std::string, Expression *>> orderedBindings;
 			collectPatternCallBindingPairs(resolved, def, orderedBindings);
 
@@ -850,7 +863,7 @@ static bool resolveCompileTimeTypeReference(
 			auto evaluateParameterValue = [&](Expression *argumentExpression) {
 				(void)callBindingFrameStack;
 				if (!argumentExpression)
-					crashCompilerBug("missing non-macro argument while resolving compile-time type reference");
+					crashCompilerBug("missing non-flex argument while resolving compile-time type reference");
 				return lookupCompileTimeExpressionValue(parseContext, argumentExpression, inferenceContext);
 			};
 			auto instKey = findMatchingInstantiationKey(def->section, orderedBindings, argTypes, evaluateParameterValue);
@@ -864,19 +877,19 @@ static bool resolveCompileTimeTypeReference(
 			return true;
 		}
 
-		BindingMap innerBindings;
+		BindingFrame innerBindings;
 		Expression *bodyExpr = nullptr;
-		if (resolved->inferredMacroExpansion) {
+		if (resolved->inferredFlexExpansion) {
 			collectPatternCallBindings(resolved, def, innerBindings);
-			bodyExpr = parseContext.cloneMacroExpansionExpression(
-				resolved->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+			bodyExpr = parseContext.cloneFlexExpansionExpression(
+				resolved->inferredFlexExpansion, true, /*preserveInferenceMetadata=*/true
 			);
 		}
 		if (!bodyExpr)
-			bodyExpr = expandMacroPatternCall(parseContext, resolved, def, innerBindings);
+			bodyExpr = expandFlexPatternCall(parseContext, resolved, def, innerBindings);
 		if (!bodyExpr)
 			return false;
-		materializeMacroBindingsInCallerScope(&parseContext, innerBindings, callBindingFrameStack);
+		materializeFlexBindingsInCallerScope(innerBindings, callBindingFrameStack);
 		callBindingFrameStack.pushFrame(std::move(innerBindings));
 		return resolveCompileTimeTypeReference(parseContext, bodyExpr, callBindingFrameStack, outTypeRef, inferenceContext);
 	}
@@ -1353,6 +1366,8 @@ struct InferenceContext {
 	std::vector<Expression *> expressionStack;
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
 	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
+	std::unordered_map<Expression *, Expression *> trialFunctionFlexExpansions;
+	const std::unordered_map<Expression *, Expression *> *inheritedTrialFunctionFlexExpansions{};
 
 	InferenceContext(ParseContext &pc) : parseContext(pc) {}
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
@@ -1482,6 +1497,24 @@ struct InferenceContext {
 		setExpressionCompileTimeValue(parseContext, expression, value, currentInstantiation);
 	}
 
+	Expression *lookupFunctionFlexExpansion(Expression *expression) const {
+		if (!expression)
+			return nullptr;
+		if (expression->inferredFlexExpansion)
+			return expression->inferredFlexExpansion;
+		if (!trial)
+			return nullptr;
+		auto trialIt = trialFunctionFlexExpansions.find(expression);
+		if (trialIt != trialFunctionFlexExpansions.end())
+			return trialIt->second;
+		if (inheritedTrialFunctionFlexExpansions) {
+			auto inheritedIt = inheritedTrialFunctionFlexExpansions->find(expression);
+			if (inheritedIt != inheritedTrialFunctionFlexExpansions->end())
+				return inheritedIt->second;
+		}
+		return nullptr;
+	}
+
 	CompileTimeValue lookupKnownConstant(VariableReference *reference) const {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
@@ -1555,13 +1588,64 @@ lookupCompileTimeExpressionValue(ParseContext &parseContext, Expression *express
 	return getExpressionCompileTimeValue(parseContext, expression, nullptr);
 }
 
+static Expression *resolveCompileTimeBindingForInference(
+	Expression *expression, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack,
+	InferenceContext *inferenceContext
+) {
+	Expression *resolvedExpression = resolveCompileTimeBinding(expression, bindingFrameStack, outBindingFrameStack);
+	if (!inferenceContext || !inferenceContext->trial || !expression || resolvedExpression != expression)
+		return resolvedExpression;
+	if (expression->kind != Expression::Kind::PatternCall)
+		return resolvedExpression;
+	Expression *trialFunctionFlexExpansion = inferenceContext->lookupFunctionFlexExpansion(expression);
+	if (!trialFunctionFlexExpansion)
+		return resolvedExpression;
+	PatternDefinition *selectedPatternDefinition = expression->selectedPatternDefinition;
+	if (!selectedPatternDefinition && expression->patternMatch && expression->patternMatch->matchedEndNode) {
+		auto &definitions = expression->patternMatch->matchedEndNode->matchingDefinitions;
+		if (definitions.size() == 1)
+			selectedPatternDefinition = definitions.front();
+	}
+	if (!selectedPatternDefinition || !selectedPatternDefinition->section || !selectedPatternDefinition->section->isFlex ||
+		selectedPatternDefinition->section->type != SectionType::Function) {
+		return resolvedExpression;
+	}
+	BindingFrame innerBindings;
+	collectPatternCallBindings(expression, selectedPatternDefinition, innerBindings);
+	materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
+	if (outBindingFrameStack) {
+		*outBindingFrameStack = bindingFrameStack;
+		pushBindingScope(*outBindingFrameStack, std::move(innerBindings));
+	}
+	return trialFunctionFlexExpansion;
+}
+
 static CompileTimeValue resolveStoredCompileTimeValue(
 	ParseContext &parseContext, Expression *expression, const BindingFrameStack &bindingFrameStack,
 	InferenceContext *inferenceContext
 ) {
-	return resolveCompileTimeValueFromKnownState(expression, bindingFrameStack, [&](Expression *currentExpression) {
-		return lookupCompileTimeExpressionValue(parseContext, currentExpression, inferenceContext);
-	});
+	if (!expression)
+		crashCompilerBug("compile-time value resolution received null expression");
+	Expression *currentExpression = expression;
+	BindingFrameStack currentBindingFrameStack = bindingFrameStack;
+	constexpr size_t maxResolutionDepth = 256;
+	for (size_t depth = 0; currentExpression && depth < maxResolutionDepth; depth++) {
+		CompileTimeValue storedValue = lookupCompileTimeExpressionValue(parseContext, currentExpression, inferenceContext);
+		if (isCompileTimeKnown(storedValue))
+			return storedValue;
+		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
+		if (isCompileTimeKnown(immediateValue))
+			return immediateValue;
+		BindingFrameStack resolvedBindingFrameStack;
+		Expression *resolvedExpression = resolveCompileTimeBindingForInference(
+			currentExpression, currentBindingFrameStack, &resolvedBindingFrameStack, inferenceContext
+		);
+		if (!resolvedExpression || resolvedExpression == currentExpression)
+			break;
+		currentExpression = resolvedExpression;
+		currentBindingFrameStack = std::move(resolvedBindingFrameStack);
+	}
+	return {};
 }
 
 static bool resolveStoredCompileTimeInteger(

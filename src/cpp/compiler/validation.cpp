@@ -39,7 +39,7 @@ struct VarUsage {
 };
 
 // Determine whether an expression writes to and/or reads from a named variable,
-// resolving through macro bindings to reach the underlying intrinsics.
+// resolving through flex bindings to reach the underlying intrinsics.
 static VarUsage analyzeVariableUsage(
 	Expression *expr, const std::string &varName, const Bindings &bindings, std::unordered_set<Expression *> &visited
 ) {
@@ -65,7 +65,7 @@ static VarUsage analyzeVariableUsage(
 		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
 			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
 			def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
-		if (def && def->section && def->section->isMacro) {
+		if (def && def->section && def->section->isFlex) {
 			Bindings merged = bindings;
 			for (auto &[key, val] : buildBindings(expr))
 				merged[key] = resolveVar(val, bindings);
@@ -118,7 +118,7 @@ static void validateSection(ParseContext &context, Section *section) {
 
 	for (auto &[name, defRef] : section->variableDefinitions) {
 		bool isPatternArg = false;
-		if (!section->isMacro)
+		if (!section->isFlex)
 			for (PatternDefinition *def : section->patternDefinitions)
 				forEachLeafElement(def->patternElements, [&](PatternElement &el) {
 					if (el.type == PatternElement::Type::Variable && el.text == name)

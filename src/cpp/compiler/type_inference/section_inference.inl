@@ -14,8 +14,8 @@ static bool isLoopSectionOpening(CodeLine *line, ParseContext &parseContext) {
 		return false;
 	Expression *header = line->expression;
 	if (header->kind == Expression::Kind::PatternCall) {
-		BindingMap innerBindings;
-		Expression *expanded = expandMacroPatternCall(parseContext, header, innerBindings);
+		BindingFrame innerBindings;
+		Expression *expanded = expandFlexPatternCall(parseContext, header, innerBindings);
 		if (expanded)
 			header = expanded;
 	}
@@ -42,7 +42,7 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 	for (auto &[name, boundVar] : section->variables) {
 		if (!boundVar)
 			continue;
-		Expression *boundExpr = bindingFrameStack.lookup(name);
+		Expression *boundExpr = bindingFrameStack.lookup(boundVar->definition);
 		if (!boundExpr)
 			continue;
 		Expression *boundExprForType = boundExpr;
@@ -94,11 +94,11 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		Expression *header = line->expression;
 		BindingFrameStack headerBindingFrameStack = bindingFrameStack;
 		if (header->kind == Expression::Kind::PatternCall) {
-			BindingMap innerBindings;
-			Expression *expanded = expandMacroPatternCall(context.parseContext, header, innerBindings);
+			BindingFrame innerBindings;
+			Expression *expanded = expandFlexPatternCall(context.parseContext, header, innerBindings);
 			if (expanded) {
 				header = expanded;
-				materializeMacroBindingsInCallerScope(&context.parseContext, innerBindings, bindingFrameStack);
+				materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
 				headerBindingFrameStack.pushFrame(std::move(innerBindings));
 			}
 		}
@@ -303,9 +303,9 @@ bool inferTypes(ParseContext &parseContext) {
 	};
 	validateVariables(parseContext.mainSection);
 
-	// Validate non-macro functions have deduced return types
+	// Validate non-flex functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
-		if (section->type == SectionType::Function && !section->isMacro && !section->patternDefinitions.empty()) {
+		if (section->type == SectionType::Function && !section->isFlex && !section->patternDefinitions.empty()) {
 			for (auto &[argTypes, inst] : section->instantiations) {
 				(void)argTypes;
 				if (!inst.valid)
@@ -406,6 +406,9 @@ bool ensureSectionInstantiationInferred(
 		context.currentKnownConstants = callerContext->currentKnownConstants;
 		context.inheritedTrialExpressionValues =
 			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
+		context.inheritedTrialFunctionFlexExpansions = callerContext->trial
+														   ? &callerContext->trialFunctionFlexExpansions
+														   : callerContext->inheritedTrialFunctionFlexExpansions;
 		context.trialJournal = callerContext->trialJournal;
 		context.trialInstantiationCache =
 			callerContext->trialInstantiationCache
@@ -422,18 +425,14 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	BindingMap nonMacroTypeBindings;
-	std::vector<std::unique_ptr<Expression>> ownedNonMacroTypeBindings;
 	size_t bindingCount = std::min(parameterNames.size(), argTypes.size());
-	for (size_t i = 0; i < bindingCount; i++) {
-		if (std::find(section->globalVariables.begin(), section->globalVariables.end(), parameterNames[i]) !=
-			section->globalVariables.end())
-			continue;
-		auto bindingValue = makeNonMacroParameterBinding(parseContext, parameterNames[i], argTypes[i], inst);
-		nonMacroTypeBindings[parameterNames[i]] = bindingValue.get();
-		ownedNonMacroTypeBindings.push_back(std::move(bindingValue));
-	}
-	bool inferenceSucceeded = inferSection(section, context, makeBindingFrameStack(nonMacroTypeBindings));
+	BindingFrame nonFlexTypeBindings =
+		rebuildInstantiationNonFlexParameterBindings(inst, bindingCount, [&](size_t index) -> const std::string & {
+		return parameterNames[index];
+	}, [&](size_t index) -> VariableReference * {
+		return findPatternParameterDefinition(definition, parameterNames[index]);
+	}, argTypes, section->globalVariables);
+	bool inferenceSucceeded = inferSection(section, context, makeBindingFrameStack(nonFlexTypeBindings));
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		auto knownIt = context.currentKnownConstants.find(reference);
 		if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))

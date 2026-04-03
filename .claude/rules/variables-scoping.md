@@ -10,7 +10,7 @@ paths:
 
 ## Function-boundary scoping
 - Variables are local to their function scope by default
-- Phase 4 (variable resolution) stops grouping at non-macro Expression/Effect sections
+- Phase 4 (variable resolution) stops grouping at non-flex Expression/Effect sections
 - Variables in nested blocks (loops, if) still access parent function's variables
 
 ## Global variables

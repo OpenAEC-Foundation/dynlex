@@ -10,6 +10,7 @@
 #include <compare>
 #include <list>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -79,6 +80,7 @@ struct Instantiation {
 	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
 	std::unordered_map<CodeLine *, IfChainSelection> ifChainSelections;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
+	std::unordered_map<std::string, std::shared_ptr<Expression>> ownedNonFlexParameterBindings;
 	llvm::Function *llvmFunction = nullptr;
 	llvm::Function *llvmCallableFunction = nullptr;
 	bool inferring = false;
@@ -116,9 +118,9 @@ struct Section {
 	// When a count reaches 0, that VL element can be classified as text (Other)
 	// without waiting for all body references to resolve.
 	std::unordered_map<std::string, int> variableLikeCounts;
-	// whether this is a macro (inlined at call site instead of function call)
-	bool isMacro = false;
-	// recursion guard for type inference of effects/macros
+	// whether this is a flex (inlined at call site instead of function call)
+	bool isFlex = false;
+	// recursion guard for type inference of effects/flexes
 	bool inferring = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;

@@ -23,7 +23,7 @@ llvm::Type *getLLVMType(ParseContext &context, DataType type);
 llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index);
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, DataType condType, const std::string &name);
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
-void resolveThroughMacroLayers(ParseContext &context, Expression *&expr);
+void resolveThroughFlexLayers(ParseContext &context, Expression *&expr);
 DataType getEffectiveType(ParseContext &context, Expression *expr);
 PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
@@ -32,18 +32,18 @@ void allocateSectionVariables(ParseContext &context, Section *section);
 llvm::Value *getVariablePointer(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
 
-// MacroScopeGuard: RAII guard that pops to caller's macro binding scope, restores on destruction.
-struct MacroScopeGuard {
+// FlexScopeGuard: RAII guard that pops to caller's flex binding scope, restores on destruction.
+struct FlexScopeGuard {
 	ParseContext &context;
 	BindingFrameStack savedBindingFrames;
 	bool active = false;
 
-	MacroScopeGuard(ParseContext &ctx) : context(ctx) {}
-	MacroScopeGuard(const MacroScopeGuard &) = delete;
-	MacroScopeGuard &operator=(const MacroScopeGuard &) = delete;
+	FlexScopeGuard(ParseContext &ctx) : context(ctx) {}
+	FlexScopeGuard(const FlexScopeGuard &) = delete;
+	FlexScopeGuard &operator=(const FlexScopeGuard &) = delete;
 
 	void popToCallerScope();
-	~MacroScopeGuard();
+	~FlexScopeGuard();
 };
 
 // Debug info helpers (codegenTypes.cpp)
@@ -53,7 +53,7 @@ llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFi
 // Function/section code generation (codegen.cpp)
 bool generateSectionCode(ParseContext &context, Section *section);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
-void emitMacroBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow = true);
+void emitFlexBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow = true);
 Instantiation *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	const std::vector<DataType> &argTypes

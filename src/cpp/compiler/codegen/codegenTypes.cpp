@@ -296,15 +296,15 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 	return builder.CreateICmpNE(condValue, llvm::ConstantInt::get(intTy, 0), name);
 }
 
-static void ensureMacroBindingRootFrame(ParseContext &context) {
-	if (context.macroBindingFrames.empty())
-		context.macroBindingFrames.pushFrame({});
+static void ensureFlexBindingRootFrame(ParseContext &context) {
+	if (context.flexBindingFrames.empty())
+		context.flexBindingFrames.pushFrame(BindingFrame{});
 }
 
-// Resolve a Variable expression one step through the current macro's binding map.
+// Resolve a Variable expression one step through the current flex's binding map.
 // Returns the bound expression (which lives in the caller's scope), or expr unchanged
 // if no binding exists. Each resolution crosses one scope boundary — the caller must
-// pop the binding stack before evaluating the result (see MacroScopeGuard::popToCallerScope).
+// pop the binding stack before evaluating the result (see FlexScopeGuard::popToCallerScope).
 static Expression *materializeCodegenCompileTimeLiteral(ParseContext &context, const CompileTimeValue &value) {
 	Expression *literal = new Expression();
 	if (const auto *number = std::get_if<double>(&value)) {
@@ -342,40 +342,40 @@ Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 			}
 		}
 	}
-	ensureMacroBindingRootFrame(context);
-	return resolveVariableBindingAcrossFrames(expr, context.macroBindingFrames);
+	ensureFlexBindingRootFrame(context);
+	return resolveVariableBindingAcrossFrames(expr, context.flexBindingFrames);
 }
 
-// Resolve an expression through all macro layers: variable bindings (which cross
-// scope boundaries upward) and macro PatternCall expansions (which push new scopes
+// Resolve an expression through all flex layers: variable bindings (which cross
+// scope boundaries upward) and flex PatternCall expansions (which push new scopes
 // downward). Variable bindings don't modify the stack; PatternCall expansions push
 // one scope each. Returns the number of scopes pushed, so the caller can pop them
-// when done. Use this when you need to see through macro indirection to inspect the
+// when done. Use this when you need to see through flex indirection to inspect the
 // underlying expression kind (e.g., detecting a property intrinsic inside a store).
-void resolveThroughMacroLayers(ParseContext &context, Expression *&expr) {
-	ensureMacroBindingRootFrame(context);
-	resolveThroughBindingLayers(expr, context.macroBindingFrames, [&](Expression *expression, BindingMap &innerBindings) {
-		return expandMacroPatternCall(context, expression, innerBindings);
+void resolveThroughFlexLayers(ParseContext &context, Expression *&expr) {
+	ensureFlexBindingRootFrame(context);
+	resolveThroughBindingLayers(expr, context.flexBindingFrames, [&](Expression *expression, BindingFrame &innerBindings) {
+		return expandFlexPatternCall(context, expression, innerBindings);
 	});
 }
 
-// MacroScopeGuard implementation
-void MacroScopeGuard::popToCallerScope() {
-	ensureMacroBindingRootFrame(context);
-	assert(context.macroBindingFrames.hasParentScope());
-	savedBindingFrames = context.macroBindingFrames;
-	popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope for MacroScopeGuard");
+// FlexScopeGuard implementation
+void FlexScopeGuard::popToCallerScope() {
+	ensureFlexBindingRootFrame(context);
+	assert(context.flexBindingFrames.hasParentScope());
+	savedBindingFrames = context.flexBindingFrames;
+	popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope for FlexScopeGuard");
 	active = true;
 }
 
-MacroScopeGuard::~MacroScopeGuard() {
+FlexScopeGuard::~FlexScopeGuard() {
 	if (active)
-		context.macroBindingFrames = savedBindingFrames;
+		context.flexBindingFrames = savedBindingFrames;
 }
 
 // Resolve the effective type of an expression during codegen.
-// Follows macro expression bindings and pattern parameter types to compute the real type,
-// even for expressions inside non-macro function bodies whose .type was never inferred.
+// Follows flex expression bindings and pattern parameter types to compute the real type,
+// even for expressions inside non-flex function bodies whose .type was never inferred.
 DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return {};
@@ -407,8 +407,8 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	case Expression::Kind::Variable: {
 		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
-			MacroScopeGuard guard(context);
-			if (context.macroBindingFrames.hasParentScope())
+			FlexScopeGuard guard(context);
+			if (context.flexBindingFrames.hasParentScope())
 				guard.popToCallerScope();
 			return getEffectiveType(context, resolved);
 		}
@@ -432,7 +432,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::IntrinsicCall: {
-		// For intrinsics in non-macro function bodies, expr->type may be Undeduced.
+		// For intrinsics in non-flex function bodies, expr->type may be Undeduced.
 		// Compute the type dynamically from the resolved argument types.
 		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
 		if (info) {
@@ -614,21 +614,21 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		assert(matchedDef->section && "Selected overload has no section");
 
 		Section *matchedSection = matchedDef->section;
-		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+		if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
 			auto *classSec = static_cast<ClassSection *>(matchedSection);
 			return {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
 		}
 
-		if (matchedSection->isMacro) {
-			BindingMap innerBindings;
-			Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
+		if (matchedSection->isFlex) {
+			BindingFrame innerBindings;
+			Expression *bodyExpr = expandFlexPatternCall(context, expr, innerBindings);
 			if (!bodyExpr)
 				return expr->type;
 
-			pushBindingScope(context.macroBindingFrames, std::move(innerBindings));
+			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
 			DataType result = getEffectiveType(context, bodyExpr);
 			popBindingScopeOrFail(
-				context.macroBindingFrames, "Missing macro binding scope while restoring effective-type context"
+				context.flexBindingFrames, "Missing flex binding scope while restoring effective-type context"
 			);
 			return concretizeClassType(result);
 		}
@@ -655,7 +655,7 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			return concretizeClassType(instIt->second.returnType);
 		assert(
 			instIt != matchedSection->instantiations.end() &&
-			"Missing inferred instantiation for deduced non-macro pattern call in getEffectiveType"
+			"Missing inferred instantiation for deduced non-flex pattern call in getEffectiveType"
 		);
 		return expr->type;
 	}
@@ -783,13 +783,13 @@ void allocateSectionVariables(ParseContext &context, Section *section) {
 }
 
 // Get the pointer for a variable expression (for store operations).
-// Recursively resolves through nested macro binding scopes to find the actual variable.
+// Recursively resolves through nested flex binding scopes to find the actual variable.
 llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
-	ensureMacroBindingRootFrame(context);
+	ensureFlexBindingRootFrame(context);
 	BindingScopeTrail scopeTrail;
-	// Resolve through macro binding layers and keep a trail so we can restore
+	// Resolve through flex binding layers and keep a trail so we can restore
 	// the exact stack state before returning to the caller.
-	expr = resolveVariableBindingAcrossScopes(expr, context.macroBindingFrames, &scopeTrail);
+	expr = resolveVariableBindingAcrossScopes(expr, context.flexBindingFrames, &scopeTrail);
 
 	llvm::Value *result = nullptr;
 
@@ -808,7 +808,7 @@ llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
 	}
 
 	// Restore all popped scopes in reverse order.
-	restoreBindingScopes(context.macroBindingFrames, scopeTrail);
+	restoreBindingScopes(context.flexBindingFrames, scopeTrail);
 
 	return result;
 }

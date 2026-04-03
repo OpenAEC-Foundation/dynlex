@@ -283,8 +283,8 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "function") {
 		return assignNameValue(context, path, node, config.functionName);
 	}
-	if (node.key == "macro") {
-		return assignNameValue(context, path, node, config.macroName);
+	if (node.key == "flex") {
+		return assignNameValue(context, path, node, config.flexName);
 	}
 	if (node.key == "local") {
 		return assignNameValue(context, path, node, config.localName);

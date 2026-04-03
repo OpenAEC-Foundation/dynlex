@@ -26,7 +26,7 @@ Patterns like `left and right` can now take two statement-level arguments.
 
 ### std.dl definition
 ```
-macro function left and right:
+flex function left and right:
     replacement:
         left
         right
@@ -49,7 +49,7 @@ Parses as: `and(set x to 5, increment x)`
 ### How the subject is determined
 
 After each statement:
-1. **Explicit:** if the statement's macro body contains `@intrinsic("new subject", var)`, that variable becomes the subject
+1. **Explicit:** if the statement's flex body contains `@intrinsic("new subject", var)`, that variable becomes the subject
 2. **Implicit:** if exactly one variable is referenced in the statement, it becomes the subject automatically
 3. **Ambiguous:** if multiple variables are referenced and no explicit `@intrinsic("new subject")` was used, the subject becomes ambiguous. Using `it` after this produces the error: *"what subject are you referring to?"*
 
@@ -63,18 +63,18 @@ function it:
 ```
 
 ```
-macro set var to val:
+flex set var to val:
     replacement:
         @intrinsic("store", var, val)
         @intrinsic("new subject", var)
 ```
 
-Other macros that clearly operate on one variable can also set the subject explicitly. Patterns with a single variable argument get implicit subject tracking for free.
+Other flexes that clearly operate on one variable can also set the subject explicitly. Patterns with a single variable argument get implicit subject tracking for free.
 
 ### Examples
 ```
 set x to 5
-increment it          # it = x (explicit subject from set macro)
+increment it          # it = x (explicit subject from set flex)
 print it              # it = x (implicit, only one variable in 'increment x')
 
 set y to it + 1       # it = x, then subject becomes y (explicit from set)
@@ -109,7 +109,7 @@ Line-level statements that return a non-void value are errors. The user probably
 - Verify existing tests still pass
 
 ### Step 2: Implement `and` pattern
-- Add `macro function left and right:` to std.dl
+- Add `flex function left and right:` to std.dl
 - Should work with no compiler changes beyond unification
 - Test: `set x to 5 and print x`
 

@@ -83,7 +83,7 @@ if [ -f build/conan_toolchain.cmake ]; then
     rm -rf build/CMakeFiles
     rm -f \
         build/CMakePresets.json \
-        build/cmakedeps_macros.cmake \
+        build/cmakedeps_flexes.cmake \
         build/conan_toolchain.cmake \
         build/conanbuild.sh \
         build/conanbuildenv-*.sh \

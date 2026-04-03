@@ -1,0 +1,2 @@
+tests/required/nonflex_specializes_flex/main.dl:7:10-33: Error: non-flex function cannot specialize flex function
+  note: This flex function shares the same pattern endpoint: tests/required/nonflex_specializes_flex/main.dl:3:10-23

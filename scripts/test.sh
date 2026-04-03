@@ -19,7 +19,6 @@ passed=0
 failed=0
 skipped=0
 failures=()
-failure_timings=()
 test_output=""
 is_windows=false
 case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
@@ -49,6 +48,27 @@ elapsed_ms_since() {
     local end_ms
     end_ms=$(now_ms)
     printf "%s\n" "$((end_ms - start_ms))"
+}
+
+append_test_result() {
+    local status="$1"
+    local color="$2"
+    local test_name="$3"
+    local detail="${4:-}"
+    local elapsed_ms="${5:-}"
+    local line="${color}${status}${NC} $test_name"
+
+    if [[ -n "$detail" ]]; then
+        line+=" ($detail"
+        if [[ -n "$elapsed_ms" ]]; then
+            line+=", ${elapsed_ms} ms"
+        fi
+        line+=")"
+    elif [[ -n "$elapsed_ms" ]]; then
+        line+=" (${elapsed_ms} ms)"
+    fi
+
+    test_output+="${line}\n"
 }
 
 normalize_output() {
@@ -131,10 +151,9 @@ for test_dir in "$TESTS_DIR"/*/; do
 
     if [[ ! -f "$source_file" ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (missing main.dl, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "missing main.dl" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
@@ -145,20 +164,18 @@ for test_dir in "$TESTS_DIR"/*/; do
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (compilation timed out, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "compilation timed out" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
     if [[ $compile_exit -ge 128 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         signal=$((compile_exit - 128))
-        test_output+="${RED}FAIL${NC} $test_name (compiler crashed with signal ${signal}, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "compiler crashed with signal ${signal}" "$test_elapsed_ms"
         [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
     output_binary_exists=false
@@ -182,35 +199,33 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         if [[ "$has_expected_diagnostics" == "true" ]]; then
-            test_output+="${RED}FAIL${NC} $test_name (diagnostics mismatch)\n"
+            append_test_result "FAIL" "$RED" "$test_name" "diagnostics mismatch" "$test_elapsed_ms"
             test_output+="  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")\n"
             test_output+="  Actual diagnostics:   $(head -c 400 <<< "$compile_output")\n"
         else
-            test_output+="${RED}FAIL${NC} $test_name (unexpected diagnostics)\n"
+            append_test_result "FAIL" "$RED" "$test_name" "unexpected diagnostics" "$test_elapsed_ms"
             test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
         fi
-        test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
     if [[ $compile_exit -ne 0 || "$output_binary_exists" != "true" ]]; then
         if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
-            test_output+="${GREEN}PASS${NC} $test_name\n"
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
             ((passed++))
         else
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
             if [[ "$output_binary_exists" != "true" ]]; then
-                test_output+="${RED}FAIL${NC} $test_name (compilation did not produce runnable output, ${test_elapsed_ms} ms)\n"
+                append_test_result "FAIL" "$RED" "$test_name" "compilation did not produce runnable output" "$test_elapsed_ms"
             else
-                test_output+="${RED}FAIL${NC} $test_name (compilation failed, ${test_elapsed_ms} ms)\n"
+                append_test_result "FAIL" "$RED" "$test_name" "compilation failed" "$test_elapsed_ms"
             fi
             [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
             ((failed++)) || true
             failures+=("$test_name")
-            failure_timings+=("$test_name:${test_elapsed_ms}")
         fi
         continue
     fi
@@ -218,10 +233,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     # Compilation succeeded but this test only expected diagnostics from a failed compile
     if [[ "$has_expected_diagnostics" == "true" && ! -f "$expected_file" ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (expected compile diagnostics without runnable output, but compilation succeeded, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "expected compile diagnostics without runnable output, but compilation succeeded" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
@@ -230,19 +244,17 @@ for test_dir in "$TESTS_DIR"/*/; do
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (execution timed out, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "execution timed out" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
     if [[ $run_exit -ne 0 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (runtime error, exit $run_exit, ${test_elapsed_ms} ms)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "runtime error, exit $run_exit" "$test_elapsed_ms"
         test_output+="  $actual_output\n"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
         continue
     fi
 
@@ -253,17 +265,16 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
     normalized_actual_output=$(normalize_output "$actual_output")
     if [[ "$normalized_actual_output" == "$expected_output" ]]; then
-        test_output+="${GREEN}PASS${NC} $test_name\n"
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
         ((passed++))
     else
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-        test_output+="${RED}FAIL${NC} $test_name (output mismatch)\n"
+        append_test_result "FAIL" "$RED" "$test_name" "output mismatch" "$test_elapsed_ms"
         test_output+="  Expected: $(head -c 200 <<< "$expected_output")\n"
         test_output+="  Actual:   $(head -c 200 <<< "$actual_output")\n"
-        test_output+="  Elapsed: ${test_elapsed_ms} ms\n"
         ((failed++))
         failures+=("$test_name")
-        failure_timings+=("$test_name:${test_elapsed_ms}")
     fi
 done
 
@@ -272,10 +283,6 @@ total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
 # Only show per-test details if there are failures
 if [[ $failed -gt 0 ]]; then
     echo -e "$test_output"
-    echo "Failure timings (ms):"
-    for entry in "${failure_timings[@]}"; do
-        echo "  ${entry/:/: } ms"
-    done
 fi
 
 echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total_elapsed_ms} ms total)"

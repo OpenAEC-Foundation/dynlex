@@ -1,26 +1,26 @@
-# Macro Inference Options
+# Flex Inference Options
 
 ## Current Choice
 
-Bring type inference for macros back.
+Bring type inference for flexes back.
 
 ### `+`
 
 - Preserves caller-scope regrouping for expressions like `discard 1 as a 64 bit integer`.
-- Avoids freezing the wrong grouping behind an opaque expanded macro root.
-- Works with the existing macro model where arguments remain syntax-level expressions instead of forced runtime values.
+- Avoids freezing the wrong grouping behind an opaque expanded flex root.
+- Works with the existing flex model where arguments remain syntax-level expressions instead of forced runtime values.
 - Does not require a full parameter-mode redesign before fixing the current compiler bugs.
 
 ### `-`
 
-- Reintroduces macro-specific inference complexity.
-- Keeps the compiler split between macro and non-macro inference behavior.
+- Reintroduces flex-specific inference complexity.
+- Keeps the compiler split between flex and non-flex inference behavior.
 - Leaves more room for binding-scope and shadowing bugs than a cleaner function-like model.
 - Makes it harder to simplify the pipeline around one runtime call model.
 
 ## Alternative 1
 
-Treat macros as function-like boundaries with explicit parameter modes.
+Treat flexes as function-like boundaries with explicit parameter modes.
 
 Needed parameter kinds:
 
@@ -34,7 +34,7 @@ Needed parameter kinds:
 
 - Cleaner semantic model than raw substitution.
 - Caller arguments can regroup and infer before crossing the boundary.
-- Removes much of the current macro-binding weirdness.
+- Removes much of the current flex-binding weirdness.
 - Better long-term architecture if the language formalizes parameter modes.
 
 ### `-`
@@ -46,7 +46,7 @@ Needed parameter kinds:
 
 ## Alternative 2
 
-Keep expanded macros opaque, but allow regrouping inside selected macro arguments before opacity takes effect.
+Keep expanded flexes opaque, but allow regrouping inside selected flex arguments before opacity takes effect.
 
 Example intent:
 
@@ -55,13 +55,13 @@ Example intent:
 
 ### `+`
 
-- Smaller change than a full macro/function unification.
-- Preserves current macro syntax and most current behavior.
-- Targets the concrete failure mode where wrapper macros seal arguments too early.
+- Smaller change than a full flex/function unification.
+- Preserves current flex syntax and most current behavior.
+- Targets the concrete failure mode where wrapper flexes seal arguments too early.
 
 ### `-`
 
-- Adds special-case boundary logic to macro expansion/regrouping.
+- Adds special-case boundary logic to flex expansion/regrouping.
 - Needs argument-role classification anyway.
-- Still keeps macro expansion semantics partially separate from normal function semantics.
-- Easier to get subtly wrong than either full macro inference or full parameter-mode unification.
+- Still keeps flex expansion semantics partially separate from normal function semantics.
+- Easier to get subtly wrong than either full flex inference or full parameter-mode unification.

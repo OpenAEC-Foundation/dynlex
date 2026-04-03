@@ -1,117 +1,170 @@
-this document explains how the compiler is supposed to behave.
+This document explains how the compiler is supposed to behave.
 
-all code should be as DRY, agnostic, user friendly and performant as possible. do more with less code.
-when we encounter an error, we add an error diagnostic and return false if this error could cause dependent errors. when a child function returns false, return false as well. this will make the compiler exit cleanly with a single diagnostic. we don't continue scanning for other diagnostics, because one error will cause lots of other errors most of the times and will make it unclear for users what they need to focus on to fix.
+All code should be as DRY, agnostic, user-friendly, and performant as possible. Do more with less code.
 
-later stages of the compiler are very dependent on earlier stages. every line of code has to be carefully thought out.
+When we encounter an error, we add an error diagnostic and return `false` if this error could cause dependent errors. When a child function returns `false`, return `false` as well. This will make the compiler exit cleanly with a single diagnostic. We do not continue scanning for other diagnostics, because one error will cause lots of other errors most of the time and make it unclear for users what they need to focus on to fix.
 
-# import stage
+Later stages of the compiler are very dependent on earlier stages. Every line of code has to be carefully thought out.
 
-the compiler combines all files to one large file.
+# Import Stage
 
-# parse stage
+The compiler combines all files into one large file.
 
-sections are analyzed. we do basic parsing WITHOUT hardcoding. which line opens a new section? what patterns does each section have?
+# Parse Stage
 
-# pattern matching stage
+Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 
-patterns are matched. here we identify:
-- what's a variable
-- what's an argument
-we match with multiple iterations. this will make sure that patterns earlier in the file can call functions later in the file.
-we discover what's a variable based on these principles:
-- a single word functions pattern is never a variable. therefore, all functions with single word patterns are parsed in the first round.
-- a single word as argument to an intrinsic is always a variable, unless it references a single word function. since functions are parsed before references to them, we are guaranteed that single word functions exist from the start.
-we use this logic to determine what's a variable and what not, all the way from the simplest intrinsics to the most complex functions.
-- alphanumeric strings in argument positions of pattern calls are variables.
+- Which line opens a new section?
+- What patterns does each section have?
 
-the consequence: an unused argument isn't an argument.
+# Pattern Matching Stage
 
-pattern matching is type agnostic. this is because we can't easily match based on types if we don't even know if a variable exists, yet. and because variables come from the callee to the caller, (the function signature defines what's a variable), while types come from the caller to the callee (the arguments define the type).
+Patterns are matched. Here we identify:
 
-the consequence: we can't know what order a nested expressions should have.
-example:
+- What is a variable
+- What is an argument
+
+We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
+
+We discover what is a variable based on these principles:
+
+- A single-word function pattern is never a variable. Therefore, all functions with single-word patterns are parsed in the first round.
+- A single word as an argument to an intrinsic is always a variable, unless it references a single-word function. Since functions are parsed before references to them, we are guaranteed that single-word functions exist from the start.
+- Alphanumeric strings in argument positions of pattern calls are variables.
+
+We use this logic to determine what is a variable and what is not, all the way from the simplest intrinsics to the most complex functions.
+
+The consequence: an unused argument is not an argument.
+
+Pattern matching is type-agnostic. This is because we cannot easily match based on types if we do not even know whether a variable exists yet. Also, variables come from the callee to the caller (the function signature defines what is a variable), while types come from the caller to the callee (the arguments define the type).
+
+The consequence: we cannot know what order nested expressions should have.
+
+Example:
+
+```text
 print x as line
-we don't know that 'print x' returns void and cannot be used as argument for 'as line'.
-since we are fully agnostic, we will make all left expressions subexpressions:
-(print x) as line.
-((x + x) + x) + x.
+```
 
-intrinsic arguments are ALWAYS stored as [name, arg1, arg2] etc. so the left operand of + in the 'add' intrinsic is [1] and the right operand is [2].
+We do not know that `print x` returns `void` and cannot be used as an argument for `as line`.
 
-we sort all expression arguments by their source position, since they didn't get added in order. after this, NO sorting is done.
+Since we are fully agnostic, we will make all left expressions subexpressions:
 
-# validation stage
+```text
+(print x) as line
+((x + x) + x) + x
+```
 
-# type resolution stage
+Intrinsic arguments are **ALWAYS** stored as `[name, arg1, arg2]`, etc. So the left operand of `+` in the `add` intrinsic is `[1]` and the right operand is `[2]`.
 
-we loop over the code like it would get executed.
-we track each variable that would possibly be a constant. a variable reference can be constant. constant means compile-time-known here. it doesn't guarantee that the value doesn't change, later.
-we can reorder expressions based on types if this is the first valid instantiation, but we cannot change what's a variable and what not.
-ALL types of each previous line have to be deduced when right away except in recursive function code.
+We sort all expression arguments by their source position, since they did not get added in order. After this, **NO** sorting is done.
 
-we only go over loops once. variables modified in there are marked as non-constant.
+# Validation Stage
 
-we infer top-down, left to right. so we infer the top level expression. before inferring it, we infer the arguments. if those arguments are expressions with arguments as well, no problem, since we infer recursively.
-the store intrinsic doesn't break this, since store should always be used left from where the value is used.
+# Type Resolution Stage
 
+We loop over the code like it would get executed.
 
-example:
+We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later.
+
+We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.
+
+**ALL** types of each previous line have to be deduced right away, except in recursive function code.
+
+We only go over loops once. Variables modified there are marked as non-constant.
+
+We infer top-down, left to right. So we infer the top-level expression. Before inferring it, we infer the arguments. If those arguments are expressions with arguments as well, no problem, since we infer recursively.
+
+The `store` intrinsic does not break this, since `store` should always be used left of where the value is used.
+
+Example:
+
+```text
 set x to 1 and increment x
-we infer
-{void:expr1} and {void:expr2}. we infer the arguments first.
-so we infer expr1 and expr2 after. x has a type when we get to expr2.
-we infer x. if x is compile time known, we set its value to that value. if it's unset, we keep it unset but don't emit an error yet. the intrinsic checking will do that.
-we infer 1. we set the compile time value to the value of the literal.
-now we infer the set to macro.
-we infer the store intrinsic. we resolve var and val.
-we set the value of var to 1.
-we set the result of this store intrinsic to void.
-we infer increment.
-we infer the second x, which reads 1 from the variable.
-we resolve val.
-etc. etc.
+```
 
-so we build up compile time values hierarchically. from the bottom of the tree to the top (a natural result of top-down but inferring the arguments first).
-when we encounter a value which can't be known compile time, values that build on it can also not be known compile time. from those we only track the types, not the values.
+We infer:
 
-when processing a function call, we infer that function right away so we can know return types. we do the same with macros. when a (macro) function fails on typing, we just reorder the expression that's calling it, since we're still inferring that one.
+```text
+{void:expr1} and {void:expr2}
+```
 
-(print x) as line is incorrect, since void as argument is not allowed unless explicitly specified in the pattern and print x returns void. we know this because we instantiate print x and walk over the code just like we do with the code in the main section. we store the return type so we don't have to instantiate functions with the same (possibly incorrect) combinations again and again. we assume  functions always return the same type for the same argument types and constants.
+We infer the arguments first, so we infer `expr1` and `expr2` after. `x` has a type when we get to `expr2`.
 
-all instantiations of a function have the same operand reordering for each code line, but can use different overloads. the first valid instantiation determines reordering.
+- We infer `x`. If `x` is compile-time-known, we set its value to that value. If it is unset, we keep it unset but do not emit an error yet. The intrinsic checking will do that.
+- We infer `1`. We set the compile-time value to the value of the literal.
+- Now we infer the `set to` flex.
+- We infer the `store` intrinsic. We resolve `var` and `val`.
+- We set the value of `var` to `1`.
+- We set the result of this `store` intrinsic to `void`.
+- We infer `increment`.
+- We infer the second `x`, which reads `1` from the variable.
+- We resolve `val`.
+- Etc.
 
-we reuse the same strategy(code) for macro functions where possible, keeping it DRY.
+So we build up compile-time values hierarchically: from the bottom of the tree to the top (a natural result of top-down inference while inferring the arguments first).
 
+When we encounter a value that cannot be known at compile time, values that build on it also cannot be known at compile time. For those, we track only types, not values.
 
-## operand reordering
+When processing a function call, we infer that function right away so we can know return types. We do the same with flexes. When a (flex) function fails on typing, we just reorder the expression that is calling it, since we are still inferring that one.
 
-we iterate over all possible operand orders until we find a valid one.
+`(print x) as line` is incorrect, since `void` as an argument is not allowed unless explicitly specified in the pattern, and `print x` returns `void`.
 
-all instantiation types are known when instantiating a function and do not change. we use this fact for reordering.
-the only exception is the store intrinsic: it takes a value whose first arguments type should be determined by its second arguments type. therefore, a store intrinsic wrapper has to be a macro function, so it expands before types are checked.
+We know this because we instantiate `print x` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
 
-we prefer sub-first aka left = subexpression, just like pattern matching.
+All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
+We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
-a functions return value may never be unused. this prevents wrong groupings. if we want to discard a functions return value, we can use a discard intrinsic.
+## Operand Reordering
 
-enclosed expressions like '1 + 4' in 'the minimum of 1 + 4 and 5 + 6' are inferred first. when an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
+We iterate over all possible operand orders until we find a valid one.
 
-so:
+All instantiation types are known when instantiating a function and do not change. We use this fact for reordering.
+
+The only exception is the `store` intrinsic: it takes a value whose first argument's type should be determined by its second argument's type. Therefore, a `store` intrinsic wrapper has to be a flex function, so it is executed in the outer context.
+
+We prefer sub-first, aka `left = subexpression`, just like pattern matching.
+
+A function's return value may never be unused. This prevents wrong groupings. If we want to discard a function's return value, we can use a `discard` intrinsic.
+
+Enclosed expressions like `1 + 4` in `the minimum of 1 + 4 and 5 + 6` are inferred first. When an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
+
+So:
+
+```text
 (x + y squared) * z + 2
-initial sub-first order:
+```
+
+Initial sub-first order:
+
+```text
 (((x + y) squared) * z) + 2
-inner increment:
+```
+
+Inner increment:
+
+```text
 ((x + (y squared)) * z) + 2
-all inner orderings have been tried. all inner orderings reset. outer increment:
+```
+
+All inner orderings have been tried. All inner orderings reset. Outer increment:
+
+```text
 ((x + y) squared) * (z + 2)
-inner increment:
+```
+
+Inner increment:
+
+```text
 (x + (y squared)) * (z + 2)
+```
 
-with multiple separate sub expressions, iterate over 1 first, reset 1 and step 2, iterate 1 again, step 2 again, when 2 is finished reset both and do the same with the outer expression.
+With multiple separate subexpressions, iterate over `1` first, reset `1` and step `2`, iterate `1` again, step `2` again, and when `2` is finished reset both and do the same with the outer expression.
 
-so outer innerright innerleft
+So, outer/inner-right/inner-left:
+
+```text
 000
 001
 010
@@ -119,42 +172,83 @@ so outer innerright innerleft
 100
 101
 etc.
+```
 
-for every increment, we need to reset and revalidate the whole expression tree. this is because some intrinsics have side effects. for example, the store intrinsic has a side effect:
-'set x to y and print x' <-- second x's type isn't know at first and should be set by the load intrinsic.
+For every increment, we need to reset and revalidate the whole expression tree. This is because some intrinsics have side effects.
 
-therefore, we sadly can't just use a recursive 'increment until next valid option'
+For example, the `store` intrinsic has a side effect:
 
-therefore, we have to separate increments, validation and clearing.
-an increment changes a grouping somewhere (or potentially multiple groupings, as long as groupings have finished iterating).
-validation infers the whole tree recursively
-clearing clears all types from the tree recursively.
+```text
+set x to y and print x
+```
 
-to detect ambiguity, we have to keep incrementing until we found another fully passing tree or we finished. when encountering the first valid state, we save this state by saving the expression pointers.
+The second `x` type is not known at first and should be set by the `load` intrinsic.
 
-we don't clone the expression tree for reordering, but reorder it. even when storing correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
-we don't use pointers to expression pointers locations (expression**), since those can be dangling pointers.
+Therefore, we sadly cannot just use a recursive "increment until next valid option."
 
-ALL functions can be seen as one of these 4 categories of operators.
-the ONLY thing we check for this is does the operator START with an argument? and does it END with an argument?
-all other arguments are IRRELEVANT. we can never start or end with 2 arguments, since '$$' would just merge to one name when the user supplies two concatenated names 'arg1' and 'arg2' as 'arg1arg2'. ' ' is a SEPARATOR, a pattern element of type 'other'.
-prefix operator:
-not $, set $ to $, vector of $ $ #
-postfix operator:
-$ doubled, $%
-infix operator:
+Therefore, we have to separate increments, validation, and clearing.
+
+- An increment changes a grouping somewhere (or potentially multiple groupings, as long as groupings have finished iterating).
+- Validation infers the whole tree recursively.
+- Clearing clears all types from the tree recursively.
+
+To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
+
+We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
+
+We do not use pointers to expression-pointer locations (`expression**`), since those can be dangling pointers.
+
+**ALL** functions can be seen as one of these 4 categories of operators.
+
+The **ONLY** thing we check for this is:
+
+- Does the operator start with an argument?
+- Does it end with an argument?
+
+All other arguments are **IRRELEVANT**. We can never start or end with 2 arguments, since `$$` would just merge into one name when the user supplies two concatenated names `arg1` and `arg2` as `arg1arg2`. A space (` `) is a **SEPARATOR**, a pattern element of type `other`.
+
+Prefix operator:
+
+```text
+not $
+set $ to $
+vector of $ $ #
+```
+
+Postfix operator:
+
+```text
+$ doubled
+$%
+```
+
+Infix operator:
+
+```text
 $ + $
-other operator:
-true, a $ bit integer
+```
 
-some orderings are ambigous.
-for example:
-the maximum of 5 and 3 + 4. did the user mean '(the maximum of 5 and 3) + 4' or 'the maximum of 5 and (3 + 4)'? both parse correctly. because of the left expression = subexpression nature, the compiler will choose the first one. this behaviour might cause glitches. but even humans will not be able to tell without context. we'd like the user to specify which option to choose.
+Other operator:
 
-# code generation stage
+```text
+true
+a $ bit integer
+```
 
-we already know which patterns call which instantiations, the type of every variable etc. but now, we branch off into compilation target: browser, machine code, spirv etc.
+Some orderings are ambiguous.
 
-# lsp interaction.
+For example:
 
-when hovering over an expression, the already evaluated compile time value and type are shown.
+```text
+the maximum of 5 and 3 + 4
+```
+
+Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4)`? Both parse correctly. Because of the left-expression-equals-subexpression nature, the compiler will choose the first one. This behavior might cause glitches. But even humans will not be able to tell without context. We would like the user to specify which option to choose.
+
+# Code Generation Stage
+
+We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
+
+# LSP Interaction
+
+When hovering over an expression, the already-evaluated compile-time value and type are shown.

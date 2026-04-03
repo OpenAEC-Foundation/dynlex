@@ -84,19 +84,19 @@ function a new n x m matrix from value:
 - `src/cpp/compiler/type_inference/const_evaluation.inl`
 - Specifically the binding-capture clone path:
   - `cloneFrozenBindingSubtree(...)`
-  - used from `captureMacroBindingReferencesImpl(...)`
+  - used from `captureFlexBindingReferencesImpl(...)`
 
 Current behavior of `cloneFrozenBindingSubtree(...)`:
 - copies `type`
 - copies `selectedPatternDefinition`
-- copies `inferredMacroExpansion`
+- copies `inferredFlexExpansion`
 - does **not** copy the stored compile-time value for the source expression
 
 That creates an invalid intermediate state:
 - clone looks inferred enough to short-circuit later logic
 - but its compile-time value map entry is gone
 
-This matches the observed failure shape better than the earlier workaround attempt to forcibly re-infer macro bindings.
+This matches the observed failure shape better than the earlier workaround attempt to forcibly re-infer flex bindings.
 
 ## Likely Fix
 - Preserve stored compile-time values when freezing already-resolved binding subtrees.
@@ -108,7 +108,7 @@ This matches the observed failure shape better than the earlier workaround attem
   - keep the path resolve-only; do not reintroduce evaluator logic
 
 ## Secondary Cleanup Opportunity
-- After the clone-path fix, re-check whether the added "force infer macroBinding if type/value missing" logic in `function_inference.inl` is still needed.
+- After the clone-path fix, re-check whether the added "force infer flexBinding if type/value missing" logic in `function_inference.inl` is still needed.
 - If preserving compile-time values at the clone boundary restores the invariant, that workaround can likely be reduced or removed.
 
 ## Files Most Relevant

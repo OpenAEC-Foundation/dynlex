@@ -140,9 +140,9 @@ void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (intrinsicExpr->range.start() != 0 || intrinsicExpr->range.end() != (int)line->patternText.size())
 		return;
 
-	Section *macroSection = replacementSection->parent;
-	if (!macroSection || !macroSection->isMacro || macroSection->type != SectionType::Function ||
-		macroSection->patternDefinitions.empty())
+	Section *flexSection = replacementSection->parent;
+	if (!flexSection || !flexSection->isFlex || flexSection->type != SectionType::Function ||
+		flexSection->patternDefinitions.empty())
 		return;
 
 	DataType aliasType;
@@ -152,7 +152,7 @@ void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (typeAliasNames.contains(aliasType))
 		return;
 
-	std::string aliasName = (std::string)macroSection->patternDefinitions.front()->range.subString;
+	std::string aliasName = (std::string)flexSection->patternDefinitions.front()->range.subString;
 	if (!aliasName.empty())
 		typeAliasNames.emplace(aliasType, std::move(aliasName));
 }
@@ -163,7 +163,7 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 namespace {
-Expression *cloneMacroExpansionExpressionImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
+Expression *cloneFlexExpansionExpressionImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
 	if (!expression)
 		return nullptr;
 	Expression *clone = new Expression();
@@ -174,7 +174,7 @@ Expression *cloneMacroExpansionExpressionImpl(ParseContext &context, Expression 
 	clone->patternMatch = expression->patternMatch;
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
-	clone->inferredMacroExpansion = nullptr;
+	clone->inferredFlexExpansion = nullptr;
 	clone->isSubMatch = expression->isSubMatch;
 	clone->isExplicitGroup = expression->isExplicitGroup;
 	clone->groupingArgumentIndices = expression->groupingArgumentIndices;
@@ -193,15 +193,15 @@ Expression *cloneMacroExpansionExpressionImpl(ParseContext &context, Expression 
 	}
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneMacroExpansionExpressionImpl(context, argument, preserveInferenceMetadata));
+		clone->arguments.push_back(cloneFlexExpansionExpressionImpl(context, argument, preserveInferenceMetadata));
 	return clone;
 }
 } // namespace
 
-Expression *ParseContext::cloneMacroExpansionExpression(Expression *expression, bool ownRoot, bool preserveInferenceMetadata) {
-	Expression *clone = cloneMacroExpansionExpressionImpl(*this, expression, preserveInferenceMetadata);
+Expression *ParseContext::cloneFlexExpansionExpression(Expression *expression, bool ownRoot, bool preserveInferenceMetadata) {
+	Expression *clone = cloneFlexExpansionExpressionImpl(*this, expression, preserveInferenceMetadata);
 	if (clone && ownRoot)
-		ownedMacroExpansionRoots.push_back(clone);
+		ownedFlexExpansionRoots.push_back(clone);
 	return clone;
 }
 
@@ -211,9 +211,7 @@ ParseContext::~ParseContext() {
 		if (line && line->expression)
 			deleteExpressionTree(line->expression, visitedFunctions);
 	}
-	for (Expression *expression : ownedMacroExpansionRoots)
-		deleteExpressionTree(expression, visitedFunctions);
-	for (Expression *expression : ownedCapturedBindingRoots)
+	for (Expression *expression : ownedFlexExpansionRoots)
 		deleteExpressionTree(expression, visitedFunctions);
 	for (Expression *expression : ownedCodegenLiteralRoots)
 		deleteExpressionTree(expression, visitedFunctions);

@@ -20,7 +20,7 @@ For each code line (in execution order):
 
 4. **For each grouping, validate bottom-up:**
    - **Submatches first:** Evaluate each submatch's return type.
-     - **Macros:** Return type = return type of the macro's first expression (macros are code replacement; a macro returning a value always has exactly one expression that returns it; a void macro can have multiple void statements).
+     - **Flexes:** Return type = return type of the flex's first expression (flexes are code replacement; a flex returning a value always has exactly one expression that returns it; a void flex can have multiple void statements).
      - **Functions:** Instantiate with the argument types passed. Infer the function body recursively (same algorithm). The instantiation's return type is the result.
    - **Check argument types against constraints:** Void arguments are valid at the pattern level — patterns like `do this and do that` (e.g., `set x to 4 and set y to 5`) accept Void submatches. Rejection happens at the **intrinsic level**: if an intrinsic expects numeric operands and receives Void, that grouping is invalid. Example: `(set x to y) + z` — the `add` intrinsic doesn't accept Void and Float, so this ordering is rejected.
    - **If all checks pass:** Keep the first valid grouping as the selected result, then continue scanning until either all remaining groupings fail or a second distinct valid grouping is found.
@@ -34,14 +34,14 @@ For each code line (in execution order):
 ## Example: `simple` test
 
 ```
-set x to 42        → macro, returns Void. No submatches, no reordering.
-set y to 10        → macro, returns Void. No submatches, no reordering.
+set x to 42        → flex, returns Void. No submatches, no reordering.
+set y to 10        → flex, returns Void. No submatches, no reordering.
 set z to x + y     → Two patterns: set $ to $, $ + $. One shared edge.
   Try 1: left as submatch of right → +(set(z, x), y)
-    Submatch set(z, x): macro → Void.
+    Submatch set(z, x): flex → Void.
     @intrinsic("add", Void, f64) — add doesn't accept Void operands → INVALID.
   Try 2: right as submatch of left → set(z, +(x, y))
-    Submatch +(x, y): macro, first expression is @intrinsic("add", x, y) → f64.
+    Submatch +(x, y): flex, first expression is @intrinsic("add", x, y) → f64.
     set $ to $ accepts (var, f64) → VALID. Commit.
 print z             → One pattern, no reordering possible.
   Instantiate print(f64). Inside the function body:
@@ -56,7 +56,7 @@ print z             → One pattern, no reordering possible.
 - **Execution order:** Process lines top-to-bottom, not in fixed-point iteration.
 - **Left-to-right default:** When trying groupings, prefer left-side as submatch (left-to-right evaluation order).
 - **Intrinsic-level type rejection:** Void arguments are valid at the pattern level, but intrinsics reject incompatible types (e.g., `add(Void, Float)` is invalid). This is the primary mechanism for rejecting wrong groupings.
-- **Macro return type:** Return type of the macro's first expression.
+- **Flex return type:** Return type of the flex's first expression.
 - **Function instantiation:** Each unique argument type combination creates a new instantiation. The function body is inferred recursively using the same algorithm.
 - **First valid grouping wins, but ambiguity is surfaced:** If exactly one grouping is valid, use it. If multiple are valid, keep the first valid grouping and emit a warning. If none are valid, it's a type error.
 - **No type inference in pattern resolution:** Pattern resolution is purely structural. `matchTypesValid` is removed. Type-based match rejection happens in this algorithm instead.

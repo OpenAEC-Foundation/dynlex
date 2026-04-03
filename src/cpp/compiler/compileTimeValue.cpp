@@ -156,8 +156,23 @@ Expression *resolveCompileTimeBinding(
 	Expression *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
 	if (resolvedExpression && resolvedExpression != expr)
 		return resolvedExpression;
-	if (expr && expr->inferredMacroExpansion)
-		return expr->inferredMacroExpansion;
+	if (expr && expr->inferredFlexExpansion) {
+		PatternDefinition *definition = expr->selectedPatternDefinition;
+		if (!definition && expr->patternMatch && expr->patternMatch->matchedEndNode) {
+			auto &definitions = expr->patternMatch->matchedEndNode->matchingDefinitions;
+			if (definitions.size() == 1)
+				definition = definitions.front();
+		}
+		if (definition && definition->section && definition->section->isFlex) {
+			BindingFrame innerBindings;
+			collectPatternCallBindings(expr, definition, innerBindings);
+			if (outBindingFrameStack) {
+				*outBindingFrameStack = bindingFrameStack;
+				pushBindingScope(*outBindingFrameStack, std::move(innerBindings));
+			}
+		}
+		return expr->inferredFlexExpansion;
+	}
 	return resolvedExpression;
 }
 

@@ -226,7 +226,7 @@ SPIR-V doesn't use DWARF. In `generateCode`, skip all debug info setup when `emi
 Why:
 - Reuses existing transport infrastructure (`Transport`, `tcpTransport`, `stdioTransport`)
 - Single binary — no separate debug adapter to install
-- Can present DynLex-aware views (pattern names instead of mangled function names, macro expansion tracking)
+- Can present DynLex-aware views (pattern names instead of mangled function names, flex expansion tracking)
 - GDB is pre-installed on most Linux distributions; LLDB on macOS
 
 The DAP server translates between VS Code's DAP requests and GDB/MI commands, mapping DWARF-level concepts back to DynLex source constructs.
@@ -361,7 +361,7 @@ These are why we build a custom adapter instead of using CodeLLDB:
 
 1. **Pattern name demangling**: Stack frames show `function left + right` instead of `add_i32_i32`. The DAP server maintains a map from monomorphized names → pattern definition text (built during compilation or by parsing the binary's symbol table + the source).
 
-2. **Macro expansion transparency**: When stopped inside a macro body, the stack trace shows both the macro expansion site and the macro definition, with the source location pointing to the caller's line (not the macro body).
+2. **Flex expansion transparency**: When stopped inside a flex body, the stack trace shows both the flex expansion site and the flex definition, with the source location pointing to the caller's line (not the flex body).
 
 3. **Variable display names**: DWARF variable names will be the DynLex variable names (since we control debug info emission), but the adapter can add type annotations in DynLex syntax (e.g., `x: 32 bit integer = 42`).
 

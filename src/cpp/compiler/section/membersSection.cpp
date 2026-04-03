@@ -30,7 +30,8 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 		typeExpr->kind = Expression::Kind::Pending;
 		PatternReference *ref = new PatternReference(typeExpr, SectionType::Function);
 		typeExpr->patternReference = ref;
-		section->addPatternReference(ref);
+		Section *referenceOwner = fieldRange.line && fieldRange.line->section ? fieldRange.line->section : section;
+		referenceOwner->addPatternReference(ref);
 
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;

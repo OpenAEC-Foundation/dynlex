@@ -33,7 +33,7 @@ paths:
 - Returns hierarchical `DocumentSymbol[]` for VS Code outline view, breadcrumbs, and Ctrl+Shift+O navigation.
 - Walks section tree recursively. Each section with `patternDefinitions` becomes a symbol.
 - **Name**: concatenated from `patternElements` text directly (elements already include spaces as separate `Other`-type elements — do NOT add extra separators).
-- **Detail**: `sectionTypeToString()`, prefixed with "macro " if `isMacro`.
+- **Detail**: `sectionTypeToString()`, prefixed with "flex " if `isFlex`.
 - **Kind mapping**: Expression/Effect → `Function`, Class → `Class`, Pattern → `Module`, others → `Namespace`.
 - **Range**: starts from `selectionRange` (pattern definition line), extends to last body code line. LSP requires `selectionRange ⊆ range`.
 - Sections without pattern definitions (e.g. main section) pass children through to the parent symbol list.

@@ -20,18 +20,18 @@ All outputs: `131434272` (correct)
 - **DynLex O3 vs C++ O3**: 1.3x slower (due to function call overhead for `set var to val` pattern)
 - **DynLex O0 vs C++ O0**: 2.9x slower (function calls not yet inlined)
 
-The gap between DynLex and C++ will narrow as more patterns become macros (inlined at compile time).
+The gap between DynLex and C++ will narrow as more patterns become flexes (inlined at compile time).
 
 ## Source Code
 
 ### DynLex (collatz.dl)
 
 ```
-macro function return value:
+flex function return value:
     replacement:
         @intrinsic("return", value)
 
-macro function set var to val:
+flex function set var to val:
     replacement:
         @intrinsic("store", var, val)
 
@@ -51,27 +51,27 @@ function left equals right:
     execute:
         return @intrinsic("equal", left, right)
 
-macro function left + right:
+flex function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-macro function left * right:
+flex function left * right:
     replacement:
         @intrinsic("multiply", left, right)
 
-macro function left / right:
+flex function left / right:
     replacement:
         @intrinsic("divide", left, right)
 
-macro function left mod right:
+flex function left mod right:
     replacement:
         @intrinsic("modulo", left, right)
 
-macro section loop while condition:
+flex section loop while condition:
     replacement:
         @intrinsic("loop while", condition)
 
-macro section if condition:
+flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
@@ -151,4 +151,4 @@ time python3 collatz.py
 ## Notes
 
 - The DynLex code uses `set temp to num * 3` then `set num to temp + 1` due to a current function precedence parsing issue with `num * 3 + 1`
-- The `set var to val` pattern is not yet a macro, causing function call overhead; making it a macro would improve performance
+- The `set var to val` pattern is not yet a flex, causing function call overhead; making it a flex would improve performance

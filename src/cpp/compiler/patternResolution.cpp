@@ -236,10 +236,10 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static bool isMacroFunctionDefinition(const PatternDefinition *definition) {
-	assert(definition && "macro specialization checks require a real pattern definition");
+static bool isFlexFunctionDefinition(const PatternDefinition *definition) {
+	assert(definition && "flex specialization checks require a real pattern definition");
 	assert(definition->section && "pattern definition must belong to a section");
-	return definition->section->type == SectionType::Function && definition->section->isMacro;
+	return definition->section->type == SectionType::Function && definition->section->isFlex;
 }
 
 static bool definitionHasTypeConstraints(const PatternDefinition &definition) {
@@ -265,8 +265,8 @@ appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDef
 
 struct DefinitionConflict {
 	enum class Kind {
-		TypedMacroParameters,
-		NonMacroSpecializesMacro,
+		TypedFlexParameters,
+		NonFlexSpecializesFlex,
 		DuplicatePatternDefinition,
 	};
 
@@ -309,12 +309,12 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::sort(definitions.begin(), definitions.end(), definitionComesBefore);
 
 	std::vector<DefinitionConflict> conflicts;
-	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenMixedMacroPairs;
+	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenMixedFlexPairs;
 	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
 
 	for (PatternDefinition *definition : definitions) {
-		if (isMacroFunctionDefinition(definition) && definitionHasTypeConstraints(*definition))
-			conflicts.push_back({DefinitionConflict::Kind::TypedMacroParameters, definition, nullptr});
+		if (isFlexFunctionDefinition(definition) && definitionHasTypeConstraints(*definition))
+			conflicts.push_back({DefinitionConflict::Kind::TypedFlexParameters, definition, nullptr});
 
 		for (PatternTreeNode *endNode : definition->endNodes) {
 			assert(endNode && "definition endpoint nodes must be valid");
@@ -324,15 +324,15 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				if (other == definition)
 					continue;
 
-				bool mixedMacroFunctionPair = definition->section->type == SectionType::Function &&
-											  other->section->type == SectionType::Function &&
-											  definition->section->isMacro != other->section->isMacro;
-				if (mixedMacroFunctionPair) {
-					PatternDefinition *nonMacroDefinition = definition->section->isMacro ? other : definition;
-					PatternDefinition *macroDefinition = definition->section->isMacro ? definition : other;
-					if (seenMixedMacroPairs.insert({nonMacroDefinition, macroDefinition}).second) {
+				bool mixedFlexFunctionPair = definition->section->type == SectionType::Function &&
+											 other->section->type == SectionType::Function &&
+											 definition->section->isFlex != other->section->isFlex;
+				if (mixedFlexFunctionPair) {
+					PatternDefinition *nonFlexDefinition = definition->section->isFlex ? other : definition;
+					PatternDefinition *flexDefinition = definition->section->isFlex ? definition : other;
+					if (seenMixedFlexPairs.insert({nonFlexDefinition, flexDefinition}).second) {
 						conflicts.push_back(
-							{DefinitionConflict::Kind::NonMacroSpecializesMacro, nonMacroDefinition, macroDefinition}
+							{DefinitionConflict::Kind::NonFlexSpecializesFlex, nonFlexDefinition, flexDefinition}
 						);
 					}
 					continue;
@@ -357,18 +357,18 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
 	const DefinitionConflict &conflict = conflicts.front();
 	switch (conflict.kind) {
-	case DefinitionConflict::Kind::TypedMacroParameters:
+	case DefinitionConflict::Kind::TypedFlexParameters:
 		context.diagnostics.push_back(Diagnostic(
 			context, Diagnostic::Level::Error,
-			"macro parameters cannot have type constraints; convert this replacement pattern to execute:",
+			"flex parameters cannot have type constraints; convert this replacement pattern to execute:",
 			conflict.primary->range
 		));
 		return false;
-	case DefinitionConflict::Kind::NonMacroSpecializesMacro: {
+	case DefinitionConflict::Kind::NonFlexSpecializesFlex: {
 		Diagnostic diagnostic(
-			context, Diagnostic::Level::Error, "non-macro function cannot specialize macro function", conflict.primary->range
+			context, Diagnostic::Level::Error, "non-flex function cannot specialize flex function", conflict.primary->range
 		);
-		diagnostic.relatedInfo.push_back({"This macro function shares the same pattern endpoint:", conflict.related->range});
+		diagnostic.relatedInfo.push_back({"This flex function shares the same pattern endpoint:", conflict.related->range});
 		context.diagnostics.push_back(std::move(diagnostic));
 		return false;
 	}
@@ -1822,7 +1822,7 @@ bool resolvePatterns(ParseContext &context) {
 			// Find the enclosing function (Function/Effect section)
 			Section *functionScope = nullptr;
 			for (Section *a = sec; a; a = a->parent) {
-				if (a->type == SectionType::Function && !a->isMacro) {
+				if (a->type == SectionType::Function && !a->isFlex) {
 					functionScope = a;
 					break;
 				}
@@ -1873,7 +1873,7 @@ bool resolvePatterns(ParseContext &context) {
 			if (isGlobal) {
 				groupIsGlobal = true;
 				for (Section *a = highestSection; a; a = a->parent) {
-					if (a->type == SectionType::Function && !a->isMacro) {
+					if (a->type == SectionType::Function && !a->isFlex) {
 						groupIsGlobal = false;
 						break;
 					}

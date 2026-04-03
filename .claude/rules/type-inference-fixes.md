@@ -16,9 +16,9 @@ matches = effectiveKind == constraint.kind && argType.pointerDepth == constraint
 
 **File:** `src/compiler/compiler.cpp`, `selectOverload` function
 
-## Bug 2: Non-macro functions returning class types (codegen)
+## Bug 2: Non-flex functions returning class types (codegen)
 
-**Root cause:** The `construct` intrinsic returns an alloca (pointer to stack struct), but non-macro functions declare their return type as the struct itself (by value). Two issues:
+**Root cause:** The `construct` intrinsic returns an alloca (pointer to stack struct), but non-flex functions declare their return type as the struct itself (by value). Two issues:
 1. The `return` handler does `CreateRet(alloca)` — returns a pointer instead of the struct value
 2. The caller receives a struct by value but tries to load from it as if it were a pointer
 
@@ -39,5 +39,5 @@ matches = effectiveKind == constraint.kind && argType.pointerDepth == constraint
 ## Other changes in this worktree
 
 - **lib/string.dl**: Added `ptr as a string` conversion (unconstrained, loops to find null terminator). Changed `value as a line` body to `return value as a string + "\n" as a string`.
-- **patternResolution.cpp**: Added compound type constraint resolution (e.g., `{pointer to byte:ptr}`) using recursive tree walk + macro class body evaluation.
+- **patternResolution.cpp**: Added compound type constraint resolution (e.g., `{pointer to byte:ptr}`) using recursive tree walk + flex class body evaluation.
 - **typeInference.cpp**: Refactored `inferExpressionType` to use `bool& changed` + error return. Improved error messages. Made promote failure non-fatal. Added unconstrained-definition fallback in overload selection.

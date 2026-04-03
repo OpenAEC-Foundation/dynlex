@@ -452,7 +452,7 @@ void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, 
 }
 
 static bool tryParseIntrinsicTypeReference(
-	ParseContext &context, Expression *intrinsicExpr, const BindingMap &bindings, DataType &outTypeRef, bool emitSPIRV
+	ParseContext &context, Expression *intrinsicExpr, const BindingFrame &bindings, DataType &outTypeRef, bool emitSPIRV
 ) {
 	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
 		intrinsicExpr->arguments.size() < 2)
@@ -498,7 +498,7 @@ static bool tryParseIntrinsicTypeReference(
 }
 
 static bool
-resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef);
+resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingFrame &bindings, DataType &outTypeRef);
 
 static Expression *createTemporaryTypeReferenceExpression(Range sourceRange) {
 	Expression *expr = new Expression();
@@ -629,7 +629,7 @@ bool resolveTypeConstraintExpression(
 }
 
 static bool instantiateClassTypeReference(
-	ParseContext &context, ClassDefinition *classDef, const BindingMap &bindings, DataType &outTypeRef
+	ParseContext &context, ClassDefinition *classDef, const BindingFrame &bindings, DataType &outTypeRef
 ) {
 	if (!classDef)
 		return false;
@@ -684,13 +684,13 @@ static std::string_view singleTokenPendingName(Expression *expr) {
 }
 
 static bool
-resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingMap &bindings, DataType &outTypeRef) {
+resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingFrame &bindings, DataType &outTypeRef) {
 	if (!expr)
 		return false;
 
 	if (std::string_view pendingName = singleTokenPendingName(expr); !pendingName.empty()) {
-		auto it = bindings.find(std::string(pendingName));
-		if (it != bindings.end())
+		auto it = bindings.bindings.find(std::string(pendingName));
+		if (it != bindings.bindings.end())
 			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
 		if (pendingName == "pointer") {
 			outTypeRef.kind = DataType::Kind::Type;
@@ -710,8 +710,14 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 	}
 
 	if (expr->kind == Expression::Kind::Variable && expr->variable) {
-		auto it = bindings.find(expr->variable->name);
-		if (it != bindings.end())
+		VariableReference *bindingReference = normalizeBindingReference(expr->variable);
+		if (bindingReference) {
+			auto parameterIt = bindings.parameterBindings.find(bindingReference);
+			if (parameterIt != bindings.parameterBindings.end())
+				return resolveTypeReferenceExpression(context, parameterIt->second, bindings, outTypeRef);
+		}
+		auto it = bindings.bindings.find(expr->variable->name);
+		if (it != bindings.bindings.end())
 			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
 		if (expr->variable->name == "pointer") {
 			outTypeRef.kind = DataType::Kind::Type;
@@ -794,21 +800,23 @@ resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const Bi
 	if (!def || !def->section)
 		return false;
 
-	if (!def->section->isMacro && def->section->type == SectionType::Class) {
+	if (!def->section->isFlex && def->section->type == SectionType::Class) {
 		auto *classSec = static_cast<ClassSection *>(def->section);
-		BindingMap classBindings = bindings;
-		appendPatternCallBindings(expr, def, classBindings);
+		BindingFrame classBindings = bindings;
+		collectPatternCallBindings(expr, def, classBindings);
 		return instantiateClassTypeReference(context, classSec->classDefinition, classBindings, outTypeRef);
 	}
 
-	BindingMap innerBindings;
-	Expression *bodyExpr = expandMacroPatternCall(context, expr, innerBindings);
+	BindingFrame innerBindings;
+	Expression *bodyExpr = expandFlexPatternCall(context, expr, innerBindings);
 	if (!bodyExpr)
 		return false;
 
-	BindingMap mergedBindings = bindings;
-	for (const auto &[name, argExpr] : innerBindings)
-		mergedBindings[name] = argExpr;
+	BindingFrame mergedBindings = bindings;
+	for (const auto &[name, argExpr] : innerBindings.bindings)
+		mergedBindings.bindings[name] = argExpr;
+	for (const auto &[parameterDefinition, argExpr] : innerBindings.parameterBindings)
+		mergedBindings.parameterBindings[parameterDefinition] = argExpr;
 	return resolveTypeReferenceExpression(context, bodyExpr, mergedBindings, outTypeRef);
 }
 

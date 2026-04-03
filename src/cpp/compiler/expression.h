@@ -38,10 +38,10 @@ struct Expression {
 	PatternMatch *patternMatch{};
 	// For PatternCall: overload selected during type inference.
 	PatternDefinition *selectedPatternDefinition{};
-	// For function-macro PatternCalls: the call-site-specific expanded body
+	// For function-flex PatternCalls: the call-site-specific expanded body
 	// shape selected during type inference. Codegen clones this grouped tree so
 	// it does not fall back to the raw ungrouped replacement source.
-	Expression *inferredMacroExpansion{};
+	Expression *inferredFlexExpansion{};
 
 	// For Pending: the pattern reference (used during resolution)
 	PatternReference *patternReference{};
@@ -61,15 +61,15 @@ struct Expression {
 	// back into surrounding operator regrouping.
 	bool isExplicitGroup = false;
 
-	// For expanded macro roots: actual argument indices that correspond to the
+	// For expanded flex roots: actual argument indices that correspond to the
 	// source pattern's parameter slots, in source order.
 	std::vector<int> groupingArgumentIndices;
 	// For each source-order grouping argument slot above, whether it had an
 	// adjacent sibling parameter slot in the original matched pattern.
 	std::vector<bool> groupingArgumentHasAdjacentSiblingSlot;
-	// For expanded macro roots: whether the original matched pattern started or
+	// For expanded flex roots: whether the original matched pattern started or
 	// ended with an argument slot. This lets operand regrouping keep working
-	// after macro expansion removes the original PatternCall node.
+	// after flex expansion removes the original PatternCall node.
 	bool groupingStartsWithArgument = false;
 	bool groupingEndsWithArgument = false;
 	// Precedence of the source pattern that expanded into this expression root.

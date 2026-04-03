@@ -1784,7 +1784,7 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 			DocumentSymbol sym;
 			sym.name = getPatternName(def);
 			std::string typeStr = sectionTypeToString(section->type);
-			sym.detail = section->isMacro ? "macro " + typeStr : typeStr;
+			sym.detail = section->isFlex ? "flex " + typeStr : typeStr;
 			sym.kind = symbolKindForSection(section->type);
 			sym.selectionRange = convertRange(def->range);
 

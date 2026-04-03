@@ -365,7 +365,7 @@ static DataType mathComputationType(DataType resultType, int mathFloatBytes) {
 }
 
 // Generate code for an intrinsic call.
-// All type decisions use getEffectiveType to resolve through macro/pattern bindings.
+// All type decisions use getEffectiveType to resolve through flex/pattern bindings.
 llvm::Value *generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &allArguments,
 	DataType resultType
@@ -383,21 +383,21 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (kind == IntrinsicKind::Store) {
-		// Generate the value in the current (original) macro scope first,
+		// Generate the value in the current (original) flex scope first,
 		// before resolving the destination which may cross scope boundaries.
 		DataType valType = getEffectiveType(context, args[2]);
 		llvm::Value *val = generateExpressionCode(context, args[2]);
 
-		// Save scope state — resolveThroughMacroLayers freely crosses scope
+		// Save scope state — resolveThroughFlexLayers freely crosses scope
 		// boundaries, so we restore afterward.
-		auto savedBindingFrames = context.macroBindingFrames;
+		auto savedBindingFrames = context.flexBindingFrames;
 
-		// Resolve the destination through all macro and scope layers to detect
+		// Resolve the destination through all flex and scope layers to detect
 		// property stores. E.g., `add value to the x of target` chains through
-		// scalar add macro → set macro → @intrinsic("store", var, val), and the
+		// scalar add flex → set flex → @intrinsic("store", var, val), and the
 		// dest var resolves through multiple scopes to @intrinsic("property", ...).
 		Expression *destExpr = args[1];
-		resolveThroughMacroLayers(context, destExpr);
+		resolveThroughFlexLayers(context, destExpr);
 
 		if (destExpr->kind == Expression::Kind::IntrinsicCall &&
 			intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
@@ -430,7 +430,7 @@ llvm::Value *generateIntrinsicCode(
 			builder.CreateStore(val, fieldPtr);
 		} else {
 			// Restore scope state — the else branch evaluates args[1] directly
-			context.macroBindingFrames = savedBindingFrames;
+			context.flexBindingFrames = savedBindingFrames;
 
 			llvm::Value *ptr = getVariablePointer(context, args[1]);
 			if (ptr && val) {
@@ -483,7 +483,7 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		// Restore scope state
-		context.macroBindingFrames = savedBindingFrames;
+		context.flexBindingFrames = savedBindingFrames;
 		return nullptr;
 	}
 
@@ -772,11 +772,11 @@ llvm::Value *generateIntrinsicCode(
 		Section *callSection = callExpr && callExpr->range.line ? callExpr->range.line->section : nullptr;
 		if (!callSection)
 			crashCompilerBug("execute body call is missing source section context");
-		if (context.sectionMacroBodyFrames.empty())
-			crashCompilerBug("execute body used outside of section macro expansion");
+		if (context.sectionFlexBodyFrames.empty())
+			crashCompilerBug("execute body used outside of section flex expansion");
 
-		ParseContext::SectionMacroBodyFrame *targetFrame = nullptr;
-		for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+		ParseContext::SectionFlexBodyFrame *targetFrame = nullptr;
+		for (auto frameIt = context.sectionFlexBodyFrames.rbegin(); frameIt != context.sectionFlexBodyFrames.rend();
 			 ++frameIt) {
 			if (frameIt->definitionSection && isSectionDescendantOrSame(callSection, frameIt->definitionSection)) {
 				targetFrame = &*frameIt;
@@ -785,12 +785,12 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		if (!targetFrame) {
-			for (auto ownerIt = context.macroCallSiteSectionStack.rbegin(); ownerIt != context.macroCallSiteSectionStack.rend();
+			for (auto ownerIt = context.flexCallSiteSectionStack.rbegin(); ownerIt != context.flexCallSiteSectionStack.rend();
 				 ++ownerIt) {
 				Section *ownerSection = *ownerIt;
 				if (!ownerSection)
 					continue;
-				for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+				for (auto frameIt = context.sectionFlexBodyFrames.rbegin(); frameIt != context.sectionFlexBodyFrames.rend();
 					 ++frameIt) {
 					if (frameIt->definitionSection && isSectionDescendantOrSame(ownerSection, frameIt->definitionSection)) {
 						targetFrame = &*frameIt;
@@ -803,12 +803,12 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		if (!targetFrame) {
-			for (auto macroIt = context.activeMacroDefinitionStack.rbegin();
-				 macroIt != context.activeMacroDefinitionStack.rend(); ++macroIt) {
-				Section *activeDefinition = *macroIt;
+			for (auto flexIt = context.activeFlexDefinitionStack.rbegin(); flexIt != context.activeFlexDefinitionStack.rend();
+				 ++flexIt) {
+				Section *activeDefinition = *flexIt;
 				if (!activeDefinition || activeDefinition->type != SectionType::Section)
 					continue;
-				for (auto frameIt = context.sectionMacroBodyFrames.rbegin(); frameIt != context.sectionMacroBodyFrames.rend();
+				for (auto frameIt = context.sectionFlexBodyFrames.rbegin(); frameIt != context.sectionFlexBodyFrames.rend();
 					 ++frameIt) {
 					if (frameIt->definitionSection == activeDefinition) {
 						targetFrame = &*frameIt;
@@ -821,20 +821,20 @@ llvm::Value *generateIntrinsicCode(
 		}
 
 		if (!targetFrame || !targetFrame->bodySection) {
-			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "execute body has no matching section macro body", callExpr->range
-			));
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "execute body has no matching section flex body", callExpr->range)
+			);
 			return nullptr;
 		}
 
 		if (targetFrame->bodyEmitted) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "execute body can only run once per section macro call", callExpr->range
+				context, Diagnostic::Level::Error, "execute body can only run once per section flex call", callExpr->range
 			));
 			return nullptr;
 		}
 		targetFrame->bodyEmitted = true;
-		emitMacroBodySection(context, targetFrame->bodySection, false);
+		emitFlexBodySection(context, targetFrame->bodySection, false);
 		return nullptr;
 	}
 
@@ -1081,7 +1081,7 @@ llvm::Value *generateIntrinsicCode(
 		std::vector<PatternDefinition *> callableMatches;
 		for (PatternDefinition *definition : matches) {
 			if (definition && definition->section && definition->section->type == SectionType::Function &&
-				!definition->section->isMacro)
+				!definition->section->isFlex)
 				callableMatches.push_back(definition);
 		}
 		if (callableMatches.empty()) {
@@ -1143,7 +1143,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
 		CompileTimeValue value =
-			resolveStoredCompileTimeValue(context, callExpr, context.macroBindingFrames, context.currentCodegenInstantiation);
+			resolveStoredCompileTimeValue(context, callExpr, context.flexBindingFrames, context.currentCodegenInstantiation);
 		if (auto *number = std::get_if<double>(&value)) {
 			llvm::Type *llvmType = getLLVMType(context, resultType);
 			return llvm::ConstantInt::get(llvmType, static_cast<std::int64_t>(*number), true);
@@ -1164,7 +1164,7 @@ llvm::Value *generateIntrinsicCode(
 		if (!args[1])
 			crashCompilerBug("select intrinsic missing condition argument during codegen");
 		CompileTimeValue conditionValue =
-			resolveStoredCompileTimeValue(context, args[1], context.macroBindingFrames, context.currentCodegenInstantiation);
+			resolveStoredCompileTimeValue(context, args[1], context.flexBindingFrames, context.currentCodegenInstantiation);
 		auto *condition = std::get_if<bool>(&conditionValue);
 		if (condition)
 			return generateExpressionCode(context, args[*condition ? 2 : 3]);
@@ -1253,7 +1253,7 @@ llvm::Value *generateIntrinsicCode(
 		Expression *propExpr = resolveVariableBinding(context, args[2]);
 		std::string fieldName = getStringLiteral(propExpr);
 
-		// C strings expose a synthetic "data" property so string-library macros can
+		// C strings expose a synthetic "data" property so string-library flexes can
 		// operate on both heap strings and string literals without duplicating logic.
 		if (fieldName == "data" && instType.isBytePointer())
 			return generateExpressionCode(context, ownerExpr);

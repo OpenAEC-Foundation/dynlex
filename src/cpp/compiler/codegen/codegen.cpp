@@ -81,36 +81,36 @@ struct ScopedVariableAllocaRestore {
 	}
 };
 
-struct ScopedActiveMacroDefinition {
+struct ScopedActiveFlexDefinition {
 	ParseContext &context;
 
-	ScopedActiveMacroDefinition(ParseContext &ctx, Section *section) : context(ctx) {
-		assert(section && "ScopedActiveMacroDefinition requires a section");
-		context.activeMacroDefinitionStack.push_back(section);
+	ScopedActiveFlexDefinition(ParseContext &ctx, Section *section) : context(ctx) {
+		assert(section && "ScopedActiveFlexDefinition requires a section");
+		context.activeFlexDefinitionStack.push_back(section);
 	}
 
-	~ScopedActiveMacroDefinition() {
-		assert(!context.activeMacroDefinitionStack.empty() && "Missing active macro definition to pop");
-		context.activeMacroDefinitionStack.pop_back();
+	~ScopedActiveFlexDefinition() {
+		assert(!context.activeFlexDefinitionStack.empty() && "Missing active flex definition to pop");
+		context.activeFlexDefinitionStack.pop_back();
 	}
 };
 
-struct ScopedMacroCallSiteSection {
+struct ScopedFlexCallSiteSection {
 	ParseContext &context;
 	bool pushed = false;
 
-	ScopedMacroCallSiteSection(ParseContext &ctx, Section *callSiteSection) : context(ctx) {
+	ScopedFlexCallSiteSection(ParseContext &ctx, Section *callSiteSection) : context(ctx) {
 		if (!callSiteSection)
 			return;
-		context.macroCallSiteSectionStack.push_back(callSiteSection);
+		context.flexCallSiteSectionStack.push_back(callSiteSection);
 		pushed = true;
 	}
 
-	~ScopedMacroCallSiteSection() {
+	~ScopedFlexCallSiteSection() {
 		if (!pushed)
 			return;
-		assert(!context.macroCallSiteSectionStack.empty() && "Missing macro call-site section to pop");
-		context.macroCallSiteSectionStack.pop_back();
+		assert(!context.flexCallSiteSectionStack.empty() && "Missing flex call-site section to pop");
+		context.flexCallSiteSectionStack.pop_back();
 	}
 };
 } // namespace
@@ -141,10 +141,13 @@ Instantiation *generateSpecializedFunction(
 		assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
 
 	if (!inst.returnType.isDeduced() || inst.needsReinfer) {
-		BindingMap callBindings;
+		BindingFrame callBindings;
 		std::vector<std::string> parameterNames;
-		for (const auto &[name, expr] : paramBindings)
-			callBindings[name] = expr;
+		for (const auto &[name, expr] : paramBindings) {
+			callBindings.bindings[name] = expr;
+			if (VariableReference *parameterDefinition = findPatternParameterDefinition(definition, name))
+				callBindings.parameterBindings[parameterDefinition] = expr;
+		}
 		for (const auto &[name, ignoredExpr] : paramBindings) {
 			(void)ignoredExpr;
 			parameterNames.push_back(name);
@@ -220,9 +223,9 @@ Instantiation *generateSpecializedFunction(
 	auto savedPatternBindings = context.patternBindings;
 	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
-	BindingFrameStack savedMacroBindingFrames = context.macroBindingFrames;
-	// Function bodies must not see caller-side macro bindings.
-	context.macroBindingFrames = makeBindingFrameStack({});
+	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
+	// Function bodies must not see caller-side flex bindings.
+	context.flexBindingFrames = makeBindingFrameStack(BindingFrame{});
 
 	builder.SetInsertPoint(entry);
 
@@ -246,12 +249,12 @@ Instantiation *generateSpecializedFunction(
 	}
 
 	// Add implicit void return if the function returns void
-	if (activeInst.returnType.kind == DataType::Kind::Void) {
+	if (activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->getTerminator()) {
 		builder.CreateRetVoid();
 	}
 
 	// Restore all codegen state
-	context.macroBindingFrames = savedMacroBindingFrames;
+	context.flexBindingFrames = savedFlexBindingFrames;
 	context.patternBindings = savedPatternBindings;
 	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
@@ -337,9 +340,9 @@ static std::unique_ptr<Expression> makeCallablePlaceholderExpression(const DataT
 llvm::Function *
 ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage) {
 	if (!definition || !definition->section || definition->section->type != SectionType::Function ||
-		definition->section->isMacro) {
+		definition->section->isFlex) {
 		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "function reference requires non-macro function",
+			context, Diagnostic::Level::Error, "function reference requires non-flex function",
 			definition ? definition->range : Range()
 		));
 		return nullptr;
@@ -459,9 +462,9 @@ static bool generateExposedFunctions(ParseContext &context, Section *section) {
 		return true;
 
 	if (section->isExposed) {
-		if (section->type != SectionType::Function || section->isMacro || section->patternDefinitions.empty()) {
+		if (section->type != SectionType::Function || section->isFlex || section->patternDefinitions.empty()) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "exposed applies only to non-macro functions",
+				context, Diagnostic::Level::Error, "exposed applies only to non-flex functions",
 				section->openingLine ? Range(section->openingLine, section->openingLine->patternText) : Range()
 			));
 			return false;
@@ -477,7 +480,7 @@ static bool generateExposedFunctions(ParseContext &context, Section *section) {
 	return true;
 }
 
-static void finalizeMacroBodySectionControlFlow(ParseContext &context, Section *bodySection) {
+static void finalizeFlexBodySectionControlFlow(ParseContext &context, Section *bodySection) {
 	if (!bodySection)
 		return;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -490,12 +493,12 @@ static void finalizeMacroBodySectionControlFlow(ParseContext &context, Section *
 	}
 }
 
-void emitMacroBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow) {
+void emitFlexBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow) {
 	if (!bodySection)
 		return;
 	generateSectionCode(context, bodySection);
 	if (finalizeControlFlow)
-		finalizeMacroBodySectionControlFlow(context, bodySection);
+		finalizeFlexBodySectionControlFlow(context, bodySection);
 }
 
 // Generate code for an expression
@@ -559,8 +562,8 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	case Expression::Kind::Variable: {
 		Expression *resolved = resolveVariableBinding(context, expr);
 		if (resolved != expr) {
-			MacroScopeGuard guard(context);
-			if (context.macroBindingFrames.hasParentScope())
+			FlexScopeGuard guard(context);
+			if (context.flexBindingFrames.hasParentScope())
 				guard.popToCallerScope();
 			return generateExpressionCode(context, resolved);
 		}
@@ -606,59 +609,57 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		Section *matchedSection = matchedDef->section;
 		assert(matchedSection && "Selected overload has no section");
 
-		// Non-macro class type references are compile-time only — no runtime code.
-		// Macro class sections (primitive type definitions) fall through to macro expansion.
-		if (matchedSection->type == SectionType::Class && !matchedSection->isMacro) {
+		// Non-flex class type references are compile-time only — no runtime code.
+		// Flex class sections (primitive type definitions) fall through to flex expansion.
+		if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
 			return nullptr;
 		}
 
 		// Build parameter name → argument expression mapping
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
-		if (matchedSection->isMacro && matchedSection->type == SectionType::Function) {
-			BindingMap innerBindings;
+		if (matchedSection->isFlex && matchedSection->type == SectionType::Function) {
+			BindingFrame innerBindings;
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
-			Expression *bodyExpr = expr->inferredMacroExpansion
-									   ? context.cloneMacroExpansionExpression(
-											 expr->inferredMacroExpansion, true, /*preserveInferenceMetadata=*/true
+			Expression *bodyExpr = expr->inferredFlexExpansion
+									   ? context.cloneFlexExpansionExpression(
+											 expr->inferredFlexExpansion, true, /*preserveInferenceMetadata=*/true
 										 )
-									   : expandMacroPatternCall(context, expr, matchedDef, innerBindings);
+									   : expandFlexPatternCall(context, expr, matchedDef, innerBindings);
 			if (!bodyExpr)
 				return nullptr;
 
-			ScopedActiveMacroDefinition activeMacroScope(context, matchedSection);
+			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
-			ScopedMacroCallSiteSection callSiteScope(context, callSiteSection);
-			pushBindingScope(context.macroBindingFrames, std::move(innerBindings));
+			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
+			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
 			llvm::Value *result = generateExpressionCode(context, bodyExpr);
-			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after function macro codegen");
+			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after function flex codegen");
 			return result;
 		}
 
-		if (matchedSection->isMacro) {
-			// Macro: inline the body with expression substitution.
-			// Push current bindings and set only this macro's parameters (scoped).
-			pushClearedBindingScope(context.macroBindingFrames);
-			ScopedVariableAllocaRestore macroVariableAllocas(matchedSection);
-			ScopedActiveMacroDefinition activeMacroScope(context, matchedSection);
+		if (matchedSection->isFlex) {
+			// Flex: inline the body with expression substitution.
+			// Push current bindings and set only this flex's parameters (scoped).
+			BindingFrame innerBindings;
+			collectPatternCallBindings(expr, matchedDef, innerBindings);
+			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
+			ScopedVariableAllocaRestore flexVariableAllocas(matchedSection);
+			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
-			ScopedMacroCallSiteSection callSiteScope(context, callSiteSection);
+			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
 			Section *savedBodySection = context.currentBodySection;
 
-			for (const auto &[paramName, argExpr] : paramBindings) {
-				context.macroBindingFrames.topBindings()[paramName] = argExpr;
-			}
-
-			// Only section-type macros (like "if condition:", "loop while condition:")
+			// Only section-type flexes (like "if condition:", "loop while condition:")
 			// should pick up and process the body section opened by this line.
-			// Function macros (like "not value:", "a + b") must NOT process
+			// Function flexes (like "not value:", "a + b") must NOT process
 			// the body section, even if they appear on a line that opens one.
 			Section *bodySection = nullptr;
 			if (matchedSection->type == SectionType::Section) {
 				bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
 				context.currentBodySection = bodySection;
 				if (bodySection)
-					context.sectionMacroBodyFrames.push_back({matchedSection, bodySection, false});
+					context.sectionFlexBodyFrames.push_back({matchedSection, bodySection, false});
 			}
 
 			llvm::Value *result = nullptr;
@@ -671,29 +672,27 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 
 			if (bodySection) {
-				assert(
-					!context.sectionMacroBodyFrames.empty() && "Missing section macro body frame when leaving section macro"
-				);
-				ParseContext::SectionMacroBodyFrame &frame = context.sectionMacroBodyFrames.back();
+				assert(!context.sectionFlexBodyFrames.empty() && "Missing section flex body frame when leaving section flex");
+				ParseContext::SectionFlexBodyFrame &frame = context.sectionFlexBodyFrames.back();
 				assert(
 					frame.definitionSection == matchedSection &&
-					"Section macro body frame stack diverged from active macro expansion"
+					"Section flex body frame stack diverged from active flex expansion"
 				);
 				if (!frame.bodyEmitted) {
 					frame.bodyEmitted = true;
-					emitMacroBodySection(context, frame.bodySection);
+					emitFlexBodySection(context, frame.bodySection);
 				} else {
-					finalizeMacroBodySectionControlFlow(context, frame.bodySection);
+					finalizeFlexBodySectionControlFlow(context, frame.bodySection);
 				}
-				context.sectionMacroBodyFrames.pop_back();
+				context.sectionFlexBodyFrames.pop_back();
 			}
 
-			popBindingScopeOrFail(context.macroBindingFrames, "Missing macro binding scope after macro pattern call");
+			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after flex pattern call");
 			context.currentBodySection = savedBodySection;
 			return result;
 		}
 
-		// Non-macro pattern: monomorphized function call.
+		// Non-flex pattern: monomorphized function call.
 		// Compute argument types at this call site for specialization.
 		std::vector<DataType> argTypes;
 		for (const auto &[paramName, argExpr] : paramBindings) {
@@ -779,13 +778,13 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 
 		Expression *header = line->expression;
 		BindingMap headerBindings;
-		context.macroBindingFrames.forEachFrame([&headerBindings](const BindingFrame &frame) {
+		context.flexBindingFrames.forEachFrame([&headerBindings](const BindingFrame &frame) {
 			for (const auto &[bindingName, expression] : frame.bindings)
 				headerBindings[bindingName] = expression;
 		});
 		if (header->kind == Expression::Kind::PatternCall) {
 			BindingMap innerBindings;
-			Expression *expanded = expandMacroPatternCall(context, header, innerBindings);
+			Expression *expanded = expandFlexPatternCall(context, header, innerBindings);
 			if (expanded) {
 				header = expanded;
 				for (const auto &[name, argExpr] : innerBindings)
@@ -910,8 +909,8 @@ bool generateCode(ParseContext &context) {
 #endif
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	if (context.macroBindingFrames.empty())
-		context.macroBindingFrames.pushFrame({});
+	if (context.flexBindingFrames.empty())
+		context.flexBindingFrames.pushFrame(BindingFrame{});
 
 	// Initialize debug info builder (skip for SPIR-V — no DWARF in SPIR-V)
 	if (context.options.emitDebugInfo && !context.options.emitSPIRV) {
@@ -926,7 +925,7 @@ bool generateCode(ParseContext &context) {
 		context.llvmModule->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
 	}
 
-	// No first pass — non-macro functions are generated on-demand via monomorphization.
+	// No first pass — non-flex functions are generated on-demand via monomorphization.
 
 	// In SPIR-V mode, declare shader I/O globals before generating code
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
@@ -987,10 +986,12 @@ bool generateCode(ParseContext &context) {
 	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
 
-	if (context.options.emitSPIRV) {
-		builder.CreateRetVoid();
-	} else {
-		builder.CreateRet(builder.getInt32(0));
+	if (!builder.GetInsertBlock()->getTerminator()) {
+		if (context.options.emitSPIRV) {
+			builder.CreateRetVoid();
+		} else {
+			builder.CreateRet(builder.getInt32(0));
+		}
 	}
 
 	// Add SPIR-V metadata for shader execution model and decorations

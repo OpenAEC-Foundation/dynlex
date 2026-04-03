@@ -10,7 +10,7 @@
 - Dominant crash signature: abort in call-argument lowering when an argument expression emits no runtime IR.
 
 ## Root Cause Found (Crash)
-- Crash point: `src/cpp/compiler/codegen/codegen.cpp` around non-macro call argument lowering (`Runtime call argument produced no code`).
+- Crash point: `src/cpp/compiler/codegen/codegen.cpp` around non-flex call argument lowering (`Runtime call argument produced no code`).
 - Mechanism:
   - Codegen treats a callee parameter as runtime unless it is in `requiredCompileTimeParameters`.
   - Some compile-time-known argument expressions are not marked as compile-time-required in the callee instantiation.

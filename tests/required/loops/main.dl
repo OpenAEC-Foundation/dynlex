@@ -30,7 +30,7 @@ function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-macro section loop while condition:
+flex section loop while condition:
 	replacement:
 		@intrinsic("loop while", condition)
 

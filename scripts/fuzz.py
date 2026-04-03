@@ -156,7 +156,7 @@ def mutate_replace_token(lines: list[str], rng: random.Random) -> None:
     replacements = [
         "import",
         "function",
-        "macro",
+        "flex",
         "@intrinsic",
         "loop",
         "if",

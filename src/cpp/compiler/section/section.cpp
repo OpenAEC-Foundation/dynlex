@@ -54,7 +54,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	std::string_view remaining = line->patternText;
 	Section *newSection{};
-	bool isMacro = false;
+	bool isFlex = false;
 	bool isLocal = false;
 	bool isExposed = false;
 
@@ -64,8 +64,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		std::string_view current = (spaceIndex != std::string::npos) ? remaining.substr(0, spaceIndex) : remaining;
 		remaining = (spaceIndex != std::string::npos) ? remaining.substr(spaceIndex + 1) : std::string_view{};
 
-		if (current == syntax.macroName) {
-			isMacro = true;
+		if (current == syntax.flexName) {
+			isFlex = true;
 		} else if (current == syntax.localName) {
 			isLocal = true;
 		} else if (current == syntax.exposedName) {
@@ -86,7 +86,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	}
 
 	if (newSection) {
-		newSection->isMacro = isMacro;
+		newSection->isFlex = isFlex;
 		newSection->isLocal = isLocal;
 		newSection->isExposed = isExposed;
 		// Remaining contains the pattern after the section type keyword

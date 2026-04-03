@@ -16,7 +16,7 @@ enum class SectionType {
 	Get,
 	// set of an expression
 	Set,
-	// replacement of a macro
+	// replacement of a flex
 	Replacement,
 	// members of a class
 	Members,

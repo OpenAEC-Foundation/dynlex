@@ -37,7 +37,7 @@ struct ParseContext {
 		int column = std::numeric_limits<int>::max();
 	};
 
-	struct SectionMacroBodyFrame {
+	struct SectionFlexBodyFrame {
 		Section *definitionSection = nullptr;
 		Section *bodySection = nullptr;
 		bool bodyEmitted = false;
@@ -112,19 +112,19 @@ struct ParseContext {
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
 	std::unordered_map<std::string, DataType> patternParamTypes;
-	// Macro binding stack for macro expansion and variable resolution across nested macro scopes.
-	BindingFrameStack macroBindingFrames;
-	// Current body section for macro expansion (used by loop intrinsics to store loop info)
+	// Flex binding stack for flex expansion and variable resolution across nested flex scopes.
+	BindingFrameStack flexBindingFrames;
+	// Current body section for flex expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
-	// Active macro definition sections currently being expanded (outermost to innermost).
-	// Used by execute-body ownership resolution when the intrinsic is wrapped through helper macros.
-	std::vector<Section *> activeMacroDefinitionStack;
-	// Source sections for active macro call sites (outermost to innermost). This preserves
-	// caller ownership when helper macros wrap ownership-sensitive intrinsics.
-	std::vector<Section *> macroCallSiteSectionStack;
-	// Active section-macro call frames. `execute body` resolves against this stack by
-	// source ownership so nested section-macro expansions can emit the correct caller body.
-	std::vector<SectionMacroBodyFrame> sectionMacroBodyFrames;
+	// Active flex definition sections currently being expanded (outermost to innermost).
+	// Used by execute-body ownership resolution when the intrinsic is wrapped through helper flexes.
+	std::vector<Section *> activeFlexDefinitionStack;
+	// Source sections for active flex call sites (outermost to innermost). This preserves
+	// caller ownership when helper flexes wrap ownership-sensitive intrinsics.
+	std::vector<Section *> flexCallSiteSectionStack;
+	// Active section-flex call frames. `execute body` resolves against this stack by
+	// source ownership so nested section-flex expansions can emit the correct caller body.
+	std::vector<SectionFlexBodyFrame> sectionFlexBodyFrames;
 	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
 	const Instantiation *currentCodegenInstantiation{};
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
@@ -167,14 +167,11 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
-	// Owns cloned macro expansion roots so call-site-specific inference and grouping
-	// never mutate shared macro definition expression trees.
-	std::vector<Expression *> ownedMacroExpansionRoots;
-	// Owns cloned macro argument captures where outer bindings must be frozen into
-	// a nested argument expression to avoid self-capture across macro scopes.
-	std::vector<Expression *> ownedCapturedBindingRoots;
+	// Owns cloned flex expansion roots so call-site-specific inference and grouping
+	// never mutate shared flex definition expression trees.
+	std::vector<Expression *> ownedFlexExpansionRoots;
 	// Owns temporary literal expressions materialized during codegen when a
-	// compile-time-only non-macro parameter must be inspected as an expression.
+	// compile-time-only non-flex parameter must be inspected as an expression.
 	std::vector<Expression *> ownedCodegenLiteralRoots;
 	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
 	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
@@ -184,7 +181,7 @@ struct ParseContext {
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
-	// User-facing aliases for concrete types discovered from macro replacements like @intrinsic("type", ...).
+	// User-facing aliases for concrete types discovered from flex replacements like @intrinsic("type", ...).
 	std::map<DataType, std::string> typeAliasNames;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
 	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
@@ -205,16 +202,16 @@ struct ParseContext {
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
 	VariableReference *createVariableReference(Range range, const std::string &name);
-	// WARNING: This exists only for per-call macro expansion isolation.
+	// WARNING: This exists only for per-call flex expansion isolation.
 	// It must NOT be used for ANYTHING else without explicit approval from the user.
 	Expression *
-	cloneMacroExpansionExpression(Expression *expression, bool ownRoot = true, bool preserveInferenceMetadata = false);
+	cloneFlexExpansionExpression(Expression *expression, bool ownRoot = true, bool preserveInferenceMetadata = false);
 };
 
-// Extract the body expression and parameter bindings from a macro PatternCall.
-// If expr is a PatternCall to a macro section, returns the macro body's last expression
+// Extract the body expression and parameter bindings from a flex PatternCall.
+// If expr is a PatternCall to a flex section, returns the flex body's last expression
 // and fills outBindings with parameter name → call-site argument expression.
-// Returns nullptr if expr is not a macro PatternCall. Does not modify any binding stack —
+// Returns nullptr if expr is not a flex PatternCall. Does not modify any binding stack —
 // the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
 template <typename OnPatternParameterNameFn>
 inline void forEachPatternParameterName(
@@ -254,6 +251,15 @@ inline void forEachPatternCallBinding(Expression *expr, PatternDefinition *defin
 	);
 }
 
+inline VariableReference *findPatternParameterDefinition(PatternDefinition *definition, const std::string &parameterName) {
+	if (!definition || !definition->section)
+		return nullptr;
+	auto definitionIt = definition->section->variableDefinitions.find(parameterName);
+	if (definitionIt == definition->section->variableDefinitions.end())
+		return nullptr;
+	return normalizeBindingReference(definitionIt->second);
+}
+
 inline void collectPatternCallBindingPairs(
 	Expression *expr, PatternDefinition *definition, std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
@@ -268,15 +274,23 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 	});
 }
 
+inline void collectPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingFrame &bindingFrame) {
+	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Expression *argumentExpression) {
+		bindingFrame.bindings[parameterName] = argumentExpression;
+		if (VariableReference *parameterDefinition = findPatternParameterDefinition(definition, parameterName))
+			bindingFrame.parameterBindings[parameterDefinition] = argumentExpression;
+	});
+}
+
 inline Expression *
-expandMacroPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingMap &outBindings) {
+expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingFrame &outBindings) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	if (def)
 		assert(std::find(defs.begin(), defs.end(), def) != defs.end());
 	(void)defs;
-	if (!def || !def->section || !def->section->isMacro)
+	if (!def || !def->section || !def->section->isFlex)
 		return nullptr;
 	Expression *bodyExpr = nullptr;
 	for (Section *child : def->section->children) {
@@ -288,13 +302,21 @@ expandMacroPatternCall(ParseContext &context, Expression *expr, PatternDefinitio
 	if (!bodyExpr)
 		return nullptr;
 	collectPatternCallBindings(expr, def, outBindings);
-	Expression *expandedBody = context.cloneMacroExpansionExpression(bodyExpr);
+	Expression *expandedBody = context.cloneFlexExpansionExpression(bodyExpr);
 	if (expandedBody)
 		expandedBody->isExplicitGroup = true;
 	return expandedBody;
 }
 
-inline Expression *expandMacroPatternCall(ParseContext &context, Expression *expr, BindingMap &outBindings) {
+inline Expression *
+expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingMap &outBindings) {
+	BindingFrame bindingFrame;
+	Expression *expandedBody = expandFlexPatternCall(context, expr, def, bindingFrame);
+	outBindings = std::move(bindingFrame.bindings);
+	return expandedBody;
+}
+
+inline Expression *expandFlexPatternCall(ParseContext &context, Expression *expr, BindingFrame &outBindings) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
@@ -306,5 +328,12 @@ inline Expression *expandMacroPatternCall(ParseContext &context, Expression *exp
 			return nullptr;
 		def = defs.front();
 	}
-	return expandMacroPatternCall(context, expr, def, outBindings);
+	return expandFlexPatternCall(context, expr, def, outBindings);
+}
+
+inline Expression *expandFlexPatternCall(ParseContext &context, Expression *expr, BindingMap &outBindings) {
+	BindingFrame bindingFrame;
+	Expression *expandedBody = expandFlexPatternCall(context, expr, bindingFrame);
+	outBindings = std::move(bindingFrame.bindings);
+	return expandedBody;
 }

@@ -16,9 +16,9 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
-	// replacement: implies macro semantics for this definition.
+	// replacement: implies flex semantics for this definition.
 	if (matchesConfiguredKeyword(line->patternText, syntax.replacementSectionName)) {
-		isMacro = true;
+		isFlex = true;
 		return executionSection = new ReplacementSection(this);
 	}
 

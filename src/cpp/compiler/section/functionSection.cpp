@@ -13,19 +13,19 @@ Section *FunctionSection::createSection(ParseContext &context, CodeLine *line) {
 	if (matchesConfiguredKeyword(line->patternText, syntax.afterSectionName)) {
 		return new PrecedenceSection(SectionType::After, this);
 	}
-	// Fall back to base class (handles "replacement" for macros, or gives error)
+	// Fall back to base class (handles "replacement" for flexes, or gives error)
 	return DefinitionSection::createSection(context, line);
 }
 
 bool FunctionSection::finalize(ParseContext &context) {
-	if (!isMacro)
+	if (!isFlex)
 		return true;
 
 	for (Section *child : children) {
 		if (child->type != SectionType::Before && child->type != SectionType::After)
 			continue;
 		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "macro functions cannot declare precedence",
+			context, Diagnostic::Level::Error, "flex functions cannot declare precedence",
 			Range(child->openingLine, child->openingLine->patternText)
 		));
 	}

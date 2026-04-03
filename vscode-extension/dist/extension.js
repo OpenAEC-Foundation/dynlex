@@ -4472,7 +4472,7 @@ var require_main2 = __commonJS({
         SemanticTokenTypes2["event"] = "event";
         SemanticTokenTypes2["function"] = "function";
         SemanticTokenTypes2["method"] = "method";
-        SemanticTokenTypes2["macro"] = "macro";
+        SemanticTokenTypes2["flex"] = "flex";
         SemanticTokenTypes2["keyword"] = "keyword";
         SemanticTokenTypes2["modifier"] = "modifier";
         SemanticTokenTypes2["comment"] = "comment";
@@ -14017,7 +14017,7 @@ var require_semanticTokens = __commonJS({
           vscode_languageserver_protocol_1.SemanticTokenTypes.event,
           vscode_languageserver_protocol_1.SemanticTokenTypes.function,
           vscode_languageserver_protocol_1.SemanticTokenTypes.method,
-          vscode_languageserver_protocol_1.SemanticTokenTypes.macro,
+          vscode_languageserver_protocol_1.SemanticTokenTypes.flex,
           vscode_languageserver_protocol_1.SemanticTokenTypes.keyword,
           vscode_languageserver_protocol_1.SemanticTokenTypes.modifier,
           vscode_languageserver_protocol_1.SemanticTokenTypes.comment,

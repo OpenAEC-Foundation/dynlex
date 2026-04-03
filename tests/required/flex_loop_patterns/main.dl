@@ -2,7 +2,7 @@ import lib/std.dl
 
 set total to 0
 
-macro section repeat count:
+flex section repeat count:
     replacement:
         set i to 0
         loop while i < count
@@ -16,7 +16,7 @@ print total as a line
 
 set nested to 0
 
-macro section repeat nested count:
+flex section repeat nested count:
     replacement:
         loop count times:
             execute the body
