@@ -99,6 +99,11 @@ sys.stdout.write("\n".join(line.rstrip() for line in text.splitlines()).rstrip()
 PY
 }
 
+build_output_has_diagnostics() {
+    local output="$1"
+    grep -Eqi '(^|[^[:alpha:]])(warning|error|fatal error)(:|[^[:alpha:]])' <<< "$output"
+}
+
 run_with_timeout() {
     local seconds="$1"
     shift
@@ -134,7 +139,16 @@ PY
 }
 
 echo -e "${YELLOW}Building compiler...${NC}"
-"$SCRIPT_DIR/build.sh"
+build_output=$("$SCRIPT_DIR/build.sh" 2>&1)
+build_exit=$?
+if [[ $build_exit -ne 0 ]]; then
+    [[ -n "$build_output" ]] && printf "%s\n" "$build_output"
+    echo -e "${RED}Build failed.${NC}"
+    exit $build_exit
+fi
+if [[ -n "$build_output" ]] && build_output_has_diagnostics "$build_output"; then
+    printf "%s\n" "$build_output"
+fi
 
 total_start_ms=$(now_ms)
 
