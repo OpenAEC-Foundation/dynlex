@@ -151,7 +151,7 @@ Implementation details are documented in `.claude/rules/` (`compiler.md`, `codeg
 ./scripts/test.sh
 ./build/dynlex tests/required/simple/main.dl -o tests/required/simple/main.out && ./tests/required/simple/main.out
 ```
-
+- The test script will build as well. so either run the build or the test script.
 - Compiled test binaries use `.out` extension.
 - Tests may include `expected.txt` (output match) or `expected_diagnostics.txt` (exact diagnostics match).
 

@@ -2,7 +2,9 @@ This document explains how the compiler is supposed to behave.
 
 All code should be as DRY, agnostic, user-friendly, and performant as possible. Do more with less code.
 
-When we encounter an error, we add an error diagnostic and return `false` if this error could cause dependent errors. When a child function returns `false`, return `false` as well. This will make the compiler exit cleanly with a single diagnostic. We do not continue scanning for other diagnostics, because one error will cause lots of other errors most of the time and make it unclear for users what they need to focus on to fix.
+When we encounter an error in the users code, we add an error diagnostic and return `false` if this error could cause dependent errors. When a child function returns `false`, return `false` as well. This will make the compiler exit cleanly with a single diagnostic. We do not continue scanning for other diagnostics, because one error will cause lots of other errors most of the time and make it unclear for users what they need to focus on to fix.
+
+When we encounter an error in the compilers code, the compiler should SCREAM. crash with crashCompilerBug.
 
 Later stages of the compiler are very dependent on earlier stages. Every line of code has to be carefully thought out.
 
@@ -16,6 +18,7 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 
 - Which line opens a new section?
 - What patterns does each section have?
+- We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.
 
 # Pattern Matching Stage
 
@@ -23,6 +26,8 @@ Patterns are matched. Here we identify:
 
 - What is a variable
 - What is an argument
+
+All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
 
@@ -55,15 +60,18 @@ Since we are fully agnostic, we will make all left expressions subexpressions:
 ((x + x) + x) + x
 ```
 
+Pattern elements are not splittable, except for `Other` tokens in pattern references.
+for example, 5*-3 should result in -15. therefore, we match for '*-' first. that doesn't work, so we match for '*' after and submatch, using the '-' in the submatch.
+
 Intrinsic arguments are **ALWAYS** stored as `[name, arg1, arg2]`, etc. So the left operand of `+` in the `add` intrinsic is `[1]` and the right operand is `[2]`.
 
 We sort all expression arguments by their source position, since they did not get added in order. After this, **NO** sorting is done.
 
-# Validation Stage
-
 # Type Resolution Stage
 
 We loop over the code like it would get executed.
+
+The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
 
 We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later.
 

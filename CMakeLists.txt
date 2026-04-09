@@ -30,27 +30,7 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 #find_package(imgui CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG)
-
-if(NOT nlohmann_json_FOUND)
-    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
-
-    if(NLOHMANN_JSON_INCLUDE_DIR)
-        add_library(nlohmann_json::nlohmann_json INTERFACE IMPORTED)
-        set_target_properties(nlohmann_json::nlohmann_json PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
-            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${NLOHMANN_JSON_INCLUDE_DIR}"
-        )
-    else()
-        set(JSON_SystemInclude ON CACHE BOOL "Include nlohmann_json headers as system headers" FORCE)
-        include(FetchContent)
-        FetchContent_Declare(
-            nlohmann_json
-            URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-        )
-        FetchContent_MakeAvailable(nlohmann_json)
-    endif()
-endif()
+find_package(nlohmann_json CONFIG REQUIRED)
 
 if(TARGET nlohmann_json::nlohmann_json)
     set(DYNLEX_NLOHMANN_TARGET nlohmann_json::nlohmann_json)

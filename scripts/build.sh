@@ -67,16 +67,6 @@ if [ -d build/CMakeFiles ] && grep -R -q "conan_toolchain\.cmake" build/CMakeFil
     rm -rf build/CMakeFiles
 fi
 
-if [ -f build/CMakeCache.txt ] && grep -q '^JSON_SystemInclude:BOOL=OFF$' build/CMakeCache.txt; then
-    echo "Removing unsafe fetched nlohmann_json cache..."
-    rm -f build/CMakeCache.txt
-    rm -rf \
-        build/CMakeFiles \
-        build/_deps/nlohmann_json-build \
-        build/_deps/nlohmann_json-src \
-        build/_deps/nlohmann_json-subbuild
-fi
-
 if [ -f build/conan_toolchain.cmake ]; then
     echo "Removing stale Conan-generated package files..."
     rm -f build/CMakeCache.txt

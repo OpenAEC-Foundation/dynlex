@@ -33,6 +33,9 @@ install_linux_deps() {
             "clang-tidy-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION-dev" \
+            libcurl4-openssl-dev \
+            libedit-dev \
+            nlohmann-json3-dev \
             ccache \
             cmake \
             ninja-build \
@@ -109,10 +112,10 @@ install_macos_deps() {
 
     brew update
     if brew info llvm@20 >/dev/null 2>&1; then
-        brew install llvm@20 ccache cmake ninja git node go
+        brew install llvm@20 nlohmann-json ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
     else
-        brew install llvm ccache cmake ninja git node go
+        brew install llvm nlohmann-json ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm)"
     fi
 
