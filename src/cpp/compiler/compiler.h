@@ -42,6 +42,7 @@ bool isComparisonOperator(const std::string &name);
 bool isMathFunction(const std::string &name);
 std::vector<PatternDefinition *>
 findDefinitionsBySignature(ParseContext &context, SectionType sectionType, std::string_view signature);
+std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(ParseContext &context, std::string_view signature);
 PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature);
 
 // Select the best overload from multiple definitions at the same trie endpoint.

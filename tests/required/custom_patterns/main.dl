@@ -14,7 +14,7 @@ function say msg:
 	execute:
 		discard @intrinsic("call", "libc", "printf", an integer, "%s\n", msg)
 
-function value as [a|an|] bits bit integer:
+function value as [a|an|] {fixed integer:bits} bit integer:
 	replacement:
 		@intrinsic("cast", value, @intrinsic("type", "int", bits))
 

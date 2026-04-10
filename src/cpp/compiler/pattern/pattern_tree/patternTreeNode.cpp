@@ -1,7 +1,7 @@
 #include "patternTreeNode.h"
+#include "compilerUtils.h"
 #include "patternDefinition.h"
 #include <algorithm>
-#include <cassert>
 #include <climits>
 #include <tuple>
 #include <unordered_set>
@@ -266,7 +266,7 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 void PatternTreeNode::addPatternPart(
 	std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition, size_t index
 ) {
-	assert(definition && "pattern tree insertion requires a definition");
+	requireCompilerInvariant(definition != nullptr, "pattern tree insertion requires a definition");
 	std::vector<DefinitionPatternElement> remaining(elements.begin() + index, elements.end());
 	auto endpoints = addElementSequence({this}, remaining, definition);
 	definition->endNodes = endpoints;
@@ -332,7 +332,7 @@ static void removeDefinitionPath(
 }
 
 void PatternTreeNode::removePatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition) {
-	assert(definition && "pattern tree removal requires a definition");
+	requireCompilerInvariant(definition != nullptr, "pattern tree removal requires a definition");
 	removeDefinitionPath(this, elements, 0, definition);
 	definition->endNodes.clear();
 }

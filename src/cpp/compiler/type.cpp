@@ -107,18 +107,22 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 			crashCompilerBug("Integer type must have a valid numericSize (1/2/4/8) before codegen");
 		}
 	case Kind::Array:
-		assert(arrayElementType && arraySize >= 0 && "Array type must have element type and size");
+		requireCompilerInvariant(arrayElementType && arraySize >= 0, "Array type must have element type and size");
 		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx), arraySize);
 	case Kind::Vector:
-		assert(arrayElementType && arraySize > 0 && "Vector type must have element type and size");
+		requireCompilerInvariant(arrayElementType && arraySize > 0, "Vector type must have element type and size");
 		return llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
 	case Kind::Matrix: {
-		assert(arrayElementType && arraySize > 0 && matrixRowCount > 0 && "Matrix type must have element type and dimensions");
+		requireCompilerInvariant(
+			arrayElementType && arraySize > 0 && matrixRowCount > 0, "Matrix type must have element type and dimensions"
+		);
 		llvm::Type *rowVectorType = llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
 		return llvm::ArrayType::get(rowVectorType, matrixRowCount);
 	}
 	case Kind::Class: {
-		assert(classDefinition && classInstIndex >= 0 && "Class type must have classDefinition and instantiation index");
+		requireCompilerInvariant(
+			classDefinition && classInstIndex >= 0, "Class type must have classDefinition and instantiation index"
+		);
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
 			std::vector<llvm::Type *> llvmFields;

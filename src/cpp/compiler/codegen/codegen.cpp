@@ -43,6 +43,17 @@ static std::vector<size_t> collectRuntimeParameterIndices(
 	return runtimeIndices;
 }
 
+static std::string formatArgumentTypesForCrash(const std::vector<DataType> &argTypes) {
+	std::string formatted = "[";
+	for (size_t index = 0; index < argTypes.size(); index++) {
+		if (index > 0)
+			formatted += ", ";
+		formatted += argTypes[index].toString();
+	}
+	formatted += "]";
+	return formatted;
+}
+
 namespace {
 struct VariableAllocaSnapshotEntry {
 	VariableReference *reference = nullptr;
@@ -75,7 +86,9 @@ struct ScopedVariableAllocaRestore {
 
 	~ScopedVariableAllocaRestore() {
 		for (const VariableAllocaSnapshotEntry &entry : entries) {
-			assert(entry.reference && "ScopedVariableAllocaRestore contains null definition reference");
+			requireCompilerInvariant(
+				entry.reference != nullptr, "ScopedVariableAllocaRestore contains null definition reference"
+			);
 			entry.reference->alloca = entry.alloca;
 		}
 	}
@@ -85,12 +98,12 @@ struct ScopedActiveFlexDefinition {
 	ParseContext &context;
 
 	ScopedActiveFlexDefinition(ParseContext &ctx, Section *section) : context(ctx) {
-		assert(section && "ScopedActiveFlexDefinition requires a section");
+		requireCompilerInvariant(section != nullptr, "ScopedActiveFlexDefinition requires a section");
 		context.activeFlexDefinitionStack.push_back(section);
 	}
 
 	~ScopedActiveFlexDefinition() {
-		assert(!context.activeFlexDefinitionStack.empty() && "Missing active flex definition to pop");
+		requireCompilerInvariant(!context.activeFlexDefinitionStack.empty(), "Missing active flex definition to pop");
 		context.activeFlexDefinitionStack.pop_back();
 	}
 };
@@ -109,7 +122,7 @@ struct ScopedFlexCallSiteSection {
 	~ScopedFlexCallSiteSection() {
 		if (!pushed)
 			return;
-		assert(!context.flexCallSiteSectionStack.empty() && "Missing flex call-site section to pop");
+		requireCompilerInvariant(!context.flexCallSiteSectionStack.empty(), "Missing flex call-site section to pop");
 		context.flexCallSiteSectionStack.pop_back();
 	}
 };
@@ -138,7 +151,7 @@ Instantiation *generateSpecializedFunction(
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
-		assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
+		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
 
 	if (!inst.returnType.isDeduced() || inst.needsReinfer) {
 		BindingFrame callBindings;
@@ -158,19 +171,16 @@ Instantiation *generateSpecializedFunction(
 		instantiationKey = findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
 							   .value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
 		instIt = section->instantiations.find(instantiationKey);
-		assert(instIt != section->instantiations.end() && "Missing instantiation after inference");
+		requireCompilerInvariant(instIt != section->instantiations.end(), "Missing instantiation after inference");
 	}
 	Instantiation &activeInst = instIt->second;
 	if (!activeInst.returnType.isDeduced()) {
-		fprintf(
-			stderr, "UNDEDUCED: '%s' args=[",
-			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString).c_str()
+		std::string functionName =
+			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString);
+		crashCompilerBug(
+			"Return type must be deduced before codegen for '" + functionName + "' with arguments " +
+			formatArgumentTypesForCrash(argTypes)
 		);
-		for (auto &t : argTypes)
-			fprintf(stderr, "%s ", t.toString().c_str());
-		fprintf(stderr, "]\n");
-		fflush(stderr);
-		assert(false && "Return type must be deduced before codegen");
 	}
 	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(paramBindings, activeInst);
 	std::vector<std::string> runtimeParameterNames;
@@ -232,7 +242,7 @@ Instantiation *generateSpecializedFunction(
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
 	context.patternParamTypes.clear();
-	assert(activeInst.argumentTypes == argTypes && "Codegen argTypes diverged from instantiation signature");
+	requireCompilerInvariant(activeInst.argumentTypes == argTypes, "Codegen argTypes diverged from instantiation signature");
 	for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++)
 		context.patternParamTypes[paramBindings[i].first] = argTypes[i];
 	argIdx = 0;
@@ -379,11 +389,11 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 	if (inst->argumentTypes.empty()) {
 		inst->argumentTypes = argTypes;
 	} else {
-		assert(inst->argumentTypes == argTypes && "Callable signature diverged from instantiation key");
+		requireCompilerInvariant(inst->argumentTypes == argTypes, "Callable signature diverged from instantiation key");
 	}
 	if (!inst->llvmFunction) {
 		inst = generateSpecializedFunction(context, section, paramBindings, argTypes);
-		assert(inst && "Missing generated instantiation");
+		requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 	}
 	if (!inst->returnType.isDeduced() || !inst->valid) {
 		Diagnostic diagnostic;
@@ -568,8 +578,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			return generateExpressionCode(context, resolved);
 		}
 
-		if (!expr->variable)
-			return nullptr;
+		requireCompilerInvariant(expr->variable != nullptr, "Variable expression reached codegen without a resolved variable");
 		std::string varName = expr->variable->name;
 
 		// Determine this variable's type for loading
@@ -588,8 +597,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (definition->alloca)
 			return builder.CreateAlignedLoad(loadType, definition->alloca, llvm::Align(8), varName + "_val");
 
-		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unknown variable", expr->range, "name", varName));
-		return nullptr;
+		crashCompilerBug("Variable '" + varName + "' reached codegen without storage");
 	}
 
 	case Expression::Kind::PatternCall: {
@@ -601,13 +609,13 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			return nullptr;
 
 		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
-		assert(matchedDef && "Pattern call missing overload selection from type inference");
-		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		assert(matchedDef && "No overload matched during codegen");
+		requireCompilerInvariant(matchedDef != nullptr, "Pattern call missing overload selection from type inference");
+		requireCompilerInvariant(
+			std::find(defs.begin(), defs.end(), matchedDef) != defs.end(), "Selected overload no longer matches call"
+		);
 
 		Section *matchedSection = matchedDef->section;
-		assert(matchedSection && "Selected overload has no section");
+		requireCompilerInvariant(matchedSection != nullptr, "Selected overload has no section");
 
 		// Non-flex class type references are compile-time only — no runtime code.
 		// Flex class sections (primitive type definitions) fall through to flex expansion.
@@ -672,10 +680,12 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 
 			if (bodySection) {
-				assert(!context.sectionFlexBodyFrames.empty() && "Missing section flex body frame when leaving section flex");
+				requireCompilerInvariant(
+					!context.sectionFlexBodyFrames.empty(), "Missing section flex body frame when leaving section flex"
+				);
 				ParseContext::SectionFlexBodyFrame &frame = context.sectionFlexBodyFrames.back();
-				assert(
-					frame.definitionSection == matchedSection &&
+				requireCompilerInvariant(
+					frame.definitionSection == matchedSection,
 					"Section flex body frame stack diverged from active flex expansion"
 				);
 				if (!frame.bodyEmitted) {
@@ -706,7 +716,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 					}
 				}
 			}
-			assert(t.isDeduced() && "Undeduced argument type at codegen");
+			requireCompilerInvariant(t.isDeduced(), "Undeduced argument type at codegen");
 			argTypes.push_back(t);
 		}
 
@@ -723,11 +733,13 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (inst->argumentTypes.empty()) {
 			inst->argumentTypes = argTypes;
 		} else {
-			assert(inst->argumentTypes == argTypes && "Codegen instantiation signature diverged from lookup key");
+			requireCompilerInvariant(
+				inst->argumentTypes == argTypes, "Codegen instantiation signature diverged from lookup key"
+			);
 		}
 		if (!inst->llvmFunction) {
 			inst = generateSpecializedFunction(context, matchedSection, paramBindings, argTypes);
-			assert(inst && "Missing generated instantiation");
+			requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 		}
 		llvm::Function *func = inst->llvmFunction;
 
@@ -758,8 +770,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::Pending:
-		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pending expression", expr->range));
-		return nullptr;
+		crashCompilerBug("Pending expression reached codegen");
 
 	case Expression::Kind::TypedPlaceholder:
 		crashCompilerBug("Typed placeholder reached codegen");
@@ -815,8 +826,8 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 
 			if (context.currentCodegenInstantiation) {
 				auto selectionIt = context.currentCodegenInstantiation->ifChainSelections.find(line);
-				assert(
-					selectionIt != context.currentCodegenInstantiation->ifChainSelections.end() &&
+				requireCompilerInvariant(
+					selectionIt != context.currentCodegenInstantiation->ifChainSelections.end(),
 					"Missing per-instantiation if-chain selection from type inference"
 				);
 				const Instantiation::IfChainSelection &selection = selectionIt->second;
@@ -828,8 +839,8 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 				}
 			} else {
 				auto selectionIt = context.inferredIfChainSelections.find(line);
-				assert(
-					selectionIt != context.inferredIfChainSelections.end() &&
+				requireCompilerInvariant(
+					selectionIt != context.inferredIfChainSelections.end(),
 					"Missing non-instantiated if-chain selection from type inference"
 				);
 				const Instantiation::IfChainSelection &selection = selectionIt->second;

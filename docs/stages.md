@@ -77,7 +77,7 @@ We track each variable that could possibly be a constant. A variable reference c
 
 We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.
 
-**ALL** types of each previous line have to be deduced right away, except in recursive function code.
+**ALL** types of each previous line have to be deduced right away, except in recursive function code. we loop over the function code again if not all types were resolved. if no progress is being made, we emit diagnostics.
 
 We only go over loops once. Variables modified there are marked as non-constant.
 

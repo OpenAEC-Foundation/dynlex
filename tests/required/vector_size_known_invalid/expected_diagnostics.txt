@@ -1,0 +1,3 @@
+tests/required/vector_size_known_invalid/main.dl:3:30-31: Error: Intrinsic 'vector' argument 1 must be an integer greater than 0
+  note: while inferring intrinsic 'vector' in 'discard @intrinsic("vector", 0)' with arguments [i8*, a 32 bit integer] -> undeduced tests/required/vector_size_known_invalid/main.dl:3:9-32
+  note: while inferring call 'discard @intrinsic("vector", 0)' with arguments [unresolved(?)] -> undeduced tests/required/vector_size_known_invalid/main.dl:3:1-32

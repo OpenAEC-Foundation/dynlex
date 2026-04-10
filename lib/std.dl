@@ -30,7 +30,7 @@ function [an|a|] integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-function [an|a|] bits bit integer:
+function [an|a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
@@ -38,7 +38,7 @@ function [a|] float:
     replacement:
         @intrinsic("type", "float")
 
-function [a|] bits bit float:
+function [a|] {fixed integer:bits} bit float:
     replacement:
         @intrinsic("type", "float", bits)
 
@@ -62,6 +62,14 @@ function [a|] type:
 	replacement:
 		@intrinsic("type", "type")
 
+function fix tofix:
+    replacement:
+        @intrinsic("type", "const", tofix)
+
+function fixed type:
+    replacement:
+        @intrinsic("type", "const", type)
+
 function void:
     replacement:
         @intrinsic("type", "void")
@@ -72,15 +80,15 @@ function [a|] pointer to pointedtype:
     replacement:
         @intrinsic("add pointer depth", pointedtype)
 
-function [an|a|] array of n [item|items]:
+function [an|a|] array of {fixed integer:n} [item|items]:
     replacement:
         @intrinsic("array", n)
 
-function [an|a|] elementtype array of n [item|items]:
+function [an|a|] elementtype array of {fixed integer:n} [item|items]:
     replacement:
         @intrinsic("array", n, elementtype)
 
-function [an|a|] n elementtype array:
+function [an|a|] {fixed integer:n} elementtype array:
     replacement:
         @intrinsic("array", n, elementtype)
 
@@ -94,7 +102,7 @@ function true_value if condition, else false_value:
     replacement:
         @intrinsic("select", condition, true_value, false_value)
 
-function [the|] build info key:
+function [the|] build info {fixed cstring:key}:
     replacement:
         @intrinsic("build info", key)
 
@@ -122,7 +130,7 @@ function [the|] type of value:
     replacement:
         @intrinsic("type of", value)
 
-function [the|] function named name:
+function [the|] function named {fixed cstring:name}:
     replacement:
         @intrinsic("function", name)
 

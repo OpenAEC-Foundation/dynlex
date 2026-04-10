@@ -1,10 +1,8 @@
 #pragma once
 
+#include "compilerUtils.h"
 #include "expression.h"
 #include "variableReference.h"
-#include <cassert>
-#include <cstdio>
-#include <cstdlib>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -40,7 +38,7 @@ struct BindingFrameStack {
 	void pushFrame(BindingFrame frame) { frames.push_back(std::move(frame)); }
 
 	void popFrame() {
-		assert(!frames.empty() && "Cannot pop an empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot pop an empty binding frame stack");
 		frames.pop_back();
 	}
 
@@ -49,27 +47,27 @@ struct BindingFrameStack {
 	bool hasParentScope() const { return frames.size() > 1; }
 
 	BindingFrame &topFrame() {
-		assert(!frames.empty() && "Cannot access top frame of empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot access top frame of empty binding frame stack");
 		return frames.back();
 	}
 
 	const BindingFrame &topFrame() const {
-		assert(!frames.empty() && "Cannot access top frame of empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot access top frame of empty binding frame stack");
 		return frames.back();
 	}
 
 	BindingMap &topBindings() {
-		assert(!frames.empty() && "Cannot access top bindings of empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot access top bindings of empty binding frame stack");
 		return frames.back().bindings;
 	}
 
 	const BindingMap &topBindings() const {
-		assert(!frames.empty() && "Cannot access top bindings of empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot access top bindings of empty binding frame stack");
 		return frames.back().bindings;
 	}
 
 	void replaceTopBindings(BindingMap frameBindings) {
-		assert(!frames.empty() && "Cannot replace top bindings of empty binding frame stack");
+		requireCompilerInvariant(!frames.empty(), "Cannot replace top bindings of empty binding frame stack");
 		frames.back().bindings = std::move(frameBindings);
 	}
 
@@ -204,9 +202,7 @@ inline void popBindingScopeOrFail(
 ) {
 	if (popBindingScope(bindingFrameStack, scopeTrail))
 		return;
-	std::fputs(failureMessage, stderr);
-	std::fputc('\n', stderr);
-	std::abort();
+	crashCompilerBug(failureMessage);
 }
 
 inline void pushBindingScope(BindingFrameStack &bindingFrameStack, BindingMap nextBindings) {

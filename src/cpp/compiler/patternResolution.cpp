@@ -1,5 +1,6 @@
 #include "classSection.h"
 #include "compiler.h"
+#include "compilerUtils.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "patternElement.h"
@@ -8,7 +9,6 @@
 #include "type.h"
 #include "variable.h"
 #include <algorithm>
-#include <cassert>
 #include <climits>
 #include <cstdlib>
 #include <functional>
@@ -236,12 +236,6 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static bool isFlexFunctionDefinition(const PatternDefinition *definition) {
-	assert(definition && "flex specialization checks require a real pattern definition");
-	assert(definition->section && "pattern definition must belong to a section");
-	return definition->section->type == SectionType::Function && definition->section->isFlex;
-}
-
 static bool definitionHasTypeConstraints(const PatternDefinition &definition) {
 	bool hasTypeConstraint = false;
 	std::function<void(const std::vector<DefinitionPatternElement> &)> visit =
@@ -265,7 +259,6 @@ appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDef
 
 struct DefinitionConflict {
 	enum class Kind {
-		TypedFlexParameters,
 		NonFlexSpecializesFlex,
 		DuplicatePatternDefinition,
 	};
@@ -297,9 +290,11 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::vector<PatternDefinition *> definitions;
 	std::function<void(Section *)> collectDefinitions = [&](Section *section) {
 		for (PatternDefinition *definition : section->patternDefinitions) {
-			assert(definition && "section pattern definition list must not contain null entries");
-			assert(definition->section == section && "pattern definition must point back to its owning section");
-			assert(definition->resolved && "definition conflict checks require resolved pattern definitions");
+			requireCompilerInvariant(definition != nullptr, "section pattern definition list must not contain null entries");
+			requireCompilerInvariant(
+				definition->section == section, "pattern definition must point back to its owning section"
+			);
+			requireCompilerInvariant(definition->resolved, "definition conflict checks require resolved pattern definitions");
 			definitions.push_back(definition);
 		}
 		for (Section *child : section->children)
@@ -313,14 +308,11 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
 
 	for (PatternDefinition *definition : definitions) {
-		if (isFlexFunctionDefinition(definition) && definitionHasTypeConstraints(*definition))
-			conflicts.push_back({DefinitionConflict::Kind::TypedFlexParameters, definition, nullptr});
-
 		for (PatternTreeNode *endNode : definition->endNodes) {
-			assert(endNode && "definition endpoint nodes must be valid");
+			requireCompilerInvariant(endNode != nullptr, "definition endpoint nodes must be valid");
 			for (PatternDefinition *other : endNode->matchingDefinitions) {
-				assert(other && "pattern tree endpoint definitions must be valid");
-				assert(other->section && "pattern tree endpoint definitions must have sections");
+				requireCompilerInvariant(other != nullptr, "pattern tree endpoint definitions must be valid");
+				requireCompilerInvariant(other->section != nullptr, "pattern tree endpoint definitions must have sections");
 				if (other == definition)
 					continue;
 
@@ -357,13 +349,6 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
 	const DefinitionConflict &conflict = conflicts.front();
 	switch (conflict.kind) {
-	case DefinitionConflict::Kind::TypedFlexParameters:
-		context.diagnostics.push_back(Diagnostic(
-			context, Diagnostic::Level::Error,
-			"flex parameters cannot have type constraints; convert this replacement pattern to execute:",
-			conflict.primary->range
-		));
-		return false;
 	case DefinitionConflict::Kind::NonFlexSpecializesFlex: {
 		Diagnostic diagnostic(
 			context, Diagnostic::Level::Error, "non-flex function cannot specialize flex function", conflict.primary->range
@@ -384,7 +369,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	}
 	}
 
-	assert(false && "unhandled definition conflict kind");
+	crashCompilerBug("unhandled definition conflict kind");
 	return false;
 }
 

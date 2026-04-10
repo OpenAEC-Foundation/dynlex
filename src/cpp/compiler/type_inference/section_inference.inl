@@ -365,7 +365,7 @@ bool ensureSectionInstantiationInferred(
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
-		assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
+		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
 	size_t parameterCount = std::min(parameterNames.size(), argTypes.size());
 	for (size_t i = 0; i < parameterCount; i++) {
 		if (parameterRequiresCompileTimeInstantiationValue(inst.requiredCompileTimeParameters, parameterNames[i], argTypes[i]))
@@ -482,7 +482,7 @@ bool ensureSectionInstantiationInferred(
 		auto node = section->instantiations.extract(instIt);
 		node.key() = refinedKey;
 		auto insertResult = section->instantiations.insert(std::move(node));
-		assert(insertResult.inserted && "Refined instantiation key collided with existing entry");
+		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
 
 	if (inst.returnType.kind == DataType::Kind::Any)

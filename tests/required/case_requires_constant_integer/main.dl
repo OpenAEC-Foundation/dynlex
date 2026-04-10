@@ -1,0 +1,17 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+flex section switch value:
+    replacement:
+        @intrinsic("switch", value)
+
+flex section case value:
+    replacement:
+        @intrinsic("case", value)
+
+set x to 1
+
+switch 1:
+    case x:
+        set x to 2

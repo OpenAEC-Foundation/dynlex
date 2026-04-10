@@ -2,10 +2,16 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 [[noreturn]] inline void crashCompilerBug(const std::string &message) {
 	std::cerr << "FATAL: compiler bug: " << message << '\n';
 	std::abort();
+}
+
+inline void requireCompilerInvariant(bool condition, std::string_view message) {
+	if (!condition)
+		crashCompilerBug(std::string(message));
 }
 
 [[noreturn]] inline void

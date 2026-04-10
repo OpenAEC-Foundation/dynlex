@@ -1,0 +1,3 @@
+import lib/std.dl
+
+discard @intrinsic("type", "int", 7)

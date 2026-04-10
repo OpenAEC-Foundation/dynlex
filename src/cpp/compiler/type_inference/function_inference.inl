@@ -998,12 +998,15 @@ static void inferOrderedExpression(
 		context.setTypeFailure(detail);
 		context.fail(buildFailureDetailDiagnostic(range, detail), priority);
 	};
-	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
+	auto failIntrinsicArgumentRequirement = [&](size_t argumentIndex, std::string_view requirement) {
 		if (argumentIndex >= expr->arguments.size() || !expr->arguments[argumentIndex])
-			crashCompilerBug("intrinsic compile-time argument validation encountered a missing argument expression");
+			crashCompilerBug("intrinsic argument validation encountered a missing argument expression");
 		std::string detail = "Intrinsic '" + expr->intrinsicName + "' argument " + std::to_string(argumentIndex) + " must be " +
 							 std::string(requirement);
 		failWithDetail(expr->arguments[argumentIndex]->range, detail, 0);
+	};
+	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
+		failIntrinsicArgumentRequirement(argumentIndex, requirement);
 	};
 	// Recurse into arguments first (bottom-up)
 	for (size_t i = 0; i < expr->arguments.size(); i++) {
@@ -1308,8 +1311,41 @@ static void inferOrderedExpression(
 						expr->type = retTypeRef.toReferencedType();
 				} else if (kind == IntrinsicKind::Function) {
 					Expression *functionExpr = resolveThroughFlexBindings(expr->arguments[1]);
+					requireCompilerInvariant(
+						functionExpr != nullptr, "function intrinsic lost its argument expression during type inference"
+					);
 					if (!std::holds_alternative<std::string>(functionExpr->literalValue)) {
-						setConfiguredTypeFailure(expr->range, "function intrinsic requires string literal");
+						setConfiguredTypeFailure(functionExpr->range, "function intrinsic requires string literal");
+						if (!context.trial)
+							context.addDiagnosticWithCurrentTrace(Diagnostic(
+								context.parseContext, Diagnostic::Level::Error, "function intrinsic requires string literal",
+								functionExpr->range
+							));
+						break;
+					}
+					std::string signature = std::get<std::string>(functionExpr->literalValue);
+					std::vector<PatternDefinition *> callableMatches =
+						findCallableFunctionDefinitionsBySignature(context.parseContext, signature);
+					if (callableMatches.empty()) {
+						setConfiguredTypeFailure(
+							functionExpr->range, "unknown function reference", "message", {{"signature", signature}}
+						);
+						if (!context.trial)
+							context.addDiagnosticWithCurrentTrace(Diagnostic(
+								context.parseContext, Diagnostic::Level::Error, "unknown function reference",
+								functionExpr->range, "signature", signature
+							));
+						break;
+					}
+					if (callableMatches.size() > 1) {
+						setConfiguredTypeFailure(
+							functionExpr->range, "ambiguous function reference", "message", {{"signature", signature}}
+						);
+						if (!context.trial)
+							context.addDiagnosticWithCurrentTrace(Diagnostic(
+								context.parseContext, Diagnostic::Level::Error, "ambiguous function reference",
+								functionExpr->range, "signature", signature
+							));
 						break;
 					}
 					expr->type = {DataType::Kind::Int, 1};
@@ -1385,7 +1421,7 @@ static void inferOrderedExpression(
 								context.parseContext, expr->arguments[2], flexBindingFrameStack, bitCount, &context
 							) ||
 							bitCount <= 0 || bitCount % 8 != 0) {
-							failCompileTimeOnlyIntrinsicArgument(2, "a positive compile-time integer bit size divisible by 8");
+							failIntrinsicArgumentRequirement(2, "a positive integer divisible by 8");
 							break;
 						}
 						typeRef.numericSize = bitCount / 8;
@@ -1538,7 +1574,7 @@ static void inferOrderedExpression(
 					CompileTimeValue sizeValue = context.lookupExpressionValue(sizeExpr);
 					auto *size = std::get_if<double>(&sizeValue);
 					if (!size || !std::isfinite(*size) || std::trunc(*size) != *size || *size < 0.0) {
-						failCompileTimeOnlyIntrinsicArgument(1, "a non-negative compile-time integer array size");
+						failIntrinsicArgumentRequirement(1, "a non-negative integer");
 						break;
 					}
 					expr->type.kind = DataType::Kind::Type;
@@ -1559,7 +1595,7 @@ static void inferOrderedExpression(
 							context.parseContext, expr->arguments[1], flexBindingFrameStack, vectorSize, &context
 						) ||
 						vectorSize < 1) {
-						setConfiguredTypeFailure(expr->range, "vector size invalid");
+						failIntrinsicArgumentRequirement(1, "an integer greater than 0");
 						break;
 					}
 					expr->type.kind = DataType::Kind::Type;
@@ -1583,11 +1619,15 @@ static void inferOrderedExpression(
 					if (!resolveStoredCompileTimeInteger(
 							context.parseContext, expr->arguments[1], flexBindingFrameStack, rows, &context
 						) ||
-						!resolveStoredCompileTimeInteger(
+						rows < 1) {
+						failIntrinsicArgumentRequirement(1, "an integer greater than 0");
+						break;
+					}
+					if (!resolveStoredCompileTimeInteger(
 							context.parseContext, expr->arguments[2], flexBindingFrameStack, columns, &context
 						) ||
-						rows < 1 || columns < 1) {
-						setConfiguredTypeFailure(expr->range, "matrix dimensions invalid");
+						columns < 1) {
+						failIntrinsicArgumentRequirement(2, "an integer greater than 0");
 						break;
 					}
 					expr->type.kind = DataType::Kind::Type;
@@ -1970,11 +2010,12 @@ static void inferOrderedExpression(
 						}
 						return;
 					}
-					assert(argType.isDeduced() && "Undeduced argument type encountered during non-flex pattern-call inference");
+					requireCompilerInvariant(
+						argType.isDeduced(), "Undeduced argument type encountered during non-flex pattern-call inference"
+					);
 				}
 				argTypes.push_back(argType);
 			}
-
 			const Instantiation *callerInstantiation = context.currentInstantiation;
 			std::vector<std::pair<std::string, CompileTimeValue>> trialCompileTimeParameters;
 			std::string trialCacheKey;
@@ -2009,7 +2050,7 @@ static void inferOrderedExpression(
 			if (inst.argumentTypes.empty()) {
 				inst.argumentTypes = argTypes;
 			} else {
-				assert(inst.argumentTypes == argTypes && "Instantiation argumentTypes diverged from map key");
+				requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
 			}
 			std::optional<InstantiationKey> refinedInstantiationKey;
 			bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
@@ -2117,11 +2158,13 @@ static void inferOrderedExpression(
 					context, matchedSection, instantiationKey, *refinedInstantiationKey, "trial inference"
 				);
 				auto instIt = matchedSection->instantiations.find(instantiationKey);
-				assert(instIt != matchedSection->instantiations.end() && "Missing provisional instantiation to refine");
+				requireCompilerInvariant(
+					instIt != matchedSection->instantiations.end(), "Missing provisional instantiation to refine"
+				);
 				auto node = matchedSection->instantiations.extract(instIt);
 				node.key() = *refinedInstantiationKey;
 				auto insertResult = matchedSection->instantiations.insert(std::move(node));
-				assert(insertResult.inserted && "Refined instantiation key collided with existing entry");
+				requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 			}
 			context.setExpressionValue(expr, context.lookupExpressionValue(expr));
 			break;

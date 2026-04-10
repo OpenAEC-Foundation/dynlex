@@ -551,11 +551,12 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *right = generateExpressionCode(context, args[2]);
 		DataType leftType = getEffectiveType(context, args[1]);
 		DataType rightType = getEffectiveType(context, args[2]);
+
 		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
 			rightType.isPointer() && leftType == rightType) {
 			llvm::Value *cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
 															: builder.CreateICmpNE(left, right, "pne");
-			assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
+			requireCompilerInvariant(resultType.isDeduced(), "Comparison result type must be deduced before codegen");
 			if (resultType.kind == DataType::Kind::Bool)
 				return cmp;
 			return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
@@ -595,7 +596,7 @@ llvm::Value *generateIntrinsicCode(
 				cmp = builder.CreateICmpNE(left, right, "ne");
 		}
 
-		assert(resultType.isDeduced() && "Comparison result type must be deduced before codegen");
+		requireCompilerInvariant(resultType.isDeduced(), "Comparison result type must be deduced before codegen");
 		if (resultType.kind == DataType::Kind::Bool)
 			return cmp; // already i1
 		return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
@@ -641,8 +642,10 @@ llvm::Value *generateIntrinsicCode(
 		DataType rightType = getEffectiveType(context, args[2]);
 		DataType promoted;
 		if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
-			std::fputs("min/max operands must be arithmetic-compatible before codegen\n", stderr);
-			std::abort();
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "min max requires arithmetic operands", callExpr ? callExpr->range : Range()
+			));
+			return nullptr;
 		}
 		left = ensureType(context, left, leftType, promoted);
 		right = ensureType(context, right, rightType, promoted);
@@ -712,7 +715,12 @@ llvm::Value *generateIntrinsicCode(
 	// Pointer intrinsics
 	if (kind == IntrinsicKind::AddressOf) {
 		llvm::Value *ptr = getVariablePointer(context, args[1]);
-		assert(ptr && "address of requires a variable");
+		if (!ptr) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "address of requires variable", args[1] ? args[1]->range : Range()
+			));
+			return nullptr;
+		}
 		return ptr;
 	}
 
@@ -730,7 +738,12 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *index = generateExpressionCode(context, args[2]);
 		llvm::Value *value = generateExpressionCode(context, args[3]);
 		DataType ptrType = getEffectiveType(context, args[1]);
-		assert(ptrType.isPointer() && "store at requires a pointer argument");
+		if (!ptrType.isPointer()) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "store at requires pointer", args[1] ? args[1]->range : Range())
+			);
+			return nullptr;
+		}
 		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[2]));
 		DataType pointedType = ptrType.dereferenced();
 		DataType elementType = pointedType;
@@ -752,7 +765,12 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *ptr = generateExpressionCode(context, args[1]);
 		llvm::Value *index = generateExpressionCode(context, args[2]);
 		DataType ptrType = getEffectiveType(context, args[1]);
-		assert(ptrType.isPointer() && "load at requires a pointer argument");
+		if (!ptrType.isPointer()) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "load at requires pointer", args[1] ? args[1]->range : Range())
+			);
+			return nullptr;
+		}
 		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[2]));
 		DataType pointedType = ptrType.dereferenced();
 		DataType elementType = pointedType;
@@ -840,7 +858,12 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::LoopWhile) {
 		Section *bodySection = context.currentBodySection;
-		assert(bodySection && "loop while requires a body section");
+		if (!bodySection) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "loop while requires body section", callExpr ? callExpr->range : Range()
+			));
+			return nullptr;
+		}
 
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
@@ -866,7 +889,12 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::If) {
 		Section *bodySection = context.currentBodySection;
-		assert(bodySection && "if requires a body section");
+		if (!bodySection) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "if requires body section", callExpr ? callExpr->range : Range())
+			);
+			return nullptr;
+		}
 
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
@@ -888,7 +916,12 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 		Section *bodySection = context.currentBodySection;
-		assert(bodySection && "else/else if requires a body section");
+		if (!bodySection) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "else requires body section", callExpr ? callExpr->range : Range()
+			));
+			return nullptr;
+		}
 
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 		llvm::BasicBlock *currentBlock = builder.GetInsertBlock();
@@ -934,11 +967,13 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *switchValue = generateExpressionCode(context, args[1]);
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
-		assert(
-			(getEffectiveType(context, args[1]).kind == DataType::Kind::Int ||
-			 getEffectiveType(context, args[1]).kind == DataType::Kind::Bool) &&
-			"switch requires an integer value"
-		);
+		DataType switchType = getEffectiveType(context, args[1]);
+		if (switchType.kind != DataType::Kind::Int && switchType.kind != DataType::Kind::Bool) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "switch requires integer", args[1] ? args[1]->range : Range())
+			);
+			return nullptr;
+		}
 
 		llvm::BasicBlock *defaultBlock = llvm::BasicBlock::Create(*context.llvmContext, "switch_default", func);
 		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "switch_exit", func);
@@ -962,16 +997,31 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Case) {
 		Section *bodySection = context.currentBodySection;
-		assert(bodySection && "case requires a body section");
+		if (!bodySection) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "case requires body section", callExpr ? callExpr->range : Range()
+			));
+			return nullptr;
+		}
 
-		assert(context.currentSwitchInst && "case outside of switch");
+		if (!context.currentSwitchInst) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "case outside switch", callExpr ? callExpr->range : Range())
+			);
+			return nullptr;
+		}
 
 		llvm::Function *func = builder.GetInsertBlock()->getParent();
 
 		// Evaluate the case value — must be a constant integer
 		llvm::Value *caseValue = generateExpressionCode(context, args[1]);
 		llvm::ConstantInt *caseConst = llvm::dyn_cast<llvm::ConstantInt>(caseValue);
-		assert(caseConst && "case value must be a constant integer");
+		if (!caseConst) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "case value must be constant integer", args[1] ? args[1]->range : Range()
+			));
+			return nullptr;
+		}
 		llvm::Type *switchType = context.currentSwitchInst->getCondition()->getType();
 		if (caseConst->getType() != switchType)
 			caseConst = llvm::cast<llvm::ConstantInt>(llvm::ConstantInt::get(switchType, caseConst->getSExtValue(), true));
@@ -1070,36 +1120,14 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Function) {
 		Expression *nameExpr = resolveVariableBinding(context, args[1]);
 		std::string signature = getStringLiteral(nameExpr);
-		if (signature.empty()) {
-			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "function intrinsic requires constant string literal", args[1]->range
-			));
-			return nullptr;
-		}
-
-		std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, SectionType::Function, signature);
-		std::vector<PatternDefinition *> callableMatches;
-		for (PatternDefinition *definition : matches) {
-			if (definition && definition->section && definition->section->type == SectionType::Function &&
-				!definition->section->isFlex)
-				callableMatches.push_back(definition);
-		}
-		if (callableMatches.empty()) {
-			Diagnostic diagnostic;
-			diagnostic.level = Diagnostic::Level::Error;
-			diagnostic.range = args[1]->range;
-			diagnostic.message = "unknown function reference: " + signature;
-			context.addDiagnostic(std::move(diagnostic));
-			return nullptr;
-		}
-		if (callableMatches.size() > 1) {
-			Diagnostic diagnostic;
-			diagnostic.level = Diagnostic::Level::Error;
-			diagnostic.range = args[1]->range;
-			diagnostic.message = "ambiguous function reference: " + signature;
-			context.addDiagnostic(std::move(diagnostic));
-			return nullptr;
-		}
+		requireCompilerInvariant(!signature.empty(), "Function intrinsic reached codegen without a string-literal signature");
+		std::vector<PatternDefinition *> callableMatches = findCallableFunctionDefinitionsBySignature(context, signature);
+		requireCompilerInvariant(
+			!callableMatches.empty(), "Function intrinsic reached codegen with an unknown function reference: " + signature
+		);
+		requireCompilerInvariant(
+			callableMatches.size() == 1, "Function intrinsic reached codegen with an ambiguous function reference: " + signature
+		);
 
 		llvm::Function *callableFunction =
 			ensureCallableFunctionGenerated(context, callableMatches.front(), callableMatches.front()->section->isExposed);
@@ -1217,7 +1245,9 @@ llvm::Value *generateIntrinsicCode(
 				fieldTypes.push_back(getEffectiveType(context, args[i]));
 			concreteType.classInstIndex = classDef->getOrCreateInstantiation(fieldTypes);
 		}
-		assert(concreteType.classInstIndex >= 0 && "class construct result type must have a concrete instantiation");
+		requireCompilerInvariant(
+			concreteType.classInstIndex >= 0, "class construct result type must have a concrete instantiation"
+		);
 		ClassInstantiation &inst = classDef->instantiations[concreteType.classInstIndex];
 		llvm::Type *structType = getLLVMType(context, concreteType);
 
@@ -1344,7 +1374,12 @@ llvm::Value *generateIntrinsicCode(
 		// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
 		// The SPIR-V patcher wraps this in a UBO struct with proper decorations
 		std::string uniformName = getStringLiteral(args[1]);
-		assert(!uniformName.empty() && "shader uniform requires a string literal name");
+		if (uniformName.empty()) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "shader uniform requires string literal", args[1] ? args[1]->range : Range()
+			));
+			return nullptr;
+		}
 		std::string globalName = "ubo_" + uniformName;
 		llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 		if (!global) {

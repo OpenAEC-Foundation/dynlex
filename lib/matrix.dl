@@ -2,23 +2,23 @@ import lib/std.dl
 
 class:
 	patterns:
-		[a|] cpu n x m matrix
+		[a|] cpu {fixed integer:n} x {fixed integer:m} matrix
 	members:
 		values as an array of n * m items
 
-function a gpu n x m matrix:
+function a gpu {fixed integer:n} x {fixed integer:m} matrix:
 	replacement:
 		@intrinsic("matrix", n, m)
 
-function a n x m matrix:
+function a {fixed integer:n} x {fixed integer:m} matrix:
 	replacement:
 		a gpu n x m matrix if the build target is gpu, else a cpu n x m matrix
 
-function a new n x m matrix from value:
+function a new {fixed integer:n} x {fixed integer:m} matrix from value:
 	replacement:
 		@intrinsic("construct", a n x m matrix, value)
 
-function [a|an|] identity n x m matrix:
+function [a|an|] identity {fixed integer:n} x {fixed integer:m} matrix:
 	execute:
 		if n is 4 and m is 4:
 			return a new n x m matrix from [

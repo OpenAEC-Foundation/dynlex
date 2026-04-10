@@ -1,8 +1,8 @@
-function [een|] bits bit integer:
+function [een|] {fixed integer:bits} bit integer:
 	replacement:
 		@intrinsic("type", "int", bits)
 
-function waarde als bits bit integer:
+function waarde als {fixed integer:bits} bit integer:
 	replacement:
 		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 

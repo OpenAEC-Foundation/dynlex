@@ -1,0 +1,5 @@
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+discard @intrinsic("address of", 1)

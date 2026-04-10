@@ -1,6 +1,6 @@
 #pragma once
+#include "compilerUtils.h"
 #include <algorithm>
-#include <cassert>
 #include <cctype>
 #include <memory>
 #include <string>
@@ -119,11 +119,11 @@ struct DataType {
 	int matrixColumns() const { return arraySize; }
 	int matrixRows() const { return matrixRowCount; }
 	DataType vectorElementType() const {
-		assert(hasVectorPayload() && arrayElementType && "Vector type must have element type");
+		requireCompilerInvariant(hasVectorPayload() && arrayElementType, "Vector type must have element type");
 		return *arrayElementType;
 	}
 	DataType matrixElementType() const {
-		assert(hasMatrixPayload() && arrayElementType && "Matrix type must have element type");
+		requireCompilerInvariant(hasMatrixPayload() && arrayElementType, "Matrix type must have element type");
 		return *arrayElementType;
 	}
 	bool isPointer() const { return pointerDepth > 0; }
@@ -168,7 +168,7 @@ struct DataType {
 
 	// Return this type with one more level of indirection
 	DataType pointed() const {
-		assert(isDeduced() && "Cannot take pointer to unresolved type");
+		requireCompilerInvariant(isDeduced(), "Cannot take pointer to unresolved type");
 		DataType result = *this;
 		result.pointerDepth++;
 		return result;
@@ -176,7 +176,7 @@ struct DataType {
 
 	// Return this type with one less level of indirection
 	DataType dereferenced() const {
-		assert(pointerDepth > 0 && "Cannot dereference non-pointer type");
+		requireCompilerInvariant(pointerDepth > 0, "Cannot dereference non-pointer type");
 		DataType result = *this;
 		result.pointerDepth--;
 		return result;
@@ -287,7 +287,7 @@ struct DataType {
 
 	// Convert a Type literal to the type it references
 	DataType toReferencedType() const {
-		assert(kind == Kind::Type && "Can only convert Type literals");
+		requireCompilerInvariant(kind == Kind::Type, "Can only convert Type literals");
 		DataType result;
 		result.kind = referencedKind;
 		result.numericSize = numericSize;

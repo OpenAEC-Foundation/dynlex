@@ -362,7 +362,7 @@ void resolveThroughFlexLayers(ParseContext &context, Expression *&expr) {
 // FlexScopeGuard implementation
 void FlexScopeGuard::popToCallerScope() {
 	ensureFlexBindingRootFrame(context);
-	assert(context.flexBindingFrames.hasParentScope());
+	requireCompilerInvariant(context.flexBindingFrames.hasParentScope(), "FlexScopeGuard requires a caller flex scope");
 	savedBindingFrames = context.flexBindingFrames;
 	popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope for FlexScopeGuard");
 	active = true;
@@ -488,11 +488,19 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		if (kind == IntrinsicKind::Call) {
 			// Format: @intrinsic("call", "library", "function", type_ref, args...)
 			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
-			assert(retTypeRef.kind == DataType::Kind::Type && "call return type must be a compile-time type reference");
-			assert(
-				retTypeRef.referencedKind != DataType::Kind::Type && retTypeRef.referencedKind != DataType::Kind::Unresolved &&
-				"call return type must resolve to a concrete runtime type"
-			);
+			if (retTypeRef.kind != DataType::Kind::Type) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "call return type must be type reference", expr->arguments[3]->range
+				));
+				return expr->type;
+			}
+			if (retTypeRef.referencedKind == DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Unresolved) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "call return type must be concrete runtime type",
+					expr->arguments[3]->range
+				));
+				return expr->type;
+			}
 			return retTypeRef.toReferencedType();
 		}
 		if (kind == IntrinsicKind::Select && expr->arguments.size() > 3) {
@@ -607,11 +615,11 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 			return expr->type;
 
 		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
-		assert(matchedDef && "Pattern call missing overload selection from type inference");
-		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		assert(std::find(defs.begin(), defs.end(), matchedDef) != defs.end() && "Selected overload no longer matches call");
-		assert(matchedDef && "No overload matched during codegen");
-		assert(matchedDef->section && "Selected overload has no section");
+		requireCompilerInvariant(matchedDef != nullptr, "Pattern call missing overload selection from type inference");
+		requireCompilerInvariant(
+			std::find(defs.begin(), defs.end(), matchedDef) != defs.end(), "Selected overload no longer matches call"
+		);
+		requireCompilerInvariant(matchedDef->section != nullptr, "Selected overload has no section");
 
 		Section *matchedSection = matchedDef->section;
 		if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
@@ -653,8 +661,8 @@ DataType getEffectiveType(ParseContext &context, Expression *expr) {
 		auto instIt = instKey ? matchedSection->instantiations.find(*instKey) : matchedSection->instantiations.end();
 		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
 			return concretizeClassType(instIt->second.returnType);
-		assert(
-			instIt != matchedSection->instantiations.end() &&
+		requireCompilerInvariant(
+			instIt != matchedSection->instantiations.end(),
 			"Missing inferred instantiation for deduced non-flex pattern call in getEffectiveType"
 		);
 		return expr->type;
@@ -730,7 +738,7 @@ std::string getPatternFunctionName(Section *section) {
 void allocateSectionVariables(ParseContext &context, Section *section) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
 		Variable *var = section->findVariable(name);
-		assert(var && "Internal compiler error: variableDefinitions contains a name missing from section variable metadata");
+		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
 		DataType varType = var->type;
 		if (!varType.isDeduced())
 			continue;
@@ -878,6 +886,6 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	}
 
 	// Unsupported conversion - this should not happen if type inference is correct
-	assert(false && "Unsupported type conversion in ensureType");
+	crashCompilerBug("Unsupported type conversion in ensureType");
 	return val;
 }

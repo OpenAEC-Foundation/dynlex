@@ -434,6 +434,18 @@ findDefinitionsBySignature(ParseContext &context, SectionType sectionType, std::
 	return node ? node->matchingDefinitions : std::vector<PatternDefinition *>{};
 }
 
+std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(ParseContext &context, std::string_view signature) {
+	std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, SectionType::Function, signature);
+	std::vector<PatternDefinition *> callableMatches;
+	for (PatternDefinition *definition : matches) {
+		if (definition && definition->section && definition->section->type == SectionType::Function &&
+			!definition->section->isFlex) {
+			callableMatches.push_back(definition);
+		}
+	}
+	return callableMatches;
+}
+
 PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
 	std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, sectionType, signature);
 	return !matches.empty() ? matches[0] : nullptr;

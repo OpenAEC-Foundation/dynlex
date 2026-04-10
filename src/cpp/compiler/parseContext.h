@@ -1,6 +1,7 @@
 #pragma once
 #include "bindingResolution.h"
 #include "codeLine.h"
+#include "compilerUtils.h"
 #include "diagnostic.h"
 #include "lsp/fileSystem.h"
 #include "patternMatch.h"
@@ -8,7 +9,6 @@
 #include "section.h"
 #include "syntaxConfig.h"
 #include <algorithm>
-#include <cassert>
 #include <limits>
 #include <list>
 #include <map>
@@ -288,7 +288,10 @@ expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition
 		return nullptr;
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	if (def)
-		assert(std::find(defs.begin(), defs.end(), def) != defs.end());
+		requireCompilerInvariant(
+			std::find(defs.begin(), defs.end(), def) != defs.end(),
+			"expandFlexPatternCall received a definition that no longer matches the pattern call"
+		);
 	(void)defs;
 	if (!def || !def->section || !def->section->isFlex)
 		return nullptr;
@@ -322,7 +325,10 @@ inline Expression *expandFlexPatternCall(ParseContext &context, Expression *expr
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 	PatternDefinition *def = expr->selectedPatternDefinition;
 	if (expr->selectedPatternDefinition) {
-		assert(std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end());
+		requireCompilerInvariant(
+			std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end(),
+			"selected flex pattern definition no longer matches the pattern call"
+		);
 	} else {
 		if (defs.size() != 1)
 			return nullptr;

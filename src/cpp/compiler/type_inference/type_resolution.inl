@@ -1382,7 +1382,7 @@ struct InferenceContext {
 	void pushExpression(Expression *expression) { expressionStack.push_back(expression); }
 
 	void popExpression() {
-		assert(!expressionStack.empty() && "Expression stack underflow during type inference");
+		requireCompilerInvariant(!expressionStack.empty(), "Expression stack underflow during type inference");
 		expressionStack.pop_back();
 	}
 
