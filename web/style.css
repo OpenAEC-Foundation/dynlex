@@ -173,12 +173,25 @@ body {
 	font-size: clamp(4rem, 15vw, 10rem);
 	font-weight: 900;
 	letter-spacing: -0.05em;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.18em;
+	margin-bottom: 1rem;
+	animation: fadeInUp 1s ease-out;
+}
+
+.logo img {
+	width: 0.72em;
+	height: 0.72em;
+	filter: drop-shadow(0 0.08em 0.18em rgba(0, 0, 0, 0.28));
+}
+
+.logo span {
 	background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 100%);
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 	background-clip: text;
-	margin-bottom: 1rem;
-	animation: fadeInUp 1s ease-out;
 }
 
 .tagline {

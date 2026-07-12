@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "type.h"
+#include "typeConstraint.h"
 struct ParseContext;
 
 struct PatternElement {
@@ -40,8 +41,11 @@ struct DefinitionPatternElement : public PatternElement {
 	std::vector<std::vector<DefinitionPatternElement>> alternatives;
 	// for Variable type: type constraint name from {type:name} syntax (empty if unconstrained)
 	std::string typeConstraintName;
-	// resolved type constraint (set during type constraint resolution step, Undeduced if unconstrained)
-	DataType resolvedTypeConstraint;
+	// Resolved parameter requirement. An empty source constraint remains unresolved and means an unconstrained parameter.
+	TypeConstraint resolvedTypeConstraint;
+	// Concrete runtime representation declared by the constraint expression, when it has one.
+	// Overload matching uses resolvedTypeConstraint; callable ABI generation uses this exact type.
+	DataType resolvedParameterType;
 	// true when a plain VariableLike word was implicitly promoted into a parameter by body usage
 	bool promotedFromVariableLike = false;
 	// the first body reference range that caused the implicit promotion

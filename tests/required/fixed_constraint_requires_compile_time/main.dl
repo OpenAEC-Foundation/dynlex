@@ -1,0 +1,25 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function require {fixed integer:value}:
+    execute:
+        return value
+
+function pass runtime {integer:value}:
+    execute:
+        return require value
+
+discard pass runtime 1

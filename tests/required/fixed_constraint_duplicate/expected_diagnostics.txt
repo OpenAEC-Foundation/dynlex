@@ -1,0 +1,2 @@
+tests/required/fixed_constraint_duplicate/main.dl:17:10-41: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/fixed_constraint_duplicate/main.dl:13:10-35

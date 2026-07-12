@@ -8,11 +8,11 @@ function set var to val:
 
 function integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function fixed tofix:
     replacement:
-        @intrinsic("type", "const", tofix)
+        @intrinsic("fix", tofix)
 
 function array of {fixed integer:n} items:
     replacement:

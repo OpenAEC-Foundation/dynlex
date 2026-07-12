@@ -8,11 +8,11 @@ function discard val:
 
 function fixed tofix:
     replacement:
-        @intrinsic("type", "const", tofix)
+        @intrinsic("fix", tofix)
 
 function [an|a|] integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function [an|a|] {fixed integer:bits} bit integer:
     replacement:

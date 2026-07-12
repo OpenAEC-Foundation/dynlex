@@ -56,8 +56,10 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 			suffix += std::to_string(text->size()) + "_" + *text;
 		else if (const auto *boolean = std::get_if<bool>(&value))
 			suffix += *boolean ? "true" : "false";
-		else if (const auto *typeRef = std::get_if<DataType>(&value))
-			suffix += typeRef->toString();
+		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
+			suffix += typeRef->type.toString();
+		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+			suffix += constraint->toString();
 		else
 			suffix += "unknown";
 	}

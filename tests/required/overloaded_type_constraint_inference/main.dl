@@ -1,14 +1,14 @@
 function integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function floating:
     replacement:
-        @intrinsic("type", "float", 32)
+        @intrinsic("type", "float")
 
 function fixed tofix:
     replacement:
-        @intrinsic("type", "const", tofix)
+        @intrinsic("fix", tofix)
 
 function accept {wrapped type of 32:value}:
     execute:

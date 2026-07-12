@@ -55,7 +55,7 @@ inline bool parameterRequiresCompileTimeInstantiationValue(
 	const std::unordered_set<std::string> &requiredCompileTimeParameters, const std::string &parameterName,
 	const DataType &argType
 ) {
-	return argType.kind == DataType::Kind::Type || requiredCompileTimeParameters.contains(parameterName);
+	return argType.isMetaType() || requiredCompileTimeParameters.contains(parameterName);
 }
 
 template <typename ReadCompileTimeFn>
@@ -70,11 +70,13 @@ inline InstantiationKey buildInstantiationKey(
 	for (size_t i = 0; i < bindingCount; i++) {
 		if (!parameterRequiresCompileTimeInstantiationValue(requiredCompileTimeParameters, paramBindings[i].first, argTypes[i]))
 			continue;
-		if (argTypes[i].kind == DataType::Kind::Type) {
-			key.compileTimeParameters.push_back({paramBindings[i].first, argTypes[i]});
-			continue;
-		}
-		key.compileTimeParameters.push_back({paramBindings[i].first, readCompileTime(paramBindings[i].second)});
+		CompileTimeValue value = readCompileTime(paramBindings[i].second);
+		if (std::holds_alternative<std::monostate>(value) && argTypes[i].kind == DataType::Kind::Type)
+			value = TypeReferenceValue::exact(argTypes[i]);
+		requireCompilerInvariant(
+			!std::holds_alternative<std::monostate>(value), "Compile-time instantiation parameter has no value"
+		);
+		key.compileTimeParameters.push_back({paramBindings[i].first, std::move(value)});
 	}
 	return key;
 }

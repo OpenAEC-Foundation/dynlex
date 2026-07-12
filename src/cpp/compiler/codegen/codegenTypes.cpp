@@ -242,7 +242,7 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 			return;
 		if (expression->kind == Expression::Kind::Variable && expression->variable &&
 			normalizeBindingReference(expression->variable) == definition && expression->type.isDeduced()) {
-			DataType expressionType = concretizeClassType(expression->type.stripFixed());
+			DataType expressionType = concretizeClassType(expression->type);
 			if (type)
 				requireCompilerInvariant(
 					*type == expressionType, "variable has inconsistent finalized types in one instantiation"

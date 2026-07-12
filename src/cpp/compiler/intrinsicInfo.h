@@ -79,7 +79,8 @@ enum class IntrinsicPurityKind {
 	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                  \
 	X(ShaderStageIs, "shader stage is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                       \
 	X(Select, "select", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
-	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)
+	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                   \
+	X(Fix, "fix", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)
 
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
 	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                             \

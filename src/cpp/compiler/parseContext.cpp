@@ -13,6 +13,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <cmath>
 #include <iostream>
 #include <iterator>
 #include <unordered_set>
@@ -47,33 +48,18 @@ static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outT
 	if (!kindStr)
 		return false;
 
-	DataType aliasType;
-	if (*kindStr == "int") {
-		aliasType = {DataType::Kind::Int, 4};
-	} else if (*kindStr == "float") {
-		aliasType = defaultFloatType(emitSPIRV);
-	} else if (*kindStr == "bool") {
-		aliasType = {DataType::Kind::Bool};
-	} else if (*kindStr == "void") {
-		aliasType = {DataType::Kind::Void};
-	} else if (*kindStr == "string") {
-		aliasType = {DataType::Kind::Int, 1};
-		aliasType.pointerDepth = 1;
-	} else if (*kindStr == "type") {
-		aliasType = {DataType::Kind::Type};
-	} else {
-		return false;
-	}
-
+	std::optional<int> numericByteSize;
 	if (intrinsicExpr->arguments.size() > 2) {
 		Expression *bitsExpr = intrinsicExpr->arguments[2];
 		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
-		if (!bits)
+		if (!bits || *bits <= 0 || std::fmod(*bits, 8.0) != 0.0)
 			return false;
-		aliasType.numericSize = (int)*bits / 8;
+		numericByteSize = static_cast<int>(*bits) / 8;
 	}
-
-	outType = aliasType;
+	std::optional<DataType> typeReference = makeBuiltinTypeReference(*kindStr, emitSPIRV, numericByteSize);
+	if (!typeReference)
+		return false;
+	outType = typeReference->toReferencedType();
 	return true;
 }
 

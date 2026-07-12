@@ -1,0 +1,17 @@
+function type:
+    replacement:
+        @intrinsic("type", "type")
+
+function byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function pointer to pointed:
+    replacement:
+        @intrinsic("add pointer depth", pointed)
+
+function relay {type:value}:
+    replacement:
+        value
+
+@intrinsic("discard", @intrinsic("size of", relay pointer to byte))

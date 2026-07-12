@@ -1,0 +1,90 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [an|a|] {fixed integer:bits} bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+function [a|] {fixed integer:bits} bit float:
+    replacement:
+        @intrinsic("type", "float", bits)
+
+function [a|] type:
+    replacement:
+        @intrinsic("type", "type")
+
+function [a|] constraint:
+    replacement:
+        @intrinsic("type", "constraint")
+
+function any:
+    replacement:
+        @intrinsic("type", "any")
+
+function fix:
+    replacement:
+        @intrinsic("fix", any)
+
+function fix value:
+    replacement:
+        @intrinsic("fix", value)
+
+function fixed:
+    replacement:
+        @intrinsic("fix", any)
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [a|an|] {fixed integer:bits} bit any:
+    replacement:
+        @intrinsic("type", "any", bits)
+
+function [a|] pointer to pointed:
+    replacement:
+        @intrinsic("add pointer depth", pointed)
+
+function array of {fixed integer:size} element:
+    replacement:
+        @intrinsic("array", size, element)
+
+function value as {fixed type:destination}:
+    replacement:
+        @intrinsic("cast", value, destination)
+
+function capture {fix:value}:
+    execute:
+        return 1
+
+function describe {a 64 bit any:value}:
+    execute:
+        return 64
+
+function describe pointer {a pointer to any:value}:
+    execute:
+        return 8
+
+function describe pair {array of 2 any:value}:
+    execute:
+        return 2
+
+function print value:
+    execute:
+        discard @intrinsic("call", "libc", "printf", integer, "%d\n", value)
+
+print capture 12
+print capture integer
+print describe (1 as a 64 bit integer)
+print describe (1 as a 64 bit float)
+print describe pointer "value"
+print describe pair [1, 2]

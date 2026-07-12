@@ -4,7 +4,7 @@ function set var to val:
 
 function integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function cstring:
     replacement:
@@ -40,11 +40,14 @@ class:
 set p to @intrinsic("construct", point, 10, 20)
 set p's x to 12
 set the x of p to 13
+set p_pointer to @intrinsic("address of", p)
+set the x of p_pointer to 14
 set text_value to @intrinsic("construct", text, 7)
 set text_length to the length of text_value
 set holder_value to @intrinsic("construct", holder, "hello")
 set nested_length to the length of the data of holder_value
 
 @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", the x of p))
+@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", the x of p_pointer))
 @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", text_length))
 @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", nested_length))

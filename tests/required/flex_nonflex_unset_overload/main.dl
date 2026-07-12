@@ -1,6 +1,6 @@
 function integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function initialize value:
     replacement:

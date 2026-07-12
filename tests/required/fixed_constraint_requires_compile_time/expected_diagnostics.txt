@@ -1,0 +1,5 @@
+tests/required/fixed_constraint_requires_compile_time/main.dl:23:16-29: Error: No overload matches call 'require value' for argument types [a 32 bit integer]. Available overloads: 'require {fixed integer:value}'
+  note: while inferring call 'return require value' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:23:16-29
+  note: while inferring call 'return require value' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:23:9-29
+  note: while inferring call 'discard pass runtime 1' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:25:9-23
+  note: while inferring call 'discard pass runtime 1' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:25:1-23

@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace llvm {
 class Type;
@@ -30,7 +32,9 @@ struct DataType {
 		// a class with members. for example point
 		Class,
 		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
-		Type
+		Type,
+		// a compile-time value describing which argument types and values a pattern accepts.
+		Constraint
 	};
 
 	Kind kind = Kind::Unresolved;
@@ -43,7 +47,6 @@ struct DataType {
 	int arraySize = 0;							// For Kind::Array and Type(Array)
 	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
 	int matrixRowCount = 0;						// For Kind::Matrix and Type(Matrix): row count, arraySize stores column count
-	bool fixed = false;							// Compile-time-known/fixed-value requirement tag
 
 	DataType() = default;
 	DataType(Kind kind) : kind(kind) {}
@@ -51,11 +54,11 @@ struct DataType {
 	DataType(
 		Kind kind, int numericSize, int pointerDepth, ClassDefinition *classDefinition = nullptr, int classInstIndex = -1,
 		Expression *typeExpression = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
-		std::shared_ptr<DataType> arrayElementType = nullptr, bool fixed = false
+		std::shared_ptr<DataType> arrayElementType = nullptr
 	)
 		: kind(kind), numericSize(numericSize), pointerDepth(pointerDepth), classDefinition(classDefinition),
 		  classInstIndex(classInstIndex), typeExpression(typeExpression), referencedKind(referencedKind), arraySize(arraySize),
-		  arrayElementType(std::move(arrayElementType)), fixed(fixed) {}
+		  arrayElementType(std::move(arrayElementType)) {}
 
 	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
 	bool hasVectorPayload() const { return kind == Kind::Vector || (kind == Kind::Type && referencedKind == Kind::Vector); }
@@ -63,8 +66,7 @@ struct DataType {
 
 	bool operator==(const DataType &other) const {
 		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
-			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount ||
-			fixed != other.fixed)
+			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount)
 			return false;
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			bool hasElem = !!arrayElementType;
@@ -94,8 +96,6 @@ struct DataType {
 			return arraySize < other.arraySize;
 		if (matrixRowCount != other.matrixRowCount)
 			return matrixRowCount < other.matrixRowCount;
-		if (fixed != other.fixed)
-			return fixed < other.fixed;
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			if (!!arrayElementType != !!other.arrayElementType)
 				return !!arrayElementType < !!other.arrayElementType;
@@ -131,6 +131,8 @@ struct DataType {
 		return *arrayElementType;
 	}
 	bool isPointer() const { return pointerDepth > 0; }
+	bool isMetaType() const { return kind == Kind::Type || kind == Kind::Constraint; }
+	bool isRuntimeValueType() const { return isDeduced() && kind != Kind::Void && !isMetaType(); }
 	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
 	// wether this type is a specific type and the type pattern has been resolved
 	bool isDeduced() const { return kind != Kind::Any && kind != Kind::Unresolved; }
@@ -158,23 +160,15 @@ struct DataType {
 		}
 		return true;
 	}
-	DataType stripFixed() const {
-		DataType result = *this;
-		result.fixed = false;
-		if (arrayElementType)
-			result.arrayElementType = std::make_shared<DataType>(arrayElementType->stripFixed());
-		return result;
-	}
-
 	static bool supportsRuntimeConversion(const DataType &fromType, const DataType &toType) {
-		DataType concreteFromType = fromType.stripFixed();
-		DataType concreteToType = toType.stripFixed();
+		const DataType &concreteFromType = fromType;
+		const DataType &concreteToType = toType;
 		if (!concreteFromType.isDeduced() || !concreteToType.isDeduced())
 			return false;
 		if (concreteFromType == concreteToType)
 			return true;
-		if (concreteFromType.kind == Kind::Void || concreteFromType.kind == Kind::Type || concreteToType.kind == Kind::Void ||
-			concreteToType.kind == Kind::Type)
+		if (concreteFromType.kind == Kind::Void || concreteFromType.isMetaType() || concreteToType.kind == Kind::Void ||
+			concreteToType.isMetaType())
 			return false;
 
 		if (concreteFromType.isPointer() && concreteToType.isPointer())
@@ -222,8 +216,8 @@ struct DataType {
 
 	// Promote for arithmetic, including pointer + number -> pointer
 	static bool promoteArithmetic(const DataType &a, const DataType &b, DataType &result) {
-		DataType left = a.stripFixed();
-		DataType right = b.stripFixed();
+		DataType left = a;
+		DataType right = b;
 		if (left.kind == Kind::Unresolved || right.kind == Kind::Unresolved) {
 			result = {Kind::Unresolved};
 			return true;
@@ -315,8 +309,8 @@ struct DataType {
 
 	// Promote for bitwise operators: integers only, using the wider integer width.
 	static bool promoteBitwise(const DataType &a, const DataType &b, DataType &result) {
-		DataType left = a.stripFixed();
-		DataType right = b.stripFixed();
+		DataType left = a;
+		DataType right = b;
 		if (left.kind == Kind::Unresolved || right.kind == Kind::Unresolved) {
 			result = {Kind::Unresolved};
 			return true;
@@ -339,7 +333,6 @@ struct DataType {
 		result.arraySize = arraySize;
 		result.matrixRowCount = matrixRowCount;
 		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
-		result.fixed = fixed;
 		return result;
 	}
 
@@ -351,3 +344,43 @@ struct DataType {
 inline int defaultFloatByteSize(bool emitSPIRV) { return emitSPIRV ? 4 : 8; }
 
 inline DataType defaultFloatType(bool emitSPIRV) { return {DataType::Kind::Float, defaultFloatByteSize(emitSPIRV)}; }
+
+inline std::optional<DataType>
+makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optional<int> numericByteSize = std::nullopt) {
+	DataType result{DataType::Kind::Type};
+	if (kindName == "int") {
+		result.referencedKind = DataType::Kind::Int;
+		result.numericSize = numericByteSize.value_or(4);
+	} else if (kindName == "float") {
+		result.referencedKind = DataType::Kind::Float;
+		result.numericSize = numericByteSize.value_or(defaultFloatByteSize(emitSPIRV));
+	} else if (kindName == "bool") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::Bool;
+	} else if (kindName == "void") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::Void;
+	} else if (kindName == "string") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::Int;
+		result.numericSize = 1;
+		result.pointerDepth = 1;
+	} else if (kindName == "type") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::Type;
+	} else if (kindName == "constraint") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::Constraint;
+	} else if (kindName == "any") {
+		result.referencedKind = DataType::Kind::Any;
+		result.numericSize = numericByteSize.value_or(0);
+	} else {
+		return std::nullopt;
+	}
+	return result;
+}

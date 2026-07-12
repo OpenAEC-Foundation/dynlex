@@ -1,6 +1,6 @@
 function [an|a|] integer:
 	replacement:
-		@intrinsic("type", "int", 32)
+		@intrinsic("type", "int")
 
 function discard val:
 	replacement:

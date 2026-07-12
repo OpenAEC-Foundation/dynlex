@@ -74,8 +74,19 @@ We loop over the code like it would get executed.
 Before inferring executable code, we infer every pattern argument type constraint with the same expression inference engine.
 Pattern matching has already recorded all candidates, but it has not selected an overload. Signature inference resolves
 constraint dependencies first, selects overloads from inferred argument types, and requires every constraint expression to
-produce a pure compile-time type. A constraint is deferred while one of its candidate signatures is unresolved. If a full
+produce a pure compile-time type or constraint value. A constraint is deferred while one of its candidate signatures is unresolved. If a full
 pass makes no progress, the remaining signature dependency is cyclic and compilation fails.
+
+Exact expression types and parameter requirements use separate models. `DataType` describes one exact expression type.
+`TypeConstraint` describes the structural domain accepted by a pattern parameter and may additionally require a compile-time-known
+value. The `constraint` meta-type carries `TypeConstraint` values just as the `type` meta-type carries type-reference values.
+`@intrinsic("fix", value)` converts a type or constraint value into the same structural constraint with its compile-time-known
+requirement enabled. Type and constraint shaping uses the same surface patterns; shaping a constraint preserves the constraint
+category. A compile-time-known requirement is not an overload axis, so definitions which differ only by `fix` are duplicates.
+Type values retain both meanings when used in a signature: their constraint view controls overload matching, while their exact type
+view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` accepts every integer
+width as a constraint but denotes the default integer width as a standalone type value. Code generation consumes that recorded exact
+view; it does not reinterpret the constraint.
 
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.

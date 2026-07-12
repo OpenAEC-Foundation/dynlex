@@ -35,6 +35,21 @@ std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &v
 	return static_cast<std::int64_t>(truncated);
 }
 
+std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value) {
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value))
+		return typeReference->type.kind == DataType::Kind::Type ? std::optional<TypeReferenceValue>(*typeReference)
+																: std::nullopt;
+	return std::nullopt;
+}
+
+std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeValue &value) {
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+		return constraint->isResolved() ? std::optional<TypeConstraint>(*constraint) : std::nullopt;
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value))
+		return typeReference->constraint.isResolved() ? std::optional<TypeConstraint>(typeReference->constraint) : std::nullopt;
+	return std::nullopt;
+}
+
 static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
 	if (token.empty())
 		return std::nullopt;
@@ -89,11 +104,11 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 				return *numericLiteral;
 		}
 		if (expr->type.kind == DataType::Kind::Type)
-			return expr->type;
+			return TypeReferenceValue::exact(expr->type);
 		return {};
 	case Expression::Kind::TypedPlaceholder:
 		if (expr->type.kind == DataType::Kind::Type)
-			return expr->type;
+			return TypeReferenceValue::exact(expr->type);
 		return {};
 	case Expression::Kind::Pending:
 		if (expr->patternReference) {
@@ -107,13 +122,13 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 			}
 		}
 		if (expr->type.kind == DataType::Kind::Type)
-			return expr->type;
+			return TypeReferenceValue::exact(expr->type);
 		return {};
 	case Expression::Kind::ArrayLiteral:
 	case Expression::Kind::IntrinsicCall:
 	case Expression::Kind::PatternCall:
 		if (expr->type.kind == DataType::Kind::Type)
-			return expr->type;
+			return TypeReferenceValue::exact(expr->type);
 		return {};
 	}
 	return {};

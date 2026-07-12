@@ -1,4 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect x="2" y="2" width="28" height="28" rx="4" fill="#5B9BD5"/>
-  <text x="16" y="22" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">DL</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="DynLex">
+  <defs>
+    <linearGradient id="background" x1="18" y1="12" x2="112" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#968aff"/>
+      <stop offset="0.52" stop-color="#5f82f2"/>
+      <stop offset="1" stop-color="#2bd1df"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#background)"/>
+  <path fill="#fff" fill-rule="evenodd" d="M24 27h28c20 0 34 15 34 37S72 101 52 101H24V27Zm15 14v46h12c12 0 20-9 20-23s-8-23-20-23H39Z"/>
+  <path fill="#fff" d="M82 41h15v45h22v15H82V41Z"/>
 </svg>

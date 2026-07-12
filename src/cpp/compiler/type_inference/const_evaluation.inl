@@ -177,11 +177,9 @@ static void seedInstantiationCompileTimeParameters(
 			instantiation.constantParameterValues.erase(name);
 			continue;
 		}
-		if (argTypes[i].kind == DataType::Kind::Type) {
-			instantiation.constantParameterValues[name] = argTypes[i];
-			continue;
-		}
 		CompileTimeValue value = readCompileTimeValue(argExpr);
+		if (!isCompileTimeKnown(value) && argTypes[i].kind == DataType::Kind::Type)
+			value = TypeReferenceValue::exact(argTypes[i]);
 		if (isCompileTimeKnown(value))
 			instantiation.constantParameterValues[name] = value;
 		else

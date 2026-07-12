@@ -29,7 +29,7 @@ static bool patternElementsHaveUnresolvedTypeConstraint(const std::vector<Defini
 			}
 			continue;
 		}
-		if (!element.typeConstraintName.empty() && !element.resolvedTypeConstraint.isDeduced())
+		if (!element.typeConstraintName.empty() && !element.resolvedTypeConstraint.isResolved())
 			return true;
 	}
 	return false;
@@ -424,8 +424,8 @@ static bool definitionParameterAcceptsVoid(
 		for (const auto &element : definition->patternElements) {
 			if (element.type != PatternElement::Type::Variable || element.text != parameterName)
 				continue;
-			DataType constraint = element.resolvedTypeConstraint.stripFixed();
-			acceptsVoid = constraint.isDeduced() && constraint.kind == DataType::Kind::Void && constraint.pointerDepth == 0;
+			acceptsVoid = element.resolvedTypeConstraint.isResolved() &&
+						  element.resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
 			break;
 		}
 		currentArgumentIndex++;
@@ -720,8 +720,8 @@ static DataType ensureExpressionTypeWithCurrentGrouping(
 }
 
 static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType &falseTypeInput, DataType &outType) {
-	DataType trueType = concretizeClassType(trueTypeInput.stripFixed());
-	DataType falseType = concretizeClassType(falseTypeInput.stripFixed());
+	DataType trueType = concretizeClassType(trueTypeInput);
+	DataType falseType = concretizeClassType(falseTypeInput);
 	if (!trueType.isDeduced() || !falseType.isDeduced())
 		return false;
 	if (trueType == falseType) {
@@ -747,14 +747,14 @@ static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType
 static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, const DataType &valueType) {
 	if (!var)
 		return;
-	var->type = concretizeClassType(valueType.stripFixed());
+	var->type = concretizeClassType(valueType);
 	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
 	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
 }
 
 static bool isVariableAssignmentCompatible(const DataType &targetType, const DataType &valueType) {
-	DataType concreteTargetType = targetType.stripFixed();
-	DataType concreteValueType = valueType.stripFixed();
+	DataType concreteTargetType = targetType;
+	DataType concreteValueType = valueType;
 	if (!concreteTargetType.isDeduced() || !concreteValueType.isDeduced())
 		return false;
 	if (concreteTargetType == concreteValueType)
@@ -857,10 +857,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	}
 	if (kind == IntrinsicKind::SizeOf) {
 		CompileTimeValue typeValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		auto *typeRef = std::get_if<DataType>(&typeValue);
-		if (!typeRef || typeRef->kind != DataType::Kind::Type)
+		auto *typeRef = std::get_if<TypeReferenceValue>(&typeValue);
+		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
-		DataType valueType = typeRef->toReferencedType();
+		DataType valueType = typeRef->type.toReferencedType();
 		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
 			!valueType.classDefinition->instantiations.empty()) {
 			valueType.classInstIndex = 0;
@@ -883,10 +883,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!isCompileTimeKnown(value))
 			return {};
 		CompileTimeValue typeValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
-		auto *typeRef = std::get_if<DataType>(&typeValue);
-		if (!typeRef || typeRef->kind != DataType::Kind::Type)
+		auto *typeRef = std::get_if<TypeReferenceValue>(&typeValue);
+		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
-		DataType targetType = typeRef->toReferencedType();
+		DataType targetType = typeRef->type.toReferencedType();
 		if (targetType.kind == DataType::Kind::Bool) {
 			std::optional<bool> truthy = compileTimeTruthiness(value);
 			return truthy.has_value() ? CompileTimeValue(*truthy) : CompileTimeValue{};
@@ -899,8 +899,9 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			return *boolean ? 1.0 : 0.0;
 		return {};
 	}
-	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array ||
-		kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth) {
+	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix || kind == IntrinsicKind::TypeOf ||
+		kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix ||
+		kind == IntrinsicKind::AddPointerDepth) {
 		return readStoredValue(expr);
 	}
 
@@ -1172,6 +1173,10 @@ static CompileTimeValue pureExecutionImmediateValue(Expression *expr) {
 	}
 }
 
+static CompileTimeValue pureExecutionStoredValue(Expression *expr, const PureExecutionState &state) {
+	return state.inferenceContext ? state.inferenceContext->lookupExpressionValue(expr) : getExpressionCompileTimeValue(expr);
+}
+
 static CompileTimeValue executePureInstantiationReturnValue(
 	PureExecutionState &state, Section *section, Instantiation &instantiation,
 	const std::vector<std::pair<std::string, CompileTimeValue>> &argumentValues
@@ -1273,13 +1278,13 @@ static PureExpressionExecutionResult evaluatePureExpression(
 	case Expression::Kind::TypedPlaceholder:
 	case Expression::Kind::Pending:
 	case Expression::Kind::ArrayLiteral:
-		return {getExpressionCompileTimeValue(expr), false};
+		return {pureExecutionStoredValue(expr, state), false};
 
 	case Expression::Kind::Variable: {
 		CompileTimeValue localValue{};
 		if (lookupPureExecutionLocalValue(frame, expr->variable, localValue))
 			return {localValue, false};
-		return {getExpressionCompileTimeValue(expr), false};
+		return {pureExecutionStoredValue(expr, state), false};
 	}
 
 	case Expression::Kind::IntrinsicCall: {
@@ -1326,7 +1331,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			return it != argumentValues.end() ? it->second : CompileTimeValue{};
 		},
 				[&](Expression *expression) {
-			return getExpressionCompileTimeValue(expression);
+			return pureExecutionStoredValue(expression, state);
 		}
 			),
 			false
@@ -1339,7 +1344,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			crashCompilerBug("pure execution encountered a pattern call without a selected definition");
 		Section *matchedSection = selectedDefinition->section;
 		if (matchedSection->type == SectionType::Class && !matchedSection->isFlex)
-			return {getExpressionCompileTimeValue(expr), false};
+			return {pureExecutionStoredValue(expr, state), false};
 		if (matchedSection->isFlex) {
 			BindingFrame innerBindings;
 			Expression *expandedBody = pureExecutionFlexExpansion(expr, state);
@@ -1534,7 +1539,7 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 			context.setTypeFailure("function reference requires a concrete type for parameter '" + parameterName + "'");
 			return nullptr;
 		}
-		if (parameterType.kind == DataType::Kind::Type || parameterType.kind == DataType::Kind::Void) {
+		if (parameterType.isMetaType() || parameterType.kind == DataType::Kind::Void) {
 			context.setTypeFailure("function reference parameter '" + parameterName + "' is not a runtime value");
 			return nullptr;
 		}
@@ -1602,7 +1607,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 			computedValue = *numericToken;
 	}
 	if (!isCompileTimeKnown(computedValue) && expr->type.kind == DataType::Kind::Type)
-		computedValue = expr->type;
+		computedValue = TypeReferenceValue::exact(expr->type);
 	return computedValue;
 }
 
@@ -1726,8 +1731,8 @@ static void inferOrderedExpression(
 			Expression *flexBinding = flexBindingFrameStack.lookup(expr->variable);
 			if (flexBinding) {
 				CompileTimeValue boundValue = resolveStoredCompileTimeValue(flexBinding, flexBindingFrameStack, &context);
-				bool requiresInference = !flexBinding->type.isDeduced() ||
-										 (flexBinding->type.kind == DataType::Kind::Type && !isCompileTimeKnown(boundValue));
+				bool requiresInference =
+					!flexBinding->type.isDeduced() || (flexBinding->type.isMetaType() && !isCompileTimeKnown(boundValue));
 				if (requiresInference && flexBinding != expr) {
 					bool preserveBindingGrouping =
 						context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding);
@@ -1742,7 +1747,7 @@ static void inferOrderedExpression(
 					expr->type = boundType;
 				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);
 				if (!isCompileTimeKnown(variableValue) && expr->type.kind == DataType::Kind::Type)
-					variableValue = expr->type;
+					variableValue = TypeReferenceValue::exact(expr->type);
 				context.setExpressionValue(expr, variableValue);
 				break;
 			}
@@ -1771,7 +1776,7 @@ static void inferOrderedExpression(
 
 	case Expression::Kind::TypedPlaceholder:
 		if (expr->type.kind == DataType::Kind::Type)
-			context.setExpressionValue(expr, expr->type);
+			context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 		else
 			context.setExpressionValue(expr, {});
 		break;
@@ -1953,7 +1958,7 @@ static void inferOrderedExpression(
 					if (!context.typesValid)
 						break;
 					if (retTypeRef.kind == DataType::Kind::Type)
-						expr->type = retTypeRef.toReferencedType().stripFixed();
+						expr->type = retTypeRef.toReferencedType();
 				} else if (kind == IntrinsicKind::Function) {
 					Expression *functionExpr = resolveThroughFlexBindings(expr->arguments[1]);
 					requireCompilerInvariant(
@@ -2018,7 +2023,7 @@ static void inferOrderedExpression(
 					DataType castResultType;
 					if (typeArgType.kind == DataType::Kind::Type &&
 						!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
-						DataType requestedType = concretizeClassType(typeArgType.toReferencedType().stripFixed());
+						DataType requestedType = concretizeClassType(typeArgType.toReferencedType());
 						setConfiguredTypeFailure(
 							expr->range, "unsupported cast", "message",
 							{{"from_type", typeToUserName(valueType, context.parseContext)},
@@ -2038,51 +2043,16 @@ static void inferOrderedExpression(
 						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type kind string");
 						break;
 					}
-					DataType typeRef;
-					typeRef.kind = DataType::Kind::Type;
-					if (kindStr == "int") {
-						typeRef.referencedKind = DataType::Kind::Int;
-						typeRef.numericSize = 4; // default
-					} else if (kindStr == "float") {
-						typeRef.referencedKind = DataType::Kind::Float;
-						typeRef.numericSize = defaultFloatByteSize(context.parseContext.options.emitSPIRV); // default
-					} else if (kindStr == "bool") {
-						typeRef.referencedKind = DataType::Kind::Bool;
-					} else if (kindStr == "void") {
-						typeRef.referencedKind = DataType::Kind::Void;
-					} else if (kindStr == "string") {
-						// string = pointer to byte (i8*)
-						typeRef.referencedKind = DataType::Kind::Int;
-						typeRef.numericSize = 1;
-						typeRef.pointerDepth = 1;
-					} else if (kindStr == "type") {
-						typeRef.referencedKind = DataType::Kind::Type;
-					} else if (kindStr == "const") {
-						if (expr->arguments.size() < 3) {
-							failIntrinsicArgumentRequirement(2, "a compile-time type reference");
-							break;
-						}
-						DataType innerTypeRef;
-						if (!resolveCompileTimeTypeReference(
-								context.parseContext, expr->arguments[2], flexBindingFrameStack, innerTypeRef, &context
-							) ||
-							innerTypeRef.kind != DataType::Kind::Type) {
-							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time type reference");
-							break;
-						}
-						typeRef = innerTypeRef;
-						typeRef.fixed = true;
-						expr->type = typeRef;
-						context.setExpressionValue(expr, expr->type);
-						break;
-					} else {
+					std::optional<DataType> typeRefType =
+						makeBuiltinTypeReference(kindStr, context.parseContext.options.emitSPIRV);
+					if (!typeRefType) {
 						failWithDetail(
 							expr->arguments[1]->range,
 							"Unknown compile-time type kind '" + kindStr + "' in intrinsic '" + expr->intrinsicName + "'", 0
 						);
 						break;
 					}
-					// Override byte size if bits argument provided
+					std::optional<int> numericByteSize;
 					if (expr->arguments.size() > 2) {
 						int bitCount = 0;
 						if (!resolveStoredCompileTimeInteger(expr->arguments[2], flexBindingFrameStack, bitCount, &context) ||
@@ -2090,10 +2060,29 @@ static void inferOrderedExpression(
 							failIntrinsicArgumentRequirement(2, "a positive integer divisible by 8");
 							break;
 						}
-						typeRef.numericSize = bitCount / 8;
+						numericByteSize = bitCount / 8;
+						typeRefType =
+							makeBuiltinTypeReference(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
+						if (!typeRefType) {
+							failIntrinsicArgumentRequirement(2, "a numeric type kind that accepts a bit width");
+							break;
+						}
 					}
-					expr->type = typeRef;
-					context.setExpressionValue(expr, expr->type);
+					TypeReferenceValue typeRefValue =
+						TypeReferenceValue::builtin(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
+					expr->type = typeRefValue.type;
+					context.setExpressionValue(expr, typeRefValue);
+				} else if (kind == IntrinsicKind::Fix) {
+					CompileTimeValue sourceValue =
+						resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
+					std::optional<TypeConstraint> constraint = getCompileTimeConstraintValue(sourceValue);
+					if (!constraint) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a type or constraint value");
+						break;
+					}
+					constraint->requiresCompileTimeValue = true;
+					expr->type = {DataType::Kind::Constraint};
+					context.setExpressionValue(expr, *constraint);
 				} else if (kind == IntrinsicKind::TypeOf) {
 					DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					if (valueType.isDeduced()) {
@@ -2106,7 +2095,7 @@ static void inferOrderedExpression(
 						expr->type.arraySize = valueType.arraySize;
 						expr->type.arrayElementType =
 							valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
-						context.setExpressionValue(expr, expr->type);
+						context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 					}
 				} else if (kind == IntrinsicKind::Select) {
 					DataType conditionType = expr->arguments[1]->type;
@@ -2235,13 +2224,42 @@ static void inferOrderedExpression(
 					expr->type.arraySize = arraySize;
 					if (expr->arguments.size() > 2) {
 						DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
+						if (elemTypeRef.kind == DataType::Kind::Constraint) {
+							std::optional<TypeConstraint> elementConstraint = getCompileTimeConstraintValue(
+								resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
+							);
+							if (!elementConstraint) {
+								failCompileTimeOnlyIntrinsicArgument(2, "a compile-time element constraint");
+								break;
+							}
+							TypeConstraint arrayConstraint = TypeConstraint::any();
+							arrayConstraint.kind = DataType::Kind::Array;
+							arrayConstraint.pointerDepth = 0;
+							arrayConstraint.arraySize = arraySize;
+							arrayConstraint.elementConstraint = std::make_shared<TypeConstraint>(*elementConstraint);
+							expr->type = {DataType::Kind::Constraint};
+							context.setExpressionValue(expr, arrayConstraint);
+							break;
+						}
 						if (elemTypeRef.kind != DataType::Kind::Type) {
 							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time element type reference");
 							break;
 						}
-						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType().stripFixed());
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
-					context.setExpressionValue(expr, expr->type);
+					TypeConstraint arrayConstraint = TypeConstraint::any();
+					arrayConstraint.kind = DataType::Kind::Array;
+					arrayConstraint.pointerDepth = 0;
+					arrayConstraint.arraySize = arraySize;
+					if (expr->arguments.size() > 2) {
+						std::optional<TypeReferenceValue> elementValue = getCompileTimeTypeReferenceValue(
+							resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
+						);
+						if (!elementValue)
+							crashCompilerBug("inferred array element type is missing its type-reference value");
+						arrayConstraint.elementConstraint = std::make_shared<TypeConstraint>(elementValue->constraint);
+					}
+					context.setExpressionValue(expr, TypeReferenceValue{expr->type, std::move(arrayConstraint)});
 				} else if (kind == IntrinsicKind::Vector) {
 					int vectorSize = 0;
 					if (!resolveStoredCompileTimeInteger(expr->arguments[1], flexBindingFrameStack, vectorSize, &context) ||
@@ -2255,15 +2273,41 @@ static void inferOrderedExpression(
 					expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 					if (expr->arguments.size() > 2) {
 						DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
+						if (elemTypeRef.kind == DataType::Kind::Constraint) {
+							std::optional<TypeConstraint> elementConstraint = getCompileTimeConstraintValue(
+								resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
+							);
+							if (!elementConstraint) {
+								failCompileTimeOnlyIntrinsicArgument(2, "a compile-time vector element constraint");
+								break;
+							}
+							TypeConstraint vectorConstraint = TypeConstraint::any();
+							vectorConstraint.kind = DataType::Kind::Vector;
+							vectorConstraint.pointerDepth = 0;
+							vectorConstraint.arraySize = vectorSize;
+							vectorConstraint.elementConstraint = std::make_shared<TypeConstraint>(*elementConstraint);
+							expr->type = {DataType::Kind::Constraint};
+							context.setExpressionValue(expr, vectorConstraint);
+							break;
+						}
 						if (elemTypeRef.kind != DataType::Kind::Type) {
 							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time vector element type reference");
 							break;
 						}
-						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType().stripFixed());
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
 					if (!context.typesValid)
 						break;
-					context.setExpressionValue(expr, expr->type);
+					TypeConstraint vectorConstraint = TypeConstraint::fromTypeReference(expr->type);
+					if (expr->arguments.size() > 2) {
+						std::optional<TypeReferenceValue> elementValue = getCompileTimeTypeReferenceValue(
+							resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
+						);
+						if (!elementValue)
+							crashCompilerBug("inferred vector element type is missing its type-reference value");
+						vectorConstraint.elementConstraint = std::make_shared<TypeConstraint>(elementValue->constraint);
+					}
+					context.setExpressionValue(expr, TypeReferenceValue{expr->type, std::move(vectorConstraint)});
 				} else if (kind == IntrinsicKind::Matrix) {
 					int rows = 0;
 					int columns = 0;
@@ -2284,19 +2328,60 @@ static void inferOrderedExpression(
 					expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 					if (expr->arguments.size() > 3) {
 						DataType elemTypeRef = ensureExpressionType(expr->arguments[3], context, flexBindingFrameStack);
+						if (elemTypeRef.kind == DataType::Kind::Constraint) {
+							std::optional<TypeConstraint> elementConstraint = getCompileTimeConstraintValue(
+								resolveStoredCompileTimeValue(expr->arguments[3], flexBindingFrameStack, &context)
+							);
+							if (!elementConstraint) {
+								failCompileTimeOnlyIntrinsicArgument(3, "a compile-time matrix element constraint");
+								break;
+							}
+							TypeConstraint matrixConstraint = TypeConstraint::any();
+							matrixConstraint.kind = DataType::Kind::Matrix;
+							matrixConstraint.pointerDepth = 0;
+							matrixConstraint.matrixRows = rows;
+							matrixConstraint.matrixColumns = columns;
+							matrixConstraint.elementConstraint = std::make_shared<TypeConstraint>(*elementConstraint);
+							expr->type = {DataType::Kind::Constraint};
+							context.setExpressionValue(expr, matrixConstraint);
+							break;
+						}
 						if (elemTypeRef.kind != DataType::Kind::Type) {
 							failCompileTimeOnlyIntrinsicArgument(3, "a compile-time matrix element type reference");
 							break;
 						}
-						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType().stripFixed());
+						expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 					}
 					if (!context.typesValid)
 						break;
-					context.setExpressionValue(expr, expr->type);
+					TypeConstraint matrixConstraint = TypeConstraint::fromTypeReference(expr->type);
+					if (expr->arguments.size() > 3) {
+						std::optional<TypeReferenceValue> elementValue = getCompileTimeTypeReferenceValue(
+							resolveStoredCompileTimeValue(expr->arguments[3], flexBindingFrameStack, &context)
+						);
+						if (!elementValue)
+							crashCompilerBug("inferred matrix element type is missing its type-reference value");
+						matrixConstraint.elementConstraint = std::make_shared<TypeConstraint>(elementValue->constraint);
+					}
+					context.setExpressionValue(expr, TypeReferenceValue{expr->type, std::move(matrixConstraint)});
 				} else if (kind == IntrinsicKind::AddPointerDepth) {
 					DataType typeArgType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+					if (typeArgType.kind == DataType::Kind::Constraint) {
+						CompileTimeValue sourceValue =
+							resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
+						std::optional<TypeConstraint> constraint = getCompileTimeConstraintValue(sourceValue);
+						if (!constraint || (constraint->kind && (*constraint->kind == DataType::Kind::Type ||
+																 *constraint->kind == DataType::Kind::Constraint))) {
+							setConfiguredTypeFailure(expr->range, "pointer to type invalid");
+							break;
+						}
+						constraint->pointerDepth = constraint->pointerDepth.value_or(0) + 1;
+						expr->type = {DataType::Kind::Constraint};
+						context.setExpressionValue(expr, *constraint);
+						break;
+					}
 					if (typeArgType.kind != DataType::Kind::Type) {
-						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type reference");
+						failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type or constraint reference");
 						break;
 					}
 					if (typeArgType.referencedKind == DataType::Kind::Type ||
@@ -2306,7 +2391,14 @@ static void inferOrderedExpression(
 					}
 					expr->type = typeArgType;
 					expr->type.pointerDepth++;
-					context.setExpressionValue(expr, expr->type);
+					std::optional<TypeReferenceValue> sourceTypeValue = getCompileTimeTypeReferenceValue(
+						resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context)
+					);
+					if (!sourceTypeValue)
+						crashCompilerBug("pointer type shaping is missing its source type-reference value");
+					sourceTypeValue->type = expr->type;
+					sourceTypeValue->constraint.pointerDepth = sourceTypeValue->constraint.pointerDepth.value_or(0) + 1;
+					context.setExpressionValue(expr, *sourceTypeValue);
 				} else if (kind == IntrinsicKind::Construct) {
 					std::vector<DataType> constructionArgumentTypes;
 					constructionArgumentTypes.reserve(expr->arguments.size() - 2);
@@ -2329,7 +2421,7 @@ static void inferOrderedExpression(
 						break;
 					}
 					if (typeRefType.referencedKind == DataType::Kind::Array) {
-						DataType arrayType = typeRefType.toReferencedType().stripFixed();
+						DataType arrayType = typeRefType.toReferencedType();
 						if (arrayType.arraySize == static_cast<int>(expr->arguments.size()) - 2) {
 							DataType elementType =
 								arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
@@ -2351,7 +2443,7 @@ static void inferOrderedExpression(
 							}
 						}
 					} else if (typeRefType.referencedKind == DataType::Kind::Vector) {
-						DataType vectorType = typeRefType.toReferencedType().stripFixed();
+						DataType vectorType = typeRefType.toReferencedType();
 						if (vectorType.arraySize == static_cast<int>(expr->arguments.size()) - 2) {
 							bool allCompatible = true;
 							for (size_t i = 2; i < expr->arguments.size(); i++) {
@@ -2371,7 +2463,7 @@ static void inferOrderedExpression(
 								expr->type = vectorType;
 						}
 					} else if (typeRefType.referencedKind == DataType::Kind::Matrix) {
-						DataType matrixType = typeRefType.toReferencedType().stripFixed();
+						DataType matrixType = typeRefType.toReferencedType();
 						if (expr->arguments.size() == 3) {
 							DataType valueType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 							if (valueType.kind == DataType::Kind::Array && valueType.arrayElementType &&
@@ -2392,9 +2484,9 @@ static void inferOrderedExpression(
 																   typeRefType.classDefinition, constructionArgumentTypes,
 																   instantiatedTypeRef, typeRefType.classInstIndex
 															   )) {
-							expr->type = instantiatedTypeRef.toReferencedType().stripFixed();
+							expr->type = instantiatedTypeRef.toReferencedType();
 						} else {
-							DataType targetType = concretizeClassType(typeRefType.toReferencedType().stripFixed());
+							DataType targetType = concretizeClassType(typeRefType.toReferencedType());
 							if (expr->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
 								targetType.classInstIndex >= 0) {
 								const auto &fieldTypes =
@@ -2411,7 +2503,7 @@ static void inferOrderedExpression(
 							}
 						}
 					} else if (expr->arguments.size() == 3) {
-						DataType targetType = typeRefType.toReferencedType().stripFixed();
+						DataType targetType = typeRefType.toReferencedType();
 						DataType valueType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 						if (valueType.isDeduced())
 							expr->type = targetType;
@@ -2499,7 +2591,7 @@ static void inferOrderedExpression(
 			argTypesForOverload.push_back(argumentType);
 			expr->arguments[ai] = inferArg;
 			argCompileTimeKnown.push_back(
-				argumentType.kind == DataType::Kind::Type || isCompileTimeKnown(context.lookupExpressionValue(inferArg))
+				argumentType.isMetaType() || isCompileTimeKnown(context.lookupExpressionValue(inferArg))
 			);
 		}
 		auto overloadFailurePriority = [&](Range diagnosticRange) {
@@ -2598,7 +2690,7 @@ static void inferOrderedExpression(
 			expr->type =
 				instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindingFrameStack, &context);
 			if (expr->type.kind == DataType::Kind::Type)
-				context.setExpressionValue(expr, expr->type);
+				context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 		} else if (matchedSection->isFlex) {
 			BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 			BindingFrame callBindings;
@@ -2682,6 +2774,7 @@ static void inferOrderedExpression(
 					context.typesValid = true;
 					if (cachedTrial->second.returnType.isDeduced())
 						expr->type = cachedTrial->second.returnType;
+					context.setExpressionValue(expr, cachedTrial->second.returnValue);
 					if (cachedTrial->second.purity == InstantiationPurity::Impure)
 						markCurrentInstantiationImpure(context);
 					break;
@@ -2768,7 +2861,6 @@ static void inferOrderedExpression(
 					buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 			} else if (inst.returnType.isDeduced()) {
 				expr->type = inst.returnType;
-				context.setExpressionValue(expr, evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context));
 			} else {
 				context.observedInProgressUndeducedInstantiation = true;
 			}
@@ -2786,6 +2878,12 @@ static void inferOrderedExpression(
 			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
 				inst.returnType = {DataType::Kind::Void};
 			}
+			CompileTimeValue inferredReturnValue{};
+			if (inst.returnType.isDeduced()) {
+				expr->type = inst.returnType;
+				inferredReturnValue = evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context);
+				context.setExpressionValue(expr, inferredReturnValue);
+			}
 			bool canCacheStableTrialInstantiation = context.trial && context.allowTrialSummaryReuse && !trialCacheKey.empty() &&
 													context.typesValid && inst.valid && !inst.inferring && !inst.needsReinfer &&
 													inst.returnType.isDeduced() &&
@@ -2793,13 +2891,11 @@ static void inferOrderedExpression(
 			if (canCacheStableTrialInstantiation) {
 				TrialInstantiationSummary summary;
 				summary.returnType = inst.returnType;
+				summary.returnValue = inferredReturnValue;
 				summary.purity = inst.purity;
 				(*context.ensureTrialInstantiationCache())[trialCacheKey] = std::move(summary);
 				traceTrialInstantiationCacheEvent("store", def, trialCacheKey);
 			}
-			if (inst.returnType.isDeduced())
-				expr->type = inst.returnType;
-			context.setExpressionValue(expr, evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context));
 			if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
 				retargetTrialSectionInstantiationWriteOrCrash(
 					context, matchedSection, instantiationKey, *refinedInstantiationKey, "trial inference"
@@ -2823,8 +2919,8 @@ static void inferOrderedExpression(
 		break;
 	}
 	CompileTimeValue inferredValue = context.lookupExpressionValue(expr);
-	if (!isCompileTimeKnown(inferredValue) && expr->type.kind == DataType::Kind::Type)
-		context.setExpressionValue(expr, expr->type);
+	if (!isCompileTimeKnown(inferredValue) && expr->type.kind == DataType::Kind::Type && !expr->inferredFlexExpansion)
+		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 }
 
 static bool

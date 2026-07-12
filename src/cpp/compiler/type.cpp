@@ -7,8 +7,6 @@
 
 std::string DataType::toString() const {
 	std::string result;
-	if (fixed)
-		result = "fixed ";
 	switch (kind) {
 	case Kind::Void:
 		result += "void";
@@ -42,6 +40,9 @@ std::string DataType::toString() const {
 		break;
 	case Kind::Type:
 		result += "type";
+		break;
+	case Kind::Constraint:
+		result += "constraint";
 		break;
 	case Kind::Any:
 	case Kind::Unresolved:
@@ -153,6 +154,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 	}
 	case Kind::Type:
 		crashCompilerBug("Type is compile-time only, cannot be converted to LLVM type");
+	case Kind::Constraint:
+		crashCompilerBug("Constraint is compile-time only, cannot be converted to LLVM type");
 	case Kind::Unresolved:
 		crashCompilerBug("Unresolved type must be resolved before codegen");
 	case Kind::Any:

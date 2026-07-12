@@ -58,8 +58,13 @@ static PatternDefinition *createClassPropertyPatternDefinition(
 	};
 	auto addOwner = [&](size_t startPos) {
 		DefinitionPatternElement owner(PatternElement::Type::Variable, "owner", startPos);
-		owner.resolvedTypeConstraint = DataType{DataType::Kind::Class};
+		DataType ownerType{DataType::Kind::Class};
+		ownerType.classDefinition = classDefinition;
+		owner.resolvedTypeConstraint = TypeConstraint::any();
+		owner.resolvedTypeConstraint.kind = DataType::Kind::Class;
+		owner.resolvedTypeConstraint.constrainsClassDefinition = true;
 		owner.resolvedTypeConstraint.classDefinition = classDefinition;
+		owner.resolvedParameterType = ownerType;
 		definition->patternElements.push_back(std::move(owner));
 	};
 
@@ -345,22 +350,6 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static bool typeConstraintDomainsOverlap(const DataType &leftInput, const DataType &rightInput) {
-	DataType left = leftInput.stripFixed();
-	DataType right = rightInput.stripFixed();
-	if (!left.isDeduced() || !right.isDeduced())
-		return true;
-	if (left.kind != right.kind)
-		return false;
-	if (left.kind == DataType::Kind::Class)
-		return left.classDefinition == right.classDefinition;
-	if (left.kind == DataType::Kind::Type)
-		return true;
-	if (left.isNumeric() || right.isNumeric())
-		return left.isNumeric() && right.isNumeric();
-	return left.pointerDepth == right.pointerDepth;
-}
-
 struct PatternDomainAutomaton {
 	struct Transition {
 		size_t target;
@@ -426,7 +415,7 @@ static bool patternElementsShareTrieTransition(const DefinitionPatternElement &l
 	if (left.type != right.type)
 		return false;
 	if (left.type == PatternElement::Type::Variable)
-		return typeConstraintDomainsOverlap(left.resolvedTypeConstraint, right.resolvedTypeConstraint);
+		return left.resolvedTypeConstraint.structurallyOverlaps(right.resolvedTypeConstraint);
 	if (left.type == PatternElement::Type::Word)
 		return true;
 	return left.text == right.text;
@@ -460,8 +449,8 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 					continue;
 				int nextDifference = current.constraintScoreDifference;
 				if (leftTransition.element->type == PatternElement::Type::Variable) {
-					nextDifference += leftTransition.element->resolvedTypeConstraint.isDeduced() ? 1 : 0;
-					nextDifference -= rightTransition.element->resolvedTypeConstraint.isDeduced() ? 1 : 0;
+					nextDifference += leftTransition.element->resolvedTypeConstraint.structuralSpecificity();
+					nextDifference -= rightTransition.element->resolvedTypeConstraint.structuralSpecificity();
 				}
 				pending.push_back({leftTransition.target, rightTransition.target, nextDifference});
 			}

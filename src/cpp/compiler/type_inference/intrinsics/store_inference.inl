@@ -16,7 +16,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], flexBindingFrameStack, valueBindingFrameStack);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 
-	if (valueType.kind == DataType::Kind::Type) {
+	if (valueType.isMetaType()) {
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}

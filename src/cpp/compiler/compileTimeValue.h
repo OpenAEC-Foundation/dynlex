@@ -13,6 +13,8 @@ struct Instantiation;
 bool isCompileTimeKnown(const CompileTimeValue &value);
 std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value);
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value);
+std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value);
+std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeValue &value);
 std::optional<DataType> buildInfoValueType(std::string_view key);
 CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key);
 std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName);
@@ -37,16 +39,18 @@ CompileTimeValue resolveCompileTimeValueFromKnownState(
 		CompileTimeValue storedValue = readKnownValue(currentExpression);
 		if (isCompileTimeKnown(storedValue))
 			return storedValue;
-		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
-		if (isCompileTimeKnown(immediateValue))
-			return immediateValue;
 		BindingFrameStack resolvedBindingFrameStack;
 		Expression *resolvedExpression =
 			resolveCompileTimeBinding(currentExpression, currentBindingFrameStack, &resolvedBindingFrameStack);
-		if (!resolvedExpression || resolvedExpression == currentExpression)
-			break;
-		currentExpression = resolvedExpression;
-		currentBindingFrameStack = std::move(resolvedBindingFrameStack);
+		if (resolvedExpression && resolvedExpression != currentExpression) {
+			currentExpression = resolvedExpression;
+			currentBindingFrameStack = std::move(resolvedBindingFrameStack);
+			continue;
+		}
+		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
+		if (isCompileTimeKnown(immediateValue))
+			return immediateValue;
+		break;
 	}
 	return {};
 }

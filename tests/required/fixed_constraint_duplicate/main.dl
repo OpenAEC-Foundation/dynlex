@@ -1,0 +1,21 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function duplicate {integer:value}:
+    execute:
+        return value
+
+function duplicate {fixed integer:value}:
+    execute:
+        return value
+
+duplicate 1

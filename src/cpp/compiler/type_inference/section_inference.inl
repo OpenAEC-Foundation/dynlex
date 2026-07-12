@@ -16,7 +16,7 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 		Variable *parameterVariable = findOwnSectionVariable(section, name);
 		if (!parameterVariable || parameterVariable->isGlobal)
 			continue;
-		parameterVariable->type = concretizeClassType(parameterType.stripFixed());
+		parameterVariable->type = concretizeClassType(parameterType);
 		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
 		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}
@@ -333,17 +333,30 @@ struct PatternTypeConstraintWorkItem {
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
 
-static bool readPatternTypeConstraintValue(Expression *expression, InferenceContext &context, DataType &outTypeReference) {
-	CompileTimeValue value = context.lookupExpressionValue(expression);
-	if (const auto *typeReference = std::get_if<DataType>(&value)) {
-		if (typeReference->kind == DataType::Kind::Type && typeReference->referencedKind != DataType::Kind::Unresolved) {
-			outTypeReference = *typeReference;
-			return true;
-		}
+static bool readPatternTypeConstraintValue(
+	Expression *expression, InferenceContext &context, TypeConstraint &outConstraint, DataType &outParameterType
+) {
+	outParameterType = {};
+	CompileTimeValue value = resolveStoredCompileTimeValue(expression, {}, &context);
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value)) {
+		if (!constraint->isResolved())
+			return false;
+		outConstraint = *constraint;
+		outParameterType = constraint->exactValueType().value_or(DataType{});
+		return true;
+	}
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value)) {
+		if (!typeReference->constraint.isResolved())
+			return false;
+		outConstraint = typeReference->constraint;
+		if (typeReference->type.kind == DataType::Kind::Type)
+			outParameterType = typeReference->type.toReferencedType();
+		return true;
 	}
 	if (expression && expression->type.kind == DataType::Kind::Type &&
 		expression->type.referencedKind != DataType::Kind::Unresolved) {
-		outTypeReference = expression->type;
+		outConstraint = TypeConstraint::fromTypeReference(expression->type);
+		outParameterType = expression->type.toReferencedType();
 		return true;
 	}
 	return false;
@@ -362,8 +375,9 @@ static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstrai
 	Expression *trialExpression = item.expression;
 	bool inferred = inferExpression(trialExpression, trialContext, false, {}, false) && trialContext.typesValid;
 	bool deferred = *trialContext.unresolvedPatternConstraintSignal;
-	DataType typeReference;
-	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, typeReference);
+	TypeConstraint constraint;
+	DataType parameterType;
+	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
 	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
 	rollbackTrialJournal(journal);
 	applyGroupingSnapshot(originalGrouping);
@@ -394,13 +408,15 @@ static void commitPatternTypeConstraint(PatternTypeConstraintWorkItem &item, Par
 		signatureInstantiation.purity == InstantiationPurity::Pure,
 		"pattern type-constraint probe and committed purity classification disagreed"
 	);
-	DataType typeReference;
+	TypeConstraint constraint;
+	DataType parameterType;
 	requireCompilerInvariant(
-		readPatternTypeConstraintValue(expression, context, typeReference),
+		readPatternTypeConstraintValue(expression, context, constraint, parameterType),
 		"pattern type-constraint probe and committed result type disagreed"
 	);
 	item.expression = expression;
-	item.element->resolvedTypeConstraint = typeReference.toReferencedType();
+	item.element->resolvedTypeConstraint = std::move(constraint);
+	item.element->resolvedParameterType = std::move(parameterType);
 }
 
 static void collectPatternTypeConstraintWorkItems(
@@ -415,7 +431,7 @@ static void collectPatternTypeConstraintWorkItems(
 						collectElements(alternative);
 					continue;
 				}
-				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isDeduced())
+				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isResolved())
 					continue;
 				int constraintEnd = definition->range.start() + static_cast<int>(element.startPos) - 1;
 				int constraintStart = constraintEnd - static_cast<int>(element.typeConstraintName.size());

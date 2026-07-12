@@ -107,8 +107,10 @@ static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue 
 		return "\"" + *text + "\"";
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *type = std::get_if<DataType>(&value))
-		return type->toString();
+	if (const auto *type = std::get_if<TypeReferenceValue>(&value))
+		return type->type.toString();
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+		return constraint->toString();
 	crashCompilerBug("unknown compile-time value alternative in purity report");
 }
 
@@ -219,15 +221,29 @@ createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceF
 static bool validateSourceCharacters(ParseContext &context, CodeLine *line, const SyntaxConfig &syntax) {
 	bool insideString = false;
 	size_t commentStart = findCommentStart(line->fullText, syntax.commentPrefix);
+	std::vector<size_t> pendingStringArgumentCharacters;
 	for (size_t index = 0; index < line->fullText.size(); index++) {
 		char character = line->fullText[index];
 		if (index < commentStart && character == '"' && (index == 0 || line->fullText[index - 1] != '\\')) {
 			insideString = !insideString;
+			if (!insideString)
+				pendingStringArgumentCharacters.clear();
 			continue;
 		}
-		if (character != argumentChar || insideString)
+		if (character != argumentChar)
 			continue;
+		if (index < commentStart && insideString) {
+			pendingStringArgumentCharacters.push_back(index);
+			continue;
+		}
 
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
+		));
+		return false;
+	}
+	if (!pendingStringArgumentCharacters.empty()) {
+		size_t index = pendingStringArgumentCharacters.front();
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
 		));
@@ -565,8 +581,8 @@ std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(Pars
 	return callableMatches;
 }
 
-static DataType concretizeCallableParameterType(DataType type) {
-	type = type.stripFixed();
+static DataType concretizeCallableParameterType(const DefinitionPatternElement &element) {
+	DataType type = element.resolvedParameterType;
 	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
 		!type.classDefinition->instantiations.empty()) {
 		type.classInstIndex = 0;
@@ -584,7 +600,7 @@ static void collectCallablePatternParameters(
 				collectCallablePatternParameters(element.alternatives.front(), outParameters);
 			break;
 		case PatternElement::Type::Variable:
-			outParameters.push_back({element.text, concretizeCallableParameterType(element.resolvedTypeConstraint)});
+			outParameters.push_back({element.text, concretizeCallableParameterType(element)});
 			break;
 		default:
 			break;
@@ -885,7 +901,8 @@ bool analyzeSections(ParseContext &context) {
 				// tokenize "import" as a keyword and the path as a string
 				line->resolved = true;
 			} else if (line->patternText.length()) {
-				currentSection->processLine(context, line);
+				if (!currentSection->processLine(context, line))
+					return false;
 			} else {
 				line->resolved = true;
 			}
@@ -934,26 +951,10 @@ findDefinitionParameterElement(const std::vector<DefinitionPatternElement> &elem
 	return nullptr;
 }
 
-static bool argumentMatchesConstraintIgnoringFixed(const DataType &constraintInput, const DataType &argTypeInput) {
-	DataType constraint = constraintInput.stripFixed();
-	DataType argType = argTypeInput.stripFixed();
-	if (!constraint.isDeduced())
-		return true;
-	if (!argType.isDeduced())
-		return false;
-	if (constraint.kind == DataType::Kind::Class)
-		return argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
-	if (constraint.kind == DataType::Kind::Type)
-		return argType.kind == DataType::Kind::Type;
-	if (constraint.isNumeric())
-		return argType.kind == constraint.kind && argType.pointerDepth == 0;
-	return argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
-}
-
 bool patternParameterRequiresCompileTimeValue(
 	PatternDefinition *definition, const std::string &parameterName, const DataType &argType
 ) {
-	if (argType.kind == DataType::Kind::Type)
+	if (argType.isMetaType())
 		return true;
 	const DefinitionPatternElement *parameterElement =
 		definition ? findDefinitionParameterElement(definition->patternElements, parameterName) : nullptr;
@@ -961,7 +962,8 @@ bool patternParameterRequiresCompileTimeValue(
 		return false;
 	if (parameterElement->type == PatternElement::Type::Word)
 		return true;
-	return parameterElement->resolvedTypeConstraint.isDeduced() && parameterElement->resolvedTypeConstraint.fixed;
+	return parameterElement->resolvedTypeConstraint.isResolved() &&
+		   parameterElement->resolvedTypeConstraint.requiresCompileTimeValue;
 }
 
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
@@ -980,7 +982,7 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 PatternDefinition *selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
-	const std::vector<bool> & /*argCompileTimeKnown*/
+	const std::vector<bool> &argCompileTimeKnown
 ) {
 	if (definitions.empty())
 		return nullptr;
@@ -1006,33 +1008,22 @@ PatternDefinition *selectOverload(
 				return;
 			}
 			const DataType &argType = argTypes[argIdx];
-			if (argType.kind == DataType::Kind::Void) {
-				bool acceptsVoid = parameterElement->resolvedTypeConstraint.isDeduced() &&
-								   parameterElement->resolvedTypeConstraint.stripFixed().kind == DataType::Kind::Void &&
-								   parameterElement->resolvedTypeConstraint.stripFixed().pointerDepth == 0;
-				if (acceptsVoid) {
-					score++;
-				} else {
-					constraintFailed = true;
-				}
-				argIdx++;
-				return;
-			}
 			if (!argType.isDeduced()) {
 				bool acceptsUnset =
-					candidate->section && candidate->section->isFlex && !parameterElement->resolvedTypeConstraint.isDeduced();
+					candidate->section && candidate->section->isFlex && !parameterElement->resolvedTypeConstraint.isResolved();
 				if (!acceptsUnset)
 					constraintFailed = true;
 				argIdx++;
 				return;
 			}
-			if (parameterElement->resolvedTypeConstraint.isDeduced()) {
-				if (!argumentMatchesConstraintIgnoringFixed(parameterElement->resolvedTypeConstraint, argType)) {
+			if (parameterElement->resolvedTypeConstraint.isResolved()) {
+				bool compileTimeKnown = argIdx < argCompileTimeKnown.size() && argCompileTimeKnown[argIdx];
+				if (!parameterElement->resolvedTypeConstraint.accepts(argType, compileTimeKnown)) {
 					constraintFailed = true;
 					argIdx++;
 					return;
 				}
-				score++;
+				score += parameterElement->resolvedTypeConstraint.structuralSpecificity();
 			}
 			argIdx++;
 		});

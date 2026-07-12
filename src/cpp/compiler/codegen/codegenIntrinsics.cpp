@@ -47,6 +47,34 @@ static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *index
 	return indexVal;
 }
 
+static unsigned classFieldLLVMIndex(const DataType &classType, int fieldIndex) {
+	requireCompilerInvariant(
+		classType.kind == DataType::Kind::Class && classType.classDefinition && classType.classInstIndex >= 0,
+		"class field access requires a concrete class type"
+	);
+	requireCompilerInvariant(
+		classType.classInstIndex < static_cast<int>(classType.classDefinition->instantiations.size()),
+		"class field access references a missing instantiation"
+	);
+	const ClassInstantiation &instantiation = classType.classDefinition->instantiations[classType.classInstIndex];
+	requireCompilerInvariant(
+		fieldIndex >= 0 && fieldIndex < static_cast<int>(instantiation.fieldTypes.size()),
+		"class field access references a missing field"
+	);
+	if (fieldIndex >= 0 && fieldIndex < static_cast<int>(instantiation.llvmFieldIndices.size()))
+		return instantiation.llvmFieldIndices[fieldIndex];
+	return static_cast<unsigned>(fieldIndex);
+}
+
+static llvm::Value *
+createClassFieldPointer(ParseContext &context, const DataType &classType, int fieldIndex, llvm::Value *classPointer) {
+	requireCompilerInvariant(classPointer != nullptr, "class field access requires an instance pointer");
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	return builder.CreateStructGEP(
+		getLLVMType(context, classType), classPointer, classFieldLLVMIndex(classType, fieldIndex), "field_ptr"
+	);
+}
+
 static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<Expression *> &args, DataType resultType) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Function *function = builder.GetInsertBlock() ? builder.GetInsertBlock()->getParent() : nullptr;
@@ -60,7 +88,7 @@ static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<
 	if (!conditionValue)
 		return nullptr;
 
-	if (resultType.kind == DataType::Kind::Type) {
+	if (resultType.isMetaType()) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "compile time type value used at runtime", args[1]->range)
 		);
@@ -403,7 +431,13 @@ llvm::Value *generateIntrinsicCode(
 			intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
 			// Storing to a class field: generate GEP + store
 			Expression *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
-			DataType instType = finalizedExpressionType(context, instExpr);
+			DataType ownerType = finalizedExpressionType(context, instExpr);
+			bool ownerIsClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.isPointer();
+			DataType instType = ownerIsClassPointer ? ownerType.dereferenced() : ownerType;
+			if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex < 0 &&
+				!instType.classDefinition->instantiations.empty()) {
+				instType.classInstIndex = 0;
+			}
 			ClassDefinition *classDef = instType.classDefinition;
 			Expression *propExpr = resolveVariableBinding(context, destExpr->arguments[2]);
 			std::string fieldName = getStringLiteral(propExpr);
@@ -416,18 +450,14 @@ llvm::Value *generateIntrinsicCode(
 				}
 			}
 
-			llvm::Value *instPtr = getVariablePointer(context, instExpr);
-			llvm::Type *structType = getLLVMType(context, instType);
-			unsigned llvmFieldIdx = static_cast<unsigned>(fieldIdx);
-			if (instType.classInstIndex >= 0 && instType.classInstIndex < static_cast<int>(classDef->instantiations.size()) &&
-				fieldIdx < static_cast<int>(classDef->instantiations[instType.classInstIndex].llvmFieldIndices.size())) {
-				llvmFieldIdx = classDef->instantiations[instType.classInstIndex].llvmFieldIndices[fieldIdx];
-			}
-			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, llvmFieldIdx, "field_ptr");
+			llvm::Value *instPtr =
+				ownerIsClassPointer ? generateExpressionCode(context, instExpr) : getVariablePointer(context, instExpr);
+			llvm::Value *fieldPtr = createClassFieldPointer(context, instType, fieldIdx, instPtr);
 
 			DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
 			val = ensureType(context, val, valType, fieldType);
 			builder.CreateStore(val, fieldPtr);
+			context.flexBindingFrames = savedBindingFrames;
 		} else {
 			// Restore scope state — the else branch evaluates args[1] directly
 			context.flexBindingFrames = savedBindingFrames;
@@ -1050,7 +1080,7 @@ llvm::Value *generateIntrinsicCode(
 			context.requiredLibraries.insert(library);
 
 		DataType retTypeRef = finalizedExpressionType(context, args[3]);
-		DataType returnType = retTypeRef.toReferencedType().stripFixed();
+		DataType returnType = retTypeRef.toReferencedType();
 		llvm::Type *returnLLVMType = returnType.toLLVM(*context.llvmContext);
 
 		// Build call arguments — string literals become global constant pointers
@@ -1142,13 +1172,13 @@ llvm::Value *generateIntrinsicCode(
 		DataType typeArgType = finalizedExpressionType(context, args[2]);
 		if (typeArgType.kind != DataType::Kind::Type)
 			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
-		DataType toType = typeArgType.toReferencedType().stripFixed();
+		DataType toType = typeArgType.toReferencedType();
 
 		return ensureType(context, val, fromType, toType);
 	}
 
-	if (kind == IntrinsicKind::Type) {
-		// Types are compile-time only — no runtime code
+	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix) {
+		// Meta-values are compile-time only — no runtime code.
 		return nullptr;
 	}
 
@@ -1156,7 +1186,7 @@ llvm::Value *generateIntrinsicCode(
 		DataType typeArgType = finalizedExpressionType(context, args[1]);
 		if (typeArgType.kind != DataType::Kind::Type)
 			return nullptr;
-		DataType valueType = typeArgType.toReferencedType().stripFixed();
+		DataType valueType = typeArgType.toReferencedType();
 		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
 			!valueType.classDefinition->instantiations.empty()) {
 			valueType.classInstIndex = 0;
@@ -1242,22 +1272,17 @@ llvm::Value *generateIntrinsicCode(
 			concreteType.classInstIndex >= 0, "class construct result type must have a concrete instantiation"
 		);
 		ClassInstantiation &inst = classDef->instantiations[concreteType.classInstIndex];
-		llvm::Type *structType = getLLVMType(context, concreteType);
-
 		llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", concreteType);
 
 		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
 			llvm::Value *fieldVal = generateExpressionCode(context, args[i + 2]);
 			DataType fieldFromType = finalizedExpressionType(context, args[i + 2]);
 			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
-			unsigned llvmFieldIndex = static_cast<unsigned>(i);
-			if (i < inst.llvmFieldIndices.size())
-				llvmFieldIndex = inst.llvmFieldIndices[i];
-			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, alloca, llvmFieldIndex, "field_ptr");
+			llvm::Value *fieldPtr = createClassFieldPointer(context, concreteType, static_cast<int>(i), alloca);
 			builder.CreateStore(fieldVal, fieldPtr);
 		}
 
-		return builder.CreateAlignedLoad(structType, alloca, llvm::Align(8), "struct_load");
+		return builder.CreateAlignedLoad(getLLVMType(context, concreteType), alloca, llvm::Align(8), "struct_load");
 	}
 
 	if (kind == IntrinsicKind::Property) {
@@ -1316,24 +1341,12 @@ llvm::Value *generateIntrinsicCode(
 			llvm::Value *instPtrValue = generateExpressionCode(context, ownerExpr);
 			if (!instPtrValue)
 				return nullptr;
-			llvm::Type *structType = getLLVMType(context, instType);
-			unsigned llvmFieldIdx = static_cast<unsigned>(fieldIdx);
-			if (instType.classInstIndex >= 0 && instType.classInstIndex < static_cast<int>(classDef->instantiations.size()) &&
-				fieldIdx < static_cast<int>(classDef->instantiations[instType.classInstIndex].llvmFieldIndices.size())) {
-				llvmFieldIdx = classDef->instantiations[instType.classInstIndex].llvmFieldIndices[fieldIdx];
-			}
-			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtrValue, llvmFieldIdx, "field_ptr");
+			llvm::Value *fieldPtr = createClassFieldPointer(context, instType, fieldIdx, instPtrValue);
 			return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
 		}
 
 		if (llvm::Value *instPtr = getVariablePointer(context, ownerExpr)) {
-			llvm::Type *structType = getLLVMType(context, instType);
-			unsigned llvmFieldIdx = static_cast<unsigned>(fieldIdx);
-			if (instType.classInstIndex >= 0 && instType.classInstIndex < static_cast<int>(classDef->instantiations.size()) &&
-				fieldIdx < static_cast<int>(classDef->instantiations[instType.classInstIndex].llvmFieldIndices.size())) {
-				llvmFieldIdx = classDef->instantiations[instType.classInstIndex].llvmFieldIndices[fieldIdx];
-			}
-			llvm::Value *fieldPtr = builder.CreateStructGEP(structType, instPtr, llvmFieldIdx, "field_ptr");
+			llvm::Value *fieldPtr = createClassFieldPointer(context, instType, fieldIdx, instPtr);
 			return builder.CreateAlignedLoad(getLLVMType(context, fieldType), fieldPtr, llvm::Align(8), fieldName + "_val");
 		}
 

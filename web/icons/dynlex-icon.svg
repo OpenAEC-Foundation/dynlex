@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">DynLex</title>
+  <defs>
+    <linearGradient id="background" x1="18" y1="12" x2="112" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7c6df2"/>
+      <stop offset="0.52" stop-color="#456bdc"/>
+      <stop offset="1" stop-color="#18b9cf"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#background)"/>
+  <path fill="#fff" fill-rule="evenodd" d="M24 27h28c20 0 34 15 34 37S72 101 52 101H24V27Zm15 14v46h12c12 0 20-9 20-23s-8-23-20-23H39Z"/>
+  <path fill="#fff" d="M82 41h15v45h22v15H82V41Z"/>
+</svg>

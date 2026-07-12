@@ -12,7 +12,7 @@ function discard val:
 
 function [an|a|] integer:
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function left + right:
     replacement:

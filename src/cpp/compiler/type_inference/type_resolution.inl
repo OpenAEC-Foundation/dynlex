@@ -69,9 +69,9 @@ static bool isConcreteTypeReferenceValue(const DataType &type) {
 
 static bool readInferredTypeReferenceValue(Expression *expression, InferenceContext *inferenceContext, DataType &outTypeRef) {
 	CompileTimeValue expressionValue = lookupCompileTimeExpressionValue(expression, inferenceContext);
-	if (auto *compileTimeTypeRef = std::get_if<DataType>(&expressionValue)) {
-		if (isConcreteTypeReferenceValue(*compileTimeTypeRef)) {
-			outTypeRef = *compileTimeTypeRef;
+	if (auto *compileTimeTypeRef = std::get_if<TypeReferenceValue>(&expressionValue)) {
+		if (isConcreteTypeReferenceValue(compileTimeTypeRef->type)) {
+			outTypeRef = compileTimeTypeRef->type;
 			return true;
 		}
 	}
@@ -346,7 +346,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				if (argType.kind == DataType::Kind::Type)
 					return {};
 			}
-			return concretizeClassType(retTypeRef.toReferencedType().stripFixed());
+			return concretizeClassType(retTypeRef.toReferencedType());
 		} else if (kind == IntrinsicKind::Function) {
 			return {DataType::Kind::Int, 1, 1};
 		} else if (kind == IntrinsicKind::Return) {
@@ -365,47 +365,24 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			if (auto *str = std::get_if<std::string>(&kindValue))
 				kindStr = *str;
 			if (!kindStr.empty()) {
-				DataType typeRef;
-				typeRef.kind = DataType::Kind::Type;
-				if (kindStr == "int") {
-					typeRef.referencedKind = DataType::Kind::Int;
-					typeRef.numericSize = 4;
-				} else if (kindStr == "float") {
-					typeRef.referencedKind = DataType::Kind::Float;
-					typeRef.numericSize = defaultFloatByteSize(
-						activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV
-					);
-				} else if (kindStr == "bool") {
-					typeRef.referencedKind = DataType::Kind::Bool;
-				} else if (kindStr == "void") {
-					typeRef.referencedKind = DataType::Kind::Void;
-				} else if (kindStr == "string") {
-					typeRef.referencedKind = DataType::Kind::Int;
-					typeRef.numericSize = 1;
-					typeRef.pointerDepth = 1;
-				} else if (kindStr == "type") {
-					typeRef.referencedKind = DataType::Kind::Type;
-				} else if (kindStr == "const") {
-					if (resolved->arguments.size() < 3)
-						return {};
-					DataType innerTypeRef;
-					if (!resolveCompileTimeTypeReference(
-							*activeTypeResolutionParseContext, resolved->arguments[2], effectiveBindingFrameStack, innerTypeRef,
-							nullptr
-						) ||
-						innerTypeRef.kind != DataType::Kind::Type)
-						return {};
-					innerTypeRef.fixed = true;
-					return innerTypeRef;
-				}
+				std::optional<int> numericByteSize;
 				if (resolved->arguments.size() > 2) {
 					int bitCount = 0;
-					if (!::resolveStoredCompileTimeInteger(resolved->arguments[2], effectiveBindingFrameStack, bitCount))
+					if (!::resolveStoredCompileTimeInteger(resolved->arguments[2], effectiveBindingFrameStack, bitCount) ||
+						bitCount <= 0 || bitCount % 8 != 0)
 						return {};
-					typeRef.numericSize = bitCount / 8;
+					numericByteSize = bitCount / 8;
 				}
-				return typeRef;
+				std::optional<DataType> typeRef = makeBuiltinTypeReference(
+					kindStr, activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV,
+					numericByteSize
+				);
+				return typeRef.value_or(DataType{});
 			}
+		} else if (kind == IntrinsicKind::Fix) {
+			CompileTimeValue sourceValue = ::resolveStoredCompileTimeValue(resolved->arguments[1], effectiveBindingFrameStack);
+			if (getCompileTimeConstraintValue(sourceValue))
+				return {DataType::Kind::Constraint};
 		} else if (kind == IntrinsicKind::TypeOf) {
 			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (valueType.isDeduced()) {
@@ -453,8 +430,10 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				typeRef.arraySize = static_cast<int>(*size);
 				if (resolved->arguments.size() > 2) {
 					DataType elemTypeRef = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					if (elemTypeRef.kind == DataType::Kind::Constraint)
+						return {DataType::Kind::Constraint};
 					if (elemTypeRef.kind == DataType::Kind::Type)
-						typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType().stripFixed());
+						typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
 				}
 				return typeRef;
 			}
@@ -473,9 +452,11 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 2) {
 				DataType elemTypeRef;
-				if (resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack).kind == DataType::Kind::Type)
-					elemTypeRef =
-						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack).toReferencedType();
+				DataType elementExpressionType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+				if (elementExpressionType.kind == DataType::Kind::Constraint)
+					return {DataType::Kind::Constraint};
+				if (elementExpressionType.kind == DataType::Kind::Type)
+					elemTypeRef = elementExpressionType.toReferencedType();
 				if (elemTypeRef.isDeduced())
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
@@ -501,15 +482,23 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 3) {
 				DataType elemTypeRef;
-				if (resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack).kind == DataType::Kind::Type)
-					elemTypeRef =
-						resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack).toReferencedType();
+				DataType elementExpressionType = resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack);
+				if (elementExpressionType.kind == DataType::Kind::Constraint)
+					return {DataType::Kind::Constraint};
+				if (elementExpressionType.kind == DataType::Kind::Type)
+					elemTypeRef = elementExpressionType.toReferencedType();
 				if (elemTypeRef.isDeduced())
 					typeRef.arrayElementType = std::make_shared<DataType>(elemTypeRef);
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::AddPointerDepth) {
 			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (typeArgType.kind == DataType::Kind::Constraint) {
+				CompileTimeValue sourceValue =
+					::resolveStoredCompileTimeValue(resolved->arguments[1], effectiveBindingFrameStack);
+				if (getCompileTimeConstraintValue(sourceValue))
+					return {DataType::Kind::Constraint};
+			}
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved) {
 				typeArgType.pointerDepth++;
@@ -518,7 +507,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 		} else if (kind == IntrinsicKind::Construct) {
 			DataType typeRefType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
-				DataType arrayType = typeRefType.toReferencedType().stripFixed();
+				DataType arrayType = typeRefType.toReferencedType();
 				if (arrayType.arraySize == static_cast<int>(resolved->arguments.size()) - 2) {
 					DataType elementType =
 						arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
@@ -557,10 +546,10 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 					instantiateClassFromArgumentTypes(
 						typeRefType.classDefinition, argumentTypes, instantiatedTypeRef, typeRefType.classInstIndex
 					)) {
-					return instantiatedTypeRef.toReferencedType().stripFixed();
+					return instantiatedTypeRef.toReferencedType();
 				}
 
-				DataType targetType = concretizeClassType(typeRefType.toReferencedType().stripFixed());
+				DataType targetType = concretizeClassType(typeRefType.toReferencedType());
 				if (resolved->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
 					targetType.classInstIndex >= 0) {
 					const auto &fieldTypes = targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
@@ -573,7 +562,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 						return targetType;
 				}
 			} else if (typeRefType.kind == DataType::Kind::Type && resolved->arguments.size() == 3) {
-				DataType targetType = typeRefType.toReferencedType().stripFixed();
+				DataType targetType = typeRefType.toReferencedType();
 				DataType valueType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 				if (valueType.isDeduced())
 					return targetType;
@@ -597,21 +586,21 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 }
 
 static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
-	DataType unfixedType = type.stripFixed();
-	std::string prefix = type.fixed ? "fixed " : "";
-	if (unfixedType.pointerDepth == 0) {
-		if (unfixedType.kind == DataType::Kind::Int && unfixedType.numericSize > 0)
-			return prefix + "a " + std::to_string(unfixedType.numericSize * 8) + " bit integer";
-		if (unfixedType.kind == DataType::Kind::Float && unfixedType.numericSize > 0)
-			return prefix + "a " + std::to_string(unfixedType.numericSize * 8) + " bit float";
-		if (unfixedType.kind == DataType::Kind::Bool)
-			return prefix + "a boolean";
-		if (unfixedType.kind == DataType::Kind::Void)
-			return prefix + "nothing";
+	if (type.pointerDepth == 0) {
+		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
+		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
+			return "a " + std::to_string(type.numericSize * 8) + " bit float";
+		if (type.kind == DataType::Kind::Bool)
+			return "a boolean";
+		if (type.kind == DataType::Kind::Void)
+			return "nothing";
+		if (type.kind == DataType::Kind::Constraint)
+			return "a constraint";
 	}
-	auto it = parseContext.typeAliasNames.find(unfixedType);
+	auto it = parseContext.typeAliasNames.find(type);
 	if (it != parseContext.typeAliasNames.end())
-		return prefix + it->second;
+		return it->second;
 	return type.toString();
 }
 
@@ -632,7 +621,6 @@ static DataType toTypeReference(const DataType &valueType) {
 	typeReference.matrixRowCount = concreteValueType.matrixRowCount;
 	if (concreteValueType.arrayElementType)
 		typeReference.arrayElementType = std::make_shared<DataType>(*concreteValueType.arrayElementType);
-	typeReference.fixed = concreteValueType.fixed;
 	return typeReference;
 }
 
@@ -643,12 +631,12 @@ static bool resolveCompileTimeTypeReference(
 	if (!expr)
 		return false;
 	CompileTimeValue directValue = lookupCompileTimeExpressionValue(expr, inferenceContext);
-	if (auto *compileTimeTypeRef = std::get_if<DataType>(&directValue)) {
+	if (auto *compileTimeTypeRef = std::get_if<TypeReferenceValue>(&directValue)) {
 		bool requiresClassCompletion = constructionArgumentTypes &&
-									   compileTimeTypeRef->referencedKind == DataType::Kind::Class &&
-									   compileTimeTypeRef->classInstIndex < 0;
-		if (isConcreteTypeReferenceValue(*compileTimeTypeRef) && !requiresClassCompletion) {
-			outTypeRef = *compileTimeTypeRef;
+									   compileTimeTypeRef->type.referencedKind == DataType::Kind::Class &&
+									   compileTimeTypeRef->type.classInstIndex < 0;
+		if (isConcreteTypeReferenceValue(compileTimeTypeRef->type) && !requiresClassCompletion) {
+			outTypeRef = compileTimeTypeRef->type;
 			return true;
 		}
 	}
@@ -664,12 +652,12 @@ static bool resolveCompileTimeTypeReference(
 	if (!resolved)
 		return false;
 	CompileTimeValue resolvedValue = lookupCompileTimeExpressionValue(resolved, inferenceContext);
-	if (auto *compileTimeTypeRef = std::get_if<DataType>(&resolvedValue)) {
+	if (auto *compileTimeTypeRef = std::get_if<TypeReferenceValue>(&resolvedValue)) {
 		bool requiresClassCompletion = constructionArgumentTypes &&
-									   compileTimeTypeRef->referencedKind == DataType::Kind::Class &&
-									   compileTimeTypeRef->classInstIndex < 0;
-		if (isConcreteTypeReferenceValue(*compileTimeTypeRef) && !requiresClassCompletion) {
-			outTypeRef = *compileTimeTypeRef;
+									   compileTimeTypeRef->type.referencedKind == DataType::Kind::Class &&
+									   compileTimeTypeRef->type.classInstIndex < 0;
+		if (isConcreteTypeReferenceValue(compileTimeTypeRef->type) && !requiresClassCompletion) {
+			outTypeRef = compileTimeTypeRef->type;
 			return true;
 		}
 	}
@@ -720,7 +708,7 @@ static bool resolveCompileTimeTypeReference(
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
-				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType().stripFixed());
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
 			}
 			return true;
 		}
@@ -766,7 +754,7 @@ static bool resolveCompileTimeTypeReference(
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
-				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType().stripFixed());
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
 			}
 			return true;
 		}
@@ -791,7 +779,7 @@ static bool resolveCompileTimeTypeReference(
 					) ||
 					elementTypeRef.kind != DataType::Kind::Type)
 					return false;
-				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType().stripFixed());
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
 			}
 			return true;
 		}
@@ -865,8 +853,8 @@ static bool resolveCompileTimeTypeReference(
 
 static bool
 completeBoundClassFieldType(const DataType &fieldConstraintInput, const DataType &argumentTypeInput, DataType &outFieldType) {
-	DataType fieldConstraint = fieldConstraintInput.stripFixed();
-	DataType argumentType = concretizeClassType(argumentTypeInput.stripFixed());
+	DataType fieldConstraint = fieldConstraintInput;
+	DataType argumentType = concretizeClassType(argumentTypeInput);
 	if (!argumentType.isConcrete())
 		return false;
 	if (fieldConstraint.kind == DataType::Kind::Any) {
@@ -1138,6 +1126,8 @@ static std::string formatInferenceTraceType(const DataType &type, ParseContext &
 			return "type";
 		return "type(" + typeToUserName(referencedType, parseContext) + ")";
 	}
+	if (type.kind == DataType::Kind::Constraint)
+		return "constraint";
 	return typeToUserName(type, parseContext);
 }
 
@@ -1156,8 +1146,6 @@ static std::string encodeDataTypeForCacheKey(const DataType &type) {
 	key += std::to_string(type.arraySize);
 	key += "|m";
 	key += std::to_string(type.matrixRowCount);
-	key += "|f";
-	key += type.fixed ? "1" : "0";
 	key += "|ci";
 	key += std::to_string(type.classInstIndex);
 	key += "|cd";
@@ -1172,6 +1160,27 @@ static std::string encodeDataTypeForCacheKey(const DataType &type) {
 	return key;
 }
 
+static std::string encodeTypeConstraintForCacheKey(const TypeConstraint &constraint) {
+	std::string key = constraint.isResolved() ? "r1" : "r0";
+	auto appendOptional = [&](std::string_view name, const auto &value) {
+		key += "|" + std::string(name);
+		key += value ? std::to_string(static_cast<long long>(*value)) : "-";
+	};
+	appendOptional("k", constraint.kind);
+	appendOptional("n", constraint.numericSize);
+	appendOptional("p", constraint.pointerDepth);
+	appendOptional("a", constraint.arraySize);
+	appendOptional("mr", constraint.matrixRows);
+	appendOptional("mc", constraint.matrixColumns);
+	appendOptional("ci", constraint.classInstantiationIndex);
+	key += "|cd" + std::to_string(reinterpret_cast<uintptr_t>(constraint.classDefinition));
+	key += constraint.constrainsClassDefinition ? "|dc1" : "|dc0";
+	key += constraint.requiresCompileTimeValue ? "|ct1" : "|ct0";
+	key += "|e";
+	key += constraint.elementConstraint ? "(" + encodeTypeConstraintForCacheKey(*constraint.elementConstraint) + ")" : "()";
+	return key;
+}
+
 static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &value) {
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
@@ -1181,8 +1190,10 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 		return "s" + std::to_string(text->size()) + ":" + *text;
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "b1" : "b0";
-	if (const auto *typeRef = std::get_if<DataType>(&value))
-		return "t" + encodeDataTypeForCacheKey(*typeRef);
+	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
+		return "t" + encodeDataTypeForCacheKey(typeRef->type) + "|" + encodeTypeConstraintForCacheKey(typeRef->constraint);
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+		return "c" + encodeTypeConstraintForCacheKey(*constraint);
 	return "?";
 }
 
@@ -1222,7 +1233,7 @@ static std::string describeInferenceTraceFrame(Expression *expr, ParseContext &p
 }
 
 static bool isValidCastRuntimeType(const DataType &type) {
-	if (!type.isDeduced() || type.kind == DataType::Kind::Void || type.kind == DataType::Kind::Type)
+	if (!type.isDeduced() || type.kind == DataType::Kind::Void || type.isMetaType())
 		return false;
 	if (type.kind == DataType::Kind::Class && !type.isPointer())
 		return false;
@@ -1240,7 +1251,7 @@ static bool tryResolveCastResultType(const DataType &fromType, const DataType &t
 		return false;
 	if (typeArgType.kind != DataType::Kind::Type)
 		return false;
-	DataType toType = concretizeClassType(typeArgType.toReferencedType().stripFixed());
+	DataType toType = concretizeClassType(typeArgType.toReferencedType());
 	if (!isSupportedCastConversion(fromType, toType))
 		return false;
 	outType = toType;
@@ -1263,6 +1274,7 @@ static bool mergeArrayElementType(const DataType &current, const DataType &next,
 // During reordering trials, diagnostics are suppressed and failures only affect the current trial.
 struct TrialInstantiationSummary {
 	DataType returnType{};
+	CompileTimeValue returnValue{};
 	InstantiationPurity purity = InstantiationPurity::Pure;
 };
 
@@ -1696,17 +1708,19 @@ static CompileTimeValue resolveStoredCompileTimeValue(
 			if (isCompileTimeKnown(knownValue))
 				return knownValue;
 		}
-		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
-		if (isCompileTimeKnown(immediateValue))
-			return immediateValue;
 		BindingFrameStack resolvedBindingFrameStack;
 		Expression *resolvedExpression = resolveCompileTimeBindingForInference(
 			currentExpression, currentBindingFrameStack, &resolvedBindingFrameStack, inferenceContext
 		);
-		if (!resolvedExpression || resolvedExpression == currentExpression)
-			break;
-		currentExpression = resolvedExpression;
-		currentBindingFrameStack = std::move(resolvedBindingFrameStack);
+		if (resolvedExpression && resolvedExpression != currentExpression) {
+			currentExpression = resolvedExpression;
+			currentBindingFrameStack = std::move(resolvedBindingFrameStack);
+			continue;
+		}
+		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
+		if (isCompileTimeKnown(immediateValue))
+			return immediateValue;
+		break;
 	}
 	return {};
 }

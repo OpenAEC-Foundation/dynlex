@@ -37,7 +37,7 @@ static SemanticTokenType classifySectionCallTokenType(Section *section, const Da
 	if (section->type != SectionType::Function)
 		return SemanticTokenType::Section;
 
-	if (resolvedExprType.kind == DataType::Kind::Type)
+	if (resolvedExprType.isMetaType())
 		return SemanticTokenType::Type;
 
 	if (!section->instantiations.empty()) {

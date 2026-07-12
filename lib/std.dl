@@ -28,7 +28,7 @@ function [an|a|] integer:
     patterns:
         int
     replacement:
-        @intrinsic("type", "int", 32)
+        @intrinsic("type", "int")
 
 function [an|a|] {fixed integer:bits} bit integer:
     replacement:
@@ -62,13 +62,33 @@ function [a|] type:
 	replacement:
 		@intrinsic("type", "type")
 
+function [a|] constraint:
+    replacement:
+        @intrinsic("type", "constraint")
+
+function any:
+    replacement:
+        @intrinsic("type", "any")
+
+function fix:
+    replacement:
+        @intrinsic("fix", any)
+
 function fix tofix:
     replacement:
-        @intrinsic("type", "const", tofix)
+        @intrinsic("fix", tofix)
+
+function fixed:
+    replacement:
+        @intrinsic("fix", any)
 
 function fixed tofix:
     replacement:
-        @intrinsic("type", "const", tofix)
+        @intrinsic("fix", tofix)
+
+function [a|an|] {fixed integer:bits} bit any:
+    replacement:
+        @intrinsic("type", "any", bits)
 
 function i8:
     replacement:

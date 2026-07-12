@@ -836,8 +836,10 @@ static std::string formatInstantiationKeyValue(const CompileTimeValue &value) {
 		return *text;
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *typeRef = std::get_if<DataType>(&value))
-		return typeRef->toString();
+	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
+		return typeRef->type.toString();
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+		return constraint->toString();
 	return "?";
 }
 
@@ -1121,8 +1123,10 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 		return "\"" + *text + "\"";
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *typeRef = std::get_if<DataType>(&value))
-		return typeRef->toString();
+	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
+		return typeRef->type.toString();
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
+		return constraint->toString();
 	return "?";
 }
 
