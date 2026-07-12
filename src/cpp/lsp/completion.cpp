@@ -538,9 +538,9 @@ void collectPatternTreeCompletions(
 	collectPlaceholderSuggestions(states, items, seenLabels, detailPrefix);
 }
 
-std::vector<MatchProgress>
-collectMatcherFrontier(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
-	std::vector<MatchProgress> frontier;
+std::vector<PatternTreeNode *>
+collectMatcherFrontierNodes(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
+	std::vector<PatternTreeNode *> frontier;
 	if (!context.parseContext || !context.parseContext->patternTrees[(int)sectionType]) {
 		return frontier;
 	}
@@ -551,15 +551,16 @@ collectMatcherFrontier(const CompletionContext &context, SectionType sectionType
 	PatternReference reference(&expr, sectionType);
 	reference.patternElements = getPatternElements(reference.pattern.text);
 
+	MatchStorage storage;
 	std::vector<MatchProgress> queue = {MatchProgress(context.parseContext, &reference)};
 	size_t iterations = 0;
 	while (!queue.empty() && iterations++ < 2048) {
 		MatchProgress current = queue.back();
 		queue.pop_back();
 		if (current.sourceElementIndex == reference.patternElements.size()) {
-			frontier.push_back(current);
+			frontier.push_back(current.currentNode);
 		}
-		std::vector<MatchProgress> nextSteps = current.step();
+		std::vector<MatchProgress> nextSteps = current.step(storage);
 		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
 	}
 
@@ -570,15 +571,11 @@ void collectMatcherFrontierCompletions(
 	SectionType sectionType, std::string_view detailPrefix, const CompletionContext &context, const std::string &linePrefix,
 	std::vector<CompletionItem> &items, std::set<std::string> &seenLabels
 ) {
-	std::vector<MatchProgress> frontier = collectMatcherFrontier(context, sectionType, linePrefix);
-	if (frontier.empty()) {
+	std::vector<PatternTreeNode *> states = collectMatcherFrontierNodes(context, sectionType, linePrefix);
+	if (states.empty()) {
 		return;
 	}
 
-	std::vector<PatternTreeNode *> states;
-	for (const MatchProgress &progress : frontier) {
-		states.push_back(progress.currentNode);
-	}
 	states = deduplicateNodes(states);
 
 	TextEdit insertionEdit;

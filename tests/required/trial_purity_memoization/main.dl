@@ -1,0 +1,32 @@
+function return value:
+	replacement:
+		@intrinsic("return", value)
+
+function set var to val:
+	replacement:
+		@intrinsic("store", var, val)
+
+function cstring:
+	replacement:
+		@intrinsic("type", "string")
+
+function left[ |]+[ |]right:
+	execute:
+		return @intrinsic("add", left, right)
+
+function {cstring:left}[ |]+[ |]{cstring:right}:
+	execute:
+		return left
+
+function add value to target:
+	replacement:
+		set target to target + value
+
+function apply gravity to velocity:
+	execute:
+		add 1.15 to velocity
+
+@intrinsic("store", velocity, 0.0)
+apply gravity to velocity
+apply gravity to velocity
+apply gravity to velocity

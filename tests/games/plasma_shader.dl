@@ -1,7 +1,7 @@
 import lib/shader.dl
 
 # Plasma fragment shader — animated colorful interference pattern
-# Compile: ./build/dynlex tests/games/plasma_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/plasma.spv
+# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate

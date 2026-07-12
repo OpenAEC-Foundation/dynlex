@@ -1,0 +1,6 @@
+import lib/graphics.dl
+
+if false:
+	set window to a new window with width 1 and height 1
+	loop while not the window should close:
+		close the window

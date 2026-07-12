@@ -145,9 +145,16 @@ def _match_progress_path(progress_value, depth=0):
     current_consumed = _consumed_source_prefix(
         progress_value["patternReference"], progress_value["sourceElementIndex"], progress_value["sourceCharIndex"]
     )
-    parent = _shared_ptr_target(progress_value["parent"])
-    if parent is None:
+    parents_pointer = progress_value["parents"]
+    if _pointer_is_null(parents_pointer):
         return current_consumed
+    parents = parents_pointer.dereference()
+    if _vector_size(parents["values"]) == 0:
+        return current_consumed
+    parent_pointer = _vector_item(parents["values"], 0)
+    if _pointer_is_null(parent_pointer):
+        return current_consumed
+    parent = parent_pointer.dereference()
     parent_rendered = _match_progress_path(parent, depth + 1)
     parent_consumed = _consumed_source_prefix(
         parent["patternReference"], parent["sourceElementIndex"], parent["sourceCharIndex"]
@@ -375,7 +382,7 @@ class MatchProgressPrinter:
         yield ("rootNode", self.value["rootNode"])
         yield ("patternReference", self.value["patternReference"])
         yield ("match", self.value["match"])
-        yield ("parent", self.value["parent"])
+        yield ("parents", self.value["parents"])
         yield ("sourceElementIndex", self.value["sourceElementIndex"])
         yield ("sourceCharIndex", self.value["sourceCharIndex"])
         yield ("patternStartPos", self.value["patternStartPos"])

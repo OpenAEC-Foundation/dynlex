@@ -6,6 +6,7 @@
 #include "lsp/fileSystem.h"
 #include "lsp/stdioTransport.h"
 #include "parseContext.h"
+#include "llvm/Support/ManagedStatic.h"
 #include <filesystem>
 #include <iostream>
 #include <string_view>
@@ -47,6 +48,7 @@ static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &ou
 // --emit-llvm outputs .ll, --emit-wasm outputs a wasm artifact, otherwise native executable
 // --version prints DynLex version and exits
 int main(int argumentCount, char *argumentValues[]) {
+	llvm::llvm_shutdown_obj llvmShutdown;
 	std::vector<std::string> args(argumentValues + 1, argumentValues + argumentCount);
 
 	ParseContext context{};
@@ -55,6 +57,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool useStdio = false;
 	bool waitDebugger = false;
 	bool emitCompletions = false;
+	bool dumpPurity = false;
 	bool enableLspTrace = false;
 	int completionLine = 0;
 	int completionColumn = 0;
@@ -109,6 +112,8 @@ int main(int argumentCount, char *argumentValues[]) {
 				return 1;
 			}
 			emitCompletions = true;
+		} else if (arg == "--dump-purity") {
+			dumpPurity = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
 		} else if (arg == "--emit-wasm") {
@@ -168,16 +173,15 @@ int main(int argumentCount, char *argumentValues[]) {
 				std::cerr << "Failed to open LSP trace output: " << lspTracePath << std::endl;
 				return 1;
 			}
-			server.run();
+			return server.run() ? 0 : 1;
 		} else {
 			lsp::DynLexServer server(lspPort);
 			if (enableLspTrace && !server.enableTrace(lspTracePath)) {
 				std::cerr << "Failed to open LSP trace output: " << lspTracePath << std::endl;
 				return 1;
 			}
-			server.run();
+			return server.run() ? 0 : 1;
 		}
-		return 0;
 	}
 
 	if (!inputFile.empty()) {
@@ -189,6 +193,8 @@ int main(int argumentCount, char *argumentValues[]) {
 				context, std::filesystem::absolute(inputFile).string(), completionLine - 1, completionColumn - 1
 			);
 		} else if (compileSucceeded) {
+			if (dumpPurity)
+				std::cout << renderPurityReport(context);
 			generateCode(context);
 		}
 		context.printDiagnostics();
@@ -199,6 +205,7 @@ int main(int argumentCount, char *argumentValues[]) {
 			return 1;
 	} else {
 		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-wasm] [--emit-spirv] [--emit-completions line:column] "
+					 "[--dump-purity] "
 					 "[--shader-stage=vertex|fragment] "
 					 "[-O0|-O1|-O2|-O3] "
 					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]] [--version]"

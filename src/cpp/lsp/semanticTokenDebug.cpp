@@ -49,34 +49,16 @@ static SemanticTokenType classifySectionCallTokenType(Section *section, const Da
 	return SemanticTokenType::Function;
 }
 
-static SemanticTokenType getMatchedPatternTokenType(
-	const std::vector<PatternDefinition *> &defs, const std::vector<Expression *> &args,
-	const std::vector<PatternTreeNode *> &nodesPassed, const DataType &resolvedExprType
-) {
-	if (defs.empty())
-		return SemanticTokenType::Function;
-
-	std::vector<DataType> argTypes;
-	argTypes.reserve(args.size());
-	for (const Expression *arg : args)
-		argTypes.push_back(arg ? arg->type : DataType{});
-
-	PatternDefinition *matchedDef = selectOverload(defs, args, nodesPassed, argTypes);
-	if (!matchedDef || !matchedDef->section)
-		matchedDef = defs.front();
-	if (!matchedDef || !matchedDef->section)
-		return SemanticTokenType::Function;
-
-	return classifySectionCallTokenType(matchedDef->section, resolvedExprType);
-}
-
 static SemanticTokenType getPatternCallTokenType(const Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return SemanticTokenType::Function;
-
-	return getMatchedPatternTokenType(
-		expr->patternMatch->matchedEndNode->matchingDefinitions, expr->arguments, expr->patternMatch->nodesPassed, expr->type
-	);
+	PatternDefinition *definition = expr->selectedPatternDefinition;
+	const auto &definitions = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	if (!definition && definitions.size() == 1)
+		definition = definitions.front();
+	if (!definition || !definition->section)
+		return SemanticTokenType::Function;
+	return classifySectionCallTokenType(definition->section, expr->type);
 }
 
 static int semanticTokenModifiers(bool isDefinition, bool isConstant) {
@@ -102,13 +84,31 @@ static Section *findOwningVariableSection(Section *fromSection, VariableReferenc
 	return nullptr;
 }
 
+static bool directExpressionHasConstant(const ParseContext &context, const VariableReference *reference) {
+	if (!reference)
+		return false;
+	for (CodeLine *line : context.codeLines) {
+		if (!line || !line->expression)
+			continue;
+		bool found = false;
+		visitExpressionTree(line->expression, [&](Expression *expression) {
+			found = expression->kind == Expression::Kind::Variable && expression->variable == reference &&
+					isCompileTimeKnown(expression->compileTimeValue);
+			return found;
+		});
+		if (found)
+			return true;
+	}
+	return false;
+}
+
 static bool hasStoredConstantValue(const ParseContext &context, const VariableReference *reference) {
 	if (!reference)
 		return false;
-	if (context.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
+	if (directExpressionHasConstant(context, reference))
 		return true;
 	VariableReference *definition = reference->definition ? reference->definition : const_cast<VariableReference *>(reference);
-	if (context.constantValuesByReference.contains(definition))
+	if (directExpressionHasConstant(context, definition))
 		return true;
 
 	Section *startSection = reference->range.line ? reference->range.line->section : nullptr;
@@ -123,9 +123,9 @@ static bool hasStoredConstantValue(const ParseContext &context, const VariableRe
 	}
 	for (const auto &[argTypes, inst] : section->instantiations) {
 		(void)argTypes;
-		if (inst.constantValuesByReference.contains(const_cast<VariableReference *>(reference)))
+		if (inst.body && inst.body->compileTimeValueForReference(reference).has_value())
 			return true;
-		if (inst.constantValuesByReference.contains(definition))
+		if (inst.body && inst.body->compileTimeValueForReference(definition).has_value())
 			return true;
 		if (matchesOwnedDefinition) {
 			auto paramIt = inst.constantParameterValues.find(reference->name);
@@ -153,11 +153,11 @@ static bool isCompileTimeVariableByName(const ParseContext &context, const ::Ran
 	VariableReference *definition = variableIt->second->definition;
 	if (!definition)
 		return false;
-	if (context.constantValuesByReference.contains(definition))
+	if (directExpressionHasConstant(context, definition))
 		return true;
 	for (const auto &[argTypes, inst] : owner->instantiations) {
 		(void)argTypes;
-		if (inst.constantValuesByReference.contains(definition))
+		if (inst.body && inst.body->compileTimeValueForReference(definition).has_value())
 			return true;
 		auto paramIt = inst.constantParameterValues.find(name);
 		if (paramIt != inst.constantParameterValues.end() && isCompileTimeKnown(paramIt->second))

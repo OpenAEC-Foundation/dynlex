@@ -1,1 +1,1 @@
-tests/required/simple/main.dl:53:11-13: Warning: all whitespace in patterns should be a single space
+tests/required/simple/main.dl:61:11-13: Warning: all whitespace in patterns should be a single space

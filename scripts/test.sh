@@ -292,6 +292,20 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 done
 
+lsp_test_start_ms=$(now_ms)
+lsp_test_output=$(run_with_timeout 30 "$SCRIPT_DIR/test_lsp.sh" 2>&1)
+lsp_test_exit=$?
+lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
+if [[ $lsp_test_exit -eq 0 ]]; then
+    append_test_result "PASS" "$GREEN" "lsp_integration" "" "$lsp_test_elapsed_ms"
+    ((passed++))
+else
+    append_test_result "FAIL" "$RED" "lsp_integration" "exit $lsp_test_exit" "$lsp_test_elapsed_ms"
+    [[ -n "$lsp_test_output" ]] && test_output+="  $lsp_test_output\n"
+    ((failed++)) || true
+    failures+=("lsp_integration")
+fi
+
 total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
 
 # Only show per-test details if there are failures

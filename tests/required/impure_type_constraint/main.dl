@@ -1,0 +1,12 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function bad type:
+    replacement:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "side effect"))
+        integer
+
+function accept {bad type:value}:
+    execute:
+        @intrinsic("discard", value)

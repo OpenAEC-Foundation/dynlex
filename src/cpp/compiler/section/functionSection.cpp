@@ -18,16 +18,6 @@ Section *FunctionSection::createSection(ParseContext &context, CodeLine *line) {
 }
 
 bool FunctionSection::finalize(ParseContext &context) {
-	if (!isFlex)
-		return true;
-
-	for (Section *child : children) {
-		if (child->type != SectionType::Before && child->type != SectionType::After)
-			continue;
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "flex functions cannot declare precedence",
-			Range(child->openingLine, child->openingLine->patternText)
-		));
-	}
+	(void)context;
 	return true;
 }

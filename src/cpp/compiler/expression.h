@@ -1,10 +1,14 @@
 #pragma once
 #include "bindingMap.h"
+#include "compileTimeInfo.h"
 #include "range.h"
 #include "type.h"
 #include <algorithm>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -12,8 +16,15 @@ struct PatternMatch;
 struct PatternDefinition;
 struct PatternReference;
 struct VariableReference;
+struct Instantiation;
+struct InstantiatedSectionBody;
 
 struct Expression {
+	struct BranchSelection {
+		bool known = false;
+		int selectedBranchIndex = -1;
+	};
+
 	enum class Kind {
 		Literal,
 		ArrayLiteral,
@@ -26,6 +37,7 @@ struct Expression {
 
 	Kind kind = Kind::Pending;
 	DataType type;
+	CompileTimeValue compileTimeValue{};
 	Range range;
 
 	// For Literal: the actual value
@@ -38,10 +50,22 @@ struct Expression {
 	PatternMatch *patternMatch{};
 	// For PatternCall: overload selected during type inference.
 	PatternDefinition *selectedPatternDefinition{};
-	// For function-flex PatternCalls: the call-site-specific expanded body
-	// shape selected during type inference. Codegen clones this grouped tree so
-	// it does not fall back to the raw ungrouped replacement source.
+	// For the function intrinsic: the exact callable definition selected during inference.
+	PatternDefinition *selectedCallableDefinition{};
+	// For non-flex PatternCalls: the exact monomorphized callee selected during
+	// type inference. Later stages consume this instance without rebuilding its key.
+	Instantiation *selectedInstantiation{};
+	// For flex PatternCalls: the call-site-specific expanded expression selected
+	// during type inference. Function-flex codegen clones this complete body
+	// expression. Section-flex control-flow inspection reuses it as the inferred
+	// header while structural codegen traverses the complete replacement section.
 	Expression *inferredFlexExpansion{};
+	// Section flexes own the complete call-site-specific replacement structure.
+	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
+	std::optional<BranchSelection> branchSelection;
+	// Reusable body clones point to the corresponding immutable template node.
+	// Directly-owned expressions leave this null.
+	Expression *reusableTemplateExpression{};
 
 	// For Pending: the pattern reference (used during resolution)
 	PatternReference *patternReference{};
@@ -75,6 +99,24 @@ struct Expression {
 	// Precedence of the source pattern that expanded into this expression root.
 	int groupingPrecedence = 0;
 };
+
+template <typename Visitor>
+inline bool visitExpressionTree(Expression *expression, Visitor &&visitor, std::unordered_set<Expression *> &visited) {
+	if (!expression || !visited.insert(expression).second)
+		return false;
+	if (visitor(expression))
+		return true;
+	for (Expression *argument : expression->arguments) {
+		if (visitExpressionTree(argument, visitor, visited))
+			return true;
+	}
+	return visitExpressionTree(expression->inferredFlexExpansion, visitor, visited);
+}
+
+template <typename Visitor> inline bool visitExpressionTree(Expression *expression, Visitor &&visitor) {
+	std::unordered_set<Expression *> visited;
+	return visitExpressionTree(expression, std::forward<Visitor>(visitor), visited);
+}
 
 // Utility: Sort expression arguments by their source position
 inline std::vector<Expression *> sortArgumentsByPosition(const std::vector<Expression *> &args) {

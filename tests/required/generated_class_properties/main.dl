@@ -1,0 +1,50 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function cstring:
+    replacement:
+        @intrinsic("type", "string")
+
+function the length of {cstring:value}:
+    execute:
+        return 99
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+class:
+    patterns:
+        point
+    members:
+        x as integer
+        y as integer
+
+class:
+    patterns:
+        text
+    members:
+        length as integer
+
+class:
+    patterns:
+        holder
+    members:
+        data as cstring
+
+set p to @intrinsic("construct", point, 10, 20)
+set p's x to 12
+set the x of p to 13
+set text_value to @intrinsic("construct", text, 7)
+set text_length to the length of text_value
+set holder_value to @intrinsic("construct", holder, "hello")
+set nested_length to the length of the data of holder_value
+
+@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", the x of p))
+@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", text_length))
+@intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", nested_length))

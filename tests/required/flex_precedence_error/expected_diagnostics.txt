@@ -1,2 +1,0 @@
-tests/required/flex_precedence_error/main.dl:2:5-11: Error: flex functions cannot declare precedence
-tests/required/flex_precedence_error/main.dl:9:5-11: Error: flex functions cannot declare precedence

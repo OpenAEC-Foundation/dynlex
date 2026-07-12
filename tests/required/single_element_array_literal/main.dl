@@ -1,0 +1,20 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+set values to [7]
+@intrinsic(
+    "discard",
+    @intrinsic(
+        "call",
+        "libc",
+        "printf",
+        an integer,
+        "%d\n",
+        @intrinsic("load at", @intrinsic("address of", values), 0)
+    )
+)

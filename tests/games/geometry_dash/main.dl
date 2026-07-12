@@ -17,7 +17,7 @@ set reference_y to the player ground y
 set reference_velocity to 0.0
 set reference_step to 0
 set reference_phase_ms to 0
-set reference_is_sliding to 1
+set reference_is_sliding to true
 set scroll_offset to 0
 
 loop while not the window should close:
@@ -35,7 +35,7 @@ loop while not the window should close:
 			set reference_phase_ms to reference_phase_ms + the frame time in milliseconds
 			if reference_phase_ms >= item reference_step of slide_ms:
 				set reference_phase_ms to 0
-				set reference_is_sliding to 0
+				set reference_is_sliding to false
 				start a jump on reference_velocity
 		else:
 			apply gravity to reference_y and reference_velocity
@@ -43,7 +43,7 @@ loop while not the window should close:
 			set reference_phase_ms to reference_phase_ms + the frame time in milliseconds
 			if reference_phase_ms >= item reference_step of jump_ms:
 				set reference_phase_ms to 0
-				set reference_is_sliding to 1
+				set reference_is_sliding to true
 				set reference_step to reference_step + 1
 
 	draw static world in window

@@ -1,0 +1,23 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+class:
+    patterns:
+        textlike
+    members:
+        length as integer
+
+class:
+    patterns:
+        vectorlike
+    members:
+        element as integer
+
+function [the|] length of {vectorlike:value}:
+    execute:
+        return 7

@@ -1,0 +1,11 @@
+function turn the item off for user:
+    replacement:
+        @intrinsic("add", item, user)
+
+function shut down the lights:
+    replacement:
+        turn the lights off for 4
+
+function turn the lights off for user:
+    replacement:
+        turn the dummy off for user

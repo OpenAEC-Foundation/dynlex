@@ -1,6 +1,6 @@
 import lib/shader.dl
 
 # Passthrough vertex shader — copies input position to gl_Position
-# Compile with: ./build/dynlex tests/games/passthrough_vertex.dl --emit-spirv --shader-stage=vertex -o tests/games/passthrough.spv
+# DynLex entrypoint flags: --emit-spirv --shader-stage=vertex
 
 set the output position to the vertex x the vertex y the vertex z the vertex w

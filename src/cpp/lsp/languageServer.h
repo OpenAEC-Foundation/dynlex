@@ -23,7 +23,7 @@ class LanguageServer {
 	virtual ~LanguageServer();
 
 	// Start the server (blocks until shutdown)
-	void run();
+	bool run();
 
 	// Stop the server
 	void shutdown();

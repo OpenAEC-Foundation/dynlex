@@ -1,0 +1,31 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function floating:
+    replacement:
+        @intrinsic("type", "float", 32)
+
+function fixed tofix:
+    replacement:
+        @intrinsic("type", "const", tofix)
+
+function accept {wrapped type of 32:value}:
+    execute:
+        @intrinsic("discard", value)
+
+function wrapped type of value:
+    replacement:
+        type of value
+
+function type of {fixed floating:value}:
+    replacement:
+        @intrinsic("discard", value)
+        @intrinsic("type", "float", 32)
+
+function type of {fixed integer:value}:
+    replacement:
+        @intrinsic("discard", value)
+        @intrinsic("type", "int", 32)
+
+accept 1

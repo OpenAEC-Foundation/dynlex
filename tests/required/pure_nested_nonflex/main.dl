@@ -1,0 +1,17 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function one more than value:
+    execute:
+        return @intrinsic("add", value, 1)
+
+function two more than value:
+    execute:
+        return one more than one more than value
+
+discard @intrinsic("type", "int", two more than 6)

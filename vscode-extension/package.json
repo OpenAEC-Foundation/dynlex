@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "publisher": "impertio",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",
@@ -194,12 +194,12 @@
         "dynlex.server.port": {
           "type": "number",
           "default": 5007,
-          "description": "Port for the DynLex language server"
+          "description": "TCP port for an externally managed DynLex language server"
         },
         "dynlex.server.host": {
           "type": "string",
           "default": "127.0.0.1",
-          "description": "Host for the DynLex language server when connecting over TCP"
+          "description": "Host for an externally managed DynLex language server"
         },
         "dynlex.server.path": {
           "type": "string",
@@ -225,19 +225,22 @@
     "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "package": "vsce package --allow-missing-repository",
+    "test": "npm run compile && node --test tests/*.test.js",
     "watch": "npm run bundle -- --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.75.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "esbuild": "^0.27.3",
-    "eslint": "^8.0.0",
-    "typescript": "^5.0.0"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.91.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.7.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.63.0"
   }
 }

@@ -1,3 +1,11 @@
+function fixed tofix:
+	replacement:
+		@intrinsic("type", "const", tofix)
+
+function [een|] integer:
+	replacement:
+		@intrinsic("type", "int", 32)
+
 function [een|] {fixed integer:bits} bit integer:
 	replacement:
 		@intrinsic("type", "int", bits)

@@ -2,35 +2,47 @@
 
 #include "type_resolution.inl"
 
-static Diagnostic
-buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const DataType &valueType, ParseContext &parseContext) {
-	Range diagnosticRange = valueExpr ? valueExpr->range : (var && var->definition ? var->definition->range : Range());
+static Diagnostic buildAssignmentTypeChangeDiagnostic(
+	const std::string &name, const DataType &currentType, Range currentTypeOriginRange,
+	const std::string &currentTypeOriginFloatLiteralReplacement, Expression *valueExpr, const DataType &valueType,
+	ParseContext &parseContext
+) {
+	Range diagnosticRange = valueExpr ? valueExpr->range : currentTypeOriginRange;
 	Diagnostic diagnostic(
-		parseContext, Diagnostic::Level::Error, "variable type change", diagnosticRange, "name", var->name, "from_type",
-		typeToUserName(var->type, parseContext), "to_type", typeToUserName(valueType, parseContext)
+		parseContext, Diagnostic::Level::Error, "variable type change", diagnosticRange, "name", name, "from_type",
+		typeToUserName(currentType, parseContext), "to_type", typeToUserName(valueType, parseContext)
 	);
 	const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, diagnosticRange);
-	if (var->typeOriginRange.line) {
+	if (currentTypeOriginRange.line) {
 		diagnostic.relatedInfo.push_back(
 			{renderConfiguredMessage(
 				 syntax, "variable type change", "related origin",
-				 {{"name", var->name}, {"type", typeToUserName(var->type, parseContext)}}
+				 {{"name", name}, {"type", typeToUserName(currentType, parseContext)}}
 			 ),
-			 var->typeOriginRange}
+			 currentTypeOriginRange}
 		);
 	}
-	if (!var->typeOriginFloatLiteralReplacement.empty() && valueType.kind == DataType::Kind::Float &&
-		var->type.kind == DataType::Kind::Int && var->typeOriginRange.line) {
+	if (!currentTypeOriginFloatLiteralReplacement.empty() && valueType.kind == DataType::Kind::Float &&
+		currentType.kind == DataType::Kind::Int && currentTypeOriginRange.line) {
 		diagnostic.quickFixes.push_back(
 			{renderConfiguredMessage(
 				 syntax, "variable type change", "quick fix float literal",
-				 {{"original", (std::string)var->typeOriginRange.subString},
-				  {"replacement", var->typeOriginFloatLiteralReplacement}}
+				 {{"original", (std::string)currentTypeOriginRange.subString},
+				  {"replacement", currentTypeOriginFloatLiteralReplacement}}
 			 ),
-			 var->typeOriginRange, var->typeOriginFloatLiteralReplacement}
+			 currentTypeOriginRange, currentTypeOriginFloatLiteralReplacement}
 		);
 	}
 	return diagnostic;
+}
+
+static Diagnostic
+buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const DataType &valueType, ParseContext &parseContext) {
+	requireCompilerInvariant(var != nullptr, "variable type-change diagnostic requires a variable");
+	Range originRange = var->typeOriginRange.line ? var->typeOriginRange : (var->definition ? var->definition->range : Range());
+	return buildAssignmentTypeChangeDiagnostic(
+		var->name, var->type, originRange, var->typeOriginFloatLiteralReplacement, valueExpr, valueType, parseContext
+	);
 }
 
 static int getRefinedClassInstantiationIndex(
@@ -41,8 +53,10 @@ static int getRefinedClassInstantiationIndex(
 	const auto &baseFieldTypes = classDef->instantiations[instIndex].fieldTypes;
 	if (fieldIndex >= baseFieldTypes.size())
 		return -1;
+	if (baseFieldTypes[fieldIndex].isDeduced())
+		crashCompilerBug("class field refinement requested for an already typed field");
 	const DataType &declaredFieldType = classDef->fields[fieldIndex].declaredType;
-	if (declaredFieldType.isDeduced() && declaredFieldType != fieldType)
+	if (declaredFieldType.isDeduced() && !isVariableAssignmentCompatible(declaredFieldType, fieldType))
 		return -1;
 	std::vector<DataType> refinedFieldTypes = baseFieldTypes;
 	refinedFieldTypes[fieldIndex] = fieldType;

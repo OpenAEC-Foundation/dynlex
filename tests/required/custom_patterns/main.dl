@@ -10,6 +10,10 @@ function [an|a|] integer:
 	replacement:
 		@intrinsic("type", "int", 32)
 
+function fixed tofix:
+	replacement:
+		@intrinsic("type", "const", tofix)
+
 function say msg:
 	execute:
 		discard @intrinsic("call", "libc", "printf", an integer, "%s\n", msg)

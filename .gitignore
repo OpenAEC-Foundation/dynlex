@@ -38,3 +38,6 @@ __pycache__/
 assets/
 
 user/
+
+# Repository-local Git worktrees
+.worktrees/

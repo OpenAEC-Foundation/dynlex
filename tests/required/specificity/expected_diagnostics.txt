@@ -1,14 +1,12 @@
-tests/required/specificity/main.dl:9:16-33: Warning: Expression 'return item + 100 + user' has multiple valid operand groupings. Using '(item + 100) + user' instead of 'item + (100 + user)'.
-  note: while inferring call 'return item + 100 + user' with arguments [a 32 bit integer, a 32 bit integer] -> a 32 bit integer tests/required/specificity/main.dl:9:16-33
-  note: while inferring call 'return item + 100 + user' with arguments [a 32 bit integer] -> undeduced tests/required/specificity/main.dl:9:9-33
+tests/required/specificity/main.dl:9:9-33: Warning: Expression 'return item + 100 + user' has multiple valid operand groupings. Using 'return ((item + 100) + user)' instead of 'return (item + (100 + user))'.
+  note: while inferring call 'return item + 100 + user' with arguments [a 32 bit integer] -> nothing tests/required/specificity/main.dl:9:9-33
   note: while inferring call 'set test to turn the dummy off for user' with arguments [a 32 bit integer, a 32 bit integer] -> undeduced tests/required/specificity/main.dl:28:21-48
   note: while inferring call 'set test to turn the dummy off for user' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/specificity/main.dl:28:9-48
   note: while inferring call 'print turn the lights off for 4' with arguments [a 32 bit integer] -> undeduced tests/required/specificity/main.dl:17:15-40
   note: while inferring call 'print turn the lights off for 4' with arguments [unresolved(?)] -> undeduced tests/required/specificity/main.dl:17:9-40
   note: while inferring call 'shut down the lights' -> undeduced tests/required/specificity/main.dl:19:1-21
-tests/required/specificity/main.dl:30:23-35: Warning: Expression 'set result to 1 + 1 + user' has multiple valid operand groupings. Using '(1 + 1) + user' instead of '1 + (1 + user)'.
-  note: while inferring call 'set result to 1 + 1 + user' with arguments [a 32 bit integer, a 32 bit integer] -> a 32 bit integer tests/required/specificity/main.dl:30:23-35
-  note: while inferring call 'set result to 1 + 1 + user' with arguments [unresolved(?), a 32 bit integer] -> undeduced tests/required/specificity/main.dl:30:9-35
+tests/required/specificity/main.dl:30:9-35: Warning: Expression 'set result to 1 + 1 + user' has multiple valid operand groupings. Using 'set result to ((1 + 1) + user)' instead of 'set result to (1 + (1 + user))'.
+  note: while inferring call 'set result to 1 + 1 + user' with arguments [a 32 bit integer, a 32 bit integer] -> nothing tests/required/specificity/main.dl:30:9-35
   note: while inferring call 'print turn the lights off for 4' with arguments [a 32 bit integer] -> undeduced tests/required/specificity/main.dl:17:15-40
   note: while inferring call 'print turn the lights off for 4' with arguments [unresolved(?)] -> undeduced tests/required/specificity/main.dl:17:9-40
   note: while inferring call 'shut down the lights' -> undeduced tests/required/specificity/main.dl:19:1-21

@@ -1,0 +1,61 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function left + right:
+    replacement:
+        @intrinsic("add", left, right)
+
+function touch runtime value:
+    replacement:
+        @intrinsic("call", "libc", "puts", an integer, "side effect")
+
+function sum left and right:
+    execute:
+        set result to left
+        set result to result + right
+        return result
+
+function caller value:
+    execute:
+        return sum value and 1
+
+function write global value:
+    globals: total
+    execute:
+        set total to value
+
+function read global:
+    globals: total
+    execute:
+        return total
+
+function write value through target:
+    execute:
+        set target to value
+
+function impure via flex value:
+    execute:
+        discard touch runtime value
+        return value
+
+set total to 0
+set local to 0
+set a to sum 1 and 2
+set b to caller 4
+write global 3
+set d to read global
+write 9 through local
+set c to impure via flex 5

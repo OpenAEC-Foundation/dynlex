@@ -8,15 +8,19 @@
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
+#include "pattern/patternDefinition.h"
 #include "pattern/patternReference.h"
 #include "pattern/pattern_tree/patternElement.h"
 #include "pattern/pattern_tree/patternMatch.h"
 #include "pattern/pattern_tree/patternTreeNode.h"
+#include "pattern/transformedPattern.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
 #include <cassert>
 #include <cctype>
+#include <climits>
+#include <cmath>
 #include <filesystem>
 using namespace std::literals;
 
@@ -82,6 +86,101 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 	return path; // Return original path (will fail with proper error)
 }
 
+static void collectSectionsPreorder(Section *section, std::vector<Section *> &outSections) {
+	if (!section)
+		return;
+	outSections.push_back(section);
+	for (Section *child : section->children)
+		collectSectionsPreorder(child, outSections);
+}
+
+static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue &value) {
+	if (std::holds_alternative<std::monostate>(value))
+		return "?";
+	if (const auto *number = std::get_if<double>(&value)) {
+		double integralPart = 0.0;
+		if (std::modf(*number, &integralPart) == 0.0)
+			return std::to_string(static_cast<long long>(integralPart));
+		return std::to_string(*number);
+	}
+	if (const auto *text = std::get_if<std::string>(&value))
+		return "\"" + *text + "\"";
+	if (const auto *boolean = std::get_if<bool>(&value))
+		return *boolean ? "true" : "false";
+	if (const auto *type = std::get_if<DataType>(&value))
+		return type->toString();
+	crashCompilerBug("unknown compile-time value alternative in purity report");
+}
+
+static bool purityReportSectionComesBefore(Section *left, Section *right) {
+	PatternDefinition *leftDefinition =
+		(left && !left->patternDefinitions.empty()) ? left->patternDefinitions.front() : nullptr;
+	PatternDefinition *rightDefinition =
+		(right && !right->patternDefinitions.empty()) ? right->patternDefinitions.front() : nullptr;
+	if (leftDefinition == rightDefinition)
+		return left < right;
+	if (!leftDefinition)
+		return false;
+	if (!rightDefinition)
+		return true;
+	CodeLine *leftLine = leftDefinition->range.line;
+	CodeLine *rightLine = rightDefinition->range.line;
+	std::string leftUri = (leftLine && leftLine->sourceFile) ? leftLine->sourceFile->uri : "";
+	std::string rightUri = (rightLine && rightLine->sourceFile) ? rightLine->sourceFile->uri : "";
+	if (leftUri != rightUri)
+		return leftUri < rightUri;
+	int leftLineIndex = leftLine ? leftLine->sourceFileLineIndex : INT_MAX;
+	int rightLineIndex = rightLine ? rightLine->sourceFileLineIndex : INT_MAX;
+	if (leftLineIndex != rightLineIndex)
+		return leftLineIndex < rightLineIndex;
+	if (leftDefinition->range.start() != rightDefinition->range.start())
+		return leftDefinition->range.start() < rightDefinition->range.start();
+	return left < right;
+}
+
+std::string renderPurityReport(ParseContext &context) {
+	std::vector<Section *> sections;
+	collectSectionsPreorder(context.mainSection, sections);
+	std::vector<Section *> functionSections;
+	for (Section *section : sections) {
+		if (!section || section->type != SectionType::Function || section->isFlex || section->patternDefinitions.empty() ||
+			section->instantiations.empty())
+			continue;
+		functionSections.push_back(section);
+	}
+	std::sort(functionSections.begin(), functionSections.end(), purityReportSectionComesBefore);
+	std::string report;
+	for (Section *section : functionSections) {
+		PatternDefinition *definition = section->patternDefinitions.front();
+		for (const auto &[key, instantiation] : section->instantiations) {
+			if (!report.empty())
+				report += '\n';
+			report += instantiation.purity == InstantiationPurity::Pure ? "pure" : "impure";
+			report += " | ";
+			report += definition->toString();
+			report += " | args=[";
+			for (size_t i = 0; i < key.argumentTypes.size(); i++) {
+				if (i > 0)
+					report += ", ";
+				report += key.argumentTypes[i].toString();
+			}
+			report += "]";
+			if (!key.compileTimeParameters.empty()) {
+				report += " | fixed=[";
+				for (size_t i = 0; i < key.compileTimeParameters.size(); i++) {
+					if (i > 0)
+						report += ", ";
+					report += key.compileTimeParameters[i].first;
+					report += "=";
+					report += formatCompileTimeValueForPurityReport(key.compileTimeParameters[i].second);
+				}
+				report += "]";
+			}
+		}
+	}
+	return report;
+}
+
 static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
 	size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
 	std::string_view withoutComment =
@@ -115,6 +214,26 @@ createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceF
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, sourceFile);
 	updateLineTrimming(line, syntax);
 	return line;
+}
+
+static bool validateSourceCharacters(ParseContext &context, CodeLine *line, const SyntaxConfig &syntax) {
+	bool insideString = false;
+	size_t commentStart = findCommentStart(line->fullText, syntax.commentPrefix);
+	for (size_t index = 0; index < line->fullText.size(); index++) {
+		char character = line->fullText[index];
+		if (index < commentStart && character == '"' && (index == 0 || line->fullText[index - 1] != '\\')) {
+			insideString = !insideString;
+			continue;
+		}
+		if (character != argumentChar || insideString)
+			continue;
+
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "disallowed character", Range(line, index, index + 1), "character", "U+0007"
+		));
+		return false;
+	}
+	return true;
 }
 
 struct InlineBodySplit {
@@ -446,12 +565,8 @@ std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(Pars
 	return callableMatches;
 }
 
-PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
-	std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, sectionType, signature);
-	return !matches.empty() ? matches[0] : nullptr;
-}
-
-static DataType concretizeClassType(DataType type) {
+static DataType concretizeCallableParameterType(DataType type) {
+	type = type.stripFixed();
 	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
 		!type.classDefinition->instantiations.empty()) {
 		type.classInstIndex = 0;
@@ -459,145 +574,48 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
+static void collectCallablePatternParameters(
+	const std::vector<DefinitionPatternElement> &elements, std::vector<std::pair<std::string, DataType>> &outParameters
+) {
+	for (const DefinitionPatternElement &element : elements) {
+		switch (element.type) {
+		case PatternElement::Type::Choice:
+			if (!element.alternatives.empty())
+				collectCallablePatternParameters(element.alternatives.front(), outParameters);
+			break;
+		case PatternElement::Type::Variable:
+			outParameters.push_back({element.text, concretizeCallableParameterType(element.resolvedTypeConstraint)});
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void collectCallableFunctionParameters(
+	PatternDefinition *definition, std::vector<std::pair<std::string, DataType>> &outParameters
+) {
+	outParameters.clear();
+	if (definition)
+		collectCallablePatternParameters(definition->patternElements, outParameters);
+}
+
+PatternDefinition *findDefinitionBySignature(ParseContext &context, SectionType sectionType, std::string_view signature) {
+	std::vector<PatternDefinition *> matches = findDefinitionsBySignature(context, sectionType, signature);
+	return !matches.empty() ? matches[0] : nullptr;
+}
+
 void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings) {
 	collectPatternCallBindings(expr, definition, bindings);
 }
 
-static bool tryParseIntrinsicTypeReference(
-	ParseContext &context, Expression *intrinsicExpr, const BindingFrame &bindings, DataType &outTypeRef, bool emitSPIRV
-) {
-	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
-		intrinsicExpr->arguments.size() < 2)
-		return false;
+Expression *createTypeConstraintExpression(ParseContext &context, Section *section, Range sourceRange) {
+	if (!section || !sourceRange.line || sourceRange.subString.empty())
+		return nullptr;
 
-	BindingFrameStack bindingFrameStack = makeBindingFrameStack(bindings);
-	CompileTimeValue kindValue = resolveStoredCompileTimeValue(context, intrinsicExpr->arguments[1], bindingFrameStack);
-	auto *kindStr = std::get_if<std::string>(&kindValue);
-	if (!kindStr)
-		return false;
-
-	DataType typeRef;
-	typeRef.kind = DataType::Kind::Type;
-	if (*kindStr == "int") {
-		typeRef.referencedKind = DataType::Kind::Int;
-		typeRef.numericSize = 4;
-	} else if (*kindStr == "float") {
-		typeRef.referencedKind = DataType::Kind::Float;
-		typeRef.numericSize = defaultFloatByteSize(emitSPIRV);
-	} else if (*kindStr == "bool") {
-		typeRef.referencedKind = DataType::Kind::Bool;
-	} else if (*kindStr == "void") {
-		typeRef.referencedKind = DataType::Kind::Void;
-	} else if (*kindStr == "string") {
-		typeRef.referencedKind = DataType::Kind::Int;
-		typeRef.numericSize = 1;
-		typeRef.pointerDepth = 1;
-	} else if (*kindStr == "type") {
-		typeRef.referencedKind = DataType::Kind::Type;
-	} else {
-		return false;
-	}
-
-	if (intrinsicExpr->arguments.size() > 2) {
-		int bitCount = 0;
-		if (!resolveStoredCompileTimeInteger(context, intrinsicExpr->arguments[2], bindingFrameStack, bitCount))
-			return false;
-		typeRef.numericSize = bitCount / 8;
-	}
-
-	outTypeRef = typeRef;
-	return true;
-}
-
-static bool
-resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingFrame &bindings, DataType &outTypeRef);
-
-static Expression *createTemporaryTypeReferenceExpression(Range sourceRange) {
-	Expression *expr = new Expression();
-	expr->range = sourceRange;
-	expr->kind = Expression::Kind::Pending;
-	PatternReference *reference = new PatternReference(expr, SectionType::Function);
-	expr->patternReference = reference;
-
-	std::string patternSnapshot = reference->pattern.text;
-	std::vector<std::tuple<size_t, size_t, std::string>> numMatches;
-	for (size_t pos = 0; pos < patternSnapshot.size();) {
-		size_t start = pos;
-		if (pos > 0) {
-			unsigned char prev = static_cast<unsigned char>(patternSnapshot[pos - 1]);
-			if (std::isalnum(prev) || prev == '_') {
-				pos = start + 1;
-				continue;
-			}
-		}
-		if (pos >= patternSnapshot.size() || !std::isdigit(static_cast<unsigned char>(patternSnapshot[pos]))) {
-			pos = start + 1;
-			continue;
-		}
-		size_t intStart = pos;
-		while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
-			pos++;
-		if (pos < patternSnapshot.size() && patternSnapshot[pos] == '.') {
-			size_t dotPos = pos;
-			pos++;
-			size_t fracStart = pos;
-			while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
-				pos++;
-			if (fracStart == pos)
-				pos = dotPos;
-		}
-		if (pos < patternSnapshot.size() && std::isalnum(static_cast<unsigned char>(patternSnapshot[pos]))) {
-			pos = intStart + 1;
-			continue;
-		}
-		numMatches.emplace_back(intStart, pos, std::string(patternSnapshot.substr(intStart, pos - intStart)));
-	}
-
-	std::vector<Expression *> numExprs;
-	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
-		auto &[pos, endPos, numStr] = *it;
-		Expression *numExpr = new Expression();
-		size_t lineStart = reference->pattern.getLinePos(pos);
-		size_t lineEnd = reference->pattern.getLinePos(endPos);
-		numExpr->range = sourceRange.subRange(static_cast<int>(lineStart), static_cast<int>(lineEnd));
-		numExpr->kind = Expression::Kind::Literal;
-		numExpr->literalValue = std::stod(numStr);
-		numExprs.push_back(numExpr);
-		reference->pattern.replacePattern(pos, endPos);
-	}
-	std::reverse(numExprs.begin(), numExprs.end());
-	for (Expression *numExpr : numExprs)
-		expr->arguments.push_back(numExpr);
-	expr->arguments = sortArgumentsByPosition(expr->arguments);
-	reference->patternElements = getPatternElements(reference->pattern.text);
-	return expr;
-}
-
-bool resolveTypeConstraintExpression(
-	ParseContext &context, Section *section, Range sourceRange, std::string_view typeConstraintExpression, DataType &outTypeRef
-) {
-	if (!section || !sourceRange.line || typeConstraintExpression.empty())
-		return false;
-
-	size_t diagnosticCount = context.diagnostics.size();
-	Expression *typeExpr = createTemporaryTypeReferenceExpression(sourceRange);
-	auto deleteTemporaryExpressionTree = [](Expression *root) {
-		std::unordered_set<Expression *> visited;
-		std::function<void(Expression *)> visit = [&](Expression *expression) {
-			if (!expression || !visited.insert(expression).second)
-				return;
-			for (Expression *argument : expression->arguments)
-				visit(argument);
-			delete expression->patternReference;
-			delete expression;
-		};
-		visit(root);
-	};
-
-	if (!typeExpr) {
-		context.diagnostics.resize(diagnosticCount);
-		return false;
-	}
+	Expression *typeExpr = section->detectPatterns(context, sourceRange, SectionType::Function, false);
+	if (!typeExpr)
+		return nullptr;
 
 	auto materializeTemporaryVariableReferences =
 		[&context](PatternReference *reference, PatternMatch &match, auto &self) -> void {
@@ -631,266 +649,20 @@ bool resolveTypeConstraintExpression(
 	prepareMatches(typeExpr);
 	if (typeExpr->kind == Expression::Kind::Pending)
 		expandPendingTypeReferenceExpression(typeExpr, section);
-
-	bool resolved =
-		resolveTypeReferenceExpression(context, typeExpr, {}, outTypeRef) && outTypeRef.kind == DataType::Kind::Type;
-	deleteTemporaryExpressionTree(typeExpr);
-	if (!resolved)
-		context.diagnostics.resize(diagnosticCount);
-	return resolved;
+	return typeExpr;
 }
 
-static bool instantiateClassTypeReference(
-	ParseContext &context, ClassDefinition *classDef, const BindingFrame &bindings, DataType &outTypeRef
-) {
-	if (!classDef)
-		return false;
-
-	std::vector<DataType> fieldTypes;
-	fieldTypes.reserve(classDef->fields.size());
-	for (FieldDefinition &field : classDef->fields) {
-		DataType fieldType = field.declaredType;
-		if (fieldType.kind == DataType::Kind::Any) {
-			outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
-			return true;
-		}
-		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
-			expandPendingTypeReferenceExpression(
-				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
-			);
-
-			DataType fieldTypeRef;
-			if (!resolveTypeReferenceExpression(context, fieldType.typeExpression, bindings, fieldTypeRef) ||
-				fieldTypeRef.kind != DataType::Kind::Type) {
-				outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
-				return true;
-			}
-			fieldType = concretizeClassType(fieldTypeRef.toReferencedType());
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
-		}
-
-		if (!fieldType.isDeduced()) {
-			outTypeRef = {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
-			return true;
-		}
-		fieldTypes.push_back(fieldType);
-	}
-
-	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
-	outTypeRef = {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
-	return true;
-}
-
-static std::string_view singleTokenPendingName(Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::Pending || !expr->patternReference)
-		return {};
-	auto &elements = expr->patternReference->patternElements;
-	if (elements.empty())
-		elements = getPatternElements(expr->patternReference->pattern.text);
-	if (elements.size() != 1)
-		return {};
-	if (elements[0].type != PatternElement::Type::Variable && elements[0].type != PatternElement::Type::VariableLike)
-		return {};
-	return elements[0].text;
-}
-
-static bool
-resolveTypeReferenceExpression(ParseContext &context, Expression *expr, const BindingFrame &bindings, DataType &outTypeRef) {
-	if (!expr)
-		return false;
-
-	if (std::string_view pendingName = singleTokenPendingName(expr); !pendingName.empty()) {
-		auto it = bindings.bindings.find(std::string(pendingName));
-		if (it != bindings.bindings.end())
-			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
-		if (pendingName == "pointer") {
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = DataType::Kind::Int;
-			outTypeRef.numericSize = 1;
-			outTypeRef.pointerDepth = 1;
-			return true;
-		}
-		DataType shorthandType = DataType::fromString(std::string(pendingName));
-		if (shorthandType.isDeduced()) {
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = shorthandType.kind;
-			outTypeRef.numericSize = shorthandType.numericSize;
-			outTypeRef.pointerDepth = shorthandType.pointerDepth;
-			return true;
-		}
-	}
-
-	if (expr->kind == Expression::Kind::Variable && expr->variable) {
-		VariableReference *bindingReference = normalizeBindingReference(expr->variable);
-		if (bindingReference) {
-			auto parameterIt = bindings.parameterBindings.find(bindingReference);
-			if (parameterIt != bindings.parameterBindings.end())
-				return resolveTypeReferenceExpression(context, parameterIt->second, bindings, outTypeRef);
-		}
-		auto it = bindings.bindings.find(expr->variable->name);
-		if (it != bindings.bindings.end())
-			return resolveTypeReferenceExpression(context, it->second, bindings, outTypeRef);
-		if (expr->variable->name == "pointer") {
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = DataType::Kind::Int;
-			outTypeRef.numericSize = 1;
-			outTypeRef.pointerDepth = 1;
-			return true;
-		}
-		DataType shorthandType = DataType::fromString(expr->variable->name);
-		if (shorthandType.isDeduced()) {
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = shorthandType.kind;
-			outTypeRef.numericSize = shorthandType.numericSize;
-			outTypeRef.pointerDepth = shorthandType.pointerDepth;
-			return true;
-		}
-		return false;
-	}
-
-	if (expr->kind == Expression::Kind::IntrinsicCall) {
-		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-		if (tryParseIntrinsicTypeReference(context, expr, bindings, outTypeRef, context.options.emitSPIRV))
-			return true;
-		if (kind == IntrinsicKind::AddPointerDepth) {
-			DataType innerTypeRef;
-			if (!resolveTypeReferenceExpression(context, expr->arguments[1], bindings, innerTypeRef) ||
-				innerTypeRef.kind != DataType::Kind::Type)
-				return false;
-			innerTypeRef.pointerDepth++;
-			outTypeRef = innerTypeRef;
-			return true;
-		}
-		if (kind == IntrinsicKind::Array) {
-			int arraySize = 0;
-			if (!resolveStoredCompileTimeInteger(context, expr->arguments[1], makeBindingFrameStack(bindings), arraySize))
-				return false;
-			outTypeRef.kind = DataType::Kind::Type;
-			outTypeRef.referencedKind = DataType::Kind::Array;
-			outTypeRef.arraySize = arraySize;
-			if (expr->arguments.size() > 2) {
-				DataType elementTypeRef;
-				if (!resolveTypeReferenceExpression(context, expr->arguments[2], bindings, elementTypeRef) ||
-					elementTypeRef.kind != DataType::Kind::Type)
-					return false;
-				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
-			}
-			return true;
-		}
-		if (kind == IntrinsicKind::Multiply && expr->arguments.size() > 2) {
-			DataType arrayTypeRef;
-			int factor = 0;
-			if (resolveTypeReferenceExpression(context, expr->arguments[1], bindings, arrayTypeRef) &&
-				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				resolveStoredCompileTimeInteger(context, expr->arguments[2], makeBindingFrameStack(bindings), factor) &&
-				factor >= 0) {
-				arrayTypeRef.arraySize *= factor;
-				outTypeRef = arrayTypeRef;
-				return true;
-			}
-			if (resolveTypeReferenceExpression(context, expr->arguments[2], bindings, arrayTypeRef) &&
-				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
-				resolveStoredCompileTimeInteger(context, expr->arguments[1], makeBindingFrameStack(bindings), factor) &&
-				factor >= 0) {
-				arrayTypeRef.arraySize *= factor;
-				outTypeRef = arrayTypeRef;
-				return true;
-			}
-		}
-		return false;
-	}
-
-	if (expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
-		return false;
-
-	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	if (defs.empty())
-		return false;
-
-	PatternDefinition *def = defs.front();
-	if (!def || !def->section)
-		return false;
-
-	if (!def->section->isFlex && def->section->type == SectionType::Class) {
-		auto *classSec = static_cast<ClassSection *>(def->section);
-		BindingFrame classBindings = bindings;
-		collectPatternCallBindings(expr, def, classBindings);
-		return instantiateClassTypeReference(context, classSec->classDefinition, classBindings, outTypeRef);
-	}
-
-	BindingFrame innerBindings;
-	Expression *bodyExpr = expandFlexPatternCall(context, expr, innerBindings);
-	if (!bodyExpr)
-		return false;
-
-	BindingFrame mergedBindings = bindings;
-	for (const auto &[name, argExpr] : innerBindings.bindings)
-		mergedBindings.bindings[name] = argExpr;
-	for (const auto &[parameterDefinition, argExpr] : innerBindings.parameterBindings)
-		mergedBindings.parameterBindings[parameterDefinition] = argExpr;
-	return resolveTypeReferenceExpression(context, bodyExpr, mergedBindings, outTypeRef);
-}
-
-static bool resolveDeclaredClassFieldTypes(ParseContext &context) {
-	std::vector<ClassDefinition *> classDefinitions;
-	std::function<void(Section *)> collectClasses = [&](Section *section) {
-		if (section->type == SectionType::Class) {
-			auto *classSec = static_cast<ClassSection *>(section);
-			classDefinitions.push_back(classSec->classDefinition);
-		}
-		for (Section *child : section->children)
-			collectClasses(child);
+void destroyTypeConstraintExpression(Expression *root) {
+	std::unordered_set<Expression *> visited;
+	std::function<void(Expression *)> destroy = [&](Expression *expression) {
+		if (!expression || !visited.insert(expression).second)
+			return;
+		for (Expression *argument : expression->arguments)
+			destroy(argument);
+		delete expression->patternReference;
+		delete expression;
 	};
-	collectClasses(context.mainSection);
-
-	bool madeProgress = true;
-	for (int iteration = 0; iteration < context.options.maxResolutionIterations && madeProgress; iteration++) {
-		madeProgress = false;
-
-		for (ClassDefinition *classDef : classDefinitions) {
-			for (FieldDefinition &field : classDef->fields) {
-				if (field.declaredType.kind == DataType::Kind::Unresolved && field.declaredType.typeExpression) {
-					expandPendingTypeReferenceExpression(
-						field.declaredType.typeExpression, field.range.line ? field.range.line->section : nullptr
-					);
-					DataType typeRef;
-					if (resolveTypeReferenceExpression(context, field.declaredType.typeExpression, {}, typeRef) &&
-						typeRef.kind == DataType::Kind::Type) {
-						field.declaredType = concretizeClassType(typeRef.toReferencedType());
-						madeProgress = true;
-					}
-				} else if (field.declaredType.kind == DataType::Kind::Class && field.declaredType.classInstIndex < 0) {
-					DataType concretized = concretizeClassType(field.declaredType);
-					if (concretized != field.declaredType) {
-						field.declaredType = concretized;
-						madeProgress = true;
-					}
-				}
-			}
-		}
-
-		for (ClassDefinition *classDef : classDefinitions) {
-			if (classDef->fields.empty() || !classDef->instantiations.empty())
-				continue;
-
-			bool allDeclared = true;
-			std::vector<DataType> fieldTypes;
-			for (const FieldDefinition &field : classDef->fields) {
-				if (!field.declaredType.isDeduced()) {
-					allDeclared = false;
-					break;
-				}
-				fieldTypes.push_back(field.declaredType);
-			}
-			if (allDeclared) {
-				classDef->getOrCreateInstantiation(fieldTypes);
-				madeProgress = true;
-			}
-		}
-	}
-
-	return true;
+	destroy(root);
 }
 
 bool compile(const std::string &path, ParseContext &context) {
@@ -911,10 +683,6 @@ bool compile(const std::string &path, ParseContext &context) {
 	if (!resolvePatterns(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
-
-	if (!resolveDeclaredClassFieldTypes(context))
-		return false;
-	context.compilationStage = ParseContext::CompilationStage::ResolvedDeclaredTypes;
 
 	if (!validate(context))
 		return false;
@@ -970,6 +738,8 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 
 		std::string_view lineString = fileView.substr(lineStart, lineEnd - lineStart);
 		CodeLine *line = createSourceLine(context, sourceFile, sourceFileLineIndex, lineString);
+		if (!validateSourceCharacters(context, line, syntax))
+			return false;
 
 		// check if the line is an import statement
 		if (std::optional<std::string_view> importPathView =
@@ -1129,31 +899,6 @@ bool analyzeSections(ParseContext &context) {
 			return false;
 	}
 
-	// Create instantiations for class definitions where all fields have declared types
-	std::function<void(Section *)> createDeclaredInstantiations = [&](Section *section) {
-		if (section->type == SectionType::Class) {
-			auto *classSec = static_cast<ClassSection *>(section);
-			ClassDefinition *classDef = classSec->classDefinition;
-			if (!classDef->fields.empty() && classDef->instantiations.empty()) {
-				bool allDeclared = true;
-				std::vector<DataType> fieldTypes;
-				for (const auto &field : classDef->fields) {
-					if (!field.declaredType.isDeduced()) {
-						allDeclared = false;
-						break;
-					}
-					fieldTypes.push_back(field.declaredType);
-				}
-				if (allDeclared) {
-					classDef->instantiations.push_back({fieldTypes});
-				}
-			}
-		}
-		for (Section *child : section->children)
-			createDeclaredInstantiations(child);
-	};
-	createDeclaredInstantiations(context.mainSection);
-
 	return true;
 }
 
@@ -1172,12 +917,73 @@ bool isMathFunction(const std::string &name) {
 		   intrinsicKind(name) != IntrinsicKind::Max;
 }
 
+static const DefinitionPatternElement *
+findDefinitionParameterElement(const std::vector<DefinitionPatternElement> &elements, std::string_view parameterName) {
+	for (const DefinitionPatternElement &element : elements) {
+		if (element.type == PatternElement::Type::Choice) {
+			for (const auto &alternative : element.alternatives) {
+				if (const DefinitionPatternElement *found = findDefinitionParameterElement(alternative, parameterName))
+					return found;
+			}
+			continue;
+		}
+		if ((element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) &&
+			element.text == parameterName)
+			return &element;
+	}
+	return nullptr;
+}
+
+static bool argumentMatchesConstraintIgnoringFixed(const DataType &constraintInput, const DataType &argTypeInput) {
+	DataType constraint = constraintInput.stripFixed();
+	DataType argType = argTypeInput.stripFixed();
+	if (!constraint.isDeduced())
+		return true;
+	if (!argType.isDeduced())
+		return false;
+	if (constraint.kind == DataType::Kind::Class)
+		return argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
+	if (constraint.kind == DataType::Kind::Type)
+		return argType.kind == DataType::Kind::Type;
+	if (constraint.isNumeric())
+		return argType.kind == constraint.kind && argType.pointerDepth == 0;
+	return argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
+}
+
+bool patternParameterRequiresCompileTimeValue(
+	PatternDefinition *definition, const std::string &parameterName, const DataType &argType
+) {
+	if (argType.kind == DataType::Kind::Type)
+		return true;
+	const DefinitionPatternElement *parameterElement =
+		definition ? findDefinitionParameterElement(definition->patternElements, parameterName) : nullptr;
+	if (!parameterElement)
+		return false;
+	if (parameterElement->type == PatternElement::Type::Word)
+		return true;
+	return parameterElement->resolvedTypeConstraint.isDeduced() && parameterElement->resolvedTypeConstraint.fixed;
+}
+
+std::unordered_set<std::string> collectExplicitCompileTimeParameters(
+	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	const std::vector<DataType> &argTypes
+) {
+	std::unordered_set<std::string> requiredParameters;
+	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
+	for (size_t i = 0; i < bindingCount; i++) {
+		if (patternParameterRequiresCompileTimeValue(definition, paramBindings[i].first, argTypes[i]))
+			requiredParameters.insert(paramBindings[i].first);
+	}
+	return requiredParameters;
+}
+
 PatternDefinition *selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
-	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
+	const std::vector<bool> & /*argCompileTimeKnown*/
 ) {
-	if (definitions.size() <= 1)
-		return definitions.empty() ? nullptr : definitions[0];
+	if (definitions.empty())
+		return nullptr;
 
 	// Score each candidate: count how many type constraints match
 	PatternDefinition *best = nullptr;
@@ -1193,51 +999,40 @@ PatternDefinition *selectOverload(
 				argIdx++;
 				return;
 			}
-			// Find the corresponding element in the candidate's definition to get its type constraint
-			for (auto &elem : candidate->patternElements) {
-				if (elem.type == PatternElement::Type::Variable && elem.text == paramName) {
-					const DataType &argType = argTypes[argIdx];
-					if (argType.kind == DataType::Kind::Void) {
-						bool acceptsVoid = elem.resolvedTypeConstraint.isDeduced() &&
-										   elem.resolvedTypeConstraint.kind == DataType::Kind::Void &&
-										   elem.resolvedTypeConstraint.pointerDepth == 0;
-						if (acceptsVoid) {
-							score++;
-						} else {
-							constraintFailed = true;
-						}
-						break;
-					}
-					if (elem.resolvedTypeConstraint.isDeduced()) {
-						// DataType constraint exists — check if argument type matches
-						const DataType &constraint = elem.resolvedTypeConstraint;
-						if (!argType.isDeduced()) {
-							// Keep candidate viable until the argument type is known.
-							break;
-						}
-						bool matches = false;
-						if (constraint.kind == DataType::Kind::Class) {
-							matches =
-								argType.kind == DataType::Kind::Class && argType.classDefinition == constraint.classDefinition;
-						} else if (constraint.kind == DataType::Kind::Type) {
-							// {type:x} accepts any compile-time type value, including pointer/array/etc. type refs.
-							matches = argType.kind == DataType::Kind::Type;
-						} else if (constraint.isNumeric()) {
-							// Numeric constraint: match exact kind (Int or Float) and pointer depth
-							// {integer:x} matches Int, {float:x} matches Float
-							matches = argType.kind == constraint.kind && argType.pointerDepth == 0;
-						} else {
-							// Other primitive type constraint: match kind and pointer depth
-							matches = argType.kind == constraint.kind && argType.pointerDepth == constraint.pointerDepth;
-						}
-						if (matches) {
-							score++;
-						} else {
-							constraintFailed = true;
-						}
-					}
-					break;
+			const DefinitionPatternElement *parameterElement =
+				findDefinitionParameterElement(candidate->patternElements, paramName);
+			if (!parameterElement) {
+				argIdx++;
+				return;
+			}
+			const DataType &argType = argTypes[argIdx];
+			if (argType.kind == DataType::Kind::Void) {
+				bool acceptsVoid = parameterElement->resolvedTypeConstraint.isDeduced() &&
+								   parameterElement->resolvedTypeConstraint.stripFixed().kind == DataType::Kind::Void &&
+								   parameterElement->resolvedTypeConstraint.stripFixed().pointerDepth == 0;
+				if (acceptsVoid) {
+					score++;
+				} else {
+					constraintFailed = true;
 				}
+				argIdx++;
+				return;
+			}
+			if (!argType.isDeduced()) {
+				bool acceptsUnset =
+					candidate->section && candidate->section->isFlex && !parameterElement->resolvedTypeConstraint.isDeduced();
+				if (!acceptsUnset)
+					constraintFailed = true;
+				argIdx++;
+				return;
+			}
+			if (parameterElement->resolvedTypeConstraint.isDeduced()) {
+				if (!argumentMatchesConstraintIgnoringFixed(parameterElement->resolvedTypeConstraint, argType)) {
+					constraintFailed = true;
+					argIdx++;
+					return;
+				}
+				score++;
 			}
 			argIdx++;
 		});

@@ -40,6 +40,7 @@ struct ParseContext {
 	struct SectionFlexBodyFrame {
 		Section *definitionSection = nullptr;
 		Section *bodySection = nullptr;
+		InstantiatedSectionBody *instantiatedBody = nullptr;
 		bool bodyEmitted = false;
 	};
 
@@ -50,7 +51,6 @@ struct ParseContext {
 	// - ImportedFiles: importedFiles, mainSourceFile, codeLines, and diagnostics gathered during file loading are valid.
 	// - AnalyzedSections: mainSection exists and the section tree / CodeLine.section assignments are valid.
 	// - ResolvedPatterns: patternTrees, pattern definitions, variable references, and pattern matches are valid.
-	// - ResolvedDeclaredTypes: declared class field types and declared class instantiations are resolved.
 	// - Validated: validation diagnostics that depend on resolved symbols have been emitted.
 	// - InferredTypes: inferred expression / variable / return types are valid for the compiled program.
 	enum class CompilationStage {
@@ -58,7 +58,6 @@ struct ParseContext {
 		ImportedFiles,
 		AnalyzedSections,
 		ResolvedPatterns,
-		ResolvedDeclaredTypes,
 		Validated,
 		InferredTypes,
 	};
@@ -111,11 +110,12 @@ struct ParseContext {
 	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
 	std::unordered_map<std::string, llvm::Value *> patternBindings;
 	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
-	std::unordered_map<std::string, DataType> patternParamTypes;
 	// Flex binding stack for flex expansion and variable resolution across nested flex scopes.
 	BindingFrameStack flexBindingFrames;
 	// Current body section for flex expansion (used by loop intrinsics to store loop info)
 	Section *currentBodySection{};
+	InstantiatedSectionBody *currentBodyInstantiation{};
+	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	// Active flex definition sections currently being expanded (outermost to innermost).
 	// Used by execute-body ownership resolution when the intrinsic is wrapped through helper flexes.
 	std::vector<Section *> activeFlexDefinitionStack;
@@ -167,17 +167,9 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
-	// Owns cloned flex expansion roots so call-site-specific inference and grouping
-	// never mutate shared flex definition expression trees.
-	std::vector<Expression *> ownedFlexExpansionRoots;
-	// Owns temporary literal expressions materialized during codegen when a
-	// compile-time-only non-flex parameter must be inspected as an expression.
-	std::vector<Expression *> ownedCodegenLiteralRoots;
-	// Compile-time constants captured per variable reference for non-instantiated flows (e.g. main section).
-	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
-	// Compile-time constants captured per expression for non-instantiated flows (e.g. main section).
-	std::unordered_map<Expression *, CompileTimeValue> constantValuesByExpression;
-	std::unordered_map<CodeLine *, Instantiation::IfChainSelection> inferredIfChainSelections;
+	// Compilation-lifetime arena for every expression allocated by an instance or
+	// flex clone. Ownership is independent of mutable grouping-tree topology.
+	std::vector<Expression *> ownedClonedExpressions;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
@@ -202,10 +194,8 @@ struct ParseContext {
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
 	VariableReference *createVariableReference(Range range, const std::string &name);
-	// WARNING: This exists only for per-call flex expansion isolation.
-	// It must NOT be used for ANYTHING else without explicit approval from the user.
-	Expression *
-	cloneFlexExpansionExpression(Expression *expression, bool ownRoot = true, bool preserveInferenceMetadata = false);
+	Expression *cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata = false);
+	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, bool preserveInferenceMetadata = false);
 };
 
 // Extract the body expression and parameter bindings from a flex PatternCall.
@@ -282,6 +272,20 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 	});
 }
 
+inline Expression *flexPatternBodyExpression(PatternDefinition *definition) {
+	if (!definition || !definition->section || !definition->section->isFlex)
+		return nullptr;
+	Expression *bodyExpression = nullptr;
+	definition->section->forEachDefinitionBodySection([&](Section *bodySection) {
+		for (CodeLine *line : bodySection->codeLines) {
+			if (line && line->expression)
+				bodyExpression = line->expression;
+		}
+		return true;
+	});
+	return bodyExpression;
+}
+
 inline Expression *
 expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingFrame &outBindings) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
@@ -292,54 +296,14 @@ expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition
 			std::find(defs.begin(), defs.end(), def) != defs.end(),
 			"expandFlexPatternCall received a definition that no longer matches the pattern call"
 		);
-	(void)defs;
 	if (!def || !def->section || !def->section->isFlex)
 		return nullptr;
-	Expression *bodyExpr = nullptr;
-	for (Section *child : def->section->children) {
-		for (CodeLine *line : child->codeLines) {
-			if (line->expression)
-				bodyExpr = line->expression;
-		}
-	}
+	Expression *bodyExpr = flexPatternBodyExpression(def);
 	if (!bodyExpr)
 		return nullptr;
 	collectPatternCallBindings(expr, def, outBindings);
-	Expression *expandedBody = context.cloneFlexExpansionExpression(bodyExpr);
+	Expression *expandedBody = context.cloneExpressionTree(bodyExpr);
 	if (expandedBody)
 		expandedBody->isExplicitGroup = true;
-	return expandedBody;
-}
-
-inline Expression *
-expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingMap &outBindings) {
-	BindingFrame bindingFrame;
-	Expression *expandedBody = expandFlexPatternCall(context, expr, def, bindingFrame);
-	outBindings = std::move(bindingFrame.bindings);
-	return expandedBody;
-}
-
-inline Expression *expandFlexPatternCall(ParseContext &context, Expression *expr, BindingFrame &outBindings) {
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
-		return nullptr;
-	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	PatternDefinition *def = expr->selectedPatternDefinition;
-	if (expr->selectedPatternDefinition) {
-		requireCompilerInvariant(
-			std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end(),
-			"selected flex pattern definition no longer matches the pattern call"
-		);
-	} else {
-		if (defs.size() != 1)
-			return nullptr;
-		def = defs.front();
-	}
-	return expandFlexPatternCall(context, expr, def, outBindings);
-}
-
-inline Expression *expandFlexPatternCall(ParseContext &context, Expression *expr, BindingMap &outBindings) {
-	BindingFrame bindingFrame;
-	Expression *expandedBody = expandFlexPatternCall(context, expr, bindingFrame);
-	outBindings = std::move(bindingFrame.bindings);
 	return expandedBody;
 }

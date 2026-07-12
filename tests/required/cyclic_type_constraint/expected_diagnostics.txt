@@ -1,0 +1,1 @@
+tests/required/cyclic_type_constraint/main.dl:1:10-30: Error: Type constraint 'right 1' has a cyclic signature dependency

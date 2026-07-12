@@ -13,7 +13,6 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/Support/ManagedStatic.h"
 #include <iostream>
 #include <iterator>
 #include <unordered_set>
@@ -85,15 +84,45 @@ void ParseContext::printDiagnostics() {
 }
 
 PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options) {
+	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
+	std::unordered_map<MatchControlState, MatchParentAlternatives *, MatchControlStateHash> memoizedStates;
 	size_t steps = 0;
 	while (queue.size()) {
 		if (options.maxSteps > 0 && steps >= options.maxSteps)
 			return nullptr;
-		steps++;
 		MatchProgress &currentProgress = queue.back();
-		std::vector<MatchProgress> nextSteps = currentProgress.step();
+		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
+		if (!inserted) {
+			std::vector<MatchProgress> resumedProgresses;
+			MatchParentAlternatives *canonicalParents = memoizedState->second;
+			MatchParentAlternatives *incomingParents = currentProgress.parents;
+			if (canonicalParents && incomingParents && canonicalParents != incomingParents) {
+				std::vector<const MatchProgress *> addedParents;
+				for (const MatchProgress *incomingParent : incomingParents->values) {
+					if (!canonicalParents->addParent(incomingParent))
+						continue;
+					addedParents.push_back(incomingParent);
+				}
+				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
+					for (auto completion = canonicalParents->completedSubmatches.rbegin();
+						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
+						resumedProgresses.push_back(MatchProgress::resumeParent(**addedParent, *completion));
+					}
+				}
+			}
+			queue.pop_back();
+			queue.insert(
+				queue.end(), std::make_move_iterator(resumedProgresses.begin()),
+				std::make_move_iterator(resumedProgresses.end())
+			);
+			continue;
+		}
+		steps++;
+		std::vector<MatchProgress> nextSteps = currentProgress.step(storage);
+		if (currentProgress.isSubmatchComplete())
+			currentProgress.parents->addCompletion(currentProgress.completedSubmatch());
 		if (currentProgress.isComplete()) {
 			return new PatternMatch(currentProgress.match);
 		}
@@ -163,10 +192,11 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 namespace {
-Expression *cloneFlexExpansionExpressionImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
+Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
 	if (!expression)
 		return nullptr;
 	Expression *clone = new Expression();
+	context.ownedClonedExpressions.push_back(clone);
 	clone->kind = expression->kind;
 	clone->range = expression->range;
 	clone->literalValue = expression->literalValue;
@@ -175,6 +205,10 @@ Expression *cloneFlexExpansionExpressionImpl(ParseContext &context, Expression *
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
+	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
+	clone->branchSelection = preserveInferenceMetadata ? expression->branchSelection : std::nullopt;
+	clone->reusableTemplateExpression =
+		expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
 	clone->isSubMatch = expression->isSubMatch;
 	clone->isExplicitGroup = expression->isExplicitGroup;
 	clone->groupingArgumentIndices = expression->groupingArgumentIndices;
@@ -184,38 +218,43 @@ Expression *cloneFlexExpansionExpressionImpl(ParseContext &context, Expression *
 	clone->groupingPrecedence = expression->groupingPrecedence;
 	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
-	if (preserveInferenceMetadata) {
-		CompileTimeValue compileTimeValue =
-			getExpressionCompileTimeValue(context, expression, context.currentCodegenInstantiation);
-		if (!isCompileTimeKnown(compileTimeValue))
-			compileTimeValue = getExpressionCompileTimeValue(context, expression);
-		setExpressionCompileTimeValue(context, clone, compileTimeValue);
-	}
+	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
+	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
+	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneFlexExpansionExpressionImpl(context, argument, preserveInferenceMetadata));
+		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata));
 	return clone;
 }
 } // namespace
 
-Expression *ParseContext::cloneFlexExpansionExpression(Expression *expression, bool ownRoot, bool preserveInferenceMetadata) {
-	Expression *clone = cloneFlexExpansionExpressionImpl(*this, expression, preserveInferenceMetadata);
-	if (clone && ownRoot)
-		ownedFlexExpansionRoots.push_back(clone);
-	return clone;
+Expression *ParseContext::cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata) {
+	return cloneExpressionTreeImpl(*this, expression, preserveInferenceMetadata);
+}
+
+std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata) {
+	if (!section)
+		return {};
+	auto body = std::make_shared<InstantiatedSectionBody>();
+	body->sourceSection = section;
+	body->lineExpressions.reserve(section->codeLines.size());
+	for (CodeLine *line : section->codeLines) {
+		body->lineExpressions.push_back(cloneExpressionTree(line ? line->expression : nullptr, preserveInferenceMetadata));
+	}
+	body->childBodies.reserve(section->children.size());
+	for (Section *child : section->children)
+		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata));
+	return body;
 }
 
 ParseContext::~ParseContext() {
-	std::unordered_set<Expression *> visitedFunctions;
+	std::unordered_set<Expression *> visitedFunctions(ownedClonedExpressions.begin(), ownedClonedExpressions.end());
 	for (auto &line : ownedCodeLines) {
 		if (line && line->expression)
 			deleteExpressionTree(line->expression, visitedFunctions);
 	}
-	for (Expression *expression : ownedFlexExpansionRoots)
-		deleteExpressionTree(expression, visitedFunctions);
-	for (Expression *expression : ownedCodegenLiteralRoots)
-		deleteExpressionTree(expression, visitedFunctions);
-
+	for (Expression *expression : ownedClonedExpressions)
+		delete expression;
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;
 	std::unordered_set<PatternReference *> visitedReferences;
@@ -241,8 +280,6 @@ ParseContext::~ParseContext() {
 				continue;
 			if (reference->expression)
 				deleteExpressionTree(reference->expression, visitedFunctions);
-			delete reference->match;
-			reference->match = nullptr;
 			delete reference;
 		}
 		for (auto &[_, variable] : section->variables) {
@@ -283,5 +320,4 @@ ParseContext::~ParseContext() {
 	llvmModule = nullptr;
 	delete llvmContext;
 	llvmContext = nullptr;
-	llvm::llvm_shutdown();
 }

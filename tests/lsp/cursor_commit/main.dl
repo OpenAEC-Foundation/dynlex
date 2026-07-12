@@ -1,0 +1,2 @@
+@intrinsic("discard", 1)
+@intrinsic("discard", 2)

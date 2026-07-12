@@ -36,7 +36,7 @@ store 10 into snake_y at 2
 set direction to dir_right
 set food_x to 15
 set food_y to 10
-set game_over to 0
+set game_over to false
 set score to 0
 
 # Main game loop
@@ -53,7 +53,7 @@ loop while not the window should close:
 	else if key = 4:
 		set direction to dir_left
 	else if key = 5:
-		set game_over to 1
+		set game_over to true
 
 	if not game_over:
 		# Calculate new head position
@@ -71,14 +71,14 @@ loop while not the window should close:
 
 		# Check wall collision
 		if new_x < 0 or new_x >= grid_size or new_y < 0 or new_y >= grid_size:
-			set game_over to 1
+			set game_over to true
 
 		# Check self collision
 		if not game_over:
 			set i to 0
 			loop while i < snake_length:
 				if item i of snake_x = new_x and item i of snake_y = new_y:
-					set game_over to 1
+					set game_over to true
 				set i to i + 1
 
 		# Move snake

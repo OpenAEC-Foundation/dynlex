@@ -53,7 +53,7 @@ static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<
 	if (!function)
 		return nullptr;
 
-	DataType conditionType = getEffectiveType(context, args[1]);
+	DataType conditionType = finalizedExpressionType(context, args[1]);
 	if (conditionType.kind != DataType::Kind::Bool)
 		crashCompilerBug("runtime select condition must be boolean after type inference");
 	llvm::Value *conditionValue = generateExpressionCode(context, args[1]);
@@ -84,7 +84,7 @@ static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<
 	llvm::BasicBlock *trueEndBlock = builder.GetInsertBlock();
 	if (!trueEndBlock->getTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
-			DataType trueType = getEffectiveType(context, args[2]);
+			DataType trueType = finalizedExpressionType(context, args[2]);
 			trueValue = ensureType(context, trueValue, trueType, resultType);
 			incomingValues.push_back({trueValue, trueEndBlock});
 		}
@@ -96,7 +96,7 @@ static llvm::Value *buildRuntimeSelect(ParseContext &context, const std::vector<
 	llvm::BasicBlock *falseEndBlock = builder.GetInsertBlock();
 	if (!falseEndBlock->getTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
-			DataType falseType = getEffectiveType(context, args[3]);
+			DataType falseType = finalizedExpressionType(context, args[3]);
 			falseValue = ensureType(context, falseValue, falseType, resultType);
 			incomingValues.push_back({falseValue, falseEndBlock});
 		}
@@ -121,7 +121,7 @@ buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<E
 	DataType elementType = vectorType.vectorElementType();
 	for (int i = 0; i < vectorType.vectorSize(); i++) {
 		llvm::Value *elementValue = generateExpressionCode(context, args[startIndex + i]);
-		DataType fromType = getEffectiveType(context, args[startIndex + i]);
+		DataType fromType = finalizedExpressionType(context, args[startIndex + i]);
 		elementValue = ensureType(context, elementValue, fromType, elementType);
 		vectorValue = builder.CreateInsertElement(vectorValue, elementValue, getVectorLaneIndexValue(context, i), "vec_ins");
 	}
@@ -130,7 +130,7 @@ buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<E
 
 static llvm::Value *buildMatrixFromFlatArray(ParseContext &context, DataType matrixType, Expression *sourceExpr) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	DataType sourceType = getEffectiveType(context, sourceExpr);
+	DataType sourceType = finalizedExpressionType(context, sourceExpr);
 	if (sourceType.kind != DataType::Kind::Array || !sourceType.arrayElementType)
 		return nullptr;
 	if (sourceType.arraySize != matrixType.matrixRows() * matrixType.matrixColumns())
@@ -181,7 +181,7 @@ static llvm::Value *buildMatrixFromScalarArgs(
 		llvm::Value *rowValue = llvm::Constant::getNullValue(getLLVMType(context, rowVectorType));
 		for (int column = 0; column < matrixType.matrixColumns(); column++) {
 			llvm::Value *elementValue = generateExpressionCode(context, args[argIndex]);
-			DataType fromType = getEffectiveType(context, args[argIndex]);
+			DataType fromType = finalizedExpressionType(context, args[argIndex]);
 			elementValue = ensureType(context, elementValue, fromType, elementType);
 			rowValue =
 				builder.CreateInsertElement(rowValue, elementValue, getVectorLaneIndexValue(context, column), "mat_row_ins");
@@ -365,7 +365,7 @@ static DataType mathComputationType(DataType resultType, int mathFloatBytes) {
 }
 
 // Generate code for an intrinsic call.
-// All type decisions use getEffectiveType to resolve through flex/pattern bindings.
+// All type decisions use finalizedExpressionType to resolve through flex/pattern bindings.
 llvm::Value *generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &allArguments,
 	DataType resultType
@@ -385,7 +385,7 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Store) {
 		// Generate the value in the current (original) flex scope first,
 		// before resolving the destination which may cross scope boundaries.
-		DataType valType = getEffectiveType(context, args[2]);
+		DataType valType = finalizedExpressionType(context, args[2]);
 		llvm::Value *val = generateExpressionCode(context, args[2]);
 
 		// Save scope state — resolveThroughFlexLayers freely crosses scope
@@ -403,7 +403,7 @@ llvm::Value *generateIntrinsicCode(
 			intrinsicKind(destExpr->intrinsicName) == IntrinsicKind::Property) {
 			// Storing to a class field: generate GEP + store
 			Expression *instExpr = resolveVariableBinding(context, destExpr->arguments[1]);
-			DataType instType = getEffectiveType(context, instExpr);
+			DataType instType = finalizedExpressionType(context, instExpr);
 			ClassDefinition *classDef = instType.classDefinition;
 			Expression *propExpr = resolveVariableBinding(context, destExpr->arguments[2]);
 			std::string fieldName = getStringLiteral(propExpr);
@@ -434,7 +434,7 @@ llvm::Value *generateIntrinsicCode(
 
 			llvm::Value *ptr = getVariablePointer(context, args[1]);
 			if (ptr && val) {
-				DataType destType = getEffectiveType(context, args[1]);
+				DataType destType = finalizedExpressionType(context, args[1]);
 				if (destType.kind == DataType::Kind::Class && !destType.isPointer() && destType.classDefinition &&
 					destType.classInstIndex >= 0) {
 					ClassDefinition *classDef = destType.classDefinition;
@@ -493,8 +493,8 @@ llvm::Value *generateIntrinsicCode(
 	if (isArithmeticIntrinsic(arithmeticOp)) {
 		llvm::Value *left = generateExpressionCode(context, args[1]);
 		llvm::Value *right = generateExpressionCode(context, args[2]);
-		DataType leftType = getEffectiveType(context, args[1]);
-		DataType rightType = getEffectiveType(context, args[2]);
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
 
 		// Pointer arithmetic: ptr +/- integer → GEP
 		if (isPointerArithmeticIntrinsic(arithmeticOp) && (leftType.isPointer() || rightType.isPointer())) {
@@ -528,7 +528,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::BitwiseNot) {
 		llvm::Value *value = generateExpressionCode(context, args[1]);
-		DataType valueType = getEffectiveType(context, args[1]);
+		DataType valueType = finalizedExpressionType(context, args[1]);
 		value = ensureType(context, value, valueType, resultType);
 		return builder.CreateNot(value, "bnot");
 	}
@@ -537,8 +537,8 @@ llvm::Value *generateIntrinsicCode(
 		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
 		llvm::Value *left = generateExpressionCode(context, args[1]);
 		llvm::Value *right = generateExpressionCode(context, args[2]);
-		DataType leftType = getEffectiveType(context, args[1]);
-		DataType rightType = getEffectiveType(context, args[2]);
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
 
 		left = ensureType(context, left, leftType, resultType);
 		right = ensureType(context, right, rightType, resultType);
@@ -549,8 +549,8 @@ llvm::Value *generateIntrinsicCode(
 	if (isComparisonIntrinsicKind(kind)) {
 		llvm::Value *left = generateExpressionCode(context, args[1]);
 		llvm::Value *right = generateExpressionCode(context, args[2]);
-		DataType leftType = getEffectiveType(context, args[1]);
-		DataType rightType = getEffectiveType(context, args[2]);
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
 
 		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
 			rightType.isPointer() && leftType == rightType) {
@@ -606,8 +606,8 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		llvm::Value *left = generateExpressionCode(context, args[1]);
 		llvm::Value *right = generateExpressionCode(context, args[2]);
-		DataType leftType = getEffectiveType(context, args[1]);
-		DataType rightType = getEffectiveType(context, args[2]);
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
 		if (leftType.kind != DataType::Kind::Bool || rightType.kind != DataType::Kind::Bool)
 			crashCompilerBug("logical and/or operands must be boolean after type inference");
 
@@ -619,7 +619,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Not) {
 		llvm::Value *val = generateExpressionCode(context, args[1]);
-		DataType valType = getEffectiveType(context, args[1]);
+		DataType valType = finalizedExpressionType(context, args[1]);
 		if (valType.kind != DataType::Kind::Bool)
 			crashCompilerBug("logical not operand must be boolean after type inference");
 
@@ -629,7 +629,7 @@ llvm::Value *generateIntrinsicCode(
 	// Negate
 	if (kind == IntrinsicKind::Negate) {
 		llvm::Value *val = generateExpressionCode(context, args[1]);
-		DataType valType = getEffectiveType(context, args[1]);
+		DataType valType = finalizedExpressionType(context, args[1]);
 		if (valType.kind == DataType::Kind::Float)
 			return builder.CreateFNeg(val, "fneg");
 		return builder.CreateNeg(val, "neg");
@@ -638,8 +638,8 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
 		llvm::Value *left = generateExpressionCode(context, args[1]);
 		llvm::Value *right = generateExpressionCode(context, args[2]);
-		DataType leftType = getEffectiveType(context, args[1]);
-		DataType rightType = getEffectiveType(context, args[2]);
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
 		DataType promoted;
 		if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
 			context.addDiagnostic(Diagnostic(
@@ -672,7 +672,7 @@ llvm::Value *generateIntrinsicCode(
 			DataType computationType = mathComputationType(resultType, mathFloatBytes);
 			if (args.size() == 2) {
 				llvm::Value *val = generateExpressionCode(context, args[1]);
-				DataType valType = getEffectiveType(context, args[1]);
+				DataType valType = finalizedExpressionType(context, args[1]);
 				if (valType != computationType)
 					val = ensureType(context, val, valType, computationType);
 				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {val->getType()});
@@ -681,8 +681,8 @@ llvm::Value *generateIntrinsicCode(
 			}
 			llvm::Value *left = generateExpressionCode(context, args[1]);
 			llvm::Value *right = generateExpressionCode(context, args[2]);
-			DataType leftType = getEffectiveType(context, args[1]);
-			DataType rightType = getEffectiveType(context, args[2]);
+			DataType leftType = finalizedExpressionType(context, args[1]);
+			DataType rightType = finalizedExpressionType(context, args[2]);
 			left = ensureType(context, left, leftType, computationType);
 			right = ensureType(context, right, rightType, computationType);
 			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
@@ -694,8 +694,8 @@ llvm::Value *generateIntrinsicCode(
 		if (kind == IntrinsicKind::Atan2) {
 			llvm::Value *y = generateExpressionCode(context, args[1]);
 			llvm::Value *x = generateExpressionCode(context, args[2]);
-			DataType yType = getEffectiveType(context, args[1]);
-			DataType xType = getEffectiveType(context, args[2]);
+			DataType yType = finalizedExpressionType(context, args[1]);
+			DataType xType = finalizedExpressionType(context, args[2]);
 			DataType promoted;
 			DataType::promoteArithmetic(yType, xType, promoted);
 			promoted = mathComputationType(promoted, defaultFloatByteSize(context.options.emitSPIRV));
@@ -726,7 +726,7 @@ llvm::Value *generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Dereference) {
 		llvm::Value *ptrVal = generateExpressionCode(context, args[1]);
-		DataType ptrType = getEffectiveType(context, args[1]);
+		DataType ptrType = finalizedExpressionType(context, args[1]);
 		DataType elemType = ptrType.dereferenced();
 		llvm::Type *elemLLVMType = getLLVMType(context, elemType);
 		return builder.CreateAlignedLoad(elemLLVMType, ptrVal, llvm::Align(8), "deref");
@@ -737,14 +737,14 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *ptr = generateExpressionCode(context, args[1]);
 		llvm::Value *index = generateExpressionCode(context, args[2]);
 		llvm::Value *value = generateExpressionCode(context, args[3]);
-		DataType ptrType = getEffectiveType(context, args[1]);
+		DataType ptrType = finalizedExpressionType(context, args[1]);
 		if (!ptrType.isPointer()) {
 			context.addDiagnostic(
 				Diagnostic(context, Diagnostic::Level::Error, "store at requires pointer", args[1] ? args[1]->range : Range())
 			);
 			return nullptr;
 		}
-		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[2]));
+		index = coerceIndexToSizeT(context, index, finalizedExpressionType(context, args[2]));
 		DataType pointedType = ptrType.dereferenced();
 		DataType elementType = pointedType;
 		llvm::Value *elementPtr = nullptr;
@@ -756,7 +756,7 @@ llvm::Value *generateIntrinsicCode(
 			llvm::Type *elemLLVMType = getLLVMType(context, elementType);
 			elementPtr = builder.CreateGEP(elemLLVMType, ptr, index, "elem_ptr");
 		}
-		value = ensureType(context, value, getEffectiveType(context, args[3]), elementType);
+		value = ensureType(context, value, finalizedExpressionType(context, args[3]), elementType);
 		builder.CreateAlignedStore(value, elementPtr, llvm::Align(8));
 		return nullptr;
 	}
@@ -764,14 +764,14 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::LoadAt) {
 		llvm::Value *ptr = generateExpressionCode(context, args[1]);
 		llvm::Value *index = generateExpressionCode(context, args[2]);
-		DataType ptrType = getEffectiveType(context, args[1]);
+		DataType ptrType = finalizedExpressionType(context, args[1]);
 		if (!ptrType.isPointer()) {
 			context.addDiagnostic(
 				Diagnostic(context, Diagnostic::Level::Error, "load at requires pointer", args[1] ? args[1]->range : Range())
 			);
 			return nullptr;
 		}
-		index = coerceIndexToSizeT(context, index, getEffectiveType(context, args[2]));
+		index = coerceIndexToSizeT(context, index, finalizedExpressionType(context, args[2]));
 		DataType pointedType = ptrType.dereferenced();
 		DataType elementType = pointedType;
 		llvm::Value *elementPtr = nullptr;
@@ -852,7 +852,7 @@ llvm::Value *generateIntrinsicCode(
 			return nullptr;
 		}
 		targetFrame->bodyEmitted = true;
-		emitFlexBodySection(context, targetFrame->bodySection, false);
+		emitFlexBodySection(context, targetFrame->bodySection, targetFrame->instantiatedBody, false);
 		return nullptr;
 	}
 
@@ -875,7 +875,7 @@ llvm::Value *generateIntrinsicCode(
 		builder.SetInsertPoint(condBlock);
 
 		llvm::Value *condValue = generateExpressionCode(context, args[1]);
-		DataType condType = getEffectiveType(context, args[1]);
+		DataType condType = finalizedExpressionType(context, args[1]);
 		if (condType.kind != DataType::Kind::Bool)
 			crashCompilerBug("loop while condition must be boolean after type inference");
 		builder.CreateCondBr(condValue, bodyBlock, exitBlock);
@@ -902,7 +902,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_exit", func);
 
 		llvm::Value *condValue = generateExpressionCode(context, args[1]);
-		DataType condType = getEffectiveType(context, args[1]);
+		DataType condType = finalizedExpressionType(context, args[1]);
 		if (condType.kind != DataType::Kind::Bool)
 			crashCompilerBug("if condition must be boolean after type inference");
 		builder.CreateCondBr(condValue, thenBlock, exitBlock);
@@ -947,7 +947,7 @@ llvm::Value *generateIntrinsicCode(
 			llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
 			llvm::Value *condValue = generateExpressionCode(context, args[1]);
-			DataType condType = getEffectiveType(context, args[1]);
+			DataType condType = finalizedExpressionType(context, args[1]);
 			if (condType.kind != DataType::Kind::Bool)
 				crashCompilerBug("else if condition must be boolean after type inference");
 			builder.CreateCondBr(condValue, elifThenBlock, newExitBlock);
@@ -967,7 +967,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *switchValue = generateExpressionCode(context, args[1]);
 
 		// Ensure the value is an integer (LLVM switch requires integer operand)
-		DataType switchType = getEffectiveType(context, args[1]);
+		DataType switchType = finalizedExpressionType(context, args[1]);
 		if (switchType.kind != DataType::Kind::Int && switchType.kind != DataType::Kind::Bool) {
 			context.addDiagnostic(
 				Diagnostic(context, Diagnostic::Level::Error, "switch requires integer", args[1] ? args[1]->range : Range())
@@ -1049,8 +1049,8 @@ llvm::Value *generateIntrinsicCode(
 		if (!library.empty() && library != "libc")
 			context.requiredLibraries.insert(library);
 
-		DataType retTypeRef = getEffectiveType(context, args[3]);
-		DataType returnType = retTypeRef.toReferencedType();
+		DataType retTypeRef = finalizedExpressionType(context, args[3]);
+		DataType returnType = retTypeRef.toReferencedType().stripFixed();
 		llvm::Type *returnLLVMType = returnType.toLLVM(*context.llvmContext);
 
 		// Build call arguments — string literals become global constant pointers
@@ -1081,17 +1081,17 @@ llvm::Value *generateIntrinsicCode(
 		for (llvm::Value *arg : callArgs)
 			argTypes.push_back(arg->getType());
 		if (library == "libc" && funcName == "malloc" && callArgs.size() == 1) {
-			callArgs[0] = coerceIndexToSizeT(context, callArgs[0], getEffectiveType(context, args[4]));
+			callArgs[0] = coerceIndexToSizeT(context, callArgs[0], finalizedExpressionType(context, args[4]));
 			llvm::FunctionType *funcType = llvm::FunctionType::get(builder.getPtrTy(), {builder.getInt64Ty()}, false);
 			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 		} else if (library == "libc" && funcName == "memcpy" && callArgs.size() == 3) {
-			callArgs[2] = coerceIndexToSizeT(context, callArgs[2], getEffectiveType(context, args[6]));
+			callArgs[2] = coerceIndexToSizeT(context, callArgs[2], finalizedExpressionType(context, args[6]));
 			llvm::FunctionType *funcType = llvm::FunctionType::get(
 				builder.getPtrTy(), {builder.getPtrTy(), builder.getPtrTy(), builder.getInt64Ty()}, false
 			);
 			callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 		} else if (library == "libc" && funcName == "snprintf" && callArgs.size() >= 3) {
-			callArgs[1] = coerceIndexToSizeT(context, callArgs[1], getEffectiveType(context, args[5]));
+			callArgs[1] = coerceIndexToSizeT(context, callArgs[1], finalizedExpressionType(context, args[5]));
 			llvm::FunctionType *funcType = llvm::FunctionType::get(
 				builder.getInt32Ty(), {builder.getPtrTy(), builder.getInt64Ty(), builder.getPtrTy()}, true
 			);
@@ -1118,19 +1118,14 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (kind == IntrinsicKind::Function) {
-		Expression *nameExpr = resolveVariableBinding(context, args[1]);
-		std::string signature = getStringLiteral(nameExpr);
-		requireCompilerInvariant(!signature.empty(), "Function intrinsic reached codegen without a string-literal signature");
-		std::vector<PatternDefinition *> callableMatches = findCallableFunctionDefinitionsBySignature(context, signature);
+		requireCompilerInvariant(callExpr, "function intrinsic reached codegen without its call expression");
+		PatternDefinition *definition = callExpr->selectedCallableDefinition;
+		requireCompilerInvariant(definition, "function intrinsic reached codegen without its inferred callable definition");
 		requireCompilerInvariant(
-			!callableMatches.empty(), "Function intrinsic reached codegen with an unknown function reference: " + signature
+			callExpr->selectedInstantiation == definition->callableInstantiation,
+			"function intrinsic callable selection diverged after inference"
 		);
-		requireCompilerInvariant(
-			callableMatches.size() == 1, "Function intrinsic reached codegen with an ambiguous function reference: " + signature
-		);
-
-		llvm::Function *callableFunction =
-			ensureCallableFunctionGenerated(context, callableMatches.front(), callableMatches.front()->section->isExposed);
+		llvm::Function *callableFunction = ensureCallableFunctionGenerated(context, definition, definition->section->isExposed);
 		if (!callableFunction)
 			return nullptr;
 		if (callableFunction->getType() == builder.getPtrTy())
@@ -1141,13 +1136,13 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Cast) {
 		// Format: args[1]=value, args[2]=type (TypeReference)
 		llvm::Value *val = generateExpressionCode(context, args[1]);
-		DataType fromType = getEffectiveType(context, args[1]);
+		DataType fromType = finalizedExpressionType(context, args[1]);
 
 		// Get target type from the TypeReference argument
-		DataType typeArgType = getEffectiveType(context, args[2]);
+		DataType typeArgType = finalizedExpressionType(context, args[2]);
 		if (typeArgType.kind != DataType::Kind::Type)
 			return nullptr; // unresolved type (e.g. spurious top-level instantiation)
-		DataType toType = typeArgType.toReferencedType();
+		DataType toType = typeArgType.toReferencedType().stripFixed();
 
 		return ensureType(context, val, fromType, toType);
 	}
@@ -1158,10 +1153,10 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (kind == IntrinsicKind::SizeOf) {
-		DataType typeArgType = getEffectiveType(context, args[1]);
+		DataType typeArgType = finalizedExpressionType(context, args[1]);
 		if (typeArgType.kind != DataType::Kind::Type)
 			return nullptr;
-		DataType valueType = typeArgType.toReferencedType();
+		DataType valueType = typeArgType.toReferencedType().stripFixed();
 		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
 			!valueType.classDefinition->instantiations.empty()) {
 			valueType.classInstIndex = 0;
@@ -1170,8 +1165,7 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
-		CompileTimeValue value =
-			resolveStoredCompileTimeValue(context, callExpr, context.flexBindingFrames, context.currentCodegenInstantiation);
+		CompileTimeValue value = resolveStoredCompileTimeValue(callExpr, context.flexBindingFrames);
 		if (auto *number = std::get_if<double>(&value)) {
 			llvm::Type *llvmType = getLLVMType(context, resultType);
 			return llvm::ConstantInt::get(llvmType, static_cast<std::int64_t>(*number), true);
@@ -1191,8 +1185,7 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Select) {
 		if (!args[1])
 			crashCompilerBug("select intrinsic missing condition argument during codegen");
-		CompileTimeValue conditionValue =
-			resolveStoredCompileTimeValue(context, args[1], context.flexBindingFrames, context.currentCodegenInstantiation);
+		CompileTimeValue conditionValue = resolveStoredCompileTimeValue(args[1], context.flexBindingFrames);
 		auto *condition = std::get_if<bool>(&conditionValue);
 		if (condition)
 			return generateExpressionCode(context, args[*condition ? 2 : 3]);
@@ -1211,7 +1204,7 @@ llvm::Value *generateIntrinsicCode(
 			DataType elementType = *resultType.arrayElementType;
 			for (size_t i = 2; i < args.size(); i++) {
 				llvm::Value *elementVal = generateExpressionCode(context, args[i]);
-				DataType fromType = getEffectiveType(context, args[i]);
+				DataType fromType = finalizedExpressionType(context, args[i]);
 				elementVal = ensureType(context, elementVal, fromType, elementType);
 				llvm::Value *elementPtr =
 					builder.CreateGEP(arrayType, alloca, {builder.getInt64(0), builder.getInt64(i - 2)}, "array_elem_ptr");
@@ -1232,7 +1225,7 @@ llvm::Value *generateIntrinsicCode(
 
 		if (resultType.kind != DataType::Kind::Class) {
 			llvm::Value *val = generateExpressionCode(context, args[2]);
-			DataType fromType = getEffectiveType(context, args[2]);
+			DataType fromType = finalizedExpressionType(context, args[2]);
 			return ensureType(context, val, fromType, resultType);
 		}
 
@@ -1242,7 +1235,7 @@ llvm::Value *generateIntrinsicCode(
 			std::vector<DataType> fieldTypes;
 			fieldTypes.reserve(args.size() - 2);
 			for (size_t i = 2; i < args.size(); i++)
-				fieldTypes.push_back(getEffectiveType(context, args[i]));
+				fieldTypes.push_back(finalizedExpressionType(context, args[i]));
 			concreteType.classInstIndex = classDef->getOrCreateInstantiation(fieldTypes);
 		}
 		requireCompilerInvariant(
@@ -1255,7 +1248,7 @@ llvm::Value *generateIntrinsicCode(
 
 		for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
 			llvm::Value *fieldVal = generateExpressionCode(context, args[i + 2]);
-			DataType fieldFromType = getEffectiveType(context, args[i + 2]);
+			DataType fieldFromType = finalizedExpressionType(context, args[i + 2]);
 			fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
 			unsigned llvmFieldIndex = static_cast<unsigned>(i);
 			if (i < inst.llvmFieldIndices.size())
@@ -1270,7 +1263,7 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::Property) {
 		// Format: args[1]=instance, args[2]=fieldname (string literal from {word:} capture)
 		Expression *ownerExpr = args[1];
-		DataType ownerType = getEffectiveType(context, ownerExpr);
+		DataType ownerType = finalizedExpressionType(context, ownerExpr);
 		bool ownerIsClassPointer = ownerType.isPointer() && ownerType.kind == DataType::Kind::Class;
 		DataType instType = ownerIsClassPointer ? ownerType.dereferenced() : ownerType;
 		if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex < 0 &&
@@ -1280,8 +1273,14 @@ llvm::Value *generateIntrinsicCode(
 		ClassDefinition *classDef = instType.classDefinition;
 
 		// Get field name from string literal
-		Expression *propExpr = resolveVariableBinding(context, args[2]);
-		std::string fieldName = getStringLiteral(propExpr);
+		std::string fieldName;
+		CompileTimeValue propertyValue = resolveStoredCompileTimeValue(args[2], context.flexBindingFrames);
+		if (const auto *propertyName = std::get_if<std::string>(&propertyValue))
+			fieldName = *propertyName;
+		if (fieldName.empty()) {
+			Expression *propExpr = resolveVariableBinding(context, args[2]);
+			fieldName = getStringLiteral(propExpr);
+		}
 
 		// C strings expose a synthetic "data" property so string-library flexes can
 		// operate on both heap strings and string literals without duplicating logic.
@@ -1403,10 +1402,10 @@ llvm::Value *generateIntrinsicCode(
 		if (!r || !g || !b || !a)
 			return nullptr;
 
-		DataType rType = getEffectiveType(context, args[1]);
-		DataType gType = getEffectiveType(context, args[2]);
-		DataType bType = getEffectiveType(context, args[3]);
-		DataType aType = getEffectiveType(context, args[4]);
+		DataType rType = finalizedExpressionType(context, args[1]);
+		DataType gType = finalizedExpressionType(context, args[2]);
+		DataType bType = finalizedExpressionType(context, args[3]);
+		DataType aType = finalizedExpressionType(context, args[4]);
 		DataType f32 = {DataType::Kind::Float, 4};
 		r = ensureType(context, r, rType, f32);
 		g = ensureType(context, g, gType, f32);
@@ -1446,7 +1445,7 @@ llvm::Value *generateIntrinsicCode(
 		llvm::Value *idx = generateExpressionCode(context, args[2]);
 		if (!idx)
 			return nullptr;
-		idx = ensureType(context, idx, getEffectiveType(context, args[2]), {DataType::Kind::Int, 4});
+		idx = ensureType(context, idx, finalizedExpressionType(context, args[2]), {DataType::Kind::Int, 4});
 		return builder.CreateExtractElement(vec, idx, "elem");
 	}
 

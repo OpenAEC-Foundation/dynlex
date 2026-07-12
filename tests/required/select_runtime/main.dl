@@ -6,6 +6,14 @@ function discard val:
     replacement:
         @intrinsic("discard", val)
 
+function fixed tofix:
+    replacement:
+        @intrinsic("type", "const", tofix)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
 function [an|a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)

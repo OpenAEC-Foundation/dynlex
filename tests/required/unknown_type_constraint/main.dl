@@ -1,0 +1,3 @@
+function accept {missing type:value}:
+    execute:
+        @intrinsic("discard", value)

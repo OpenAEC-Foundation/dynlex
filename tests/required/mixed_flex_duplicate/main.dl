@@ -1,0 +1,11 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function consume {integer:value}:
+    replacement:
+        @intrinsic("discard", value)
+
+function consume {integer:value}:
+    execute:
+        @intrinsic("discard", value)

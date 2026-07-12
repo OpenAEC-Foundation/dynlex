@@ -1,7 +1,7 @@
 import lib/random.dl
 import lib/array.dl
 
-function fill plan levels jump_ms slide_ms with count count using seed seed_value:
+function fill plan levels jump_ms slide_ms with count {integer:count} using seed seed_value:
 	execute:
 		seed random with seed_value
 		set i to 0

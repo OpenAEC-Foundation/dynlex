@@ -47,17 +47,17 @@ print 7 is even inverted as line
 function n is even nested:
     execute:
         if n != 0:
-            if n - 1 is odd nested:
-                return 1
+            if (n - 1) is odd nested:
+                return true
             else:
-                return 0
-        return 1
+                return false
+        return true
 
 function n is odd nested:
     execute:
         if n != 0:
-            return n - 1 is even nested
-        return 0
+            return (n - 1) is even nested
+        return false
 
 print 4 is even nested as line
 print 7 is even nested as line

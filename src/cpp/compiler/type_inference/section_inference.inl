@@ -9,24 +9,85 @@ static Variable *findOwnSectionVariable(Section *section, const std::string &nam
 	return it != section->variables.end() ? it->second : nullptr;
 }
 
-static bool isLoopSectionOpening(CodeLine *line, ParseContext &parseContext) {
-	if (!line || !line->expression)
-		return false;
-	Expression *header = line->expression;
-	if (header->kind == Expression::Kind::PatternCall) {
-		BindingFrame innerBindings;
-		Expression *expanded = expandFlexPatternCall(parseContext, header, innerBindings);
-		if (expanded)
-			header = expanded;
+static void seedNonFlexSectionParameterState(Section *section, InferenceContext &context) {
+	if (!section || !context.currentInstantiation || section->isFlex || section->patternDefinitions.empty())
+		return;
+	for (const auto &[name, parameterType] : context.currentInstantiation->parameterTypesByName) {
+		Variable *parameterVariable = findOwnSectionVariable(section, name);
+		if (!parameterVariable || parameterVariable->isGlobal)
+			continue;
+		parameterVariable->type = concretizeClassType(parameterType.stripFixed());
+		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
+		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}
+	for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
+		Variable *parameterVariable = findOwnSectionVariable(section, name);
+		if (parameterVariable) {
+			context.setKnownConstant(parameterVariable->definition, value);
+		}
+	}
+}
+
+static bool isLoopSectionOpening(Expression *openingExpression) {
+	if (!openingExpression)
+		return false;
+	Expression *header = openingExpression;
+	if (header->kind == Expression::Kind::PatternCall)
+		header = header->inferredFlexExpansion;
 	return header && header->kind == Expression::Kind::IntrinsicCall &&
 		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
 }
 
-static bool inferSection(Section *section, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
-	// The first instantiation determines operand ordering; subsequent ones reuse it.
-	// size() > 1 because the current instantiation is already inserted before inferSection is called.
-	bool alreadyOrdered = section->instantiations.size() > 1;
+static std::optional<std::string> finalizedControlHeaderKind(Expression *expression, InferenceContext &context) {
+	if (!expression)
+		return std::nullopt;
+	Expression *header = expression;
+	if (header->kind == Expression::Kind::PatternCall)
+		header = context.lookupFlexExpansion(header);
+	if (!header || header->kind != Expression::Kind::IntrinsicCall)
+		return std::nullopt;
+	if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
+		return std::nullopt;
+	return header->intrinsicName;
+}
+
+static std::optional<std::string> inferControlHeaderKindForLookahead(
+	Expression *expression, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &bindingFrameStack
+) {
+	if (!expression)
+		return std::nullopt;
+	GroupingSnapshot originalGrouping = captureGroupingSnapshot(expression);
+	resetExpressionTypes(expression);
+	InferenceContext::TrialJournal journal;
+	InferenceContext trialContext(context.parseContext, true);
+	trialContext.currentInstantiation = context.currentInstantiation;
+	trialContext.currentKnownConstants = context.currentKnownConstants;
+	trialContext.inheritedTrialExpressionValues =
+		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
+	trialContext.trialJournal = &journal;
+	trialContext.trialInstantiationCache =
+		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
+	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
+	trialContext.allowTrialSummaryReuse = true;
+	trialContext.detectGroupingAmbiguity = false;
+	Expression *trialExpression = expression;
+	std::optional<std::string> kind;
+	if (inferExpression(trialExpression, trialContext, alreadyOrdered, bindingFrameStack, false) && trialContext.typesValid)
+		kind = finalizedControlHeaderKind(trialExpression, trialContext);
+	rollbackTrialJournal(journal);
+	applyGroupingSnapshot(originalGrouping);
+	recomputeRanges(expression);
+	resetExpressionTypes(expression);
+	return kind;
+}
+
+static bool inferSection(
+	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
+	const BindingFrameStack &bindingFrameStack
+) {
+	requireCompilerInvariant(!body || body->sourceSection == section, "active instantiated body does not match section");
+	// The first valid inference determines operand ordering per code line. Later
+	// passes reuse the committed grouping stored on the line itself.
 	if (context.trial && context.trialJournal)
 		context.trialJournal->recordTouchedSection(section);
 	if (context.trial && context.trialJournal) {
@@ -37,35 +98,30 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			context.trialJournal->recordVariableWrite(variable);
 		}
 	}
-	resetSectionExpressionTypes(section);
+	resetSectionExpressionTypes(section, body);
 	resetSectionLocalVariableTypes(section);
-	for (auto &[name, boundVar] : section->variables) {
-		if (!boundVar)
-			continue;
-		Expression *boundExpr = bindingFrameStack.lookup(boundVar->definition);
-		if (!boundExpr)
-			continue;
-		Expression *boundExprForType = boundExpr;
-		DataType boundType = ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, bindingFrameStack);
-		if (!boundType.isDeduced())
-			continue;
-		if (context.trial && context.trialJournal)
-			context.trialJournal->recordVariableWrite(boundVar);
-		commitVariableTypeFromValue(boundVar, boundExpr, boundType);
-		CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
-		context.setKnownConstant(boundVar->definition, boundValue);
-		context.snapshotReferenceConstant(boundVar->definition);
-	}
-
-	if (context.currentInstantiation) {
-		for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
-			Variable *var = findOwnSectionVariable(section, name);
-			if (var)
-				context.setKnownConstant(var->definition, value);
+	if (section->isFlex || section->patternDefinitions.empty()) {
+		for (auto &[name, boundVar] : section->variables) {
+			if (!boundVar)
+				continue;
+			Expression *boundExpr = bindingFrameStack.lookup(boundVar->definition);
+			if (!boundExpr)
+				continue;
+			Expression *boundExprForType = boundExpr;
+			DataType boundType = ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, bindingFrameStack);
+			if (!boundType.isDeduced())
+				continue;
+			if (context.trial && context.trialJournal)
+				context.trialJournal->recordVariableWrite(boundVar);
+			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
+			CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
+			context.setKnownConstant(boundVar->definition, boundValue);
 		}
+	} else {
+		seedNonFlexSectionParameterState(section, context);
 	}
 
-	bool loopSection = isLoopSectionOpening(section->openingLine, context.parseContext);
+	bool loopSection = isLoopSectionOpening(openingExpression);
 	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
 	if (loopSection) {
 		constantsAtLoopEntry = context.currentKnownConstants;
@@ -87,78 +143,96 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 		}
 	} loopMutationScope(context, loopSection);
 
-	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Expression *, BindingFrameStack>> {
-		if (!line || !line->expression)
+	auto controlHeaderInfo = [&](CodeLine *line,
+								 Expression *lineExpression) -> std::optional<std::pair<std::string, Expression *>> {
+		if (!line || !lineExpression)
 			return std::nullopt;
 
-		Expression *header = line->expression;
-		BindingFrameStack headerBindingFrameStack = bindingFrameStack;
-		if (header->kind == Expression::Kind::PatternCall) {
-			BindingFrame innerBindings;
-			Expression *expanded = expandFlexPatternCall(context.parseContext, header, innerBindings);
-			if (expanded) {
-				header = expanded;
-				materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
-				headerBindingFrameStack.pushFrame(std::move(innerBindings));
-			}
-		}
+		Expression *header = lineExpression;
+		if (header->kind == Expression::Kind::PatternCall)
+			header = context.lookupFlexExpansion(header);
 		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
 		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
 			return std::nullopt;
-		return std::make_optional(std::make_tuple(header->intrinsicName, header, std::move(headerBindingFrameStack)));
+		return std::make_optional(std::make_pair(header->intrinsicName, header));
 	};
 
 	auto inferOpenedSection = [&](CodeLine *line) {
 		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
 			return true;
-		if (!inferSection(line->sectionOpening, context, bindingFrameStack)) {
+		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
+		Expression *activeOpeningExpression =
+			body && line->sectionOpening ? body->findCloneOf(line->expression) : line->expression;
+		if (!inferSection(line->sectionOpening, openedBody, activeOpeningExpression, context, bindingFrameStack)) {
 			context.typesValid = false;
 			return false;
 		}
 		return true;
 	};
+	auto inferLineExpression = [&](CodeLine *line, Expression *&lineExpression) {
+		if (!lineExpression)
+			return true;
+		applyCodeLineGrouping(line, lineExpression, context);
+		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
+		bool ambiguityChecked = !context.trial && context.detectGroupingAmbiguity;
+		if (!inferExpression(
+				lineExpression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
+			)) {
+			context.typesValid = false;
+			return false;
+		}
+		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
+		return true;
+	};
 
 	for (size_t i = 0; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
-		auto headerInfo = controlHeaderInfo(line);
-		if (headerInfo && std::get<0>(*headerInfo) == "if") {
-			auto constantsBeforeChain = context.currentKnownConstants;
+		Expression *&lineExpression = body ? body->lineExpression(i) : line->expression;
+		auto constantsBeforeLine = context.currentKnownConstants;
+		if (!inferLineExpression(line, lineExpression))
+			return false;
+		auto headerInfo = controlHeaderInfo(line, lineExpression);
+		if (headerInfo && headerInfo->first == "if") {
+			auto constantsBeforeChain = std::move(constantsBeforeLine);
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
 				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
 					break;
-				auto nextInfo = controlHeaderInfo(next);
-				if (!nextInfo)
+				Expression *&nextExpression = body ? body->lineExpression(chainEnd + 1) : next->expression;
+				applyCodeLineGrouping(next, nextExpression, context);
+				std::optional<std::string> nextKind = finalizedControlHeaderKind(nextExpression, context);
+				if (!nextKind) {
+					nextKind = inferControlHeaderKindForLookahead(
+						nextExpression, context, codeLineCanReuseGrouping(next, context), bindingFrameStack
+					);
+				}
+				if (!nextKind)
 					break;
-				const std::string &nextKind = std::get<0>(*nextInfo);
-				if (nextKind != "else if" && nextKind != "else")
+				if (*nextKind != "else if" && *nextKind != "else")
 					break;
 				chainEnd++;
 			}
 
-			for (size_t k = i; k <= chainEnd; k++) {
+			for (size_t k = i + 1; k <= chainEnd; k++) {
 				CodeLine *header = section->codeLines[k];
-				if (!header->expression)
-					continue;
-				if (!inferExpression(header->expression, context, alreadyOrdered, bindingFrameStack)) {
-					context.typesValid = false;
+				Expression *&headerExpression = body ? body->lineExpression(k) : header->expression;
+				if (!inferLineExpression(header, headerExpression))
 					return false;
-				}
 			}
 
 			std::optional<size_t> selectedBranch;
 			bool branchKnown = true;
 			for (size_t k = i; k <= chainEnd; k++) {
-				auto branchInfo = controlHeaderInfo(section->codeLines[k]);
+				Expression *branchExpression = body ? body->lineExpression(k) : section->codeLines[k]->expression;
+				auto branchInfo = controlHeaderInfo(section->codeLines[k], branchExpression);
 				if (!branchInfo) {
 					branchKnown = false;
 					break;
 				}
-				const std::string &branchKind = std::get<0>(*branchInfo);
-				Expression *header = std::get<1>(*branchInfo);
-				const auto &headerBindingFrameStack = std::get<2>(*branchInfo);
+				const std::string &branchKind = branchInfo->first;
+				Expression *header = branchInfo->second;
 				if (branchKind == "else") {
 					if (!selectedBranch.has_value())
 						selectedBranch = k;
@@ -168,10 +242,6 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 					branchKnown = false;
 					break;
 				}
-				if (context.currentInstantiation)
-					markCompileTimeParameterRequirements(
-						header->arguments[1], headerBindingFrameStack, context.currentInstantiation
-					);
 				CompileTimeValue conditionValue = context.lookupExpressionValue(header->arguments[1]);
 				auto *condition = std::get_if<bool>(&conditionValue);
 				if (!condition) {
@@ -185,14 +255,12 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			}
 
 			if (!context.trial) {
-				Instantiation::IfChainSelection selection;
-				selection.known = branchKnown;
-				if (branchKnown && selectedBranch.has_value())
-					selection.selectedBranchLine = section->codeLines[*selectedBranch];
-				if (context.currentInstantiation)
-					context.currentInstantiation->ifChainSelections[line] = selection;
-				else
-					context.parseContext.inferredIfChainSelections[line] = selection;
+				Expression *&firstHeaderExpression = body ? body->lineExpression(i) : line->expression;
+				requireCompilerInvariant(firstHeaderExpression, "if chain is missing its inferred header expression");
+				firstHeaderExpression->branchSelection = Expression::BranchSelection{
+					.known = branchKnown,
+					.selectedBranchIndex = branchKnown && selectedBranch.has_value() ? static_cast<int>(*selectedBranch) : -1,
+				};
 			}
 
 			if (branchKnown && selectedBranch.has_value()) {
@@ -203,8 +271,9 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 				std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchStates;
 				bool hasElseBranch = false;
 				for (size_t k = i; k <= chainEnd; k++) {
-					auto branchInfo = controlHeaderInfo(section->codeLines[k]);
-					if (branchInfo && std::get<0>(*branchInfo) == "else")
+					Expression *branchExpression = body ? body->lineExpression(k) : section->codeLines[k]->expression;
+					auto branchInfo = controlHeaderInfo(section->codeLines[k], branchExpression);
+					if (branchInfo && branchInfo->first == "else")
 						hasElseBranch = true;
 					context.currentKnownConstants = constantsBeforeChain;
 					if (!inferOpenedSection(section->codeLines[k]))
@@ -233,22 +302,6 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			continue;
 		}
 
-		if (line->expression) {
-			if (!inferExpression(
-					line->expression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
-				)) {
-				context.typesValid = false;
-				return false;
-			}
-			DataType lineType = line->expression ? line->expression->type : DataType{};
-			if (section->type != SectionType::Replacement && (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void)) {
-				context.setTypeFailure(
-					"Standalone expression '" + std::string(line->expression->range.subString) +
-					"' must return nothing; use discard if you want to ignore a value"
-				);
-				return false;
-			}
-		}
 		if (!inferOpenedSection(line))
 			return false;
 	}
@@ -265,21 +318,220 @@ static bool inferSection(Section *section, InferenceContext &context, const Bind
 			context.currentKnownConstants = constantsAtLoopEntry;
 			for (VariableReference *ref : loopMutations)
 				context.setKnownConstant(ref, {});
-			return inferSection(section, context, bindingFrameStack);
+			return inferSection(section, body, openingExpression, context, bindingFrameStack);
 		}
 	}
 	context.typesValid = true;
 	return true;
 }
 
+struct PatternTypeConstraintWorkItem {
+	PatternDefinition *definition{};
+	DefinitionPatternElement *element{};
+	Expression *expression{};
+};
+
+enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
+
+static bool readPatternTypeConstraintValue(Expression *expression, InferenceContext &context, DataType &outTypeReference) {
+	CompileTimeValue value = context.lookupExpressionValue(expression);
+	if (const auto *typeReference = std::get_if<DataType>(&value)) {
+		if (typeReference->kind == DataType::Kind::Type && typeReference->referencedKind != DataType::Kind::Unresolved) {
+			outTypeReference = *typeReference;
+			return true;
+		}
+	}
+	if (expression && expression->type.kind == DataType::Kind::Type &&
+		expression->type.referencedKind != DataType::Kind::Unresolved) {
+		outTypeReference = expression->type;
+		return true;
+	}
+	return false;
+}
+
+static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
+	resetExpressionTypes(item.expression);
+	InferenceContext::TrialJournal journal;
+	InferenceContext trialContext(parseContext, true);
+	Instantiation signatureInstantiation;
+	trialContext.currentInstantiation = &signatureInstantiation;
+	trialContext.trialJournal = &journal;
+	trialContext.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
+	trialContext.detectGroupingAmbiguity = false;
+	Expression *trialExpression = item.expression;
+	bool inferred = inferExpression(trialExpression, trialContext, false, {}, false) && trialContext.typesValid;
+	bool deferred = *trialContext.unresolvedPatternConstraintSignal;
+	DataType typeReference;
+	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, typeReference);
+	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
+	rollbackTrialJournal(journal);
+	applyGroupingSnapshot(originalGrouping);
+	item.expression = originalGrouping.root;
+	recomputeRanges(item.expression);
+	resetExpressionTypes(item.expression);
+	if (deferred)
+		return PatternTypeConstraintProbe::Deferred;
+	if (!inferred || !producedType)
+		return PatternTypeConstraintProbe::Invalid;
+	return pure ? PatternTypeConstraintProbe::Ready : PatternTypeConstraintProbe::Impure;
+}
+
+static void commitPatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+	InferenceContext context(parseContext);
+	Instantiation signatureInstantiation;
+	context.currentInstantiation = &signatureInstantiation;
+	context.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
+	resetExpressionTypes(item.expression);
+	Expression *expression = item.expression;
+	bool inferred = inferExpression(expression, context, false, {}, false) && context.typesValid;
+	requireCompilerInvariant(
+		!*context.unresolvedPatternConstraintSignal,
+		"committed pattern type-constraint inference encountered an unresolved signature dependency"
+	);
+	requireCompilerInvariant(inferred, "pattern type-constraint probe and committed inference disagreed");
+	requireCompilerInvariant(
+		signatureInstantiation.purity == InstantiationPurity::Pure,
+		"pattern type-constraint probe and committed purity classification disagreed"
+	);
+	DataType typeReference;
+	requireCompilerInvariant(
+		readPatternTypeConstraintValue(expression, context, typeReference),
+		"pattern type-constraint probe and committed result type disagreed"
+	);
+	item.expression = expression;
+	item.element->resolvedTypeConstraint = typeReference.toReferencedType();
+}
+
+static void collectPatternTypeConstraintWorkItems(
+	ParseContext &parseContext, Section *section, std::vector<PatternTypeConstraintWorkItem> &items
+) {
+	for (PatternDefinition *definition : section->patternDefinitions) {
+		std::function<void(std::vector<DefinitionPatternElement> &)> collectElements =
+			[&](std::vector<DefinitionPatternElement> &elements) {
+			for (DefinitionPatternElement &element : elements) {
+				if (element.type == PatternElement::Type::Choice) {
+					for (auto &alternative : element.alternatives)
+						collectElements(alternative);
+					continue;
+				}
+				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isDeduced())
+					continue;
+				int constraintEnd = definition->range.start() + static_cast<int>(element.startPos) - 1;
+				int constraintStart = constraintEnd - static_cast<int>(element.typeConstraintName.size());
+				Range constraintRange(definition->range.line, constraintStart, constraintEnd);
+				items.push_back({
+					definition,
+					&element,
+					createTypeConstraintExpression(parseContext, definition->section, constraintRange),
+				});
+			}
+		};
+		collectElements(definition->patternElements);
+	}
+	for (Section *child : section->children)
+		collectPatternTypeConstraintWorkItems(parseContext, child, items);
+}
+
+static bool inferPatternTypeConstraints(ParseContext &parseContext) {
+	std::vector<PatternTypeConstraintWorkItem> items;
+	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
+	collectPatternTypeConstraintWorkItems(parseContext, parseContext.mainSection, items);
+	auto destroyExpressions = [&]() {
+		for (PatternTypeConstraintWorkItem &item : items) {
+			if (!item.expression)
+				continue;
+			destroyTypeConstraintExpression(item.expression);
+			item.expression = nullptr;
+		}
+	};
+	for (const PatternTypeConstraintWorkItem &item : items) {
+		if (item.expression)
+			continue;
+		if (parseContext.diagnostics.size() == diagnosticsBeforeParsing) {
+			parseContext.diagnostics.push_back(Diagnostic(
+				parseContext, Diagnostic::Level::Error, "unknown type constraint", item.definition->range, "type_constraint",
+				item.element->typeConstraintName
+			));
+		}
+		destroyExpressions();
+		return false;
+	}
+
+	size_t unresolvedCount = items.size();
+	while (unresolvedCount > 0) {
+		bool madeProgress = false;
+		for (PatternTypeConstraintWorkItem &item : items) {
+			if (!item.expression)
+				continue;
+			if (!item.definition || !item.element) {
+				destroyExpressions();
+				crashCompilerBug("pattern type-constraint work item lost its source definition");
+			}
+			PatternTypeConstraintProbe probe = probePatternTypeConstraint(item, parseContext);
+			if (probe == PatternTypeConstraintProbe::Deferred)
+				continue;
+			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
+				const char *diagnosticKey =
+					probe == PatternTypeConstraintProbe::Impure ? "impure type constraint" : "unknown type constraint";
+				parseContext.diagnostics.push_back(Diagnostic(
+					parseContext, Diagnostic::Level::Error, diagnosticKey, item.definition->range, "type_constraint",
+					item.element->typeConstraintName
+				));
+				destroyExpressions();
+				return false;
+			}
+			commitPatternTypeConstraint(item, parseContext);
+			destroyTypeConstraintExpression(item.expression);
+			item.expression = nullptr;
+			unresolvedCount--;
+			madeProgress = true;
+		}
+		if (madeProgress)
+			continue;
+		auto unresolved = std::find_if(items.begin(), items.end(), [](const PatternTypeConstraintWorkItem &item) {
+			return item.expression != nullptr;
+		});
+		requireCompilerInvariant(unresolved != items.end(), "type-constraint worklist lost its unresolved item");
+		parseContext.diagnostics.push_back(Diagnostic(
+			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->definition->range, "type_constraint",
+			unresolved->element->typeConstraintName
+		));
+		destroyExpressions();
+		return false;
+	}
+	return true;
+}
+
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
+	if (!inferPatternTypeConstraints(parseContext))
+		return false;
+	if (!validatePatternDefinitionConflicts(parseContext))
+		return false;
 	InferenceContext context(parseContext);
-	parseContext.constantValuesByReference.clear();
-	parseContext.constantValuesByExpression.clear();
-	parseContext.inferredIfChainSelections.clear();
 	context.currentKnownConstants.clear();
-	if (!inferSection(parseContext.mainSection, context, {}))
+	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {}))
+		return false;
+	std::function<bool(Section *)> inferExposedFunctions = [&](Section *section) {
+		if (!section)
+			return true;
+		if (section->isExposed) {
+			if (section->patternDefinitions.empty() ||
+				!ensureCallableFunctionInstantiationInferred(
+					section->patternDefinitions.front(), context,
+					section->openingLine ? Range(section->openingLine, section->openingLine->patternText) : Range()
+				)) {
+				return false;
+			}
+		}
+		for (Section *child : section->children) {
+			if (!inferExposedFunctions(child))
+				return false;
+		}
+		return true;
+	};
+	if (!inferExposedFunctions(parseContext.mainSection))
 		return false;
 
 	// Validate variables — all must have deduced types
@@ -330,8 +582,8 @@ bool inferTypes(ParseContext &parseContext) {
 }
 
 bool ensureSectionInstantiationInferred(
-	ParseContext &parseContext, Section *section, PatternDefinition *definition, const std::vector<std::string> &parameterNames,
-	const BindingFrameStack &callerBindingFrameStack, const std::vector<DataType> &argTypes,
+	ParseContext &parseContext, Section *section, PatternDefinition *definition,
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
 	const Instantiation *callerInstantiation, InferenceContext *callerContext
 ) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
@@ -339,20 +591,17 @@ bool ensureSectionInstantiationInferred(
 		return false;
 	(void)definition;
 	(void)callerInstantiation;
-
-	std::vector<std::pair<std::string, Expression *>> paramBindings;
-	paramBindings.reserve(parameterNames.size());
-	for (const std::string &parameterName : parameterNames)
-		paramBindings.push_back({parameterName, callerBindingFrameStack.lookup(parameterName)});
 	auto evaluateParameterValue = [&](Expression *argumentExpression) {
 		if (!argumentExpression)
 			crashCompilerBug("missing section parameter expression while building instantiation key");
 		return callerContext ? callerContext->lookupExpressionValue(argumentExpression)
-							 : getExpressionCompileTimeValue(parseContext, argumentExpression, callerInstantiation);
+							 : getExpressionCompileTimeValue(argumentExpression);
 	};
+	std::unordered_set<std::string> explicitCompileTimeParameters =
+		collectExplicitCompileTimeParameters(definition, paramBindings, argTypes);
 	InstantiationKey instantiationKey =
 		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
-			.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
+			.value_or(buildInstantiationKey(explicitCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue));
 	if (callerContext && callerContext->trial) {
 		if (!callerContext->trialJournal)
 			crashCompilerBug("trial section-instantiation inference started without an active trial journal");
@@ -362,58 +611,42 @@ bool ensureSectionInstantiationInferred(
 	if (instIt == section->instantiations.end())
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
+	if (!inst.body)
+		inst.body = parseContext.cloneSectionBody(section);
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
 		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
-	size_t parameterCount = std::min(parameterNames.size(), argTypes.size());
-	for (size_t i = 0; i < parameterCount; i++) {
-		if (parameterRequiresCompileTimeInstantiationValue(inst.requiredCompileTimeParameters, parameterNames[i], argTypes[i]))
-			inst.requiredCompileTimeParameters.insert(parameterNames[i]);
+	inst.requiredCompileTimeParameters = explicitCompileTimeParameters;
+	seedInstantiationParameterTypes(inst, paramBindings, argTypes);
+	seedInstantiationCompileTimeParameters(
+		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
+		[&](Expression *argumentExpression) {
+		return callerContext ? callerContext->lookupExpressionValue(argumentExpression)
+							 : getExpressionCompileTimeValue(argumentExpression);
 	}
-	for (size_t i = 0; i < parameterNames.size(); i++) {
-		const std::string &parameterName = parameterNames[i];
-		Expression *argumentExpression = callerBindingFrameStack.lookup(parameterName);
-		if (!argumentExpression) {
-			inst.constantParameterValues.erase(parameterName);
-			continue;
-		}
-		if (i < argTypes.size() && argTypes[i].kind == DataType::Kind::Type) {
-			inst.constantParameterValues[parameterName] = argTypes[i];
-			continue;
-		}
-		CompileTimeValue value = callerContext
-									 ? callerContext->lookupExpressionValue(argumentExpression)
-									 : getExpressionCompileTimeValue(parseContext, argumentExpression, callerInstantiation);
-		if (isCompileTimeKnown(value))
-			inst.constantParameterValues[parameterName] = value;
-		else
-			inst.constantParameterValues.erase(parameterName);
-	}
+	);
 	if (inst.returnType.isDeduced() && !inst.needsReinfer)
 		return inst.valid;
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 
-	inst.constantValuesByReference.clear();
-	inst.constantValuesByExpression.clear();
 	inst.writtenGlobalReferences.clear();
 	inst.finalGlobalConstantValues.clear();
-	inst.selectedOverloadsByCall.clear();
-	inst.ifChainSelections.clear();
+	inst.purity = InstantiationPurity::Pure;
+	inst.pureReturnValuesByArguments.clear();
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	if (callerContext) {
 		context.currentKnownConstants = callerContext->currentKnownConstants;
+		context.allowTrialSummaryReuse = callerContext->allowTrialSummaryReuse;
 		context.inheritedTrialExpressionValues =
 			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
-		context.inheritedTrialFunctionFlexExpansions = callerContext->trial
-														   ? &callerContext->trialFunctionFlexExpansions
-														   : callerContext->inheritedTrialFunctionFlexExpansions;
 		context.trialJournal = callerContext->trialJournal;
 		context.trialInstantiationCache =
 			callerContext->trialInstantiationCache
 				? callerContext->trialInstantiationCache
 				: (callerContext->trial ? callerContext->ensureTrialInstantiationCache() : nullptr);
+		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
 		context.suppressDiagnostics = callerContext->suppressDiagnostics;
 		context.suppressReinferPassDiagnostics = callerContext->suppressReinferPassDiagnostics;
 	}
@@ -425,14 +658,9 @@ bool ensureSectionInstantiationInferred(
 			context.setKnownConstant(var->definition, value);
 	}
 	context.currentInstantiation = &inst;
-	size_t bindingCount = std::min(parameterNames.size(), argTypes.size());
-	BindingFrame nonFlexTypeBindings =
-		rebuildInstantiationNonFlexParameterBindings(inst, bindingCount, [&](size_t index) -> const std::string & {
-		return parameterNames[index];
-	}, [&](size_t index) -> VariableReference * {
-		return findPatternParameterDefinition(definition, parameterNames[index]);
-	}, argTypes, section->globalVariables);
-	bool inferenceSucceeded = inferSection(section, context, makeBindingFrameStack(nonFlexTypeBindings));
+	if (context.trial)
+		inst.body = parseContext.cloneSectionBody(section);
+	bool inferenceSucceeded = inferSection(section, inst.body.get(), nullptr, context, {});
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		auto knownIt = context.currentKnownConstants.find(reference);
 		if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))

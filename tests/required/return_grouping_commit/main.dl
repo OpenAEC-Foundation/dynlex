@@ -1,0 +1,25 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function left - right:
+    execute:
+        return @intrinsic("subtract", left, right)
+
+function value odded:
+    execute:
+        return value
+
+function byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function test value:
+    execute:
+        return value - 1 odded
+
+discard @intrinsic("array", test 4, byte)

@@ -27,31 +27,41 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 #include <algorithm>
+#include <bit>
 #include <unordered_map>
 #include <unordered_set>
 
 static std::vector<size_t> collectRuntimeParameterIndices(
-	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const Instantiation &inst
+	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	const std::vector<DataType> &argTypes
 ) {
 	std::vector<size_t> runtimeIndices;
 	runtimeIndices.reserve(paramBindings.size());
-	for (size_t i = 0; i < paramBindings.size(); i++) {
-		if (inst.requiredCompileTimeParameters.contains(paramBindings[i].first))
+	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
+	for (size_t i = 0; i < bindingCount; i++) {
+		if (patternParameterRequiresCompileTimeValue(definition, paramBindings[i].first, argTypes[i]))
 			continue;
 		runtimeIndices.push_back(i);
 	}
 	return runtimeIndices;
 }
 
-static std::string formatArgumentTypesForCrash(const std::vector<DataType> &argTypes) {
-	std::string formatted = "[";
-	for (size_t index = 0; index < argTypes.size(); index++) {
-		if (index > 0)
-			formatted += ", ";
-		formatted += argTypes[index].toString();
+static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey &instantiationKey) {
+	std::string suffix;
+	for (const auto &[name, value] : instantiationKey.compileTimeParameters) {
+		suffix += "_ct_" + name + "_";
+		if (const auto *number = std::get_if<double>(&value))
+			suffix += std::to_string(std::bit_cast<uint64_t>(*number));
+		else if (const auto *text = std::get_if<std::string>(&value))
+			suffix += std::to_string(text->size()) + "_" + *text;
+		else if (const auto *boolean = std::get_if<bool>(&value))
+			suffix += *boolean ? "true" : "false";
+		else if (const auto *typeRef = std::get_if<DataType>(&value))
+			suffix += typeRef->toString();
+		else
+			suffix += "unknown";
 	}
-	formatted += "]";
-	return formatted;
+	return suffix;
 }
 
 namespace {
@@ -131,65 +141,31 @@ struct ScopedFlexCallSiteSection {
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 Instantiation *generateSpecializedFunction(
-	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes
+	ParseContext &context, Section *section, PatternDefinition *definition,
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, Instantiation &instantiation
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	PatternDefinition *definition = section->patternDefinitions.empty() ? nullptr : section->patternDefinitions.front();
-	auto evaluateParameterValue = [&](Expression *argumentExpression) {
-		if (!argumentExpression)
-			crashCompilerBug("missing section parameter expression while building codegen instantiation key");
-		return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
-	};
-	InstantiationKey instantiationKey =
-		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
-			.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
-	auto instIt = section->instantiations.find(instantiationKey);
-	if (instIt == section->instantiations.end())
-		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
-	Instantiation &inst = instIt->second;
-	if (inst.argumentTypes.empty())
-		inst.argumentTypes = argTypes;
-	else
-		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
-
-	if (!inst.returnType.isDeduced() || inst.needsReinfer) {
-		BindingFrame callBindings;
-		std::vector<std::string> parameterNames;
-		for (const auto &[name, expr] : paramBindings) {
-			callBindings.bindings[name] = expr;
-			if (VariableReference *parameterDefinition = findPatternParameterDefinition(definition, name))
-				callBindings.parameterBindings[parameterDefinition] = expr;
-		}
-		for (const auto &[name, ignoredExpr] : paramBindings) {
-			(void)ignoredExpr;
-			parameterNames.push_back(name);
-		}
-		ensureSectionInstantiationInferred(
-			context, section, definition, parameterNames, makeBindingFrameStack(callBindings), argTypes
-		);
-		instantiationKey = findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
-							   .value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
-		instIt = section->instantiations.find(instantiationKey);
-		requireCompilerInvariant(instIt != section->instantiations.end(), "Missing instantiation after inference");
-	}
+	auto instIt = std::find_if(section->instantiations.begin(), section->instantiations.end(), [&](const auto &entry) {
+		return &entry.second == &instantiation;
+	});
+	requireCompilerInvariant(
+		instIt != section->instantiations.end(), "selected codegen instantiation is not owned by its section"
+	);
+	const InstantiationKey &instantiationKey = instIt->first;
 	Instantiation &activeInst = instIt->second;
-	if (!activeInst.returnType.isDeduced()) {
-		std::string functionName =
-			section->patternDefinitions.empty() ? "?" : std::string(section->patternDefinitions[0]->range.subString);
-		crashCompilerBug(
-			"Return type must be deduced before codegen for '" + functionName + "' with arguments " +
-			formatArgumentTypesForCrash(argTypes)
-		);
-	}
-	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(paramBindings, activeInst);
+	const std::vector<DataType> &argTypes = activeInst.argumentTypes;
+	requireCompilerInvariant(activeInst.valid, "invalid function instantiation reached codegen");
+	requireCompilerInvariant(!activeInst.inferring, "in-progress function instantiation reached codegen");
+	requireCompilerInvariant(!activeInst.needsReinfer, "unfinished function instantiation reached codegen");
+	requireCompilerInvariant(activeInst.returnType.isDeduced(), "function without a deduced return type reached codegen");
+	requireCompilerInvariant(activeInst.body != nullptr, "function without an inferred body reached codegen");
+	std::vector<size_t> runtimeParameterIndices =
+		collectRuntimeParameterIndices(definition, paramBindings, activeInst.argumentTypes);
 	std::vector<std::string> runtimeParameterNames;
 	runtimeParameterNames.reserve(runtimeParameterIndices.size());
 	for (size_t runtimeParameterIndex : runtimeParameterIndices)
 		runtimeParameterNames.push_back(paramBindings[runtimeParameterIndex].first);
 
-	// All runtime parameters are opaque pointers. Compile-time-only parameters
-	// stay in patternParamTypes but do not become LLVM function arguments.
 	std::vector<llvm::Type *> paramTypes(runtimeParameterNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
 	llvm::Type *returnType = getLLVMType(context, activeInst.returnType);
 
@@ -200,6 +176,7 @@ Instantiation *generateSpecializedFunction(
 	for (const DataType &t : argTypes) {
 		funcName += "_" + t.toString();
 	}
+	funcName += encodeInstantiationKeyForFunctionName(instantiationKey);
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunction = func;
@@ -231,7 +208,6 @@ Instantiation *generateSpecializedFunction(
 	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
 	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
 	auto savedPatternBindings = context.patternBindings;
-	auto savedParamTypes = context.patternParamTypes;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
 	// Function bodies must not see caller-side flex bindings.
@@ -241,10 +217,7 @@ Instantiation *generateSpecializedFunction(
 
 	// Set up bindings: map parameter names to LLVM values and their types
 	context.patternBindings.clear();
-	context.patternParamTypes.clear();
 	requireCompilerInvariant(activeInst.argumentTypes == argTypes, "Codegen argTypes diverged from instantiation signature");
-	for (size_t i = 0; i < paramBindings.size() && i < argTypes.size(); i++)
-		context.patternParamTypes[paramBindings[i].first] = argTypes[i];
 	argIdx = 0;
 	for (auto &arg : func->args()) {
 		size_t parameterIndex = runtimeParameterIndices[argIdx];
@@ -254,8 +227,13 @@ Instantiation *generateSpecializedFunction(
 	context.currentCodegenInstantiation = &activeInst;
 
 	// Generate function body
+	requireCompilerInvariant(
+		activeInst.body != nullptr, "inferred function instantiation is missing its owned expression body"
+	);
 	for (Section *child : section->children) {
-		generateSectionCode(context, child);
+		InstantiatedSectionBody *childBody = activeInst.body->bodyForChild(child);
+		requireCompilerInvariant(childBody, "instantiated function body is missing a child section");
+		generateSectionCode(context, child, childBody);
 	}
 
 	// Add implicit void return if the function returns void
@@ -266,7 +244,6 @@ Instantiation *generateSpecializedFunction(
 	// Restore all codegen state
 	context.flexBindingFrames = savedFlexBindingFrames;
 	context.patternBindings = savedPatternBindings;
-	context.patternParamTypes = savedParamTypes;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
 
@@ -277,63 +254,6 @@ Instantiation *generateSpecializedFunction(
 	return &activeInst;
 }
 
-static DataType concretizeCallableType(DataType type) {
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
-		!type.classDefinition->instantiations.empty()) {
-		type.classInstIndex = 0;
-	}
-	return type;
-}
-
-static void collectCallablePatternParameters(
-	const std::vector<DefinitionPatternElement> &elements, std::vector<std::pair<std::string, DataType>> &outParameters
-) {
-	for (const DefinitionPatternElement &element : elements) {
-		switch (element.type) {
-		case PatternElement::Type::Choice:
-			if (!element.alternatives.empty())
-				collectCallablePatternParameters(element.alternatives[0], outParameters);
-			break;
-		case PatternElement::Type::Variable:
-			outParameters.push_back({element.text, concretizeCallableType(element.resolvedTypeConstraint)});
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-static bool buildCallableFunctionSignature(
-	ParseContext &context, PatternDefinition *definition, std::vector<std::pair<std::string, DataType>> &outParameters
-) {
-	if (!definition || !definition->section)
-		return false;
-
-	outParameters.clear();
-	collectCallablePatternParameters(definition->patternElements, outParameters);
-	for (const auto &[parameterName, parameterType] : outParameters) {
-		if (!parameterType.isDeduced()) {
-			Diagnostic diagnostic;
-			diagnostic.level = Diagnostic::Level::Error;
-			diagnostic.range = definition->range;
-			diagnostic.message = "function reference requires concrete parameter types: " + definition->toString() +
-								 " parameter '" + parameterName + "'";
-			context.addDiagnostic(std::move(diagnostic));
-			return false;
-		}
-		if (parameterType.kind == DataType::Kind::Type || parameterType.kind == DataType::Kind::Void) {
-			Diagnostic diagnostic;
-			diagnostic.level = Diagnostic::Level::Error;
-			diagnostic.range = definition->range;
-			diagnostic.message = "function reference requires runtime parameters: " + definition->toString() + " parameter '" +
-								 parameterName + "'";
-			context.addDiagnostic(std::move(diagnostic));
-			return false;
-		}
-	}
-	return true;
-}
-
 static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argTypes) {
 	std::string name = getPatternFunctionName(definition->section) + "_callable";
 	for (const DataType &type : argTypes)
@@ -341,76 +261,38 @@ static std::string buildCallableFunctionName(PatternDefinition *definition, cons
 	return name;
 }
 
-static std::unique_ptr<Expression> makeCallablePlaceholderExpression(const DataType &type) {
-	auto expression = std::make_unique<Expression>();
-	expression->type = type;
-	return expression;
-}
-
 llvm::Function *
 ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage) {
-	if (!definition || !definition->section || definition->section->type != SectionType::Function ||
-		definition->section->isFlex) {
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "function reference requires non-flex function",
-			definition ? definition->range : Range()
-		));
-		return nullptr;
-	}
-	if (context.options.emitSPIRV) {
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "function references are unavailable for SPIR-V targets", definition->range
-		));
-		return nullptr;
-	}
+	requireCompilerInvariant(
+		definition && definition->section && definition->section->type == SectionType::Function && !definition->section->isFlex,
+		"non-callable definition reached callable codegen"
+	);
+	requireCompilerInvariant(!context.options.emitSPIRV, "function reference reached SPIR-V codegen");
 
 	std::vector<std::pair<std::string, DataType>> parameters;
-	if (!buildCallableFunctionSignature(context, definition, parameters))
-		return nullptr;
+	collectCallableFunctionParameters(definition, parameters);
+	Instantiation *inst = definition->callableInstantiation;
+	requireCompilerInvariant(inst, "callable definition reached codegen without its inferred instantiation");
+	const std::vector<DataType> &argTypes = inst->argumentTypes;
+	requireCompilerInvariant(parameters.size() == argTypes.size(), "callable parameter count changed after inference");
 
 	std::vector<std::pair<std::string, Expression *>> paramBindings;
-	std::vector<std::unique_ptr<Expression>> ownedBindings;
-	std::vector<DataType> argTypes;
 	paramBindings.reserve(parameters.size());
-	ownedBindings.reserve(parameters.size());
-	argTypes.reserve(parameters.size());
-	for (const auto &[parameterName, parameterType] : parameters) {
-		argTypes.push_back(parameterType);
-		auto placeholder = makeCallablePlaceholderExpression(parameterType);
-		paramBindings.push_back({parameterName, placeholder.get()});
-		ownedBindings.push_back(std::move(placeholder));
+	for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
+		requireCompilerInvariant(
+			parameters[parameterIndex].second == argTypes[parameterIndex], "callable parameter type changed after inference"
+		);
+		paramBindings.push_back({parameters[parameterIndex].first, nullptr});
 	}
 
 	Section *section = definition->section;
-	InstantiationKey instantiationKey = buildInstantiationKey({}, paramBindings, argTypes, [](Expression *) {
-		return CompileTimeValue{};
-	});
-	Instantiation *inst = &section->instantiations[instantiationKey];
-	if (inst->argumentTypes.empty()) {
-		inst->argumentTypes = argTypes;
-	} else {
-		requireCompilerInvariant(inst->argumentTypes == argTypes, "Callable signature diverged from instantiation key");
-	}
 	if (!inst->llvmFunction) {
-		inst = generateSpecializedFunction(context, section, paramBindings, argTypes);
+		inst = generateSpecializedFunction(context, section, definition, paramBindings, *inst);
 		requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 	}
-	if (!inst->returnType.isDeduced() || !inst->valid) {
-		Diagnostic diagnostic;
-		diagnostic.level = Diagnostic::Level::Error;
-		diagnostic.range = definition->range;
-		diagnostic.message = "callable function inference failed: " + definition->toString();
-		context.addDiagnostic(std::move(diagnostic));
-		return nullptr;
-	}
-	if (inst->needsReinfer || !inst->requiredCompileTimeParameters.empty()) {
-		Diagnostic diagnostic;
-		diagnostic.level = Diagnostic::Level::Error;
-		diagnostic.range = definition->range;
-		diagnostic.message = "callable function cannot require compile-time parameters: " + definition->toString();
-		context.addDiagnostic(std::move(diagnostic));
-		return nullptr;
-	}
+	requireCompilerInvariant(inst->valid, "invalid callable instantiation reached codegen");
+	requireCompilerInvariant(!inst->needsReinfer, "unfinished callable instantiation reached codegen");
+	requireCompilerInvariant(inst->returnType.isDeduced(), "callable without a return type reached codegen");
 	if (inst->llvmCallableFunction) {
 		if (requireExternalLinkage)
 			inst->llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -503,10 +385,10 @@ static void finalizeFlexBodySectionControlFlow(ParseContext &context, Section *b
 	}
 }
 
-void emitFlexBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow) {
+void emitFlexBodySection(ParseContext &context, Section *bodySection, InstantiatedSectionBody *body, bool finalizeControlFlow) {
 	if (!bodySection)
 		return;
-	generateSectionCode(context, bodySection);
+	generateSectionCode(context, bodySection, body);
 	if (finalizeControlFlow)
 		finalizeFlexBodySectionControlFlow(context, bodySection);
 }
@@ -521,7 +403,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
-			DataType numType = getEffectiveType(context, expr);
+			DataType numType = finalizedExpressionType(context, expr);
 			llvm::Type *llvmType = numType.toLLVM(*context.llvmContext);
 			if (numType.kind == DataType::Kind::Int)
 				return llvm::ConstantInt::get(llvmType, (int64_t)*doubleVal, true);
@@ -552,14 +434,14 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::ArrayLiteral: {
-		DataType arrayType = getEffectiveType(context, expr);
+		DataType arrayType = finalizedExpressionType(context, expr);
 		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
 			return nullptr;
 		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
 		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
 			llvm::Value *elementValue = generateExpressionCode(context, expr->arguments[i]);
-			DataType fromType = getEffectiveType(context, expr->arguments[i]);
+			DataType fromType = finalizedExpressionType(context, expr->arguments[i]);
 			elementValue = ensureType(context, elementValue, fromType, *arrayType.arrayElementType);
 			llvm::Value *elementPtr = builder.CreateGEP(
 				llvmArrayType, tempAlloca, {builder.getInt64(0), builder.getInt64(static_cast<int64_t>(i))}, "array_elem_ptr"
@@ -582,7 +464,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::string varName = expr->variable->name;
 
 		// Determine this variable's type for loading
-		DataType varType = getEffectiveType(context, expr);
+		DataType varType = finalizedExpressionType(context, expr);
 
 		llvm::Type *loadType = getLLVMType(context, varType);
 
@@ -601,14 +483,15 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::PatternCall: {
-		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
-			return nullptr;
+		requireCompilerInvariant(
+			expr->patternMatch && expr->patternMatch->matchedEndNode,
+			"pattern call reached codegen without its resolved pattern match"
+		);
 
 		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-		if (defs.empty())
-			return nullptr;
+		requireCompilerInvariant(!defs.empty(), "pattern call reached codegen without matching definitions");
 
-		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
+		PatternDefinition *matchedDef = finalizedPatternDefinition(context, expr);
 		requireCompilerInvariant(matchedDef != nullptr, "Pattern call missing overload selection from type inference");
 		requireCompilerInvariant(
 			std::find(defs.begin(), defs.end(), matchedDef) != defs.end(), "Selected overload no longer matches call"
@@ -626,26 +509,6 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Build parameter name → argument expression mapping
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
-		if (matchedSection->isFlex && matchedSection->type == SectionType::Function) {
-			BindingFrame innerBindings;
-			collectPatternCallBindings(expr, matchedDef, innerBindings);
-			Expression *bodyExpr = expr->inferredFlexExpansion
-									   ? context.cloneFlexExpansionExpression(
-											 expr->inferredFlexExpansion, true, /*preserveInferenceMetadata=*/true
-										 )
-									   : expandFlexPatternCall(context, expr, matchedDef, innerBindings);
-			if (!bodyExpr)
-				return nullptr;
-
-			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
-			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
-			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
-			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
-			llvm::Value *result = generateExpressionCode(context, bodyExpr);
-			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after function flex codegen");
-			return result;
-		}
-
 		if (matchedSection->isFlex) {
 			// Flex: inline the body with expression substitution.
 			// Push current bindings and set only this flex's parameters (scoped).
@@ -657,27 +520,45 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
 			Section *savedBodySection = context.currentBodySection;
+			InstantiatedSectionBody *savedBodyInstantiation = context.currentBodyInstantiation;
 
 			// Only section-type flexes (like "if condition:", "loop while condition:")
 			// should pick up and process the body section opened by this line.
 			// Function flexes (like "not value:", "a + b") must NOT process
 			// the body section, even if they appear on a line that opens one.
 			Section *bodySection = nullptr;
+			InstantiatedSectionBody *bodyInstantiation = nullptr;
 			if (matchedSection->type == SectionType::Section) {
 				bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
+				bodyInstantiation = context.currentInstantiatedSectionBody && bodySection
+										? context.currentInstantiatedSectionBody->bodyForChild(bodySection)
+										: nullptr;
 				context.currentBodySection = bodySection;
+				context.currentBodyInstantiation = bodyInstantiation;
 				if (bodySection)
-					context.sectionFlexBodyFrames.push_back({matchedSection, bodySection, false});
+					context.sectionFlexBodyFrames.push_back({matchedSection, bodySection, bodyInstantiation, false});
 			}
 
 			llvm::Value *result = nullptr;
-			for (Section *child : matchedSection->children) {
-				allocateSectionVariables(context, child);
-				for (CodeLine *line : child->codeLines) {
-					if (line->expression)
-						result = generateExpressionCode(context, line->expression);
+			requireCompilerInvariant(
+				static_cast<bool>(expr->inferredFlexBody), "section flex reached codegen without its inferred replacement body"
+			);
+			matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
+				InstantiatedSectionBody *definitionBody = definitionBodySection == matchedSection
+															  ? expr->inferredFlexBody.get()
+															  : expr->inferredFlexBody->bodyForChild(definitionBodySection);
+				requireCompilerInvariant(definitionBody, "section flex inferred body is missing a definition section");
+				InstantiatedSectionBody *savedInstantiatedSectionBody = context.currentInstantiatedSectionBody;
+				context.currentInstantiatedSectionBody = definitionBody;
+				allocateSectionVariables(context, definitionBodySection, definitionBody);
+				for (size_t lineIndex = 0; lineIndex < definitionBodySection->codeLines.size(); lineIndex++) {
+					Expression *lineExpression = definitionBody->lineExpression(lineIndex);
+					if (lineExpression)
+						result = generateExpressionCode(context, lineExpression);
 				}
-			}
+				context.currentInstantiatedSectionBody = savedInstantiatedSectionBody;
+				return true;
+			});
 
 			if (bodySection) {
 				requireCompilerInvariant(
@@ -690,7 +571,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 				);
 				if (!frame.bodyEmitted) {
 					frame.bodyEmitted = true;
-					emitFlexBodySection(context, frame.bodySection);
+					emitFlexBodySection(context, frame.bodySection, frame.instantiatedBody);
 				} else {
 					finalizeFlexBodySectionControlFlow(context, frame.bodySection);
 				}
@@ -699,56 +580,29 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after flex pattern call");
 			context.currentBodySection = savedBodySection;
+			context.currentBodyInstantiation = savedBodyInstantiation;
 			return result;
 		}
 
-		// Non-flex pattern: monomorphized function call.
-		// Compute argument types at this call site for specialization.
-		std::vector<DataType> argTypes;
-		for (const auto &[paramName, argExpr] : paramBindings) {
-			DataType t = getEffectiveType(context, argExpr);
-			if (!t.isDeduced() && matchedDef) {
-				for (const auto &elem : matchedDef->patternElements) {
-					if (elem.type == PatternElement::Type::Variable && elem.text == paramName &&
-						elem.resolvedTypeConstraint.isDeduced()) {
-						t = elem.resolvedTypeConstraint;
-						break;
-					}
-				}
-			}
-			requireCompilerInvariant(t.isDeduced(), "Undeduced argument type at codegen");
-			argTypes.push_back(t);
-		}
-
-		// Look up or generate the specialized function
-		auto evaluateParameterValue = [&](Expression *argumentExpression) {
-			if (!argumentExpression)
-				crashCompilerBug("missing pattern-call argument while building codegen instantiation key");
-			return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
-		};
-		InstantiationKey instantiationKey =
-			findMatchingInstantiationKey(matchedSection, paramBindings, argTypes, evaluateParameterValue)
-				.value_or(buildInstantiationKey({}, paramBindings, argTypes, evaluateParameterValue));
-		Instantiation *inst = &matchedSection->instantiations[instantiationKey];
-		if (inst->argumentTypes.empty()) {
-			inst->argumentTypes = argTypes;
-		} else {
-			requireCompilerInvariant(
-				inst->argumentTypes == argTypes, "Codegen instantiation signature diverged from lookup key"
-			);
-		}
+		// Non-flex pattern: emit the exact monomorphized function selected by inference.
+		Instantiation *inst = expr->selectedInstantiation;
+		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
+		const std::vector<DataType> &argTypes = inst->argumentTypes;
+		requireCompilerInvariant(
+			argTypes.size() == paramBindings.size(), "selected instantiation argument count diverged from the call"
+		);
 		if (!inst->llvmFunction) {
-			inst = generateSpecializedFunction(context, matchedSection, paramBindings, argTypes);
+			inst = generateSpecializedFunction(context, matchedSection, matchedDef, paramBindings, *inst);
 			requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 		}
 		llvm::Function *func = inst->llvmFunction;
 
 		// Build call arguments: pass variable pointers or temp allocas
+		std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(matchedDef, paramBindings, argTypes);
 		std::vector<llvm::Value *> args;
-		for (size_t i = 0; i < paramBindings.size(); i++) {
-			if (inst->requiredCompileTimeParameters.contains(paramBindings[i].first))
-				continue;
-			Expression *argExpr = paramBindings[i].second;
+		args.reserve(runtimeParameterIndices.size());
+		for (size_t runtimeParameterIndex : runtimeParameterIndices) {
+			Expression *argExpr = paramBindings[runtimeParameterIndex].second;
 			llvm::Value *ptr = getVariablePointer(context, argExpr);
 			if (ptr) {
 				args.push_back(ptr);
@@ -756,7 +610,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 				llvm::Value *argVal = generateExpressionCode(context, argExpr);
 				if (!argVal)
 					crashCompilerBug("Runtime call argument produced no code");
-				llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[i]);
+				llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[runtimeParameterIndex]);
 				builder.CreateAlignedStore(argVal, tempAlloca, llvm::Align(8));
 				args.push_back(tempAlloca);
 			}
@@ -766,7 +620,9 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::IntrinsicCall: {
-		return generateIntrinsicCode(context, expr, expr->intrinsicName, expr->arguments, getEffectiveType(context, expr));
+		return generateIntrinsicCode(
+			context, expr, expr->intrinsicName, expr->arguments, finalizedExpressionType(context, expr)
+		);
 	}
 
 	case Expression::Kind::Pending:
@@ -780,27 +636,40 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 }
 
 // Generate code for a section (process pattern references)
-bool generateSectionCode(ParseContext &context, Section *section) {
-	allocateSectionVariables(context, section);
+bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
+	requireCompilerInvariant(!body || body->sourceSection == section, "active codegen body does not match section");
+	InstantiatedSectionBody *savedInstantiatedBody = context.currentInstantiatedSectionBody;
+	context.currentInstantiatedSectionBody = body;
+	struct InstantiatedBodyRestore {
+		ParseContext &context;
+		InstantiatedSectionBody *saved;
+		~InstantiatedBodyRestore() { context.currentInstantiatedSectionBody = saved; }
+	} instantiatedBodyRestore{context, savedInstantiatedBody};
+	allocateSectionVariables(context, section, body);
 
-	auto controlHeaderInfo = [&](CodeLine *line) -> std::optional<std::tuple<std::string, Expression *, BindingMap>> {
-		if (!line || !line->expression)
+	auto controlHeaderInfo = [&](CodeLine *line, Expression *lineExpression
+							 ) -> std::optional<std::tuple<std::string, Expression *, BindingMap>> {
+		if (!line || !lineExpression)
 			return std::nullopt;
 
-		Expression *header = line->expression;
+		Expression *header = lineExpression;
 		BindingMap headerBindings;
 		context.flexBindingFrames.forEachFrame([&headerBindings](const BindingFrame &frame) {
 			for (const auto &[bindingName, expression] : frame.bindings)
 				headerBindings[bindingName] = expression;
 		});
 		if (header->kind == Expression::Kind::PatternCall) {
+			PatternDefinition *definition = finalizedPatternDefinition(context, header);
+			if (!definition->section || !definition->section->isFlex)
+				return std::nullopt;
+			requireCompilerInvariant(
+				header->inferredFlexExpansion, "control-flow flex reached codegen without its finalized expansion"
+			);
 			BindingMap innerBindings;
-			Expression *expanded = expandFlexPatternCall(context, header, innerBindings);
-			if (expanded) {
-				header = expanded;
-				for (const auto &[name, argExpr] : innerBindings)
-					headerBindings[name] = argExpr;
-			}
+			collectPatternCallBindings(header, definition, innerBindings);
+			header = header->inferredFlexExpansion;
+			for (const auto &[name, argExpr] : innerBindings)
+				headerBindings[name] = argExpr;
 		}
 		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
@@ -810,12 +679,14 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 	};
 	for (size_t i = 0; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
-		auto headerInfo = controlHeaderInfo(line);
+		Expression *lineExpression = body ? body->lineExpression(i) : line->expression;
+		auto headerInfo = controlHeaderInfo(line, lineExpression);
 		if (headerInfo && std::get<0>(*headerInfo) == "if") {
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
-				auto nextInfo = controlHeaderInfo(next);
+				Expression *nextExpression = body ? body->lineExpression(chainEnd + 1) : next->expression;
+				auto nextInfo = controlHeaderInfo(next, nextExpression);
 				if (!nextInfo)
 					break;
 				const std::string &nextKind = std::get<0>(*nextInfo);
@@ -824,36 +695,30 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 				chainEnd++;
 			}
 
-			if (context.currentCodegenInstantiation) {
-				auto selectionIt = context.currentCodegenInstantiation->ifChainSelections.find(line);
-				requireCompilerInvariant(
-					selectionIt != context.currentCodegenInstantiation->ifChainSelections.end(),
-					"Missing per-instantiation if-chain selection from type inference"
-				);
-				const Instantiation::IfChainSelection &selection = selectionIt->second;
-				if (selection.known) {
-					if (selection.selectedBranchLine && selection.selectedBranchLine->sectionOpening)
-						generateSectionCode(context, selection.selectedBranchLine->sectionOpening);
-					i = chainEnd;
-					continue;
+			requireCompilerInvariant(
+				lineExpression && lineExpression->branchSelection,
+				"if chain reached codegen without finalized branch-selection metadata"
+			);
+			const Expression::BranchSelection &selection = *lineExpression->branchSelection;
+			if (selection.known) {
+				if (selection.selectedBranchIndex >= 0) {
+					requireCompilerInvariant(
+						selection.selectedBranchIndex < static_cast<int>(section->codeLines.size()),
+						"finalized if-chain branch index is out of range"
+					);
+					CodeLine *selectedLine = section->codeLines[selection.selectedBranchIndex];
+					if (selectedLine->sectionOpening) {
+						InstantiatedSectionBody *selectedBody =
+							body ? body->bodyForChild(selectedLine->sectionOpening) : nullptr;
+						generateSectionCode(context, selectedLine->sectionOpening, selectedBody);
+					}
 				}
-			} else {
-				auto selectionIt = context.inferredIfChainSelections.find(line);
-				requireCompilerInvariant(
-					selectionIt != context.inferredIfChainSelections.end(),
-					"Missing non-instantiated if-chain selection from type inference"
-				);
-				const Instantiation::IfChainSelection &selection = selectionIt->second;
-				if (selection.known) {
-					if (selection.selectedBranchLine && selection.selectedBranchLine->sectionOpening)
-						generateSectionCode(context, selection.selectedBranchLine->sectionOpening);
-					i = chainEnd;
-					continue;
-				}
+				i = chainEnd;
+				continue;
 			}
 		}
 
-		if (line->expression) {
+		if (lineExpression) {
 			if (context.diBuilder && line->sourceFile && context.currentDebugScope) {
 				auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 				// Use a DILexicalBlockFile scope when the code line's source file
@@ -866,7 +731,7 @@ bool generateSectionCode(ParseContext &context, Section *section) {
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
-			generateExpressionCode(context, line->expression);
+			generateExpressionCode(context, lineExpression);
 		}
 	}
 

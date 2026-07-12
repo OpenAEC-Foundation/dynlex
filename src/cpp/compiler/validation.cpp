@@ -9,8 +9,6 @@
 using Bindings = BindingMap;
 
 static bool isInternalSection(Section *section) {
-	if (!section)
-		return false;
 	for (CodeLine *line : section->codeLines) {
 		if (line && line->sourceFile && !line->sourceFile->uri.empty())
 			return isInternalSourcePath(line->sourceFile->uri);
@@ -25,10 +23,6 @@ static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
 
 static Bindings buildBindings(Expression *expr) {
 	Bindings result;
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
-		return result;
-	if (expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
-		return result;
 	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
 	collectPatternCallBindings(expr, def, result);
 	return result;
@@ -69,13 +63,16 @@ static VarUsage analyzeVariableUsage(
 			Bindings merged = bindings;
 			for (auto &[key, val] : buildBindings(expr))
 				merged[key] = resolveVar(val, bindings);
-			for (Section *child : def->section->children)
-				for (CodeLine *line : child->codeLines)
-					if (line->expression) {
-						VarUsage body = analyzeVariableUsage(line->expression, varName, merged, visited);
-						usage.writes |= body.writes;
-						usage.reads |= body.reads;
-					}
+			def->section->forEachDefinitionBodySection([&](Section *bodySection) {
+				for (CodeLine *line : bodySection->codeLines) {
+					if (!line->expression)
+						continue;
+					VarUsage body = analyzeVariableUsage(line->expression, varName, merged, visited);
+					usage.writes |= body.writes;
+					usage.reads |= body.reads;
+				}
+				return true;
+			});
 			return usage;
 		}
 		for (Expression *arg : expr->arguments)

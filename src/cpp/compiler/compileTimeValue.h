@@ -21,27 +21,15 @@ Expression *resolveCompileTimeBinding(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
 );
 CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr);
-CompileTimeValue getExpressionCompileTimeValue(
-	const ParseContext &context, const Expression *expr, const Instantiation *instantiation = nullptr
-);
-void setExpressionCompileTimeValue(
-	ParseContext &context, Expression *expr, const CompileTimeValue &value, Instantiation *instantiation = nullptr
-);
-CompileTimeValue resolveStoredCompileTimeValue(
-	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack = {},
-	const Instantiation *instantiation = nullptr
-);
-bool resolveStoredCompileTimeInteger(
-	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue,
-	const Instantiation *instantiation = nullptr
-);
+CompileTimeValue getExpressionCompileTimeValue(const Expression *expr);
+void setExpressionCompileTimeValue(Expression *expr, const CompileTimeValue &value);
+CompileTimeValue resolveStoredCompileTimeValue(Expression *expr, const BindingFrameStack &bindingFrameStack = {});
+bool resolveStoredCompileTimeInteger(Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue);
 
 template <typename ReadKnownValueFn>
 CompileTimeValue resolveCompileTimeValueFromKnownState(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, ReadKnownValueFn &&readKnownValue
 ) {
-	if (!expr)
-		crashCompilerBug("compile-time value resolution received null expression");
 	Expression *currentExpression = expr;
 	BindingFrameStack currentBindingFrameStack = bindingFrameStack;
 	constexpr size_t maxResolutionDepth = 256;

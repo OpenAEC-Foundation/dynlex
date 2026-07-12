@@ -35,7 +35,6 @@ class DynLexServer : public LanguageServer {
   private:
 	struct CursorState {
 		std::string uri;
-		int version = 0;
 		Position position;
 	};
 

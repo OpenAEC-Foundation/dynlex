@@ -1,0 +1,25 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function left[ |]+[ |]right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function left[ |]-[ |]right:
+    execute:
+        return @intrinsic("subtract", left, right)
+
+function left[ |]*[ |]right:
+    execute:
+        return @intrinsic("multiply", left, right)
+
+function first second suffix:
+    execute:
+        return @intrinsic("add", first, second)
+
+set r to r * 0.5 + 0.5 set g to g * 0.5 +import0.5

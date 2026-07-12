@@ -24,11 +24,11 @@ llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index);
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, DataType condType, const std::string &name);
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
 void resolveThroughFlexLayers(ParseContext &context, Expression *&expr);
-DataType getEffectiveType(ParseContext &context, Expression *expr);
-PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr);
+DataType finalizedExpressionType(ParseContext &context, Expression *expr);
+PatternDefinition *finalizedPatternDefinition(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
 std::string getPatternFunctionName(Section *section);
-void allocateSectionVariables(ParseContext &context, Section *section);
+void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
 llvm::Value *getVariablePointer(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
 
@@ -51,12 +51,14 @@ llvm::DIType *getDIType(ParseContext &context, DataType type);
 llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFile);
 
 // Function/section code generation (codegen.cpp)
-bool generateSectionCode(ParseContext &context, Section *section);
+bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
-void emitFlexBodySection(ParseContext &context, Section *bodySection, bool finalizeControlFlow = true);
+void emitFlexBodySection(
+	ParseContext &context, Section *bodySection, InstantiatedSectionBody *body = nullptr, bool finalizeControlFlow = true
+);
 Instantiation *generateSpecializedFunction(
-	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes
+	ParseContext &context, Section *section, PatternDefinition *definition,
+	const std::vector<std::pair<std::string, Expression *>> &paramBindings, Instantiation &instantiation
 );
 llvm::Function *
 ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage);

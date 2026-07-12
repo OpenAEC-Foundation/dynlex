@@ -240,7 +240,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=2.0,
+        default=10.0,
         help="Per-compilation timeout in seconds. Timeouts are treated as crashes worth inspection.",
     )
     parser.add_argument(

@@ -25,8 +25,8 @@ if [[ $# -eq 0 ]]; then
     set -- "$PROJECT_DIR/tests/required/precedence/main.dl" -o /tmp/dynlex_asan_leak_check.out
 fi
 
-LSAN_BASE="suppressions=$SUPPRESSIONS_FILE:print_suppressions=1"
-ASAN_BASE="detect_leaks=1:exitcode=23:halt_on_error=0"
+LSAN_BASE="suppressions=$SUPPRESSIONS_FILE:print_suppressions=1:exitcode=23"
+ASAN_BASE="detect_leaks=1:halt_on_error=1"
 export LSAN_OPTIONS="${LSAN_OPTIONS:+$LSAN_OPTIONS:}$LSAN_BASE"
 export ASAN_OPTIONS="${ASAN_OPTIONS:+$ASAN_OPTIONS:}$ASAN_BASE"
 

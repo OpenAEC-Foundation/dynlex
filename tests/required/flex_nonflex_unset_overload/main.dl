@@ -1,0 +1,14 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function initialize value:
+    replacement:
+        @intrinsic("store", value, 11)
+
+function initialize {integer:value}:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", value))
+
+initialize result
+initialize result

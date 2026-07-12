@@ -11,7 +11,7 @@ EXT_DIR="$SCRIPT_DIR/../vscode-extension"
 cd "$EXT_DIR"
 VSIX=$(ls -t dynlex-language-*.vsix | head -1)
 echo "Installing $VSIX..."
-code --install-extension "$VSIX"
+code --install-extension "$VSIX" --force
 
 echo ""
 echo "Extension installed. Please reload VS Code (Ctrl+Shift+P → 'Developer: Reload Window')."

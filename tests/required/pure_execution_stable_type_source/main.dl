@@ -1,0 +1,25 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function left + right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function left * right:
+    execute:
+        return @intrinsic("multiply", left, right)
+
+function increment value:
+    execute:
+        return value + 1
+
+function double value:
+    execute:
+        return value * increment value
+
+discard @intrinsic("array", double 5)

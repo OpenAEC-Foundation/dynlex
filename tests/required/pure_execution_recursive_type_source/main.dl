@@ -1,0 +1,36 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function left [is less than or equal to|<=] right:
+    execute:
+        return @intrinsic("less than or equal", left, right)
+
+function left - right:
+    execute:
+        return @intrinsic("subtract", left, right)
+
+function left * right:
+    execute:
+        return @intrinsic("multiply", left, right)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function factorial of n:
+    execute:
+        if n <= 1:
+            return 1
+        set m to n - 1
+        return n * factorial of m
+
+discard @intrinsic("array", factorial of 8)

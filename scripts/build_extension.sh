@@ -10,11 +10,14 @@ EXT_DIR="$SCRIPT_DIR/../vscode-extension"
 
 cd "$EXT_DIR"
 
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "Installing dependencies..."
-    npm install
-fi
+# Install the exact locked dependency graph.
+echo "Installing dependencies..."
+npm ci
+
+# Validate source and managed-server launch behavior before packaging.
+echo "Testing extension..."
+npm test
+npm run lint
 
 # Bundle
 echo "Bundling extension..."
@@ -22,4 +25,4 @@ npm run bundle
 
 # Package .vsix
 echo "Packaging .vsix..."
-npx @vscode/vsce package --allow-missing-repository
+npm run package

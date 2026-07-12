@@ -5,13 +5,21 @@
 #include <climits>
 #include <string_view>
 struct Section;
+struct Instantiation;
 struct PatternTreeNode;
 struct PatternDefinition {
 	Range range;
 	// the section that contains this pattern definition
 	Section *section{};
+	Instantiation *callableInstantiation{};
 	// the elements of this code lines pattern (with type constraints from {type:name} syntax)
 	std::vector<DefinitionPatternElement> patternElements;
+	// Compiler-generated definitions can carry constraints that directly reference
+	// compiler objects and therefore cannot be reconstructed from source text.
+	bool hasPrebuiltPatternElements = false;
+	// Class member access is an atomic generated operation. It binds before every
+	// pattern that participates in the source-declared precedence graph.
+	bool isGeneratedClassPropertyAccessor = false;
 	// when resolved, this pattern has been added to the pattern tree
 	bool resolved{};
 	// the exact trie endpoint nodes this definition currently ends at

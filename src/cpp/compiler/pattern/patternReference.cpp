@@ -6,6 +6,8 @@ PatternReference::PatternReference(Expression *expression, SectionType patternTy
 	: sourceRange(expression->range), pattern(std::string(expression->range.subString)), patternType(patternType),
 	  expression(expression) {}
 
+PatternReference::~PatternReference() { delete match; }
+
 void PatternReference::resolve(PatternMatch *matchResult) {
 	match = matchResult;
 	resolved = true;

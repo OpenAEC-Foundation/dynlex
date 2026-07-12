@@ -1,4 +1,5 @@
 #pragma once
+#include "groupingSnapshot.h"
 #include "patternElement.h"
 #include <string>
 #include <vector>
@@ -61,6 +62,11 @@ struct CodeLine {
 
 	// the expression tree for this code line (built during analysis)
 	Expression *expression{};
+	// Operand regrouping chosen for this code line. Once a valid grouping is
+	// known, later inference passes reuse it instead of searching again.
+	bool hasCommittedGrouping = false;
+	bool groupingAmbiguityChecked = false;
+	GroupingSnapshot committedGrouping;
 
 	// Mapping from transformed text back to original file locations.
 	std::vector<SourceSlice> sourceSlices;

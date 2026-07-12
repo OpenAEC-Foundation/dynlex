@@ -14,6 +14,9 @@ struct PatternReference {
 	Expression *expression;
 	bool resolved{};
 	PatternReference(Expression *expression, SectionType patternType);
+	~PatternReference();
+	PatternReference(const PatternReference &) = delete;
+	PatternReference &operator=(const PatternReference &) = delete;
 	void resolve(PatternMatch *matchResult = nullptr);
 	const Range &range() const { return sourceRange; }
 };

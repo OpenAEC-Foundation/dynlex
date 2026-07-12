@@ -3,8 +3,6 @@
 #include "function_inference.inl"
 
 static bool expressionTreeHasCycle(Expression *expr, std::unordered_set<Expression *> &visiting) {
-	if (!expr)
-		return false;
 	if (!visiting.insert(expr).second)
 		return true;
 	for (Expression *arg : expr->arguments) {
@@ -20,9 +18,14 @@ static bool expressionTreeHasCycle(Expression *expr) {
 	return expressionTreeHasCycle(expr, visiting);
 }
 
-static void recomputeRanges(Expression *expr, std::unordered_set<Expression *> &visited) {
-	if (!expr)
+static void collectExpressionNodes(Expression *expr, std::unordered_set<Expression *> &nodes) {
+	if (!expr || !nodes.insert(expr).second)
 		return;
+	for (Expression *argument : expr->arguments)
+		collectExpressionNodes(argument, nodes);
+}
+
+static void recomputeRanges(Expression *expr, std::unordered_set<Expression *> &visited) {
 	if (!visited.insert(expr).second)
 		return;
 	for (Expression *arg : expr->arguments)
@@ -55,8 +58,6 @@ static void recomputeRanges(Expression *expr) {
 }
 
 static bool expressionContains(Expression *root, Expression *target, std::unordered_set<Expression *> &visited) {
-	if (!root)
-		return false;
 	if (root == target)
 		return true;
 	if (!visited.insert(root).second)
@@ -74,14 +75,22 @@ static bool expressionContains(Expression *root, Expression *target) {
 }
 
 static void resetExpressionTypes(Expression *expr, std::unordered_set<Expression *> &visited) {
-	if (!expr)
-		return;
 	if (!visited.insert(expr).second)
 		return;
+	Expression *inferredFlexExpansion = expr->inferredFlexExpansion;
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
+	expr->compileTimeValue = {};
+	expr->selectedPatternDefinition = nullptr;
+	expr->selectedCallableDefinition = nullptr;
+	expr->selectedInstantiation = nullptr;
+	expr->branchSelection.reset();
+	expr->inferredFlexExpansion = nullptr;
+	expr->inferredFlexBody.reset();
 	for (Expression *arg : expr->arguments)
 		resetExpressionTypes(arg, visited);
+	if (inferredFlexExpansion)
+		resetExpressionTypes(inferredFlexExpansion, visited);
 }
 
 static void resetExpressionTypes(Expression *expr) {
@@ -104,8 +113,6 @@ static std::string renderResolvedExpressionArgument(Expression *expr) {
 }
 
 static std::string renderResolvedExpression(Expression *expr) {
-	if (!expr)
-		return "<null>";
 	if (!expr->range.subString.empty() && (expr->kind == Expression::Kind::Literal ||
 										   expr->kind == Expression::Kind::Variable || expr->kind == Expression::Kind::Pending))
 		return (std::string)expr->range.subString;
@@ -149,8 +156,6 @@ static std::string renderResolvedExpression(Expression *expr) {
 	std::string rendered;
 	size_t argumentIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		if (!node)
-			continue;
 		if (node->type == PatternElement::Type::Variable) {
 			if (argumentIndex < expr->arguments.size())
 				rendered += renderResolvedExpressionArgument(expr->arguments[argumentIndex++]);
@@ -176,12 +181,6 @@ buildOperandGroupingWarningKey(const Range &range, std::string_view chosenGroupi
 	key += alternativeGrouping;
 	return key;
 }
-
-struct GroupingSnapshot {
-	Expression *root{};
-	std::unordered_map<Expression *, std::vector<Expression *>> argumentsByExpression;
-	std::unordered_map<Expression *, bool> explicitGroupByExpression;
-};
 
 enum class GroupingEnumerationProgress {
 	NoCandidate,
@@ -239,16 +238,12 @@ static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
 }
 
 static bool expressionHasGroupingShape(Expression *expression) {
-	if (!expression)
-		return false;
 	if (expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty())
 		return true;
 	return !expression->groupingArgumentIndices.empty();
 }
 
 static size_t groupingArgumentCount(Expression *expression) {
-	if (!expression)
-		return 0;
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->arguments.size();
 	return expression->groupingArgumentIndices.size();
@@ -320,6 +315,84 @@ static bool snapshotsHaveSameLocalOrdering(const GroupingSnapshot &left, const G
 	return snapshotsHaveSameLocalOrdering(left, right, left.root, right.root, true, true, false);
 }
 
+static const GroupingSnapshot *codeLineGroupingForContext(CodeLine *line, const InferenceContext &context) {
+	if (!line)
+		return nullptr;
+	if (line->hasCommittedGrouping && line->groupingAmbiguityChecked)
+		return &line->committedGrouping;
+	if (context.trial) {
+		auto trialGrouping = context.trialCodeLineGroupings.find(line);
+		if (trialGrouping != context.trialCodeLineGroupings.end())
+			return &trialGrouping->second;
+	}
+	return line->hasCommittedGrouping ? &line->committedGrouping : nullptr;
+}
+
+static void applyCodeLineGrouping(CodeLine *line, Expression *&activeExpression, const InferenceContext &context) {
+	const GroupingSnapshot *grouping = nullptr;
+	if (context.trial) {
+		auto trialGrouping = context.trialCodeLineGroupings.find(line);
+		if (trialGrouping != context.trialCodeLineGroupings.end())
+			grouping = &trialGrouping->second;
+	}
+	// Instantiation trees are cloned from the already-canonical reusable
+	// template. A CodeLine snapshot contains template pointers and must never be
+	// applied to an instance-owned tree.
+	if (!grouping && (!activeExpression || !activeExpression->reusableTemplateExpression))
+		grouping = codeLineGroupingForContext(line, context);
+	if (!grouping)
+		return;
+	applyGroupingSnapshot(*grouping);
+	activeExpression = grouping->root;
+	recomputeRanges(activeExpression);
+}
+
+static bool codeLineCanReuseGrouping(CodeLine *line, const InferenceContext &context) {
+	if (!line)
+		return false;
+	if (line->hasCommittedGrouping && line->groupingAmbiguityChecked)
+		return true;
+	return context.trial && context.trialCodeLineGroupings.contains(line);
+}
+
+static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanceGrouping) {
+	GroupingSnapshot templateGrouping;
+	auto templateExpression = [](Expression *expression) {
+		return expression && expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
+	};
+	templateGrouping.root = templateExpression(instanceGrouping.root);
+	for (const auto &[expression, arguments] : instanceGrouping.argumentsByExpression) {
+		auto &templateArguments = templateGrouping.argumentsByExpression[templateExpression(expression)];
+		templateArguments.reserve(arguments.size());
+		for (Expression *argument : arguments)
+			templateArguments.push_back(templateExpression(argument));
+	}
+	for (const auto &[expression, isExplicitGroup] : instanceGrouping.explicitGroupByExpression)
+		templateGrouping.explicitGroupByExpression[templateExpression(expression)] = isExplicitGroup;
+	return templateGrouping;
+}
+
+static void commitCodeLineGrouping(CodeLine *line, Expression *&expr, InferenceContext &context, bool ambiguityChecked) {
+	GroupingSnapshot grouping = captureGroupingSnapshot(expr);
+	if (context.trial) {
+		context.trialCodeLineGroupings[line] = std::move(grouping);
+		return;
+	}
+	if (expr && expr->reusableTemplateExpression) {
+		GroupingSnapshot templateGrouping = reusableTemplateGrouping(grouping);
+		applyGroupingSnapshot(templateGrouping);
+		line->expression = templateGrouping.root;
+		recomputeRanges(line->expression);
+		line->committedGrouping = captureGroupingSnapshot(line->expression);
+	} else {
+		line->committedGrouping = std::move(grouping);
+		line->expression = line->committedGrouping.root;
+	}
+	line->hasCommittedGrouping = true;
+	if (ambiguityChecked)
+		line->groupingAmbiguityChecked = true;
+}
+
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {
 	if (!expression || !definition || !expression->patternMatch)
 		return 0;
@@ -339,30 +412,22 @@ static int countMatchedParameters(Expression *expression, PatternDefinition *def
 // the middle "$" is interior even though it is also a variable element.
 // There can never be multiple left or right boundary slots.
 static bool startsWithArgument(Expression *expression) {
-	if (!expression)
-		return false;
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
 	return expression->groupingStartsWithArgument;
 }
 
 static bool endsWithArgument(Expression *expression) {
-	if (!expression)
-		return false;
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
 	return expression->groupingEndsWithArgument;
 }
 
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex) {
-	if (!expression)
-		return false;
 	if (expression->kind != Expression::Kind::PatternCall) {
-		if (argumentIndex >= expression->groupingArgumentHasAdjacentSiblingSlot.size())
-			return false;
 		return expression->groupingArgumentHasAdjacentSiblingSlot[argumentIndex];
 	}
-	if (!expression || !expression->patternMatch || !expression->patternMatch->matchedEndNode)
+	if (!expression->patternMatch || !expression->patternMatch->matchedEndNode)
 		return false;
 	for (PatternDefinition *definition : expression->patternMatch->matchedEndNode->matchingDefinitions) {
 		if (!definition || countMatchedParameters(expression, definition) != static_cast<int>(expression->arguments.size()))
@@ -386,8 +451,6 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 }
 
 static int expressionPrecedence(Expression *expression) {
-	if (!expression)
-		return 0;
 	if (expression->kind != Expression::Kind::PatternCall)
 		return expression->groupingPrecedence;
 	if (!expression->patternMatch || !expression->patternMatch->matchedEndNode ||
@@ -413,6 +476,8 @@ static bool validateGroupingInTrial(
 	std::vector<InferenceContext::OperandGroupingWarning> *resolvedGroupingWarnings = nullptr
 ) {
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(expr);
+	std::unordered_set<Expression *> originalExpressionNodes;
+	collectExpressionNodes(expr, originalExpressionNodes);
 	if (expressionTreeHasCycle(expr)) {
 		considerGroupingFailure(
 			trialFailure, buildFailureDetailDiagnostic(failureSnapshot.range, "internal operand regrouping cycle detected"), 1
@@ -426,11 +491,11 @@ static bool validateGroupingInTrial(
 	trialContext.currentKnownConstants = context.currentKnownConstants;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
-	trialContext.inheritedTrialFunctionFlexExpansions =
-		context.trial ? &context.trialFunctionFlexExpansions : context.inheritedTrialFunctionFlexExpansions;
 	trialContext.trialJournal = &journal;
 	trialContext.trialInstantiationCache =
 		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
+	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
+	trialContext.allowTrialSummaryReuse = true;
 	// Trial validation only needs to answer "is this grouping valid?".
 	// Ambiguity scanning belongs to the outer committed inference pass.
 	trialContext.detectGroupingAmbiguity = false;
@@ -440,6 +505,11 @@ static bool validateGroupingInTrial(
 	trialContext.fixedGroupingRoots = &trialFixedGroupingRoots;
 	trialContext.resolvedGroupingRoots = &trialFixedGroupingRoots;
 	inferOrderedExpression(expr, trialContext, flexBindingFrameStack, true);
+	std::unordered_set<Expression *> inferredExpressionNodes;
+	collectExpressionNodes(expr, inferredExpressionNodes);
+	requireCompilerInvariant(
+		inferredExpressionNodes == originalExpressionNodes, "grouping trial inference changed the expression node set"
+	);
 	bool trialSucceeded = trialContext.typesValid;
 	if (trialSucceeded && trialContext.typesValid && requireVoidResult) {
 		DataType lineType = expr ? expr->type : DataType{};
@@ -507,6 +577,8 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 			);
 		return GroupingEnumerationProgress::NoCandidate;
 	}
+	std::unordered_set<Expression *> originalExpressionNodes;
+	collectExpressionNodes(expr, originalExpressionNodes);
 	recomputeRanges(expr);
 
 	if (alreadyOrdered)
@@ -553,15 +625,9 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 			}
 			GroupingEnumerationProgress childProgress =
 				enumeratePrioritizedChoices(current, true, true, false, true, continuation);
-			GroupingEnumerationProgress propagatedChildProgress = childProgress;
-			// During ambiguity scans we keep iterating enclosed opaque choices
-			// before bubbling a stop from outer continuations. For first-valid
-			// selection passes we must honor Stop immediately.
-			if (propagatedChildProgress == GroupingEnumerationProgress::Stop && context.detectGroupingAmbiguity)
-				propagatedChildProgress = GroupingEnumerationProgress::EmittedContinue;
 			for (Expression *root : insertedRoots)
 				fixedGroupingRoots.erase(root);
-			if (propagatedChildProgress != GroupingEnumerationProgress::Stop) {
+			if (childProgress != GroupingEnumerationProgress::Stop) {
 				if (hasSavedCurrentSnapshot)
 					applyGroupingSnapshot(savedCurrentSnapshot);
 				if (preserveExplicitGroup && savedCurrent)
@@ -570,7 +636,7 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 				current = savedCurrent;
 			}
 			result = mergeGroupingEnumerationProgress(result, childProgress);
-			return propagatedChildProgress;
+			return childProgress;
 		}
 		);
 		if (result != GroupingEnumerationProgress::Stop)
@@ -618,6 +684,11 @@ static GroupingEnumerationProgress enumerateExpressionGroupings(
 
 	auto emitCandidate = [&](Expression *&candidateRoot) -> GroupingEnumerationProgress {
 		expr = candidateRoot;
+		std::unordered_set<Expression *> candidateExpressionNodes;
+		collectExpressionNodes(expr, candidateExpressionNodes);
+		requireCompilerInvariant(
+			candidateExpressionNodes == originalExpressionNodes, "operand regrouping changed the expression node set"
+		);
 		recomputeRanges(expr);
 		return withFixedRoot(expr, [&]() {
 			return emitStructuralCandidate(expr, fixedGroupingRoots);
@@ -873,8 +944,11 @@ static bool inferExpression(
 		auto *savedFixedGroupingRoots = context.fixedGroupingRoots;
 		auto *savedResolvedGroupingRoots = context.resolvedGroupingRoots;
 		bool savedDetectGroupingAmbiguityDuringInfer = context.detectGroupingAmbiguity;
+		bool savedAllowTrialSummaryReuse = context.allowTrialSummaryReuse;
 		if (!collectGroupingAmbiguity)
 			context.detectGroupingAmbiguity = false;
+		if (!collectGroupingAmbiguity)
+			context.allowTrialSummaryReuse = false;
 		std::unordered_set<Expression *> commitResolvedGroupingRoots;
 		context.fixedGroupingRoots = selectedFixedGroupingRoots.empty() ? nullptr : &selectedFixedGroupingRoots;
 		context.resolvedGroupingRoots = &commitResolvedGroupingRoots;
@@ -882,10 +956,7 @@ static bool inferExpression(
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguityDuringInfer;
-		if (context.typesValid && !context.trial && context.currentInstantiation)
-			recordSelectedOverloadsForInstantiation(expr, context.currentInstantiation);
-		if (context.typesValid)
-			snapshotExpressionVariableReferences(expr, context);
+		context.allowTrialSummaryReuse = savedAllowTrialSummaryReuse;
 		if (context.typesValid && requireVoidResult) {
 			DataType lineType = expr ? expr->type : DataType{};
 			if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {

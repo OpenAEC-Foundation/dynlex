@@ -5,8 +5,6 @@
 		}
 	],
 	"settings": {
-		"dynlex.server.host": "127.0.0.1",
-		"dynlex.server.port": 5007,
 		"dynlex.server.useExternal": false,
 		"dynlex.server.path": "./build/dynlex",
 		"dynlex.server.flags": ""

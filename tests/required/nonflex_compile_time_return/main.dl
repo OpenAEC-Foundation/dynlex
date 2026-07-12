@@ -1,0 +1,13 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function times left right:
+    execute:
+        return @intrinsic("multiply", left, right)
+
+discard @intrinsic("type", "int", times 4 4)

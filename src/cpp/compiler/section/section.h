@@ -23,9 +23,26 @@ class BasicBlock;
 } // namespace llvm
 
 struct ParseContext;
+struct Section;
 struct Variable;
 struct Expression;
 struct PatternDefinition;
+
+struct InstantiatedSectionBody {
+	Section *sourceSection{};
+	std::vector<Expression *> lineExpressions;
+	std::vector<std::shared_ptr<InstantiatedSectionBody>> childBodies;
+
+	Expression *&lineExpression(size_t index);
+	InstantiatedSectionBody *bodyForChild(Section *child) const;
+	Expression *findCloneOf(const Expression *templateExpression) const;
+	std::optional<CompileTimeValue> compileTimeValueForReference(const VariableReference *reference) const;
+};
+
+enum class InstantiationPurity {
+	Pure,
+	Impure,
+};
 
 struct InstantiationKey {
 	std::vector<DataType> argumentTypes;
@@ -65,22 +82,16 @@ inline InstantiationKey buildInstantiationKey(
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
-	struct IfChainSelection {
-		bool known = false;
-		CodeLine *selectedBranchLine = nullptr;
-	};
-
 	DataType returnType{DataType::Kind::Any};
 	std::vector<DataType> argumentTypes;
+	std::unordered_map<std::string, DataType> parameterTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
-	std::unordered_map<VariableReference *, CompileTimeValue> constantValuesByReference;
-	std::unordered_map<Expression *, CompileTimeValue> constantValuesByExpression;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
-	std::unordered_map<Expression *, PatternDefinition *> selectedOverloadsByCall;
-	std::unordered_map<CodeLine *, IfChainSelection> ifChainSelections;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
-	std::unordered_map<std::string, std::shared_ptr<Expression>> ownedNonFlexParameterBindings;
+	InstantiationPurity purity = InstantiationPurity::Pure;
+	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
+	std::shared_ptr<InstantiatedSectionBody> body;
 	llvm::Function *llvmFunction = nullptr;
 	llvm::Function *llvmCallableFunction = nullptr;
 	bool inferring = false;
@@ -142,8 +153,12 @@ struct Section {
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
 	virtual bool finalize(ParseContext &context);
-	Expression *detectPatterns(ParseContext &context, Range range, SectionType patternType);
-	Expression *detectPatternsRecursively(ParseContext &context, Range range, StringHierarchy *node, SectionType patternType);
+	Expression *
+	detectPatterns(ParseContext &context, Range range, SectionType patternType, bool registerPatternReferences = true);
+	Expression *detectPatternsRecursively(
+		ParseContext &context, Range range, StringHierarchy *node, SectionType patternType,
+		bool registerPatternReferences = true
+	);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void addPatternReference(PatternReference *reference);
@@ -158,6 +173,36 @@ struct Section {
 
 	// The line that opens this section (e.g. "loop 10 times:")
 	CodeLine *openingLine{};
+
+	static bool isDefinitionBodySectionType(SectionType sectionType) {
+		return sectionType == SectionType::Get || sectionType == SectionType::Replacement;
+	}
+
+	template <typename Visitor> bool forEachDefinitionBodySection(Visitor &&visitor) {
+		if (!patternDefinitions.empty()) {
+			for (Section *child : children) {
+				if (!child || !isDefinitionBodySectionType(child->type))
+					continue;
+				if (!visitor(child))
+					return false;
+			}
+			return true;
+		}
+		return visitor(this);
+	}
+
+	template <typename Visitor> bool forEachDefinitionBodySection(Visitor &&visitor) const {
+		if (!patternDefinitions.empty()) {
+			for (const Section *child : children) {
+				if (!child || !isDefinitionBodySectionType(child->type))
+					continue;
+				if (!visitor(child))
+					return false;
+			}
+			return true;
+		}
+		return visitor(this);
+	}
 
 	virtual std::string toString() const { return openingLine ? std::string(openingLine->patternText) : "main"; }
 };

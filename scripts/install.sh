@@ -54,6 +54,7 @@ install_linux_deps() {
             clang-tools-extra \
             llvm \
             llvm-devel \
+            json-devel \
             ccache \
             cmake \
             ninja-build \
@@ -70,6 +71,7 @@ install_linux_deps() {
         sudo pacman -Sy --noconfirm \
             clang \
             llvm \
+            nlohmann-json \
             ccache \
             cmake \
             ninja \
@@ -89,6 +91,7 @@ install_linux_deps() {
             clang-tools \
             llvm \
             llvm-devel \
+            nlohmann_json-devel \
             ccache \
             cmake \
             ninja \

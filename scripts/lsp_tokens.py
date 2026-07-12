@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -10,6 +11,18 @@ from typing import Any
 
 def repo_root() -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parent.parent
+
+
+def default_server_path(root: pathlib.Path) -> pathlib.Path:
+    override = os.environ.get("DYNLEX_LSP_SERVER")
+    if override:
+        override_path = pathlib.Path(override)
+        return override_path if override_path.is_absolute() else (root / override_path).resolve()
+    compiler = root / "build" / "dynlex"
+    windows_compiler = compiler.with_suffix(".exe")
+    if not compiler.is_file() and windows_compiler.is_file():
+        return windows_compiler
+    return compiler
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,6 +93,8 @@ class LspSession:
         self.print_messages = print_messages
         self.print_stderr = print_stderr
         self.request_id = 0
+        self.server_requests: list[dict[str, Any]] = []
+        self.server_notifications: list[dict[str, Any]] = []
         self.process = subprocess.Popen(
             [str(server_path), "--stdio"],
             cwd=cwd,
@@ -115,9 +130,19 @@ class LspSession:
             self.notify("exit")
         except Exception:
             pass
-        if self.process.poll() is None:
+        try:
+            shutdown_timeout = float(os.environ.get("DYNLEX_LSP_SHUTDOWN_TIMEOUT", "10"))
+            self.process.wait(timeout=shutdown_timeout)
+        except subprocess.TimeoutExpired:
             self.process.terminate()
             self.process.wait(timeout=2)
+        self._stderr_thread.join(timeout=1)
+        if self.process.returncode != 0:
+            stderr = "".join(self._stderr_lines).strip()
+            raise RuntimeError(
+                f"language server exited with status {self.process.returncode}"
+                + (f": {stderr}" if stderr else "")
+            )
 
     def _write_message(self, payload: dict[str, Any]) -> None:
         assert self.process.stdin is not None
@@ -161,6 +186,15 @@ class LspSession:
         self._write_message(payload)
         while True:
             message = self._read_message()
+            if "method" in message:
+                if "id" in message:
+                    self.server_requests.append(message)
+                    if message["method"] != "workspace/semanticTokens/refresh":
+                        raise RuntimeError(f"unsupported language-server request: {message['method']}")
+                    self._write_message({"jsonrpc": "2.0", "id": message["id"], "result": None})
+                else:
+                    self.server_notifications.append(message)
+                continue
             if message.get("id") != request_id:
                 continue
             if "error" in message:
@@ -232,7 +266,11 @@ def run_simple_mode(args: argparse.Namespace) -> int:
         raise SystemExit("simple mode requires a file path")
 
     root = repo_root()
-    server_path = (root / args.server).resolve() if not pathlib.Path(args.server).is_absolute() else pathlib.Path(args.server)
+    server_path = (
+        default_server_path(root)
+        if args.server == "./build/dynlex"
+        else (root / args.server).resolve() if not pathlib.Path(args.server).is_absolute() else pathlib.Path(args.server)
+    )
     file_path = (root / args.file).resolve() if not pathlib.Path(args.file).is_absolute() else pathlib.Path(args.file)
     uri = to_file_uri(file_path)
     text = file_path.read_text()
@@ -303,7 +341,11 @@ def run_simple_mode(args: argparse.Namespace) -> int:
 
 def run_scenario(args: argparse.Namespace) -> int:
     root = repo_root()
-    server_path = (root / args.server).resolve() if not pathlib.Path(args.server).is_absolute() else pathlib.Path(args.server)
+    server_path = (
+        default_server_path(root)
+        if args.server == "./build/dynlex"
+        else (root / args.server).resolve() if not pathlib.Path(args.server).is_absolute() else pathlib.Path(args.server)
+    )
     scenario_path = (root / args.scenario).resolve() if not pathlib.Path(args.scenario).is_absolute() else pathlib.Path(args.scenario)
     scenario = json.loads(scenario_path.read_text())
     session = LspSession(server_path, root, args.print_messages, args.print_stderr)

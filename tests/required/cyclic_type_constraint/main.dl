@@ -1,0 +1,7 @@
+function left {right 1:value}:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function right {left 1:value}:
+    replacement:
+        @intrinsic("type", "int", 32)

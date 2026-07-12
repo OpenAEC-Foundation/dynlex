@@ -38,156 +38,6 @@ static DataType concretizeClassType(DataType type) {
 	return type;
 }
 
-static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName) {
-	if (fieldName == "data" && ownerType.isBytePointer())
-		return ownerType;
-	return {};
-}
-
-static bool instantiateClassFromCodegenArgumentTypes(
-	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex
-) {
-	if (!classDef || classDef->fields.size() != argumentTypes.size())
-		return false;
-
-	std::vector<DataType> fieldTypes;
-	fieldTypes.reserve(argumentTypes.size());
-	for (size_t i = 0; i < argumentTypes.size(); i++) {
-		DataType argumentType = concretizeClassType(argumentTypes[i]);
-		if (!argumentType.isDeduced())
-			return false;
-		DataType fieldType = classDef->fields[i].declaredType;
-		if (baseClassInstIndex >= 0 && static_cast<size_t>(baseClassInstIndex) < classDef->instantiations.size() &&
-			i < classDef->instantiations[baseClassInstIndex].fieldTypes.size()) {
-			fieldType = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
-		}
-		if (fieldType.kind == DataType::Kind::Any) {
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Array && fieldType.arraySize >= 0 && !fieldType.arrayElementType) {
-			if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldType.arraySize)
-				return false;
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
-		}
-
-		if (!DataType::supportsRuntimeConversion(argumentType, fieldType))
-			return false;
-
-		if (!fieldType.isDeduced())
-			return false;
-		fieldTypes.push_back(fieldType);
-	}
-
-	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
-	outTypeRef = {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
-	return true;
-}
-
-static DataType resolveConstructResultType(ParseContext &context, Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::IntrinsicCall || expr->arguments.size() < 2)
-		return {};
-
-	DataType typeRefType = getEffectiveType(context, expr->arguments[1]);
-	if (typeRefType.kind != DataType::Kind::Type)
-		return {};
-
-	if (typeRefType.referencedKind == DataType::Kind::Array) {
-		DataType arrayType = typeRefType.toReferencedType();
-		if (arrayType.arraySize != static_cast<int>(expr->arguments.size()) - 2)
-			return {};
-
-		DataType elementType = arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
-		bool allDeduced = true;
-		for (size_t i = 2; i < expr->arguments.size(); i++) {
-			DataType argType = getEffectiveType(context, expr->arguments[i]);
-			if (!argType.isDeduced())
-				allDeduced = false;
-			if (!arrayType.arrayElementType) {
-				if (!elementType.isDeduced())
-					elementType = argType;
-				else if (elementType != argType)
-					allDeduced = false;
-			}
-		}
-		if (allDeduced && elementType.isDeduced()) {
-			arrayType.arrayElementType = std::make_shared<DataType>(elementType);
-			return arrayType;
-		}
-		return {};
-	}
-
-	if (typeRefType.referencedKind == DataType::Kind::Vector) {
-		DataType vectorType = typeRefType.toReferencedType();
-		if (vectorType.arraySize != static_cast<int>(expr->arguments.size()) - 2)
-			return {};
-		for (size_t i = 2; i < expr->arguments.size(); i++) {
-			DataType argType = getEffectiveType(context, expr->arguments[i]);
-			if (!argType.isDeduced())
-				return {};
-			DataType promoted;
-			if (!DataType::promoteArithmetic(argType, *vectorType.arrayElementType, promoted) ||
-				promoted != *vectorType.arrayElementType)
-				return {};
-		}
-		return vectorType;
-	}
-
-	if (typeRefType.referencedKind == DataType::Kind::Matrix) {
-		DataType matrixType = typeRefType.toReferencedType();
-		if (expr->arguments.size() == 3) {
-			DataType valueType = getEffectiveType(context, expr->arguments[2]);
-			if (valueType.kind == DataType::Kind::Array && valueType.arrayElementType &&
-				valueType.arraySize == matrixType.matrixRows() * matrixType.matrixColumns()) {
-				DataType promoted;
-				if (DataType::promoteArithmetic(*valueType.arrayElementType, matrixType.matrixElementType(), promoted) &&
-					promoted == matrixType.matrixElementType())
-					return matrixType;
-			}
-		}
-		return {};
-	}
-
-	if (typeRefType.classDefinition) {
-		std::vector<DataType> argumentTypes;
-		argumentTypes.reserve(expr->arguments.size() - 2);
-		for (size_t i = 2; i < expr->arguments.size(); i++) {
-			DataType argumentType = getEffectiveType(context, expr->arguments[i]);
-			if (!argumentType.isDeduced())
-				return {};
-			argumentTypes.push_back(argumentType);
-		}
-
-		DataType instantiatedTypeRef;
-		if (instantiateClassFromCodegenArgumentTypes(
-				typeRefType.classDefinition, argumentTypes, instantiatedTypeRef, typeRefType.classInstIndex
-			))
-			return concretizeClassType(instantiatedTypeRef.toReferencedType());
-
-		DataType targetType = concretizeClassType(typeRefType.toReferencedType());
-		if (expr->arguments.size() == targetType.classDefinition->fields.size() + 2 && targetType.classInstIndex >= 0) {
-			const auto &fieldTypes = targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
-			if (argumentTypes.size() != fieldTypes.size())
-				return {};
-			for (size_t i = 0; i < fieldTypes.size(); i++) {
-				if (!DataType::supportsRuntimeConversion(concretizeClassType(argumentTypes[i]), fieldTypes[i]))
-					return {};
-			}
-			return targetType;
-		}
-		return {};
-	}
-
-	if (expr->arguments.size() == 3) {
-		DataType targetType = typeRefType.toReferencedType();
-		DataType valueType = getEffectiveType(context, expr->arguments[2]);
-		if (valueType.isDeduced())
-			return concretizeClassType(targetType);
-	}
-
-	return {};
-}
-
 // Get the DWARF debug type for a given DataType
 llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (!context.diBuilder)
@@ -301,47 +151,7 @@ static void ensureFlexBindingRootFrame(ParseContext &context) {
 		context.flexBindingFrames.pushFrame(BindingFrame{});
 }
 
-// Resolve a Variable expression one step through the current flex's binding map.
-// Returns the bound expression (which lives in the caller's scope), or expr unchanged
-// if no binding exists. Each resolution crosses one scope boundary — the caller must
-// pop the binding stack before evaluating the result (see FlexScopeGuard::popToCallerScope).
-static Expression *materializeCodegenCompileTimeLiteral(ParseContext &context, const CompileTimeValue &value) {
-	Expression *literal = new Expression();
-	if (const auto *number = std::get_if<double>(&value)) {
-		literal->kind = Expression::Kind::Literal;
-		literal->literalValue = *number;
-		setExpressionCompileTimeValue(context, literal, *number);
-	} else if (const auto *text = std::get_if<std::string>(&value)) {
-		literal->kind = Expression::Kind::Literal;
-		literal->literalValue = *text;
-		setExpressionCompileTimeValue(context, literal, *text);
-	} else if (const auto *boolean = std::get_if<bool>(&value)) {
-		literal->kind = Expression::Kind::Literal;
-		literal->literalValue = *boolean ? 1.0 : 0.0;
-		setExpressionCompileTimeValue(context, literal, *boolean);
-	} else if (const auto *typeRef = std::get_if<DataType>(&value)) {
-		literal->kind = Expression::Kind::TypedPlaceholder;
-		literal->type = *typeRef;
-		setExpressionCompileTimeValue(context, literal, *typeRef);
-	} else {
-		delete literal;
-		return nullptr;
-	}
-	context.ownedCodegenLiteralRoots.push_back(literal);
-	return literal;
-}
-
 Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
-	if (expr && expr->kind == Expression::Kind::Variable && expr->variable && context.currentCodegenInstantiation) {
-		const std::string &name = expr->variable->name;
-		if (context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)) {
-			auto constIt = context.currentCodegenInstantiation->constantParameterValues.find(name);
-			if (constIt != context.currentCodegenInstantiation->constantParameterValues.end()) {
-				if (Expression *literal = materializeCodegenCompileTimeLiteral(context, constIt->second))
-					return literal;
-			}
-		}
-	}
 	ensureFlexBindingRootFrame(context);
 	return resolveVariableBindingAcrossFrames(expr, context.flexBindingFrames);
 }
@@ -355,7 +165,16 @@ Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
 void resolveThroughFlexLayers(ParseContext &context, Expression *&expr) {
 	ensureFlexBindingRootFrame(context);
 	resolveThroughBindingLayers(expr, context.flexBindingFrames, [&](Expression *expression, BindingFrame &innerBindings) {
-		return expandFlexPatternCall(context, expression, innerBindings);
+		if (!expression || expression->kind != Expression::Kind::PatternCall)
+			return static_cast<Expression *>(nullptr);
+		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
+		if (!definition->section || !definition->section->isFlex)
+			return static_cast<Expression *>(nullptr);
+		requireCompilerInvariant(
+			expression->inferredFlexExpansion, "codegen flex-layer resolution is missing the inferred expansion"
+		);
+		collectPatternCallBindings(expression, definition, innerBindings);
+		return expression->inferredFlexExpansion;
 	});
 }
 
@@ -373,343 +192,23 @@ FlexScopeGuard::~FlexScopeGuard() {
 		context.flexBindingFrames = savedBindingFrames;
 }
 
-// Resolve the effective type of an expression during codegen.
-// Follows flex expression bindings and pattern parameter types to compute the real type,
-// even for expressions inside non-flex function bodies whose .type was never inferred.
-DataType getEffectiveType(ParseContext &context, Expression *expr) {
-	if (!expr)
-		return {};
-
-	switch (expr->kind) {
-	case Expression::Kind::Literal:
-		if (expr->type.isDeduced())
-			return expr->type;
-		if (std::holds_alternative<double>(expr->literalValue)) {
-			double value = std::get<double>(expr->literalValue);
-			std::string_view literalText = expr->range.subString;
-			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
-								   literalText.find('e') != std::string_view::npos ||
-								   literalText.find('E') != std::string_view::npos;
-			if (!explicitlyFloat && std::trunc(value) == value)
-				return {DataType::Kind::Int, 4};
-			return defaultFloatType(context.options.emitSPIRV);
-		}
-		if (std::holds_alternative<std::string>(expr->literalValue)) {
-			DataType stringType{DataType::Kind::Int, 1};
-			stringType.pointerDepth = 1;
-			return stringType;
-		}
-		return expr->type;
-
-	case Expression::Kind::ArrayLiteral:
-		return expr->type;
-
-	case Expression::Kind::Variable: {
-		Expression *resolved = resolveVariableBinding(context, expr);
-		if (resolved != expr) {
-			FlexScopeGuard guard(context);
-			if (context.flexBindingFrames.hasParentScope())
-				guard.popToCallerScope();
-			return getEffectiveType(context, resolved);
-		}
-
-		if (!expr->variable)
-			return expr->type;
-		std::string name = expr->variable->name;
-
-		// Check pattern parameter types (monomorphized function: typed parameters)
-		auto paramIt = context.patternParamTypes.find(name);
-		if (paramIt != context.patternParamTypes.end())
-			return paramIt->second;
-
-		// Look up in section variables
-		Section *sec = expr->range.line ? expr->range.line->section : nullptr;
-		Variable *var = sec ? sec->findVariable(name) : nullptr;
-		if (var)
-			return var->type;
-
-		return expr->type;
-	}
-
-	case Expression::Kind::IntrinsicCall: {
-		// For intrinsics in non-flex function bodies, expr->type may be Undeduced.
-		// Compute the type dynamically from the resolved argument types.
-		const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
-		if (info) {
-			switch (info->returnKind) {
-			case IntrinsicReturnKind::SameAsArgs:
-				if (expr->arguments.size() == 2) {
-					return getEffectiveType(context, expr->arguments[1]);
-				} else {
-					DataType leftType = getEffectiveType(context, expr->arguments[1]);
-					DataType rightType = getEffectiveType(context, expr->arguments[2]);
-					DataType result;
-					DataType::promoteArithmetic(leftType, rightType, result);
-					return result;
-				}
-			case IntrinsicReturnKind::SameAsInts:
-				if (expr->arguments.size() == 2)
-					return getEffectiveType(context, expr->arguments[1]);
-				else {
-					DataType leftType = getEffectiveType(context, expr->arguments[1]);
-					DataType rightType = getEffectiveType(context, expr->arguments[2]);
-					DataType result;
-					DataType::promoteBitwise(leftType, rightType, result);
-					return result;
-				}
-			case IntrinsicReturnKind::Bool:
-				return {DataType::Kind::Bool};
-			case IntrinsicReturnKind::Void:
-				return {DataType::Kind::Void};
-			case IntrinsicReturnKind::Float:
-				return {DataType::Kind::Float, 4};
-			case IntrinsicReturnKind::Custom:
-				break;
-			}
-		}
-		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-		if (kind == IntrinsicKind::AddressOf)
-			return getEffectiveType(context, expr->arguments[1]).pointed();
-		if (kind == IntrinsicKind::Dereference)
-			return concretizeClassType(getEffectiveType(context, expr->arguments[1]).dereferenced());
-		if (kind == IntrinsicKind::LoadAt) {
-			DataType ptrType = getEffectiveType(context, expr->arguments[1]);
-			if (ptrType.isPointer()) {
-				DataType pointedType = ptrType.dereferenced();
-				if (pointedType.kind == DataType::Kind::Array && pointedType.arrayElementType)
-					return *pointedType.arrayElementType;
-				return pointedType;
-			}
-			return {DataType::Kind::Int, 8};
-		}
-		if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
-			return getEffectiveType(context, expr->arguments[1]);
-		}
-		if (kind == IntrinsicKind::Call) {
-			// Format: @intrinsic("call", "library", "function", type_ref, args...)
-			DataType retTypeRef = getEffectiveType(context, expr->arguments[3]);
-			if (retTypeRef.kind != DataType::Kind::Type) {
-				context.addDiagnostic(Diagnostic(
-					context, Diagnostic::Level::Error, "call return type must be type reference", expr->arguments[3]->range
-				));
-				return expr->type;
-			}
-			if (retTypeRef.referencedKind == DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Unresolved) {
-				context.addDiagnostic(Diagnostic(
-					context, Diagnostic::Level::Error, "call return type must be concrete runtime type",
-					expr->arguments[3]->range
-				));
-				return expr->type;
-			}
-			return retTypeRef.toReferencedType();
-		}
-		if (kind == IntrinsicKind::Select && expr->arguments.size() > 3) {
-			if (!expr->arguments[1])
-				crashCompilerBug("select intrinsic missing condition expression while reading compile-time value");
-			CompileTimeValue conditionValue =
-				getExpressionCompileTimeValue(context, expr->arguments[1], context.currentCodegenInstantiation);
-			auto *condition = std::get_if<bool>(&conditionValue);
-			if (condition)
-				return getEffectiveType(context, expr->arguments[*condition ? 2 : 3]);
-			DataType trueType = getEffectiveType(context, expr->arguments[2]);
-			DataType falseType = getEffectiveType(context, expr->arguments[3]);
-			if (trueType.isDeduced() && falseType.isDeduced() && trueType == falseType)
-				return trueType;
-			return expr->type;
-		}
-		if (kind == IntrinsicKind::Function)
-			return {DataType::Kind::Int, 1, 1};
-		if (kind == IntrinsicKind::Construct) {
-			if (expr->type.isDeduced())
-				return concretizeClassType(expr->type);
-			return resolveConstructResultType(context, expr);
-		}
-		if (kind == IntrinsicKind::Type) {
-			Expression *kindExpr = resolveVariableBinding(context, expr->arguments[1]);
-			if (auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue)) {
-				DataType typeRef;
-				typeRef.kind = DataType::Kind::Type;
-				if (*kindStr == "int") {
-					typeRef.referencedKind = DataType::Kind::Int;
-					typeRef.numericSize = 4;
-				} else if (*kindStr == "float") {
-					typeRef.referencedKind = DataType::Kind::Float;
-					typeRef.numericSize = defaultFloatByteSize(context.options.emitSPIRV);
-				} else if (*kindStr == "bool") {
-					typeRef.referencedKind = DataType::Kind::Bool;
-				} else if (*kindStr == "void") {
-					typeRef.referencedKind = DataType::Kind::Void;
-				} else if (*kindStr == "string") {
-					typeRef.referencedKind = DataType::Kind::Int;
-					typeRef.numericSize = 1;
-					typeRef.pointerDepth = 1;
-				} else if (*kindStr == "type") {
-					typeRef.referencedKind = DataType::Kind::Type;
-				} else {
-					return expr->type;
-				}
-				if (expr->arguments.size() > 2) {
-					Expression *bitsExpr = resolveVariableBinding(context, expr->arguments[2]);
-					if (auto *bits = std::get_if<double>(&bitsExpr->literalValue))
-						typeRef.numericSize = static_cast<int>(*bits) / 8;
-				}
-				return typeRef;
-			}
-		}
-		if (kind == IntrinsicKind::AddPointerDepth) {
-			DataType innerType = getEffectiveType(context, expr->arguments[1]);
-			if (innerType.kind == DataType::Kind::Type) {
-				innerType.pointerDepth++;
-				return innerType;
-			}
-		}
-		if (kind == IntrinsicKind::SizeOf)
-			return {DataType::Kind::Int, 8};
-		if (kind == IntrinsicKind::TypeOf) {
-			DataType valueType = getEffectiveType(context, expr->arguments[1]);
-			if (valueType.isDeduced()) {
-				DataType typeRef;
-				typeRef.kind = DataType::Kind::Type;
-				typeRef.referencedKind = valueType.kind;
-				typeRef.numericSize = valueType.numericSize;
-				typeRef.pointerDepth = valueType.pointerDepth;
-				typeRef.classDefinition = valueType.classDefinition;
-				typeRef.classInstIndex = valueType.classInstIndex;
-				typeRef.arraySize = valueType.arraySize;
-				typeRef.matrixRowCount = valueType.matrixRowCount;
-				typeRef.arrayElementType =
-					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
-				return typeRef;
-			}
-		}
-		if (kind == IntrinsicKind::Array)
-			return expr->type;
-		if ((kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix) && expr->type.kind == DataType::Kind::Type)
-			return expr->type;
-		if (kind == IntrinsicKind::Property) {
-			DataType ownerType = getEffectiveType(context, expr->arguments[1]);
-			std::string fieldName = getStringLiteral(resolveVariableBinding(context, expr->arguments[2]));
-			DataType builtInPropertyType = resolveBuiltInPropertyType(ownerType, fieldName);
-			if (builtInPropertyType.isDeduced())
-				return builtInPropertyType;
-			return expr->type; // Class property type determined during inference
-		}
-		if (kind == IntrinsicKind::Cast) {
-			if (expr->type.kind == DataType::Kind::Class)
-				return concretizeClassType(expr->type);
-			DataType typeArgType = getEffectiveType(context, expr->arguments[2]);
-			if (typeArgType.kind == DataType::Kind::Type)
-				return concretizeClassType(typeArgType.toReferencedType());
-		}
-		return expr->type;
-	}
-
-	case Expression::Kind::PatternCall: {
-		if (expr->type.isDeduced())
-			return concretizeClassType(expr->type);
-		if (!expr->patternMatch || !expr->patternMatch->matchedEndNode)
-			return expr->type;
-
-		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-		if (defs.empty())
-			return expr->type;
-
-		PatternDefinition *matchedDef = selectCodegenOverload(context, expr);
-		requireCompilerInvariant(matchedDef != nullptr, "Pattern call missing overload selection from type inference");
-		requireCompilerInvariant(
-			std::find(defs.begin(), defs.end(), matchedDef) != defs.end(), "Selected overload no longer matches call"
-		);
-		requireCompilerInvariant(matchedDef->section != nullptr, "Selected overload has no section");
-
-		Section *matchedSection = matchedDef->section;
-		if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
-			auto *classSec = static_cast<ClassSection *>(matchedSection);
-			return {DataType::Kind::Type, 0, 0, classSec->classDefinition, -1, nullptr, DataType::Kind::Class};
-		}
-
-		if (matchedSection->isFlex) {
-			BindingFrame innerBindings;
-			Expression *bodyExpr = expandFlexPatternCall(context, expr, innerBindings);
-			if (!bodyExpr)
-				return expr->type;
-
-			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
-			DataType result = getEffectiveType(context, bodyExpr);
-			popBindingScopeOrFail(
-				context.flexBindingFrames, "Missing flex binding scope while restoring effective-type context"
-			);
-			return concretizeClassType(result);
-		}
-
-		std::vector<DataType> argTypes;
-		std::vector<std::pair<std::string, Expression *>> orderedBindings;
-		collectPatternCallBindingPairs(expr, matchedDef, orderedBindings);
-		for (const auto &[ignoredParameterName, argumentExpression] : orderedBindings) {
-			(void)ignoredParameterName;
-			DataType argType = getEffectiveType(context, argumentExpression);
-			if (!argType.isDeduced())
-				return expr->type;
-			argTypes.push_back(argType);
-		}
-
-		auto evaluateParameterValue = [&](Expression *argumentExpression) {
-			if (!argumentExpression)
-				crashCompilerBug("missing pattern-call argument while building codegen instantiation key");
-			return getExpressionCompileTimeValue(context, argumentExpression, context.currentCodegenInstantiation);
-		};
-		auto instKey = findMatchingInstantiationKey(matchedSection, orderedBindings, argTypes, evaluateParameterValue);
-		auto instIt = instKey ? matchedSection->instantiations.find(*instKey) : matchedSection->instantiations.end();
-		if (instIt != matchedSection->instantiations.end() && instIt->second.returnType.isDeduced())
-			return concretizeClassType(instIt->second.returnType);
-		requireCompilerInvariant(
-			instIt != matchedSection->instantiations.end(),
-			"Missing inferred instantiation for deduced non-flex pattern call in getEffectiveType"
-		);
-		return expr->type;
-	}
-
-	default:
-		return expr->type;
-	}
+DataType finalizedExpressionType(ParseContext &, Expression *expr) {
+	requireCompilerInvariant(expr != nullptr, "codegen requested the type of a null expression");
+	requireCompilerInvariant(expr->type.isDeduced(), "expression reached codegen without a finalized inferred type");
+	return concretizeClassType(expr->type);
 }
 
-PatternDefinition *selectCodegenOverload(ParseContext &context, Expression *expr) {
+PatternDefinition *finalizedPatternDefinition(ParseContext &, Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 
 	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
-	if (defs.empty())
-		return nullptr;
-	if (defs.size() == 1)
-		return defs.front();
-
-	std::vector<DataType> argTypes;
-	argTypes.reserve(expr->arguments.size());
-	bool allArgumentTypesDeduced = true;
-	for (Expression *arg : expr->arguments) {
-		DataType argType = getEffectiveType(context, arg);
-		argTypes.push_back(argType);
-		if (!argType.isDeduced())
-			allArgumentTypesDeduced = false;
-	}
-	if (allArgumentTypesDeduced) {
-		PatternDefinition *matchedDef = selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypes);
-		if (matchedDef)
-			return matchedDef;
-	}
-
-	if (context.currentCodegenInstantiation) {
-		auto selectedIt = context.currentCodegenInstantiation->selectedOverloadsByCall.find(expr);
-		if (selectedIt != context.currentCodegenInstantiation->selectedOverloadsByCall.end() &&
-			std::find(defs.begin(), defs.end(), selectedIt->second) != defs.end()) {
-			return selectedIt->second;
-		}
-	}
-
-	if (expr->selectedPatternDefinition && std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end())
-		return expr->selectedPatternDefinition;
-
-	return nullptr;
+	requireCompilerInvariant(expr->selectedPatternDefinition, "pattern call reached codegen without a finalized overload");
+	requireCompilerInvariant(
+		std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end(),
+		"finalized overload no longer belongs to the matched pattern endpoint"
+	);
+	return expr->selectedPatternDefinition;
 }
 
 // Create an alloca at function entry (avoids stack growth in loops)
@@ -734,12 +233,41 @@ std::string getPatternFunctionName(Section *section) {
 	return name;
 }
 
-// Allocate all variables for a section at its start
-void allocateSectionVariables(ParseContext &context, Section *section) {
+static void
+collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *definition, std::optional<DataType> &type) {
+	if (!body)
+		return;
+	std::function<void(Expression *)> visitExpression = [&](Expression *expression) {
+		if (!expression)
+			return;
+		if (expression->kind == Expression::Kind::Variable && expression->variable &&
+			normalizeBindingReference(expression->variable) == definition && expression->type.isDeduced()) {
+			DataType expressionType = concretizeClassType(expression->type.stripFixed());
+			if (type)
+				requireCompilerInvariant(
+					*type == expressionType, "variable has inconsistent finalized types in one instantiation"
+				);
+			else
+				type = expressionType;
+		}
+		for (Expression *argument : expression->arguments)
+			visitExpression(argument);
+	};
+	for (Expression *expression : body->lineExpressions)
+		visitExpression(expression);
+	for (const auto &child : body->childBodies)
+		collectFinalizedVariableTypes(child.get(), definition, type);
+}
+
+// Allocate all variables for a section at its start from finalized inference metadata.
+void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
 		Variable *var = section->findVariable(name);
 		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
-		DataType varType = var->type;
+		std::optional<DataType> finalizedType;
+		if (body)
+			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
+		DataType varType = finalizedType.value_or(var->type);
 		if (!varType.isDeduced())
 			continue;
 

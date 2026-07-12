@@ -145,7 +145,7 @@ function [the|] [last|] pressed key [of|in] window:
 
 function [the|] window should close:
 	execute:
-		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window)
+		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window) != 0
 
 function query [the|] framebuffer [width] of {cstring:window}:
 	execute:

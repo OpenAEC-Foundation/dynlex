@@ -41,8 +41,9 @@ bool LanguageServer::enableTrace(const std::string &path) {
 	return true;
 }
 
-void LanguageServer::run() {
+bool LanguageServer::run() {
 	running = true;
+	bool succeeded = true;
 
 	if (transport) {
 		// Direct transport mode (e.g., stdio)
@@ -54,7 +55,8 @@ void LanguageServer::run() {
 		TcpServer server(port);
 		if (!server.setup()) {
 			logError("Failed to setup TCP server");
-			return;
+			running = false;
+			return false;
 		}
 
 		log("Language server listening on port " + std::to_string(port));
@@ -70,10 +72,12 @@ void LanguageServer::run() {
 		}
 #else
 		logError("TCP transport mode is unavailable in web builds.");
+		succeeded = false;
 #endif
 	}
 
 	running = false;
+	return succeeded;
 }
 
 void LanguageServer::shutdown() {

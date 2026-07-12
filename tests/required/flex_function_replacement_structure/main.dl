@@ -1,0 +1,18 @@
+flex function set var to value:
+    replacement:
+        @intrinsic("store", var, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+flex function clamp var between low and high:
+    replacement:
+        if @intrinsic("less than", var, low):
+            set var to low
+        if @intrinsic("greater than", var, high):
+            set var to high
+
+@intrinsic("store", value, 20)
+clamp value between 0 and 10
+@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int", 32), "%d\n", value))

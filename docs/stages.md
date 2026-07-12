@@ -71,6 +71,18 @@ We sort all expression arguments by their source position, since they did not ge
 
 We loop over the code like it would get executed.
 
+Before inferring executable code, we infer every pattern argument type constraint with the same expression inference engine.
+Pattern matching has already recorded all candidates, but it has not selected an overload. Signature inference resolves
+constraint dependencies first, selects overloads from inferred argument types, and requires every constraint expression to
+produce a pure compile-time type. A constraint is deferred while one of its candidate signatures is unresolved. If a full
+pass makes no progress, the remaining signature dependency is cyclic and compilation fails.
+
+After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
+overloads. Declaration order never selects an overload.
+
+this implies:
+ - functions and classes are instantiated on USAGE. for functions when they're called, for classes with the construct intrinsic. so if a class or function is never used, NO instantiation is created.
+
 The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
 
 We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later.
@@ -115,6 +127,8 @@ So we build up compile-time values hierarchically: from the bottom of the tree t
 When we encounter a value that cannot be known at compile time, values that build on it also cannot be known at compile time. For those, we track only types, not values.
 
 When processing a function call, we infer that function right away so we can know return types. We do the same with flexes. When a (flex) function fails on typing, we just reorder the expression that is calling it, since we are still inferring that one.
+
+after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
 
 `(print x) as line` is incorrect, since `void` as an argument is not allowed unless explicitly specified in the pattern, and `print x` returns `void`.
 
@@ -203,6 +217,8 @@ Therefore, we have to separate increments, validation, and clearing.
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
+
+reusable expression trees are cloned only to own per-usage inference state: once for each function instantiation and flex expansion. the original tree is unmodified.
 
 We do not use pointers to expression-pointer locations (`expression**`), since those can be dangling pointers.
 

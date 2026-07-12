@@ -1,7 +1,7 @@
 import lib/shader.dl
 
 # Concentric rings with animated color wave — hypnotic pattern
-# Compile: ./build/dynlex tests/games/rings_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/rings.spv
+# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate

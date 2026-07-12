@@ -7,43 +7,45 @@
 
 std::string DataType::toString() const {
 	std::string result;
+	if (fixed)
+		result = "fixed ";
 	switch (kind) {
 	case Kind::Void:
-		result = "void";
+		result += "void";
 		break;
 	case Kind::Bool:
-		result = "bool";
+		result += "bool";
 		break;
 	case Kind::Int:
-		result = "i" + std::to_string(numericSize * 8);
+		result += "i" + std::to_string(numericSize * 8);
 		break;
 	case Kind::Float:
-		result = "f" + std::to_string(numericSize * 8);
+		result += "f" + std::to_string(numericSize * 8);
 		break;
 	case Kind::Array:
-		result = "array[" + std::to_string(arraySize) + "]";
+		result += "array[" + std::to_string(arraySize) + "]";
 		if (arrayElementType)
 			result += " of " + arrayElementType->toString();
 		break;
 	case Kind::Vector:
-		result = "vector[" + std::to_string(arraySize) + "]";
+		result += "vector[" + std::to_string(arraySize) + "]";
 		if (arrayElementType)
 			result += " of " + arrayElementType->toString();
 		break;
 	case Kind::Matrix:
-		result = "matrix[" + std::to_string(matrixRowCount) + "x" + std::to_string(arraySize) + "]";
+		result += "matrix[" + std::to_string(matrixRowCount) + "x" + std::to_string(arraySize) + "]";
 		if (arrayElementType)
 			result += " of " + arrayElementType->toString();
 		break;
 	case Kind::Class:
-		result = (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
+		result += (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
 		break;
 	case Kind::Type:
-		result = "type";
+		result += "type";
 		break;
 	case Kind::Any:
 	case Kind::Unresolved:
-		return "unresolved(" + (typeExpression ? std::string("expr") : std::string("?")) + ")";
+		return result + "unresolved(" + (typeExpression ? std::string("expr") : std::string("?")) + ")";
 	}
 	for (int i = 0; i < pointerDepth; i++)
 		result += "*";

@@ -12,83 +12,90 @@ enum class IntrinsicReturnKind {
 	Custom,		// special handling required
 };
 
+enum class IntrinsicPurityKind {
+	Pure,
+	Impure,
+	Custom,
+};
+
 #define DYNLEX_INTRINSIC_FIXED_TABLE(X)                                                                                        \
-	X(Add, "add", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Subtract, "subtract", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                          \
-	X(Multiply, "multiply", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                          \
-	X(Divide, "divide", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                              \
-	X(Modulo, "modulo", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                              \
-	X(BitwiseAnd, "bitwise and", 3, IntrinsicReturnKind::SameAsInts, 0, 0)                                                     \
-	X(BitwiseOr, "bitwise or", 3, IntrinsicReturnKind::SameAsInts, 0, 0)                                                       \
-	X(BitwiseXor, "bitwise xor", 3, IntrinsicReturnKind::SameAsInts, 0, 0)                                                     \
-	X(ShiftLeft, "shift left", 3, IntrinsicReturnKind::SameAsInts, 0, 0)                                                       \
-	X(ShiftRight, "shift right", 3, IntrinsicReturnKind::SameAsInts, 0, 0)                                                     \
-	X(BitwiseNot, "bitwise not", 2, IntrinsicReturnKind::SameAsInts, 0, 0)                                                     \
-	X(Negate, "negate", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                              \
-	X(Sin, "sin", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Cos, "cos", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Sqrt, "sqrt", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                  \
-	X(Abs, "abs", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Floor, "floor", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                \
-	X(Ceil, "ceil", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                  \
-	X(Round, "round", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                \
-	X(Exp, "exp", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Log, "log", 2, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Pow, "pow", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Atan2, "atan2", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                \
-	X(Min, "min", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(Max, "max", 3, IntrinsicReturnKind::SameAsArgs, 0, 0)                                                                    \
-	X(LessThan, "less than", 3, IntrinsicReturnKind::Bool, 0, 0)                                                               \
-	X(GreaterThan, "greater than", 3, IntrinsicReturnKind::Bool, 0, 0)                                                         \
-	X(Equal, "equal", 3, IntrinsicReturnKind::Bool, 0, 0)                                                                      \
-	X(NotEqual, "not equal", 3, IntrinsicReturnKind::Bool, 0, 0)                                                               \
-	X(LessThanOrEqual, "less than or equal", 3, IntrinsicReturnKind::Bool, 0, 0)                                               \
-	X(GreaterThanOrEqual, "greater than or equal", 3, IntrinsicReturnKind::Bool, 0, 0)                                         \
-	X(And, "and", 3, IntrinsicReturnKind::Bool, 0, 0)                                                                          \
-	X(Or, "or", 3, IntrinsicReturnKind::Bool, 0, 0)                                                                            \
-	X(Not, "not", 2, IntrinsicReturnKind::Bool, 0, 0)                                                                          \
-	X(Discard, "discard", 2, IntrinsicReturnKind::Void, 0, 0)                                                                  \
-	X(Store, "store", 3, IntrinsicReturnKind::Void, 0, 0)                                                                      \
-	X(StoreAt, "store at", 4, IntrinsicReturnKind::Void, 0, 0)                                                                 \
-	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0)                                                             \
-	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0)                                                         \
-	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0)                                                                            \
-	X(ElseIf, "else if", 2, IntrinsicReturnKind::Void, 0, 0)                                                                   \
-	X(Else, "else", 1, IntrinsicReturnKind::Void, 0, 0)                                                                        \
-	X(Switch, "switch", 2, IntrinsicReturnKind::Void, 0, 0)                                                                    \
-	X(Case, "case", 2, IntrinsicReturnKind::Void, 0, 0)                                                                        \
-	X(ShaderOutput, "shader output", 5, IntrinsicReturnKind::Void, 0, 0)                                                       \
-	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float, 0, 0)                                                        \
-	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0)                                                    \
-	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Float, 0, 0)                                                  \
-	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1)                                                              \
-	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0)                                                           \
-	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0)                                                        \
-	X(LoadAt, "load at", 3, IntrinsicReturnKind::Custom, 0, 0)                                                                 \
-	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2)                                                              \
-	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2)                                                                      \
-	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0)                                                                 \
-	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1)                                                                 \
-	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1)                                                           \
-	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1)                                                             \
-	X(ShaderStageIs, "shader stage is", 2, IntrinsicReturnKind::Custom, 1, 1)                                                  \
-	X(Select, "select", 4, IntrinsicReturnKind::Custom, 0, 0)                                                                  \
-	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1)
+	X(Add, "add", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Subtract, "subtract", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                               \
+	X(Multiply, "multiply", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                               \
+	X(Divide, "divide", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                   \
+	X(Modulo, "modulo", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                   \
+	X(BitwiseAnd, "bitwise and", 3, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                          \
+	X(BitwiseOr, "bitwise or", 3, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                            \
+	X(BitwiseXor, "bitwise xor", 3, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                          \
+	X(ShiftLeft, "shift left", 3, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                            \
+	X(ShiftRight, "shift right", 3, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                          \
+	X(BitwiseNot, "bitwise not", 2, IntrinsicReturnKind::SameAsInts, 0, 0, IntrinsicPurityKind::Pure)                          \
+	X(Negate, "negate", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                   \
+	X(Sin, "sin", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Cos, "cos", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Sqrt, "sqrt", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(Abs, "abs", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Floor, "floor", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                     \
+	X(Ceil, "ceil", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(Round, "round", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                     \
+	X(Exp, "exp", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Log, "log", 2, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Pow, "pow", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Atan2, "atan2", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                     \
+	X(Min, "min", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Max, "max", 3, IntrinsicReturnKind::SameAsArgs, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(LessThan, "less than", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                    \
+	X(GreaterThan, "greater than", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                              \
+	X(Equal, "equal", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                           \
+	X(NotEqual, "not equal", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                    \
+	X(LessThanOrEqual, "less than or equal", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                    \
+	X(GreaterThanOrEqual, "greater than or equal", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)              \
+	X(And, "and", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                               \
+	X(Or, "or", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                                 \
+	X(Not, "not", 2, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                               \
+	X(Discard, "discard", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(Store, "store", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom)                                         \
+	X(StoreAt, "store at", 4, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
+	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                  \
+	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
+	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                                 \
+	X(ElseIf, "else if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                        \
+	X(Else, "else", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
+	X(Switch, "switch", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                         \
+	X(Case, "case", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
+	X(ShaderOutput, "shader output", 5, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
+	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                           \
+	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \
+	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Pure)                       \
+	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
+	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
+	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
+	X(LoadAt, "load at", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                                    \
+	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Custom)                                 \
+	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                                           \
+	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                      \
+	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                      \
+	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                \
+	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                  \
+	X(ShaderStageIs, "shader stage is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                       \
+	X(Select, "select", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)
 
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
-	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1)                                                        \
-	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0)                                                                 \
-	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 3, 3)                                                                  \
-	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1)                                                                  \
-	X(Array, "array", 2, 3, IntrinsicReturnKind::Custom, 1, -1)                                                                \
-	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1)                                                              \
-	X(Matrix, "matrix", 3, 4, IntrinsicReturnKind::Custom, 1, -1)
+	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                             \
+	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                      \
+	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)                                     \
+	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
+	X(Array, "array", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
+	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
+	X(Matrix, "matrix", 3, 4, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)
 
 enum class IntrinsicKind {
 	Unknown,
-#define DYNLEX_INTRINSIC_KIND_ENUM_FIXED(kind, name, minArgCount, returnKind, compileTimeArgMin, compileTimeArgMax) kind,
+#define DYNLEX_INTRINSIC_KIND_ENUM_FIXED(kind, name, minArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity)    \
+	kind,
 #define DYNLEX_INTRINSIC_KIND_ENUM_RANGED(                                                                                     \
-	kind, name, minArgCount, maxArgCount, returnKind, compileTimeArgMin, compileTimeArgMax                                     \
+	kind, name, minArgCount, maxArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity                             \
 )                                                                                                                              \
 	kind,
 	DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_KIND_ENUM_FIXED)
@@ -104,20 +111,21 @@ struct IntrinsicInfo {
 	IntrinsicKind kind;
 	int compileTimeArgMin; // 0 = none, otherwise first compile-time-only argument index
 	int compileTimeArgMax; // inclusive, -1 = unbounded from compileTimeArgMin
+	IntrinsicPurityKind purity;
 
 	constexpr IntrinsicInfo(
 		int minArgCount, IntrinsicReturnKind returnKind, IntrinsicKind kind, int compileTimeArgMin = 0,
-		int compileTimeArgMax = 0
+		int compileTimeArgMax = 0, IntrinsicPurityKind purity = IntrinsicPurityKind::Impure
 	)
 		: minArgCount(minArgCount), maxArgCount(minArgCount), returnKind(returnKind), kind(kind),
-		  compileTimeArgMin(compileTimeArgMin), compileTimeArgMax(compileTimeArgMax) {}
+		  compileTimeArgMin(compileTimeArgMin), compileTimeArgMax(compileTimeArgMax), purity(purity) {}
 
 	constexpr IntrinsicInfo(
 		int minArgCount, int maxArgCount, IntrinsicReturnKind returnKind, IntrinsicKind kind, int compileTimeArgMin = 0,
-		int compileTimeArgMax = 0
+		int compileTimeArgMax = 0, IntrinsicPurityKind purity = IntrinsicPurityKind::Impure
 	)
 		: minArgCount(minArgCount), maxArgCount(maxArgCount), returnKind(returnKind), kind(kind),
-		  compileTimeArgMin(compileTimeArgMin), compileTimeArgMax(compileTimeArgMax) {}
+		  compileTimeArgMin(compileTimeArgMin), compileTimeArgMax(compileTimeArgMax), purity(purity) {}
 };
 
 enum class ArithmeticIntrinsicKind { None, Add, Subtract, Multiply, Divide, Modulo };
@@ -129,12 +137,12 @@ enum class ArithmeticIntrinsicKind { None, Add, Subtract, Multiply, Divide, Modu
 //   arguments[1..] = user-supplied arguments
 inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry() {
 	static const std::unordered_map<std::string, IntrinsicInfo> registry = {
-#define DYNLEX_INTRINSIC_REG_ENTRY_FIXED(kind, name, minArgCount, returnKind, compileTimeArgMin, compileTimeArgMax)            \
-	{name, {minArgCount, returnKind, IntrinsicKind::kind, compileTimeArgMin, compileTimeArgMax}},
+#define DYNLEX_INTRINSIC_REG_ENTRY_FIXED(kind, name, minArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity)    \
+	{name, {minArgCount, returnKind, IntrinsicKind::kind, compileTimeArgMin, compileTimeArgMax, purity}},
 #define DYNLEX_INTRINSIC_REG_ENTRY_RANGED(                                                                                     \
-	kind, name, minArgCount, maxArgCount, returnKind, compileTimeArgMin, compileTimeArgMax                                     \
+	kind, name, minArgCount, maxArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity                             \
 )                                                                                                                              \
-	{name, {minArgCount, maxArgCount, returnKind, IntrinsicKind::kind, compileTimeArgMin, compileTimeArgMax}},
+	{name, {minArgCount, maxArgCount, returnKind, IntrinsicKind::kind, compileTimeArgMin, compileTimeArgMax, purity}},
 		DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_FIXED)
 			DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_RANGED)
 #undef DYNLEX_INTRINSIC_REG_ENTRY_FIXED
@@ -200,6 +208,34 @@ inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argI
 		return false;
 	return info->compileTimeArgMax < 0 || argIndex <= info->compileTimeArgMax;
 }
+
+constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
+	switch (kind) {
+#define DYNLEX_INTRINSIC_PURE_SWITCH_FIXED(kind, name, minArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity)  \
+	case IntrinsicKind::kind:                                                                                                  \
+		return purity;
+#define DYNLEX_INTRINSIC_PURE_SWITCH_RANGED(                                                                                   \
+	kind, name, minArgCount, maxArgCount, returnKind, compileTimeArgMin, compileTimeArgMax, purity                             \
+)                                                                                                                              \
+	case IntrinsicKind::kind:                                                                                                  \
+		return purity;
+		DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_PURE_SWITCH_FIXED)
+		DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_PURE_SWITCH_RANGED)
+#undef DYNLEX_INTRINSIC_PURE_SWITCH_FIXED
+#undef DYNLEX_INTRINSIC_PURE_SWITCH_RANGED
+	default:
+		return IntrinsicPurityKind::Impure;
+	}
+}
+
+constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }
+
+static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));
+static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Return));
+static_assert(intrinsicPurityKind(IntrinsicKind::Store) == IntrinsicPurityKind::Custom);
+static_assert(intrinsicPurityKind(IntrinsicKind::Property) == IntrinsicPurityKind::Custom);
+static_assert(intrinsicPurityKind(IntrinsicKind::Call) == IntrinsicPurityKind::Impure);
+static_assert(intrinsicPurityKind(IntrinsicKind::LoadAt) == IntrinsicPurityKind::Impure);
 
 #undef DYNLEX_INTRINSIC_FIXED_TABLE
 #undef DYNLEX_INTRINSIC_RANGED_TABLE

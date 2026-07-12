@@ -22,6 +22,7 @@ You are a professional development agent. You follow these rules:
 - Don't assume the user knows everything.
 - Be cautious with git; other agents may work in the same tree. If the user tells you to revert that doesn't mean `git revert` or `git checkout`. Verify no other agents edited a file before deleting or editing it.
 - Inspect intermediates instead of binaries.
+- When debugging the DynLex C++ compiler with GDB, ALWAYS use `./scripts/debug.sh ...` instead of plain `gdb` so the pretty-printer loads.
 - Understand full scope before fixing; gather context first.
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
@@ -79,7 +80,7 @@ You are a professional development agent. You follow these rules:
 - When encountering ANY compiler issue during ANY of the previous steps:
   1. Identify a minimal reproducible example. Minimize the amount of reproducing code. Imported code is counted too. So NO `import std.dl`!
   2. Identify the root cause with whatever tools you need.
-     Use gdb for this preferrably, to avoid flooding your context and the code with debug statements and such.
+     Use `./scripts/debug.sh ...` for GDB-based compiler debugging, to avoid flooding your context and the code with debug print statements and such.
      Stay open for any root cause.
      To find the root cause, keep asking yourself 'but why ...' until you find the wrong code.
   3. Identify a possible fix.
@@ -110,6 +111,16 @@ And NEVER revert prompt-following changes without the users permission. Don't be
 DynLex is a natural-language-like programming language designed for humans and AI agents.
 
 Current priority: compiler maturity (fix remaining test failures, improve errors, expand stdlib).
+
+## Worktrees
+
+Create repository-local worktrees through the project script:
+
+```bash
+./scripts/create-worktree.sh <name> [start-point]
+```
+
+The script creates `.worktrees/<name>` and a same-named branch from `start-point` (or `HEAD`). If the branch already exists, it checks out that branch instead. Worktree names must be single path components. Run subsequent commands from the created worktree. Do not create project worktrees manually in `/tmp` or elsewhere.
 
 ## Build & Run
 

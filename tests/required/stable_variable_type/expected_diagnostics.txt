@@ -1,4 +1,4 @@
 lib/std.dl:19:9-38: Error: Variable 'a' cannot change type from a 32 bit integer to a 64 bit float
   note: while inferring intrinsic 'store' in '@intrinsic("store", var, val)' with arguments [i8*, a 32 bit integer, a 64 bit float] -> undeduced lib/std.dl:19:9-38
-  note: while inferring call 'set target to target + value' with arguments [a 32 bit integer, a 64 bit float] -> undeduced lib/std.dl:266:3-31
+  note: while inferring call 'set target to target + value' with arguments [a 32 bit integer, a 64 bit float] -> undeduced lib/std.dl:284:3-31
   note: while inferring call 'add 0.5 to a' with arguments [a 64 bit float, a 32 bit integer] -> undeduced tests/required/stable_variable_type/main.dl:4:1-13

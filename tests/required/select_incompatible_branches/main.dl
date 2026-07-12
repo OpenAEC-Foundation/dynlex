@@ -1,1 +1,1 @@
-print @intrinsic("select", 1 = 1, 1, "x") as line
+@intrinsic("discard", @intrinsic("select", @intrinsic("cast", @intrinsic("call", "libc", "rand", @intrinsic("type", "int", 32)), @intrinsic("type", "bool")), 1, "x"))

@@ -1,0 +1,20 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function cstring:
+    replacement:
+        @intrinsic("type", "string")
+
+class:
+    patterns:
+        box
+    members:
+        item
+
+set box_value to @intrinsic("construct", box, 1)
+set box_value's item to "wrong"

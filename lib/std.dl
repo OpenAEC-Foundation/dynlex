@@ -66,15 +66,43 @@ function fix tofix:
     replacement:
         @intrinsic("type", "const", tofix)
 
-function fixed type:
+function fixed tofix:
     replacement:
-        @intrinsic("type", "const", type)
+        @intrinsic("type", "const", tofix)
+
+function i8:
+    replacement:
+        a byte
+
+function i16:
+    replacement:
+        a 16 bit integer
+
+function i32:
+    replacement:
+        a 32 bit integer
+
+function i64:
+    replacement:
+        a 64 bit integer
+
+function f32:
+    replacement:
+        a 32 bit float
+
+function f64:
+    replacement:
+        a 64 bit float
 
 function void:
     replacement:
         @intrinsic("type", "void")
 
 # --- Pointer and string types ---
+
+function pointer:
+    replacement:
+        a pointer to byte
 
 function [a|] pointer to pointedtype:
     replacement:
@@ -133,16 +161,6 @@ function [the|] type of value:
 function [the|] function named {fixed cstring:name}:
     replacement:
         @intrinsic("function", name)
-
-# --- Class properties ---
-
-function:
-    patterns:
-        the {word:propertyname} of ownername
-        ownername's {word:propertyname}
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $, $ + $, $ - $, $ * $, $ / $, $ mod $
-    execute:
-        return @intrinsic("property", ownername, propertyname)
 
 # --- Pointers ---
 

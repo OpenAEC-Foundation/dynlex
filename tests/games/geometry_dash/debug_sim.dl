@@ -25,4 +25,4 @@ loop while i < count:
 	clamp y and velocity to the ground
 	set i to i + 1
 
-@intrinsic("call", "libc", "printf", an integer, "DEBUG_SIM_BASELINE_OK highest_y=%ld\n", highest_y as an integer as a 64 bit integer)
+discard @intrinsic("call", "libc", "printf", an integer, "DEBUG_SIM_BASELINE_OK highest_y=%ld\n", highest_y as an integer as a 64 bit integer)

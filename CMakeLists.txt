@@ -29,8 +29,13 @@ endif()
 #
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#find_package(imgui CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+# nlohmann_json is header-only, so Emscripten must use the host package.  Keep
+# LLVM and every compiled dependency restricted to the target sysroot.
+if(EMSCRIPTEN)
+    find_package(nlohmann_json CONFIG REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+else()
+    find_package(nlohmann_json CONFIG REQUIRED)
+endif()
 
 if(TARGET nlohmann_json::nlohmann_json)
     set(DYNLEX_NLOHMANN_TARGET nlohmann_json::nlohmann_json)
@@ -41,6 +46,28 @@ if(TARGET nlohmann_json::nlohmann_json)
 
     get_target_property(DYNLEX_NLOHMANN_INCLUDE_DIRS ${DYNLEX_NLOHMANN_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
     if(DYNLEX_NLOHMANN_INCLUDE_DIRS)
+        if(EMSCRIPTEN)
+            set(DYNLEX_NLOHMANN_STAGING_DIR "${CMAKE_BINARY_DIR}/dependencies/include")
+            set(DYNLEX_NLOHMANN_SOURCE_DIR "")
+            foreach(DYNLEX_NLOHMANN_INCLUDE_DIR IN LISTS DYNLEX_NLOHMANN_INCLUDE_DIRS)
+                if(EXISTS "${DYNLEX_NLOHMANN_INCLUDE_DIR}/nlohmann/json.hpp")
+                    set(DYNLEX_NLOHMANN_SOURCE_DIR "${DYNLEX_NLOHMANN_INCLUDE_DIR}/nlohmann")
+                    break()
+                endif()
+            endforeach()
+
+            if(NOT DYNLEX_NLOHMANN_SOURCE_DIR)
+                message(FATAL_ERROR "nlohmann_json does not provide its required nlohmann/json.hpp header")
+            endif()
+
+            file(REMOVE_RECURSE "${DYNLEX_NLOHMANN_STAGING_DIR}/nlohmann")
+            file(COPY "${DYNLEX_NLOHMANN_SOURCE_DIR}" DESTINATION "${DYNLEX_NLOHMANN_STAGING_DIR}")
+            set(DYNLEX_NLOHMANN_INCLUDE_DIRS "${DYNLEX_NLOHMANN_STAGING_DIR}")
+            set_target_properties(${DYNLEX_NLOHMANN_TARGET} PROPERTIES
+                INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_NLOHMANN_INCLUDE_DIRS}"
+            )
+        endif()
+
         set_target_properties(${DYNLEX_NLOHMANN_TARGET} PROPERTIES
             INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${DYNLEX_NLOHMANN_INCLUDE_DIRS}"
         )

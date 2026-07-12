@@ -11,6 +11,7 @@ Language support for the DynLex programming language in Visual Studio Code.
 
 ## Requirements
 
+- Visual Studio Code 1.91 or newer
 - The `dynlex` compiler must be installed and accessible
 - By default, the extension prefers a workspace `build/dynlex`, then a bundled binary, then `dynlex` on `PATH`
 
@@ -18,10 +19,14 @@ Language support for the DynLex programming language in Visual Studio Code.
 
 This extension contributes the following settings:
 
-- `dynlex.server.port`: Port for the DynLex language server (default: 5007)
+- `dynlex.server.host`: Host for an externally managed TCP language server
+- `dynlex.server.port`: Port for an externally managed TCP language server (default: 5007)
 - `dynlex.server.path`: Custom path to the dynlex executable (leave empty to use the default resolution)
-- `dynlex.server.flags`: Additional flags passed to the DynLex language server process
+- `dynlex.server.flags`: Additional flags passed to the managed DynLex language server process
 - `dynlex.server.useExternal`: Connect to an already-running DynLex language server instead of spawning one
+
+Managed language servers use stdio and are isolated per VS Code window. Host and port settings apply only when
+`dynlex.server.useExternal` is enabled.
 
 ## Commands
 
@@ -48,14 +53,15 @@ If the language server fails to start:
 
 1. Check the Output panel (View > Output) and select "DynLex Language Server"
 2. Verify that `dynlex` is built and accessible at the configured path
-3. Ensure the configured DynLex server port is available when using TCP mode
+3. When using external mode, ensure the configured DynLex server is listening on the configured host and port
 
 ## Building from Source
 
 ```bash
 cd vscode-extension
-npm install
-npm run compile
+npm ci
+npm run lint
+npm test
 ```
 
 To test the extension, press F5 in VS Code to launch an Extension Development Host.

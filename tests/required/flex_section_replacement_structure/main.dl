@@ -1,0 +1,20 @@
+flex function execute body:
+    replacement:
+        @intrinsic("execute body")
+
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section repeat count:
+    replacement:
+        @intrinsic("store", iteration, 0)
+        while @intrinsic("less than", iteration, count):
+            execute body
+            @intrinsic("store", iteration, @intrinsic("add", iteration, 1))
+
+@intrinsic("store", total, 0)
+repeat 3:
+    @intrinsic("store", total, @intrinsic("add", total, 2))
+
+@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int", 32), "%d\n", total))

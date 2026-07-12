@@ -1,0 +1,23 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function left + right:
+    replacement:
+        @intrinsic("add", left, right)
+
+function sum left and right:
+    execute:
+        set total to left
+        set total to total + right
+        return total
+
+discard @intrinsic("type", "int", sum 4 and 4)

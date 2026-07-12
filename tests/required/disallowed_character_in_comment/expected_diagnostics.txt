@@ -1,0 +1,1 @@
+tests/required/disallowed_character_in_comment/main.dl:1:9-10: Error: Disallowed character U+0007

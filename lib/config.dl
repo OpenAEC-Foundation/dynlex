@@ -43,6 +43,8 @@ dynlex options:
             related unused parameter candidate: "'{parameter}' isn't a parameter because it is not used:"
             quick fix unused parameter candidate: "Wrap '{parameter}' in curly braces"
         unknown type constraint: "Type constraint '{type_constraint}' does not refer to a known type"
+        cyclic type constraint: "Type constraint '{type_constraint}' has a cyclic signature dependency"
+        impure type constraint: "Type constraint '{type_constraint}' must be pure"
         precedence target not found: "Precedence target not found: {target}"
         precedence cycle detected: "Cycle detected in precedence declarations"
         invalid pattern parse unmatched bracket: "Unmatched '{character}' in pattern"
@@ -54,7 +56,7 @@ dynlex options:
         unknown intrinsic: "unknown intrinsic: \"{intrinsic}\""
         intrinsic wrong argument count: "intrinsic \"{intrinsic}\" expects {expected} argument(s), got {found}"
         pattern whitespace should be single space: "all whitespace in patterns should be a single space"
-        invalid reserved placeholder use: "Invalid use of reserved internal placeholder character in source code"
+        disallowed character: "Disallowed character {character}"
         variable has no type: "Variable '{name}' has no type (never assigned a value)"
         function has no deduced return type: "Function '{function}' has no deduced return type"
         variable type change:

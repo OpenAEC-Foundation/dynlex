@@ -1,0 +1,36 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function fixed tofix:
+    replacement:
+        @intrinsic("type", "const", tofix)
+
+function array of {fixed integer:n} items:
+    replacement:
+        @intrinsic("array", n)
+
+class:
+    patterns:
+        box {fixed integer:n}
+    members:
+        values as array of n items
+
+function constructed box {fixed integer:n} from value:
+    replacement:
+        @intrinsic("construct", box n, value)
+
+function selected {fixed integer:n}:
+    execute:
+        return constructed box n from [1, 2]
+
+set result to selected 2
+@intrinsic("discard", result)

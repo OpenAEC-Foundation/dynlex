@@ -8,6 +8,7 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 }
 
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
+	Expression *destinationSourceExpr = resolveThroughBindings(expr->arguments[1], flexBindingFrameStack);
 	BindingFrameStack destinationBindingFrameStack;
 	Expression *destinationExpr =
 		resolveThroughBindingsDeep(expr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
@@ -35,7 +36,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				context.trialJournal->recordVariableWrite(variable);
 			if (!variable->type.isDeduced() || variable->type == valueType)
 				commitVariableTypeFromValue(variable, valueExpr, valueType);
+			destinationExpr->type = variable->type;
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
+			if (!context.trial)
+				destinationExpr->compileTimeValue = assignedValue;
 			if (variable->isGlobal)
 				context.noteWrittenGlobalReference(variable->definition);
 			context.setKnownConstant(variable->definition, assignedValue);
@@ -43,7 +47,6 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				context.noteLoopMutation(variable->definition);
 				context.setKnownConstant(variable->definition, {});
 			}
-			context.snapshotReferenceConstant(destinationExpr->variable);
 			return;
 		}
 
@@ -96,6 +99,27 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	for (size_t i = 0; i < classDefinition->fields.size(); i++) {
 		if (classDefinition->fields[i].name != fieldName)
 			continue;
+		const DataType &currentFieldType = classDefinition->instantiations[instanceType.classInstIndex].fieldTypes[i];
+		if (currentFieldType.isDeduced()) {
+			if (isVariableAssignmentCompatible(currentFieldType, valueType))
+				return;
+			std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
+											  ? std::string(destinationSourceExpr->range.subString)
+											  : fieldName;
+			context.setTypeFailure(renderConfiguredMessage(
+				syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
+				"message",
+				{{"name", destinationName},
+				 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
+				 {"to_type", typeToUserName(valueType, context.parseContext)}}
+			));
+			if (!context.trial) {
+				context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
+					destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext
+				));
+			}
+			return;
+		}
 		int refinedInstIndex =
 			getRefinedClassInstantiationIndex(context, classDefinition, instanceType.classInstIndex, i, valueType);
 		if (refinedInstIndex < 0)

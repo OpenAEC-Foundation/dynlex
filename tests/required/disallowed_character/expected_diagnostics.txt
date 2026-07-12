@@ -1,0 +1,1 @@
+tests/required/disallowed_character/main.dl:1:7-8: Error: Disallowed character U+0007

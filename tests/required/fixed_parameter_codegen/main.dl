@@ -1,0 +1,35 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function fixed tofix:
+    replacement:
+        @intrinsic("type", "const", tofix)
+
+function left is right:
+    replacement:
+        @intrinsic("equal", left, right)
+
+function left and right:
+    replacement:
+        @intrinsic("and", left, right)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function selected {fixed integer:n} x {fixed integer:m}:
+    execute:
+        if n is 4 and m is 4:
+            return 7
+
+set result to selected 4 x 4
+@intrinsic("discard", @intrinsic("call", "libc", "printf", an integer, "%d\n", result))

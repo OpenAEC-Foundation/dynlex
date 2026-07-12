@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from dl_files import discover_entry_points, discover_dl_files, build_import_graph
 
-IMPORT_RE = re.compile(r"^\s*import\s+([^\s#]+)")
+
 PERF_LINE_RE = re.compile(r"^\s*(\d+)\s*;\s*(.*?)\s*;\s*(.*?)\s*$")
 
 
@@ -47,64 +48,13 @@ def first_relevant_error(stderr_text: str) -> str:
     return lines[-1]
 
 
-def normalize_import_token(token: str) -> str:
-    token = token.strip()
-    if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
-        token = token[1:-1]
-    return token
-
-
-def resolve_import_path(repo_root: Path, importer: Path, token: str) -> Path | None:
-    token = normalize_import_token(token)
-    if not token:
-        return None
-
-    base_candidates = [
-        importer.parent / token,
-        repo_root / token,
-    ]
-    if "/" not in token and "\\" not in token:
-        base_candidates.append(repo_root / "lib" / token)
-
-    candidates: list[Path] = []
-    for base in base_candidates:
-        candidates.append(base)
-        if base.suffix == "":
-            candidates.append(base.with_suffix(".dl"))
-
-    for candidate in candidates:
-        candidate = candidate.resolve()
-        if candidate.exists() and candidate.suffix == ".dl":
-            return candidate
-    return None
-
-
 def discover_main_files(repo_root: Path) -> list[Path]:
-    excluded_dirs = {"build", ".git", ".cache", ".idea", ".vscode"}
-    all_dl: list[Path] = []
-    for p in repo_root.rglob("*.dl"):
-        rel_parts = p.relative_to(repo_root).parts
-        if any(part in excluded_dirs for part in rel_parts):
-            continue
-        all_dl.append(p.resolve())
-    all_dl.sort()
-    imported: set[Path] = set()
-
-    for dl_file in all_dl:
-        try:
-            lines = dl_file.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            continue
-        for line in lines:
-            match = IMPORT_RE.match(line)
-            if not match:
-                continue
-            resolved = resolve_import_path(repo_root, dl_file, match.group(1))
-            if resolved is not None:
-                imported.add(resolved)
-
-    mains = [p for p in all_dl if p not in imported]
-    return mains
+    files = discover_dl_files(repo_root)
+    graph, unresolved = build_import_graph(repo_root, files)
+    if unresolved:
+        details = ", ".join(f"{path.relative_to(repo_root)} -> {token}" for path, token in unresolved)
+        raise RuntimeError(f"unresolved DynLex imports: {details}")
+    return discover_entry_points(files, graph)
 
 
 def detect_compiler(repo_root: Path, explicit: str | None) -> Path:

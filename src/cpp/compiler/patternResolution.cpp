@@ -2,9 +2,11 @@
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "expression.h"
+#include "functionSection.h"
 #include "intrinsicInfo.h"
 #include "patternElement.h"
 #include "patternTreeNode.h"
+#include "replacementSection.h"
 #include "transformedPattern.h"
 #include "type.h"
 #include "variable.h"
@@ -20,6 +22,116 @@
 #include <unordered_set>
 
 namespace {
+static CodeLine *createGeneratedLine(
+	ParseContext &context, const Range &sourceRange, Section *section, std::string text, int logicalLineOffset = 0
+) {
+	auto generatedLine = std::make_unique<CodeLine>(std::string_view{}, sourceRange.line->sourceFile);
+	generatedLine->setOwnedText(std::move(text));
+	generatedLine->rightTrimmedText = generatedLine->fullText;
+	generatedLine->patternText = generatedLine->fullText;
+	generatedLine->sourceFileLineIndex = sourceRange.line->sourceFileLineIndex;
+	generatedLine->mergedLineIndex = sourceRange.line->mergedLineIndex + logicalLineOffset;
+	generatedLine->section = section;
+	SourceLocation sourceStart = sourceRange.sourceStart();
+	generatedLine->sourceSlices.push_back({0, 0, sourceStart.sourceFile, sourceStart.sourceFileLineIndex, sourceStart.column});
+	CodeLine *result = generatedLine.get();
+	context.ownedCodeLines.push_back(std::move(generatedLine));
+	return result;
+}
+
+static PatternDefinition *createClassPropertyPatternDefinition(
+	ParseContext &context, FunctionSection *accessorSection, ClassDefinition *classDefinition, const FieldDefinition &field,
+	bool possessive
+) {
+	std::string patternText = possessive ? "owner's " + field.name : "the " + field.name + " of owner";
+	CodeLine *patternLine = createGeneratedLine(context, field.range, accessorSection, patternText);
+	auto *definition = new PatternDefinition(Range(patternLine, patternLine->fullText), accessorSection);
+	definition->hasPrebuiltPatternElements = true;
+	definition->isGeneratedClassPropertyAccessor = true;
+
+	auto addLiteralSequence = [&](std::string_view text, size_t startPos) {
+		for (const PatternElement &element : getPatternElements(text)) {
+			DefinitionPatternElement literal(element);
+			literal.startPos += startPos;
+			definition->patternElements.push_back(std::move(literal));
+		}
+	};
+	auto addOwner = [&](size_t startPos) {
+		DefinitionPatternElement owner(PatternElement::Type::Variable, "owner", startPos);
+		owner.resolvedTypeConstraint = DataType{DataType::Kind::Class};
+		owner.resolvedTypeConstraint.classDefinition = classDefinition;
+		definition->patternElements.push_back(std::move(owner));
+	};
+
+	if (possessive) {
+		addOwner(0);
+		addLiteralSequence(patternText.substr(5), 5);
+	} else {
+		const size_t ownerStart = patternText.size() - std::string_view("owner").size();
+		addLiteralSequence(std::string_view(patternText).substr(0, ownerStart), 0);
+		addOwner(ownerStart);
+	}
+
+	accessorSection->patternDefinitions.push_back(definition);
+	return definition;
+}
+
+static void generateClassPropertyPatterns(ParseContext &context) {
+	std::vector<ClassSection *> classSections;
+	std::function<void(Section *)> collectClasses = [&](Section *section) {
+		if (section->type == SectionType::Class)
+			classSections.push_back(static_cast<ClassSection *>(section));
+		for (Section *child : section->children)
+			collectClasses(child);
+	};
+	collectClasses(context.mainSection);
+
+	for (ClassSection *classSection : classSections) {
+		ClassDefinition *classDefinition = classSection->classDefinition;
+		for (const FieldDefinition &field : classDefinition->fields) {
+			auto *accessorSection = new FunctionSection(context.mainSection);
+			accessorSection->isFlex = true;
+			accessorSection->isLocal = classSection->isLocal;
+			createClassPropertyPatternDefinition(context, accessorSection, classDefinition, field, false);
+			createClassPropertyPatternDefinition(context, accessorSection, classDefinition, field, true);
+
+			auto *replacementSection = new ReplacementSection(accessorSection);
+			accessorSection->executionSection = replacementSection;
+			CodeLine *bodyLine = createGeneratedLine(
+				context, field.range, replacementSection, "@intrinsic(\"property\", owner, \"" + field.name + "\")", 1
+			);
+			replacementSection->codeLines.push_back(bodyLine);
+
+			auto *intrinsic = new Expression();
+			intrinsic->kind = Expression::Kind::IntrinsicCall;
+			intrinsic->intrinsicName = "property";
+			intrinsic->range = Range(bodyLine, bodyLine->fullText);
+
+			auto *intrinsicName = new Expression();
+			intrinsicName->kind = Expression::Kind::Literal;
+			intrinsicName->literalValue = std::string("property");
+			intrinsicName->range = intrinsic->range;
+			intrinsic->arguments.push_back(intrinsicName);
+
+			auto *owner = new Expression();
+			owner->kind = Expression::Kind::Variable;
+			owner->range = intrinsic->range;
+			owner->variable = context.createVariableReference(owner->range, "owner");
+			intrinsic->arguments.push_back(owner);
+			replacementSection->addVariableReference(context, owner->variable);
+
+			auto *propertyName = new Expression();
+			propertyName->kind = Expression::Kind::Literal;
+			propertyName->literalValue = field.name;
+			propertyName->range = intrinsic->range;
+			intrinsic->arguments.push_back(propertyName);
+
+			bodyLine->expression = intrinsic;
+			bodyLine->resolved = true;
+		}
+	}
+}
+
 static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
 	if (!def)
 		return {INT_MAX, INT_MAX, INT_MAX, ""};
@@ -137,9 +249,6 @@ findDefinitionOwnerSection(Section *startSection, const std::string &name, const
 static bool sectionSubtreeHasBoundReferenceToDefinition(
 	Section *section, const std::string &name, const VariableReference *definitionReference
 ) {
-	if (!section)
-		return false;
-
 	auto it = section->variableReferences.find(name);
 	if (it != section->variableReferences.end()) {
 		for (VariableReference *reference : it->second) {
@@ -236,34 +345,136 @@ static bool isInternalSection(Section *section) {
 		   isInternalSourcePath(section->openingLine->sourceFile->uri);
 }
 
-static bool definitionHasTypeConstraints(const PatternDefinition &definition) {
-	bool hasTypeConstraint = false;
-	std::function<void(const std::vector<DefinitionPatternElement> &)> visit =
-		[&](const std::vector<DefinitionPatternElement> &elements) {
-		for (const DefinitionPatternElement &element : elements) {
+static bool typeConstraintDomainsOverlap(const DataType &leftInput, const DataType &rightInput) {
+	DataType left = leftInput.stripFixed();
+	DataType right = rightInput.stripFixed();
+	if (!left.isDeduced() || !right.isDeduced())
+		return true;
+	if (left.kind != right.kind)
+		return false;
+	if (left.kind == DataType::Kind::Class)
+		return left.classDefinition == right.classDefinition;
+	if (left.kind == DataType::Kind::Type)
+		return true;
+	if (left.isNumeric() || right.isNumeric())
+		return left.isNumeric() && right.isNumeric();
+	return left.pointerDepth == right.pointerDepth;
+}
+
+struct PatternDomainAutomaton {
+	struct Transition {
+		size_t target;
+		const DefinitionPatternElement *element;
+	};
+	struct State {
+		std::vector<size_t> epsilonTargets;
+		std::vector<Transition> transitions;
+		bool accepting = false;
+	};
+
+	std::vector<State> states{2};
+
+	explicit PatternDomainAutomaton(const PatternDefinition &definition) {
+		states[1].accepting = true;
+		addSequence(definition.patternElements, 0, 1);
+	}
+
+  private:
+	size_t addState() {
+		states.emplace_back();
+		return states.size() - 1;
+	}
+
+	void addSequence(const std::vector<DefinitionPatternElement> &elements, size_t start, size_t end) {
+		if (elements.empty()) {
+			states[start].epsilonTargets.push_back(end);
+			return;
+		}
+		size_t current = start;
+		for (size_t i = 0; i < elements.size(); i++) {
+			size_t next = i + 1 == elements.size() ? end : addState();
+			const DefinitionPatternElement &element = elements[i];
 			if (element.type == PatternElement::Type::Choice) {
 				for (const auto &alternative : element.alternatives)
-					visit(alternative);
-				continue;
+					addSequence(alternative, current, next);
+			} else {
+				states[current].transitions.push_back({next, &element});
 			}
-			if (element.type == PatternElement::Type::Variable && !element.typeConstraintName.empty())
-				hasTypeConstraint = true;
+			current = next;
 		}
-	};
-	visit(definition.patternElements);
-	return hasTypeConstraint;
+	}
+};
+
+struct PatternDomainSearchState {
+	size_t leftState;
+	size_t rightState;
+	int constraintScoreDifference;
+
+	bool operator==(const PatternDomainSearchState &) const = default;
+};
+
+struct PatternDomainSearchStateHash {
+	size_t operator()(const PatternDomainSearchState &state) const {
+		size_t hash = std::hash<size_t>{}(state.leftState);
+		hash ^= std::hash<size_t>{}(state.rightState) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		hash ^= std::hash<int>{}(state.constraintScoreDifference) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		return hash;
+	}
+};
+
+static bool patternElementsShareTrieTransition(const DefinitionPatternElement &left, const DefinitionPatternElement &right) {
+	if (left.type != right.type)
+		return false;
+	if (left.type == PatternElement::Type::Variable)
+		return typeConstraintDomainsOverlap(left.resolvedTypeConstraint, right.resolvedTypeConstraint);
+	if (left.type == PatternElement::Type::Word)
+		return true;
+	return left.text == right.text;
+}
+
+static bool
+definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinition, const PatternDefinition &rightDefinition) {
+	PatternDomainAutomaton left(leftDefinition);
+	PatternDomainAutomaton right(rightDefinition);
+	std::vector<PatternDomainSearchState> pending{{0, 0, 0}};
+	std::unordered_set<PatternDomainSearchState, PatternDomainSearchStateHash> visited;
+
+	while (!pending.empty()) {
+		PatternDomainSearchState current = pending.back();
+		pending.pop_back();
+		if (!visited.insert(current).second)
+			continue;
+
+		const auto &leftState = left.states[current.leftState];
+		const auto &rightState = right.states[current.rightState];
+		if (leftState.accepting && rightState.accepting && current.constraintScoreDifference == 0)
+			return true;
+
+		for (size_t target : leftState.epsilonTargets)
+			pending.push_back({target, current.rightState, current.constraintScoreDifference});
+		for (size_t target : rightState.epsilonTargets)
+			pending.push_back({current.leftState, target, current.constraintScoreDifference});
+		for (const auto &leftTransition : leftState.transitions) {
+			for (const auto &rightTransition : rightState.transitions) {
+				if (!patternElementsShareTrieTransition(*leftTransition.element, *rightTransition.element))
+					continue;
+				int nextDifference = current.constraintScoreDifference;
+				if (leftTransition.element->type == PatternElement::Type::Variable) {
+					nextDifference += leftTransition.element->resolvedTypeConstraint.isDeduced() ? 1 : 0;
+					nextDifference -= rightTransition.element->resolvedTypeConstraint.isDeduced() ? 1 : 0;
+				}
+				pending.push_back({leftTransition.target, rightTransition.target, nextDifference});
+			}
+		}
+	}
+
+	return false;
 }
 
 static void
 appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDefinition *left, const PatternDefinition *right);
 
 struct DefinitionConflict {
-	enum class Kind {
-		NonFlexSpecializesFlex,
-		DuplicatePatternDefinition,
-	};
-
-	Kind kind;
 	PatternDefinition *primary;
 	PatternDefinition *related{};
 };
@@ -277,7 +488,7 @@ static bool definitionConflictComesBefore(const DefinitionConflict &left, const 
 		return true;
 	if (definitionComesBefore(right.related, left.related))
 		return false;
-	return static_cast<int>(left.kind) < static_cast<int>(right.kind);
+	return false;
 }
 
 static bool emitDefinitionConflicts(ParseContext &context) {
@@ -304,7 +515,6 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::sort(definitions.begin(), definitions.end(), definitionComesBefore);
 
 	std::vector<DefinitionConflict> conflicts;
-	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenMixedFlexPairs;
 	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
 
 	for (PatternDefinition *definition : definitions) {
@@ -316,29 +526,12 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				if (other == definition)
 					continue;
 
-				bool mixedFlexFunctionPair = definition->section->type == SectionType::Function &&
-											 other->section->type == SectionType::Function &&
-											 definition->section->isFlex != other->section->isFlex;
-				if (mixedFlexFunctionPair) {
-					PatternDefinition *nonFlexDefinition = definition->section->isFlex ? other : definition;
-					PatternDefinition *flexDefinition = definition->section->isFlex ? definition : other;
-					if (seenMixedFlexPairs.insert({nonFlexDefinition, flexDefinition}).second) {
-						conflicts.push_back(
-							{DefinitionConflict::Kind::NonFlexSpecializesFlex, nonFlexDefinition, flexDefinition}
-						);
-					}
-					continue;
-				}
-
-				if (definitionHasTypeConstraints(*definition) || definitionHasTypeConstraints(*other))
-					continue;
-
 				PatternDefinition *earlierDefinition = definitionComesBefore(definition, other) ? definition : other;
 				PatternDefinition *laterDefinition = earlierDefinition == definition ? other : definition;
-				if (seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
-					conflicts.push_back(
-						{DefinitionConflict::Kind::DuplicatePatternDefinition, laterDefinition, earlierDefinition}
-					);
+				if (!seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
+					continue;
+				if (definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
+					conflicts.push_back({laterDefinition, earlierDefinition});
 			}
 		}
 	}
@@ -348,35 +541,18 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 
 	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
 	const DefinitionConflict &conflict = conflicts.front();
-	switch (conflict.kind) {
-	case DefinitionConflict::Kind::NonFlexSpecializesFlex: {
-		Diagnostic diagnostic(
-			context, Diagnostic::Level::Error, "non-flex function cannot specialize flex function", conflict.primary->range
-		);
-		diagnostic.relatedInfo.push_back({"This flex function shares the same pattern endpoint:", conflict.related->range});
-		context.diagnostics.push_back(std::move(diagnostic));
-		return false;
-	}
-	case DefinitionConflict::Kind::DuplicatePatternDefinition: {
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, conflict.primary->range);
-		Diagnostic diagnostic(context, Diagnostic::Level::Error, "duplicate pattern definition", conflict.primary->range);
-		diagnostic.relatedInfo.push_back(
-			{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), conflict.related->range}
-		);
-		appendImplicitPromotionDuplicateDetails(diagnostic, conflict.primary, conflict.related);
-		context.diagnostics.push_back(std::move(diagnostic));
-		return false;
-	}
-	}
-
-	crashCompilerBug("unhandled definition conflict kind");
+	const SyntaxConfig &syntax = syntaxConfigForRange(context, conflict.primary->range);
+	Diagnostic diagnostic(context, Diagnostic::Level::Error, "duplicate pattern definition", conflict.primary->range);
+	diagnostic.relatedInfo.push_back(
+		{renderConfiguredMessage(syntax, "duplicate pattern definition related existing"), conflict.related->range}
+	);
+	appendImplicitPromotionDuplicateDetails(diagnostic, conflict.primary, conflict.related);
+	context.diagnostics.push_back(std::move(diagnostic));
 	return false;
 }
 
 static std::vector<std::pair<std::string, Range>> collectImplicitlyPromotedParameters(const PatternDefinition *definition) {
 	std::vector<std::pair<std::string, Range>> result;
-	if (!definition)
-		return result;
 	std::function<void(const std::vector<DefinitionPatternElement> &)> visit =
 		[&](const std::vector<DefinitionPatternElement> &elements) {
 		for (const DefinitionPatternElement &element : elements) {
@@ -423,18 +599,21 @@ appendImplicitPromotionDuplicateDetails(Diagnostic &diagnostic, const PatternDef
 }
 
 static void appendUniqueSection(std::vector<Section *> &sections, Section *section) {
-	if (!section)
-		return;
 	if (std::find(sections.begin(), sections.end(), section) == sections.end())
 		sections.push_back(section);
 }
 
+static void eraseOwnedSectionVariable(Section *section, const std::string &name, const VariableReference *definitionReference) {
+	auto variableIt = section->variables.find(name);
+	if (variableIt == section->variables.end() || !variableIt->second || variableIt->second->definition != definitionReference)
+		return;
+	Variable *variable = variableIt->second;
+	section->variables.erase(variableIt);
+	delete variable;
+}
+
 static Range definitionNodeRange(const PatternDefinition *definition, const PatternTreeNode *node) {
-	if (!definition || !node)
-		return {};
 	auto startIt = node->definitionStartPositions.find(const_cast<PatternDefinition *>(definition));
-	if (startIt == node->definitionStartPositions.end())
-		return {};
 	return Range(
 		definition->range.line, definition->range.start() + static_cast<int>(startIt->second),
 		definition->range.start() + static_cast<int>(startIt->second + node->text.length())
@@ -456,17 +635,12 @@ struct AcceptedLiteralDiagnosticInfo {
 static std::vector<AcceptedLiteralDiagnosticInfo>
 collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinition *definition) {
 	std::vector<AcceptedLiteralDiagnosticInfo> result;
-	if (!definition)
-		return result;
-
 	std::unordered_set<std::string> seen;
 	for (const AcceptedLiteralMatch &acceptedLiteral : match.acceptedLiterals) {
 		PatternTreeNode *node = acceptedLiteral.node;
-		if (!node || node->type != PatternElement::Type::VariableLike)
+		if (node->type != PatternElement::Type::VariableLike)
 			continue;
 		Range range = definitionNodeRange(definition, node);
-		if (!range.line)
-			continue;
 		std::string key = range.toString();
 		if (!seen.insert(key).second)
 			continue;
@@ -704,6 +878,8 @@ findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *matc
 }
 } // namespace
 
+bool validatePatternDefinitionConflicts(ParseContext &context) { return emitDefinitionConflicts(context); }
+
 void addVariableReferencesFromMatch(ParseContext &context, PatternReference *reference, PatternMatch &match) {
 	int offset = reference->range().start();
 	for (VariableMatch &varMatch : match.discoveredVariables) {
@@ -795,9 +971,6 @@ static void expandMatch(Expression *rootExpression, Expression *expr, PatternMat
 
 // Recursively expand pending expressions to their resolved forms
 void expandExpression(Expression *expr, Section *section) {
-	if (!expr)
-		return;
-
 	// Expand children first
 	for (Expression *arg : expr->arguments) {
 		expandExpression(arg, section);
@@ -939,8 +1112,6 @@ static void incrementVariableLikeCounts(PatternReference *reference) {
 }
 
 static Range firstMatchedDefinitionRange(PatternMatch *match) {
-	if (!match || !match->matchedEndNode || match->matchedEndNode->matchingDefinitions.empty())
-		return {};
 	return match->matchedEndNode->matchingDefinitions.front()->range;
 }
 
@@ -1045,8 +1216,6 @@ static void removeVariableReferencesFromMatch(
 ) {
 	Section *refSection = reference->range().section();
 	for (VariableMatch &varMatch : match.discoveredVariables) {
-		if (!varMatch.variableReference)
-			continue;
 		const std::string &name = varMatch.variableReference->name;
 
 		// Remove from section's variableReferences
@@ -1089,6 +1258,7 @@ static void removeVariableReferencesFromMatch(
 							ownerSection->variableReferences.erase(vit);
 					}
 					ownerSection->variableDefinitions.erase(defIt);
+					eraseOwnedSectionVariable(ownerSection, name, definitionReference);
 				}
 
 				// Revert Variable→VariableLike in pattern definitions and mark for re-resolution.
@@ -1137,9 +1307,6 @@ static std::vector<Section *> unresolveReference(
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs, bool revertImplicitPromotions = true
 ) {
 	std::vector<Section *> affectedSections;
-	if (!reference->resolved || !reference->match)
-		return affectedSections;
-
 	// Remove variable references created from the match
 	removeVariableReferencesFromMatch(context, reference, *reference->match, affectedSections, revertImplicitPromotions);
 
@@ -1160,9 +1327,6 @@ static std::vector<Section *> unresolveReference(
 }
 
 static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Section *section) {
-	if (!section)
-		return false;
-
 	bool changed = false;
 	std::vector<std::pair<std::string, VariableReference *>> ownedDefinitions;
 	ownedDefinitions.reserve(section->variableDefinitions.size());
@@ -1170,8 +1334,6 @@ static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Secti
 		ownedDefinitions.emplace_back(name, definitionReference);
 
 	for (const auto &[name, definitionReference] : ownedDefinitions) {
-		if (!definitionReference)
-			continue;
 		if (sectionSubtreeHasBoundReferenceToDefinition(section, name, definitionReference))
 			continue;
 
@@ -1185,6 +1347,7 @@ static bool cleanupStaleImplicitPromotionsInSection(ParseContext &context, Secti
 					section->variableReferences.erase(vit);
 			}
 			section->variableDefinitions.erase(defIt);
+			eraseOwnedSectionVariable(section, name, definitionReference);
 		}
 
 		for (PatternDefinition *def : section->patternDefinitions) {
@@ -1316,6 +1479,7 @@ static bool resolveReferences(
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
+	generateClassPropertyPatterns(context);
 	std::list<PatternReference *> bodyReferences;
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
@@ -1327,6 +1491,8 @@ bool resolvePatterns(ParseContext &context) {
 	bool hadPatternParseError = false;
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
+			if (unresolvedDefinition->hasPrebuiltPatternElements)
+				continue;
 			std::vector<DefinitionPatternElement> parsedElements;
 			if (!parsePatternElements(
 					context, unresolvedDefinition->range, unresolvedDefinition->range.subString, parsedElements
@@ -1355,7 +1521,6 @@ bool resolvePatterns(ParseContext &context) {
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
 	bool staleInvalidationOccurred = false;
-	std::vector<Section *> pendingRequeueSections;
 	std::vector<Section *> pendingPromotionCleanupSections;
 
 	// Helper: after adding a definition to the tree, find less-specific definitions
@@ -1448,15 +1613,6 @@ bool resolvePatterns(ParseContext &context) {
 			}
 			return section->patternDefinitionsResolved;
 		});
-		if (!pendingRequeueSections.empty()) {
-			std::sort(pendingRequeueSections.begin(), pendingRequeueSections.end(), sectionComesBefore);
-			for (Section *sec : pendingRequeueSections) {
-				if (std::find(unResolvedSections.begin(), unResolvedSections.end(), sec) == unResolvedSections.end())
-					unResolvedSections.push_back(sec);
-			}
-			pendingRequeueSections.clear();
-		}
-
 		if (unResolvedSections.size() < sectionsBefore) {
 			madeProgress = true;
 		}
@@ -1474,39 +1630,12 @@ bool resolvePatterns(ParseContext &context) {
 				if (!cleanupStaleImplicitPromotionsInSection(context, sec))
 					continue;
 				cleanupChanged = true;
-				appendUniqueSection(pendingRequeueSections, sec);
+				if (std::find(unResolvedSections.begin(), unResolvedSections.end(), sec) == unResolvedSections.end())
+					unResolvedSections.push_back(sec);
 			}
 			pendingPromotionCleanupSections.clear();
 			if (cleanupChanged)
 				madeProgress = true;
-		}
-
-		// Resolve type constraints on definition elements ({type:name} syntax).
-		// Resolve capture constraints through the normal type-expression parser so
-		// compound constraints like "4 float array" work the same as declared types.
-		{
-			std::function<void(Section *)> resolveTypeConstraints = [&](Section *section) {
-				for (PatternDefinition *def : section->patternDefinitions) {
-					for (auto &elem : def->patternElements) {
-						if (elem.typeConstraintName.empty() || elem.resolvedTypeConstraint.isDeduced())
-							continue;
-
-						int constraintEnd = def->range.start() + static_cast<int>(elem.startPos) - 1;
-						int constraintStart = constraintEnd - static_cast<int>(elem.typeConstraintName.size());
-						Range constraintRange(def->range.line, constraintStart, constraintEnd);
-						DataType typeRef;
-						if (resolveTypeConstraintExpression(
-								context, def->section, constraintRange, elem.typeConstraintName, typeRef
-							))
-							elem.resolvedTypeConstraint = typeRef.toReferencedType();
-						if (elem.resolvedTypeConstraint.isDeduced())
-							madeProgress = true;
-					}
-				}
-				for (Section *child : section->children)
-					resolveTypeConstraints(child);
-			};
-			resolveTypeConstraints(context.mainSection);
 		}
 
 		if (unResolvedSections.empty() && bodyReferences.empty())
@@ -1526,8 +1655,6 @@ bool resolvePatterns(ParseContext &context) {
 				if (promotableNames.empty())
 					continue;
 				for (PatternReference *reference : bodyReferences) {
-					if (!reference)
-						continue;
 					Section *referenceSection = reference->range().section();
 					if (!sectionContainsOrIsAncestorOf(section, referenceSection))
 						continue;
@@ -1557,7 +1684,7 @@ bool resolvePatterns(ParseContext &context) {
 				break; // no sections to force-resolve and no progress — truly stuck
 			// Force-resolve all remaining sections by adding their definitions as-is.
 			// Copy the list first because addDefinitionToTree may trigger invalidations
-			// that re-add sections to unResolvedSections.
+			// whose cleanup re-adds sections on the next iteration.
 			std::list<Section *> toForceResolve = std::move(unResolvedSections);
 			unResolvedSections.clear();
 			for (Section *section : toForceResolve) {
@@ -1570,7 +1697,7 @@ bool resolvePatterns(ParseContext &context) {
 					}
 				}
 			}
-			// Sections may have been re-added by invalidation cascades — continue the loop
+			// Invalidation cleanup runs during the next iteration.
 		}
 	}
 
@@ -1606,10 +1733,9 @@ bool resolvePatterns(ParseContext &context) {
 		return false;
 	}
 
-	// Phase 2: resolve global references (all definitions are now in the tree)
-	if (!emitDefinitionConflicts(context))
-		return false;
-
+	// Phase 2: resolve global references (all definitions are now in the tree).
+	// Typed-domain conflicts are checked after signature inference, when every
+	// constraint has a concrete type.
 	emitDuplicatePatternWordWarnings(context);
 
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
@@ -1621,25 +1747,6 @@ bool resolvePatterns(ParseContext &context) {
 	if (!bodyReferences.empty() || !globalReferences.empty()) {
 		emitUnresolvedPatternDiagnostics();
 		return false;
-	}
-
-	// Validate type constraints — report unresolved ones as errors
-	{
-		std::function<void(Section *)> validateTypeConstraints = [&](Section *section) {
-			for (PatternDefinition *def : section->patternDefinitions) {
-				for (auto &elem : def->patternElements) {
-					if (!elem.typeConstraintName.empty() && !elem.resolvedTypeConstraint.isDeduced()) {
-						context.diagnostics.push_back(Diagnostic(
-							context, Diagnostic::Level::Error, "unknown type constraint", def->range, "type_constraint",
-							elem.typeConstraintName
-						));
-					}
-				}
-			}
-			for (Section *child : section->children)
-				validateTypeConstraints(child);
-		};
-		validateTypeConstraints(context.mainSection);
 	}
 
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
@@ -1717,6 +1824,20 @@ bool resolvePatterns(ParseContext &context) {
 
 		if (!collectPrecedence(context.mainSection))
 			return false;
+
+		std::vector<PatternDefinition *> precedenceTargets(involvedDefs.begin(), involvedDefs.end());
+		std::function<void(Section *)> placeGeneratedPropertyAccessors = [&](Section *section) {
+			for (PatternDefinition *definition : section->patternDefinitions) {
+				if (!definition->isGeneratedClassPropertyAccessor)
+					continue;
+				involvedDefs.insert(definition);
+				for (PatternDefinition *target : precedenceTargets)
+					edges.push_back({definition, target});
+			}
+			for (Section *child : section->children)
+				placeGeneratedPropertyAccessors(child);
+		};
+		placeGeneratedPropertyAccessors(context.mainSection);
 
 		if (!involvedDefs.empty()) {
 			// Topological sort (Kahn's algorithm) to assign precedence levels
@@ -1877,7 +1998,13 @@ bool resolvePatterns(ParseContext &context) {
 				}
 			}
 			highestSection->variableDefinitions[name] = definition;
-			highestSection->variables[name] = new Variable(name, definition, groupIsGlobal);
+			auto variableIt = highestSection->variables.find(name);
+			if (variableIt == highestSection->variables.end()) {
+				highestSection->variables.emplace(name, new Variable(name, definition, groupIsGlobal));
+			} else {
+				requireCompilerInvariant(variableIt->second, "section variable map contains a null variable");
+				*variableIt->second = Variable(name, definition, groupIsGlobal);
+			}
 			for (VariableReference *ref : groupRefs) {
 				if (ref != definition)
 					ref->definition = definition;

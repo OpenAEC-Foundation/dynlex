@@ -1,0 +1,21 @@
+import lib/std.dl
+
+flex section choose {boolean:condition}:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section choose {integer:count}:
+    replacement:
+        @intrinsic("loop while", false)
+
+flex section otherwise:
+    replacement:
+        @intrinsic("else")
+
+set result to 0
+choose true:
+    set result to 1
+otherwise:
+    set result to 2
+
+print result as line

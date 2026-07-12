@@ -43,6 +43,7 @@ struct DataType {
 	int arraySize = 0;							// For Kind::Array and Type(Array)
 	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
 	int matrixRowCount = 0;						// For Kind::Matrix and Type(Matrix): row count, arraySize stores column count
+	bool fixed = false;							// Compile-time-known/fixed-value requirement tag
 
 	DataType() = default;
 	DataType(Kind kind) : kind(kind) {}
@@ -50,11 +51,11 @@ struct DataType {
 	DataType(
 		Kind kind, int numericSize, int pointerDepth, ClassDefinition *classDefinition = nullptr, int classInstIndex = -1,
 		Expression *typeExpression = nullptr, Kind referencedKind = Kind::Unresolved, int arraySize = 0,
-		std::shared_ptr<DataType> arrayElementType = nullptr
+		std::shared_ptr<DataType> arrayElementType = nullptr, bool fixed = false
 	)
 		: kind(kind), numericSize(numericSize), pointerDepth(pointerDepth), classDefinition(classDefinition),
 		  classInstIndex(classInstIndex), typeExpression(typeExpression), referencedKind(referencedKind), arraySize(arraySize),
-		  arrayElementType(std::move(arrayElementType)) {}
+		  arrayElementType(std::move(arrayElementType)), fixed(fixed) {}
 
 	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
 	bool hasVectorPayload() const { return kind == Kind::Vector || (kind == Kind::Type && referencedKind == Kind::Vector); }
@@ -62,7 +63,8 @@ struct DataType {
 
 	bool operator==(const DataType &other) const {
 		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
-			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount)
+			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount ||
+			fixed != other.fixed)
 			return false;
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			bool hasElem = !!arrayElementType;
@@ -92,6 +94,8 @@ struct DataType {
 			return arraySize < other.arraySize;
 		if (matrixRowCount != other.matrixRowCount)
 			return matrixRowCount < other.matrixRowCount;
+		if (fixed != other.fixed)
+			return fixed < other.fixed;
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			if (!!arrayElementType != !!other.arrayElementType)
 				return !!arrayElementType < !!other.arrayElementType;
@@ -130,36 +134,70 @@ struct DataType {
 	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
 	// wether this type is a specific type and the type pattern has been resolved
 	bool isDeduced() const { return kind != Kind::Any && kind != Kind::Unresolved; }
+	bool isConcrete() const {
+		if (!isDeduced())
+			return false;
+		if (kind == Kind::Array)
+			return arraySize >= 0 && arrayElementType && arrayElementType->isConcrete();
+		if (kind == Kind::Vector)
+			return arraySize > 0 && arrayElementType && arrayElementType->isConcrete();
+		if (kind == Kind::Matrix)
+			return matrixRowCount > 0 && arraySize > 0 && arrayElementType && arrayElementType->isConcrete();
+		if (kind == Kind::Class)
+			return classDefinition && classInstIndex >= 0;
+		if (kind == Kind::Type) {
+			if (referencedKind == Kind::Array)
+				return arraySize >= 0 && arrayElementType && arrayElementType->isConcrete();
+			if (referencedKind == Kind::Vector)
+				return arraySize > 0 && arrayElementType && arrayElementType->isConcrete();
+			if (referencedKind == Kind::Matrix)
+				return matrixRowCount > 0 && arraySize > 0 && arrayElementType && arrayElementType->isConcrete();
+			if (referencedKind == Kind::Class)
+				return classDefinition && classInstIndex >= 0;
+			return referencedKind != Kind::Any && referencedKind != Kind::Unresolved;
+		}
+		return true;
+	}
+	DataType stripFixed() const {
+		DataType result = *this;
+		result.fixed = false;
+		if (arrayElementType)
+			result.arrayElementType = std::make_shared<DataType>(arrayElementType->stripFixed());
+		return result;
+	}
 
 	static bool supportsRuntimeConversion(const DataType &fromType, const DataType &toType) {
-		if (!fromType.isDeduced() || !toType.isDeduced())
+		DataType concreteFromType = fromType.stripFixed();
+		DataType concreteToType = toType.stripFixed();
+		if (!concreteFromType.isDeduced() || !concreteToType.isDeduced())
 			return false;
-		if (fromType == toType)
+		if (concreteFromType == concreteToType)
 			return true;
-		if (fromType.kind == Kind::Void || fromType.kind == Kind::Type || toType.kind == Kind::Void ||
-			toType.kind == Kind::Type)
+		if (concreteFromType.kind == Kind::Void || concreteFromType.kind == Kind::Type || concreteToType.kind == Kind::Void ||
+			concreteToType.kind == Kind::Type)
 			return false;
 
-		if (fromType.isPointer() && toType.isPointer())
+		if (concreteFromType.isPointer() && concreteToType.isPointer())
 			return true;
-		if (fromType.isPointer() && toType.kind == Kind::Int && toType.pointerDepth == 0)
+		if (concreteFromType.isPointer() && concreteToType.kind == Kind::Int && concreteToType.pointerDepth == 0)
 			return true;
-		if (fromType.kind == Kind::Int && fromType.pointerDepth == 0 && toType.isPointer())
-			return true;
-
-		if (fromType.isNumeric() && toType.isNumeric())
-			return true;
-		if (fromType.isNumeric() && toType.kind == Kind::Bool && toType.pointerDepth == 0)
-			return true;
-		if (fromType.kind == Kind::Bool && fromType.pointerDepth == 0 && toType.isNumeric())
+		if (concreteFromType.kind == Kind::Int && concreteFromType.pointerDepth == 0 && concreteToType.isPointer())
 			return true;
 
-		if (toType.kind == Kind::Vector && toType.pointerDepth == 0 && toType.arrayElementType && fromType.isNumeric())
-			return supportsRuntimeConversion(fromType, *toType.arrayElementType);
-		if (fromType.kind == Kind::Vector && fromType.pointerDepth == 0 && fromType.arrayElementType &&
-			toType.kind == Kind::Vector && toType.pointerDepth == 0 && toType.arrayElementType &&
-			fromType.arraySize == toType.arraySize)
-			return supportsRuntimeConversion(*fromType.arrayElementType, *toType.arrayElementType);
+		if (concreteFromType.isNumeric() && concreteToType.isNumeric())
+			return true;
+		if (concreteFromType.isNumeric() && concreteToType.kind == Kind::Bool && concreteToType.pointerDepth == 0)
+			return true;
+		if (concreteFromType.kind == Kind::Bool && concreteFromType.pointerDepth == 0 && concreteToType.isNumeric())
+			return true;
+
+		if (concreteToType.kind == Kind::Vector && concreteToType.pointerDepth == 0 && concreteToType.arrayElementType &&
+			concreteFromType.isNumeric())
+			return supportsRuntimeConversion(concreteFromType, *concreteToType.arrayElementType);
+		if (concreteFromType.kind == Kind::Vector && concreteFromType.pointerDepth == 0 && concreteFromType.arrayElementType &&
+			concreteToType.kind == Kind::Vector && concreteToType.pointerDepth == 0 && concreteToType.arrayElementType &&
+			concreteFromType.arraySize == concreteToType.arraySize)
+			return supportsRuntimeConversion(*concreteFromType.arrayElementType, *concreteToType.arrayElementType);
 
 		return false;
 	}
@@ -184,90 +222,92 @@ struct DataType {
 
 	// Promote for arithmetic, including pointer + number -> pointer
 	static bool promoteArithmetic(const DataType &a, const DataType &b, DataType &result) {
-		if (a.kind == Kind::Unresolved || b.kind == Kind::Unresolved) {
+		DataType left = a.stripFixed();
+		DataType right = b.stripFixed();
+		if (left.kind == Kind::Unresolved || right.kind == Kind::Unresolved) {
 			result = {Kind::Unresolved};
 			return true;
 		}
-		if (a.isPointer() && b.isNumeric()) {
-			result = a;
+		if (left.isPointer() && right.isNumeric()) {
+			result = left;
 			return true;
 		}
-		if (b.isPointer() && a.isNumeric()) {
-			result = b;
+		if (right.isPointer() && left.isNumeric()) {
+			result = right;
 			return true;
 		}
-		if (a.isVector() && b.isNumeric()) {
+		if (left.isVector() && right.isNumeric()) {
 			DataType elem;
-			if (!promoteArithmetic(a.vectorElementType(), b, elem))
+			if (!promoteArithmetic(left.vectorElementType(), right, elem))
 				return false;
-			result = a;
+			result = left;
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (b.isVector() && a.isNumeric()) {
+		if (right.isVector() && left.isNumeric()) {
 			DataType elem;
-			if (!promoteArithmetic(a, b.vectorElementType(), elem))
+			if (!promoteArithmetic(left, right.vectorElementType(), elem))
 				return false;
-			result = b;
+			result = right;
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (a.isVector() && b.isVector() && a.vectorSize() == b.vectorSize()) {
+		if (left.isVector() && right.isVector() && left.vectorSize() == right.vectorSize()) {
 			DataType elem;
-			if (!promoteArithmetic(a.vectorElementType(), b.vectorElementType(), elem))
+			if (!promoteArithmetic(left.vectorElementType(), right.vectorElementType(), elem))
 				return false;
-			result = a;
+			result = left;
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (a.isMatrix() && b.isNumeric()) {
+		if (left.isMatrix() && right.isNumeric()) {
 			DataType elem;
-			if (!promoteArithmetic(a.matrixElementType(), b, elem))
+			if (!promoteArithmetic(left.matrixElementType(), right, elem))
 				return false;
-			result = a;
+			result = left;
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (b.isMatrix() && a.isNumeric()) {
+		if (right.isMatrix() && left.isNumeric()) {
 			DataType elem;
-			if (!promoteArithmetic(a, b.matrixElementType(), elem))
+			if (!promoteArithmetic(left, right.matrixElementType(), elem))
 				return false;
-			result = b;
+			result = right;
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (a.isMatrix() && b.isVector() && a.matrixColumns() == b.vectorSize()) {
+		if (left.isMatrix() && right.isVector() && left.matrixColumns() == right.vectorSize()) {
 			DataType elem;
-			if (!promoteArithmetic(a.matrixElementType(), b.vectorElementType(), elem))
-				return false;
-			result = {Kind::Vector};
-			result.arraySize = a.matrixRows();
-			result.arrayElementType = std::make_shared<DataType>(elem);
-			return true;
-		}
-		if (a.isVector() && b.isMatrix() && a.vectorSize() == b.matrixRows()) {
-			DataType elem;
-			if (!promoteArithmetic(a.vectorElementType(), b.matrixElementType(), elem))
+			if (!promoteArithmetic(left.matrixElementType(), right.vectorElementType(), elem))
 				return false;
 			result = {Kind::Vector};
-			result.arraySize = b.matrixColumns();
+			result.arraySize = left.matrixRows();
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (a.isMatrix() && b.isMatrix() && a.matrixColumns() == b.matrixRows()) {
+		if (left.isVector() && right.isMatrix() && left.vectorSize() == right.matrixRows()) {
 			DataType elem;
-			if (!promoteArithmetic(a.matrixElementType(), b.matrixElementType(), elem))
+			if (!promoteArithmetic(left.vectorElementType(), right.matrixElementType(), elem))
+				return false;
+			result = {Kind::Vector};
+			result.arraySize = right.matrixColumns();
+			result.arrayElementType = std::make_shared<DataType>(elem);
+			return true;
+		}
+		if (left.isMatrix() && right.isMatrix() && left.matrixColumns() == right.matrixRows()) {
+			DataType elem;
+			if (!promoteArithmetic(left.matrixElementType(), right.matrixElementType(), elem))
 				return false;
 			result = {Kind::Matrix};
-			result.matrixRowCount = a.matrixRows();
-			result.arraySize = b.matrixColumns();
+			result.matrixRowCount = left.matrixRows();
+			result.arraySize = right.matrixColumns();
 			result.arrayElementType = std::make_shared<DataType>(elem);
 			return true;
 		}
-		if (a.isNumeric() && b.isNumeric()) {
+		if (left.isNumeric() && right.isNumeric()) {
 			result = {};
-			result.kind = (a.kind == Kind::Float || b.kind == Kind::Float) ? Kind::Float : Kind::Int;
-			result.numericSize = std::max(a.numericSize, b.numericSize);
+			result.kind = (left.kind == Kind::Float || right.kind == Kind::Float) ? Kind::Float : Kind::Int;
+			result.numericSize = std::max(left.numericSize, right.numericSize);
 			return true;
 		}
 		return false;
@@ -275,13 +315,15 @@ struct DataType {
 
 	// Promote for bitwise operators: integers only, using the wider integer width.
 	static bool promoteBitwise(const DataType &a, const DataType &b, DataType &result) {
-		if (a.kind == Kind::Unresolved || b.kind == Kind::Unresolved) {
+		DataType left = a.stripFixed();
+		DataType right = b.stripFixed();
+		if (left.kind == Kind::Unresolved || right.kind == Kind::Unresolved) {
 			result = {Kind::Unresolved};
 			return true;
 		}
-		if (!a.isInteger() || !b.isInteger())
+		if (!left.isInteger() || !right.isInteger())
 			return false;
-		result = {Kind::Int, std::max(a.numericSize, b.numericSize)};
+		result = {Kind::Int, std::max(left.numericSize, right.numericSize)};
 		return true;
 	}
 
@@ -297,25 +339,8 @@ struct DataType {
 		result.arraySize = arraySize;
 		result.matrixRowCount = matrixRowCount;
 		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
+		result.fixed = fixed;
 		return result;
-	}
-
-	// Parse a type from a string (e.g. "i32", "f64", "void")
-	static DataType fromString(const std::string &s) {
-		if (s == "void")
-			return {Kind::Void};
-		if (s == "bool")
-			return {Kind::Bool};
-		auto isBitSuffix = [&](char prefix) {
-			return s.size() >= 2 && s[0] == prefix && std::all_of(s.begin() + 1, s.end(), [](unsigned char ch) {
-				return std::isdigit(ch);
-			});
-		};
-		if (isBitSuffix('i'))
-			return {Kind::Int, std::stoi(s.substr(1)) / 8};
-		if (isBitSuffix('f'))
-			return {Kind::Float, std::stoi(s.substr(1)) / 8};
-		return {};
 	}
 
 	llvm::Type *toLLVM(llvm::LLVMContext &ctx) const;

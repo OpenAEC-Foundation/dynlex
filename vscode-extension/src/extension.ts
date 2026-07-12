@@ -2,26 +2,21 @@ import * as vscode from 'vscode';
 import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn, ChildProcess } from 'child_process';
 import {
     LanguageClient,
     LanguageClientOptions,
+    ServerOptions,
     StreamInfo,
 } from 'vscode-languageclient/node';
+import { buildManagedServerOptions } from './managedServer';
 
 let client: LanguageClient | undefined;
-let serverProcess: ChildProcess | undefined;
-let outputChannel: vscode.OutputChannel;
-let reconnectAttempts = 0;
-let reconnectTimeout: NodeJS.Timeout | undefined;
+let outputChannel: vscode.LogOutputChannel;
 let isShuttingDown = false;
 let extensionPath: string;
 let cursorClientId = '';
 let lastSentCursorKey: string | undefined;
 let instantiationHoverProvider: DynLexInstantiationHoverProvider | undefined;
-
-const BASE_RECONNECT_DELAY = 5000; // 5 seconds
-const MAX_RECONNECT_DELAY = 60000; // 1 minute
 
 interface DynLexInstantiationOption {
     key: string;
@@ -33,6 +28,14 @@ interface DynLexInstantiationLensEntry {
     currentKey: string;
     range: vscode.Range;
     options: DynLexInstantiationOption[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+function isPosition(value: unknown): value is { line: number; character: number } {
+    return isRecord(value) && typeof value.line === 'number' && typeof value.character === 'number';
 }
 
 class DynLexInstantiationHoverProvider implements vscode.HoverProvider {
@@ -51,25 +54,27 @@ class DynLexInstantiationHoverProvider implements vscode.HoverProvider {
 
             const entries: DynLexInstantiationLensEntry[] = [];
             for (const raw of response) {
-                if (!raw || typeof raw !== 'object') {
+                if (!isRecord(raw) || !isRecord(raw.range)) {
                     continue;
                 }
-                const r = (raw as any).range;
-                const start = r?.start;
-                const end = r?.end;
-                if (!start || !end) {
+                const start = raw.range.start;
+                const end = raw.range.end;
+                if (!isPosition(start) || !isPosition(end)) {
                     continue;
                 }
-                const optionsRaw = (raw as any).options;
+                const optionsRaw = raw.options;
                 if (!Array.isArray(optionsRaw) || optionsRaw.length === 0) {
                     continue;
                 }
-                const options: DynLexInstantiationOption[] = optionsRaw
-                    .filter((option: any) => option && typeof option.key === 'string' && typeof option.label === 'string')
-                    .map((option: any) => ({ key: option.key as string, label: option.label as string }));
+                const options: DynLexInstantiationOption[] = [];
+                for (const option of optionsRaw) {
+                    if (isRecord(option) && typeof option.key === 'string' && typeof option.label === 'string') {
+                        options.push({ key: option.key, label: option.label });
+                    }
+                }
                 entries.push({
-                    selectionKey: String((raw as any).selectionKey || ''),
-                    currentKey: String((raw as any).currentKey || ''),
+                    selectionKey: typeof raw.selectionKey === 'string' ? raw.selectionKey : '',
+                    currentKey: typeof raw.currentKey === 'string' ? raw.currentKey : '',
                     range: new vscode.Range(
                         new vscode.Position(start.line, start.character),
                         new vscode.Position(end.line, end.character),
@@ -103,14 +108,14 @@ class DynLexInstantiationHoverProvider implements vscode.HoverProvider {
 export function activate(context: vscode.ExtensionContext) {
     extensionPath = context.extensionPath;
     cursorClientId = vscode.env.sessionId || `dynlex-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-    outputChannel = vscode.window.createOutputChannel('DynLex Language Server');
+    outputChannel = vscode.window.createOutputChannel('DynLex Language Server', { log: true });
     context.subscriptions.push(outputChannel);
 
     log('DynLex extension activating...');
     log(`Extension path: ${extensionPath}`);
 
     // Start the language server
-    startLanguageServer(context);
+    void startLanguageServer(context);
 
     // Watch for file changes and notify the server
     const fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.dl');
@@ -155,7 +160,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Register debug adapter
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('dynlex', {
-            createDebugAdapterDescriptor(_session: vscode.DebugSession) {
+            createDebugAdapterDescriptor() {
                 const serverPath = getServerPath();
                 const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
                 return new vscode.DebugAdapterExecutable(serverPath, ['--dap'], { cwd });
@@ -167,7 +172,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('dynlex.restartServer', () => {
             log('Restarting language server...');
-            reconnectAttempts = 0;
             void stopLanguageServer().then(() => startLanguageServer(context));
         })
     );
@@ -213,9 +217,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate(): Thenable<void> | undefined {
     isShuttingDown = true;
-    if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-    }
     return stopLanguageServer();
 }
 
@@ -329,11 +330,15 @@ async function waitForPort(port: number, hosts: string[], timeoutMs: number = 30
 }
 
 async function startLanguageServer(context: vscode.ExtensionContext) {
-    const port = getServerPort();
-    const hosts = getServerHosts();
-    let activeHost = hosts[0];
+    if (client || isShuttingDown) {
+        return;
+    }
+
+    let serverOptions: ServerOptions;
 
     if (useExternalServer()) {
+        const port = getServerPort();
+        const hosts = getServerHosts();
         log(`Waiting for external server on ${hosts.join(', ')}:${port}...`);
         const readyHost = await waitForPort(port, hosts);
         if (!readyHost) {
@@ -341,62 +346,52 @@ async function startLanguageServer(context: vscode.ExtensionContext) {
             vscode.window.showErrorMessage(`Timed out waiting for DynLex language server on ${hosts.join(', ')}:${port}`);
             return;
         }
-        activeHost = readyHost;
         log(`External server is ready`);
+        serverOptions = createExternalServerOptions(port, readyHost);
     } else {
         const serverPath = getServerPath();
         const extraFlags = getServerFlags();
-        const args = ['--lsp', '--port', String(port), ...extraFlags];
+        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
         log(`Server path resolved to: ${serverPath}`);
-        log(`Starting language server: ${serverPath} ${args.join(' ')} on port ${port}`);
-
-        // Spawn the server process in the workspace folder so relative imports resolve
-        serverProcess = spawn(serverPath, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-        });
-
-        serverProcess.stdout?.on('data', (data) => {
-            log(`Server stdout: ${data.toString().trim()}`);
-        });
-
-        serverProcess.stderr?.on('data', (data) => {
-            log(`Server stderr: ${data.toString().trim()}`);
-        });
-
-        serverProcess.on('error', (err) => {
-            logError(`Failed to start server: ${err.message}`);
-            vscode.window.showErrorMessage(`Failed to start DynLex language server: ${err.message}`);
-            scheduleReconnect(context);
-        });
-
-        serverProcess.on('exit', (code, signal) => {
-            log(`Server process exited with code ${code}, signal ${signal}`);
-            if (!isShuttingDown) {
-                vscode.window.showWarningMessage(`DynLex language server exited unexpectedly.`);
-                scheduleReconnect(context);
-            }
-        });
-
-        // Give the server a moment to start listening
-        await new Promise(resolve => setTimeout(resolve, 500));
+        log(`Starting managed language server over stdio: ${serverPath} --stdio ${extraFlags.join(' ')}`.trim());
+        serverOptions = buildManagedServerOptions(serverPath, extraFlags, cwd);
     }
 
-    // Connect to the server via TCP
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [{ scheme: 'file', language: 'dynlex' }],
+        synchronize: {
+            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.dl')
+        },
+        outputChannel: outputChannel
+    };
+
+    const startingClient = new LanguageClient(
+        'dynlex-language-server',
+        'DynLex Language Server',
+        serverOptions,
+        clientOptions
+    );
+    client = startingClient;
+
     try {
-        await connectToServer(port, activeHost, context);
-        reconnectAttempts = 0;
+        await startingClient.start();
+        log('Language client started successfully');
+        context.subscriptions.push(startingClient);
+        lastSentCursorKey = undefined;
+        await sendActiveCursorNotification(vscode.window.activeTextEditor);
     } catch (err) {
-        logError(`Error connecting to server: ${err}`);
-        scheduleReconnect(context);
+        if (client === startingClient) {
+            client = undefined;
+        }
+        logError(`Failed to start language client: ${err}`);
+        vscode.window.showErrorMessage(`Failed to start DynLex language server: ${err}`);
     }
 }
 
-async function connectToServer(port: number, host: string, context: vscode.ExtensionContext) {
-    log(`Connecting to language server on ${host}:${port}...`);
-
-    const serverOptions = (): Promise<StreamInfo> => {
+function createExternalServerOptions(port: number, host: string): ServerOptions {
+    return (): Promise<StreamInfo> => {
+        log(`Connecting to external language server on ${host}:${port}...`);
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
             socket.setTimeout(2000);
@@ -427,32 +422,6 @@ async function connectToServer(port: number, host: string, context: vscode.Exten
             socket.connect(port, host);
         });
     };
-
-    const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'dynlex' }],
-        synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.dl')
-        },
-        outputChannel: outputChannel
-    };
-
-    client = new LanguageClient(
-        'dynlex-language-server',
-        'DynLex Language Server',
-        serverOptions,
-        clientOptions
-    );
-
-    try {
-        await client.start();
-        log('Language client started successfully');
-        context.subscriptions.push(client);
-        lastSentCursorKey = undefined;
-        await sendActiveCursorNotification(vscode.window.activeTextEditor);
-    } catch (err) {
-        logError(`Failed to start language client: ${err}`);
-        throw err;
-    }
 }
 
 async function sendActiveCursorNotification(editor: vscode.TextEditor | undefined) {
@@ -489,42 +458,15 @@ async function sendActiveCursorNotification(editor: vscode.TextEditor | undefine
     await client.sendNotification('dynlex/activeCursorChanged', payload);
 }
 
-function scheduleReconnect(context: vscode.ExtensionContext) {
-    if (isShuttingDown) {
-        return;
-    }
-
-    if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-    }
-
-    // Exponential backoff: 5s, 10s, 20s, 40s, 60s (capped)
-    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
-    reconnectAttempts++;
-
-    log(`Scheduling reconnect attempt ${reconnectAttempts} in ${delay / 1000} seconds...`);
-
-    reconnectTimeout = setTimeout(async () => {
-        log(`Attempting to reconnect (attempt ${reconnectAttempts})...`);
-        await stopLanguageServer();
-        await startLanguageServer(context);
-    }, delay);
-}
-
 async function stopLanguageServer(): Promise<void> {
     if (client) {
+        const stoppingClient = client;
+        client = undefined;
         try {
-            await client.stop();
+            await stoppingClient.stop();
             log('Language client stopped');
         } catch (err) {
             logError(`Error stopping client: ${err}`);
         }
-        client = undefined;
-    }
-
-    if (serverProcess) {
-        serverProcess.kill();
-        serverProcess = undefined;
-        log('Server process killed');
     }
 }

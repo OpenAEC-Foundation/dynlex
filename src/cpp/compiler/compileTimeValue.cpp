@@ -62,36 +62,17 @@ static std::optional<double> parseCompileTimeNumericToken(std::string_view token
 	}
 }
 
-CompileTimeValue
-getExpressionCompileTimeValue(const ParseContext &context, const Expression *expr, const Instantiation *instantiation) {
-	if (!expr)
-		crashCompilerBug("compile-time value lookup received null expression");
-	if (instantiation) {
-		auto instIt = instantiation->constantValuesByExpression.find(const_cast<Expression *>(expr));
-		if (instIt != instantiation->constantValuesByExpression.end())
-			return instIt->second;
-	}
-	auto parseIt = context.constantValuesByExpression.find(const_cast<Expression *>(expr));
-	if (parseIt != context.constantValuesByExpression.end())
-		return parseIt->second;
-	return {};
+CompileTimeValue getExpressionCompileTimeValue(const Expression *expr) {
+	requireCompilerInvariant(expr != nullptr, "compile-time value lookup received a null expression");
+	return expr->compileTimeValue;
 }
 
-void setExpressionCompileTimeValue(
-	ParseContext &context, Expression *expr, const CompileTimeValue &value, Instantiation *instantiation
-) {
-	if (!expr)
-		crashCompilerBug("compile-time value assignment received null expression");
-	auto &target = instantiation ? instantiation->constantValuesByExpression : context.constantValuesByExpression;
-	if (isCompileTimeKnown(value))
-		target[expr] = value;
-	else
-		target.erase(expr);
+void setExpressionCompileTimeValue(Expression *expr, const CompileTimeValue &value) {
+	requireCompilerInvariant(expr != nullptr, "compile-time value assignment received a null expression");
+	expr->compileTimeValue = value;
 }
 
 CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
-	if (!expr)
-		crashCompilerBug("compile-time value resolution received null expression");
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
 		if (const auto *number = std::get_if<double>(&expr->literalValue)) {
@@ -158,11 +139,7 @@ Expression *resolveCompileTimeBinding(
 		return resolvedExpression;
 	if (expr && expr->inferredFlexExpansion) {
 		PatternDefinition *definition = expr->selectedPatternDefinition;
-		if (!definition && expr->patternMatch && expr->patternMatch->matchedEndNode) {
-			auto &definitions = expr->patternMatch->matchedEndNode->matchingDefinitions;
-			if (definitions.size() == 1)
-				definition = definitions.front();
-		}
+		requireCompilerInvariant(definition, "inferred flex expansion is missing its selected definition");
 		if (definition && definition->section && definition->section->isFlex) {
 			BindingFrame innerBindings;
 			collectPatternCallBindings(expr, definition, innerBindings);
@@ -176,21 +153,15 @@ Expression *resolveCompileTimeBinding(
 	return resolvedExpression;
 }
 
-CompileTimeValue resolveStoredCompileTimeValue(
-	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack,
-	const Instantiation *instantiation
-) {
+CompileTimeValue resolveStoredCompileTimeValue(Expression *expr, const BindingFrameStack &bindingFrameStack) {
 	return resolveCompileTimeValueFromKnownState(expr, bindingFrameStack, [&](Expression *currentExpression) {
-		return getExpressionCompileTimeValue(context, currentExpression, instantiation);
+		return getExpressionCompileTimeValue(currentExpression);
 	});
 }
 
-bool resolveStoredCompileTimeInteger(
-	const ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue,
-	const Instantiation *instantiation
-) {
+bool resolveStoredCompileTimeInteger(Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue) {
 	std::optional<std::int64_t> integerValue =
-		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(context, expr, bindingFrameStack, instantiation));
+		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(expr, bindingFrameStack));
 	if (!integerValue.has_value() || *integerValue < std::numeric_limits<int>::min() ||
 		*integerValue > std::numeric_limits<int>::max()) {
 		return false;

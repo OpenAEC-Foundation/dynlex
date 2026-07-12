@@ -1,0 +1,6 @@
+pure | sum left and right | args=[i32, i32]
+pure | caller value | args=[i32]
+impure | write global value | args=[i32]
+impure | read global | args=[]
+impure | write value through target | args=[i32, i32]
+impure | impure via flex value | args=[i32]

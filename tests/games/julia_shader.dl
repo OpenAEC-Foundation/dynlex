@@ -1,7 +1,7 @@
 import lib/shader.dl
 
 # Julia set fragment shader — animated beautiful fractal
-# Compile: ./build/dynlex tests/games/julia_shader.dl --emit-spirv --shader-stage=fragment -o tests/games/julia.spv
+# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
 set px to the fragment x coordinate
 set py to the fragment y coordinate
