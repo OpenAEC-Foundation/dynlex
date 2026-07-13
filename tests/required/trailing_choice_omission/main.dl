@@ -18,3 +18,21 @@ function stretch amount [factor|]:
 
 print (stretch 2 5) as line
 print (stretch 4) as line
+
+# Adjacent omittable choices: every combination composes with clean separators.
+function report [gently|] [twice|]:
+	execute:
+		print 5 as line
+
+report
+report gently
+report twice
+report gently twice
+
+# Author-placed spaces inside alternatives are equivalent to spaces outside.
+function start [the |]drill:
+	execute:
+		print 8 as line
+
+start the drill
+start drill

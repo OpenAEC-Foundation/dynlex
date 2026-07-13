@@ -282,38 +282,9 @@ bool parsePatternElements(
 				choice.alternatives.push_back(std::move(alternative));
 				altOffset += part.size() + 1; // +1 for '|'
 			}
-			// if the choice has an empty alternative and is followed by a space,
-			// absorb the space into non-empty alternatives to avoid double spaces.
-			// e.g. [the|] screen → [the |]screen, so empty matches "screen" not " screen"
-			bool hasEmptyAlternative = false;
-			for (auto &alt : choice.alternatives) {
-				if (alt.empty()) {
-					hasEmptyAlternative = true;
-					break;
-				}
-			}
-			if (hasEmptyAlternative && i < patternString.size() && patternString[i] == ' ') {
-				for (auto &alt : choice.alternatives) {
-					if (!alt.empty()) {
-						alt.push_back(DefinitionPatternElement(PatternElement::Type::Other, " ", i + offset));
-					}
-				}
-				i++; // skip the space in the main sequence
-			} else if (hasEmptyAlternative && i >= patternString.size() && !result.empty() &&
-					   result.back().type == PatternElement::Type::Other && result.back().text == " ") {
-				// A trailing choice has no following space to absorb: absorb the
-				// preceding space instead, so the empty alternative ends the
-				// pattern right after the previous element.
-				// e.g. alpha [the|] → alpha[ the|], so omission matches "alpha" not "alpha "
-				DefinitionPatternElement precedingSpace = std::move(result.back());
-				result.pop_back();
-				for (auto &alt : choice.alternatives) {
-					if (!alt.empty()) {
-						alt.insert(alt.begin(), precedingSpace);
-					}
-				}
-			}
-
+			// Separator spaces around choices are normalized when patterns are
+			// added to the pattern tree, so alternatives keep their authored
+			// elements here.
 			result.push_back(std::move(choice));
 		}
 
