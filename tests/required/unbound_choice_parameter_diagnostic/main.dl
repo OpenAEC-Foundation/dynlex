@@ -1,0 +1,7 @@
+import std.dl
+
+function combine alpha [beta|nothing]:
+	execute:
+		return alpha + beta
+
+print (combine 1 nothing) as line

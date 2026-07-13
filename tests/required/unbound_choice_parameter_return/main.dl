@@ -1,0 +1,9 @@
+import std.dl
+
+function pick alpha [beta|solo]:
+	execute:
+		set chosen to alpha
+		set chosen to beta
+		return chosen
+
+print (pick 1 solo) as line

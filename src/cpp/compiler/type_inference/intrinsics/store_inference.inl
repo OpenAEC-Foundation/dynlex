@@ -20,8 +20,23 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}
-	if (!valueType.isDeduced())
+	if (!valueType.isDeduced()) {
+		// A silent pass would let an unresolved store reach codegen. Fail the
+		// pass instead, so grouping trials and reinference retry, and a final
+		// diagnostic names the actual cause.
+		std::string valueText =
+			valueExpr && !valueExpr->range.subString.empty() ? (std::string)valueExpr->range.subString : "<expression>";
+		std::vector<RelatedInfo> unboundParameterInfo;
+		appendUnboundParameterTrace(context, valueExpr, unboundParameterInfo);
+		context.setTypeFailure(renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value unresolved",
+			"message", {{"value", valueText}}
+		));
+		context.typeFailureRelatedInfo.insert(
+			context.typeFailureRelatedInfo.end(), unboundParameterInfo.begin(), unboundParameterInfo.end()
+		);
 		return;
+	}
 
 	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable) {
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;

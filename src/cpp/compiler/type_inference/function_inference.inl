@@ -694,6 +694,59 @@ static void appendImplicitPromotionTrace(
 	}
 }
 
+// Find the pattern element range of an unbound parameter in the sections that
+// own the active instantiation, or an empty range when the name is not an
+// unbound parameter of this call.
+static Range findUnboundParameterElementRange(InferenceContext &context, const std::string &name) {
+	if (!context.currentInstantiation || !context.currentInstantiation->body)
+		return {};
+	if (context.currentInstantiation->parameterTypesByName.contains(name))
+		return {};
+	Section *ownerSection = context.currentInstantiation->body->sourceSection;
+	if (!ownerSection)
+		return {};
+	for (PatternDefinition *definition : ownerSection->patternDefinitions) {
+		DefinitionPatternElement *element = findParameterElement(definition->patternElements, name);
+		if (!element)
+			continue;
+		return Range(
+			definition->range.line, definition->range.start() + static_cast<int>(element->startPos),
+			definition->range.start() + static_cast<int>(element->startPos + element->text.length())
+		);
+	}
+	return {};
+}
+
+// An argument can stay unresolved because it reads a pattern parameter the
+// active call's match did not bind (its choice alternative was not taken).
+// The generic overload failure would hide that cause, so name the parameter.
+static void
+appendUnboundParameterTrace(InferenceContext &context, Expression *argumentExpression, std::vector<RelatedInfo> &relatedInfo) {
+	std::function<void(Expression *)> visit = [&](Expression *expression) {
+		if (!expression || expression->type.isDeduced())
+			return;
+		if (expression->kind == Expression::Kind::Variable && expression->variable) {
+			const std::string &name = expression->variable->name;
+			Range elementRange = findUnboundParameterElementRange(context, name);
+			if (!elementRange.line)
+				return;
+			std::string message = renderConfiguredMessage(
+				syntaxConfigForRange(context.parseContext, elementRange), "unbound choice parameter", "message",
+				{{"name", name}}
+			);
+			for (const RelatedInfo &existing : relatedInfo) {
+				if (existing.message == message)
+					return;
+			}
+			relatedInfo.push_back({std::move(message), elementRange});
+			return;
+		}
+		for (Expression *argument : expression->arguments)
+			visit(argument);
+	};
+	visit(argumentExpression);
+}
+
 static DataType requestKnownOrInferExpressionType(
 	Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack, bool preserveCurrentGrouping
 ) {
@@ -2647,6 +2700,8 @@ static void inferOrderedExpression(
 						appendImplicitPromotionTrace(implicitPromotionRelatedInfo, candidate, parameterName);
 				}
 			}
+			for (Expression *argumentExpression : expr->arguments)
+				appendUnboundParameterTrace(context, argumentExpression, implicitPromotionRelatedInfo);
 			context.typeFailureRelatedInfo.insert(
 				context.typeFailureRelatedInfo.end(), implicitPromotionRelatedInfo.begin(), implicitPromotionRelatedInfo.end()
 			);

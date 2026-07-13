@@ -1,0 +1,7 @@
+lib/std.dl:19:9-38: Error: the assigned value 'beta' has no type
+  note: while inferring intrinsic 'store' in '@intrinsic("store", var, val)' with arguments [i8*, a 32 bit integer, unresolved(?)] -> undeduced lib/std.dl:19:9-38
+  note: parameter 'beta' is not bound by this call: the matched alternative does not include it tests/required/unbound_choice_parameter_return/main.dl:3:22-26
+  note: while inferring call 'set chosen to beta' with arguments [a 32 bit integer, unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:6:3-21
+  note: while inferring call 'pick 1 solo' with arguments [a 32 bit integer] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:9:8-19
+  note: while inferring call 'print (pick 1 solo' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:9:1-19
+  note: while inferring call 'print (pick 1 solo) as line' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:9:1-28

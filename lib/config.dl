@@ -58,6 +58,8 @@ dynlex options:
         pattern whitespace should be single space: "all whitespace in patterns should be a single space"
         disallowed character: "Disallowed character {character}"
         variable has no type: "Variable '{name}' has no type (never assigned a value)"
+        unbound choice parameter: "parameter '{name}' is not bound by this call: the matched alternative does not include it"
+        store value unresolved: "the assigned value '{value}' has no type"
         function has no deduced return type: "Function '{function}' has no deduced return type"
         variable type change:
             message: "Variable '{name}' cannot change type from {from_type} to {to_type}"
