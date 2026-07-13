@@ -28,9 +28,7 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Build and test
-        run: |
-          ./scripts/build.sh --lint=false
-          ./scripts/test.sh
+        run: ./scripts/test.sh --lint=false
 
       - name: ccache stats
         if: always()
@@ -64,19 +62,8 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install.sh
 
-      - name: Configure LLVM
-        run: |
-          if brew info llvm@20 >/dev/null 2>&1; then
-            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
-          else
-            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
-          fi
-          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
-
       - name: Build and test
-        run: |
-          ./scripts/build.sh --lint=false
-          ./scripts/test.sh
+        run: ./scripts/test.sh --lint=false
 
       - name: ccache stats
         if: always()
@@ -94,9 +81,7 @@ jobs:
         shell: pwsh
 
       - name: Build and test
-        run: |
-          ./scripts/build.sh --lint=false
-          ./scripts/test.sh
+        run: ./scripts/test.sh --lint=false
         shell: bash
 
   web-build-smoke:

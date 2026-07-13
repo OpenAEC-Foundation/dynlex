@@ -108,10 +108,10 @@ Windows (winget):
 
 ```powershell
 .\scripts\install.ps1
-# if clang is not on PATH after install, set LLVM path manually:
-$env:PATH="$env:ProgramFiles\LLVM\bin;$env:PATH"
-$env:LLVM_DIR="$env:ProgramFiles\LLVM\lib\cmake\llvm"
 ```
+
+The Windows installer also installs `nlohmann_json` through vcpkg and exports
+the package paths used by `scripts/build.sh`.
 
 ## Usage
 

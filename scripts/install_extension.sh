@@ -11,6 +11,9 @@ EXT_DIR="$SCRIPT_DIR/../vscode-extension"
 cd "$EXT_DIR"
 VSIX=$(ls -t dynlex-language-*.vsix | head -1)
 echo "Installing $VSIX..."
+if code --list-extensions | grep -Fxiq "impertio.dynlex-language"; then
+    code --uninstall-extension impertio.dynlex-language
+fi
 code --install-extension "$VSIX" --force
 
 echo ""

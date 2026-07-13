@@ -35,6 +35,9 @@ install_linux_deps() {
             "llvm-$LLVM_VERSION-dev" \
             libcurl4-openssl-dev \
             libedit-dev \
+            libfreetype-dev \
+            libgl-dev \
+            libglfw3-dev \
             nlohmann-json3-dev \
             ccache \
             cmake \
@@ -54,7 +57,10 @@ install_linux_deps() {
             clang-tools-extra \
             llvm \
             llvm-devel \
+            freetype-devel \
+            glfw-devel \
             json-devel \
+            mesa-libGL-devel \
             ccache \
             cmake \
             ninja-build \
@@ -70,6 +76,9 @@ install_linux_deps() {
         require_sudo
         sudo pacman -Sy --noconfirm \
             clang \
+            freetype2 \
+            glfw \
+            libglvnd \
             llvm \
             nlohmann-json \
             ccache \
@@ -91,6 +100,9 @@ install_linux_deps() {
             clang-tools \
             llvm \
             llvm-devel \
+            freetype2-devel \
+            libglfw-devel \
+            Mesa-libGL-devel \
             nlohmann_json-devel \
             ccache \
             cmake \
@@ -120,6 +132,15 @@ install_macos_deps() {
     else
         brew install llvm nlohmann-json ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm)"
+    fi
+
+    BREW_LLVM_VERSION="$("$BREW_LLVM_PREFIX/bin/llvm-config" --version | cut -d. -f1)"
+    if [ -n "${GITHUB_PATH:-}" ]; then
+        printf '%s\n' "$BREW_LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+    fi
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        printf 'LLVM_DIR=%s\n' "$BREW_LLVM_PREFIX/lib/cmake/llvm" >> "$GITHUB_ENV"
+        printf 'DYNLEX_LLVM_VERSION=%s\n' "$BREW_LLVM_VERSION" >> "$GITHUB_ENV"
     fi
 
     echo ""

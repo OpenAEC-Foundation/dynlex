@@ -2,7 +2,7 @@
   "name": "dynlex-language",
   "displayName": "DynLex Language",
   "description": "Language support for the DynLex programming language",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "impertio",
   "icon": "icons/dynlex.png",
   "engines": {

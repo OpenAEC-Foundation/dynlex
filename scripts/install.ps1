@@ -371,6 +371,113 @@ function Add-GitHubPathIfPresent {
     }
 }
 
+function Resolve-VcpkgRoot {
+    $candidates = @()
+    $vcpkgCommand = Get-Command vcpkg -ErrorAction SilentlyContinue
+    if ($vcpkgCommand) {
+        $candidates += Split-Path -Parent $vcpkgCommand.Source
+    }
+    if ($env:VCPKG_ROOT) {
+        $candidates += $env:VCPKG_ROOT
+    }
+    if ($env:VCPKG_INSTALLATION_ROOT) {
+        $candidates += $env:VCPKG_INSTALLATION_ROOT
+    }
+    $candidates += "C:\vcpkg"
+    $candidates += Join-Path $env:LOCALAPPDATA "DynLex\vcpkg"
+
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if ($candidate -and (Test-Path (Join-Path $candidate "vcpkg.exe"))) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+function Resolve-GitExecutable {
+    $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCommand) {
+        return $gitCommand.Source
+    }
+
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles} "Git\cmd\git.exe"),
+        (Join-Path ${env:ProgramFiles} "Git\bin\git.exe"),
+        (Join-Path ${env:LOCALAPPDATA} "Programs\Git\cmd\git.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Git was installed but git.exe could not be located."
+}
+
+function Ensure-Vcpkg {
+    $vcpkgRoot = Resolve-VcpkgRoot
+    if ($vcpkgRoot) {
+        return $vcpkgRoot
+    }
+
+    $vcpkgRoot = Join-Path $env:LOCALAPPDATA "DynLex\vcpkg"
+    if (Test-Path $vcpkgRoot) {
+        throw "The vcpkg directory exists but is incomplete: $vcpkgRoot"
+    }
+
+    $vcpkgParent = Split-Path -Parent $vcpkgRoot
+    New-Item -ItemType Directory -Path $vcpkgParent -Force | Out-Null
+    Write-Host "Installing vcpkg at $vcpkgRoot..." -ForegroundColor Cyan
+    $git = Resolve-GitExecutable
+    & $git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to clone vcpkg."
+    }
+
+    & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to bootstrap vcpkg."
+    }
+
+    return $vcpkgRoot
+}
+
+function Install-NlohmannJson {
+    $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    $triplet = switch ($architecture) {
+        "X64" { "x64-windows" }
+        "X86" { "x86-windows" }
+        "Arm64" { "arm64-windows" }
+        default { throw "Unsupported Windows architecture for nlohmann_json: $architecture" }
+    }
+
+    $vcpkgRoot = Ensure-Vcpkg
+    $vcpkg = Join-Path $vcpkgRoot "vcpkg.exe"
+    Write-Host "Installing nlohmann-json for $triplet..." -ForegroundColor Cyan
+    & $vcpkg install "nlohmann-json:$triplet" --disable-metrics 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "vcpkg failed to install nlohmann-json:$triplet."
+    }
+
+    $installedRoot = Join-Path $vcpkgRoot "installed\$triplet"
+    $includeFile = Join-Path $installedRoot "include\nlohmann\json.hpp"
+    $cmakeDir = Join-Path $installedRoot "share\nlohmann_json"
+    $cmakeConfig = Join-Path $cmakeDir "nlohmann_jsonConfig.cmake"
+    if (-not (Test-Path $includeFile) -or -not (Test-Path $cmakeConfig)) {
+        throw "vcpkg reported success but the nlohmann_json headers or CMake package are missing from $installedRoot."
+    }
+
+    $cmakeDirUnix = $cmakeDir -replace '\\', '/'
+    $env:NLOHMANN_JSON_DIR = $cmakeDirUnix
+    [Environment]::SetEnvironmentVariable("NLOHMANN_JSON_DIR", $cmakeDirUnix, "User")
+    if ($env:GITHUB_ENV) {
+        Add-Content -Path $env:GITHUB_ENV -Value "NLOHMANN_JSON_DIR=$cmakeDirUnix"
+    }
+
+    return $cmakeDir
+}
+
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
 
 if (-not (Test-Winget)) {
@@ -391,6 +498,7 @@ Ensure-Package "Git.Git" "git"
 Ensure-Package "Python.Python.3" "python"
 Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
+$nlohmannJsonDir = Install-NlohmannJson
 
 if ($llvmConfig) {
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
@@ -425,6 +533,7 @@ if ($llvmConfig -and $llvmBin) {
 }
 
 if ($llvmBin) {
+    $env:PATH = "$llvmBin;$env:PATH"
     Add-GitHubPathIfPresent -PathValue $llvmBin
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
     Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Git\bin")
@@ -436,8 +545,12 @@ if ($llvmBin) {
         Write-Warning "Proceeding without LLVM_DIR. CMake will attempt automatic LLVM package discovery."
     } else {
         $llvmCmake = Split-Path -Parent $llvmConfig.FullName
+        $llvmCmakeUnix = $llvmCmake -replace '\\', '/'
+        $env:LLVM_DIR = $llvmCmakeUnix
+        $env:DYNLEX_LLVM_VERSION = "20"
+        [Environment]::SetEnvironmentVariable("LLVM_DIR", $llvmCmakeUnix, "User")
+        [Environment]::SetEnvironmentVariable("DYNLEX_LLVM_VERSION", "20", "User")
         if ($env:GITHUB_ENV) {
-            $llvmCmakeUnix = $llvmCmake -replace '\\', '/'
             Add-Content -Path $env:GITHUB_ENV -Value "LLVM_DIR=$llvmCmakeUnix"
             Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_VERSION=20"
         }
@@ -456,6 +569,7 @@ if ($llvmBin) {
     } else {
         Write-Host '$env:LLVM_DIR should be set manually if CMake cannot auto-discover LLVM.'
     }
+    Write-Host ('$env:NLOHMANN_JSON_DIR="' + $nlohmannJsonDir + '"')
 } else {
     throw "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
 }
@@ -463,5 +577,5 @@ if ($llvmBin) {
 Write-Host ""
 Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "Build with CMake (example):"
-Write-Host '  cmake -S . -B build -G Ninja -DLLVM_DIR="$env:LLVM_DIR"'
+Write-Host '  cmake -S . -B build -G Ninja -DLLVM_DIR="$env:LLVM_DIR" -Dnlohmann_json_DIR="$env:NLOHMANN_JSON_DIR"'
 Write-Host "  cmake --build build --parallel"

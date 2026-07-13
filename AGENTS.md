@@ -131,7 +131,7 @@ The script creates `.worktrees/<name>` and a same-named branch from `start-point
 ./build/dynlex --dap
 ```
 
-Dependencies: C++23, Conan (`nlohmann_json`), LLVM 20.
+Dependencies: C++23, `nlohmann_json` (system package on Unix, vcpkg on Windows), LLVM 20.
 
 ## Project Structure
 

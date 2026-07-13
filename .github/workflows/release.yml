@@ -37,11 +37,8 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install.sh
 
-      - name: Build (Release)
-        run: ./scripts/build.sh --release
-
-      - name: Run tests
-        run: ./scripts/test.sh
+      - name: Build and test (Release)
+        run: ./scripts/test.sh --release
 
       - name: Package release artifacts
         run: |
@@ -78,26 +75,9 @@ jobs:
             Add-Content -Path $env:GITHUB_PATH -Value $wixBin
           }
 
-      - name: Configure (Release)
-        shell: pwsh
-        run: |
-          $args = @(
-            "-S", ".",
-            "-B", "build",
-            "-G", "Ninja",
-            "-DCMAKE_BUILD_TYPE=Release"
-          )
-          if ($env:LLVM_DIR) {
-            $args += "-DLLVM_DIR=$env:LLVM_DIR"
-          }
-          if ($env:DYNLEX_LLVM_VERSION) {
-            $args += "-DDYNLEX_LLVM_VERSION=$env:DYNLEX_LLVM_VERSION"
-          }
-          cmake @args
-
-      - name: Build (Release)
-        shell: pwsh
-        run: cmake --build build --parallel
+      - name: Build and test (Release)
+        shell: bash
+        run: ./scripts/test.sh --release
 
       - name: Package MSI
         shell: bash
@@ -124,20 +104,8 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install.sh
 
-      - name: Configure LLVM
-        run: |
-          if brew info llvm@20 >/dev/null 2>&1; then
-            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
-            echo "LLVM_BIN=$(brew --prefix llvm@20)/bin" >> "$GITHUB_ENV"
-          else
-            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
-            echo "LLVM_BIN=$(brew --prefix llvm)/bin" >> "$GITHUB_ENV"
-          fi
-          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
-
-      - name: Build (Release)
-        run: |
-          ./scripts/build.sh --release
+      - name: Build and test (Release)
+        run: ./scripts/test.sh --release
 
       - name: Package PKG
         run: |

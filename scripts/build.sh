@@ -103,6 +103,10 @@ if [ -n "${LLVM_DIR:-}" ]; then
     CMAKE_ARGS+=("-DLLVM_DIR=$LLVM_DIR")
 fi
 
+if [ -n "${NLOHMANN_JSON_DIR:-}" ]; then
+    CMAKE_ARGS+=("-Dnlohmann_json_DIR=$NLOHMANN_JSON_DIR")
+fi
+
 if command -v ccache >/dev/null 2>&1; then
     CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
     case "$CCACHE_DIR" in

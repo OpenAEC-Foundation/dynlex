@@ -139,7 +139,7 @@ PY
 }
 
 echo -e "${YELLOW}Building compiler...${NC}"
-build_output=$("$SCRIPT_DIR/build.sh" 2>&1)
+build_output=$("$SCRIPT_DIR/build.sh" "$@" 2>&1)
 build_exit=$?
 if [[ $build_exit -ne 0 ]]; then
     [[ -n "$build_output" ]] && printf "%s\n" "$build_output"

@@ -189,11 +189,8 @@ if [[ "${retag_mode}" != "true" ]]; then
   echo "${target_version}" > "${VERSION_FILE}"
   version_updated=true
 
-  echo "Building release ${target_version}..."
-  "${ROOT_DIR}/scripts/build.sh" --release
-
-  echo "Running tests for release ${target_version}..."
-  "${ROOT_DIR}/scripts/test.sh"
+  echo "Building and testing release ${target_version}..."
+  "${ROOT_DIR}/scripts/test.sh" --release
 
   git -C "${ROOT_DIR}" add metadata/VERSION
   git -C "${ROOT_DIR}" commit -m "Release ${target_version}"

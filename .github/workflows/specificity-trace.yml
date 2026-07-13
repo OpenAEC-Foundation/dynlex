@@ -41,16 +41,6 @@ jobs:
         run: ./scripts/install.ps1
         shell: pwsh
 
-      - name: Configure LLVM (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          if brew info llvm@20 >/dev/null 2>&1; then
-            echo "LLVM_DIR=$(brew --prefix llvm@20)/lib/cmake/llvm" >> "$GITHUB_ENV"
-          else
-            echo "LLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm" >> "$GITHUB_ENV"
-          fi
-          echo "DYNLEX_LLVM_VERSION=20" >> "$GITHUB_ENV"
-
       - name: Build compiler
         run: ./scripts/build.sh --lint=false
         shell: bash
