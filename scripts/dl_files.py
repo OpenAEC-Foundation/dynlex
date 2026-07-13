@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 IMPORT_RE = re.compile(r"^\s*import\s+([^\s#]+)")
-EXCLUDED_DIRECTORY_NAMES = {".cache", ".git", ".idea", ".vscode", "node_modules"}
+EXCLUDED_DIRECTORY_NAMES = {".cache", ".git", ".idea", ".vscode", ".worktrees", "node_modules"}
 
 
 def discover_dl_files(repo_root: Path) -> list[Path]:
