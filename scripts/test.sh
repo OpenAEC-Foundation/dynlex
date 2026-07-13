@@ -169,6 +169,7 @@ if [[ $build_exit -ne 0 ]]; then
     echo -e "${RED}Build failed.${NC}"
     exit $build_exit
 fi
+echo -e "${GREEN}Compiler build complete.${NC}"
 
 total_start_ms=$(now_ms)
 
@@ -176,6 +177,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     test_start_ms=$(now_ms)
     test_dir="${test_dir%/}"
     test_name="$(basename "$test_dir")"
+    echo "Testing $test_name..."
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
     output_binary="$test_dir/main.out"
@@ -344,6 +346,7 @@ run_auxiliary_test() {
     local auxiliary_output
     local auxiliary_exit
     local test_elapsed_ms
+    echo "Testing $test_name..."
     test_start_ms=$(now_ms)
     auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
     auxiliary_exit=$?
@@ -362,6 +365,7 @@ run_auxiliary_test() {
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 
+echo "Testing lsp_integration..."
 lsp_test_start_ms=$(now_ms)
 lsp_shell="$BASH"
 if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then
