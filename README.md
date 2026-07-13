@@ -102,7 +102,7 @@ if brew info llvm@20 >/dev/null 2>&1; then
 else
   export PATH="$(brew --prefix llvm)/bin:$PATH"
 fi
-export LIBRARY_PATH="$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+export LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 ```
 
 Windows (winget):

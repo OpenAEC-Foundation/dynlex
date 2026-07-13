@@ -22,6 +22,20 @@ install_optional_mcp_server() {
     fi
 }
 
+brew_install_missing() {
+    local missing=()
+    local formula
+    for formula in "$@"; do
+        if ! brew list --formula --versions "$formula" >/dev/null 2>&1; then
+            missing+=("$formula")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        brew install "${missing[@]}"
+    fi
+}
+
 install_linux_deps() {
     if command -v apt-get >/dev/null 2>&1; then
         require_sudo
@@ -127,14 +141,14 @@ install_macos_deps() {
 
     brew update
     if brew info llvm@20 >/dev/null 2>&1; then
-        brew install llvm@20 nlohmann-json freetype glfw ccache cmake ninja git node go
-        BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
+        BREW_LLVM_FORMULA="llvm@20"
     else
-        brew install llvm nlohmann-json freetype glfw ccache cmake ninja git node go
-        BREW_LLVM_PREFIX="$(brew --prefix llvm)"
+        BREW_LLVM_FORMULA="llvm"
     fi
+    brew_install_missing "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw ccache cmake ninja git node go
+    BREW_LLVM_PREFIX="$(brew --prefix "$BREW_LLVM_FORMULA")"
 
-    BREW_LIBRARY_PATH="$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+    BREW_LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
     export LIBRARY_PATH="$BREW_LIBRARY_PATH"
     BREW_LLVM_VERSION="$("$BREW_LLVM_PREFIX/bin/llvm-config" --version | cut -d. -f1)"
     if [ -n "${GITHUB_PATH:-}" ]; then
