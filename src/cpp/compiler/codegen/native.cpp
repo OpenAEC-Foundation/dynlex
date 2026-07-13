@@ -5,6 +5,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
@@ -95,9 +96,14 @@ bool emitNativeExecutable(ParseContext &context) {
 		passManager.run(*context.llvmModule);
 	}
 
-	auto linkerProgram = llvm::sys::findProgramByName("cc");
+#ifdef _WIN32
+	const llvm::StringRef linkerName = "cc.exe";
+#else
+	const llvm::StringRef linkerName = "cc";
+#endif
+	auto linkerProgram = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
 	if (!linkerProgram) {
-		pushPlainError("failed to find linker: " + linkerProgram.getError().message());
+		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
 		return false;
 	}
 
