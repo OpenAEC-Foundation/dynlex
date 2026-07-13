@@ -314,6 +314,17 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
 
+    # MinGW stores full DWARF in every COFF object for a normal Debug build.
+    # Keeping that data in the objects makes LLD spend an unbounded amount of
+    # time producing the final PE image.  Split DWARF preserves the complete
+    # debugger information in adjacent .dwo files while leaving only the
+    # address-bearing skeleton records for the linker.
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(${PROJECT_NAME} PRIVATE
+            "$<$<CONFIG:Debug>:-gsplit-dwarf>"
+        )
+    endif()
+
     add_executable(fbx_to_obj tools/fbx_to_obj.cpp third_party/ufbx/ufbx.c)
     target_include_directories(
         fbx_to_obj SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ufbx ${CMAKE_SOURCE_DIR}/third_party/stb
