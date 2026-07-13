@@ -463,7 +463,13 @@ llvm::Value *generateIntrinsicCode(
 			context.flexBindingFrames = savedBindingFrames;
 
 			llvm::Value *ptr = getVariablePointer(context, args[1]);
-			if (ptr && val) {
+			// A silently skipped store would corrupt program behavior far from
+			// the cause; storage for every reachable destination must exist.
+			if (!ptr)
+				crashCompilerBug("store destination reached codegen without storage");
+			if (!val)
+				crashCompilerBug("store value reached codegen without a generated value");
+			{
 				DataType destType = finalizedExpressionType(context, args[1]);
 				if (destType.kind == DataType::Kind::Class && !destType.isPointer() && destType.classDefinition &&
 					destType.classInstIndex >= 0) {
