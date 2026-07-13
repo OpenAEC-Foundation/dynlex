@@ -393,12 +393,12 @@ static void removeDefinitionPath(
 				current, DefinitionPatternElement(PatternElement::Type::Other, " ", elem.startPos), definition
 			);
 			if (!current)
-				return;
+				crashCompilerBug("pattern tree removal lost its separator path; elements changed since insertion");
 			state.pendingSeparator = false;
 		}
 		current = stepAndCleanChild(current, elem, definition);
 		if (!current)
-			return;
+			crashCompilerBug("pattern tree removal lost its element path; elements changed since insertion");
 		state.hasContent = true;
 	}
 	// Endpoint: remove this definition from matchingDefinitions
