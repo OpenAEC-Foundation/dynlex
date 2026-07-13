@@ -156,14 +156,9 @@ add_definitions(${LLVM_DEFINITIONS})
 # macOS, LLVM's LibEdit target points at the SDK's usr/include directory. That
 # directory is already searched by the compiler and propagating it as an
 # explicit -isystem path moves the C headers ahead of libc++'s wrapper headers.
+# DynLex consumes only LLVM's link dependency, not LibEdit's headers.
 if(TARGET LibEdit::LibEdit)
-    get_target_property(DYNLEX_LIBEDIT_INCLUDE_DIRS LibEdit::LibEdit INTERFACE_INCLUDE_DIRECTORIES)
-    if(DYNLEX_LIBEDIT_INCLUDE_DIRS)
-        list(REMOVE_ITEM DYNLEX_LIBEDIT_INCLUDE_DIRS ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
-        set_target_properties(LibEdit::LibEdit PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_LIBEDIT_INCLUDE_DIRS}"
-        )
-    endif()
+    set_target_properties(LibEdit::LibEdit PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
 endif()
 
 #
