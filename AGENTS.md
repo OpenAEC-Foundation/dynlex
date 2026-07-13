@@ -145,7 +145,7 @@ Dependencies: C++23, `nlohmann_json` (system package on Unix, vcpkg on Windows),
 - `vscode-extension/`: VS Code extension (TypeScript)
 - `tests/required/`: Required test cases
 
-Implementation details are documented in `.claude/rules/` (`compiler.md`, `codegen.md`, `lsp.md`, `dap.md`).
+Implementation details are documented in `docs/stages.md`.
 
 ## Language Basics
 

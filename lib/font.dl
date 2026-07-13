@@ -116,8 +116,8 @@ function a loaded font from path at size s:
 
 function render char code at px py using font and color r g b:
     execute:
-        set face_raw to item 0 of font as a pointer to a byte
-        set tex_id to item 1 of font as a 32 bit integer
+        set face_raw to (item 0 of font) as a pointer to a byte
+        set tex_id to (item 1 of font) as a 32 bit integer
 
         # Load and render the glyph
         discard @intrinsic("call", "freetype", "FT_Load_Char", an integer, face_raw, code as a 64 bit integer, 4)
@@ -162,7 +162,7 @@ function render char code at px py using font and color r g b:
         @intrinsic("call", "GL", "glEnd", void)
 
         # Return new cursor x (advance is in 26.6 fixed point, divide by 64)
-        return px + adv / 64 as an integer
+        return (px + adv / 64) as an integer
 
 # --- Text rendering helpers ---
 
