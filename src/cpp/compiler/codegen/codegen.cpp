@@ -212,8 +212,11 @@ Instantiation *generateSpecializedFunction(
 	auto savedPatternBindings = context.patternBindings;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
-	// Function bodies must not see caller-side flex bindings.
+	// Function bodies must not see caller-side flex bindings or blame their
+	// diagnostics on the caller's flex expansion.
 	context.flexBindingFrames = makeBindingFrameStack(BindingFrame{});
+	std::vector<Range> savedFlexCallSiteRanges = std::move(context.flexCallSiteRangeStack);
+	context.flexCallSiteRangeStack.clear();
 
 	builder.SetInsertPoint(entry);
 
@@ -249,6 +252,7 @@ Instantiation *generateSpecializedFunction(
 
 	// Restore all codegen state
 	context.flexBindingFrames = savedFlexBindingFrames;
+	context.flexCallSiteRangeStack = std::move(savedFlexCallSiteRanges);
 	context.patternBindings = savedPatternBindings;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
@@ -521,12 +525,17 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			BindingFrame innerBindings;
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
 			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
+			context.flexCallSiteRangeStack.push_back(expr->range);
 			ScopedVariableAllocaRestore flexVariableAllocas(matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
 			Section *savedBodySection = context.currentBodySection;
 			InstantiatedSectionBody *savedBodyInstantiation = context.currentBodyInstantiation;
+			// Scope switch state to this expansion and its body, so a nested
+			// match inside a case body cannot capture the outer match's cases.
+			llvm::SwitchInst *savedSwitchInst = context.currentSwitchInst;
+			llvm::BasicBlock *savedSwitchExitBlock = context.currentSwitchExitBlock;
 
 			// Only section-type flexes (like "if condition:", "loop while condition:")
 			// should pick up and process the body section opened by this line.
@@ -585,8 +594,11 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 
 			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after flex pattern call");
+			context.flexCallSiteRangeStack.pop_back();
 			context.currentBodySection = savedBodySection;
 			context.currentBodyInstantiation = savedBodyInstantiation;
+			context.currentSwitchInst = savedSwitchInst;
+			context.currentSwitchExitBlock = savedSwitchExitBlock;
 			return result;
 		}
 

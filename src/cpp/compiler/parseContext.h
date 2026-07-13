@@ -122,6 +122,10 @@ struct ParseContext {
 	// Source sections for active flex call sites (outermost to innermost). This preserves
 	// caller ownership when helper flexes wrap ownership-sensitive intrinsics.
 	std::vector<Section *> flexCallSiteSectionStack;
+	// Source ranges of the flex pattern calls currently being expanded, so
+	// diagnostics from intrinsics inside flex replacement bodies can point at
+	// the caller's line instead of the library definition.
+	std::vector<Range> flexCallSiteRangeStack;
 	// Active section-flex call frames. `execute body` resolves against this stack by
 	// source ownership so nested section-flex expansions can emit the correct caller body.
 	std::vector<SectionFlexBodyFrame> sectionFlexBodyFrames;
@@ -130,6 +134,9 @@ struct ParseContext {
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
+	// Switches whose default block was already claimed by an `otherwise`
+	// branch; keyed by identity so scoped state restoration cannot revive it.
+	std::unordered_set<llvm::SwitchInst *> switchesWithDefaultCase;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
 

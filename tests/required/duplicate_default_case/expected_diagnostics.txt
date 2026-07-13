@@ -1,0 +1,1 @@
+tests/required/duplicate_default_case/main.dl:9:2-11: Error: this match already has an otherwise branch

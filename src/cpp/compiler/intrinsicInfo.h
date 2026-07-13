@@ -63,6 +63,7 @@ enum class IntrinsicPurityKind {
 	X(Else, "else", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
 	X(Switch, "switch", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                         \
 	X(Case, "case", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
+	X(DefaultCase, "default case", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(ShaderOutput, "shader output", 5, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                           \
 	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \

@@ -1,0 +1,11 @@
+import std.dl
+
+set r to 0
+match based on 3:
+	case 1:
+		set r to 1
+	otherwise:
+		set r to 2
+	otherwise:
+		set r to 3
+print r as line

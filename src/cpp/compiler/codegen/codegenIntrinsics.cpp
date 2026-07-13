@@ -30,6 +30,14 @@ static bool isSectionDescendantOrSame(Section *section, Section *ancestor) {
 	return false;
 }
 
+// Diagnostics for intrinsics inside flex replacement bodies should point at
+// the caller's line, not the library definition of the flex.
+static Range intrinsicDiagnosticRange(ParseContext &context, Expression *callExpr) {
+	if (!context.flexCallSiteRangeStack.empty())
+		return context.flexCallSiteRangeStack.back();
+	return intrinsicDiagnosticRange(context, callExpr);
+}
+
 static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *indexVal, DataType indexType) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Type *sizeTy = builder.getInt64Ty();
@@ -679,7 +687,8 @@ llvm::Value *generateIntrinsicCode(
 		DataType promoted;
 		if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "min max requires arithmetic operands", callExpr ? callExpr->range : Range()
+				context, Diagnostic::Level::Error, "min max requires arithmetic operands",
+				intrinsicDiagnosticRange(context, callExpr)
 			));
 			return nullptr;
 		}
@@ -896,7 +905,8 @@ llvm::Value *generateIntrinsicCode(
 		Section *bodySection = context.currentBodySection;
 		if (!bodySection) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "loop while requires body section", callExpr ? callExpr->range : Range()
+				context, Diagnostic::Level::Error, "loop while requires body section",
+				intrinsicDiagnosticRange(context, callExpr)
 			));
 			return nullptr;
 		}
@@ -926,9 +936,9 @@ llvm::Value *generateIntrinsicCode(
 	if (kind == IntrinsicKind::If) {
 		Section *bodySection = context.currentBodySection;
 		if (!bodySection) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "if requires body section", callExpr ? callExpr->range : Range())
-			);
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "if requires body section", intrinsicDiagnosticRange(context, callExpr)
+			));
 			return nullptr;
 		}
 
@@ -954,7 +964,7 @@ llvm::Value *generateIntrinsicCode(
 		Section *bodySection = context.currentBodySection;
 		if (!bodySection) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "else requires body section", callExpr ? callExpr->range : Range()
+				context, Diagnostic::Level::Error, "else requires body section", intrinsicDiagnosticRange(context, callExpr)
 			));
 			return nullptr;
 		}
@@ -1035,15 +1045,15 @@ llvm::Value *generateIntrinsicCode(
 		Section *bodySection = context.currentBodySection;
 		if (!bodySection) {
 			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "case requires body section", callExpr ? callExpr->range : Range()
+				context, Diagnostic::Level::Error, "case requires body section", intrinsicDiagnosticRange(context, callExpr)
 			));
 			return nullptr;
 		}
 
 		if (!context.currentSwitchInst) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "case outside switch", callExpr ? callExpr->range : Range())
-			);
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "case outside switch", intrinsicDiagnosticRange(context, callExpr)
+			));
 			return nullptr;
 		}
 
@@ -1066,6 +1076,41 @@ llvm::Value *generateIntrinsicCode(
 		context.currentSwitchInst->addCase(caseConst, caseBlock);
 
 		builder.SetInsertPoint(caseBlock);
+		bodySection->exitBlock = context.currentSwitchExitBlock;
+		bodySection->branchBackBlock = nullptr;
+
+		return nullptr;
+	}
+
+	if (kind == IntrinsicKind::DefaultCase) {
+		Section *bodySection = context.currentBodySection;
+		if (!bodySection) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "default case requires body section",
+				intrinsicDiagnosticRange(context, callExpr)
+			));
+			return nullptr;
+		}
+
+		if (!context.currentSwitchInst) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "default case outside switch", intrinsicDiagnosticRange(context, callExpr)
+			));
+			return nullptr;
+		}
+
+		if (!context.switchesWithDefaultCase.insert(context.currentSwitchInst).second) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "duplicate default case", intrinsicDiagnosticRange(context, callExpr)
+			));
+			return nullptr;
+		}
+
+		// Reuse the switch's default block: drop its placeholder branch to the
+		// exit and let the body fill it instead.
+		llvm::BasicBlock *defaultBlock = context.currentSwitchInst->getDefaultDest();
+		defaultBlock->getTerminator()->eraseFromParent();
+		builder.SetInsertPoint(defaultBlock);
 		bodySection->exitBlock = context.currentSwitchExitBlock;
 		bodySection->branchBackBlock = nullptr;
 

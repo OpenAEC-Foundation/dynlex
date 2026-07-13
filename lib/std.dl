@@ -498,3 +498,7 @@ flex section [match|switch] [based|] [on|] value:
 flex section case value:
     replacement:
         @intrinsic("case", value)
+
+flex section [otherwise|default]:
+    replacement:
+        @intrinsic("default case")
