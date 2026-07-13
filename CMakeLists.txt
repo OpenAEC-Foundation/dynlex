@@ -252,26 +252,26 @@ add_definitions (-DGLFW_INCvLUDE_NONE
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-# LLVM 20+ includes the SPIR-V and WebAssembly backends as official targets.
-# Resolve native backend components only for native builds.
-if(NOT EMSCRIPTEN)
-    llvm_map_components_to_libnames(
-        dynlex_llvm_libs_native
-        core
-        support
-        irreader
-        passes
-        native
-        SPIRV
-        WebAssemblyCodeGen
-        WebAssemblyDesc
-        WebAssemblyInfo
-        WebAssemblyUtils
-    )
-endif()
+# LLVM packages declare whether their components should be consumed through
+# the monolithic LLVM shared library or as individual static archives.  Use
+# llvm_config so that declaration is respected and any component omitted from
+# a partial shared library is still linked explicitly.
+function(dynlex_link_llvm target)
+    if(LLVM_LINK_LLVM_DYLIB)
+        if(NOT TARGET LLVM)
+            message(FATAL_ERROR
+                "LLVM_LINK_LLVM_DYLIB is enabled, but the LLVM package does not provide its shared LLVM target"
+            )
+        endif()
+        message(STATUS "Linking ${target} against the shared LLVM library")
+        llvm_config(${target} USE_SHARED ${ARGN})
+    else()
+        message(STATUS "Linking ${target} against LLVM component libraries")
+        llvm_config(${target} ${ARGN})
+    endif()
+endfunction()
 
-llvm_map_components_to_libnames(
-    dynlex_llvm_libs_web
+set(DYNLEX_LLVM_COMMON_COMPONENTS
     core
     support
     irreader
@@ -280,6 +280,14 @@ llvm_map_components_to_libnames(
     WebAssemblyDesc
     WebAssemblyInfo
     WebAssemblyUtils
+)
+
+# LLVM 20+ includes the SPIR-V and WebAssembly backends as official targets.
+# Native builds additionally need the host and SPIR-V backends.
+set(DYNLEX_LLVM_NATIVE_COMPONENTS
+    ${DYNLEX_LLVM_COMMON_COMPONENTS}
+    native
+    SPIRV
 )
 
 set(DYNLEX_NATIVE_SOURCES ${PROJECT_SOURCES})
@@ -295,11 +303,8 @@ if(NOT EMSCRIPTEN)
     add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
                                     ${PROJECT_CONFIGS})
 
-    target_link_libraries (${PROJECT_NAME}
-    PRIVATE
-    nlohmann_json::nlohmann_json
-    ${dynlex_llvm_libs_native}
-    )
+    target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
+    dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
     set_target_properties (${PROJECT_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -337,7 +342,8 @@ if(DYNLEX_WEB)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     target_compile_definitions(dynlex_web PRIVATE DYNLEX_WEB=1 DYNLEX_VERSION="${PROJECT_VERSION}")
-    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json ${dynlex_llvm_libs_web})
+    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json)
+    dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS})
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS
         "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json','_dynlex_web_get_lsp_hover_json','_dynlex_web_get_lsp_definition_json','_dynlex_web_get_lsp_semantic_tokens_json']"
@@ -407,5 +413,6 @@ set(CPACK_PACKAGE_CONTACT "DynLex maintainers <maintainers@dynlex.org>")
 set(CPACK_PACKAGE_VENDOR "DynLex")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/johnheikens/DynLex")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, zlib1g, libzstd1")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)
