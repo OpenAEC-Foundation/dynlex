@@ -37,7 +37,7 @@ std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple
 	if (targetTriple.isOSWindows()) {
 		static constexpr std::array windowsLibraryNames = {
 			LibraryNameMapping{"GL", "opengl32"},
-			LibraryNameMapping{"glfw", "glfw3"},
+			LibraryNameMapping{"glfw", "glfw3dll"},
 		};
 		for (const LibraryNameMapping &mapping : windowsLibraryNames) {
 			if (library == mapping.portableName) {
@@ -58,9 +58,12 @@ bool linkerReportsMissingLibrary(llvm::StringRef output, const std::vector<std::
 	}
 
 	for (const std::string &argument : arguments) {
-		if (!llvm::StringRef(argument).starts_with("-l"))
+		const llvm::StringRef argumentRef(argument);
+		if (!argumentRef.starts_with("-l"))
 			continue;
-		if (output.contains("cannot find " + argument) || output.contains("unable to find library " + argument))
+		const llvm::StringRef libraryName = argumentRef.drop_front(2);
+		if (output.contains("cannot find " + argument) || output.contains("unable to find library " + argument) ||
+			output.contains("library '" + libraryName.str() + "' not found"))
 			return true;
 	}
 	return false;

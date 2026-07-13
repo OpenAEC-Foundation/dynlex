@@ -127,13 +127,15 @@ install_macos_deps() {
 
     brew update
     if brew info llvm@20 >/dev/null 2>&1; then
-        brew install llvm@20 nlohmann-json ccache cmake ninja git node go
+        brew install llvm@20 nlohmann-json freetype glfw ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm@20)"
     else
-        brew install llvm nlohmann-json ccache cmake ninja git node go
+        brew install llvm nlohmann-json freetype glfw ccache cmake ninja git node go
         BREW_LLVM_PREFIX="$(brew --prefix llvm)"
     fi
 
+    BREW_LIBRARY_PATH="$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+    export LIBRARY_PATH="$BREW_LIBRARY_PATH"
     BREW_LLVM_VERSION="$("$BREW_LLVM_PREFIX/bin/llvm-config" --version | cut -d. -f1)"
     if [ -n "${GITHUB_PATH:-}" ]; then
         printf '%s\n' "$BREW_LLVM_PREFIX/bin" >> "$GITHUB_PATH"
@@ -141,11 +143,13 @@ install_macos_deps() {
     if [ -n "${GITHUB_ENV:-}" ]; then
         printf 'LLVM_DIR=%s\n' "$BREW_LLVM_PREFIX/lib/cmake/llvm" >> "$GITHUB_ENV"
         printf 'DYNLEX_LLVM_VERSION=%s\n' "$BREW_LLVM_VERSION" >> "$GITHUB_ENV"
+        printf 'LIBRARY_PATH=%s\n' "$BREW_LIBRARY_PATH" >> "$GITHUB_ENV"
     fi
 
     echo ""
     echo "Add LLVM tools to PATH for this shell before building:"
     echo "  export PATH=\"$BREW_LLVM_PREFIX/bin:\$PATH\""
+    echo "  export LIBRARY_PATH=\"$BREW_LIBRARY_PATH\""
     echo ""
     echo "Or add it permanently in your shell rc file."
 }

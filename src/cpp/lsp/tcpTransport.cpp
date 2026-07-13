@@ -1,9 +1,12 @@
 #include "tcpTransport.h"
+#include <algorithm>
+#include <cerrno>
 #include <cstring>
 #include <iostream>
+#include <limits>
+#include <system_error>
 
 #ifdef _WIN32
-#include <winsock2.h>
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
@@ -14,34 +17,56 @@
 
 namespace lsp {
 
+namespace {
+
+std::string socketErrorMessage() {
+#ifdef _WIN32
+	return std::system_category().message(WSAGetLastError());
+#else
+	return std::strerror(errno);
+#endif
+}
+
+} // namespace
+
 // TcpTransport implementation
 
-TcpTransport::TcpTransport(int socket) : socket(socket) {}
+TcpTransport::TcpTransport(SocketHandle socketHandle) : socketHandle(socketHandle) {}
 
 TcpTransport::~TcpTransport() { close(); }
 
 ssize_t TcpTransport::read(char *buffer, size_t count) {
-	if (socket < 0)
+	if (socketHandle == invalidSocketHandle)
 		return -1;
-	return recv(socket, buffer, count, 0);
+#ifdef _WIN32
+	const int socketCount = static_cast<int>(std::min(count, static_cast<size_t>(std::numeric_limits<int>::max())));
+	return recv(socketHandle, buffer, socketCount, 0);
+#else
+	return recv(socketHandle, buffer, count, 0);
+#endif
 }
 
 ssize_t TcpTransport::write(const char *buffer, size_t count) {
-	if (socket < 0)
+	if (socketHandle == invalidSocketHandle)
 		return -1;
-	return send(socket, buffer, count, 0);
+#ifdef _WIN32
+	const int socketCount = static_cast<int>(std::min(count, static_cast<size_t>(std::numeric_limits<int>::max())));
+	return send(socketHandle, buffer, socketCount, 0);
+#else
+	return send(socketHandle, buffer, count, 0);
+#endif
 }
 
-bool TcpTransport::isConnected() const { return socket >= 0; }
+bool TcpTransport::isConnected() const { return socketHandle != invalidSocketHandle; }
 
 void TcpTransport::close() {
-	if (socket >= 0) {
+	if (socketHandle != invalidSocketHandle) {
 #ifdef _WIN32
-		closesocket(socket);
+		closesocket(socketHandle);
 #else
-		::close(socket);
+		::close(socketHandle);
 #endif
-		socket = -1;
+		socketHandle = invalidSocketHandle;
 	}
 }
 
@@ -54,42 +79,47 @@ TcpServer::~TcpServer() { shutdown(); }
 bool TcpServer::setup() {
 #ifdef _WIN32
 	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-		std::cerr << "[LSP ERROR] Failed to initialize Winsock" << std::endl;
+	const int startupResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (startupResult != 0) {
+		std::cerr << "[LSP ERROR] Failed to initialize Winsock: " << std::system_category().message(startupResult) << std::endl;
 		return false;
 	}
+	winsockInitialized = true;
 #endif
 
 	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (serverSocket < 0) {
-		std::cerr << "[LSP ERROR] Failed to create socket: " << strerror(errno) << std::endl;
+	if (serverSocket == invalidSocketHandle) {
+		std::cerr << "[LSP ERROR] Failed to create socket: " << socketErrorMessage() << std::endl;
 		return false;
 	}
 
-	// Allow socket reuse
-	int opt = 1;
 #ifdef _WIN32
-	if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&opt), sizeof(opt)) < 0) {
+	const BOOL exclusiveAddressUse = TRUE;
+	if (setsockopt(
+			serverSocket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char *>(&exclusiveAddressUse),
+			sizeof(exclusiveAddressUse)
+		) == SOCKET_ERROR) {
 #else
-	if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+	const int reuseAddress = 1;
+	if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &reuseAddress, sizeof(reuseAddress)) < 0) {
 #endif
-		std::cerr << "[LSP ERROR] Failed to set socket options: " << strerror(errno) << std::endl;
+		std::cerr << "[LSP ERROR] Failed to set socket options: " << socketErrorMessage() << std::endl;
 		return false;
 	}
 
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons(port);
 
 	if (bind(serverSocket, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0) {
-		std::cerr << "[LSP ERROR] Failed to bind socket: " << strerror(errno) << std::endl;
+		std::cerr << "[LSP ERROR] Failed to bind socket: " << socketErrorMessage() << std::endl;
 		return false;
 	}
 
 	if (listen(serverSocket, 1) < 0) {
-		std::cerr << "[LSP ERROR] Failed to listen on socket: " << strerror(errno) << std::endl;
+		std::cerr << "[LSP ERROR] Failed to listen on socket: " << socketErrorMessage() << std::endl;
 		return false;
 	}
 
@@ -100,8 +130,8 @@ std::unique_ptr<TcpTransport> TcpServer::acceptConnection() {
 	struct sockaddr_in clientAddr;
 	socklen_t clientLen = sizeof(clientAddr);
 
-	int clientSocket = accept(serverSocket, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
-	if (clientSocket < 0) {
+	SocketHandle clientSocket = accept(serverSocket, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
+	if (clientSocket == invalidSocketHandle) {
 		return nullptr;
 	}
 
@@ -109,15 +139,20 @@ std::unique_ptr<TcpTransport> TcpServer::acceptConnection() {
 }
 
 void TcpServer::shutdown() {
-	if (serverSocket >= 0) {
+	if (serverSocket != invalidSocketHandle) {
 #ifdef _WIN32
 		closesocket(serverSocket);
-		WSACleanup();
 #else
 		::close(serverSocket);
 #endif
-		serverSocket = -1;
+		serverSocket = invalidSocketHandle;
 	}
+#ifdef _WIN32
+	if (winsockInitialized) {
+		WSACleanup();
+		winsockInitialized = false;
+	}
+#endif
 }
 
 } // namespace lsp
