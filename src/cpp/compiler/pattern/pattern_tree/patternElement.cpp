@@ -299,6 +299,19 @@ bool parsePatternElements(
 					}
 				}
 				i++; // skip the space in the main sequence
+			} else if (hasEmptyAlternative && i >= patternString.size() && !result.empty() &&
+					   result.back().type == PatternElement::Type::Other && result.back().text == " ") {
+				// A trailing choice has no following space to absorb: absorb the
+				// preceding space instead, so the empty alternative ends the
+				// pattern right after the previous element.
+				// e.g. alpha [the|] → alpha[ the|], so omission matches "alpha" not "alpha "
+				DefinitionPatternElement precedingSpace = std::move(result.back());
+				result.pop_back();
+				for (auto &alt : choice.alternatives) {
+					if (!alt.empty()) {
+						alt.insert(alt.begin(), precedingSpace);
+					}
+				}
 			}
 
 			result.push_back(std::move(choice));

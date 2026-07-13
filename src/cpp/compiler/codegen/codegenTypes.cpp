@@ -262,13 +262,21 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 // Allocate all variables for a section at its start from finalized inference metadata.
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
+		// Call-bound parameters already have storage behind their argument
+		// pointer; variable resolution finds them there first. Parameters the
+		// active match did not bind (their choice alternative was not taken)
+		// fall through and get local storage like any other variable.
+		if (context.patternBindings.contains(name))
+			continue;
 		Variable *var = section->findVariable(name);
 		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
 		std::optional<DataType> finalizedType;
 		if (body)
 			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
 		DataType varType = finalizedType.value_or(var->type);
-		if (!varType.isDeduced())
+		// Compile-time-only parameters (fixed values, type and constraint
+		// parameters) have no runtime representation to allocate.
+		if (!varType.isRuntimeValueType())
 			continue;
 
 		// Check if this is a global variable

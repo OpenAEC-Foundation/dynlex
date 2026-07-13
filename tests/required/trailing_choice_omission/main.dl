@@ -1,0 +1,20 @@
+import std.dl
+
+# A trailing choice with an empty alternative can be omitted entirely.
+
+function describe amount [loudly|]:
+	execute:
+		print amount as line
+
+describe 4 loudly
+describe 9
+
+# The same works when the trailing alternative is a parameter: bound when the
+# caller supplies it, a fresh local when omitted.
+function stretch amount [factor|]:
+	execute:
+		set factor to amount * 3
+		return factor
+
+print (stretch 2 5) as line
+print (stretch 4) as line

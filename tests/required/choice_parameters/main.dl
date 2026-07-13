@@ -1,0 +1,36 @@
+import std.dl
+
+# Parameters may appear inside choice alternatives. When the call matches the
+# alternative containing the parameter, it binds like any argument. When the
+# call matches another alternative, the parameter behaves like a fresh local
+# of that instantiation.
+
+function combine alpha [beta|]:
+	execute:
+		return alpha + beta
+
+print (combine 1 2) as line
+
+function run count [frame|frames]:
+	execute:
+		set frame to 0
+		loop while frame < count:
+			increment frame
+		print frame as line
+
+run 3 frames
+run 5 frames
+
+# The bound instantiation of the same definition still works alongside the
+# unbound one: here the second argument binds frame through the alternative.
+run 4 9
+
+# A choice parameter in the middle of the pattern, unbound through the word
+# alternative and bound through the parameter alternative.
+function middle [gap|word] tail:
+	execute:
+		set gap to tail * 2
+		return gap
+
+print (middle word 6) as line
+print (middle 5 7) as line

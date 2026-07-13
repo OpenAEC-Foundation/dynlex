@@ -232,6 +232,10 @@ Instantiation *generateSpecializedFunction(
 	requireCompilerInvariant(
 		activeInst.body != nullptr, "inferred function instantiation is missing its owned expression body"
 	);
+	// Parameters this call's match did not bind (their choice alternative was
+	// not taken) live as locals of this instantiation and need storage here;
+	// bound parameters are skipped because they resolve through patternBindings.
+	allocateSectionVariables(context, section, activeInst.body.get());
 	for (Section *child : section->children) {
 		InstantiatedSectionBody *childBody = activeInst.body->bodyForChild(child);
 		requireCompilerInvariant(childBody, "instantiated function body is missing a child section");
