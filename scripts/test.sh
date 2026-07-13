@@ -102,63 +102,81 @@ PY
 run_with_timeout() {
     local seconds="$1"
     shift
-    if [[ "$is_windows" == "true" ]]; then
-        python3 - "$seconds" "$@" <<'PY'
-import subprocess
-import sys
-
-timeout_seconds = int(sys.argv[1])
-cmd = sys.argv[2:]
-
-try:
-    completed = subprocess.run(cmd, timeout=timeout_seconds, capture_output=True)
-except subprocess.TimeoutExpired as exc:
-    if exc.stdout:
-        sys.stdout.buffer.write(exc.stdout)
-    if exc.stderr:
-        sys.stderr.buffer.write(exc.stderr)
-    sys.exit(124)
-
-if completed.stdout:
-    sys.stdout.buffer.write(completed.stdout)
-if completed.stderr:
-    sys.stderr.buffer.write(completed.stderr)
-if completed.returncode < 0 or completed.returncode > 255:
-    status = completed.returncode & 0xFFFFFFFF
-    sys.stderr.write(f"Process terminated with Windows status 0x{status:08X}\n")
-    sys.exit(125)
-sys.exit(completed.returncode)
-PY
-        return $?
-    fi
-    if command -v timeout >/dev/null 2>&1; then
-        timeout "$seconds" "$@"
-        return $?
-    fi
-    if command -v gtimeout >/dev/null 2>&1; then
-        gtimeout "$seconds" "$@"
-        return $?
-    fi
     python3 - "$seconds" "$@" <<'PY'
+import os
+import signal
 import subprocess
 import sys
 
 timeout_seconds = int(sys.argv[1])
 cmd = sys.argv[2:]
+popen_options = {
+    "stdout": subprocess.PIPE,
+    "stderr": subprocess.PIPE,
+}
+if os.name == "nt":
+    popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+else:
+    popen_options["start_new_session"] = True
+
+process = subprocess.Popen(cmd, **popen_options)
 
 try:
-    completed = subprocess.run(cmd, timeout=timeout_seconds, capture_output=True)
-except subprocess.TimeoutExpired as exc:
-    stderr = exc.stderr or b""
+    stdout, stderr = process.communicate(timeout=timeout_seconds)
+except subprocess.TimeoutExpired:
+    termination_error = b""
+    if os.name == "nt":
+        terminated = subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if terminated.returncode != 0:
+            termination_error = terminated.stderr
+            if process.poll() is None:
+                process.kill()
+    else:
+        os.killpg(process.pid, signal.SIGKILL)
+
+    try:
+        stdout, stderr = process.communicate(timeout=5)
+    except subprocess.TimeoutExpired as cleanup_timeout:
+        if process.poll() is None:
+            process.kill()
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stderr is not None:
+            process.stderr.close()
+        process.wait(timeout=5)
+        stdout = cleanup_timeout.output or b""
+        stderr = cleanup_timeout.stderr or b""
+        termination_error += b"Timed-out process tree did not release its output pipes\n"
+
+    if stdout:
+        sys.stdout.buffer.write(stdout)
     if stderr:
         sys.stderr.buffer.write(stderr)
+    if termination_error:
+        sys.stderr.buffer.write(termination_error)
+        sys.exit(125)
     sys.exit(124)
 
-if completed.stdout:
-    sys.stdout.buffer.write(completed.stdout)
-if completed.stderr:
-    sys.stderr.buffer.write(completed.stderr)
-sys.exit(completed.returncode)
+if stdout:
+    sys.stdout.buffer.write(stdout)
+if stderr:
+    sys.stderr.buffer.write(stderr)
+if process.returncode < 0:
+    signal_number = -process.returncode
+    if signal_number <= 127:
+        sys.exit(128 + signal_number)
+    sys.stderr.write(f"Process terminated by signal {signal_number}\n")
+    sys.exit(125)
+if process.returncode > 255:
+    status = process.returncode & 0xFFFFFFFF
+    sys.stderr.write(f"Process terminated with Windows status 0x{status:08X}\n")
+    sys.exit(125)
+sys.exit(process.returncode)
 PY
 }
 
@@ -364,6 +382,23 @@ run_auxiliary_test() {
 
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
+
+echo "Testing timeout_process_tree..."
+timeout_test_start_ms=$(now_ms)
+timeout_test_output=$(run_with_timeout 1 python3 -B "$SCRIPT_DIR/test_timeout_process_tree.py" 2>&1)
+timeout_test_exit=$?
+timeout_test_elapsed_ms=$(elapsed_ms_since "$timeout_test_start_ms")
+if [[ $timeout_test_exit -eq 124 && $timeout_test_elapsed_ms -lt 10000 ]]; then
+    append_test_result "PASS" "$GREEN" "timeout_process_tree" "" "$timeout_test_elapsed_ms"
+    ((passed++))
+else
+    append_test_result \
+        "FAIL" "$RED" "timeout_process_tree" \
+        "expected timeout exit 124 within 10000 ms, got exit $timeout_test_exit" "$timeout_test_elapsed_ms"
+    [[ -n "$timeout_test_output" ]] && test_output+="  $timeout_test_output\n"
+    ((failed++)) || true
+    failures+=("timeout_process_tree")
+fi
 
 echo "Testing lsp_integration..."
 lsp_test_start_ms=$(now_ms)
