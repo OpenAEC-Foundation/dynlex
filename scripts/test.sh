@@ -344,6 +344,33 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 done
 
+run_auxiliary_test() {
+    local test_name="$1"
+    local timeout_seconds="$2"
+    shift 2
+
+    local test_start_ms
+    local auxiliary_output
+    local auxiliary_exit
+    local test_elapsed_ms
+    test_start_ms=$(now_ms)
+    auxiliary_output=$(run_with_timeout "$timeout_seconds" "$@" 2>&1)
+    auxiliary_exit=$?
+    test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+    if [[ $auxiliary_exit -eq 0 ]]; then
+        append_test_result "PASS" "$GREEN" "$test_name" "" "$test_elapsed_ms"
+        ((passed++))
+    else
+        append_test_result "FAIL" "$RED" "$test_name" "exit $auxiliary_exit" "$test_elapsed_ms"
+        [[ -n "$auxiliary_output" ]] && test_output+="  $auxiliary_output\n"
+        ((failed++)) || true
+        failures+=("$test_name")
+    fi
+}
+
+run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
+run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
+
 lsp_test_start_ms=$(now_ms)
 lsp_shell="$BASH"
 if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then

@@ -22,20 +22,6 @@ install_optional_mcp_server() {
     fi
 }
 
-brew_install_missing() {
-    local missing=()
-    local formula
-    for formula in "$@"; do
-        if ! brew list --formula --versions "$formula" >/dev/null 2>&1; then
-            missing+=("$formula")
-        fi
-    done
-
-    if [ ${#missing[@]} -gt 0 ]; then
-        brew install "${missing[@]}"
-    fi
-}
-
 install_linux_deps() {
     if command -v apt-get >/dev/null 2>&1; then
         require_sudo
@@ -145,7 +131,36 @@ install_macos_deps() {
     else
         BREW_LLVM_FORMULA="llvm"
     fi
-    brew_install_missing "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw ccache cmake ninja git node go
+
+    local missing_formulas=()
+    local formula
+    for formula in "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw; do
+        if ! brew list --formula --versions "$formula" >/dev/null 2>&1; then
+            missing_formulas+=("$formula")
+        fi
+    done
+
+    local tool_formulas=(
+        ccache ccache
+        cmake cmake
+        ninja ninja
+        git git
+        node node
+        go go
+    )
+    local index
+    local tool
+    for ((index = 0; index < ${#tool_formulas[@]}; index += 2)); do
+        tool="${tool_formulas[index]}"
+        formula="${tool_formulas[index + 1]}"
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_formulas+=("$formula")
+        fi
+    done
+
+    if [ ${#missing_formulas[@]} -gt 0 ]; then
+        HOMEBREW_NO_INSTALL_UPGRADE=1 brew install "${missing_formulas[@]}"
+    fi
     BREW_LLVM_PREFIX="$(brew --prefix "$BREW_LLVM_FORMULA")"
 
     BREW_LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"

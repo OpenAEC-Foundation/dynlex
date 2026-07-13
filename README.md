@@ -105,6 +105,9 @@ fi
 export LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 ```
 
+The installer reuses tools already available on `PATH` and installs missing
+Homebrew formulae without upgrading unrelated installed packages.
+
 Windows (winget):
 
 ```powershell
