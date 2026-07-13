@@ -15,6 +15,30 @@ project (dynlex VERSION ${DYNLEX_VERSION})
 
 include(GNUInstallDirs)
 
+# Homebrew Clang selects the macOS SDK through its driver configuration, but
+# CMake does not always include that configured sysroot in its detected implicit
+# header directories. LLVM's imported targets then re-export SDK headers used by
+# system libraries (FFI, LibEdit, zlib, and others) as explicit -isystem paths.
+# Mark the active SDK headers as implicit so CMake omits them from every target's
+# command line and preserves libc++'s wrapper-header ordering.
+if(APPLE)
+    execute_process(
+        COMMAND xcrun --sdk macosx --show-sdk-path
+        OUTPUT_VARIABLE DYNLEX_MACOS_SDK
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE DYNLEX_MACOS_SDK_RESULT
+        ERROR_QUIET
+    )
+    set(DYNLEX_MACOS_SDK_SYSTEM_INCLUDE "${DYNLEX_MACOS_SDK}/usr/include")
+    if(NOT DYNLEX_MACOS_SDK_RESULT EQUAL 0 OR NOT IS_DIRECTORY "${DYNLEX_MACOS_SDK_SYSTEM_INCLUDE}")
+        message(FATAL_ERROR "Unable to locate the active macOS SDK headers through xcrun")
+    endif()
+    list(APPEND CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "${DYNLEX_MACOS_SDK_SYSTEM_INCLUDE}")
+    list(APPEND CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "${DYNLEX_MACOS_SDK_SYSTEM_INCLUDE}")
+    list(REMOVE_DUPLICATES CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES)
+    list(REMOVE_DUPLICATES CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+endif()
+
 #
 # Enable ccache if available
 #
@@ -151,15 +175,6 @@ endif()
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-
-# Static LLVM packages expose their system link dependencies transitively. On
-# macOS, LLVM's LibEdit target points at the SDK's usr/include directory. That
-# directory is already searched by the compiler and propagating it as an
-# explicit -isystem path moves the C headers ahead of libc++'s wrapper headers.
-# DynLex consumes only LLVM's link dependency, not LibEdit's headers.
-if(TARGET LibEdit::LibEdit)
-    set_target_properties(LibEdit::LibEdit PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
-endif()
 
 #
 # CMake setup

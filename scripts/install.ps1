@@ -443,39 +443,72 @@ function Ensure-Vcpkg {
     return $vcpkgRoot
 }
 
-function Install-NlohmannJson {
+function Install-VcpkgDependencies {
     $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-    $triplet = switch ($architecture) {
+    $windowsTriplet = switch ($architecture) {
         "X64" { "x64-windows" }
         "X86" { "x86-windows" }
         "Arm64" { "arm64-windows" }
-        default { throw "Unsupported Windows architecture for nlohmann_json: $architecture" }
+        default { throw "Unsupported Windows architecture for DynLex dependencies: $architecture" }
+    }
+    $mingwTriplet = switch ($architecture) {
+        "X64" { "x64-mingw-dynamic" }
+        "X86" { "x86-mingw-dynamic" }
+        "Arm64" { "arm64-mingw-dynamic" }
+        default { throw "Unsupported Windows architecture for DynLex dependencies: $architecture" }
     }
 
     $vcpkgRoot = Ensure-Vcpkg
     $vcpkg = Join-Path $vcpkgRoot "vcpkg.exe"
-    Write-Host "Installing nlohmann-json for $triplet..." -ForegroundColor Cyan
-    & $vcpkg install "nlohmann-json:$triplet" --disable-metrics 2>&1 | Out-Host
+    Write-Host "Installing DynLex libraries through vcpkg..." -ForegroundColor Cyan
+    & $vcpkg install `
+        "nlohmann-json:$windowsTriplet" `
+        "glfw3:$mingwTriplet" `
+        "freetype:$mingwTriplet" `
+        --disable-metrics 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) {
-        throw "vcpkg failed to install nlohmann-json:$triplet."
+        throw "vcpkg failed to install the DynLex libraries."
     }
 
-    $installedRoot = Join-Path $vcpkgRoot "installed\$triplet"
-    $includeFile = Join-Path $installedRoot "include\nlohmann\json.hpp"
-    $cmakeDir = Join-Path $installedRoot "share\nlohmann_json"
+    $windowsRoot = Join-Path $vcpkgRoot "installed\$windowsTriplet"
+    $includeFile = Join-Path $windowsRoot "include\nlohmann\json.hpp"
+    $cmakeDir = Join-Path $windowsRoot "share\nlohmann_json"
     $cmakeConfig = Join-Path $cmakeDir "nlohmann_jsonConfig.cmake"
     if (-not (Test-Path $includeFile) -or -not (Test-Path $cmakeConfig)) {
-        throw "vcpkg reported success but the nlohmann_json headers or CMake package are missing from $installedRoot."
+        throw "vcpkg reported success but the nlohmann_json package is incomplete in $windowsRoot."
+    }
+
+    $mingwRoot = Join-Path $vcpkgRoot "installed\$mingwTriplet"
+    $nativeLibraryDir = Join-Path $mingwRoot "lib"
+    $nativeBinDir = Join-Path $mingwRoot "bin"
+    $glfwImportLibrary = Get-ChildItem -Path $nativeLibraryDir -Filter "*glfw3*.a" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    $freetypeImportLibrary = Get-ChildItem -Path $nativeLibraryDir -Filter "*freetype*.a" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $glfwImportLibrary -or -not $freetypeImportLibrary -or -not (Test-Path $nativeBinDir)) {
+        throw "vcpkg reported success but the MinGW GLFW or FreeType artifacts are incomplete in $mingwRoot."
     }
 
     $cmakeDirUnix = $cmakeDir -replace '\\', '/'
     $env:NLOHMANN_JSON_DIR = $cmakeDirUnix
+    $env:PATH = "$nativeBinDir;$env:PATH"
+    if ($env:LIBRARY_PATH) {
+        $env:LIBRARY_PATH = "$nativeLibraryDir;$env:LIBRARY_PATH"
+    } else {
+        $env:LIBRARY_PATH = $nativeLibraryDir
+    }
     [Environment]::SetEnvironmentVariable("NLOHMANN_JSON_DIR", $cmakeDirUnix, "User")
+    Add-GitHubPathIfPresent -PathValue $nativeBinDir
     if ($env:GITHUB_ENV) {
         Add-Content -Path $env:GITHUB_ENV -Value "NLOHMANN_JSON_DIR=$cmakeDirUnix"
+        Add-Content -Path $env:GITHUB_ENV -Value "LIBRARY_PATH=$env:LIBRARY_PATH"
     }
 
-    return $cmakeDir
+    return [PSCustomObject]@{
+        NlohmannJsonDir = $cmakeDir
+        NativeLibraryDir = $nativeLibraryDir
+        NativeBinDir = $nativeBinDir
+    }
 }
 
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
@@ -498,7 +531,8 @@ Ensure-Package "Git.Git" "git"
 Ensure-Package "Python.Python.3" "python"
 Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
-$nlohmannJsonDir = Install-NlohmannJson
+$vcpkgDependencies = Install-VcpkgDependencies
+$nlohmannJsonDir = $vcpkgDependencies.NlohmannJsonDir
 
 if ($llvmConfig) {
     $llvmCmake = Split-Path -Parent $llvmConfig.FullName
@@ -570,6 +604,8 @@ if ($llvmBin) {
         Write-Host '$env:LLVM_DIR should be set manually if CMake cannot auto-discover LLVM.'
     }
     Write-Host ('$env:NLOHMANN_JSON_DIR="' + $nlohmannJsonDir + '"')
+    Write-Host ('$env:LIBRARY_PATH="' + $vcpkgDependencies.NativeLibraryDir + ';$env:LIBRARY_PATH"')
+    Write-Host ('$env:PATH="' + $vcpkgDependencies.NativeBinDir + ';$env:PATH"')
 } else {
     throw "LLVM install path could not be auto-detected. Ensure clang is on PATH and LLVM_DIR is set before building."
 }

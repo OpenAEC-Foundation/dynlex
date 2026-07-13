@@ -345,7 +345,11 @@ for test_dir in "$TESTS_DIR"/*/; do
 done
 
 lsp_test_start_ms=$(now_ms)
-lsp_test_output=$(run_with_timeout 30 bash "$SCRIPT_DIR/test_lsp.sh" 2>&1)
+lsp_shell="$BASH"
+if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then
+    lsp_shell=$(cygpath -w "$lsp_shell")
+fi
+lsp_test_output=$(run_with_timeout 30 "$lsp_shell" "$SCRIPT_DIR/test_lsp.sh" 2>&1)
 lsp_test_exit=$?
 lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
 if [[ $lsp_test_exit -eq 0 ]]; then

@@ -12,12 +12,61 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
+
+namespace {
+
+struct LibraryNameMapping {
+	llvm::StringLiteral portableName;
+	llvm::StringLiteral linkerName;
+};
+
+std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library) {
+	if (targetTriple.isOSDarwin() && library == "GL")
+		return {"-framework", "OpenGL"};
+
+	if (targetTriple.isOSWindows()) {
+		static constexpr std::array windowsLibraryNames = {
+			LibraryNameMapping{"GL", "opengl32"},
+			LibraryNameMapping{"glfw", "glfw3"},
+		};
+		for (const LibraryNameMapping &mapping : windowsLibraryNames) {
+			if (library == mapping.portableName) {
+				library = mapping.linkerName;
+				break;
+			}
+		}
+	}
+
+	return {"-l" + library.str()};
+}
+
+bool linkerReportsMissingLibrary(llvm::StringRef output, const std::vector<std::string> &arguments) {
+	if (arguments.size() == 2 && arguments[0] == "-framework") {
+		const std::string &framework = arguments[1];
+		return output.contains("framework '" + framework + "' not found") ||
+			   output.contains("framework not found " + framework);
+	}
+
+	for (const std::string &argument : arguments) {
+		if (!llvm::StringRef(argument).starts_with("-l"))
+			continue;
+		if (output.contains("cannot find " + argument) || output.contains("unable to find library " + argument))
+			return true;
+	}
+	return false;
+}
+
+} // namespace
 
 bool emitNativeExecutable(ParseContext &context) {
 	auto pushPlainError = [&](std::string message) {
@@ -35,6 +84,7 @@ bool emitNativeExecutable(ParseContext &context) {
 
 	std::string targetTriple = llvm::sys::getDefaultTargetTriple();
 	context.llvmModule->setTargetTriple(targetTriple);
+	const llvm::Triple parsedTargetTriple(targetTriple);
 
 	// Find target
 	std::string error;
@@ -120,7 +170,7 @@ bool emitNativeExecutable(ParseContext &context) {
 	}
 
 	std::vector<std::string> commandStorage;
-	commandStorage.reserve(5 + context.requiredLibraries.size());
+	commandStorage.reserve(5 + context.requiredLibraries.size() * 2);
 	commandStorage.push_back(*linkerProgram);
 	commandStorage.push_back(objectPath);
 	commandStorage.push_back("-o");
@@ -130,7 +180,10 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandStorage.push_back("-g");
 
 	for (const std::string &lib : context.requiredLibraries) {
-		commandStorage.push_back("-l" + lib);
+		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib);
+		commandStorage.insert(
+			commandStorage.end(), std::make_move_iterator(arguments.begin()), std::make_move_iterator(arguments.end())
+		);
 	}
 
 	std::vector<llvm::StringRef> commandArgs;
@@ -174,7 +227,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		// Check which libraries are actually missing
 		std::vector<std::string> missingLibs;
 		for (const std::string &lib : context.requiredLibraries) {
-			if (linkerOutput.find("cannot find -l" + lib) != std::string::npos) {
+			if (linkerReportsMissingLibrary(linkerOutput, nativeLibraryArguments(parsedTargetTriple, lib))) {
 				missingLibs.push_back(lib);
 			}
 		}
