@@ -149,10 +149,22 @@ if(LLVM_PACKAGE_VERSION VERSION_LESS "${DYNLEX_MIN_LLVM_VERSION}.0.0")
     message(FATAL_ERROR "DynLex requires LLVM ${DYNLEX_MIN_LLVM_VERSION} or newer")
 endif()
 
-set(DYNLEX_LLVM_INCLUDE_DIRS ${LLVM_INCLUDE_DIRS})
-list(REMOVE_ITEM DYNLEX_LLVM_INCLUDE_DIRS ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
-include_directories(SYSTEM ${DYNLEX_LLVM_INCLUDE_DIRS})
+include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
+
+# Static LLVM packages expose their system link dependencies transitively. On
+# macOS, LLVM's LibEdit target points at the SDK's usr/include directory. That
+# directory is already searched by the compiler and propagating it as an
+# explicit -isystem path moves the C headers ahead of libc++'s wrapper headers.
+if(TARGET LibEdit::LibEdit)
+    get_target_property(DYNLEX_LIBEDIT_INCLUDE_DIRS LibEdit::LibEdit INTERFACE_INCLUDE_DIRECTORIES)
+    if(DYNLEX_LIBEDIT_INCLUDE_DIRS)
+        list(REMOVE_ITEM DYNLEX_LIBEDIT_INCLUDE_DIRS ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+        set_target_properties(LibEdit::LibEdit PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_LIBEDIT_INCLUDE_DIRS}"
+        )
+    endif()
+endif()
 
 #
 # CMake setup

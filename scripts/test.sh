@@ -107,6 +107,35 @@ build_output_has_diagnostics() {
 run_with_timeout() {
     local seconds="$1"
     shift
+    if [[ "$is_windows" == "true" ]]; then
+        python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+timeout_seconds = int(sys.argv[1])
+cmd = sys.argv[2:]
+
+try:
+    completed = subprocess.run(cmd, timeout=timeout_seconds, capture_output=True)
+except subprocess.TimeoutExpired as exc:
+    if exc.stdout:
+        sys.stdout.buffer.write(exc.stdout)
+    if exc.stderr:
+        sys.stderr.buffer.write(exc.stderr)
+    sys.exit(124)
+
+if completed.stdout:
+    sys.stdout.buffer.write(completed.stdout)
+if completed.stderr:
+    sys.stderr.buffer.write(completed.stderr)
+if completed.returncode < 0 or completed.returncode > 255:
+    status = completed.returncode & 0xFFFFFFFF
+    sys.stderr.write(f"Process terminated with Windows status 0x{status:08X}\n")
+    sys.exit(125)
+sys.exit(completed.returncode)
+PY
+        return $?
+    fi
     if command -v timeout >/dev/null 2>&1; then
         timeout "$seconds" "$@"
         return $?
@@ -183,6 +212,14 @@ for test_dir in "$TESTS_DIR"/*/; do
         failures+=("$test_name")
         continue
     fi
+    if [[ $compile_exit -eq 125 ]]; then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        append_test_result "FAIL" "$RED" "$test_name" "compiler terminated abnormally" "$test_elapsed_ms"
+        [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
+        ((failed++))
+        failures+=("$test_name")
+        continue
+    fi
     if [[ $compile_exit -ge 128 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         signal=$((compile_exit - 128))
@@ -214,10 +251,12 @@ for test_dir in "$TESTS_DIR"/*/; do
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         if [[ "$has_expected_diagnostics" == "true" ]]; then
             append_test_result "FAIL" "$RED" "$test_name" "diagnostics mismatch" "$test_elapsed_ms"
+            test_output+="  Compiler exit:        $compile_exit\n"
             test_output+="  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")\n"
             test_output+="  Actual diagnostics:   $(head -c 400 <<< "$compile_output")\n"
         else
             append_test_result "FAIL" "$RED" "$test_name" "unexpected diagnostics" "$test_elapsed_ms"
+            test_output+="  Compiler exit:      $compile_exit\n"
             test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
         fi
         ((failed++))
@@ -233,7 +272,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         else
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
             if [[ "$output_binary_exists" != "true" ]]; then
-                append_test_result "FAIL" "$RED" "$test_name" "compilation did not produce runnable output" "$test_elapsed_ms"
+                append_test_result "FAIL" "$RED" "$test_name" "compiler exited $compile_exit without runnable output" "$test_elapsed_ms"
             else
                 append_test_result "FAIL" "$RED" "$test_name" "compilation failed" "$test_elapsed_ms"
             fi
