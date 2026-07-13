@@ -1,0 +1,40 @@
+import std.dl
+
+# A global written by a callee reached through an intermediate function must
+# invalidate the caller's compile-time constant tracking. The `if` below would
+# otherwise fold against the stale initial value 0 and drop the decrement.
+
+set shared_delay to 0
+
+function arm the delay:
+	globals: shared_delay
+	execute:
+		set shared_delay to 2
+		return 1
+
+function tick the delay:
+	globals: shared_delay
+	execute:
+		if shared_delay > 0:
+			decrement shared_delay
+
+function arm the delay count [time|times]:
+	execute:
+		set i to 0
+		loop while i < count:
+			discard arm the delay
+			increment i
+
+function read the delay:
+	globals: shared_delay
+	execute:
+		return shared_delay
+
+arm the delay 4 times
+print read the delay as line
+tick the delay
+print read the delay as line
+tick the delay
+print read the delay as line
+tick the delay
+print read the delay as line

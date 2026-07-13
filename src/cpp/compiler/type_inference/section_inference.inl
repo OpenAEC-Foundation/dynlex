@@ -653,7 +653,9 @@ bool ensureSectionInstantiationInferred(
 	inst.pureReturnValuesByArguments.clear();
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
 	if (callerContext) {
-		context.currentKnownConstants = callerContext->currentKnownConstants;
+		// Do not seed from the caller's tracked constants: the instantiation is
+		// cached and reused under other global states (see the non-flex call
+		// path in function_inference.inl).
 		context.allowTrialSummaryReuse = callerContext->allowTrialSummaryReuse;
 		context.inheritedTrialExpressionValues =
 			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;

@@ -65,15 +65,20 @@ static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instant
 	};
 }
 
-static void mergeWrittenGlobalConstantsIntoCaller(
-	const Instantiation &inst, std::unordered_map<VariableReference *, CompileTimeValue> &callerKnownConstants
-) {
+// Applies a callee's global write effects to the caller context, mirroring a
+// direct store to each written global: the caller's own effect summary, its
+// tracked constant value, and the surrounding loop mutation scope. Skipping
+// any of these would let later code fold branches against values the callee
+// already overwrote, or treat a loop-carried global as loop-invariant.
+static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
+		context.noteWrittenGlobalReference(reference);
 		auto it = inst.finalGlobalConstantValues.find(reference);
-		if (it != inst.finalGlobalConstantValues.end() && isCompileTimeKnown(it->second))
-			callerKnownConstants[reference] = it->second;
-		else
-			callerKnownConstants.erase(reference);
+		context.setKnownConstant(reference, it != inst.finalGlobalConstantValues.end() ? it->second : CompileTimeValue{});
+		if (context.inLoopMutationScope()) {
+			context.noteLoopMutation(reference);
+			context.setKnownConstant(reference, {});
+		}
 	}
 }
 
@@ -2835,7 +2840,12 @@ static void inferOrderedExpression(
 					inst.needsReinfer = false;
 					inst.inferring = true;
 					context.currentInstantiation = &inst;
-					context.currentKnownConstants = callerKnownConstants;
+					// A cached instantiation serves every future call site, so its
+					// inference must not consume the calling context's tracked
+					// constants: the only entries visible inside the callee are
+					// globals, and their values differ per call. Parameter
+					// constants arrive through the instantiation key instead.
+					context.currentKnownConstants.clear();
 					bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
 					context.suppressReinferPassDiagnostics = true;
 					if (!inst.body)
@@ -2852,8 +2862,6 @@ static void inferOrderedExpression(
 					return passSucceeded;
 				}
 				);
-				if (!context.trial && inferenceSucceeded && context.typesValid)
-					mergeWrittenGlobalConstantsIntoCaller(inst, callerKnownConstants);
 				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.valid = inferenceSucceeded;
@@ -2870,8 +2878,7 @@ static void inferOrderedExpression(
 			}
 			if (!context.typesValid)
 				break;
-			if (!context.trial)
-				mergeWrittenGlobalConstantsIntoCaller(inst, context.currentKnownConstants);
+			mergeCalleeGlobalWritesIntoCaller(context, inst);
 			mergeInstantiationPurityIntoCaller(context, inst);
 
 			// If no return intrinsic was found, default to Void
