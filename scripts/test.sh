@@ -188,6 +188,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
     output_binary="$test_dir/main.out"
+    stack_limit_file="$test_dir/stack_limit_kb.txt"
     if [[ "$is_windows" == "true" ]]; then
         output_binary="$test_dir/main.exe"
     fi
@@ -203,7 +204,19 @@ for test_dir in "$TESTS_DIR"/*/; do
     expected_diagnostics_file="$test_dir/expected_diagnostics.txt"
 
     # Compile (5 second timeout)
-    compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+    if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
+        stack_limit_kb=$(<"$stack_limit_file")
+        if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result "FAIL" "$RED" "$test_name" "invalid stack_limit_kb.txt" "$test_elapsed_ms"
+            ((failed++))
+            failures+=("$test_name")
+            continue
+        fi
+        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
+    else
+        compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+    fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
@@ -332,7 +345,7 @@ for test_dir in "$TESTS_DIR"/*/; do
 done
 
 lsp_test_start_ms=$(now_ms)
-lsp_test_output=$(run_with_timeout 30 "$SCRIPT_DIR/test_lsp.sh" 2>&1)
+lsp_test_output=$(run_with_timeout 30 bash "$SCRIPT_DIR/test_lsp.sh" 2>&1)
 lsp_test_exit=$?
 lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
 if [[ $lsp_test_exit -eq 0 ]]; then

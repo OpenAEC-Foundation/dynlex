@@ -1,0 +1,33 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [an|a|] {fixed integer:bits} bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+function value as destinationtype:
+    execute:
+        return @intrinsic("cast", value, destinationtype)
+
+function [the|] floor of value:
+    execute:
+        return @intrinsic("floor", value)
+
+function rounded value:
+    execute:
+        return (the floor of value) as a 64 bit integer
+
+discard rounded 1.5

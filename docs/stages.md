@@ -225,6 +225,11 @@ Therefore, we have to separate increments, validation, and clearing.
 - Validation infers the whole tree recursively.
 - Clearing clears all types from the tree recursively.
 
+Grouping candidates are produced by a pull enumerator. It suspends after one candidate, fully unwinds the native generation stack,
+and lets validation run before it resumes. It never stores all possible candidates. The suspended state contains only the current
+choice indices and one compact expression-pointer layout for the active candidate, because validation may temporarily apply another
+layout to the same expression nodes.
+
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.

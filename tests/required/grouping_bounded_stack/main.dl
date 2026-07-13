@@ -1,0 +1,41 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function left[ |]&[ |]right:
+    execute:
+        return @intrinsic("bitwise and", left, right)
+
+function left[ |]+[ |]right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function trigger value:
+    execute:
+        return value + 2 + 3 + 4 + 5 & 1.5
+
+function trigger two value:
+    execute:
+        return trigger value
+
+function trigger three value:
+    execute:
+        return trigger two value
+
+function trigger four value:
+    execute:
+        return trigger three value
+
+function trigger five value:
+    execute:
+        return trigger four value
+
+function trigger six value:
+    execute:
+        return trigger five value
+
+discard trigger six 1
