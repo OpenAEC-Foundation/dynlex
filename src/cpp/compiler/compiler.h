@@ -13,7 +13,9 @@ struct PatternDefinition;
 struct InferenceContext;
 
 bool compile(const std::string &path, ParseContext &context);
-bool importSourceFile(const std::string &path, ParseContext &context);
+// resolutionRoot is the directory the file's path was resolved under; the
+// file's own imports try that root before the working directory.
+bool importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot = "");
 bool analyzeSections(ParseContext &context);
 bool resolvePatterns(ParseContext &context);
 bool validate(ParseContext &context);

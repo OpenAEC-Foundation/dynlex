@@ -24,10 +24,21 @@
 #include <filesystem>
 using namespace std::literals;
 
+// A resolved import: the path to load plus the resolution root the file was
+// found under. Nested imports of that file first try the same root, so one
+// import graph never mixes files from different library locations.
+struct ResolvedImport {
+	std::string path;
+	std::string root;
+};
+
 // Search paths for library imports (e.g., "lib/std.dl")
-// Tries: original path, then installed location, then source tree
-static std::string
-resolveImportPath(const std::string &path, const std::string &importingFileDir, lsp::FileSystem *fileSystem) {
+// Tries: the importing file's directory, the importing file's resolution root,
+// the working directory, then the source tree and installed locations.
+static ResolvedImport resolveImportPath(
+	const std::string &path, const std::string &importingFileDir, const std::string &importingFileRoot,
+	lsp::FileSystem *fileSystem
+) {
 	auto resolveCandidate = [fileSystem](const std::string &candidate, std::string &resolved) -> bool {
 		if (candidate.empty())
 			return false;
@@ -39,26 +50,35 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 
 	std::string resolvedPath;
 
-	// Try relative to the importing file's directory first
+	// Try relative to the importing file's directory first; the sibling stays
+	// within the importer's resolution root.
 	if (!importingFileDir.empty()) {
 		std::string relativePath = importingFileDir + "/" + path;
 		if (resolveCandidate(relativePath, resolvedPath))
-			return resolvedPath;
+			return {resolvedPath, importingFileRoot};
+	}
+
+	// Try the importing file's resolution root, keeping the import graph on
+	// one consistent tree even when it differs from the working directory.
+	if (!importingFileRoot.empty()) {
+		std::string rootPath = importingFileRoot + "/" + path;
+		if (resolveCandidate(rootPath, resolvedPath))
+			return {resolvedPath, importingFileRoot};
 	}
 
 	// Try the path as-is (relative to CWD)
 	if (resolveCandidate(path, resolvedPath))
-		return resolvedPath;
+		return {resolvedPath, ""};
 
 #ifdef DYNLEX_WEB
 	// Browser mode uses a virtual root. Keep imports deterministic for in-memory and preloaded files.
 	if (!path.empty() && path[0] != '/') {
 		if (resolveCandidate("/" + path, resolvedPath))
-			return resolvedPath;
+			return {resolvedPath, ""};
 		if (resolveCandidate("/workspace/" + path, resolvedPath))
-			return resolvedPath;
+			return {resolvedPath, "/workspace"};
 		if (resolveCandidate("/lib/" + path, resolvedPath))
-			return resolvedPath;
+			return {resolvedPath, ""};
 	}
 #endif
 
@@ -66,24 +86,24 @@ resolveImportPath(const std::string &path, const std::string &importingFileDir, 
 	// These come before system paths so dev builds use the source tree's libraries
 	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
 	if (resolveCandidate(devPath, resolvedPath))
-		return resolvedPath;
+		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
 
 	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
 	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
 	if (resolveCandidate(devLibPath, resolvedPath))
-		return resolvedPath;
+		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
 
 	// Try installed system path
 	std::string systemPath = "/usr/share/dynlex/" + path;
 	if (resolveCandidate(systemPath, resolvedPath))
-		return resolvedPath;
+		return {resolvedPath, "/usr/share/dynlex"};
 
 	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
 	std::string systemLibPath = "/usr/share/dynlex/lib/" + path;
 	if (resolveCandidate(systemLibPath, resolvedPath))
-		return resolvedPath;
+		return {resolvedPath, "/usr/share/dynlex"};
 
-	return path; // Return original path (will fail with proper error)
+	return {path, importingFileRoot}; // Return original path (will fail with proper error)
 }
 
 static void collectSectionsPreorder(Section *section, std::vector<Section *> &outSections) {
@@ -711,7 +731,7 @@ bool compile(const std::string &path, ParseContext &context) {
 	return true;
 }
 
-bool importSourceFile(const std::string &path, ParseContext &context) {
+bool importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot) {
 	lsp::SourceFile *sourceFile = context.fileSystem->getFile(path);
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
@@ -765,8 +785,10 @@ bool importSourceFile(const std::string &path, ParseContext &context) {
 				std::filesystem::path(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri))
 					.parent_path()
 					.string();
-			std::string importPath = resolveImportPath(std::string(*importPathView), importingDir, context.fileSystem.get());
-			if (!importSourceFile(importPath, context)) {
+			ResolvedImport resolvedImport =
+				resolveImportPath(std::string(*importPathView), importingDir, resolutionRoot, context.fileSystem.get());
+			const std::string &importPath = resolvedImport.path;
+			if (!importSourceFile(importPath, context, resolvedImport.root)) {
 				context.addDiagnostic(Diagnostic(
 					context, Diagnostic::Level::Error, "failed to import source file",
 					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length()), "path",
