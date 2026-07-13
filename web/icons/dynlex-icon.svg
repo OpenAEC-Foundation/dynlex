@@ -1,13 +1,140 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
-  <title id="title">DynLex</title>
+<svg width="64" height="64" viewBox="2 2 12 12" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="background" x1="18" y1="12" x2="112" y2="120" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7c6df2"/>
-      <stop offset="0.52" stop-color="#456bdc"/>
-      <stop offset="1" stop-color="#18b9cf"/>
+    <path id="shape" d="
+      M 3 3
+      H 8
+      C 11 3 13 5 13 8
+      C 13 11 11 13 8 13
+      H 3
+      L 5 11
+      H 7
+      L 10 8
+      L 8 7
+      V 8
+      H 6
+      L 8 5
+      H 5
+      Z
+    "/>
+
+    <path id="power-glow" d="
+      M 5 11
+      H 7
+      L 10 8
+      L 8 7
+      V 8
+      H 6
+      L 7.6 5.6
+    "/>
+
+    <path id="power-mask-path" d="
+      M 5 11
+      H 7
+      L 10 8
+      L 8 7
+      V 8
+      H 6
+      L 7.7667 5.35
+    "/>
+
+    <clipPath id="clip">
+      <use href="#shape"/>
+    </clipPath>
+
+    <filter id="soft-light" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.8"/>
+    </filter>
+
+    <filter id="power-blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="0.35"/>
+    </filter>
+
+    <filter id="rim-blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="0.09"/>
+    </filter>
+
+    <filter id="mask-soften" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="0.22"/>
+    </filter>
+
+    <mask id="power-zone-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+      <rect x="0" y="0" width="16" height="16" fill="black"/>
+      <use
+        href="#power-mask-path"
+        fill="none"
+        stroke="white"
+        stroke-width="1.35"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#mask-soften)"
+      />
+    </mask>
+
+    <linearGradient id="body-gradient" x1="8" y1="3" x2="8" y2="13" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E4D80"/>
+      <stop offset="100%" stop-color="#112B48"/>
+    </linearGradient>
+
+    <linearGradient id="power-gradient" x1="5" y1="11" x2="10" y2="5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4DCCFF"/>
+      <stop offset="100%" stop-color="#F4FFFF"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#background)"/>
-  <path fill="#fff" fill-rule="evenodd" d="M24 27h28c20 0 34 15 34 37S72 101 52 101H24V27Zm15 14v46h12c12 0 20-9 20-23s-8-23-20-23H39Z"/>
-  <path fill="#fff" d="M82 41h15v45h22v15H82V41Z"/>
+
+  <!-- body -->
+  <use href="#shape" fill="url(#body-gradient)"/>
+
+  <!-- body lighting -->
+  <ellipse
+    cx="6.0" cy="4.8" rx="4.2" ry="2.2"
+    fill="#FFFFFF"
+    opacity="0.10"
+    filter="url(#soft-light)"
+    clip-path="url(#clip)"
+  />
+  <ellipse
+    cx="10.5" cy="11.2" rx="3.8" ry="2.0"
+    fill="#000000"
+    opacity="0.05"
+    filter="url(#soft-light)"
+    clip-path="url(#clip)"
+  />
+
+  <!-- blurred rim itself -->
+  <use
+    href="#shape"
+    fill="none"
+    stroke="#8FC6FF"
+    stroke-opacity="0.48"
+    stroke-width="0.95"
+    stroke-linejoin="round"
+    filter="url(#rim-blur)"
+    clip-path="url(#clip)"
+  />
+
+  <!-- power-colored part of that same blurred rim -->
+  <use
+    href="#shape"
+    fill="none"
+    stroke="url(#power-gradient)"
+    stroke-opacity="0.95"
+    stroke-width="0.95"
+    stroke-linejoin="round"
+    filter="url(#rim-blur)"
+    clip-path="url(#clip)"
+    mask="url(#power-zone-mask)"
+  />
+
+  <!-- unchanged power glow -->
+  <use
+    href="#power-glow"
+    fill="none"
+    stroke="#37D2FF"
+    stroke-opacity="0.28"
+    stroke-width="1.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#power-blur)"
+    clip-path="url(#clip)"
+  />
 </svg>
