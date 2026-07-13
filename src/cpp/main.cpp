@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -160,15 +161,25 @@ int main(int argumentCount, char *argumentValues[]) {
 		std::cerr << "Continuing..." << std::endl;
 	}
 
+	std::unique_ptr<lsp::StdioTransport> stdioTransport;
+	if (runDAP || useStdio) {
+		try {
+			stdioTransport = std::make_unique<lsp::StdioTransport>();
+		} catch (const std::system_error &error) {
+			std::cerr << "Failed to configure stdio transport: " << error.what() << std::endl;
+			return 1;
+		}
+	}
+
 	if (runDAP) {
-		dap::DapServer server(std::make_unique<lsp::StdioTransport>(), argumentValues[0]);
+		dap::DapServer server(std::move(stdioTransport), argumentValues[0]);
 		server.run();
 		return 0;
 	}
 
 	if (runLSP || useStdio) {
 		if (useStdio) {
-			lsp::DynLexServer server(std::make_unique<lsp::StdioTransport>());
+			lsp::DynLexServer server(std::move(stdioTransport));
 			if (enableLspTrace && !server.enableTrace(lspTracePath)) {
 				std::cerr << "Failed to open LSP trace output: " << lspTracePath << std::endl;
 				return 1;

@@ -6,7 +6,7 @@ namespace lsp {
 // Stdio transport - reads from stdin, writes to stdout
 class StdioTransport : public Transport {
   public:
-	StdioTransport() = default;
+	StdioTransport();
 	~StdioTransport() override = default;
 
 	ssize_t read(char *buffer, size_t count) override;
