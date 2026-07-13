@@ -254,7 +254,21 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			break;
 		}
 		case ',': {
-			if (nodeStack.top()->character == '(' || nodeStack.top()->character == '[') {
+			// Commas separate arguments only in @intrinsic argument lists and
+			// array literals. In grouping parentheses they stay ordinary text,
+			// so patterns containing a literal comma (like the select pattern
+			// "$ if $, else $") still match inside them.
+			auto isIntrinsicArgumentParen = [&range](const StringHierarchy *parenNode) {
+				constexpr std::string_view intrinsicKeyword = "@intrinsic"sv;
+				if (parenNode->start < 1)
+					return false;
+				size_t parenPos = static_cast<size_t>(parenNode->start) - 1;
+				return parenPos >= intrinsicKeyword.length() &&
+					   range.subString.substr(parenPos - intrinsicKeyword.length(), intrinsicKeyword.length()) ==
+						   intrinsicKeyword;
+			};
+			if (nodeStack.top()->character == '[' ||
+				(nodeStack.top()->character == '(' && isIntrinsicArgumentParen(nodeStack.top()))) {
 				// add the child, don't push
 				StringHierarchy *newChild = new StringHierarchy(character, nodeStack.top()->start);
 				// move all other children to this new child
@@ -268,7 +282,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 				nodeStack.pop();
 				push();
 			} else {
-				// Top-level comma — treat as regular text, only commas inside () are special
+				// Grouping-paren or top-level comma — treat as regular text
 			}
 			break;
 		}
@@ -482,16 +496,10 @@ Expression *Section::detectPatternsRecursively(
 				expr->arguments.push_back(intrinsicExpr);
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {
-				// Regular parentheses - process arguments inside
-				if (child->children.size() && child->children[0]->character == ',') {
-					for (StringHierarchy *subChild : child->children) {
-						if (!delegate(subChild))
-							return nullptr;
-					}
-				} else {
-					if (!delegate(child))
-						return nullptr;
-				}
+				// Regular grouping parentheses hold exactly one sub-expression;
+				// commas only separate arguments in @intrinsic lists and arrays.
+				if (!delegate(child))
+					return nullptr;
 				reference->pattern.replaceLine(child->start - "("sv.length(), child->end + ")"sv.length());
 			}
 		} else if (child->character == '[') {

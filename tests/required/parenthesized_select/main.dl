@@ -1,0 +1,12 @@
+import std.dl
+
+# The select pattern contains a literal comma, so its grouping parentheses
+# must keep the comma as an ordinary token instead of splitting arguments.
+
+set vx to 200
+set vy to 100
+set flag to (1 if vx + vy > 255, else 0)
+print flag as line
+set flag2 to (1 if vx > 255, else 0)
+print flag2 as line
+print (7 if vx = 200, else 9) as line
