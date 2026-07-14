@@ -9,12 +9,15 @@ imports fall back to the working directory and mix trees.
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-COMPILER = SCRIPT_DIR.parent / "build" / "dynlex"
+if len(sys.argv) != 2:
+    raise SystemExit(f"Usage: {Path(sys.argv[0]).name} <compiler>")
+
+COMPILER = Path(sys.argv.pop()).resolve()
 
 
 class ImportRootConsistencyTests(unittest.TestCase):

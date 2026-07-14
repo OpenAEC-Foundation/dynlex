@@ -3,11 +3,17 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPILER="$PROJECT_DIR/build/dynlex"
-if [[ ! -x "$COMPILER" && -x "$PROJECT_DIR/build/dynlex.exe" ]]; then
-    COMPILER="$PROJECT_DIR/build/dynlex.exe"
-fi
 TESTS_DIR="$PROJECT_DIR/tests/required"
+
+is_windows=false
+case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+    *mingw*|*msys*|*cygwin*) is_windows=true ;;
+esac
+
+COMPILER="$PROJECT_DIR/build/dynlex"
+if [[ "$is_windows" == "true" ]]; then
+    COMPILER+=".exe"
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -20,10 +26,6 @@ failed=0
 skipped=0
 failures=()
 test_output=""
-is_windows=false
-case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
-    *mingw*|*msys*|*cygwin*) is_windows=true ;;
-esac
 
 # Known failing tests — these don't count as unexpected failures
 KNOWN_FAILURES=""
@@ -382,7 +384,7 @@ run_auxiliary_test() {
 
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
-run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py"
+run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)
