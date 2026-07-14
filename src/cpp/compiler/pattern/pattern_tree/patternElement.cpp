@@ -100,6 +100,29 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 	}
 }
 
+// Choices multiply into concrete pattern paths (see canonicalPatternPaths).
+// Bound the product so a pathological definition is rejected with a
+// diagnostic instead of expanding without limit.
+constexpr size_t maxPatternChoiceCombinations = 1024;
+
+static size_t countPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
+	size_t count = 1;
+	for (const DefinitionPatternElement &element : elements) {
+		if (element.type != PatternElement::Type::Choice)
+			continue;
+		size_t alternativePaths = 0;
+		for (const auto &alternative : element.alternatives) {
+			alternativePaths += countPatternPaths(alternative);
+			if (alternativePaths > maxPatternChoiceCombinations)
+				return maxPatternChoiceCombinations + 1;
+		}
+		count *= alternativePaths;
+		if (count > maxPatternChoiceCombinations)
+			return maxPatternChoiceCombinations + 1;
+	}
+	return count;
+}
+
 static bool emitPatternParseFailure(ParseContext &context, Diagnostic diagnostic) {
 	context.addDiagnostic(std::move(diagnostic));
 	return false;
@@ -350,6 +373,15 @@ bool parsePatternElements(
 		}
 
 		pos = i; // continue after closing bracket
+	}
+
+	if (countPatternPaths(result) > maxPatternChoiceCombinations) {
+		return emitPatternParseFailure(
+			context, Diagnostic(
+						 context, Diagnostic::Level::Error, "pattern choice combination limit", patternRange, "limit",
+						 std::to_string(maxPatternChoiceCombinations)
+					 )
+		);
 	}
 
 	normalizePatternElements(result);

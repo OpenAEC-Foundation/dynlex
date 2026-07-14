@@ -1,0 +1,1 @@
+tests/required/choice_combination_limit/main.dl:5:10-107: Error: pattern expands to more than 1024 choice combinations

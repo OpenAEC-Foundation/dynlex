@@ -171,8 +171,8 @@ struct ScopedFlexCallSiteRange {
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 Instantiation *generateSpecializedFunction(
-	ParseContext &context, Section *section, PatternDefinition *,
-	const std::vector<std::pair<std::string, Expression *>> &paramBindings, Instantiation &instantiation
+	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	Instantiation &instantiation
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	auto instIt = std::find_if(section->instantiations.begin(), section->instantiations.end(), [&](const auto &entry) {
@@ -325,7 +325,7 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 
 	Section *section = definition->section;
 	if (!inst->llvmFunction) {
-		inst = generateSpecializedFunction(context, section, definition, paramBindings, *inst);
+		inst = generateSpecializedFunction(context, section, paramBindings, *inst);
 		requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 	}
 	requireCompilerInvariant(inst->valid, "invalid callable instantiation reached codegen");
@@ -672,7 +672,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			argTypes.size() == paramBindings.size(), "selected instantiation argument count diverged from the call"
 		);
 		if (!inst->llvmFunction) {
-			inst = generateSpecializedFunction(context, matchedSection, matchedDef, paramBindings, *inst);
+			inst = generateSpecializedFunction(context, matchedSection, paramBindings, *inst);
 			requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
 		}
 		llvm::Function *func = inst->llvmFunction;

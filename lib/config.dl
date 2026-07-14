@@ -56,6 +56,7 @@ dynlex options:
         unknown intrinsic: "unknown intrinsic: \"{intrinsic}\""
         intrinsic wrong argument count: "intrinsic \"{intrinsic}\" expects {expected} argument(s), got {found}"
         pattern whitespace should be single space: "all whitespace in patterns should be a single space"
+        pattern choice combination limit: "pattern expands to more than {limit} choice combinations"
         disallowed character: "Disallowed character {character}"
         variable has no type: "Variable '{name}' has no type (never assigned a value)"
         unbound choice parameter: "parameter '{name}' is not bound by this call: the matched alternative does not include it"

@@ -57,8 +57,8 @@ void emitFlexBodySection(
 	ParseContext &context, Section *bodySection, InstantiatedSectionBody *body = nullptr, bool finalizeControlFlow = true
 );
 Instantiation *generateSpecializedFunction(
-	ParseContext &context, Section *section, PatternDefinition *definition,
-	const std::vector<std::pair<std::string, Expression *>> &paramBindings, Instantiation &instantiation
+	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
+	Instantiation &instantiation
 );
 llvm::Function *
 ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage);
