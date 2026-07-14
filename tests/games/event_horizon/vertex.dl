@@ -1,0 +1,6 @@
+import lib/shader.dl
+
+# Fullscreen passthrough vertex shader.
+# DynLex entrypoint flags: --emit-spirv --shader-stage=vertex
+
+set the output position to the vertex x the vertex y the vertex z the vertex w

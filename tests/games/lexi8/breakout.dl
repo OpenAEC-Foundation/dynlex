@@ -1,0 +1,344 @@
+# LEXI-8 Breakout
+#
+# A complete Breakout game written in the LEXI-8 natural-language assembly
+# dialect. Every statement below assembles to one CHIP-8 instruction or one
+# data byte; the sprites are drawn as pictures. Sixty four bricks, a paddle,
+# a bouncing ball, score keeping, three lives, and win and lose screens.
+#
+# Keypad: key 4 moves the paddle left, key 6 moves it right.
+
+import lib/std.dl
+import tests/games/lexi8/assembler.dl
+
+function build the breakout rom:
+	execute:
+		restart the assembler
+
+		# Register roles
+		set scratch to 0
+		set tens to 1
+		set ones to 2
+		set paddle to 3
+		set ball_x to 4
+		set ball_y to 5
+		set ball_dx to 6
+		set ball_dy to 7
+		set score to 8
+		set bricks to 9
+		set lives to 10
+		set temp to 11
+		set cursor_x to 12
+		set cursor_y to 13
+		set aux to 14
+		set flags to 15
+
+		# --- Boot ---
+		label "start"
+		clear the display
+		load 3 into v lives
+		load 0 into v score
+		load 64 into v bricks
+		load 28 into v paddle
+		run routine "draw the bricks"
+		point index at "paddle sprite"
+		load 31 into v aux
+		draw 1 row at v paddle and v aux
+		run routine "reset the ball"
+		jump to "main loop"
+
+		# --- Routine: draw the wall of bricks (16 columns, 4 rows) ---
+		label "draw the bricks"
+		point index at "brick sprite"
+		load 0 into v temp
+		load 6 into v aux
+		label "brick loop"
+		draw 1 row at v temp and v aux
+		raise v temp by 4
+		skip when v temp is 64
+		jump to "brick loop"
+		load 0 into v temp
+		raise v aux by 2
+		skip when v aux is 14
+		jump to "brick loop"
+		end routine
+
+		# --- Routine: serve a fresh ball, drifting upward ---
+		label "reset the ball"
+		randomize v ball_x masked 31
+		raise v ball_x by 16
+		load 20 into v ball_y
+		load 255 into v ball_dy
+		randomize v ball_dx masked 1
+		skip when v ball_dx is 1
+		load 255 into v ball_dx
+		point index at "ball sprite"
+		draw 1 row at v ball_x and v ball_y
+		end routine
+
+		# --- Routines: reverse a direction (1 and 255 swap under xor 254) ---
+		label "flip dx"
+		load 254 into v aux
+		xor v ball_dx with v aux
+		end routine
+
+		label "flip dy"
+		load 254 into v aux
+		xor v ball_dy with v aux
+		end routine
+
+		# --- Main loop: paddle input ---
+		label "main loop"
+		load 4 into v scratch
+		skip when key v scratch is down
+		jump to "check right key"
+		skip when v paddle is not 0
+		jump to "check right key"
+		point index at "paddle sprite"
+		load 31 into v aux
+		draw 1 row at v paddle and v aux
+		raise v paddle by 254
+		draw 1 row at v paddle and v aux
+		label "check right key"
+		load 6 into v scratch
+		skip when key v scratch is down
+		jump to "ball step"
+		skip when v paddle is not 58
+		jump to "ball step"
+		point index at "paddle sprite"
+		load 31 into v aux
+		draw 1 row at v paddle and v aux
+		raise v paddle by 2
+		draw 1 row at v paddle and v aux
+
+		# --- Main loop: ball flight ---
+		label "ball step"
+		point index at "ball sprite"
+		draw 1 row at v ball_x and v ball_y
+		skip when v ball_x is 63
+		jump to "check left wall"
+		skip when v ball_dx is 1
+		jump to "check top wall"
+		run routine "flip dx"
+		jump to "check top wall"
+		label "check left wall"
+		skip when v ball_x is 0
+		jump to "check top wall"
+		skip when v ball_dx is 255
+		jump to "check top wall"
+		run routine "flip dx"
+		label "check top wall"
+		skip when v ball_y is 0
+		jump to "advance ball"
+		skip when v ball_dy is 255
+		jump to "advance ball"
+		run routine "flip dy"
+		label "advance ball"
+		add v ball_dx into v ball_x
+		add v ball_dy into v ball_y
+		point index at "ball sprite"
+		draw 1 row at v ball_x and v ball_y
+		skip when v flags is 0
+		jump to "hit something"
+		skip when v ball_y is 31
+		jump to "pace"
+		jump to "ball missed"
+
+		# --- Collisions: the paddle sits at row 31, bricks on rows 6 to 12 ---
+		label "hit something"
+		skip when v ball_y is not 31
+		jump to "paddle bounce"
+		copy v ball_x into v temp
+		load 252 into v aux
+		and v temp with v aux
+		point index at "brick sprite"
+		draw 1 row at v temp and v ball_y
+		raise v score by 1
+		load 1 into v aux
+		subtract v aux from v bricks
+		run routine "flip dy"
+		skip when v bricks is 0
+		jump to "pace"
+		jump to "you win"
+
+		label "paddle bounce"
+		load 255 into v ball_dy
+		jump to "pace"
+
+		label "ball missed"
+		point index at "ball sprite"
+		draw 1 row at v ball_x and v ball_y
+		load 1 into v aux
+		subtract v aux from v lives
+		skip when v lives is 0
+		jump to "respawn"
+		jump to "game over"
+		label "respawn"
+		run routine "reset the ball"
+		jump to "pace"
+
+		# --- Main loop: pacing (one game tick per two 60 Hz timer ticks) ---
+		label "pace"
+		load the delay into v scratch
+		skip when v scratch is 0
+		jump to "pace"
+		load 2 into v scratch
+		start the delay from v scratch
+		jump to "main loop"
+
+		# --- Routine: draw the two digit score with the built in font ---
+		label "show the score"
+		point index at "score scratch"
+		store the decimal digits of v score
+		point index at "score scratch"
+		restore all registers through v 2
+		load 26 into v cursor_x
+		load 20 into v cursor_y
+		point index at the digit sprite of v tens
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at the digit sprite of v ones
+		draw 5 rows at v cursor_x and v cursor_y
+		end routine
+
+		# --- Ending screens ---
+		label "game over"
+		clear the display
+		load 6 into v cursor_x
+		load 8 into v cursor_y
+		point index at "letter G"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter A"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter M"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter E"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 10
+		point index at "letter O"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter V"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter E"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter R"
+		draw 5 rows at v cursor_x and v cursor_y
+		run routine "show the score"
+		label "rest in peace"
+		jump to "rest in peace"
+
+		label "you win"
+		clear the display
+		load 14 into v cursor_x
+		load 8 into v cursor_y
+		point index at "letter Y"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter O"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter U"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 10
+		point index at "letter W"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter I"
+		draw 5 rows at v cursor_x and v cursor_y
+		raise v cursor_x by 6
+		point index at "letter N"
+		draw 5 rows at v cursor_x and v cursor_y
+		run routine "show the score"
+		label "victory lap"
+		jump to "victory lap"
+
+		# --- Sprites ---
+		label "ball sprite"
+		data row "X......."
+		label "paddle sprite"
+		data row "XXXXXX.."
+		label "brick sprite"
+		data row "XXX....."
+		label "score scratch"
+		data byte 0
+		data byte 0
+		data byte 0
+		label "letter G"
+		data row "XXXX...."
+		data row "X......."
+		data row "X.XX...."
+		data row "X..X...."
+		data row "XXXX...."
+		label "letter A"
+		data row "XXXX...."
+		data row "X..X...."
+		data row "XXXX...."
+		data row "X..X...."
+		data row "X..X...."
+		label "letter M"
+		data row "X..X...."
+		data row "XXXX...."
+		data row "XXXX...."
+		data row "X..X...."
+		data row "X..X...."
+		label "letter E"
+		data row "XXXX...."
+		data row "X......."
+		data row "XXXX...."
+		data row "X......."
+		data row "XXXX...."
+		label "letter O"
+		data row "XXXX...."
+		data row "X..X...."
+		data row "X..X...."
+		data row "X..X...."
+		data row "XXXX...."
+		label "letter V"
+		data row "X..X...."
+		data row "X..X...."
+		data row "X..X...."
+		data row "X..X...."
+		data row ".XX....."
+		label "letter R"
+		data row "XXXX...."
+		data row "X..X...."
+		data row "XXXX...."
+		data row "X.X....."
+		data row "X..X...."
+		label "letter Y"
+		data row "X..X...."
+		data row "X..X...."
+		data row ".XX....."
+		data row ".X......"
+		data row ".X......"
+		label "letter U"
+		data row "X..X...."
+		data row "X..X...."
+		data row "X..X...."
+		data row "X..X...."
+		data row "XXXX...."
+		label "letter W"
+		data row "X..X...."
+		data row "X..X...."
+		data row "XXXX...."
+		data row "XXXX...."
+		data row "X..X...."
+		label "letter I"
+		data row "XXX....."
+		data row ".X......"
+		data row ".X......"
+		data row ".X......"
+		data row "XXX....."
+		label "letter N"
+		data row "X..X...."
+		data row "XX.X...."
+		data row "X.XX...."
+		data row "X..X...."
+		data row "X..X...."
+
+		resolve all labels

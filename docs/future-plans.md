@@ -16,12 +16,7 @@ Features and design decisions planned for later implementation.
 - File = module
 - Everything public by default
 - `local` modifier for private definitions
-- Import system (partially implemented, some test cases still failing)
-
-## Platform Targets
-
-- Cross-platform (Linux, macOS, Windows)
-- Future: JavaScript compilation for browser/universal support
+- Import system (partially implemented)
 
 ## AI Integration
 

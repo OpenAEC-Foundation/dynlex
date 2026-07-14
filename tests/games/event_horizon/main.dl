@@ -1,0 +1,110 @@
+import lib/graphics.dl
+
+# EVENT HORIZON — interactive procedural black hole
+#
+# WASD or arrows move the camera. Move the mouse to shift the lens.
+# Click to send a gravitational shockwave. R recenters. Escape closes.
+
+function key key_code is down in target_window:
+    execute:
+        return @intrinsic("call", "glfw", "glfwGetKey", an integer, target_window, key_code) = 1
+
+set window to a new window with width 1280 and height 720
+@intrinsic("call", "glfw", "glfwSetWindowTitle", void, window, "EVENT HORIZON  |  WASD/arrows: move  |  mouse: bend  |  click: pulse  |  R: center")
+# GLFW_STICKY_MOUSE_BUTTONS preserves short clicks between expensive frames.
+@intrinsic("call", "glfw", "glfwSetInputMode", void, window, 208899, 1)
+
+set vertex_shader to a vertex shader from "tests/games/event_horizon/vertex.spv"
+set fragment_shader to a fragment shader from "tests/games/event_horizon/horizon.spv"
+set program to a shader program with vertex vertex_shader and fragment fragment_shader
+use shader program program
+
+# One scalar per UBO, in the source-defined binding order of horizon.dl.
+set time_buffer to a uniform buffer
+set width_buffer to a uniform buffer
+set height_buffer to a uniform buffer
+set mouse_x_buffer to a uniform buffer
+set mouse_y_buffer to a uniform buffer
+set pulse_age_buffer to a uniform buffer
+set camera_x_buffer to a uniform buffer
+set camera_y_buffer to a uniform buffer
+bind uniform buffer time_buffer to 0
+bind uniform buffer width_buffer to 1
+bind uniform buffer height_buffer to 2
+bind uniform buffer mouse_x_buffer to 3
+bind uniform buffer mouse_y_buffer to 4
+bind uniform buffer pulse_age_buffer to 5
+bind uniform buffer camera_x_buffer to 6
+bind uniform buffer camera_y_buffer to 7
+
+set last_click_time to 0.0 - 10.0
+set mouse_was_down to false
+set camera_x to 0.0
+set camera_y to 0.0
+set previous_time to the time since start
+
+while not the window should close:
+    set time to the time since start
+    set frame_time to time - previous_time
+    set previous_time to time
+    clamp frame_time between 0.0 and 0.1
+    set movement to frame_time * 0.72
+
+    set moving_left to key 65 is down in window or key 263 is down in window
+    set moving_right to key 68 is down in window or key 262 is down in window
+    set moving_up to key 87 is down in window or key 265 is down in window
+    set moving_down to key 83 is down in window or key 264 is down in window
+    if moving_left:
+        subtract movement from camera_x
+    if moving_right:
+        add movement to camera_x
+    if moving_up:
+        add movement to camera_y
+    if moving_down:
+        subtract movement from camera_y
+    clamp camera_x between 0.0 - 0.82 and 0.82
+    clamp camera_y between 0.0 - 0.52 and 0.52
+    if key 82 is down in window:
+        set camera_x to 0.0
+        set camera_y to 0.0
+
+    set width to query the framebuffer width of window
+    set height to query the framebuffer height of window
+
+    set mouse_x to 0.0
+    set mouse_y to 0.0
+    @intrinsic("call", "glfw", "glfwGetCursorPos", void, window, address of mouse_x, address of mouse_y)
+
+    set mouse_is_down to @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, 0) = 1
+    if mouse_is_down and not mouse_was_down:
+        set last_click_time to time
+    set mouse_was_down to mouse_is_down
+
+    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 256) = 1:
+        @intrinsic("call", "glfw", "glfwSetWindowShouldClose", void, window, 1)
+
+    update uniform buffer time_buffer with time
+    update uniform buffer width_buffer with width
+    update uniform buffer height_buffer with height
+    update uniform buffer mouse_x_buffer with mouse_x
+    update uniform buffer mouse_y_buffer with mouse_y
+    update uniform buffer pulse_age_buffer with time - last_click_time
+    update uniform buffer camera_x_buffer with camera_x
+    update uniform buffer camera_y_buffer with camera_y
+
+    clear the screen
+    draw a fullscreen quad
+    display the frame of window
+
+@intrinsic("call", "GL", "glDeleteProgram", void, program)
+@intrinsic("call", "GL", "glDeleteShader", void, vertex_shader)
+@intrinsic("call", "GL", "glDeleteShader", void, fragment_shader)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of time_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of width_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of height_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of mouse_x_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of mouse_y_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of pulse_age_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of camera_x_buffer)
+@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of camera_y_buffer)
+close the window

@@ -1,0 +1,322 @@
+# LEXI-8 machine
+#
+# A complete CHIP-8 virtual machine written in DynLex: 4096 bytes of memory,
+# sixteen 8 bit registers, a call stack, delay and sound timers, a sixteen key
+# pad and a 64 x 32 XOR-drawn display with collision reporting in v 15.
+
+import lib/std.dl
+import lib/array.dl
+import lib/random.dl
+import tests/games/lexi8/assembler.dl
+
+# --- Machine state ---
+
+set chip_memory to allocate 4096 slots of an integer
+set chip_v to allocate 16 slots of an integer
+set chip_stack to allocate 16 slots of an integer
+set chip_display to allocate 2048 slots of an integer
+set chip_keys to allocate 16 slots of an integer
+set chip_pc to 512
+set chip_index to 0
+set chip_sp to 0
+set chip_delay to 0
+set chip_sound to 0
+set chip_halted to 0
+set chip_font_cursor to 0
+set chip_cycles to 0
+
+# --- Built in hexadecimal font (5 bytes per glyph, stored at address 0) ---
+
+function install font byte value:
+	globals: chip_memory, chip_font_cursor
+	execute:
+		store value into chip_memory at chip_font_cursor
+		increment chip_font_cursor
+
+function install glyph a then b then c then d then e:
+	execute:
+		install font byte a
+		install font byte b
+		install font byte c
+		install font byte d
+		install font byte e
+
+function install the machine font:
+	globals: chip_font_cursor
+	execute:
+		set chip_font_cursor to 0
+		install glyph 240 then 144 then 144 then 144 then 240
+		install glyph 32 then 96 then 32 then 32 then 112
+		install glyph 240 then 16 then 240 then 128 then 240
+		install glyph 240 then 16 then 240 then 16 then 240
+		install glyph 144 then 144 then 240 then 16 then 16
+		install glyph 240 then 128 then 240 then 16 then 240
+		install glyph 240 then 128 then 240 then 144 then 240
+		install glyph 240 then 16 then 32 then 64 then 64
+		install glyph 240 then 144 then 240 then 144 then 240
+		install glyph 240 then 144 then 240 then 16 then 240
+		install glyph 240 then 144 then 240 then 144 then 144
+		install glyph 224 then 144 then 224 then 144 then 224
+		install glyph 240 then 128 then 128 then 128 then 240
+		install glyph 224 then 144 then 144 then 144 then 224
+		install glyph 240 then 128 then 240 then 128 then 240
+		install glyph 240 then 128 then 240 then 128 then 128
+
+# --- Lifecycle ---
+
+function initialize the machine:
+	globals: chip_memory, chip_v, chip_stack, chip_display, chip_keys, chip_pc, chip_index, chip_sp, chip_delay, chip_sound, chip_halted, chip_cycles
+	execute:
+		set i to 0
+		loop while i < 4096:
+			store 0 into chip_memory at i
+			increment i
+		set i to 0
+		loop while i < 2048:
+			store 0 into chip_display at i
+			increment i
+		set i to 0
+		loop while i < 16:
+			store 0 into chip_v at i
+			store 0 into chip_stack at i
+			store 0 into chip_keys at i
+			increment i
+		set chip_pc to 512
+		set chip_index to 0
+		set chip_sp to 0
+		set chip_delay to 0
+		set chip_sound to 0
+		set chip_halted to 0
+		set chip_cycles to 0
+		install the machine font
+
+function load the assembled rom into the machine:
+	globals: chip_memory
+	execute:
+		set i to 0
+		loop while i < the assembled rom size:
+			store the assembled rom byte at i into chip_memory at 512 + i
+			increment i
+
+# --- Observation (used by the renderer, the HUD and the tests) ---
+
+function [the|] machine pixel at x and y:
+	globals: chip_display
+	execute:
+		return item y * 64 + x of chip_display
+
+function [the|] machine register r:
+	globals: chip_v
+	execute:
+		return item r of chip_v
+
+function [the|] machine program counter:
+	globals: chip_pc
+	execute:
+		return chip_pc
+
+function [the|] machine cycle count:
+	globals: chip_cycles
+	execute:
+		return chip_cycles
+
+function [the|] machine is halted:
+	globals: chip_halted
+	execute:
+		return chip_halted = 1
+
+function [the|] count of lit machine pixels:
+	globals: chip_display
+	execute:
+		set total to 0
+		set i to 0
+		loop while i < 2048:
+			set total to total + item i of chip_display
+			increment i
+		return total
+
+# --- Input and timers ---
+
+function set machine key k to state:
+	globals: chip_keys
+	execute:
+		store state into chip_keys at k & 15
+
+function tick the machine timers:
+	globals: chip_delay, chip_sound
+	execute:
+		if chip_delay > 0:
+			decrement chip_delay
+		if chip_sound > 0:
+			decrement chip_sound
+
+# --- Faults ---
+
+function report machine fault for opcode:
+	globals: chip_halted
+	execute:
+		print "LEXI-8 machine fault: unknown opcode" as line
+		print opcode as line
+		set chip_halted to 1
+
+# --- The interpreter ---
+
+function step the machine:
+	globals: chip_memory, chip_v, chip_stack, chip_display, chip_keys, chip_pc, chip_index, chip_sp, chip_delay, chip_sound, chip_halted, chip_cycles
+	execute:
+		if chip_halted = 1:
+			return 0
+		set hi to item chip_pc of chip_memory
+		set lo to item chip_pc + 1 of chip_memory
+		set opcode to (hi << 8) | lo
+		set x to hi & 15
+		set y to lo >> 4
+		set n to lo & 15
+		set nn to lo
+		set nnn to opcode & 4095
+		set chip_pc to chip_pc + 2
+		increment chip_cycles
+		match based on hi >> 4:
+			case 0:
+				if nn = 224:
+					set i to 0
+					loop while i < 2048:
+						store 0 into chip_display at i
+						increment i
+				else if nn = 238:
+					decrement chip_sp
+					set chip_pc to item chip_sp of chip_stack
+				else:
+					report machine fault for opcode
+			case 1:
+				set chip_pc to nnn
+			case 2:
+				store chip_pc into chip_stack at chip_sp
+				increment chip_sp
+				set chip_pc to nnn
+			case 3:
+				if item x of chip_v = nn:
+					set chip_pc to chip_pc + 2
+			case 4:
+				if item x of chip_v != nn:
+					set chip_pc to chip_pc + 2
+			case 5:
+				if item x of chip_v = item y of chip_v:
+					set chip_pc to chip_pc + 2
+			case 6:
+				store nn into chip_v at x
+			case 7:
+				store (item x of chip_v + nn) & 255 into chip_v at x
+			case 8:
+				set vx to item x of chip_v
+				set vy to item y of chip_v
+				if n = 0:
+					store vy into chip_v at x
+				else if n = 1:
+					store vx | vy into chip_v at x
+				else if n = 2:
+					store vx & vy into chip_v at x
+				else if n = 3:
+					store vx ^ vy into chip_v at x
+				else if n = 4:
+					store (vx + vy) & 255 into chip_v at x
+					store (vx + vy) >> 8 into chip_v at 15
+				else if n = 5:
+					store (vx - vy) & 255 into chip_v at x
+					store (256 + vx - vy) >> 8 into chip_v at 15
+				else if n = 6:
+					store vx >> 1 into chip_v at x
+					store vx & 1 into chip_v at 15
+				else if n = 7:
+					store (vy - vx) & 255 into chip_v at x
+					store (256 + vy - vx) >> 8 into chip_v at 15
+				else if n = 14:
+					store (vx << 1) & 255 into chip_v at x
+					store (vx >> 7) & 1 into chip_v at 15
+				else:
+					report machine fault for opcode
+			case 9:
+				if item x of chip_v != item y of chip_v:
+					set chip_pc to chip_pc + 2
+			case 10:
+				set chip_index to nnn
+			case 11:
+				set chip_pc to (nnn + item 0 of chip_v) & 4095
+			case 12:
+				store (a random number) & nn into chip_v at x
+			case 13:
+				set start_x to (item x of chip_v) & 63
+				set start_y to (item y of chip_v) & 31
+				store 0 into chip_v at 15
+				set row to 0
+				loop while row < n:
+					set py to start_y + row
+					if py < 32:
+						set sprite_byte to item chip_index + row of chip_memory
+						set col to 0
+						loop while col < 8:
+							if ((sprite_byte >> (7 - col)) & 1) = 1:
+								set px to start_x + col
+								if px < 64:
+									set cell to py * 64 + px
+									if item cell of chip_display = 1:
+										store 1 into chip_v at 15
+									store (item cell of chip_display) ^ 1 into chip_display at cell
+							increment col
+					increment row
+			case 14:
+				if nn = 158:
+					if item ((item x of chip_v) & 15) of chip_keys = 1:
+						set chip_pc to chip_pc + 2
+				else if nn = 161:
+					if item ((item x of chip_v) & 15) of chip_keys = 0:
+						set chip_pc to chip_pc + 2
+				else:
+					report machine fault for opcode
+			case 15:
+				if nn = 7:
+					store chip_delay into chip_v at x
+				else if nn = 10:
+					set pressed to the negative of 1
+					set k to 0
+					loop while k < 16:
+						if item k of chip_keys = 1:
+							set pressed to k
+						increment k
+					if pressed < 0:
+						set chip_pc to chip_pc - 2
+					else:
+						store pressed into chip_v at x
+				else if nn = 21:
+					set chip_delay to item x of chip_v
+				else if nn = 24:
+					set chip_sound to item x of chip_v
+				else if nn = 30:
+					set chip_index to (chip_index + item x of chip_v) & 4095
+				else if nn = 41:
+					set chip_index to ((item x of chip_v) & 15) * 5
+				else if nn = 51:
+					set vx to item x of chip_v
+					store vx / 100 into chip_memory at chip_index
+					store (vx / 10) mod 10 into chip_memory at chip_index + 1
+					store vx mod 10 into chip_memory at chip_index + 2
+				else if nn = 85:
+					set i to 0
+					loop while i <= x:
+						store item i of chip_v into chip_memory at chip_index + i
+						increment i
+				else if nn = 101:
+					set i to 0
+					loop while i <= x:
+						store item chip_index + i of chip_memory into chip_v at i
+						increment i
+				else:
+					report machine fault for opcode
+		return 1
+
+function step the machine count [time|times]:
+	execute:
+		set i to 0
+		loop while i < count:
+			discard step the machine
+			increment i

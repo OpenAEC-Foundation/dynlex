@@ -1,0 +1,29 @@
+rom size
+424
+first opcode
+0
+224
+pixels after boot
+199
+bricks, lives, score after boot
+64
+3
+0
+paddle after holding right
+58
+paddle after tapping left
+48
+score, bricks, lives after 1890 frames
+3
+61
+0
+score plus bricks
+64
+lives at the end
+0
+pixels at the end
+136
+halted
+0
+cycles
+252480

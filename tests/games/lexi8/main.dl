@@ -1,0 +1,120 @@
+# LEXI-8 console front end
+#
+# Assembles the Breakout ROM, boots the machine and presents it like a CRT:
+# every emulated pixel is drawn as a glowing amber phosphor dot that fades
+# over a few frames after it turns off. The HUD at the bottom reads the score
+# and the lives straight out of the emulated registers while the game runs.
+#
+# Controls: left/right arrows (or A and D) move the paddle,
+#           R reboots the console, escape quits.
+
+import lib/graphics.dl
+import lib/font.dl
+import lib/random.dl
+import tests/games/lexi8/chip8.dl
+import tests/games/lexi8/breakout.dl
+
+set pixel_scale to 16
+set playfield_height to 32 * pixel_scale
+set hud_height to 48
+set phosphor to allocate 2048 slots of 0.0
+
+function [the|] key code key_code is down in the_window:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetKey", an integer, the_window, key_code) = 1
+
+function feed [the|] pad from the_window:
+	execute:
+		set left_pressed to 0
+		if the key code 263 is down in the_window:
+			set left_pressed to 1
+		if the key code 65 is down in the_window:
+			set left_pressed to 1
+		set right_pressed to 0
+		if the key code 262 is down in the_window:
+			set right_pressed to 1
+		if the key code 68 is down in the_window:
+			set right_pressed to 1
+		set machine key 4 to left_pressed
+		set machine key 6 to right_pressed
+
+function render [the|] phosphor screen:
+	globals: phosphor
+	execute:
+		# Fade every cell toward darkness, snap lit cells to full brightness.
+		set y to 0
+		loop while y < 32:
+			set x to 0
+			loop while x < 64:
+				set cell to y * 64 + x
+				set brightness to (item cell of phosphor) * 0.76
+				if the machine pixel at x and y = 1:
+					set brightness to 1.0
+				store brightness into phosphor at cell
+				increment x
+			increment y
+
+		# Glow pass: a wide dim halo behind every visible cell.
+		set y to 0
+		loop while y < 32:
+			set x to 0
+			loop while x < 64:
+				set brightness to item y * 64 + x of phosphor
+				if brightness > 0.05:
+					set glow_r to (105.0 * brightness) as an integer
+					set glow_g to (58.0 * brightness) as an integer
+					set glow_b to (12.0 * brightness) as an integer
+					draw rectangle at x * 16 - 3 y * 16 - 3 size 22 22 with color glow_r glow_g glow_b
+				increment x
+			increment y
+
+		# Core pass: the bright phosphor dot with a thin grid gap.
+		set y to 0
+		loop while y < 32:
+			set x to 0
+			loop while x < 64:
+				set brightness to item y * 64 + x of phosphor
+				if brightness > 0.05:
+					set core_r to (255.0 * brightness) as an integer
+					set core_g to (196.0 * brightness) as an integer
+					set core_b to (98.0 * brightness) as an integer
+					draw rectangle at x * 16 + 1 y * 16 + 1 size 14 14 with color core_r core_g core_b
+				increment x
+			increment y
+
+seed random with current time
+build the breakout rom
+initialize the machine
+load the assembled rom into the machine
+
+set window to a new window with width (64 * pixel_scale) and height (playfield_height + hud_height)
+set hud_font to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+
+loop while not the window should close:
+	if the key code 256 is down in window:
+		@intrinsic("call", "glfw", "glfwSetWindowShouldClose", void, window, 1)
+	if the key code 82 is down in window:
+		initialize the machine
+		load the assembled rom into the machine
+
+	feed the pad from window
+	step the machine 32 times
+	tick the machine timers
+
+	clear screen
+	draw rectangle at 0 0 size 1024 playfield_height with color 9 7 12
+	render the phosphor screen
+
+	draw rectangle at 0 playfield_height size 1024 hud_height with color 24 18 28
+	draw rectangle at 0 playfield_height size 1024 2 with color 92 60 24
+	draw text "LEXI-8 BREAKOUT" at 16 playfield_height + 32 using hud_font and color 255 196 98
+	draw text "SCORE" at 330 playfield_height + 32 using hud_font and color 160 130 90
+	draw number the machine register 8 at 430 playfield_height + 32 using hud_font and color 255 220 140
+	draw text "LIVES" at 530 playfield_height + 32 using hud_font and color 160 130 90
+	draw number the machine register 10 at 630 playfield_height + 32 using hud_font and color 255 220 140
+	draw text "ARROWS MOVE - R RESET" at 700 playfield_height + 32 using hud_font and color 120 100 80
+
+	display the frame of window
+	sleep for 16 milliseconds
+
+close the window

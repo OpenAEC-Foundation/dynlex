@@ -1,0 +1,296 @@
+# LEXI-8 assembler
+#
+# A natural-language CHIP-8 assembler embedded in DynLex. Every statement
+# below is an ordinary DynLex pattern that appends bytecode to the ROM.
+# Labels may be referenced before they are defined; `resolve all labels`
+# patches every recorded forward reference afterwards.
+
+import lib/std.dl
+import lib/array.dl
+
+# --- Assembler state ---
+
+set rom_bytes to allocate 3584 slots of an integer
+set rom_cursor to 0
+set label_names to allocate 128 slots of "unnamed"
+set label_addresses to allocate 128 slots of an integer
+set label_count to 0
+set fixup_offsets to allocate 512 slots of an integer
+set fixup_names to allocate 512 slots of "unnamed"
+set fixup_count to 0
+
+# CHIP-8 programs are loaded at address 512, so byte n of the ROM lives there.
+function [the|] current assembly address:
+	globals: rom_cursor
+	execute:
+		return 512 + rom_cursor
+
+function [the|] assembled rom size:
+	globals: rom_cursor
+	execute:
+		return rom_cursor
+
+function [the|] assembled rom byte at offset:
+	globals: rom_bytes
+	execute:
+		return item offset of rom_bytes
+
+function restart the assembler:
+	globals: rom_cursor, label_count, fixup_count
+	execute:
+		set rom_cursor to 0
+		set label_count to 0
+		set fixup_count to 0
+
+# --- Byte emission ---
+
+function emit rom byte value:
+	globals: rom_bytes, rom_cursor
+	execute:
+		store value & 255 into rom_bytes at rom_cursor
+		increment rom_cursor
+
+function emit opcode hi then lo:
+	execute:
+		emit rom byte hi
+		emit rom byte lo
+
+# --- Labels and fixups ---
+
+function label name:
+	globals: label_names, label_addresses, label_count
+	execute:
+		store name into label_names at label_count
+		store the current assembly address into label_addresses at label_count
+		increment label_count
+
+function find label name:
+	globals: label_names, label_addresses, label_count
+	execute:
+		set i to 0
+		loop while i < label_count:
+			if item i of label_names = name:
+				return item i of label_addresses
+			increment i
+		return the negative of 1
+
+# Emits `top nnn` with nnn unknown; records the spot so `resolve all labels`
+# can patch the 12 bit address in later.
+function emit opcode top addressing name:
+	globals: rom_cursor, fixup_offsets, fixup_names, fixup_count
+	execute:
+		store rom_cursor into fixup_offsets at fixup_count
+		store name into fixup_names at fixup_count
+		increment fixup_count
+		emit opcode (top << 4) then 0
+
+function resolve [all|] labels:
+	globals: rom_bytes, fixup_offsets, fixup_names, fixup_count
+	execute:
+		set f to 0
+		loop while f < fixup_count:
+			set name to item f of fixup_names
+			set target to find label name
+			if target < 0:
+				print "assembler error: unknown label" as line
+				print name as line
+				@intrinsic("call", "libc", "exit", void, 1)
+			set offset to item f of fixup_offsets
+			store (item offset of rom_bytes) | ((target >> 8) & 15) into rom_bytes at offset
+			store target & 255 into rom_bytes at offset + 1
+			increment f
+
+# --- Instruction statements ---
+# Registers are written `v 0` through `v 15`; expressions are allowed,
+# so games can name their registers with ordinary DynLex variables.
+
+# 00E0
+function clear the display:
+	execute:
+		emit opcode 0 then 224
+
+# 00EE
+function end [the|] routine:
+	execute:
+		emit opcode 0 then 238
+
+# 1nnn
+function jump to name:
+	execute:
+		emit opcode 1 addressing name
+
+# 2nnn
+function run routine name:
+	execute:
+		emit opcode 2 addressing name
+
+# 3xnn
+function skip when v x is nn:
+	execute:
+		emit opcode 48 | x then nn
+
+# 4xnn
+function skip when v x is not nn:
+	execute:
+		emit opcode 64 | x then nn
+
+# 5xy0
+function skip when v x matches v y:
+	execute:
+		emit opcode 80 | x then y << 4
+
+# 9xy0
+function skip when v x differs from v y:
+	execute:
+		emit opcode 144 | x then y << 4
+
+# 6xnn
+function load nn into v x:
+	execute:
+		emit opcode 96 | x then nn
+
+# 7xnn (adds modulo 256, so 254 means "subtract 2")
+function raise v x by nn:
+	execute:
+		emit opcode 112 | x then nn
+
+# 8xy0
+function copy v y into v x:
+	execute:
+		emit opcode 128 | x then y << 4
+
+# 8xy1
+function or v x with v y:
+	execute:
+		emit opcode 128 | x then (y << 4) | 1
+
+# 8xy2
+function and v x with v y:
+	execute:
+		emit opcode 128 | x then (y << 4) | 2
+
+# 8xy3
+function xor v x with v y:
+	execute:
+		emit opcode 128 | x then (y << 4) | 3
+
+# 8xy4 (carry lands in v 15)
+function add v y into v x:
+	execute:
+		emit opcode 128 | x then (y << 4) | 4
+
+# 8xy5 (borrow flag lands in v 15)
+function subtract v y from v x:
+	execute:
+		emit opcode 128 | x then (y << 4) | 5
+
+# 8xy6
+function shift v x right:
+	execute:
+		emit opcode 128 | x then (x << 4) | 6
+
+# 8xy7
+function replace v x with v y minus it:
+	execute:
+		emit opcode 128 | x then (y << 4) | 7
+
+# 8xyE
+function shift v x left:
+	execute:
+		emit opcode 128 | x then (x << 4) | 14
+
+# Annn
+function point index at name:
+	execute:
+		emit opcode 10 addressing name
+
+# Bnnn
+function jump to name plus v 0:
+	execute:
+		emit opcode 11 addressing name
+
+# Cxnn
+function randomize v x masked nn:
+	execute:
+		emit opcode 192 | x then nn
+
+# Dxyn
+function draw n [row|rows] at v x and v y:
+	execute:
+		emit opcode 208 | x then (y << 4) | n
+
+# Ex9E
+function skip when key v x is down:
+	execute:
+		emit opcode 224 | x then 158
+
+# ExA1
+function skip when key v x is up:
+	execute:
+		emit opcode 224 | x then 161
+
+# Fx07
+function load [the|] delay [timer|] into v x:
+	execute:
+		emit opcode 240 | x then 7
+
+# Fx0A
+function await [a|] key into v x:
+	execute:
+		emit opcode 240 | x then 10
+
+# Fx15
+function start [the|] delay [timer|] from v x:
+	execute:
+		emit opcode 240 | x then 21
+
+# Fx18
+function start [the|] sound [timer|] from v x:
+	execute:
+		emit opcode 240 | x then 24
+
+# Fx1E
+function add v x into [the|] index:
+	execute:
+		emit opcode 240 | x then 30
+
+# Fx29
+function point index at [the|] digit [sprite|] [of|] v x:
+	execute:
+		emit opcode 240 | x then 41
+
+# Fx33
+function store [the|] decimal digits of v x:
+	execute:
+		emit opcode 240 | x then 51
+
+# Fx55 (stores v 0 up to and including v x)
+function save all registers through v x:
+	execute:
+		emit opcode 240 | x then 85
+
+# Fx65 (loads v 0 up to and including v x)
+function restore all registers through v x:
+	execute:
+		emit opcode 240 | x then 101
+
+# --- Data statements ---
+
+function data byte value:
+	execute:
+		emit rom byte value
+
+# Sprite art: an 8 character picture row, `X` for a lit pixel.
+function data row picture:
+	execute:
+		set value to 0
+		set i to 0
+		loop while i < 8:
+			set glyph to (item i of picture) as an integer
+			if glyph = 0:
+				set i to 8
+			else:
+				if glyph = 88:
+					set value to value | (128 >> i)
+				increment i
+		emit rom byte value
