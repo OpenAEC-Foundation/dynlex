@@ -32,6 +32,12 @@ struct ResolvedImport {
 	std::string root;
 };
 
+static std::string currentResolutionRoot() {
+	std::error_code error;
+	std::filesystem::path current = std::filesystem::current_path(error);
+	return error ? std::string{} : current.lexically_normal().string();
+}
+
 // Search paths for library imports (e.g., "lib/std.dl")
 // Tries: the importing file's directory, the importing file's resolution root,
 // the working directory, then the source tree and installed locations.
@@ -67,18 +73,22 @@ static ResolvedImport resolveImportPath(
 	}
 
 	// Try the path as-is (relative to CWD)
-	if (resolveCandidate(path, resolvedPath))
-		return {resolvedPath, ""};
+	if (resolveCandidate(path, resolvedPath)) {
+		std::filesystem::path requestedPath = pathutil::toFilesystemPath(path);
+		std::string foundRoot =
+			requestedPath.is_absolute() ? requestedPath.parent_path().lexically_normal().string() : currentResolutionRoot();
+		return {resolvedPath, foundRoot};
+	}
 
 #ifdef DYNLEX_WEB
 	// Browser mode uses a virtual root. Keep imports deterministic for in-memory and preloaded files.
 	if (!path.empty() && path[0] != '/') {
 		if (resolveCandidate("/" + path, resolvedPath))
-			return {resolvedPath, ""};
+			return {resolvedPath, "/"};
 		if (resolveCandidate("/workspace/" + path, resolvedPath))
 			return {resolvedPath, "/workspace"};
 		if (resolveCandidate("/lib/" + path, resolvedPath))
-			return {resolvedPath, ""};
+			return {resolvedPath, "/"};
 	}
 #endif
 
@@ -751,8 +761,15 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 
 	context.importedFiles[canonicalPath] = sourceFile;
 	// The first file imported is the main source file
-	if (!context.mainSourceFile)
+	bool isMainSourceFile = !context.mainSourceFile;
+	if (isMainSourceFile)
 		context.mainSourceFile = sourceFile;
+	std::string activeResolutionRoot = resolutionRoot;
+	if (isMainSourceFile && activeResolutionRoot.empty()) {
+		std::filesystem::path mainPath =
+			std::filesystem::absolute(pathutil::toFilesystemPath(sourceFile->uri.empty() ? path : sourceFile->uri));
+		activeResolutionRoot = mainPath.parent_path().lexically_normal().string();
+	}
 
 	// Iterate over lines, preserving line terminators for exact source mapping.
 	std::string_view fileView{sourceFile->content};
@@ -786,7 +803,7 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 					.parent_path()
 					.string();
 			ResolvedImport resolvedImport =
-				resolveImportPath(std::string(*importPathView), importingDir, resolutionRoot, context.fileSystem.get());
+				resolveImportPath(std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get());
 			const std::string &importPath = resolvedImport.path;
 			if (!importSourceFile(importPath, context, resolvedImport.root)) {
 				context.addDiagnostic(Diagnostic(
@@ -956,48 +973,60 @@ bool isMathFunction(const std::string &name) {
 		   intrinsicKind(name) != IntrinsicKind::Max;
 }
 
-static const DefinitionPatternElement *
-findDefinitionParameterElement(const std::vector<DefinitionPatternElement> &elements, std::string_view parameterName) {
+static const DefinitionPatternElement *findDefinitionParameterElementAt(
+	const std::vector<DefinitionPatternElement> &elements, std::string_view parameterName, size_t startPos
+) {
 	for (const DefinitionPatternElement &element : elements) {
 		if (element.type == PatternElement::Type::Choice) {
 			for (const auto &alternative : element.alternatives) {
-				if (const DefinitionPatternElement *found = findDefinitionParameterElement(alternative, parameterName))
+				if (const DefinitionPatternElement *found =
+						findDefinitionParameterElementAt(alternative, parameterName, startPos))
 					return found;
 			}
 			continue;
 		}
 		if ((element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) &&
-			element.text == parameterName)
+			element.text == parameterName && element.startPos == startPos)
 			return &element;
 	}
 	return nullptr;
 }
 
-bool patternParameterRequiresCompileTimeValue(
-	PatternDefinition *definition, const std::string &parameterName, const DataType &argType
-) {
+const DefinitionPatternElement *matchedPatternParameterElement(PatternDefinition *definition, PatternTreeNode *matchedNode) {
+	if (!definition || !matchedNode)
+		return nullptr;
+	auto nameIt = matchedNode->parameterNames.find(definition);
+	auto startIt = matchedNode->definitionStartPositions.find(definition);
+	if (nameIt == matchedNode->parameterNames.end() || startIt == matchedNode->definitionStartPositions.end())
+		return nullptr;
+	return findDefinitionParameterElementAt(definition->patternElements, nameIt->second, startIt->second);
+}
+
+bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType) {
 	if (argType.isMetaType())
 		return true;
-	const DefinitionPatternElement *parameterElement =
-		definition ? findDefinitionParameterElement(definition->patternElements, parameterName) : nullptr;
-	if (!parameterElement)
-		return false;
-	if (parameterElement->type == PatternElement::Type::Word)
+	if (parameterElement.type == PatternElement::Type::Word)
 		return true;
-	return parameterElement->resolvedTypeConstraint.isResolved() &&
-		   parameterElement->resolvedTypeConstraint.requiresCompileTimeValue;
+	return parameterElement.resolvedTypeConstraint.isResolved() &&
+		   parameterElement.resolvedTypeConstraint.requiresCompileTimeValue;
 }
 
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 ) {
+	requireCompilerInvariant(paramBindings.size() == argTypes.size(), "pattern parameter bindings and types diverged");
 	std::unordered_set<std::string> requiredParameters;
-	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
-	for (size_t i = 0; i < bindingCount; i++) {
-		if (patternParameterRequiresCompileTimeValue(definition, paramBindings[i].first, argTypes[i]))
-			requiredParameters.insert(paramBindings[i].first);
-	}
+	size_t bindingIndex = 0;
+	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &parameterName, PatternTreeNode *node) {
+		requireCompilerInvariant(bindingIndex < argTypes.size(), "matched pattern has more parameters than call arguments");
+		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, node);
+		requireCompilerInvariant(parameterElement != nullptr, "matched pattern parameter has no definition element");
+		if (patternParameterRequiresCompileTimeValue(*parameterElement, argTypes[bindingIndex]))
+			requiredParameters.insert(parameterName);
+		bindingIndex++;
+	});
+	requireCompilerInvariant(bindingIndex == argTypes.size(), "matched pattern has fewer parameters than call arguments");
 	return requiredParameters;
 }
 
@@ -1018,17 +1047,13 @@ PatternDefinition *selectOverload(
 		bool constraintFailed = false;
 
 		size_t argIdx = 0;
-		forEachPatternParameterName(nodesPassed, candidate, [&](const std::string &paramName, PatternTreeNode *) {
+		forEachPatternParameterName(nodesPassed, candidate, [&](const std::string &, PatternTreeNode *node) {
 			if (constraintFailed || argIdx >= argTypes.size()) {
 				argIdx++;
 				return;
 			}
-			const DefinitionPatternElement *parameterElement =
-				findDefinitionParameterElement(candidate->patternElements, paramName);
-			if (!parameterElement) {
-				argIdx++;
-				return;
-			}
+			const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(candidate, node);
+			requireCompilerInvariant(parameterElement != nullptr, "overload parameter has no definition element");
 			const DataType &argType = argTypes[argIdx];
 			if (!argType.isDeduced()) {
 				bool acceptsUnset =

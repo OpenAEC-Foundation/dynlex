@@ -32,14 +32,15 @@
 #include <unordered_set>
 
 static std::vector<size_t> collectRuntimeParameterIndices(
-	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes
+	const Instantiation &instantiation, const std::vector<std::pair<std::string, Expression *>> &paramBindings
 ) {
 	std::vector<size_t> runtimeIndices;
 	runtimeIndices.reserve(paramBindings.size());
-	size_t bindingCount = std::min(paramBindings.size(), argTypes.size());
+	size_t bindingCount = std::min(paramBindings.size(), instantiation.argumentTypes.size());
 	for (size_t i = 0; i < bindingCount; i++) {
-		if (patternParameterRequiresCompileTimeValue(definition, paramBindings[i].first, argTypes[i]))
+		if (parameterRequiresCompileTimeInstantiationValue(
+				instantiation.requiredCompileTimeParameters, paramBindings[i].first, instantiation.argumentTypes[i]
+			))
 			continue;
 		runtimeIndices.push_back(i);
 	}
@@ -138,12 +139,39 @@ struct ScopedFlexCallSiteSection {
 		context.flexCallSiteSectionStack.pop_back();
 	}
 };
+
+static bool sectionIsDescendantOrSame(Section *section, Section *ancestor) {
+	for (Section *current = section; current; current = current->parent) {
+		if (current == ancestor)
+			return true;
+	}
+	return false;
+}
+
+struct ScopedFlexCallSiteRange {
+	ParseContext &context;
+
+	ScopedFlexCallSiteRange(ParseContext &ctx, const Range &callRange) : context(ctx) {
+		Range diagnosticRange = callRange;
+		Section *callSection = callRange.line ? callRange.line->section : nullptr;
+		if (!context.flexCallSiteRangeStack.empty() && !context.activeFlexDefinitionStack.empty() &&
+			sectionIsDescendantOrSame(callSection, context.activeFlexDefinitionStack.back())) {
+			diagnosticRange = context.flexCallSiteRangeStack.back();
+		}
+		context.flexCallSiteRangeStack.push_back(diagnosticRange);
+	}
+
+	~ScopedFlexCallSiteRange() {
+		requireCompilerInvariant(!context.flexCallSiteRangeStack.empty(), "Missing flex call-site range to pop");
+		context.flexCallSiteRangeStack.pop_back();
+	}
+};
 } // namespace
 
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
 Instantiation *generateSpecializedFunction(
-	ParseContext &context, Section *section, PatternDefinition *definition,
+	ParseContext &context, Section *section, PatternDefinition *,
 	const std::vector<std::pair<std::string, Expression *>> &paramBindings, Instantiation &instantiation
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -161,8 +189,7 @@ Instantiation *generateSpecializedFunction(
 	requireCompilerInvariant(!activeInst.needsReinfer, "unfinished function instantiation reached codegen");
 	requireCompilerInvariant(activeInst.returnType.isDeduced(), "function without a deduced return type reached codegen");
 	requireCompilerInvariant(activeInst.body != nullptr, "function without an inferred body reached codegen");
-	std::vector<size_t> runtimeParameterIndices =
-		collectRuntimeParameterIndices(definition, paramBindings, activeInst.argumentTypes);
+	std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(activeInst, paramBindings);
 	std::vector<std::string> runtimeParameterNames;
 	runtimeParameterNames.reserve(runtimeParameterIndices.size());
 	for (size_t runtimeParameterIndex : runtimeParameterIndices)
@@ -230,6 +257,7 @@ Instantiation *generateSpecializedFunction(
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
+	ScopedVariableAllocaRestore functionVariableAllocas(section);
 
 	// Generate function body
 	requireCompilerInvariant(
@@ -403,6 +431,49 @@ void emitFlexBodySection(ParseContext &context, Section *bodySection, Instantiat
 		finalizeFlexBodySectionControlFlow(context, bodySection);
 }
 
+static llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
+	// Strings are currently i8* pointers to constant data. Runtime string
+	// operations remain the responsibility of the string library.
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	auto it = context.stringConstants.find(value);
+	if (it != context.stringConstants.end()) {
+		llvm::GlobalVariable *strGlobal = it->second;
+		return builder.CreateInBoundsGEP(
+			strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+		);
+	}
+	std::string globalName = ".str." + std::to_string(context.stringConstants.size());
+	llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, value, true);
+	llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
+		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
+	);
+	context.stringConstants[value] = strGlobal;
+	return builder.CreateInBoundsGEP(
+		strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
+	);
+}
+
+static llvm::Value *
+generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &value, const DataType &type) {
+	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
+	llvm::Type *llvmType = getLLVMType(context, type);
+	if (const auto *number = std::get_if<double>(&value)) {
+		if (type.kind == DataType::Kind::Int)
+			return llvm::ConstantInt::get(llvmType, static_cast<int64_t>(*number), true);
+		if (type.kind == DataType::Kind::Float)
+			return llvm::ConstantFP::get(llvmType, *number);
+	}
+	if (const auto *boolean = std::get_if<bool>(&value)) {
+		requireCompilerInvariant(type.kind == DataType::Kind::Bool, "boolean compile-time value has non-boolean runtime type");
+		return llvm::ConstantInt::get(llvmType, *boolean ? 1 : 0);
+	}
+	if (const auto *text = std::get_if<std::string>(&value)) {
+		requireCompilerInvariant(type.isBytePointer(), "string compile-time value has non-string runtime type");
+		return generateStringConstant(context, *text);
+	}
+	crashCompilerBug("compile-time parameter value cannot be represented at runtime");
+}
+
 // Generate code for an expression
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
@@ -420,24 +491,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			return llvm::ConstantFP::get(llvmType, *doubleVal);
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
-			// TODO: strings are currently just i8* pointers to constant data.
-			// String operations (concatenation, slicing, etc.) need runtime support.
-			auto it = context.stringConstants.find(*strVal);
-			if (it != context.stringConstants.end()) {
-				llvm::GlobalVariable *strGlobal = it->second;
-				return builder.CreateInBoundsGEP(
-					strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
-				);
-			}
-			std::string globalName = ".str." + std::to_string(context.stringConstants.size());
-			llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, *strVal, true);
-			llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
-				*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
-			);
-			context.stringConstants[*strVal] = strGlobal;
-			return builder.CreateInBoundsGEP(
-				strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
-			);
+			return generateStringConstant(context, *strVal);
 		}
 		// Unknown literal variant type - should never reach here after type inference
 		crashCompilerBug("Unknown literal type in codegen");
@@ -475,6 +529,15 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		// Determine this variable's type for loading
 		DataType varType = finalizedExpressionType(context, expr);
+		if (context.currentCodegenInstantiation &&
+			context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(varName)) {
+			auto valueIt = context.currentCodegenInstantiation->constantParameterValues.find(varName);
+			requireCompilerInvariant(
+				valueIt != context.currentCodegenInstantiation->constantParameterValues.end(),
+				"compile-time parameter reached codegen without its instantiation value"
+			);
+			return generateCompileTimeRuntimeValue(context, valueIt->second, varType);
+		}
 
 		llvm::Type *loadType = getLLVMType(context, varType);
 
@@ -525,7 +588,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			BindingFrame innerBindings;
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
 			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
-			context.flexCallSiteRangeStack.push_back(expr->range);
+			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
 			ScopedVariableAllocaRestore flexVariableAllocas(matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
@@ -594,7 +657,6 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 
 			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after flex pattern call");
-			context.flexCallSiteRangeStack.pop_back();
 			context.currentBodySection = savedBodySection;
 			context.currentBodyInstantiation = savedBodyInstantiation;
 			context.currentSwitchInst = savedSwitchInst;
@@ -616,7 +678,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		llvm::Function *func = inst->llvmFunction;
 
 		// Build call arguments: pass variable pointers or temp allocas
-		std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(matchedDef, paramBindings, argTypes);
+		std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(*inst, paramBindings);
 		std::vector<llvm::Value *> args;
 		args.reserve(runtimeParameterIndices.size());
 		for (size_t runtimeParameterIndex : runtimeParameterIndices) {

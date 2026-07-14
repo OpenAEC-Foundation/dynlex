@@ -19,7 +19,7 @@ struct PatternTreeNode : public PatternElement {
 	std::unordered_map<PatternDefinition *, size_t> definitionStartPositions{};
 	using PatternElement::PatternElement;
 	// Add a definition to the tree and record the endpoint nodes on the definition itself.
-	void addPatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition, size_t index = 0);
+	void addPatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition);
 	// Remove a definition from the tree (clears matchingDefinition and parameterNames).
 	// Must be called with the SAME elements that were used in addPatternPart (before any element type changes).
 	void removePatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition);

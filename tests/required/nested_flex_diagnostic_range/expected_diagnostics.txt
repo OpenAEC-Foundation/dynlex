@@ -1,0 +1,1 @@
+tests/required/nested_flex_diagnostic_range/main.dl:9:1-6: Error: case requires a body section

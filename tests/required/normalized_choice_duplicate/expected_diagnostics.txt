@@ -1,0 +1,2 @@
+tests/required/normalized_choice_duplicate/main.dl:4:10-30: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/normalized_choice_duplicate/main.dl:1:10-31

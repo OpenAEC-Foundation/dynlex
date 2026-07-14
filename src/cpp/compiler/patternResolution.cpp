@@ -353,7 +353,7 @@ static bool isInternalSection(Section *section) {
 struct PatternDomainAutomaton {
 	struct Transition {
 		size_t target;
-		const DefinitionPatternElement *element;
+		DefinitionPatternElement element;
 	};
 	struct State {
 		std::vector<size_t> epsilonTargets;
@@ -365,7 +365,8 @@ struct PatternDomainAutomaton {
 
 	explicit PatternDomainAutomaton(const PatternDefinition &definition) {
 		states[1].accepting = true;
-		addSequence(definition.patternElements, 0, 1);
+		for (const auto &path : canonicalPatternPaths(definition.patternElements))
+			addSequence(path, 0, 1);
 	}
 
   private:
@@ -382,13 +383,7 @@ struct PatternDomainAutomaton {
 		size_t current = start;
 		for (size_t i = 0; i < elements.size(); i++) {
 			size_t next = i + 1 == elements.size() ? end : addState();
-			const DefinitionPatternElement &element = elements[i];
-			if (element.type == PatternElement::Type::Choice) {
-				for (const auto &alternative : element.alternatives)
-					addSequence(alternative, current, next);
-			} else {
-				states[current].transitions.push_back({next, &element});
-			}
+			states[current].transitions.push_back({next, elements[i]});
 			current = next;
 		}
 	}
@@ -445,12 +440,12 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 			pending.push_back({current.leftState, target, current.constraintScoreDifference});
 		for (const auto &leftTransition : leftState.transitions) {
 			for (const auto &rightTransition : rightState.transitions) {
-				if (!patternElementsShareTrieTransition(*leftTransition.element, *rightTransition.element))
+				if (!patternElementsShareTrieTransition(leftTransition.element, rightTransition.element))
 					continue;
 				int nextDifference = current.constraintScoreDifference;
-				if (leftTransition.element->type == PatternElement::Type::Variable) {
-					nextDifference += leftTransition.element->resolvedTypeConstraint.structuralSpecificity();
-					nextDifference -= rightTransition.element->resolvedTypeConstraint.structuralSpecificity();
+				if (leftTransition.element.type == PatternElement::Type::Variable) {
+					nextDifference += leftTransition.element.resolvedTypeConstraint.structuralSpecificity();
+					nextDifference -= rightTransition.element.resolvedTypeConstraint.structuralSpecificity();
 				}
 				pending.push_back({leftTransition.target, rightTransition.target, nextDifference});
 			}
@@ -687,59 +682,16 @@ static bool isParameterLikeElement(const DefinitionPatternElement &element) {
 }
 
 static bool forEachPatternSpelling(
-	const std::vector<DefinitionPatternElement> &elements, size_t elementIndex, std::string &currentSpelling,
-	const std::function<bool(const std::string &)> &visitor
-);
-
-static bool forEachPatternSpellingWithSuffix(
-	const std::vector<DefinitionPatternElement> &alternativeElements, size_t alternativeIndex, std::string &currentSpelling,
-	const std::vector<DefinitionPatternElement> &suffixElements, size_t suffixIndex,
-	const std::function<bool(const std::string &)> &visitor
+	const std::vector<DefinitionPatternElement> &elements, const std::function<bool(const std::string &)> &visitor
 ) {
-	if (alternativeIndex >= alternativeElements.size())
-		return forEachPatternSpelling(suffixElements, suffixIndex, currentSpelling, visitor);
-
-	const DefinitionPatternElement &element = alternativeElements[alternativeIndex];
-	if (element.type == PatternElement::Type::Choice) {
-		for (const auto &nestedAlternative : element.alternatives) {
-			if (forEachPatternSpellingWithSuffix(
-					nestedAlternative, 0, currentSpelling, alternativeElements, alternativeIndex + 1, visitor
-				))
-				return true;
-		}
-		return false;
+	for (const auto &path : canonicalPatternPaths(elements)) {
+		std::string spelling;
+		for (const DefinitionPatternElement &element : path)
+			spelling += element.text;
+		if (visitor(spelling))
+			return true;
 	}
-
-	size_t previousSize = currentSpelling.size();
-	currentSpelling += element.text;
-	bool found = forEachPatternSpellingWithSuffix(
-		alternativeElements, alternativeIndex + 1, currentSpelling, suffixElements, suffixIndex, visitor
-	);
-	currentSpelling.resize(previousSize);
-	return found;
-}
-
-static bool forEachPatternSpelling(
-	const std::vector<DefinitionPatternElement> &elements, size_t elementIndex, std::string &currentSpelling,
-	const std::function<bool(const std::string &)> &visitor
-) {
-	if (elementIndex >= elements.size())
-		return visitor(currentSpelling);
-
-	const DefinitionPatternElement &element = elements[elementIndex];
-	if (element.type == PatternElement::Type::Choice) {
-		for (const auto &alternative : element.alternatives) {
-			if (forEachPatternSpellingWithSuffix(alternative, 0, currentSpelling, elements, elementIndex + 1, visitor))
-				return true;
-		}
-		return false;
-	}
-
-	size_t previousSize = currentSpelling.size();
-	currentSpelling += element.text;
-	bool found = forEachPatternSpelling(elements, elementIndex + 1, currentSpelling, visitor);
-	currentSpelling.resize(previousSize);
-	return found;
+	return false;
 }
 
 static bool isSingleWordPatternSpelling(const std::string &spelling) {
@@ -842,9 +794,7 @@ static AlternativePatternSuggestion
 findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *match, const std::string &originalToken) {
 	for (PatternDefinition *definition : collectAlternativeSearchOrder(match)) {
 		AlternativePatternSuggestion suggestion;
-		std::string spelling;
-		bool found =
-			forEachPatternSpelling(definition->patternElements, 0, spelling, [&](const std::string &candidateSpelling) {
+		bool found = forEachPatternSpelling(definition->patternElements, [&](const std::string &candidateSpelling) {
 			if (candidateSpelling.empty() || candidateSpelling == originalToken)
 				return false;
 

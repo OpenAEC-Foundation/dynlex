@@ -1,5 +1,18 @@
 #pragma once
 
+static std::string storeValueText(Expression *valueExpression) {
+	if (!valueExpression || valueExpression->range.subString.empty())
+		return "<expression>";
+	std::string_view text = valueExpression->range.subString;
+	size_t start = 0;
+	while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start])))
+		start++;
+	size_t end = text.size();
+	while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1])))
+		end--;
+	return std::string(text.substr(start, end - start));
+}
+
 static void setInvalidStoreDestinationFailure(Expression *destinationExpr, InferenceContext &context) {
 	std::string destinationText = destinationExpr && !destinationExpr->range.subString.empty()
 									  ? (std::string)destinationExpr->range.subString
@@ -14,18 +27,27 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		resolveThroughBindingsDeep(expr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
 	BindingFrameStack valueBindingFrameStack;
 	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], flexBindingFrameStack, valueBindingFrameStack);
+	bool callerObservedInProgressInstantiation = context.observedInProgressUndeducedInstantiation;
+	context.observedInProgressUndeducedInstantiation = false;
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
+	bool valueDependsOnInProgressInstantiation = context.observedInProgressUndeducedInstantiation;
+	context.observedInProgressUndeducedInstantiation =
+		callerObservedInProgressInstantiation || valueDependsOnInProgressInstantiation;
 
 	if (valueType.isMetaType()) {
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}
 	if (!valueType.isDeduced()) {
+		if (valueDependsOnInProgressInstantiation && context.currentInstantiation) {
+			if (!context.trial)
+				context.currentInstantiation->needsReinfer = true;
+			return;
+		}
 		// A silent pass would let an unresolved store reach codegen. Fail the
 		// pass instead, so grouping trials and reinference retry, and a final
 		// diagnostic names the actual cause.
-		std::string valueText =
-			valueExpr && !valueExpr->range.subString.empty() ? (std::string)valueExpr->range.subString : "<expression>";
+		std::string valueText = storeValueText(valueExpr);
 		std::vector<RelatedInfo> unboundParameterInfo;
 		appendUnboundParameterTrace(context, valueExpr, unboundParameterInfo);
 		context.setTypeFailure(renderConfiguredMessage(
@@ -35,6 +57,14 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.typeFailureRelatedInfo.insert(
 			context.typeFailureRelatedInfo.end(), unboundParameterInfo.begin(), unboundParameterInfo.end()
 		);
+		return;
+	}
+	if (!valueType.isRuntimeValueType()) {
+		std::string valueText = storeValueText(valueExpr);
+		context.setTypeFailure(renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value not runtime",
+			"message", {{"value", valueText}}
+		));
 		return;
 	}
 

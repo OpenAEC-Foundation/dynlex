@@ -70,6 +70,11 @@ bool parsePatternElements(
 
 void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector<DefinitionPatternElement> &elements);
 
+// Expand choices into complete paths and normalize separator spaces on each
+// resulting path. Every consumer of pattern structure must use these paths so
+// insertion, removal, specificity, spelling, and overlap checks agree exactly.
+std::vector<std::vector<DefinitionPatternElement>> canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements);
+
 bool visitPatternNameWithFoundState(
 	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
 	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch

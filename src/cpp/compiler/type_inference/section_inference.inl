@@ -600,7 +600,8 @@ bool inferTypes(ParseContext &parseContext) {
 bool ensureSectionInstantiationInferred(
 	ParseContext &parseContext, Section *section, PatternDefinition *definition,
 	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation, InferenceContext *callerContext
+	const std::unordered_set<std::string> &explicitCompileTimeParameters, const Instantiation *callerInstantiation,
+	InferenceContext *callerContext
 ) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!section)
@@ -613,8 +614,6 @@ bool ensureSectionInstantiationInferred(
 		return callerContext ? callerContext->lookupExpressionValue(argumentExpression)
 							 : getExpressionCompileTimeValue(argumentExpression);
 	};
-	std::unordered_set<std::string> explicitCompileTimeParameters =
-		collectExplicitCompileTimeParameters(definition, paramBindings, argTypes);
 	InstantiationKey instantiationKey =
 		findMatchingInstantiationKey(section, paramBindings, argTypes, evaluateParameterValue)
 			.value_or(buildInstantiationKey(explicitCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue));
@@ -646,6 +645,7 @@ bool ensureSectionInstantiationInferred(
 		return inst.valid;
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
+	ScopedSectionLocalVariableState calleeVariableState(section);
 
 	inst.writtenGlobalReferences.clear();
 	inst.finalGlobalConstantValues.clear();
@@ -731,7 +731,7 @@ bool ensureSectionInstantiationInferred(
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
 
-	if (inst.returnType.kind == DataType::Kind::Any)
+	if (!inst.needsReinfer && !context.observedInProgressUndeducedInstantiation && inst.returnType.kind == DataType::Kind::Any)
 		inst.returnType = {DataType::Kind::Void};
 
 	return inst.returnType.isDeduced();

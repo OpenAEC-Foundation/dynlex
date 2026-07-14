@@ -48,6 +48,37 @@ class ImportRootConsistencyTests(unittest.TestCase):
             self.assertEqual(runResult.returncode, 0)
             self.assertEqual(runResult.stdout.strip(), "ok")
 
+    def test_main_file_seeds_import_root_outside_working_directory(self) -> None:
+        self.assertTrue(COMPILER.exists(), f"compiler not built at {COMPILER}")
+        with tempfile.TemporaryDirectory(prefix="dynlex-main-import-root-") as temporary_directory:
+            root = Path(temporary_directory)
+            project = root / "project"
+            (project / "pkg").mkdir(parents=True)
+            main = project / "main.dl"
+            main.write_text("import pkg/entry.dl\n", encoding="utf-8")
+            (project / "pkg" / "entry.dl").write_text(
+                "import pkg/nested.dl\n", encoding="utf-8"
+            )
+            (project / "pkg" / "nested.dl").write_text("", encoding="utf-8")
+
+            work = root / "unrelated-working-directory"
+            (work / "pkg").mkdir(parents=True)
+            (work / "pkg" / "nested.dl").write_text(
+                "this conflicting working-directory file must not be imported $$$\n", encoding="utf-8"
+            )
+            output = root / "main.out"
+            compileResult = subprocess.run(
+                [str(COMPILER), str(main), "-o", str(output)],
+                cwd=work,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            self.assertEqual(
+                compileResult.returncode, 0,
+                f"nested project import escaped the main file's root:\n{compileResult.stdout}\n{compileResult.stderr}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

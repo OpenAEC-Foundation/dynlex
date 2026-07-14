@@ -1,0 +1,13 @@
+function integer:
+	replacement:
+		@intrinsic("type", "int")
+
+function fixed tofix:
+	replacement:
+		@intrinsic("fix", tofix)
+
+function emit [fixed {fixed integer:value}|plain]:
+	execute:
+		@intrinsic("return", value)
+
+@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int"), "%d\n", emit fixed 81))

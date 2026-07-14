@@ -151,6 +151,67 @@ void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector
 	markDuplicateVariableLikeElementsRec(definitionRange, elements, {SeenVariableLikes{}});
 }
 
+namespace {
+static bool isPatternSeparator(const DefinitionPatternElement &element) {
+	return element.type == PatternElement::Type::Other && !element.text.empty() &&
+		   element.text.find_first_not_of(' ') == std::string::npos;
+}
+
+static std::vector<std::vector<DefinitionPatternElement>>
+expandedPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
+	std::vector<std::vector<DefinitionPatternElement>> paths(1);
+	for (const DefinitionPatternElement &element : elements) {
+		if (element.type != PatternElement::Type::Choice) {
+			for (auto &path : paths)
+				path.push_back(element);
+			continue;
+		}
+
+		std::vector<std::vector<DefinitionPatternElement>> branchedPaths;
+		for (const auto &path : paths) {
+			for (const auto &alternative : element.alternatives) {
+				for (auto &alternativePath : expandedPatternPaths(alternative)) {
+					std::vector<DefinitionPatternElement> branch = path;
+					branch.insert(branch.end(), alternativePath.begin(), alternativePath.end());
+					branchedPaths.push_back(std::move(branch));
+				}
+			}
+		}
+		paths = std::move(branchedPaths);
+	}
+	return paths;
+}
+
+static std::vector<DefinitionPatternElement> normalizePatternSeparators(const std::vector<DefinitionPatternElement> &elements) {
+	std::vector<DefinitionPatternElement> normalized;
+	bool pendingSeparator = false;
+	size_t separatorStartPos = 0;
+	for (const DefinitionPatternElement &element : elements) {
+		if (isPatternSeparator(element)) {
+			if (!normalized.empty() && !pendingSeparator) {
+				pendingSeparator = true;
+				separatorStartPos = element.startPos;
+			}
+			continue;
+		}
+		if (pendingSeparator) {
+			normalized.emplace_back(PatternElement::Type::Other, " ", separatorStartPos);
+			pendingSeparator = false;
+		}
+		normalized.push_back(element);
+	}
+	return normalized;
+}
+} // namespace
+
+std::vector<std::vector<DefinitionPatternElement>>
+canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
+	auto paths = expandedPatternPaths(elements);
+	for (auto &path : paths)
+		path = normalizePatternSeparators(path);
+	return paths;
+}
+
 bool visitPatternNameWithFoundState(
 	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
 	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch

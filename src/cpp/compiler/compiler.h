@@ -26,7 +26,8 @@ void destroyTypeConstraintExpression(Expression *expression);
 bool ensureSectionInstantiationInferred(
 	ParseContext &context, Section *section, PatternDefinition *definition,
 	const std::vector<std::pair<std::string, Expression *>> &paramBindings, const std::vector<DataType> &argTypes,
-	const Instantiation *callerInstantiation = nullptr, InferenceContext *callerContext = nullptr
+	const std::unordered_set<std::string> &explicitCompileTimeParameters, const Instantiation *callerInstantiation = nullptr,
+	InferenceContext *callerContext = nullptr
 );
 std::string renderPurityReport(ParseContext &context);
 bool isInternalSourcePath(std::string_view path);
@@ -60,12 +61,11 @@ PatternDefinition *selectOverload(
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
 	const std::vector<bool> & /*argCompileTimeKnown*/
 );
-bool patternParameterRequiresCompileTimeValue(
-	PatternDefinition *definition, const std::string &parameterName, const DataType &argType
-);
+const DefinitionPatternElement *matchedPatternParameterElement(PatternDefinition *definition, PatternTreeNode *matchedNode);
+bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType);
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<DataType> &argTypes
+	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
 );
 
 void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings);

@@ -20,125 +20,39 @@ static bool definitionComesBefore(const PatternDefinition *a, const PatternDefin
 }
 } // namespace
 
-// Link all parent nodes to a shared child for the given element.
-// Reuses existing children where possible; creates one shared new child for parents that lack one.
-static std::vector<PatternTreeNode *> addSharedChild(
-	const std::vector<PatternTreeNode *> &parents, const DefinitionPatternElement &elem, PatternDefinition *definition
-) {
-	PatternTreeNode *sharedNew = nullptr;
-	std::vector<PatternTreeNode *> children;
-	std::unordered_set<PatternTreeNode *> seen;
-
-	for (auto *parent : parents) {
-		PatternTreeNode *child = nullptr;
-
-		if (elem.type == PatternElement::Type::Variable) {
-			child = parent->argumentChild;
-		} else if (elem.type == PatternElement::Type::Word) {
-			child = parent->wordChild;
-		} else {
-			auto it = parent->literalChildren.find(elem.text);
-			if (it != parent->literalChildren.end())
-				child = it->second;
-		}
-
-		if (child) {
-			// parent already has a child for this element — reuse it
-			child->definitionStartPositions[definition] = elem.startPos;
-			if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
-				child->parameterNames[definition] = elem.text;
-			if (seen.insert(child).second)
-				children.push_back(child);
-		} else {
-			// parent doesn't have a child — share one new node across all such parents
-			if (!sharedNew)
-				sharedNew = new PatternTreeNode(elem.type, elem.text);
-			sharedNew->definitionStartPositions[definition] = elem.startPos;
-			if (elem.type == PatternElement::Type::Variable) {
-				parent->argumentChild = sharedNew;
-				sharedNew->parameterNames[definition] = elem.text;
-			} else if (elem.type == PatternElement::Type::Word) {
-				parent->wordChild = sharedNew;
-				sharedNew->parameterNames[definition] = elem.text;
-			} else {
-				parent->literalChildren[elem.text] = sharedNew;
-			}
-			if (seen.insert(sharedNew).second)
-				children.push_back(sharedNew);
-		}
+static PatternTreeNode *
+addChild(PatternTreeNode *parent, const DefinitionPatternElement &element, PatternDefinition *definition) {
+	PatternTreeNode *child = nullptr;
+	if (element.type == PatternElement::Type::Variable) {
+		child = parent->argumentChild;
+	} else if (element.type == PatternElement::Type::Word) {
+		child = parent->wordChild;
+	} else {
+		auto existing = parent->literalChildren.find(element.text);
+		if (existing != parent->literalChildren.end())
+			child = existing->second;
 	}
 
-	return children;
-}
-
-// Tree walks canonicalize separator spaces per path: a separator only exists
-// between two content elements, doubled separators collapse to one, and
-// leading or trailing separators vanish. This makes every composition of
-// choice alternatives (including empty ones) produce cleanly separated paths
-// regardless of where the author placed the spaces.
-struct SeparatorWalkState {
-	bool pendingSeparator = false;
-	size_t separatorStartPos = 0;
-	bool hasContent = false;
-};
-
-static bool isSeparatorElement(const DefinitionPatternElement &elem) {
-	return elem.type == PatternElement::Type::Other && !elem.text.empty() &&
-		   elem.text.find_first_not_of(' ') == std::string::npos;
-}
-
-// Combine one choice alternative with the elements following the choice, so a
-// branch continues through the shared tail with its own separator state.
-static std::vector<DefinitionPatternElement> flattenAlternative(
-	const std::vector<DefinitionPatternElement> &alternative, const std::vector<DefinitionPatternElement> &elements,
-	size_t choiceIndex
-) {
-	std::vector<DefinitionPatternElement> flattened(alternative.begin(), alternative.end());
-	flattened.insert(flattened.end(), elements.begin() + choiceIndex + 1, elements.end());
-	return flattened;
-}
-
-// Walk a sequence of elements through the tree, branching at Choice elements
-// and converging all branches back to shared nodes afterward.
-static std::vector<PatternTreeNode *> addElementSequence(
-	std::vector<PatternTreeNode *> currentNodes, const std::vector<DefinitionPatternElement> &elements,
-	PatternDefinition *definition, SeparatorWalkState state
-) {
-	for (size_t i = 0; i < elements.size(); i++) {
-		const DefinitionPatternElement &elem = elements[i];
-		if (elem.type == PatternElement::Type::Choice) {
-			std::vector<PatternTreeNode *> branchEndpoints;
-			for (auto &alternative : elem.alternatives) {
-				auto endpoints =
-					addElementSequence(currentNodes, flattenAlternative(alternative, elements, i), definition, state);
-				branchEndpoints.insert(branchEndpoints.end(), endpoints.begin(), endpoints.end());
-			}
-			// deduplicate — branches that converged to the same node
-			std::unordered_set<PatternTreeNode *> seen;
-			std::vector<PatternTreeNode *> deduped;
-			for (auto *node : branchEndpoints) {
-				if (seen.insert(node).second)
-					deduped.push_back(node);
-			}
-			return deduped;
-		}
-		if (isSeparatorElement(elem)) {
-			if (state.hasContent && !state.pendingSeparator) {
-				state.pendingSeparator = true;
-				state.separatorStartPos = elem.startPos;
-			}
-			continue;
-		}
-		if (state.pendingSeparator) {
-			currentNodes = addSharedChild(
-				currentNodes, DefinitionPatternElement(PatternElement::Type::Other, " ", state.separatorStartPos), definition
-			);
-			state.pendingSeparator = false;
-		}
-		currentNodes = addSharedChild(currentNodes, elem, definition);
-		state.hasContent = true;
+	if (!child) {
+		child = new PatternTreeNode(element.type, element.text);
+		if (element.type == PatternElement::Type::Variable)
+			parent->argumentChild = child;
+		else if (element.type == PatternElement::Type::Word)
+			parent->wordChild = child;
+		else
+			parent->literalChildren[element.text] = child;
 	}
-	return currentNodes;
+	child->definitionStartPositions[definition] = element.startPos;
+	if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
+		child->parameterNames[definition] = element.text;
+	return child;
+}
+
+static PatternTreeNode *
+addElementPath(PatternTreeNode *current, const std::vector<DefinitionPatternElement> &path, PatternDefinition *definition) {
+	for (const DefinitionPatternElement &element : path)
+		current = addChild(current, element, definition);
+	return current;
 }
 
 // Walk elements through two parallel paths in the tree: the main (exact) path and
@@ -146,10 +60,10 @@ static std::vector<PatternTreeNode *> addElementSequence(
 // has a more specific element (literal or word). Any matchingDefinition found only on
 // the less-specific endpoints is a less-specific definition.
 static void walkForLessSpecific(
-	const std::vector<DefinitionPatternElement> &elements, size_t index, std::vector<PatternTreeNode *> mainNodes,
-	std::vector<PatternTreeNode *> lessSpecificNodes, std::vector<PatternDefinition *> &result, SeparatorWalkState state
+	const std::vector<DefinitionPatternElement> &path, size_t index, std::vector<PatternTreeNode *> mainNodes,
+	std::vector<PatternTreeNode *> lessSpecificNodes, std::vector<PatternDefinition *> &result
 ) {
-	if (index >= elements.size()) {
+	if (index >= path.size()) {
 		// Collect matchingDefinitions from lessSpecific endpoints that are NOT on main endpoints
 		std::unordered_set<PatternTreeNode *> mainSet(mainNodes.begin(), mainNodes.end());
 		for (PatternTreeNode *node : lessSpecificNodes) {
@@ -161,25 +75,7 @@ static void walkForLessSpecific(
 		return;
 	}
 
-	const DefinitionPatternElement &choiceOrContent = elements[index];
-
-	if (choiceOrContent.type == PatternElement::Type::Choice) {
-		// Branch each alternative recursively, then merge endpoints
-		for (const auto &alternative : choiceOrContent.alternatives) {
-			std::vector<PatternDefinition *> subResult;
-			walkForLessSpecific(
-				flattenAlternative(alternative, elements, index), 0, mainNodes, lessSpecificNodes, subResult, state
-			);
-			result.insert(result.end(), subResult.begin(), subResult.end());
-		}
-		return;
-	}
-
-	if (isSeparatorElement(choiceOrContent)) {
-		state.pendingSeparator = state.pendingSeparator || state.hasContent;
-		walkForLessSpecific(elements, index + 1, std::move(mainNodes), std::move(lessSpecificNodes), result, state);
-		return;
-	}
+	const DefinitionPatternElement &element = path[index];
 
 	auto advanceThroughElement = [](const DefinitionPatternElement &elem, std::vector<PatternTreeNode *> &mainNodes,
 									std::vector<PatternTreeNode *> &lessSpecificNodes) {
@@ -294,24 +190,16 @@ static void walkForLessSpecific(
 		lessSpecificNodes = std::move(nextLess);
 	};
 
-	if (state.pendingSeparator) {
-		advanceThroughElement(
-			DefinitionPatternElement(PatternElement::Type::Other, " ", state.separatorStartPos), mainNodes, lessSpecificNodes
-		);
-		state.pendingSeparator = false;
-		if (mainNodes.empty() && lessSpecificNodes.empty())
-			return;
-	}
-	advanceThroughElement(choiceOrContent, mainNodes, lessSpecificNodes);
-	state.hasContent = true;
+	advanceThroughElement(element, mainNodes, lessSpecificNodes);
 
 	if (!mainNodes.empty() || !lessSpecificNodes.empty())
-		walkForLessSpecific(elements, index + 1, std::move(mainNodes), std::move(lessSpecificNodes), result, state);
+		walkForLessSpecific(path, index + 1, std::move(mainNodes), std::move(lessSpecificNodes), result);
 }
 
 std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(std::vector<DefinitionPatternElement> &elements) {
 	std::vector<PatternDefinition *> result;
-	walkForLessSpecific(elements, 0, {this}, {}, result, {});
+	for (const auto &path : canonicalPatternPaths(elements))
+		walkForLessSpecific(path, 0, {this}, {}, result);
 	// Deduplicate
 	std::unordered_set<PatternDefinition *> seen;
 	result.erase(
@@ -327,17 +215,14 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 	return result;
 }
 
-void PatternTreeNode::addPatternPart(
-	std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition, size_t index
-) {
+void PatternTreeNode::addPatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition) {
 	requireCompilerInvariant(definition != nullptr, "pattern tree insertion requires a definition");
-	std::vector<DefinitionPatternElement> remaining(elements.begin() + index, elements.end());
-	SeparatorWalkState state;
-	state.hasContent = index > 0;
-	auto endpoints = addElementSequence({this}, remaining, definition, state);
-	definition->endNodes = endpoints;
-
-	for (auto *node : endpoints) {
+	std::unordered_set<PatternTreeNode *> seenEndpoints;
+	definition->endNodes.clear();
+	for (const auto &path : canonicalPatternPaths(elements)) {
+		PatternTreeNode *node = addElementPath(this, path, definition);
+		if (seenEndpoints.insert(node).second)
+			definition->endNodes.push_back(node);
 		// Add this definition to the endpoint
 		if (std::find(node->matchingDefinitions.begin(), node->matchingDefinitions.end(), definition) ==
 			node->matchingDefinitions.end()) {
@@ -349,7 +234,7 @@ void PatternTreeNode::addPatternPart(
 // Recursively remove a definition from the tree, walking the element path.
 // Only removes the definition from matchingDefinitions/parameterNames at the endpoint.
 // Does NOT detach empty nodes — keeping the trie structure intact ensures that
-// addElementSequence during re-add finds the same nodes, preserving existing
+// insertion during re-add finds the same nodes, preserving existing
 // PatternMatch::matchedEndNode pointers.
 // Step to the child node for one element, cleaning this definition's metadata
 // on the way. Returns nullptr when the path does not exist.
@@ -374,32 +259,12 @@ stepAndCleanChild(PatternTreeNode *current, const DefinitionPatternElement &elem
 }
 
 static void removeDefinitionPath(
-	PatternTreeNode *current, const std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition,
-	SeparatorWalkState state
+	PatternTreeNode *current, const std::vector<DefinitionPatternElement> &path, PatternDefinition *definition
 ) {
-	for (size_t i = 0; i < elements.size(); i++) {
-		const DefinitionPatternElement &elem = elements[i];
-		if (elem.type == PatternElement::Type::Choice) {
-			for (const auto &alternative : elem.alternatives)
-				removeDefinitionPath(current, flattenAlternative(alternative, elements, i), definition, state);
-			return;
-		}
-		if (isSeparatorElement(elem)) {
-			state.pendingSeparator = state.pendingSeparator || state.hasContent;
-			continue;
-		}
-		if (state.pendingSeparator) {
-			current = stepAndCleanChild(
-				current, DefinitionPatternElement(PatternElement::Type::Other, " ", elem.startPos), definition
-			);
-			if (!current)
-				crashCompilerBug("pattern tree removal lost its separator path; elements changed since insertion");
-			state.pendingSeparator = false;
-		}
-		current = stepAndCleanChild(current, elem, definition);
+	for (const DefinitionPatternElement &element : path) {
+		current = stepAndCleanChild(current, element, definition);
 		if (!current)
 			crashCompilerBug("pattern tree removal lost its element path; elements changed since insertion");
-		state.hasContent = true;
 	}
 	// Endpoint: remove this definition from matchingDefinitions
 	auto &defs = current->matchingDefinitions;
@@ -410,6 +275,7 @@ static void removeDefinitionPath(
 
 void PatternTreeNode::removePatternPart(std::vector<DefinitionPatternElement> &elements, PatternDefinition *definition) {
 	requireCompilerInvariant(definition != nullptr, "pattern tree removal requires a definition");
-	removeDefinitionPath(this, elements, definition, {});
+	for (const auto &path : canonicalPatternPaths(elements))
+		removeDefinitionPath(this, path, definition);
 	definition->endNodes.clear();
 }

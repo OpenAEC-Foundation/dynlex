@@ -1,0 +1,20 @@
+function integer:
+	replacement:
+		@intrinsic("type", "int")
+
+function fixed tofix:
+	replacement:
+		@intrinsic("fix", tofix)
+
+flex section if condition:
+	replacement:
+		@intrinsic("if", condition)
+
+function specialize {fixed integer:depth} value [slot|done]:
+	execute:
+		@intrinsic("store", slot, value)
+		if @intrinsic("equal", depth, 1):
+			@intrinsic("discard", specialize 0 1.5 done)
+		@intrinsic("return", slot)
+
+@intrinsic("discard", specialize 1 2 done)

@@ -1,0 +1,2 @@
+tests/required/store_void_value/main.dl:4:1-38: Error: the assigned value 'no value' has no runtime value
+  note: while inferring intrinsic 'store' in '@intrinsic("store", target, no value)' with arguments [i8*, unresolved(?), nothing] -> undeduced tests/required/store_void_value/main.dl:4:1-38

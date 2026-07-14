@@ -1,0 +1,9 @@
+flex function inner:
+	replacement:
+		@intrinsic("case", 1)
+
+flex function outer:
+	replacement:
+		inner
+
+outer

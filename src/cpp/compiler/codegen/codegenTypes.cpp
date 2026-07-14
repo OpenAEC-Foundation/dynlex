@@ -266,7 +266,9 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		// pointer; variable resolution finds them there first. Parameters the
 		// active match did not bind (their choice alternative was not taken)
 		// fall through and get local storage like any other variable.
-		if (context.patternBindings.contains(name))
+		if (context.patternBindings.contains(name) ||
+			(context.currentCodegenInstantiation &&
+			 context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)))
 			continue;
 		Variable *var = section->findVariable(name);
 		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");

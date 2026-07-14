@@ -218,7 +218,7 @@ template <typename InferPassFn>
 // isolated expression or operand-grouping trials.
 static bool runInstantiationReinferenceLoop(
 	InferenceContext &context, Instantiation &instantiation, PatternDefinition *definition, const Range &fallbackRange,
-	std::string functionName, InferPassFn &&inferPass
+	std::string functionName, bool canDeferToCaller, InferPassFn &&inferPass
 ) {
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
@@ -233,6 +233,8 @@ static bool runInstantiationReinferenceLoop(
 			return true;
 		}
 		if (afterPass == beforePass) {
+			if (canDeferToCaller && context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced())
+				return true;
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
 			return false;
 		}
@@ -421,18 +423,15 @@ static bool definitionParameterAcceptsVoid(
 		return false;
 	size_t currentArgumentIndex = 0;
 	bool acceptsVoid = false;
-	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &parameterName, PatternTreeNode *) {
+	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &, PatternTreeNode *node) {
 		if (acceptsVoid || currentArgumentIndex != argumentIndex) {
 			currentArgumentIndex++;
 			return;
 		}
-		for (const auto &element : definition->patternElements) {
-			if (element.type != PatternElement::Type::Variable || element.text != parameterName)
-				continue;
-			acceptsVoid = element.resolvedTypeConstraint.isResolved() &&
-						  element.resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
-			break;
-		}
+		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, node);
+		requireCompilerInvariant(element != nullptr, "matched pattern parameter has no definition element");
+		acceptsVoid = element->resolvedTypeConstraint.isResolved() &&
+					  element->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
 		currentArgumentIndex++;
 	});
 	return acceptsVoid;
@@ -469,6 +468,42 @@ static void resetSectionLocalVariableTypes(Section *section) {
 		variable->typeOriginFloatLiteralReplacement.clear();
 	}
 }
+
+struct ScopedSectionLocalVariableState {
+	struct Entry {
+		Variable *variable;
+		DataType type;
+		Range typeOriginRange;
+		std::string typeOriginFloatLiteralReplacement;
+	};
+	std::vector<Entry> entries;
+
+	explicit ScopedSectionLocalVariableState(Section *section) {
+		std::function<void(Section *)> collect = [&](Section *current) {
+			if (!current)
+				return;
+			for (const auto &[name, variable] : current->variables) {
+				(void)name;
+				if (!variable || variable->isGlobal)
+					continue;
+				entries.push_back(
+					{variable, variable->type, variable->typeOriginRange, variable->typeOriginFloatLiteralReplacement}
+				);
+			}
+			for (Section *child : current->children)
+				collect(child);
+		};
+		collect(section);
+	}
+
+	~ScopedSectionLocalVariableState() {
+		for (const Entry &entry : entries) {
+			entry.variable->type = entry.type;
+			entry.variable->typeOriginRange = entry.typeOriginRange;
+			entry.variable->typeOriginFloatLiteralReplacement = entry.typeOriginFloatLiteralReplacement;
+		}
+	}
+};
 
 static DefinitionPatternElement *
 findParameterElement(std::vector<DefinitionPatternElement> &elements, const std::string &parameterName) {
@@ -1601,7 +1636,9 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 			context.setTypeFailure("function reference parameter '" + parameterName + "' is not a runtime value");
 			return nullptr;
 		}
-		if (patternParameterRequiresCompileTimeValue(definition, parameterName, parameterType)) {
+		DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
+		requireCompilerInvariant(parameterElement != nullptr, "callable parameter has no definition element");
+		if (patternParameterRequiresCompileTimeValue(*parameterElement, parameterType)) {
 			context.setTypeFailure("function reference cannot bind fixed parameter '" + parameterName + "'");
 			return nullptr;
 		}
@@ -1614,7 +1651,7 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 		ownedArguments.push_back(std::move(argument));
 	}
 	if (!ensureSectionInstantiationInferred(
-			context.parseContext, definition->section, definition, parameterBindings, argumentTypes,
+			context.parseContext, definition->section, definition, parameterBindings, argumentTypes, {},
 			context.currentInstantiation, &context
 		)) {
 		return nullptr;
@@ -2818,7 +2855,7 @@ static void inferOrderedExpression(
 				argTypes.push_back(argType);
 			}
 			std::unordered_set<std::string> explicitCompileTimeParameters =
-				collectExplicitCompileTimeParameters(def, paramBindings, argTypes);
+				collectExplicitCompileTimeParameters(def, paramBindings, expr->patternMatch->nodesPassed, argTypes);
 			std::vector<std::pair<std::string, CompileTimeValue>> trialCompileTimeParameters;
 			std::string trialCacheKey;
 			if (context.trial && context.allowTrialSummaryReuse) {
@@ -2863,12 +2900,13 @@ static void inferOrderedExpression(
 			std::optional<InstantiationKey> refinedInstantiationKey;
 			bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
 			if (!inst.inferring && !hasReusableInstantiation) {
+				ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 				if (context.trial)
 					inst.body = context.parseContext.cloneSectionBody(matchedSection);
 				Instantiation *savedInst = context.currentInstantiation;
 				auto callerKnownConstants = context.currentKnownConstants;
 				bool inferenceSucceeded = runInstantiationReinferenceLoop(
-					context, inst, def, expr->range, (std::string)def->range.subString,
+					context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
 					[&]() -> bool {
 					seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 					inst.writtenGlobalReferences.clear();
@@ -2920,6 +2958,8 @@ static void inferOrderedExpression(
 				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.valid = inferenceSucceeded;
+				if (inst.needsReinfer && savedInst && !context.trial)
+					savedInst->needsReinfer = true;
 				refinedInstantiationKey =
 					buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 			} else if (inst.returnType.isDeduced()) {
@@ -2937,7 +2977,8 @@ static void inferOrderedExpression(
 			mergeInstantiationPurityIntoCaller(context, inst);
 
 			// If no return intrinsic was found, default to Void
-			if (!inst.inferring && inst.returnType.kind == DataType::Kind::Any) {
+			if (!inst.inferring && !inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&
+				inst.returnType.kind == DataType::Kind::Any) {
 				inst.returnType = {DataType::Kind::Void};
 			}
 			CompileTimeValue inferredReturnValue{};

@@ -35,7 +35,7 @@ static bool isSectionDescendantOrSame(Section *section, Section *ancestor) {
 static Range intrinsicDiagnosticRange(ParseContext &context, Expression *callExpr) {
 	if (!context.flexCallSiteRangeStack.empty())
 		return context.flexCallSiteRangeStack.back();
-	return intrinsicDiagnosticRange(context, callExpr);
+	return callExpr ? callExpr->range : Range();
 }
 
 static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *indexVal, DataType indexType) {

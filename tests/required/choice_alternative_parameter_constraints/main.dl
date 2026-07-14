@@ -1,0 +1,25 @@
+function integer:
+	replacement:
+		@intrinsic("type", "int")
+
+function boolean:
+	replacement:
+		@intrinsic("type", "bool")
+
+function fixed tofix:
+	replacement:
+		@intrinsic("fix", tofix)
+
+function typed [number {integer:value}|flag {boolean:value}]:
+	execute:
+		@intrinsic("return", value)
+
+@intrinsic("discard", typed number 6)
+@intrinsic("discard", typed flag @intrinsic("equal", 1, 1))
+
+function mode [fixed {fixed integer:value}|runtime {integer:value}]:
+	execute:
+		@intrinsic("return", value)
+
+@intrinsic("discard", mode fixed 7)
+@intrinsic("discard", mode runtime 8)

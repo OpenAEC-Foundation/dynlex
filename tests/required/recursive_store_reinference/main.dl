@@ -1,0 +1,19 @@
+flex section if condition:
+	replacement:
+		@intrinsic("if", condition)
+
+function n is even stored:
+	execute:
+		if @intrinsic("not equal", n, 0):
+			@intrinsic("store", result, @intrinsic("subtract", n, 1) is odd stored)
+			@intrinsic("return", result)
+		@intrinsic("return", @intrinsic("equal", 1, 1))
+
+function n is odd stored:
+	execute:
+		if @intrinsic("not equal", n, 0):
+			@intrinsic("store", result, @intrinsic("subtract", n, 1) is even stored)
+			@intrinsic("return", result)
+		@intrinsic("return", @intrinsic("equal", 1, 0))
+
+@intrinsic("discard", 4 is even stored)
