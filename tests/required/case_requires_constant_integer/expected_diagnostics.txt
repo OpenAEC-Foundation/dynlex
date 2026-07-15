@@ -1,1 +1,1 @@
-tests/required/case_requires_constant_integer/main.dl:11:27-33: Error: case value must be a constant integer
+tests/required/case_requires_constant_integer/main.dl:27-33: Error: case value must be a constant integer

@@ -164,7 +164,7 @@ Implementation details are documented in `docs/stages.md`.
 ```
 - The test script will build as well. so either run the build or the test script.
 - Compiled test binaries use `.out` extension.
-- Tests may include `expected.txt` (output match) or `expected_diagnostics.txt` (exact diagnostics match).
+- Tests may include `expected.txt` (output match) or `expected_diagnostics.txt` (exact diagnostics match after source line numbers are removed). Diagnostic expectations must use `path.dl:column-range` locations; including a source line number makes the test invalid.
 
 ## Key Design Decisions
 

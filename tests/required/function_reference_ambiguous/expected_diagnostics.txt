@@ -1,4 +1,4 @@
-lib/std.dl:183:9-37: Error: Ambiguous function reference: the string form of $
-  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [i8*, i8*] -> undeduced lib/std.dl:183:9-37
-  note: while inferring call 'set fn to the function named "the string form of $"' with arguments [i8*] -> undeduced tests/required/function_reference_ambiguous/main.dl:3:11-52
-  note: while inferring call 'set fn to the function named "the string form of $"' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/function_reference_ambiguous/main.dl:3:1-52
+lib/std.dl:9-37: Error: Ambiguous function reference: the string form of $
+  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [i8*, i8*] -> undeduced lib/std.dl:9-37
+  note: while inferring call 'set fn to the function named "the string form of $"' with arguments [i8*] -> undeduced tests/required/function_reference_ambiguous/main.dl:11-52
+  note: while inferring call 'set fn to the function named "the string form of $"' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/function_reference_ambiguous/main.dl:1-52
