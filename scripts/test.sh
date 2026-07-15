@@ -457,6 +457,7 @@ run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_dia
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
+run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
