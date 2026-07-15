@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set arguments to the command line arguments
+print argument 0 of arguments

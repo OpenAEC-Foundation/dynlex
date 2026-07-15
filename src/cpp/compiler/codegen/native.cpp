@@ -1,4 +1,5 @@
 #include "native.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -29,6 +30,55 @@ struct LibraryNameMapping {
 	llvm::StringLiteral portableName;
 	llvm::StringLiteral linkerName;
 };
+
+struct ProgramExecutionResult {
+	int exitCode = 0;
+	bool executionFailed = false;
+	std::string executeError;
+	std::string output;
+};
+
+std::optional<ProgramExecutionResult>
+executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef> arguments, std::string &setupError) {
+	llvm::SmallString<128> stdoutPath;
+	llvm::SmallString<128> stderrPath;
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_program_stdout", "log", stdoutPath)) {
+		setupError = "failed to create temporary program stdout file: " + ec.message();
+		return std::nullopt;
+	}
+	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_program_stderr", "log", stderrPath)) {
+		llvm::sys::fs::remove(stdoutPath);
+		setupError = "failed to create temporary program stderr file: " + ec.message();
+		return std::nullopt;
+	}
+
+	std::vector<std::optional<llvm::StringRef>> redirects = {
+		std::nullopt,
+		llvm::StringRef(stdoutPath),
+		llvm::StringRef(stderrPath),
+	};
+	ProgramExecutionResult result;
+	result.exitCode = llvm::sys::ExecuteAndWait(
+		program, arguments, std::nullopt, redirects, 0, 0, &result.executeError, &result.executionFailed
+	);
+
+	auto readFile = [&](llvm::StringRef path) -> std::optional<std::string> {
+		std::ifstream file(path.str(), std::ios::in | std::ios::binary);
+		if (!file)
+			return std::nullopt;
+		return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	};
+	std::optional<std::string> stdoutContents = readFile(stdoutPath);
+	std::optional<std::string> stderrContents = readFile(stderrPath);
+	llvm::sys::fs::remove(stdoutPath);
+	llvm::sys::fs::remove(stderrPath);
+	if (!stdoutContents || !stderrContents) {
+		setupError = "failed to read captured program output";
+		return std::nullopt;
+	}
+	result.output = std::move(*stdoutContents) + std::move(*stderrContents);
+	return result;
+}
 
 std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library) {
 	if (targetTriple.isOSDarwin() && library == "GL")
@@ -114,6 +164,27 @@ bool emitNativeExecutable(ParseContext &context) {
 
 	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 
+#ifdef _WIN32
+	const llvm::StringRef linkerName = "cc.exe";
+#else
+	const llvm::StringRef linkerName = "cc";
+#endif
+	auto linkerProgram = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
+	if (!linkerProgram) {
+		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
+		return false;
+	}
+
+	const bool requiresNonMergeableDwarfStrings = context.options.emitDebugInfo && parsedTargetTriple.isOSBinFormatELF();
+	std::optional<std::string> objectCopyProgram;
+	if (requiresNonMergeableDwarfStrings) {
+		objectCopyProgram = llvm::sys::Process::FindInEnvPath("PATH", "objcopy");
+		if (!objectCopyProgram) {
+			pushPlainError("failed to find required ELF object utility 'objcopy' on PATH");
+			return false;
+		}
+	}
+
 	// Determine output path
 	std::string outputPath = context.options.outputPath;
 	if (outputPath.empty()) {
@@ -149,27 +220,40 @@ bool emitNativeExecutable(ParseContext &context) {
 		passManager.run(*context.llvmModule);
 	}
 
-#ifdef _WIN32
-	const llvm::StringRef linkerName = "cc.exe";
-#else
-	const llvm::StringRef linkerName = "cc";
-#endif
-	auto linkerProgram = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
-	if (!linkerProgram) {
-		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
-		return false;
-	}
+	if (objectCopyProgram) {
+		// GNU BFD suffix-merges SHF_MERGE debug strings without preserving the
+		// string-boundary offsets required by DWARF 5. Keep the strings intact.
+		std::vector<std::string> objectCopyStorage = {
+			*objectCopyProgram,
+			"--set-section-flags",
+			".debug_str=readonly,debug",
+			"--set-section-flags",
+			".debug_line_str=readonly,debug",
+			objectPath,
+		};
+		std::vector<llvm::StringRef> objectCopyArguments;
+		objectCopyArguments.reserve(objectCopyStorage.size());
+		for (const std::string &argument : objectCopyStorage)
+			objectCopyArguments.push_back(argument);
 
-	llvm::SmallString<128> stdoutPath;
-	llvm::SmallString<128> stderrPath;
-	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_link_stdout", "log", stdoutPath)) {
-		pushPlainError("failed to create temporary linker stdout file: " + ec.message());
-		return false;
-	}
-	if (std::error_code ec = llvm::sys::fs::createTemporaryFile("dynlex_link_stderr", "log", stderrPath)) {
-		llvm::sys::fs::remove(stdoutPath);
-		pushPlainError("failed to create temporary linker stderr file: " + ec.message());
-		return false;
+		std::string setupError;
+		std::optional<ProgramExecutionResult> result =
+			executeProgramAndCapture(*objectCopyProgram, objectCopyArguments, setupError);
+		if (!result) {
+			pushPlainError(setupError);
+			return false;
+		}
+		if (!result->executeError.empty()) {
+			pushPlainError("failed to execute ELF object utility: " + result->executeError);
+			return false;
+		}
+		if (result->executionFailed || result->exitCode != 0) {
+			std::string message = "preparing ELF debug information failed with exit code " + std::to_string(result->exitCode);
+			if (!result->output.empty())
+				message += "\nObject utility output:\n" + result->output;
+			pushPlainError(std::move(message));
+			return false;
+		}
 	}
 
 	std::vector<std::string> commandStorage;
@@ -194,43 +278,27 @@ bool emitNativeExecutable(ParseContext &context) {
 	for (const std::string &arg : commandStorage)
 		commandArgs.push_back(arg);
 
-	std::vector<std::optional<llvm::StringRef>> redirects = {
-		std::nullopt,
-		llvm::StringRef(stdoutPath),
-		llvm::StringRef(stderrPath),
-	};
-
-	std::string executeError;
-	bool executionFailed = false;
-	int linkResult =
-		llvm::sys::ExecuteAndWait(*linkerProgram, commandArgs, std::nullopt, redirects, 0, 0, &executeError, &executionFailed);
-
-	auto readFile = [](llvm::StringRef path) {
-		std::ifstream file(path.str(), std::ios::in | std::ios::binary);
-		if (!file)
-			return std::string{};
-		return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-	};
-
-	std::string linkerOutput = readFile(stdoutPath) + readFile(stderrPath);
-	llvm::sys::fs::remove(stdoutPath);
-	llvm::sys::fs::remove(stderrPath);
-
-	if (!executeError.empty()) {
-		pushPlainError("failed to execute linker: " + executeError);
+	std::string setupError;
+	std::optional<ProgramExecutionResult> linkExecution = executeProgramAndCapture(*linkerProgram, commandArgs, setupError);
+	if (!linkExecution) {
+		pushPlainError(setupError);
+		return false;
+	}
+	if (!linkExecution->executeError.empty()) {
+		pushPlainError("failed to execute linker: " + linkExecution->executeError);
 		return false;
 	}
 
-	if (executionFailed || linkResult != 0) {
+	if (linkExecution->executionFailed || linkExecution->exitCode != 0) {
 		Diagnostic diagnostic(
-			context, Diagnostic::Level::Error, "linking failed", Range(), "exit_code", std::to_string(linkResult)
+			context, Diagnostic::Level::Error, "linking failed", Range(), "exit_code", std::to_string(linkExecution->exitCode)
 		);
 		const SyntaxConfig &syntax = syntaxConfigForRange(context, Range());
 
 		// Check which libraries are actually missing
 		std::vector<std::string> missingLibs;
 		for (const std::string &lib : context.requiredLibraries) {
-			if (linkerReportsMissingLibrary(linkerOutput, nativeLibraryArguments(parsedTargetTriple, lib))) {
+			if (linkerReportsMissingLibrary(linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib))) {
 				missingLibs.push_back(lib);
 			}
 		}
@@ -246,10 +314,10 @@ bool emitNativeExecutable(ParseContext &context) {
 				"\n" + renderConfiguredMessage(syntax, "linking failed", "missing libraries", {{"libraries", libraries}}) +
 				"\n" + renderConfiguredMessage(syntax, "linking failed", "install hint");
 		}
-		if (!linkerOutput.empty()) {
-			if (linkerOutput.back() == '\n')
-				linkerOutput.pop_back();
-			diagnostic.message += "\nLinker output:\n" + linkerOutput;
+		if (!linkExecution->output.empty()) {
+			if (linkExecution->output.back() == '\n')
+				linkExecution->output.pop_back();
+			diagnostic.message += "\nLinker output:\n" + linkExecution->output;
 		}
 
 		context.diagnostics.push_back(std::move(diagnostic));

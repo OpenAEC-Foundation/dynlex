@@ -72,6 +72,10 @@ enum class IntrinsicPurityKind {
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
 	X(LoadAt, "load at", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                                    \
+	X(CommandLineArgumentCount, "command line argument count", 1, IntrinsicReturnKind::Custom, 0, 0,                           \
+	  IntrinsicPurityKind::Impure)                                                                                             \
+	X(CommandLineArgumentValues, "command line argument values", 1, IntrinsicReturnKind::Custom, 0, 0,                         \
+	  IntrinsicPurityKind::Impure)                                                                                             \
 	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Custom)                                 \
 	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                                           \
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                      \

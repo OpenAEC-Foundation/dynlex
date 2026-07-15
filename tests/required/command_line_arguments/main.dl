@@ -1,0 +1,13 @@
+import lib/std.dl
+
+function emit {argument list:arguments}:
+    execute:
+        print arguments' length as line
+        loop index from 0 to arguments' length:
+            set value to argument index of arguments
+            print value as line
+            print value's length as line
+
+set arguments to the command line arguments
+emit arguments
+print "end" as line

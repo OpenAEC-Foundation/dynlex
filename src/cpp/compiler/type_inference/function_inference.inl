@@ -2012,7 +2012,18 @@ static void inferOrderedExpression(
 				expr->type = {DataType::Kind::Float, 4};
 				break;
 			case IntrinsicReturnKind::Custom:
-				if (kind == IntrinsicKind::AddressOf) {
+				if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+					if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
+						failWithDetail(expr->range, "Command-line arguments are unavailable for this target", 0);
+						break;
+					}
+					if (kind == IntrinsicKind::CommandLineArgumentCount) {
+						expr->type = {DataType::Kind::Int, 4};
+					} else {
+						expr->type = {DataType::Kind::Int, 1};
+						expr->type.pointerDepth = 2;
+					}
+				} else if (kind == IntrinsicKind::AddressOf) {
 					DataType varType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					if (varType.isDeduced())
 						expr->type = varType.pointed();

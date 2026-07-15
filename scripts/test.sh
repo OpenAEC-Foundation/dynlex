@@ -104,14 +104,41 @@ PY
 run_with_timeout() {
     local seconds="$1"
     shift
-    python3 - "$seconds" "$@" <<'PY'
+    local arguments_file=""
+    if [[ "${1:-}" == "--arguments-file" ]]; then
+        if [[ $# -lt 2 ]]; then
+            echo "run_with_timeout: --arguments-file requires a path" >&2
+            return 125
+        fi
+        arguments_file="$2"
+        shift 2
+    fi
+    python3 - "$seconds" "$arguments_file" "$@" <<'PY'
 import os
+from pathlib import Path
 import signal
 import subprocess
 import sys
 
 timeout_seconds = int(sys.argv[1])
-cmd = sys.argv[2:]
+arguments_file = sys.argv[2]
+cmd = sys.argv[3:]
+if arguments_file:
+    data = Path(arguments_file).read_bytes()
+    argument_lines = [] if not data else data.split(b"\n")
+    if argument_lines and argument_lines[-1] == b"":
+        argument_lines.pop()
+    for index, line in enumerate(argument_lines, start=1):
+        if line.endswith(b"\r"):
+            line = line[:-1]
+        if b"\0" in line:
+            sys.stderr.write(f"NUL byte in argument metadata line {index}\n")
+            sys.exit(125)
+        try:
+            cmd.append(line.decode("utf-8"))
+        except UnicodeDecodeError as error:
+            sys.stderr.write(f"Invalid UTF-8 in argument metadata line {index}: {error}\n")
+            sys.exit(125)
 popen_options = {
     "stdout": subprocess.PIPE,
     "stderr": subprocess.PIPE,
@@ -202,6 +229,8 @@ for test_dir in "$TESTS_DIR"/*/; do
     expected_file="$test_dir/expected.txt"
     output_binary="$test_dir/main.out"
     stack_limit_file="$test_dir/stack_limit_kb.txt"
+    arguments_file="$test_dir/arguments.txt"
+    expected_runtime_failure_file="$test_dir/expected_runtime_failure.txt"
     if [[ "$is_windows" == "true" ]]; then
         output_binary="$test_dir/main.exe"
     fi
@@ -319,13 +348,60 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Run (5 second timeout)
-    actual_output=$(run_with_timeout 5 "$output_binary" 2>&1)
+    run_command=(run_with_timeout 5)
+    if [[ -f "$arguments_file" ]]; then
+        run_command+=(--arguments-file "$arguments_file")
+    fi
+    actual_output=$("${run_command[@]}" "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "execution timed out" "$test_elapsed_ms"
         ((failed++))
         failures+=("$test_name")
+        continue
+    fi
+    if [[ $run_exit -eq 125 ]]; then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        append_test_result "FAIL" "$RED" "$test_name" "program terminated abnormally" "$test_elapsed_ms"
+        [[ -n "$actual_output" ]] && test_output+="  $actual_output\n"
+        ((failed++))
+        failures+=("$test_name")
+        continue
+    fi
+    if [[ -f "$expected_runtime_failure_file" ]]; then
+        expected_runtime_failure=$(tr -d '\r\n' < "$expected_runtime_failure_file")
+        case "$expected_runtime_failure" in
+        abort)
+            if [[ "$is_windows" == "true" ]]; then
+                expected_run_exit=3
+            else
+                expected_run_exit=$(python3 -c 'import signal; print(128 + signal.SIGABRT)')
+            fi
+            ;;
+        *)
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result \
+                "FAIL" "$RED" "$test_name" \
+                "invalid expected_runtime_failure.txt: $expected_runtime_failure" "$test_elapsed_ms"
+            ((failed++))
+            failures+=("$test_name")
+            continue
+            ;;
+        esac
+        if [[ $run_exit -eq $expected_run_exit ]]; then
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result "PASS" "$GREEN" "$test_name" "expected abort" "$test_elapsed_ms"
+            ((passed++))
+        else
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result \
+                "FAIL" "$RED" "$test_name" \
+                "expected abort exit $expected_run_exit, got $run_exit" "$test_elapsed_ms"
+            [[ -n "$actual_output" ]] && test_output+="  $actual_output\n"
+            ((failed++))
+            failures+=("$test_name")
+        fi
         continue
     fi
     if [[ $run_exit -ne 0 ]]; then
@@ -385,6 +461,8 @@ run_auxiliary_test() {
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
+run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
+run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

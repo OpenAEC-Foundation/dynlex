@@ -502,3 +502,28 @@ flex section case value:
 flex section [otherwise|default]:
     replacement:
         @intrinsic("default case")
+
+# --- Command-line arguments ---
+
+class:
+    patterns:
+        [an|] argument list
+    members:
+        data as a pointer to cstring
+        length as i32
+
+function [the|] command line arguments:
+    execute:
+        return @intrinsic(
+            "construct",
+            an argument list,
+            @intrinsic("command line argument values"),
+            @intrinsic("command line argument count")
+        )
+
+function argument {integer:index} of {argument list:arguments}:
+    execute:
+        if index < 0 or index >= arguments' length:
+            @intrinsic("call", "libc", "abort", void)
+        set value to item index of arguments' data
+        return new string from data value with length the length of value
