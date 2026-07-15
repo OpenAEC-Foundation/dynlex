@@ -27,6 +27,8 @@ jobs:
         run: cd src/web/ide && npm ci
       - name: Build IDE and refresh web root
         run: ./scripts/build_web_root.sh
+      - name: Verify website content and local links
+        run: node tests/web/site.mjs web
       - name: Verify web compiler artifacts are in deploy root
         run: |
           test -f web/compiler/dynlex_web.js

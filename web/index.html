@@ -1,1172 +1,359 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="icon" type="image/svg+xml" href="icons/dynlex-icon.svg">
-	<title>DynLex - Code That Speaks Human</title>
-	<link rel="stylesheet" href="style.css">
-
-	<!-- Vertex Shader (shared) -->
-	<script id="vertex-shader" type="x-shader/x-vertex">
-		attribute vec2 a_position;
-		varying vec2 v_texCoord;
-
-		void main() {
-			gl_Position = vec4(a_position, 0.0, 1.0);
-			v_texCoord = (a_position + 1.0) / 2.0;
-		}
-	</script>
-
-	<!-- Fish-eye Distortion Shader -->
-	<script id="distortion-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		varying vec2 v_texCoord;
-		uniform sampler2D u_texture;
-		uniform float u_distortion;
-		uniform float u_bounce;
-		uniform vec2 u_resolution;
-
-		void main() {
-			vec2 center = vec2(0.5, 0.5);
-			vec2 offset = v_texCoord - center;
-
-			float aspect = u_resolution.x / u_resolution.y;
-			offset.x *= aspect;
-
-			float maxDist = max(aspect, 1.0) * 0.5;
-			vec2 relOffset = offset / maxDist;
-			float rSquared = dot(relOffset, relOffset);
-
-			// Fish-eye distortion: gentle barrel, center stays clear, edges compress
-			float multiplier = 1.0 - 0.4 * rSquared;
-			float lerpedMult = u_distortion * multiplier + (1.0 - u_distortion);
-
-			// Bounce: inflate/deflate from center like a rubber membrane
-			// Positive = bulge toward viewer (barrel), negative = dip away (pincushion)
-			float bounceMult = 1.0 + u_bounce * 0.2 * (1.0 - rSquared);
-			lerpedMult *= bounceMult;
-
-			vec2 distorted = offset * lerpedMult;
-			distorted.x /= aspect;
-			vec2 sampleCoord = center + distorted;
-
-			gl_FragColor = texture2D(u_texture, clamp(sampleCoord, 0.0, 1.0));
-		}
-	</script>
-
-	<!-- 3D Tunnel Vertex Shader -->
-	<script id="tunnel-vertex-shader" type="x-shader/x-vertex">
-		attribute vec3 a_position;
-		attribute float a_alpha;
-		uniform mat4 u_viewProjection;
-		varying float v_alpha;
-
-		void main() {
-			gl_Position = u_viewProjection * vec4(a_position, 1.0);
-			v_alpha = a_alpha;
-		}
-	</script>
-
-	<!-- 3D Tunnel Fragment Shader -->
-	<script id="tunnel-fragment-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		uniform vec3 u_color;
-		varying float v_alpha;
-
-		void main() {
-			gl_FragColor = vec4(u_color, v_alpha);
-		}
-	</script>
-
-	<!-- Textured Plane Vertex Shader -->
-	<script id="plane-vertex-shader" type="x-shader/x-vertex">
-		attribute vec3 a_position;
-		attribute vec2 a_texCoord;
-		uniform mat4 u_viewProjection;
-		varying vec2 v_texCoord;
-
-		void main() {
-			gl_Position = u_viewProjection * vec4(a_position, 1.0);
-			v_texCoord = a_texCoord;
-		}
-	</script>
-
-	<!-- Textured Plane Fragment Shader -->
-	<script id="plane-fragment-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		uniform sampler2D u_texture;
-		varying vec2 v_texCoord;
-
-		void main() {
-			vec4 texColor = texture2D(u_texture, v_texCoord);
-			if (texColor.a < 0.01) discard;
-			gl_FragColor = texColor;
-		}
-	</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="DynLex is a statically typed, pattern-based programming language that reads like intent and compiles through LLVM.">
+    <meta name="theme-color" content="#0b0d0e">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="DynLex — Code shaped like thought">
+    <meta property="og:description" content="Define readable language patterns, keep static guarantees, and compile to native code, WebAssembly, or SPIR-V.">
+    <meta property="og:url" content="https://dynlex.com/">
+    <link rel="canonical" href="https://dynlex.com/">
+    <link rel="icon" type="image/svg+xml" href="icons/dynlex-icon.svg">
+    <link rel="stylesheet" href="home.css">
+    <title>DynLex — Code shaped like thought</title>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareSourceCode",
+            "name": "DynLex",
+            "codeRepository": "https://github.com/OpenAEC-Foundation/dynlex",
+            "programmingLanguage": "C++",
+            "runtimePlatform": "LLVM",
+            "license": "https://github.com/OpenAEC-Foundation/dynlex/blob/master/LICENSE.md",
+            "url": "https://dynlex.com/"
+        }
+    </script>
+    <noscript>
+        <style>
+            .reveal { opacity: 1 !important; transform: none !important; }
+            @media (max-width: 840px) {
+                .site-header { position: absolute; height: auto; min-height: 68px; flex-wrap: wrap; }
+                .menu-toggle { display: none; }
+                .site-nav { position: static; width: 100%; display: flex; flex-direction: row; flex-wrap: wrap; padding: 0 0 1rem; background: transparent; }
+                .site-nav .nav-cta { margin-top: 0; }
+            }
+        </style>
+    </noscript>
 </head>
-
 <body>
-	<!-- Intro Animation -->
-	<div class="intro-overlay" id="intro">
-		<canvas id="introCanvas"></canvas>
-	</div>
-	<div class="intro-flash" id="flash"></div>
-
-	<nav class="nav">
-		<a href="#comparison" class="nav-btn">Comparison</a>
-		<a href="#patterns" class="nav-btn">Patterns</a>
-		<a href="#performance" class="nav-btn">Performance</a>
-		<a href="ide/index.html" class="nav-btn">IDE</a>
-		<a href="download.html" class="nav-btn">Download</a>
-		<a href="wiki/index.html" class="nav-btn primary">Learn More</a>
-	</nav>
-
-	<div class="bg-orbs">
-		<div class="orb orb-1"></div>
-		<div class="orb orb-2"></div>
-		<div class="orb orb-3"></div>
-	</div>
-
-	<div class="content">
-		<header class="hero">
-			<h1 class="logo"><img src="icons/dynlex-icon.svg" alt=""><span>DynLex</span></h1>
-			<p class="tagline">
-				A programming language designed for <strong>humans</strong>.<br>
-				Write code that reads like natural language.
-			</p>
-			<div class="scroll-indicator"></div>
-		</header>
-
-		<section id="comparison" class="reveal">
-			<h2 class="section-title">Code That Speaks</h2>
-			<p class="section-subtitle">
-				No cryptic syntax. No memorizing symbols. Just describe what you want.
-			</p>
-
-			<div class="comparison">
-				<div>
-					<span class="comparison-label">OpenGL</span>
-					<div class="code-block glass-card">
-						<pre><code>glClearColor(<span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">1.0f</span>);
-glClear(GL_COLOR_BUFFER_BIT);
-glBegin(GL_QUADS);
-<span class="tk">for</span> (<span class="tk">int</span> i = <span class="tn">0</span>; i &lt; <span class="tn">10</span>; i++) {
-    glVertex2f(i * <span class="tn">50</span>, <span class="tn">100</span>);
-    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">100</span>);
-    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">140</span>);
-    glVertex2f(i * <span class="tn">50</span>, <span class="tn">140</span>);
-}
-glEnd();</code></pre>
-					</div>
-				</div>
-				<div>
-					<span class="comparison-label">DynLex</span>
-					<div class="code-block glass-card">
-						<pre><code><span class="tp">set</span> <span class="tv">the background</span> <span class="tp">to</span> <span class="tv">black</span>
-
-<span class="tp">repeat</span> <span class="tn">10</span> <span class="tp">times with</span> <span class="tv">i</span> <span class="tp">as index:</span>
-    <span class="tp">draw</span> <span class="tv">a square</span> <span class="tp">at</span> <span class="tv">i</span> * <span class="tn">50</span>, <span class="tn">100</span> <span class="tp">with size</span> <span class="tn">40</span></code></pre>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<section id="patterns" class="reveal">
-			<h2 class="section-title">Define Your Own Language</h2>
-			<p class="section-subtitle">
-				Create patterns that match how you think. The syntax is yours to shape.<br>
-				<em>If you can define Python syntax in DynLex, why use Python?</em>
-			</p>
-
-			<div class="glass-card code-block">
-				<pre><code><span class="tp">when</span> <span class="tv">a customer</span> <span class="tp">sends</span> <span class="tv">an email</span><span class="tp">:</span>
-    <span class="tp">respond to</span> <span class="tv">the email</span> <span class="tp">with</span> <span class="ts">"We have received your message."</span>
-
-<span class="tp">when</span> <span class="tv">the order</span> <span class="tp">is ready:</span>
-    <span class="tp">notify</span> <span class="tv">the customer</span>
-    <span class="tp">update</span> <span class="tv">the status</span> <span class="tp">to</span> <span class="ts">"shipped"</span></code></pre>
-			</div>
-		</section>
-
-		<section id="performance" class="reveal">
-			<h2 class="section-title">Supreme Performance</h2>
-			<p class="section-subtitle">
-				Compiles to machine code via LLVM. No runtime overhead, no virtual machine.<br>
-				No language is faster.
-			</p>
-
-			<div class="benchmark">
-				<div class="benchmark-header">
-					<span class="benchmark-title">Sum 0 to 100 million</span>
-					<span class="benchmark-note">Lower is better</span>
-				</div>
-				<div class="benchmark-bars">
-					<div class="benchmark-row">
-						<span class="benchmark-label">Python</span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar python" style="--width: 100%"></div>
-						</div>
-						<span class="benchmark-time">6.556s</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">DynLex <small>-O0</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar tbx" style="--width: 3%"></div>
-						</div>
-						<span class="benchmark-time">0.196s</span>
-						<span class="benchmark-speedup">33x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">C++ <small>-O0</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar cpp" style="--width: 2.8%"></div>
-						</div>
-						<span class="benchmark-time">0.186s</span>
-						<span class="benchmark-speedup">35x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">DynLex <small>-O3</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar tbx optimized" style="--width: 0.5%"></div>
-						</div>
-						<span class="benchmark-time">0.001s</span>
-						<span class="benchmark-speedup highlight">6556x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">C++ <small>-O3</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar cpp optimized" style="--width: 0.5%"></div>
-						</div>
-						<span class="benchmark-time">0.001s</span>
-						<span class="benchmark-speedup">6556x faster</span>
-					</div>
-				</div>
-				<p class="benchmark-footnote">With -O3, both DynLex and C++ compute the result at compile time via LLVM constant folding.</p>
-			</div>
-		</section>
-
-		<section class="reveal">
-			<h2 class="section-title">Human and AI Native</h2>
-			<p class="section-subtitle">
-				Designed for both humans and AI agents.<br>
-				Natural language patterns are intuitive to read, write, and generate.<br>
-				AI output tokens are filtered by a pattern tree, ensuring valid syntax.
-			</p>
-
-			<div class="ai-demo">
-				<div class="ai-editor">
-					<div class="ai-editor-header">
-						<div class="ai-editor-dot"></div>
-						<span class="ai-editor-label">AI generating code</span>
-					</div>
-					<div class="ai-code-line">
-						<span id="ai-typed" class="ai-typed"></span><span class="ai-cursor"></span>
-					</div>
-					<div id="ai-dropdown" class="ai-dropdown"></div>
-				</div>
-			</div>
-		</section>
-
-		<section class="reveal">
-			<h2 class="section-title">Eye for Beauty</h2>
-			<p class="section-subtitle">
-				Other languages spend their time maintaining decades of legacy complexity.<br>
-				DynLex stays minimal, leaving room to focus on elegance and powerful features.
-			</p>
-
-			<details class="spoiler">
-				<summary>Speaking of beauty...</summary>
-				<div class="spoiler-content">
-					<p style="margin-bottom: 1rem; color: var(--text-secondary);">
-						When a language has been around for decades, even the official website starts to show its age.
-					</p>
-					<div class="screenshot-grid">
-						<div class="screenshot-card">
-							<img src="cpp_site.png" alt="C++ official website">
-							<p>C++ - Founded 1985</p>
-						</div>
-						<div class="screenshot-card">
-							<img src="python_site.png" alt="Python official website">
-							<p>Python - Founded 1991</p>
-						</div>
-					</div>
-				</div>
-			</details>
-		</section>
-
-		<section class="cta reveal">
-			<h2 class="section-title">Start Building</h2>
-			<p class="section-subtitle" style="margin: 1rem auto 2rem;">
-				Clone the repo and write your first DynLex program in seconds.
-			</p>
-			<a href="https://github.com/OpenAEC-Foundation/dynlex" class="cta-button">
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path
-						d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-				</svg>
-				View on GitHub
-			</a>
-		</section>
-
-		<footer>
-			<p>DynLex is open source. Built for humans, by humans.</p>
-		</footer>
-	</div>
-
-	<script>
-		// Unified WebGL intro: 3D tunnel + textured code plane + fish-eye post-process
-		const intro = document.getElementById('intro');
-		const flash = document.getElementById('flash');
-		const canvas = document.getElementById('introCanvas');
-		const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-
-		// Code lines with syntax highlighting
-		const codeLines = [
-			[
-				{ text: 'when', color: '#89ddff' },
-				{ text: ' a visitor ', color: '#82aaff' },
-				{ text: 'visits', color: '#89ddff' },
-				{ text: ' the website', color: '#82aaff' },
-				{ text: ':', color: '#89ddff' }
-			],
-			[
-				{ text: '    show', color: '#89ddff' },
-				{ text: ' "DynLex"', color: '#c3e88d' },
-				{ text: ' to', color: '#89ddff' },
-				{ text: ' the visitor', color: '#82aaff' }
-			],
-			[
-				{ text: '    reveal', color: '#89ddff' },
-				{ text: ' the main page', color: '#82aaff' }
-			],
-			[
-				{ text: 'executing...', color: '#c792ea' }
-			]
-		];
-
-		const fontSize = 32;
-		const lineHeight = fontSize * 1.4;
-		const padding = 40;
-		let sourceCanvas, sourceCtx, measureCanvas, measureCtx;
-		let animationId;
-		let bounceStartTime = -1, bounceCameraZ = 0;
-
-		// WebGL state
-		let tunnelProg, planeProg, postProg;
-		let tunnelVBO, tunnelMeshVBO, planeVBO, postQuadVBO;
-		let framebuffer, sceneTex, depthBuf;
-		let codeTexture;
-		let fbWidth = 0, fbHeight = 0;
-
-		// Plane positions in tunnel
-		const CODE_PLANE_Z = 15;
-		const CODE_PLANE_HALF_H = 6;
-		const PAGE_PLANE_Z = 700;
-		const PAGE_PLANE_HALF_H = 7;
-
-		// === 3D Tunnel System ===
-		const tunnel = {
-			radius: 16,
-			speed: 110,
-			numLines: 400,
-			viewDist: 100,
-			angularWidth: 0.1,
-			lengthMin: 2,
-			lengthMax: 8,
-			lines: null,
-			cameraZ: 0,
-			lastTime: -1
-		};
-
-		function sharpCurve(x, sharpness) {
-			// tanh squashes sine into flat plateaus with sharp transitions
-			return Math.tanh(sharpness * Math.sin(x));
-		}
-
-		function tunnelPath(z) {
-			// Straight at the start (code plane at z=15), curves in middle, straightens near page plane
-			const blendIn = smoothstep(80, 140, z);
-			const blendOut = 1 - smoothstep(PAGE_PLANE_Z - 50, PAGE_PLANE_Z - 8, z);
-			const blend = blendIn * blendOut;
-			return [
-				blend * 22.0 * sharpCurve(z * 0.012, 3),
-				blend * 16.0 * sharpCurve(z * 0.0085, 3)
-			];
-		}
-
-		function createTunnelLine(zAhead, intensity) {
-			return {
-				angle: Math.random() * Math.PI * 2,
-				zStart: tunnel.cameraZ + zAhead,
-				length: tunnel.lengthMin + Math.random() * (tunnel.lengthMax - tunnel.lengthMin),
-				opacity: intensity
-			};
-		}
-
-		function initTunnelLines() {
-			tunnel.lines = [];
-			tunnel.cameraZ = 0;
-			tunnel.lastTime = -1;
-			for (let i = 0; i < tunnel.numLines; i++) {
-				tunnel.lines.push(createTunnelLine(Math.random() * tunnel.viewDist, 0));
-			}
-		}
-
-		function smoothstep(edge0, edge1, x) {
-			const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-			return t * t * (3 - 2 * t);
-		}
-
-		// Matrix math (column-major for WebGL)
-		function mat4Perspective(fov, aspect, near, far) {
-			const f = 1.0 / Math.tan(fov * 0.5);
-			const nf = 1.0 / (near - far);
-			return new Float32Array([
-				f / aspect, 0, 0, 0,
-				0, f, 0, 0,
-				0, 0, (far + near) * nf, -1,
-				0, 0, 2 * far * near * nf, 0
-			]);
-		}
-
-		function mat4LookAt(eye, target, up) {
-			let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
-			const fLen = Math.sqrt(fx * fx + fy * fy + fz * fz);
-			fx /= fLen; fy /= fLen; fz /= fLen;
-			// right = cross(up, forward) for correct handedness
-			let rx = up[1] * fz - up[2] * fy;
-			let ry = up[2] * fx - up[0] * fz;
-			let rz = up[0] * fy - up[1] * fx;
-			const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
-			rx /= rLen; ry /= rLen; rz /= rLen;
-			// up = cross(forward, right) to match swapped right vector
-			const ux = fy * rz - fz * ry;
-			const uy = fz * rx - fx * rz;
-			const uz = fx * ry - fy * rx;
-			return new Float32Array([
-				rx, ux, -fx, 0,
-				ry, uy, -fy, 0,
-				rz, uz, -fz, 0,
-				-(rx * eye[0] + ry * eye[1] + rz * eye[2]),
-				-(ux * eye[0] + uy * eye[1] + uz * eye[2]),
-				(fx * eye[0] + fy * eye[1] + fz * eye[2]),
-				1
-			]);
-		}
-
-		function mat4Multiply(a, b) {
-			const o = new Float32Array(16);
-			for (let i = 0; i < 4; i++) {
-				for (let j = 0; j < 4; j++) {
-					o[j * 4 + i] = a[i] * b[j * 4] + a[4 + i] * b[j * 4 + 1] + a[8 + i] * b[j * 4 + 2] + a[12 + i] * b[j * 4 + 3];
-				}
-			}
-			return o;
-		}
-
-		// Shader helpers
-		function getShaderSource(id) {
-			return document.getElementById(id).textContent;
-		}
-
-		function compileShader(type, source) {
-			const shader = gl.createShader(type);
-			gl.shaderSource(shader, source);
-			gl.compileShader(shader);
-			return shader;
-		}
-
-		function createProgram(vsSrc, fsSrc) {
-			const program = gl.createProgram();
-			gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vsSrc));
-			gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fsSrc));
-			gl.linkProgram(program);
-			return program;
-		}
-
-		function createTexture() {
-			const tex = gl.createTexture();
-			gl.bindTexture(gl.TEXTURE_2D, tex);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			return tex;
-		}
-
-		function ensureFramebuffer(w, h) {
-			if (fbWidth === w && fbHeight === h) return;
-			fbWidth = w; fbHeight = h;
-
-			if (!framebuffer) framebuffer = gl.createFramebuffer();
-			if (!sceneTex) sceneTex = createTexture();
-			if (!depthBuf) depthBuf = gl.createRenderbuffer();
-
-			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-
-			gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuf);
-			gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
-
-			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
-			gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuf);
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-		}
-
-		function initWebGL() {
-			if (!gl) return false;
-
-			// Tunnel program (3D lines)
-			tunnelProg = createProgram(
-				getShaderSource('tunnel-vertex-shader'),
-				getShaderSource('tunnel-fragment-shader'));
-			tunnelVBO = gl.createBuffer();
-			tunnelMeshVBO = gl.createBuffer();
-
-			// Plane program (textured 3D quads)
-			planeProg = createProgram(
-				getShaderSource('plane-vertex-shader'),
-				getShaderSource('plane-fragment-shader'));
-			planeVBO = gl.createBuffer();
-
-			// Post-process program (fish-eye distortion)
-			postProg = createProgram(
-				getShaderSource('vertex-shader'),
-				getShaderSource('distortion-shader'));
-			postQuadVBO = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-				-1, -1, 1, -1, -1, 1,
-				-1, 1, 1, -1, 1, 1
-			]), gl.STATIC_DRAW);
-
-			// Textures
-			codeTexture = createTexture();
-
-			gl.enable(gl.BLEND);
-			return true;
-		}
-
-		function measureText() {
-			if (!measureCtx) {
-				measureCanvas = document.createElement('canvas');
-				measureCtx = measureCanvas.getContext('2d');
-			}
-			measureCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
-			let maxWidth = 0;
-			codeLines.forEach(line => {
-				let lineWidth = 0;
-				line.forEach(part => lineWidth += measureCtx.measureText(part.text).width);
-				maxWidth = Math.max(maxWidth, lineWidth);
-			});
-			return { width: maxWidth + padding * 2, height: codeLines.length * lineHeight + padding * 2 };
-		}
-
-		function renderSourceText(revealProgress) {
-			const screenWidth = window.innerWidth;
-			const screenHeight = window.innerHeight;
-
-			if (!sourceCanvas) {
-				sourceCanvas = document.createElement('canvas');
-				sourceCanvas.width = screenWidth;
-				sourceCanvas.height = screenHeight;
-				sourceCtx = sourceCanvas.getContext('2d');
-			}
-
-			sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
-			sourceCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
-			sourceCtx.textBaseline = 'top';
-
-			const textSize = measureText();
-			const startX = (screenWidth - textSize.width) / 2 + padding;
-			const startY = (screenHeight - textSize.height) / 2 + padding;
-
-			let totalChars = 0;
-			codeLines.forEach(line => line.forEach(part => totalChars += part.text.length));
-			const charsToShow = Math.floor(revealProgress * totalChars);
-
-			let charCount = 0;
-			codeLines.forEach((line, lineIdx) => {
-				let x = startX;
-				const y = startY + lineIdx * lineHeight;
-				line.forEach(part => {
-					sourceCtx.fillStyle = part.color;
-					for (let i = 0; i < part.text.length; i++) {
-						if (charCount < charsToShow) {
-							sourceCtx.fillText(part.text[i], x, y);
-						}
-						x += sourceCtx.measureText(part.text[i]).width;
-						charCount++;
-					}
-				});
-			});
-
-			if (revealProgress >= 1) {
-				const flashOn = Math.floor(Date.now() / 150) % 2 === 0;
-				if (!flashOn) {
-					const lastLineY = startY + 3 * lineHeight;
-					sourceCtx.clearRect(0, lastLineY, sourceCanvas.width, lineHeight);
-				}
-			}
-
-			// Upload to WebGL texture
-			gl.bindTexture(gl.TEXTURE_2D, codeTexture);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
-		}
-
-		// Build plane vertices at z position on tunnel path
-		function buildPlaneVerts(z, halfW, halfH) {
-			const c = tunnelPath(z);
-			// 4 corners, each with position (3) + texcoord (2) = 5 floats
-			// Two triangles: 0-1-2, 1-3-2
-			const x = c[0], y = c[1];
-			return new Float32Array([
-				// tri 1
-				x - halfW, y - halfH, z, 0, 1,
-				x + halfW, y - halfH, z, 1, 1,
-				x - halfW, y + halfH, z, 0, 0,
-				// tri 2
-				x + halfW, y - halfH, z, 1, 1,
-				x + halfW, y + halfH, z, 1, 0,
-				x - halfW, y + halfH, z, 0, 0,
-			]);
-		}
-
-		function renderScene(elapsed, distortion, bounce, bgColor, lineColor, lineIntensity, revealProgress) {
-			const w = window.innerWidth;
-			const h = window.innerHeight;
-			canvas.width = w;
-			canvas.height = h;
-			ensureFramebuffer(w, h);
-
-			// === Pass 1: Render 3D scene to framebuffer ===
-			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-			gl.viewport(0, 0, w, h);
-			gl.clearColor(bgColor[0], bgColor[1], bgColor[2], 1);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			gl.enable(gl.DEPTH_TEST);
-
-			// Init tunnel lines on first call
-			if (!tunnel.lines) initTunnelLines();
-
-			// Recycle lines behind camera
-			for (let i = 0; i < tunnel.lines.length; i++) {
-				const line = tunnel.lines[i];
-				if (line.zStart + line.length < tunnel.cameraZ - 2) {
-					tunnel.lines[i] = createTunnelLine(
-						tunnel.viewDist * 0.4 + Math.random() * tunnel.viewDist * 0.6,
-						lineIntensity
-					);
-				}
-			}
-
-			// Camera follows tunnel path
-			const camP = tunnelPath(tunnel.cameraZ);
-			const lookAhead = 12;
-			const lookP = tunnelPath(tunnel.cameraZ + lookAhead);
-			const eye = [camP[0], camP[1], tunnel.cameraZ];
-			const target = [lookP[0], lookP[1], tunnel.cameraZ + lookAhead];
-
-			const aspect = w / h;
-			const proj = mat4Perspective(Math.PI * 0.45, aspect, 0.1, 600);
-			const view = mat4LookAt(eye, target, [0, 1, 0]);
-			const vp = mat4Multiply(proj, view);
-
-			// --- Draw solid tunnel mesh (opaque wall behind stripes) ---
-			{
-				gl.useProgram(tunnelProg);
-				gl.depthMask(true);
-				gl.disable(gl.BLEND);
-
-				const meshSegLen = 4;
-				const meshRingN = 16;
-				const meshR = tunnel.radius + 1.5;
-				const meshStartZ = Math.max(tunnel.cameraZ - 2, 0);
-				const meshEndZ = tunnel.cameraZ + tunnel.viewDist;
-				const numMeshSegs = Math.ceil((meshEndZ - meshStartZ) / meshSegLen);
-				const meshVerts = new Float32Array(numMeshSegs * meshRingN * 6 * 4);
-				let mi = 0;
-
-				for (let seg = 0; seg < numMeshSegs; seg++) {
-					const z0 = meshStartZ + seg * meshSegLen;
-					const z1 = z0 + meshSegLen;
-					const c0 = tunnelPath(z0);
-					const c1 = tunnelPath(z1);
-
-					for (let v = 0; v < meshRingN; v++) {
-						const a0 = (v / meshRingN) * Math.PI * 2;
-						const a1 = ((v + 1) / meshRingN) * Math.PI * 2;
-						const cos0 = Math.cos(a0), sin0 = Math.sin(a0);
-						const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
-
-						const pts = [
-							c0[0] + meshR * cos0, c0[1] + meshR * sin0, z0,
-							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
-							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
-							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
-							c1[0] + meshR * cos1, c1[1] + meshR * sin1, z1,
-							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
-						];
-						for (let t = 0; t < 6; t++) {
-							meshVerts[mi++] = pts[t * 3];
-							meshVerts[mi++] = pts[t * 3 + 1];
-							meshVerts[mi++] = pts[t * 3 + 2];
-							meshVerts[mi++] = 1.0;
-						}
-					}
-				}
-
-				gl.bindBuffer(gl.ARRAY_BUFFER, tunnelMeshVBO);
-				gl.bufferData(gl.ARRAY_BUFFER, meshVerts, gl.DYNAMIC_DRAW);
-
-				const mPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
-				const mAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
-				gl.enableVertexAttribArray(mPosLoc);
-				gl.vertexAttribPointer(mPosLoc, 3, gl.FLOAT, false, 16, 0);
-				gl.enableVertexAttribArray(mAlphaLoc);
-				gl.vertexAttribPointer(mAlphaLoc, 1, gl.FLOAT, false, 16, 12);
-
-				gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
-				gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), bgColor[0], bgColor[1], bgColor[2]);
-
-				gl.drawArrays(gl.TRIANGLES, 0, numMeshSegs * meshRingN * 6);
-				gl.enable(gl.BLEND);
-			}
-
-			// --- Draw textured planes (opaque, write depth) ---
-			gl.useProgram(planeProg);
-			gl.depthMask(true);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			const pPosLoc = gl.getAttribLocation(planeProg, 'a_position');
-			const pTexLoc = gl.getAttribLocation(planeProg, 'a_texCoord');
-			gl.enableVertexAttribArray(pPosLoc);
-			gl.enableVertexAttribArray(pTexLoc);
-			gl.uniformMatrix4fv(gl.getUniformLocation(planeProg, 'u_viewProjection'), false, vp);
-			gl.uniform1i(gl.getUniformLocation(planeProg, 'u_texture'), 0);
-			gl.activeTexture(gl.TEXTURE0);
-
-			// Code text plane (fixed size inside tunnel)
-			if (CODE_PLANE_Z > tunnel.cameraZ - 5) {
-				renderSourceText(revealProgress);
-				const codeHalfW = CODE_PLANE_HALF_H * aspect;
-				const codeVerts = buildPlaneVerts(CODE_PLANE_Z, codeHalfW, CODE_PLANE_HALF_H);
-
-				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
-				gl.bufferData(gl.ARRAY_BUFFER, codeVerts, gl.DYNAMIC_DRAW);
-				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
-				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
-				gl.bindTexture(gl.TEXTURE_2D, codeTexture);
-				gl.drawArrays(gl.TRIANGLES, 0, 6);
-			}
-
-			// --- Draw tunnel lines (semi-transparent, no depth write) ---
-			gl.depthMask(false);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			const R = tunnel.radius;
-			const dA = tunnel.angularWidth;
-			const verts = new Float32Array(tunnel.lines.length * 6 * 4);
-			let vi = 0;
-
-			for (const line of tunnel.lines) {
-				const z0 = line.zStart;
-				const z1 = z0 + line.length;
-				const a0 = line.angle;
-				const a1 = a0 + dA;
-				const p0 = tunnelPath(z0);
-				const p1 = tunnelPath(z1);
-				const c0a0 = Math.cos(a0), s0a0 = Math.sin(a0);
-				const c0a1 = Math.cos(a1), s0a1 = Math.sin(a1);
-
-				const corners = [
-					p0[0] + R * c0a0, p0[1] + R * s0a0, z0,
-					p0[0] + R * c0a1, p0[1] + R * s0a1, z0,
-					p1[0] + R * c0a0, p1[1] + R * s0a0, z1,
-					p1[0] + R * c0a1, p1[1] + R * s0a1, z1
-				];
-
-				const midZ = (z0 + z1) * 0.5 - tunnel.cameraZ;
-				const distFade = smoothstep(0, 6, midZ);
-				const alpha = line.opacity * distFade;
-
-				const idx = [0, 1, 2, 1, 3, 2];
-				for (const ci of idx) {
-					verts[vi++] = corners[ci * 3];
-					verts[vi++] = corners[ci * 3 + 1];
-					verts[vi++] = corners[ci * 3 + 2];
-					verts[vi++] = alpha;
-				}
-			}
-
-			gl.useProgram(tunnelProg);
-			gl.bindBuffer(gl.ARRAY_BUFFER, tunnelVBO);
-			gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
-
-			const tPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
-			const tAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
-			gl.enableVertexAttribArray(tPosLoc);
-			gl.vertexAttribPointer(tPosLoc, 3, gl.FLOAT, false, 16, 0);
-			gl.enableVertexAttribArray(tAlphaLoc);
-			gl.vertexAttribPointer(tAlphaLoc, 1, gl.FLOAT, false, 16, 12);
-
-			gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
-			gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), lineColor[0], lineColor[1], lineColor[2]);
-
-			gl.drawArrays(gl.TRIANGLES, 0, tunnel.lines.length * 6);
-			gl.depthMask(true);
-
-			// === Pass 2: Post-process (fish-eye) to screen ===
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-			gl.viewport(0, 0, w, h);
-			gl.disable(gl.DEPTH_TEST);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			gl.useProgram(postProg);
-			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
-
-			// Disable attribs from previous draw calls, then enable only what we need
-			for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
-			const ppPosLoc = gl.getAttribLocation(postProg, 'a_position');
-			gl.enableVertexAttribArray(ppPosLoc);
-			gl.vertexAttribPointer(ppPosLoc, 2, gl.FLOAT, false, 0, 0);
-
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-			gl.uniform1i(gl.getUniformLocation(postProg, 'u_texture'), 0);
-			gl.uniform1f(gl.getUniformLocation(postProg, 'u_distortion'), distortion);
-			gl.uniform1f(gl.getUniformLocation(postProg, 'u_bounce'), bounce);
-			gl.uniform2f(gl.getUniformLocation(postProg, 'u_resolution'), w, h);
-
-			gl.drawArrays(gl.TRIANGLES, 0, 6);
-		}
-
-		function resetIntro() {
-			if (animationId) cancelAnimationFrame(animationId);
-			intro.classList.remove('hidden');
-			intro.style.opacity = 1;
-			sourceCanvas = null;
-			tunnel.lines = null;
-			tunnel.lastTime = -1;
-			tunnel.cameraZ = 0;
-			bounceStartTime = -1;
-			bounceCameraZ = 0;
-			// Pause all animations so background matches our static render at snap
-			document.body.style.animationPlayState = 'paused';
-			document.body.style.backgroundPosition = '0% 50%';
-			document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = 'paused');
-		}
-
-		function playIntro() {
-			resetIntro();
-			initWebGL();
-
-			const startTime = performance.now();
-
-			function animate(currentTime) {
-				const elapsed = (currentTime - startTime) / 1000;
-
-				// Timeline:
-				// 0-3: typewriter, camera stationary
-				// 3-3.5: pause
-				// 3.5-4: "executing..."
-				// 4-5.5: camera accelerates through code plane, fish-eye ramps up
-				// 5-5.5: bg black→white, lines white→black (flash)
-				// 5.5-7.5: bg white→dark, full speed tunnel
-				// 8.5-10: lines fade
-				// ~10.4: page plane fills viewport → snap to real page
-				const moveStart = 4;
-				const flashStart = 5;
-				const flashEnd = 5.5;
-				const tunnelEnd = 8.5;
-				const raysFadeEnd = 10;
-
-				// Typewriter progress — compute ratio from actual text data
-				let totalChars = 0, firstLinesChars = 0;
-				codeLines.forEach((line, i) => {
-					const lineLen = line.reduce((sum, part) => sum + part.text.length, 0);
-					totalChars += lineLen;
-					if (i < codeLines.length - 1) firstLinesChars += lineLen;
-				});
-				const firstLinesRatio = firstLinesChars / totalChars;
-				let revealProgress;
-				if (elapsed < 3) {
-					revealProgress = elapsed / 3 * firstLinesRatio;
-				} else if (elapsed < 3.5) {
-					revealProgress = firstLinesRatio;
-				} else {
-					revealProgress = 1;
-				}
-
-				// Camera: exponential acceleration after moveStart
-				// pos = A * (e^(k*t) - 1), starts slow, gets very fast
-				const expK = 0.7;
-				const expA = PAGE_PLANE_Z / (Math.exp(expK * 6.5) - 1); // reach page in ~6.5s of movement
-				const snapDist = PAGE_PLANE_HALF_H / Math.tan(Math.PI * 0.45 * 0.5);
-				const maxCameraZ = PAGE_PLANE_Z - snapDist; // page fills viewport here
-				let distortion = 0;
-				let bounce = 0;
-
-				if (elapsed < moveStart) {
-					tunnel.cameraZ = 0;
-				} else {
-					const t = elapsed - moveStart;
-					tunnel.cameraZ = Math.min(expA * (Math.exp(expK * t) - 1), maxCameraZ);
-					distortion = 1 - Math.exp(-1.5 * t);
-
-					// Trigger bounce when camera hits the page
-					if (bounceStartTime < 0 && tunnel.cameraZ >= maxCameraZ) {
-						bounceStartTime = elapsed;
-					}
-				}
-
-				// When camera hits the page, switch to real page with CSS bounce
-				if (bounceStartTime >= 0) {
-					// Hide intro, show real page
-					intro.classList.add('hidden');
-					document.body.style.animationPlayState = '';
-					document.body.style.backgroundPosition = '';
-					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
-					localStorage.setItem('intro_seen', 'true');
-
-					// CSS bounce animation on the real page — scale from viewport center
-					const html = document.documentElement;
-					html.style.transformOrigin = '50% 50vh';
-					html.style.overflow = 'hidden';
-
-					function animateBounce(time) {
-						const bt = (time - bounceStartTime * 1000 - startTime) / 1000;
-						const scale = 1 + 0.08 * Math.exp(-4.0 * bt) * Math.sin(18.0 * bt);
-						html.style.transform = `scale(${scale})`;
-
-						if (bt < 1.2) {
-							requestAnimationFrame(animateBounce);
-						} else {
-							html.style.transform = '';
-							html.style.transformOrigin = '';
-							html.style.overflow = '';
-						}
-					}
-					requestAnimationFrame(animateBounce);
-					return;
-				}
-
-				// Background color: dark throughout
-				const bgColor = [0.04, 0.04, 0.06];
-
-				// Line color: always white
-				const lineColor = [0.9, 0.95, 1.0];
-
-				// Line spawn intensity
-				let lineIntensity = 0;
-				if (elapsed >= moveStart && elapsed < flashStart) {
-					lineIntensity = ((elapsed - moveStart) / (flashStart - moveStart)) * 1.5;
-				} else if (elapsed >= flashStart) {
-					lineIntensity = 1.5;
-				}
-
-				renderScene(elapsed, distortion, 0, bgColor, lineColor, lineIntensity, revealProgress);
-
-				// Safety timeout
-				if (elapsed >= 20) {
-					intro.classList.add('hidden');
-					document.body.style.animationPlayState = '';
-					document.body.style.backgroundPosition = '';
-					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
-					localStorage.setItem('intro_seen', 'true');
-					return;
-				}
-
-				animationId = requestAnimationFrame(animate);
-			}
-
-			document.fonts.ready.then(() => {
-				animationId = requestAnimationFrame(animate);
-			});
-		}
-
-		// Check if already seen, otherwise play
-		if (localStorage.getItem('intro_seen')) {
-			intro.classList.add('hidden');
-		} else {
-			playIntro();
-		}
-
-		// Click logo to replay intro
-		document.querySelector('.logo').addEventListener('click', () => {
-			playIntro();
-		});
-		document.querySelector('.logo').style.cursor = 'pointer';
-
-		// Scroll reveal
-		const observer = new IntersectionObserver((entries) => {
-			entries.forEach(entry => {
-				if (entry.isIntersecting) entry.target.classList.add('visible');
-			});
-		}, { threshold: 0.1 });
-
-		document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-		// AI Autocomplete Animation
-		(function() {
-			const aiTyped = document.getElementById('ai-typed');
-			const aiDropdown = document.getElementById('ai-dropdown');
-
-			// Sequence of tokens with their completion options
-			// Each step: { typed: "text so far", options: [{text, prob, valid}], selected: index }
-			const sequence = [
-				{
-					typed: '',
-					options: [
-						{ text: 'send', prob: 42, valid: true },
-						{ text: 'create', prob: 28, valid: true },
-						{ text: 'delete', prob: 18, valid: true },
-						{ text: 'foreach', prob: 12, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send ',
-					options: [
-						{ text: 'an email', prob: 45, valid: true },
-						{ text: 'a message', prob: 35, valid: true },
-						{ text: 'notification', prob: 15, valid: true },
-						{ text: '()', prob: 5, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email ',
-					options: [
-						{ text: 'to', prob: 65, valid: true },
-						{ text: 'from', prob: 20, valid: true },
-						{ text: 'with', prob: 12, valid: true },
-						{ text: ';', prob: 3, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to ',
-					options: [
-						{ text: 'the user', prob: 38, valid: true },
-						{ text: 'the admin', prob: 32, valid: true },
-						{ text: 'support', prob: 22, valid: true },
-						{ text: 'null', prob: 8, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user ',
-					options: [
-						{ text: 'with subject', prob: 55, valid: true },
-						{ text: 'containing', prob: 30, valid: true },
-						{ text: 'about', prob: 12, valid: true },
-						{ text: '++', prob: 3, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user with subject ',
-					options: [
-						{ text: '"Welcome"', prob: 40, valid: true },
-						{ text: '"Update"', prob: 30, valid: true },
-						{ text: '"Alert"', prob: 25, valid: true },
-						{ text: '0x4F', prob: 5, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user with subject "Welcome"',
-					options: null,
-					selected: -1
-				}
-			];
-
-			let currentStep = 0;
-			let charIndex = 0;
-			let phase = 'typing'; // 'typing', 'showing', 'selecting', 'pause'
-			let phaseTimer = 0;
-
-			function renderDropdown(step) {
-				if (!step.options) {
-					aiDropdown.classList.remove('visible');
-					return;
-				}
-
-				aiDropdown.innerHTML = step.options.map((opt, i) => `
-					<div class="ai-option ${i === step.selected ? 'selected' : ''} ${!opt.valid ? 'disabled' : ''}">
-						<span class="ai-option-text">${opt.text}</span>
-						<span class="ai-option-prob">${opt.prob}%</span>
-						<div class="ai-option-bar">
-							<div class="ai-option-bar-fill" style="width: ${opt.prob}%"></div>
-						</div>
-					</div>
-				`).join('');
-
-				// Position dropdown at cursor
-				const typedRect = aiTyped.getBoundingClientRect();
-				const editorRect = aiTyped.closest('.ai-editor').getBoundingClientRect();
-				aiDropdown.style.left = (typedRect.right - editorRect.left) + 'px';
-				aiDropdown.style.top = (typedRect.bottom - editorRect.top + 5) + 'px';
-
-				aiDropdown.classList.add('visible');
-			}
-
-			function tick() {
-				const step = sequence[currentStep];
-				const targetText = step.typed;
-
-				if (phase === 'typing') {
-					if (charIndex < targetText.length) {
-						charIndex++;
-						aiTyped.textContent = targetText.slice(0, charIndex);
-					} else {
-						phase = 'showing';
-						phaseTimer = 0;
-					}
-				} else if (phase === 'showing') {
-					renderDropdown(step);
-					phaseTimer++;
-					if (phaseTimer > 15) {
-						phase = 'selecting';
-						phaseTimer = 0;
-					}
-				} else if (phase === 'selecting') {
-					phaseTimer++;
-					if (phaseTimer > 10) {
-						phase = 'pause';
-						phaseTimer = 0;
-						aiDropdown.classList.remove('visible');
-					}
-				} else if (phase === 'pause') {
-					phaseTimer++;
-					if (phaseTimer > 5) {
-						currentStep++;
-						if (currentStep >= sequence.length) {
-							// Reset and loop
-							currentStep = 0;
-							charIndex = 0;
-							aiTyped.textContent = '';
-							phase = 'typing';
-							phaseTimer = 0;
-							setTimeout(tick, 1500); // Pause before restart
-							return;
-						}
-						phase = 'typing';
-						phaseTimer = 0;
-					}
-				}
-
-				setTimeout(tick, phase === 'typing' ? 60 : 50);
-			}
-
-			// Start animation
-			setTimeout(tick, 1000);
-		})();
-	</script>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="scroll-progress" aria-hidden="true"><span id="scroll-progress-bar"></span></div>
+
+    <header class="site-header" id="site-header">
+        <a class="brand" href="index.html" aria-label="DynLex home">
+            <img src="icons/dynlex-icon.svg" alt="">
+            <span>DynLex</span>
+        </a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+            <span></span><span></span><span></span>
+            <span class="sr-only">Open navigation</span>
+        </button>
+        <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+            <a href="#language">Language</a>
+            <a href="#toolchain">Toolchain</a>
+            <a href="#status">Status</a>
+            <a href="wiki/index.html">Docs</a>
+            <a href="https://github.com/OpenAEC-Foundation/dynlex">GitHub</a>
+            <a class="nav-cta" href="ide/index.html">Open IDE <span aria-hidden="true">↗</span></a>
+        </nav>
+    </header>
+
+    <main id="main">
+        <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-grid" aria-hidden="true"></div>
+            <div class="hero-orbit hero-orbit-a" aria-hidden="true"></div>
+            <div class="hero-orbit hero-orbit-b" aria-hidden="true"></div>
+
+            <div class="hero-copy reveal">
+                <div class="eyebrow"><span></span> Open source · Early release · v0.0.1</div>
+                <h1 id="hero-title">Code shaped<br>like <em>thought.</em></h1>
+                <p class="hero-lede">
+                    DynLex is a statically typed, pattern-based language that lets software read like intent—then compiles it through LLVM.
+                </p>
+                <div class="hero-actions">
+                    <a class="button button-acid" data-ide-link href="ide/index.html">Try it in your browser <span aria-hidden="true">↗</span></a>
+                    <a class="button button-ghost" href="download.html">Download DynLex</a>
+                </div>
+                <p class="hero-note"><span aria-hidden="true">●</span> The compiler and editor run locally in your browser.</p>
+            </div>
+
+            <div class="hero-stage reveal" data-delay="1">
+                <div class="code-window">
+                    <div class="code-titlebar">
+                        <div class="window-controls" aria-hidden="true"><span></span><span></span><span></span></div>
+                        <span>main.dl</span>
+                        <span class="compile-state"><i></i> Compiles</span>
+                    </div>
+                    <div class="code-tabs" role="tablist" aria-label="Code examples">
+                        <button class="code-tab active" type="button" role="tab" aria-selected="true" aria-controls="example-readable" id="tab-readable" data-code-tab="readable">Readable</button>
+                        <button class="code-tab" type="button" role="tab" aria-selected="false" aria-controls="example-pattern" id="tab-pattern" data-code-tab="pattern">Define syntax</button>
+                        <button class="code-tab" type="button" role="tab" aria-selected="false" aria-controls="example-graphics" id="tab-graphics" data-code-tab="graphics">Graphics</button>
+                    </div>
+                    <div class="code-panel active" id="example-readable" role="tabpanel" aria-labelledby="tab-readable" data-code-panel="readable">
+                        <pre aria-label="A readable DynLex program"><code>import lib/std.dl
+
+set width to 7
+set height to 6
+set area to width * height
+
+print area as line</code></pre>
+                    </div>
+                    <div class="code-panel" id="example-pattern" role="tabpanel" aria-labelledby="tab-pattern" data-code-panel="pattern" hidden>
+                        <pre aria-label="A custom DynLex function pattern"><code>import lib/std.dl
+
+function square value:
+    execute:
+        return value * value
+
+print (square 9) as line</code></pre>
+                    </div>
+                    <div class="code-panel" id="example-graphics" role="tabpanel" aria-labelledby="tab-graphics" data-code-panel="graphics" hidden>
+                        <pre aria-label="A DynLex graphics loop"><code>import lib/graphics.dl
+
+set window to a new window with width 800 and height 600
+
+loop while not the window should close:
+    clear the screen
+    draw a fullscreen quad
+    display the frame of window</code></pre>
+                    </div>
+                    <div class="code-footer">
+                        <span><kbd>LLVM</kbd> native · wasm · SPIR-V</span>
+                        <a data-ide-link href="ide/index.html">Run this code <span aria-hidden="true">→</span></a>
+                    </div>
+                </div>
+                <div class="stage-label stage-label-top">No VM</div>
+                <div class="stage-label stage-label-bottom">Full type inference</div>
+            </div>
+        </section>
+
+        <div class="signal-strip" aria-label="DynLex capabilities">
+            <div>
+                <span>Pattern-defined syntax</span><i>◆</i>
+                <span>Static typing</span><i>◆</i>
+                <span>Native LLVM</span><i>◆</i>
+                <span>Browser compiler</span><i>◆</i>
+                <span>LSP + DAP</span><i>◆</i>
+                <span>SPIR-V shaders</span><i>◆</i>
+            </div>
+        </div>
+
+        <section class="manifesto section-pad" id="language" aria-labelledby="language-title">
+            <div class="section-kicker reveal">01 / The language</div>
+            <div class="manifesto-heading reveal">
+                <h2 id="language-title">Your problem already has a language.</h2>
+                <p>Most programming languages make you translate that language into their grammar. DynLex makes grammar programmable.</p>
+            </div>
+
+            <div class="pattern-story">
+                <article class="story-card story-definition reveal">
+                    <div class="story-number">01</div>
+                    <p class="story-label">Define a pattern</p>
+                    <pre><code>function total price for quantity items:
+    execute:
+        return price * quantity</code></pre>
+                    <p>Literal words form the readable structure. Used words become typed parameters through inference.</p>
+                </article>
+                <div class="story-connector reveal" aria-hidden="true">
+                    <span>same program</span>
+                    <svg viewBox="0 0 180 44"><path d="M2 22H164M151 8l14 14-14 14"/></svg>
+                </div>
+                <article class="story-card story-use reveal" data-delay="1">
+                    <div class="story-number">02</div>
+                    <p class="story-label">Use the language you made</p>
+                    <pre><code>set subtotal to total 24.95 for 3 items
+print subtotal as line</code></pre>
+                    <p>No parser plug-in. No preprocessor. The pattern participates in normal matching, overload resolution, and type inference.</p>
+                </article>
+            </div>
+
+            <div class="principle-grid">
+                <article class="principle reveal">
+                    <span class="principle-icon">Aa</span>
+                    <h3>Syntax that says why</h3>
+                    <p>Shape APIs around the vocabulary of the work, from business rules to graphics.</p>
+                </article>
+                <article class="principle reveal" data-delay="1">
+                    <span class="principle-icon">T?</span>
+                    <h3>Inferred, not untyped</h3>
+                    <p>DynLex resolves static types and overloads without making every call read like a declaration.</p>
+                </article>
+                <article class="principle reveal" data-delay="2">
+                    <span class="principle-icon">{ }</span>
+                    <h3>The library is the language</h3>
+                    <p>Core behavior stays small. Reusable language behavior lives in readable DynLex patterns.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="toolchain section-pad" id="toolchain" aria-labelledby="toolchain-title">
+            <div class="toolchain-intro reveal">
+                <div class="section-kicker section-kicker-light">02 / One compiler, real targets</div>
+                <h2 id="toolchain-title">Readable at the top.<br><em>Serious underneath.</em></h2>
+                <p>DynLex is a C++23 compiler built on LLVM 20. It resolves pattern calls, infers types, and branches into target-specific code generation only after the program is understood.</p>
+            </div>
+
+            <div class="pipeline reveal" aria-label="DynLex compilation pipeline">
+                <div class="pipeline-step">
+                    <span>01</span>
+                    <strong>Source</strong>
+                    <small>Natural-language patterns</small>
+                </div>
+                <i aria-hidden="true">→</i>
+                <div class="pipeline-step">
+                    <span>02</span>
+                    <strong>Pattern tree</strong>
+                    <small>Deterministic matching</small>
+                </div>
+                <i aria-hidden="true">→</i>
+                <div class="pipeline-step">
+                    <span>03</span>
+                    <strong>Inference</strong>
+                    <small>Types, overloads, constants</small>
+                </div>
+                <i aria-hidden="true">→</i>
+                <div class="pipeline-step pipeline-output">
+                    <span>04</span>
+                    <strong>Codegen</strong>
+                    <small>Native · wasm · SPIR-V</small>
+                </div>
+            </div>
+
+            <div class="capability-grid">
+                <article class="capability reveal">
+                    <div class="capability-top"><span>Native</span><b>01</b></div>
+                    <h3>LLVM machine code</h3>
+                    <p>Build native executables with LLVM optimization and no language virtual machine.</p>
+                    <code>dynlex app.dl -o app</code>
+                </article>
+                <article class="capability reveal" data-delay="1">
+                    <div class="capability-top"><span>Browser</span><b>02</b></div>
+                    <h3>Compiler in WebAssembly</h3>
+                    <p>Edit, compile, inspect diagnostics, and run emitted program WASM without sending source to a server.</p>
+                    <a href="ide/index.html">Launch browser IDE <span aria-hidden="true">↗</span></a>
+                </article>
+                <article class="capability reveal" data-delay="2">
+                    <div class="capability-top"><span>GPU</span><b>03</b></div>
+                    <h3>SPIR-V shaders</h3>
+                    <p>Compile DynLex shader programs for the GPU and connect them to the graphics library.</p>
+                    <code>--emit-spirv</code>
+                </article>
+                <article class="capability reveal" data-delay="3">
+                    <div class="capability-top"><span>Tools</span><b>04</b></div>
+                    <h3>LSP and DAP</h3>
+                    <p>Semantic tokens, diagnostics, hover, definitions, completions, and GDB-backed debugging.</p>
+                    <a href="https://github.com/OpenAEC-Foundation/dynlex/tree/master/vscode-extension">VS Code integration <span aria-hidden="true">↗</span></a>
+                </article>
+            </div>
+        </section>
+
+        <section class="proof section-pad" aria-labelledby="proof-title">
+            <div class="proof-heading reveal">
+                <div class="section-kicker">03 / Beyond hello world</div>
+                <h2 id="proof-title">Small language.<br>Large proving ground.</h2>
+                <p>The compiler is exercised with real programs: games, 3D graphics, text rendering, model loading, and animated shaders.</p>
+            </div>
+
+            <div class="proof-grid">
+                <article class="proof-card proof-snake reveal">
+                    <div class="proof-visual snake-board" aria-hidden="true">
+                        <span class="snake-food"></span>
+                        <i class="snake-1"></i><i class="snake-2"></i><i class="snake-3"></i><i class="snake-4"></i><i class="snake-5"></i><i class="snake-6"></i>
+                        <b>SCORE 08</b>
+                    </div>
+                    <div class="proof-copy"><span>Game loop</span><h3>Snake, written in DynLex</h3><p>Input, state, collision detection, memory, text, and drawing in one readable program.</p></div>
+                </article>
+                <article class="proof-card proof-shader reveal" data-delay="1">
+                    <div class="proof-visual shader-field" aria-hidden="true"><span></span><i></i><b>fragment.dl</b></div>
+                    <div class="proof-copy"><span>GPU pipeline</span><h3>Animated shader gallery</h3><p>DynLex compiles fragment and vertex shaders to SPIR-V and drives them from native graphics code.</p></div>
+                </article>
+                <article class="proof-card proof-ide reveal" data-delay="2">
+                    <div class="proof-visual mini-ide" aria-hidden="true">
+                        <div><span></span><span></span><span></span></div>
+                        <pre><i>1</i> import lib/std.dl
+<i>2</i>
+<i>3</i> print "Hello" as line</pre>
+                        <b>✓ Ready</b>
+                    </div>
+                    <div class="proof-copy"><span>Zero install</span><h3>The compiler in your browser</h3><p>The real compiler, bundled standard library, Monaco editor, LSP features, and runnable output.</p></div>
+                </article>
+            </div>
+        </section>
+
+        <section class="status section-pad" id="status" aria-labelledby="status-title">
+            <div class="status-heading reveal">
+                <div class="section-kicker section-kicker-light">04 / Project status</div>
+                <h2 id="status-title">Early. Working.<br>Built in public.</h2>
+                <p>DynLex is at version 0.0.1: usable enough to explore, young enough that compiler maturity, the standard library, diagnostics, and documentation are still moving quickly.</p>
+            </div>
+
+            <div class="status-board reveal">
+                <div class="status-column available">
+                    <div class="status-column-title"><span></span> Available today</div>
+                    <ul>
+                        <li>Native LLVM compiler</li>
+                        <li>Static typing with full inference</li>
+                        <li>Pattern definitions and overloads</li>
+                        <li>Standard library in DynLex</li>
+                        <li>Web compiler and Monaco IDE</li>
+                        <li>LSP, DAP, and VS Code support</li>
+                        <li>Linux, macOS, and Windows packages</li>
+                    </ul>
+                </div>
+                <div class="status-column growing">
+                    <div class="status-column-title"><span></span> Growing now</div>
+                    <ul>
+                        <li>Compiler correctness and maturity</li>
+                        <li>Broader standard library</li>
+                        <li>Clearer diagnostics</li>
+                        <li>Deeper language documentation</li>
+                        <li>More practical validation programs</li>
+                    </ul>
+                    <a href="https://github.com/OpenAEC-Foundation/dynlex/blob/master/docs/future-plans.md">Read the roadmap <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+        </section>
+
+        <section class="start" aria-labelledby="start-title">
+            <div class="start-copy reveal">
+                <div class="section-kicker">05 / Start here</div>
+                <h2 id="start-title">Make code<br>speak your language.</h2>
+                <p>Try DynLex instantly in the browser, or install the native compiler and build a real executable.</p>
+                <div class="start-actions">
+                    <a class="button button-ink" data-ide-link href="ide/index.html">Open the browser IDE <span aria-hidden="true">↗</span></a>
+                    <a class="button button-outline" href="wiki/getting-started.html">Read getting started</a>
+                </div>
+            </div>
+            <div class="install-card reveal" data-delay="1">
+                <div class="install-header">
+                    <span>Linux quick install</span>
+                    <button id="copy-install" type="button" data-copy="curl -fsSL https://dynlex.com/install.sh | sh"><span>Copy</span></button>
+                </div>
+                <pre><code><span>$</span> curl -fsSL https://dynlex.com/install.sh | sh</code></pre>
+                <div class="install-footer">
+                    <span>Other platform?</span>
+                    <a href="download.html">Windows · macOS · Linux <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-main">
+            <a class="brand footer-brand" href="index.html"><img src="icons/dynlex-icon.svg" alt=""><span>DynLex</span></a>
+            <p>A natural-language-like programming language for humans and AI agents.</p>
+        </div>
+        <div class="footer-links">
+            <div><strong>Learn</strong><a href="wiki/getting-started.html">Getting started</a><a href="wiki/index.html">Documentation</a><a href="wiki/terms.html">Language terms</a></div>
+            <div><strong>Build</strong><a href="ide/index.html">Browser IDE</a><a href="download.html">Download</a><a href="https://github.com/OpenAEC-Foundation/dynlex/tree/master/vscode-extension">VS Code</a></div>
+            <div><strong>Project</strong><a href="https://github.com/OpenAEC-Foundation/dynlex">GitHub</a><a href="https://github.com/OpenAEC-Foundation/dynlex/issues">Issues</a><a href="https://github.com/OpenAEC-Foundation/dynlex/releases">Releases</a></div>
+        </div>
+        <div class="footer-bottom"><span>Open source · v0.0.1</span><span>© <span id="current-year">2026</span> OpenAEC Foundation</span></div>
+    </footer>
+
+    <noscript><p class="noscript">JavaScript is optional for reading this site. Enable it for interactive examples and navigation on small screens.</p></noscript>
+    <script src="home.js" defer></script>
 </body>
-
 </html>
