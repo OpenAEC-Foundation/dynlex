@@ -6,9 +6,16 @@
 #include "lsp/fileSystem.h"
 #include "lsp/stdioTransport.h"
 #include "parseContext.h"
+#include "syntaxConfig.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/Program.h"
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -18,6 +25,109 @@
 #ifndef DYNLEX_VERSION
 #define DYNLEX_VERSION "dev"
 #endif
+
+namespace {
+
+constexpr std::string_view commandWrapperPath = "<command-wrapper>";
+constexpr std::string_view commandSourcePath = "<command-line>";
+
+void printUsage(std::ostream &output) {
+	output << "Usage:\n"
+		   << "  dynlex <file.dl> [compiler options]\n"
+		   << "  dynlex <source...>\n"
+		   << "  dynlex -- <source...>\n\n"
+		   << "Compiler options:\n"
+		   << "  --emit-llvm | --emit-wasm | --emit-spirv\n"
+		   << "  --emit-completions line:column  --dump-purity\n"
+		   << "  --shader-stage=vertex|fragment  -O0|-O1|-O2|-O3\n"
+		   << "  -o <output>  -g|--debug\n"
+		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
+		   << "  --version  --help\n";
+}
+
+bool hasErrors(const ParseContext &context) {
+	return std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [](const Diagnostic &diagnostic) {
+		return diagnostic.level == Diagnostic::Level::Error;
+	});
+}
+
+bool isFileArgument(const std::string &argument) {
+	if (argument.ends_with(".dl"))
+		return true;
+	std::error_code error;
+	return std::filesystem::exists(argument, error);
+}
+
+std::string joinSourceArguments(const std::vector<std::string> &arguments, size_t start) {
+	std::string source;
+	for (size_t index = start; index < arguments.size(); index++) {
+		if (!source.empty())
+			source += ' ';
+		source += arguments[index];
+	}
+	return source;
+}
+
+int executeProgram(const std::string &programPath) {
+	std::vector<llvm::StringRef> arguments = {programPath};
+	std::string executionError;
+	bool executionFailed = false;
+	int exitCode = llvm::sys::ExecuteAndWait(programPath, arguments, std::nullopt, {}, 0, 0, &executionError, &executionFailed);
+	if (executionFailed || exitCode < 0) {
+		std::cerr << "Failed to execute compiled command";
+		if (!executionError.empty())
+			std::cerr << ": " << executionError;
+		std::cerr << std::endl;
+		return 1;
+	}
+	return exitCode;
+}
+
+int compileAndExecuteCommand(std::string source, ParseContext &context) {
+	auto fileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
+	fileSystem->setFile(std::string(commandSourcePath), std::move(source));
+	context.fileSystem = std::move(fileSystem);
+	if (!initializeSyntaxConfigs(context, std::string(commandSourcePath))) {
+		context.printDiagnostics();
+		return 1;
+	}
+	static_cast<lsp::MemoryFileSystem *>(context.fileSystem.get())
+		->setFile(
+			std::string(commandWrapperPath), context.projectSyntax.importKeyword + " lib/commands.dl\n" +
+												 context.projectSyntax.importKeyword + " " + std::string(commandSourcePath) +
+												 "\n"
+		);
+
+	llvm::SmallString<128> temporaryDirectory;
+	if (std::error_code error = llvm::sys::fs::createUniqueDirectory("dynlex-command", temporaryDirectory)) {
+		std::cerr << "Failed to create temporary command directory: " << error.message() << std::endl;
+		return 1;
+	}
+
+	std::filesystem::path outputPath = std::filesystem::path(temporaryDirectory.str().str()) / "command";
+#ifdef _WIN32
+	outputPath += ".exe";
+#endif
+	context.options.inputPath = std::string(commandSourcePath);
+	context.options.outputPath = outputPath.string();
+
+	int result = 1;
+	bool compileSucceeded = compile(std::string(commandWrapperPath), context);
+	bool codegenSucceeded = compileSucceeded && generateCode(context);
+	context.printDiagnostics();
+	if (codegenSucceeded && !hasErrors(context))
+		result = executeProgram(outputPath.string());
+
+	std::error_code cleanupError;
+	std::filesystem::remove_all(std::filesystem::path(temporaryDirectory.str().str()), cleanupError);
+	if (cleanupError) {
+		std::cerr << "Failed to remove temporary command directory: " << cleanupError.message() << std::endl;
+		return 1;
+	}
+	return result;
+}
+
+} // namespace
 
 static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &outColumn) {
 	size_t colon = text.find(':');
@@ -43,7 +153,7 @@ static bool parseOneBasedLineColumn(std::string_view text, int &outLine, int &ou
 // will compile DynLex to an executable named main
 // to execute that executable: ./main
 // the compiler will always receive one source file, since that file imports all other files
-// if no arguments are given, the program will print its arguments to the console
+// non-file positional arguments are joined as source, compiled, and executed
 // --lsp flag starts the language server on TCP port 5007 by default
 // --stdio flag starts the language server on stdin/stdout (for MCP integration)
 // --emit-llvm outputs .ll, --emit-wasm outputs a wasm artifact, otherwise native executable
@@ -60,16 +170,28 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool emitCompletions = false;
 	bool dumpPurity = false;
 	bool enableLspTrace = false;
+	bool showHelp = false;
+	bool explicitShaderStage = false;
 	int completionLine = 0;
 	int completionColumn = 0;
 	int lspPort = 5007;
 	std::string inputFile;
 	std::string lspTracePath;
+	std::optional<size_t> commandSourceStart;
 
 	// Parse arguments
-	for (size_t i = 0; i < args.size(); ++i) {
-		const std::string &arg = args[i];
-		if (arg == "--wait-debugger") {
+	for (size_t argumentIndex = 0; argumentIndex < args.size(); ++argumentIndex) {
+		const std::string &arg = args[argumentIndex];
+		if (arg == "--") {
+			if (!inputFile.empty()) {
+				std::cerr << "Cannot combine file input with command-line source" << std::endl;
+				return 1;
+			}
+			commandSourceStart = argumentIndex + 1;
+			break;
+		} else if (arg == "--help" || arg == "-h") {
+			showHelp = true;
+		} else if (arg == "--wait-debugger") {
 			waitDebugger = true;
 		} else if (arg == "--dap") {
 			runDAP = true;
@@ -84,14 +206,14 @@ int main(int argumentCount, char *argumentValues[]) {
 			std::cout << DYNLEX_VERSION << std::endl;
 			return 0;
 		} else if (arg == "--port") {
-			if (i + 1 >= args.size()) {
+			if (argumentIndex + 1 >= args.size()) {
 				std::cerr << "Missing value for --port" << std::endl;
 				return 1;
 			}
 			try {
-				lspPort = std::stoi(args[++i]);
+				lspPort = std::stoi(args[++argumentIndex]);
 			} catch (const std::exception &) {
-				std::cerr << "Invalid --port value: " << args[i] << std::endl;
+				std::cerr << "Invalid --port value: " << args[argumentIndex] << std::endl;
 				return 1;
 			}
 			if (lspPort <= 0 || lspPort > 65535) {
@@ -104,8 +226,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			std::string value;
 			if (arg.size() > std::string("--emit-completions").size() && arg[std::string("--emit-completions").size()] == '=') {
 				value = arg.substr(std::string("--emit-completions=").size());
-			} else if (i + 1 < args.size()) {
-				value = args[++i];
+			} else if (argumentIndex + 1 < args.size()) {
+				value = args[++argumentIndex];
 			}
 
 			if (!parseOneBasedLineColumn(value, completionLine, completionColumn)) {
@@ -122,8 +244,10 @@ int main(int argumentCount, char *argumentValues[]) {
 		} else if (arg == "--emit-spirv") {
 			context.options.emitSPIRV = true;
 		} else if (arg == "--shader-stage=vertex") {
+			explicitShaderStage = true;
 			context.options.shaderStage = ParseContext::ShaderStage::Vertex;
 		} else if (arg == "--shader-stage=fragment") {
+			explicitShaderStage = true;
 			context.options.shaderStage = ParseContext::ShaderStage::Fragment;
 		} else if (arg == "-g" || arg == "--debug") {
 			context.options.emitDebugInfo = true;
@@ -138,12 +262,30 @@ int main(int argumentCount, char *argumentValues[]) {
 		} else if (arg.starts_with("-o")) {
 			if (arg.size() > 2) {
 				context.options.outputPath = arg.substr(2);
-			} else if (i + 1 < args.size()) {
-				context.options.outputPath = args[++i];
+			} else {
+				if (argumentIndex + 1 >= args.size()) {
+					std::cerr << "Missing value for -o" << std::endl;
+					return 1;
+				}
+				context.options.outputPath = args[++argumentIndex];
 			}
-		} else if (!arg.starts_with("-")) {
+		} else if (arg.starts_with("-")) {
+			std::cerr << "Unknown option: " << arg << std::endl;
+			return 1;
+		} else if (!inputFile.empty()) {
+			std::cerr << "Only one input file can be compiled" << std::endl;
+			return 1;
+		} else if (isFileArgument(arg)) {
 			inputFile = arg;
+		} else {
+			commandSourceStart = argumentIndex;
+			break;
 		}
+	}
+
+	if (showHelp) {
+		printUsage(std::cout);
+		return 0;
 	}
 
 	int explicitOutputModes = 0;
@@ -153,6 +295,22 @@ int main(int argumentCount, char *argumentValues[]) {
 	if (explicitOutputModes > 1) {
 		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-wasm, or --emit-spirv" << std::endl;
 		return 1;
+	}
+	if (commandSourceStart) {
+		if (*commandSourceStart >= args.size()) {
+			std::cerr << "No command-line source was provided after --" << std::endl;
+			return 1;
+		}
+		if (runLSP || runDAP || useStdio || enableLspTrace) {
+			std::cerr << "Cannot combine a language or debug server with command-line source" << std::endl;
+			return 1;
+		}
+		if (explicitOutputModes != 0 || emitCompletions || dumpPurity || explicitShaderStage ||
+			!context.options.outputPath.empty()) {
+			std::cerr << "Command-line source supports native execution options only; use a .dl file when emitting output"
+					  << std::endl;
+			return 1;
+		}
 	}
 
 	if (waitDebugger) {
@@ -195,6 +353,10 @@ int main(int argumentCount, char *argumentValues[]) {
 		}
 	}
 
+	if (commandSourceStart) {
+		return compileAndExecuteCommand(joinSourceArguments(args, *commandSourceStart), context);
+	}
+
 	if (!inputFile.empty()) {
 		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		context.options.inputPath = inputFile;
@@ -209,18 +371,10 @@ int main(int argumentCount, char *argumentValues[]) {
 			generateCode(context);
 		}
 		context.printDiagnostics();
-		bool hasErrors = std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [](const Diagnostic &d) {
-			return d.level == Diagnostic::Level::Error;
-		});
-		if (hasErrors)
+		if (hasErrors(context))
 			return 1;
 	} else {
-		std::cerr << "Usage: dynlex <file.dl> [--emit-llvm] [--emit-wasm] [--emit-spirv] [--emit-completions line:column] "
-					 "[--dump-purity] "
-					 "[--shader-stage=vertex|fragment] "
-					 "[-O0|-O1|-O2|-O3] "
-					 "[-o output] [-g] [--lsp] [--port PORT] [--stdio] [--dap] [--lsp-trace[=PATH]] [--version]"
-				  << std::endl;
+		printUsage(std::cerr);
 	}
 
 	return 0;
