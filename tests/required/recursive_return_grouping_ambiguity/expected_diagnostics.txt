@@ -1,10 +1,10 @@
-tests/required/recursive_return_grouping_ambiguity/main.dl:22:13-42: Warning: Expression 'return n - 1 is even inverted' has multiple valid operand groupings. Using 'return ((n - 1) is even inverted)' instead of 'return (n - (1 is even inverted))'.
-  note: while inferring call 'return n - 1 is even inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursive_return_grouping_ambiguity/main.dl:22:13-42
-  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:16:20-41
-  note: while inferring call 'return n - 1 is odd inverted' with arguments [unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:16:13-41
-  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:25:23-41
-  note: while inferring intrinsic 'discard' in '@intrinsic("discard", 4 is even inverted)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:25:1-42
-tests/required/recursive_return_grouping_ambiguity/main.dl:16:13-41: Warning: Expression 'return n - 1 is odd inverted' has multiple valid operand groupings. Using 'return ((n - 1) is odd inverted)' instead of 'return (n - (1 is odd inverted))'.
-  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursive_return_grouping_ambiguity/main.dl:16:13-41
-  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:25:23-41
-  note: while inferring intrinsic 'discard' in '@intrinsic("discard", 4 is even inverted)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:25:1-42
+tests/required/recursive_return_grouping_ambiguity/main.dl:13-42: Warning: Expression 'return n - 1 is even inverted' has multiple valid operand groupings. Using 'return ((n - 1) is even inverted)' instead of 'return (n - (1 is even inverted))'.
+  note: while inferring call 'return n - 1 is even inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursive_return_grouping_ambiguity/main.dl:13-42
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:20-41
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:13-41
+  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:23-41
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", 4 is even inverted)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:1-42
+tests/required/recursive_return_grouping_ambiguity/main.dl:13-41: Warning: Expression 'return n - 1 is odd inverted' has multiple valid operand groupings. Using 'return ((n - 1) is odd inverted)' instead of 'return (n - (1 is odd inverted))'.
+  note: while inferring call 'return n - 1 is odd inverted' with arguments [a 32 bit integer] -> nothing tests/required/recursive_return_grouping_ambiguity/main.dl:13-41
+  note: while inferring call '4 is even inverted' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:23-41
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", 4 is even inverted)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/recursive_return_grouping_ambiguity/main.dl:1-42

@@ -1,5 +1,5 @@
-tests/required/incompatible_void_return_type/main.dl:13:30-31: Error: Function return type is nothing, but this return statement produces a 32 bit integer
-  note: Function return type was first inferred as nothing here tests/required/incompatible_void_return_type/main.dl:12:13-33
-  note: while inferring intrinsic 'return' in '@intrinsic("return", 1)' with arguments [i8*, a 32 bit integer] -> undeduced tests/required/incompatible_void_return_type/main.dl:13:9-32
-  note: while inferring call 'discard mixed return' -> undeduced tests/required/incompatible_void_return_type/main.dl:15:9-21
-  note: while inferring call 'discard mixed return' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_void_return_type/main.dl:15:1-21
+tests/required/incompatible_void_return_type/main.dl:30-31: Error: Function return type is nothing, but this return statement produces a 32 bit integer
+  note: Function return type was first inferred as nothing here tests/required/incompatible_void_return_type/main.dl:13-33
+  note: while inferring intrinsic 'return' in '@intrinsic("return", 1)' with arguments [i8*, a 32 bit integer] -> undeduced tests/required/incompatible_void_return_type/main.dl:9-32
+  note: while inferring call 'discard mixed return' -> undeduced tests/required/incompatible_void_return_type/main.dl:9-21
+  note: while inferring call 'discard mixed return' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_void_return_type/main.dl:1-21
