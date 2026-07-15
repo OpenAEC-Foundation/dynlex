@@ -175,13 +175,42 @@ static bool inferSection(
 			return true;
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
-		bool ambiguityChecked = !context.trial && context.detectGroupingAmbiguity;
-		if (!inferExpression(
-				lineExpression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
-			)) {
+		bool detectLineGroupingAmbiguity = !context.trial && context.detectGroupingAmbiguity;
+		bool previousGroupingAmbiguityIncomplete = context.groupingAmbiguityIncomplete;
+		context.groupingAmbiguityIncomplete = false;
+		bool inferred = inferExpression(
+			lineExpression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
+		);
+		bool lineGroupingAmbiguityIncomplete = context.groupingAmbiguityIncomplete;
+		context.groupingAmbiguityIncomplete = previousGroupingAmbiguityIncomplete || lineGroupingAmbiguityIncomplete;
+		if (!inferred) {
 			context.typesValid = false;
 			return false;
 		}
+		Section *inferenceRootSection = context.currentInstantiation && context.currentInstantiation->body
+											? context.currentInstantiation->body->sourceSection
+											: context.parseContext.mainSection;
+		requireCompilerInvariant(line->section, "inferred code line has no owning section");
+		bool lineBelongsToInferenceRoot =
+			line->section == inferenceRootSection || line->section->isDescendantOf(inferenceRootSection);
+		if (!context.trial && lineGroupingAmbiguityIncomplete && lineBelongsToInferenceRoot) {
+			auto existing = std::find_if(
+				context.parseContext.deferredGroupingAmbiguities.begin(),
+				context.parseContext.deferredGroupingAmbiguities.end(),
+				[&](const ParseContext::DeferredGroupingAmbiguity &deferred) {
+				return deferred.line == line;
+			}
+			);
+			if (existing == context.parseContext.deferredGroupingAmbiguities.end()) {
+				context.parseContext.deferredGroupingAmbiguities.push_back({
+					line,
+					inferenceRootSection,
+					context.currentInstantiation,
+					context.captureInferenceTraceRelatedInfo(lineExpression),
+				});
+			}
+		}
+		bool ambiguityChecked = detectLineGroupingAmbiguity && !lineGroupingAmbiguityIncomplete;
 		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
 		return true;
 	};
@@ -519,6 +548,8 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 	return true;
 }
 
+#include "grouping_finalization.inl"
+
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!inferPatternTypeConstraints(parseContext))
@@ -548,6 +579,8 @@ bool inferTypes(ParseContext &parseContext) {
 		return true;
 	};
 	if (!inferExposedFunctions(parseContext.mainSection))
+		return false;
+	if (!finalizeDeferredGroupingAmbiguities(parseContext))
 		return false;
 
 	// Validate variables — all must have deduced types
@@ -690,6 +723,8 @@ bool ensureSectionInstantiationInferred(
 	if (callerContext) {
 		callerContext->observedInProgressUndeducedInstantiation =
 			callerContext->observedInProgressUndeducedInstantiation || context.observedInProgressUndeducedInstantiation;
+		callerContext->groupingAmbiguityIncomplete =
+			callerContext->groupingAmbiguityIncomplete || context.groupingAmbiguityIncomplete;
 		callerContext->inheritTypeFailureFrom(context);
 	}
 	if (!inst.valid || !context.typesValid)

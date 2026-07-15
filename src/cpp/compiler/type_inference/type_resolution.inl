@@ -1316,6 +1316,12 @@ struct InferenceContext {
 			InstantiationPurity purity;
 		};
 
+		struct InstantiationReturnTypeUndo {
+			Instantiation *instantiation;
+			DataType returnType;
+			Range returnTypeOriginRange;
+		};
+
 		std::vector<VariableUndo> variableTypeUndo;
 		std::unordered_set<Variable *> seenVariables;
 		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
@@ -1326,6 +1332,8 @@ struct InferenceContext {
 		std::unordered_set<std::string> seenSectionInstantiations;
 		std::vector<InstantiationPurityUndo> instantiationPurityUndo;
 		std::unordered_set<Instantiation *> seenInstantiationPurities;
+		std::vector<InstantiationReturnTypeUndo> instantiationReturnTypeUndo;
+		std::unordered_set<Instantiation *> seenInstantiationReturnTypes;
 
 		static std::string sectionInstantiationUndoId(Section *section, const InstantiationKey &key) {
 			std::string keyString = std::to_string(reinterpret_cast<uintptr_t>(section)) + "|";
@@ -1380,6 +1388,15 @@ struct InferenceContext {
 				return;
 			seenInstantiationPurities.insert(instantiation);
 			instantiationPurityUndo.push_back({instantiation, instantiation->purity});
+		}
+
+		void recordInstantiationReturnTypeWrite(Instantiation *instantiation) {
+			if (!instantiation || seenInstantiationReturnTypes.contains(instantiation))
+				return;
+			seenInstantiationReturnTypes.insert(instantiation);
+			instantiationReturnTypeUndo.push_back(
+				{instantiation, instantiation->returnType, instantiation->returnTypeOriginRange}
+			);
 		}
 
 		SectionInstantiationRetargetResult
@@ -1437,6 +1454,7 @@ struct InferenceContext {
 	const std::unordered_set<Expression *> *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
+	bool groupingAmbiguityIncomplete = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 	std::vector<Expression *> expressionStack;
 	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;

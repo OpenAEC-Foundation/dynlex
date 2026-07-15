@@ -258,6 +258,10 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 	}
 	for (auto it = journal.instantiationPurityUndo.rbegin(); it != journal.instantiationPurityUndo.rend(); ++it)
 		it->instantiation->purity = it->purity;
+	for (auto it = journal.instantiationReturnTypeUndo.rbegin(); it != journal.instantiationReturnTypeUndo.rend(); ++it) {
+		it->instantiation->returnType = it->returnType;
+		it->instantiation->returnTypeOriginRange = it->returnTypeOriginRange;
+	}
 	for (auto it = journal.sectionInstantiationUndo.rbegin(); it != journal.sectionInstantiationUndo.rend(); ++it) {
 		auto instantiationIt = it->section->instantiations.find(it->key);
 		if (it->existed) {
@@ -1707,6 +1711,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 }
 
 #include "intrinsics/store_inference.inl"
+#include "return_inference.inl"
 #include "variable_flow.inl"
 
 // Infer types for a section's code lines with operand reordering. Returns false on failure.
@@ -1984,11 +1989,18 @@ static void inferOrderedExpression(
 				break;
 			}
 			case IntrinsicReturnKind::Void:
-				if (kind == IntrinsicKind::Return && expr->arguments.size() > 1) {
-					DataType retType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-					if (retType.isDeduced() && context.currentInstantiation)
-						context.currentInstantiation->returnType = retType;
-					context.setExpressionValue(expr, context.lookupExpressionValue(expr->arguments[1]));
+				if (kind == IntrinsicKind::Return) {
+					Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
+					Expression *sourceReturnValueExpression =
+						returnValueExpression ? resolveThroughBindings(returnValueExpression, flexBindingFrameStack) : nullptr;
+					DataType returnType = returnValueExpression
+											  ? ensureExpressionType(returnValueExpression, context, flexBindingFrameStack)
+											  : DataType{DataType::Kind::Void};
+					if (returnType.isDeduced() &&
+						!reconcileFunctionReturnType(context, expr, sourceReturnValueExpression, returnType))
+						break;
+					if (returnValueExpression)
+						context.setExpressionValue(expr, context.lookupExpressionValue(returnValueExpression));
 				}
 				if ((kind == IntrinsicKind::If || kind == IntrinsicKind::ElseIf || kind == IntrinsicKind::LoopWhile) &&
 					expr->arguments.size() > 1) {

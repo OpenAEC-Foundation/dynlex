@@ -1,0 +1,25 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function left - right:
+    execute:
+        return @intrinsic("subtract", left, right)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function n is even inverted:
+    execute:
+        if @intrinsic("not equal", n, 0):
+            return n - 1 is odd inverted
+        return 1
+
+function n is odd inverted:
+    execute:
+        if @intrinsic("not equal", n, 0):
+            return n - 1 is even inverted
+        return 0
+
+@intrinsic("discard", 4 is even inverted)

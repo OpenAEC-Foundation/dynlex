@@ -3,6 +3,7 @@
 #include "compileTimeInfo.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
+#include "range.h"
 #include "sectionType.h"
 #include "stringHierarchy.h"
 #include "type.h"
@@ -85,6 +86,7 @@ inline InstantiationKey buildInstantiationKey(
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
 	DataType returnType{DataType::Kind::Any};
+	Range returnTypeOriginRange;
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, DataType> parameterTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;

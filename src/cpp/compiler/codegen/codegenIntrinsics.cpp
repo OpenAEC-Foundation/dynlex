@@ -1118,6 +1118,10 @@ llvm::Value *generateIntrinsicCode(
 	}
 
 	if (kind == IntrinsicKind::Return) {
+		if (args.size() == 1) {
+			builder.CreateRetVoid();
+			return nullptr;
+		}
 		llvm::Value *returnValue = generateExpressionCode(context, args[1]);
 		builder.CreateRet(returnValue);
 		return nullptr;

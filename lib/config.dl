@@ -63,6 +63,10 @@ dynlex options:
         store value unresolved: "the assigned value '{value}' has no type"
         store value not runtime: "the assigned value '{value}' has no runtime value"
         function has no deduced return type: "Function '{function}' has no deduced return type"
+        incompatible return type:
+            message: "Function return type is {expected_type}, but this return statement produces {actual_type}"
+            related origin: "Function return type was first inferred as {type} here"
+            quick fix convert: "Convert returned value to {type}"
         variable type change:
             message: "Variable '{name}' cannot change type from {from_type} to {to_type}"
             related origin: "Variable '{name}' first became {type} here"

@@ -569,6 +569,8 @@ static bool validateGroupingInTrial(
 	trialContext.fixedGroupingRoots = &trialFixedGroupingRoots;
 	trialContext.resolvedGroupingRoots = &trialFixedGroupingRoots;
 	inferOrderedExpression(expr, trialContext, flexBindingFrameStack, true);
+	if (trialContext.observedInProgressUndeducedInstantiation || trialContext.groupingAmbiguityIncomplete)
+		context.groupingAmbiguityIncomplete = true;
 	std::unordered_set<Expression *> inferredExpressionNodes;
 	collectExpressionNodes(expr, inferredExpressionNodes);
 	requireCompilerInvariant(
@@ -1091,25 +1093,45 @@ static bool inferExpression(
 	bool foundValidGrouping = false;
 	bool groupingAmbiguous = false;
 	auto queueSelectedGroupingWarnings = [&]() {
-		if (!context.pendingOperandGroupingWarnings)
+		if (!context.pendingOperandGroupingWarnings || context.groupingAmbiguityIncomplete)
 			return;
 		context.pendingOperandGroupingWarnings->insert(
 			context.pendingOperandGroupingWarnings->end(), selectedGroupingWarnings.begin(), selectedGroupingWarnings.end()
 		);
 	};
 	auto queueCurrentGroupingWarning = [&](std::string chosenGrouping, std::string alternativeGrouping) {
-		if (!context.pendingOperandGroupingWarnings)
+		if (!context.pendingOperandGroupingWarnings || context.groupingAmbiguityIncomplete)
 			return;
+		std::vector<RelatedInfo> relatedInfo = context.captureInferenceTraceRelatedInfo(expr);
+		for (const ParseContext::DeferredGroupingAmbiguity &deferred : context.parseContext.deferredGroupingAmbiguities) {
+			if (expr && deferred.line == expr->range.line) {
+				if (relatedInfo.empty()) {
+					relatedInfo = deferred.relatedInfo;
+					break;
+				}
+				auto storedTracePosition =
+					std::find_if(deferred.relatedInfo.begin(), deferred.relatedInfo.end(), [&](const RelatedInfo &stored) {
+					const Range &current = relatedInfo.back().range;
+					return stored.range.line == current.line && stored.range.subString == current.subString;
+				});
+				requireCompilerInvariant(
+					storedTracePosition != deferred.relatedInfo.end(),
+					"stable grouping trace does not reconnect to its deferred inference trace"
+				);
+				relatedInfo.insert(relatedInfo.end(), storedTracePosition + 1, deferred.relatedInfo.end());
+				break;
+			}
+		}
 		context.pendingOperandGroupingWarnings->push_back({
 			expr ? expr->range : Range(),
 			originalDiagnostic.text,
 			std::move(chosenGrouping),
 			std::move(alternativeGrouping),
-			context.captureInferenceTraceRelatedInfo(expr),
+			std::move(relatedInfo),
 		});
 	};
 	auto emitOwnedGroupingWarnings = [&]() {
-		if (!ownsPendingOperandGroupingWarnings || context.trial)
+		if (!ownsPendingOperandGroupingWarnings || context.trial || context.groupingAmbiguityIncomplete)
 			return;
 		for (const auto &warning : localGroupingWarnings) {
 			std::string warningKey =

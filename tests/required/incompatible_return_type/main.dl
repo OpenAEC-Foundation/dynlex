@@ -1,0 +1,35 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function value as destination:
+    replacement:
+        @intrinsic("cast", value, destination)
+
+function left + right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function left > right:
+    execute:
+        return @intrinsic("greater than", left, right)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function widened value:
+    execute:
+        if value > 0:
+            return value + 32
+        return value
+
+discard widened (65 as byte)

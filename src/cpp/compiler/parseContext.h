@@ -74,6 +74,13 @@ struct ParseContext {
 		SectionType referencedPatternType = SectionType::Function;
 	};
 
+	struct DeferredGroupingAmbiguity {
+		CodeLine *line;
+		Section *rootSection;
+		Instantiation *instantiation;
+		std::vector<RelatedInfo> relatedInfo;
+	};
+
 	struct Options {
 		std::string inputPath;
 		std::string outputPath;
@@ -178,6 +185,7 @@ struct ParseContext {
 	// flex clone. Ownership is independent of mutable grouping-tree topology.
 	std::vector<Expression *> ownedClonedExpressions;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
+	std::vector<DeferredGroupingAmbiguity> deferredGroupingAmbiguities;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
 	// User-facing aliases for concrete types discovered from flex replacements like @intrinsic("type", ...).
