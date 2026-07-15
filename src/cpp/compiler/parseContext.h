@@ -106,6 +106,8 @@ struct ParseContext {
 	llvm::LLVMContext *llvmContext{};
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
+	llvm::GlobalVariable *commandLineArgumentCountGlobal{};
+	llvm::GlobalVariable *commandLineArgumentValuesGlobal{};
 
 	// Debug info (initialized when emitDebugInfo is true, not for SPIR-V)
 	llvm::DIBuilder *diBuilder{};

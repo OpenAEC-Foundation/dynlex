@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: test_debug_info.py <compiler>", file=sys.stderr)
+        return 2
+
+    if platform.system() != "Linux":
+        return 0
+
+    compiler = Path(sys.argv[1]).resolve()
+    if not compiler.is_file():
+        print(f"compiler not found: {compiler}", file=sys.stderr)
+        return 2
+
+    dwarf_verifier = shutil.which("llvm-dwarfdump-20") or shutil.which("llvm-dwarfdump")
+    if dwarf_verifier is None:
+        print("required DWARF verifier not found: llvm-dwarfdump-20", file=sys.stderr)
+        return 2
+
+    repo_root = Path(__file__).resolve().parent.parent
+    source = repo_root / "tests/required/simple/main.dl"
+    with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
+        executable = Path(temporary_directory) / "simple.out"
+        compile_result = subprocess.run(
+            [str(compiler), str(source), "-g", "-o", str(executable)],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if compile_result.returncode != 0:
+            print(compile_result.stdout + compile_result.stderr, file=sys.stderr)
+            return 1
+
+        verify_result = subprocess.run(
+            [dwarf_verifier, "--verify", str(executable)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if verify_result.returncode != 0:
+            print(verify_result.stdout + verify_result.stderr, file=sys.stderr)
+            return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

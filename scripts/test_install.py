@@ -12,6 +12,64 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
+class LinuxDependencyInstallerTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "Linux installer requires a POSIX host")
+    def test_binutils_is_installed_by_every_supported_package_manager(self) -> None:
+        for package_manager in ("apt-get", "dnf", "pacman", "zypper"):
+            with self.subTest(package_manager=package_manager):
+                self._assert_installs_binutils(package_manager)
+
+    def _assert_installs_binutils(self, package_manager: str) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-install-linux-") as temporary_directory:
+            root = Path(temporary_directory)
+            bin_directory = root / "bin"
+            bin_directory.mkdir()
+
+            self._write_executable(
+                bin_directory / "uname",
+                "#!/bin/bash\nprintf 'Linux\\n'\n",
+            )
+            self._write_executable(bin_directory / package_manager, "#!/bin/bash\nexit 0\n")
+            self._write_executable(
+                bin_directory / "sudo",
+                "#!/bin/bash\nprintf '%s\\n' \"$*\" >> \"$SUDO_LOG\"\n",
+            )
+            self._write_executable(
+                bin_directory / "dirname",
+                "#!/bin/bash\nvalue=$1\nprintf '%s\\n' \"${value%/*}\"\n",
+            )
+
+            sudo_log = root / "sudo.log"
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": str(bin_directory),
+                "SUDO_LOG": str(sudo_log),
+            })
+
+            bash = shutil.which("bash")
+            self.assertIsNotNone(bash)
+            completed = subprocess.run(
+                [bash, str(SCRIPT_DIR / "install.sh")],
+                capture_output=True,
+                env=environment,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+
+            install_commands = [
+                line for line in sudo_log.read_text(encoding="utf-8").splitlines()
+                if " install " in f" {line} " or line.startswith("pacman ")
+            ]
+            self.assertEqual(len(install_commands), 1, install_commands)
+            self.assertIn("binutils", install_commands[0].split())
+
+    @staticmethod
+    def _write_executable(path: Path, contents: str) -> None:
+        path.write_text(contents, encoding="utf-8")
+        path.chmod(0o755)
+
+
 class MacOSDependencyInstallerTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "macOS installer requires a POSIX host")
     def test_existing_tools_are_not_reinstalled_or_upgraded(self) -> None:

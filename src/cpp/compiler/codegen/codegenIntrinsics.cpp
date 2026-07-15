@@ -6,6 +6,7 @@
 #include "intrinsicInfo.h"
 #include "type.h"
 #include "variable.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -416,6 +417,14 @@ llvm::Value *generateIntrinsicCode(
 		// Evaluate the argument for side effects and discard the result
 		generateExpressionCode(context, args[1]);
 		return nullptr;
+	}
+
+	if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+		llvm::GlobalVariable *global = kind == IntrinsicKind::CommandLineArgumentCount
+										   ? context.commandLineArgumentCountGlobal
+										   : context.commandLineArgumentValuesGlobal;
+		requireCompilerInvariant(global != nullptr, "command-line argument intrinsic reached codegen without native ABI state");
+		return builder.CreateLoad(global->getValueType(), global, global->getName() + ".value");
 	}
 
 	if (kind == IntrinsicKind::Store) {

@@ -16,7 +16,7 @@ A natural-language-like programming language that compiles to native code via LL
 ./scripts/build.sh
 ```
 
-Requires C++23, CMake, Ninja, `nlohmann_json`, and LLVM 20+.
+Requires C++23, CMake, Ninja, `nlohmann_json`, LLVM 20+, and GNU binutils on ELF systems.
 
 ## Browser Compiler (Phase 1)
 
