@@ -1,1 +1,1 @@
-tests/required/unknown_intrinsic_in_flex/main.dl:3:9-31: Error: unknown intrinsic: "not real"
+tests/required/unknown_intrinsic_in_flex/main.dl:9-31: Error: unknown intrinsic: "not real"

@@ -1,1 +1,1 @@
-tests/required/shader_uniform_requires_string_literal/main.dl:5:38-39: Error: shader uniform requires a string literal name
+tests/required/shader_uniform_requires_string_literal/main.dl:38-39: Error: shader uniform requires a string literal name

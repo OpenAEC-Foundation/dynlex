@@ -1,1 +1,1 @@
-tests/required/switch_requires_integer/main.dl:1:22-25: Error: switch requires an integer value
+tests/required/switch_requires_integer/main.dl:22-25: Error: switch requires an integer value

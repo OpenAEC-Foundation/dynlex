@@ -1,2 +1,2 @@
-tests/required/array_literal_mismatch/main.dl:3:15-23: Error: Array literal elements must have matching or compatible numeric types
-  note: while inferring call 'set values to [1, "x"]' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/array_literal_mismatch/main.dl:3:1-23
+tests/required/array_literal_mismatch/main.dl:15-23: Error: Array literal elements must have matching or compatible numeric types
+  note: while inferring call 'set values to [1, "x"]' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/array_literal_mismatch/main.dl:1-23

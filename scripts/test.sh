@@ -78,27 +78,12 @@ normalize_output() {
 }
 
 normalize_diagnostics() {
-    PYTHON_DIAGNOSTICS="$1" python3 - "$PROJECT_DIR" <<'PY'
-import re
-import sys
-import os
-
-project_dir = sys.argv[1].replace("\\", "/").rstrip("/")
-text = os.environ["PYTHON_DIAGNOSTICS"].replace("\r", "")
-
-path_prefixes = {project_dir}
-match = re.match(r"^/([A-Za-z])/(.*)$", project_dir)
-if match:
-    drive = match.group(1)
-    rest = match.group(2)
-    path_prefixes.add(f"{drive.upper()}:/{rest}")
-    path_prefixes.add(f"{drive.lower()}:/{rest}")
-
-for prefix in sorted(path_prefixes, key=len, reverse=True):
-    text = text.replace(prefix + "/", "")
-
-sys.stdout.write("\n".join(line.rstrip() for line in text.splitlines()).rstrip())
-PY
+    local reject_line_numbers="${2:-false}"
+    local arguments=("$PROJECT_DIR")
+    if [[ "$reject_line_numbers" == "true" ]]; then
+        arguments+=("--reject-line-numbers")
+    fi
+    printf "%s" "$1" | python3 -B "$SCRIPT_DIR/diagnostic_expectations.py" "${arguments[@]}"
 }
 
 run_with_timeout() {
@@ -215,6 +200,23 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     expected_diagnostics_file="$test_dir/expected_diagnostics.txt"
+    expected_diagnostics=""
+    normalized_expected_diagnostics=""
+    has_expected_diagnostics=false
+    if [[ -f "$expected_diagnostics_file" ]]; then
+        expected_diagnostics=$(<"$expected_diagnostics_file")
+        normalized_expected_diagnostics=$(normalize_diagnostics "$expected_diagnostics" true 2>&1)
+        expected_diagnostics_exit=$?
+        if [[ $expected_diagnostics_exit -ne 0 ]]; then
+            test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+            append_test_result "FAIL" "$RED" "$test_name" "invalid expected diagnostics" "$test_elapsed_ms"
+            test_output+="  $normalized_expected_diagnostics\n"
+            ((failed++))
+            failures+=("$test_name")
+            continue
+        fi
+        has_expected_diagnostics=true
+    fi
 
     # Compile (5 second timeout)
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
@@ -264,14 +266,6 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     normalized_compile_output=$(normalize_diagnostics "$compile_output")
-    expected_diagnostics=""
-    normalized_expected_diagnostics=""
-    has_expected_diagnostics=false
-    if [[ -f "$expected_diagnostics_file" ]]; then
-        expected_diagnostics=$(<"$expected_diagnostics_file")
-        normalized_expected_diagnostics=$(normalize_diagnostics "$expected_diagnostics")
-        has_expected_diagnostics=true
-    fi
 
     if [[ "$normalized_compile_output" != "$normalized_expected_diagnostics" ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
@@ -383,6 +377,7 @@ run_auxiliary_test() {
 }
 
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
+run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 
