@@ -69,8 +69,6 @@ int DataType::getByteSize() const {
 	case Kind::Matrix:
 		return arrayElementType ? arrayElementType->getByteSize() * arraySize * matrixRowCount : 0;
 	case Kind::Class:
-		if (classDefinition && classInstIndex >= 0 && classInstIndex < static_cast<int>(classDefinition->instantiations.size()))
-			return classDefinition->instantiations[classInstIndex].byteSize;
 		return 0;
 	default:
 		return 0;
@@ -128,27 +126,16 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		);
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
+			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
+			llvmFields.reserve(inst.fieldTypes.size());
 			inst.llvmFieldIndices.clear();
-			int offset = 0;
-			for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-				// Align field to its natural alignment
-				int fieldSize = inst.fieldTypes[i].isPointer() ? 8 : inst.fieldTypes[i].numericSize;
-				if (!fieldSize)
-					fieldSize = 1; // bool
-				int fieldAlign = fieldSize;
-				int padding = (fieldAlign - (offset % fieldAlign)) % fieldAlign;
-				if (padding > 0) {
-					llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), padding));
-					offset += padding;
-				}
-
-				inst.llvmFieldIndices.push_back(llvmFields.size());
-				llvmFields.push_back(inst.fieldTypes[i].toLLVM(ctx));
-				offset += fieldSize;
+			inst.llvmFieldIndices.reserve(inst.fieldTypes.size());
+			for (const DataType &fieldType : inst.fieldTypes) {
+				inst.llvmFieldIndices.push_back(static_cast<unsigned>(llvmFields.size()));
+				llvmFields.push_back(fieldType.toLLVM(ctx));
 			}
-			inst.byteSize = offset;
-			inst.llvmStructType = llvm::StructType::create(ctx, llvmFields, "class");
+			inst.llvmStructType->setBody(llvmFields);
 		}
 		return inst.llvmStructType;
 	}

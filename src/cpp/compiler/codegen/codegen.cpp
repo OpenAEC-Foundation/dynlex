@@ -71,10 +71,11 @@ namespace {
 struct VariableAllocaSnapshotEntry {
 	VariableReference *reference = nullptr;
 	llvm::AllocaInst *alloca = nullptr;
+	std::optional<DataType> finalizedType;
 };
 
 static void collectVariableAllocaSnapshotEntries(
-	Section *section, std::unordered_set<VariableReference *> &visitedReferences,
+	ParseContext &context, Section *section, std::unordered_set<VariableReference *> &visitedReferences,
 	std::vector<VariableAllocaSnapshotEntry> &entries
 ) {
 	if (!section)
@@ -83,18 +84,24 @@ static void collectVariableAllocaSnapshotEntries(
 		(void)ignoredName;
 		if (!definitionReference || !visitedReferences.insert(definitionReference).second)
 			continue;
-		entries.push_back({definitionReference, definitionReference->alloca});
+		auto finalizedType = context.finalizedVariableTypes.find(definitionReference);
+		entries.push_back(
+			{definitionReference, definitionReference->alloca,
+			 finalizedType == context.finalizedVariableTypes.end() ? std::nullopt
+																   : std::optional<DataType>(finalizedType->second)}
+		);
 	}
 	for (Section *child : section->children)
-		collectVariableAllocaSnapshotEntries(child, visitedReferences, entries);
+		collectVariableAllocaSnapshotEntries(context, child, visitedReferences, entries);
 }
 
 struct ScopedVariableAllocaRestore {
+	ParseContext &context;
 	std::vector<VariableAllocaSnapshotEntry> entries;
 
-	explicit ScopedVariableAllocaRestore(Section *section) {
+	explicit ScopedVariableAllocaRestore(ParseContext &context, Section *section) : context(context) {
 		std::unordered_set<VariableReference *> visitedReferences;
-		collectVariableAllocaSnapshotEntries(section, visitedReferences, entries);
+		collectVariableAllocaSnapshotEntries(context, section, visitedReferences, entries);
 	}
 
 	~ScopedVariableAllocaRestore() {
@@ -103,6 +110,10 @@ struct ScopedVariableAllocaRestore {
 				entry.reference != nullptr, "ScopedVariableAllocaRestore contains null definition reference"
 			);
 			entry.reference->alloca = entry.alloca;
+			if (entry.finalizedType)
+				context.finalizedVariableTypes[entry.reference] = *entry.finalizedType;
+			else
+				context.finalizedVariableTypes.erase(entry.reference);
 		}
 	}
 };
@@ -257,7 +268,7 @@ Instantiation *generateSpecializedFunction(
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
-	ScopedVariableAllocaRestore functionVariableAllocas(section);
+	ScopedVariableAllocaRestore functionVariableAllocas(context, section);
 
 	// Generate function body
 	requireCompilerInvariant(
@@ -589,7 +600,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
 			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
 			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
-			ScopedVariableAllocaRestore flexVariableAllocas(matchedSection);
+			ScopedVariableAllocaRestore flexVariableAllocas(context, matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);
@@ -621,22 +632,14 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			requireCompilerInvariant(
 				static_cast<bool>(expr->inferredFlexBody), "section flex reached codegen without its inferred replacement body"
 			);
-			matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
+			bool generatedBody = matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
 				InstantiatedSectionBody *definitionBody = definitionBodySection == matchedSection
 															  ? expr->inferredFlexBody.get()
 															  : expr->inferredFlexBody->bodyForChild(definitionBodySection);
 				requireCompilerInvariant(definitionBody, "section flex inferred body is missing a definition section");
-				InstantiatedSectionBody *savedInstantiatedSectionBody = context.currentInstantiatedSectionBody;
-				context.currentInstantiatedSectionBody = definitionBody;
-				allocateSectionVariables(context, definitionBodySection, definitionBody);
-				for (size_t lineIndex = 0; lineIndex < definitionBodySection->codeLines.size(); lineIndex++) {
-					Expression *lineExpression = definitionBody->lineExpression(lineIndex);
-					if (lineExpression)
-						result = generateExpressionCode(context, lineExpression);
-				}
-				context.currentInstantiatedSectionBody = savedInstantiatedSectionBody;
-				return true;
+				return generateSectionCode(context, definitionBodySection, definitionBody, &result);
 			});
+			requireCompilerInvariant(generatedBody, "failed to generate an inferred flex replacement body");
 
 			if (bodySection) {
 				requireCompilerInvariant(
@@ -716,8 +719,10 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 }
 
 // Generate code for a section (process pattern references)
-bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
+bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSectionBody *body, llvm::Value **lastResult) {
 	requireCompilerInvariant(!body || body->sourceSection == section, "active codegen body does not match section");
+	if (lastResult)
+		*lastResult = nullptr;
 	InstantiatedSectionBody *savedInstantiatedBody = context.currentInstantiatedSectionBody;
 	context.currentInstantiatedSectionBody = body;
 	struct InstantiatedBodyRestore {
@@ -738,9 +743,14 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			for (const auto &[bindingName, expression] : frame.bindings)
 				headerBindings[bindingName] = expression;
 		});
-		if (header->kind == Expression::Kind::PatternCall) {
+		std::unordered_set<Expression *> visited;
+		bool outermost = true;
+		while (header && header->kind == Expression::Kind::PatternCall) {
+			requireCompilerInvariant(
+				visited.insert(header).second, "control-flow header contains a cyclic inferred flex expansion"
+			);
 			PatternDefinition *definition = finalizedPatternDefinition(context, header);
-			if (!definition->section || !definition->section->isFlex)
+			if (!flexPatternCanForwardControlHeader(definition, outermost))
 				return std::nullopt;
 			requireCompilerInvariant(
 				header->inferredFlexExpansion, "control-flow flex reached codegen without its finalized expansion"
@@ -750,6 +760,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			header = header->inferredFlexExpansion;
 			for (const auto &[name, argExpr] : innerBindings)
 				headerBindings[name] = argExpr;
+			outermost = false;
 		}
 		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
@@ -781,6 +792,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			);
 			const Expression::BranchSelection &selection = *lineExpression->branchSelection;
 			if (selection.known) {
+				if (lastResult)
+					*lastResult = nullptr;
 				if (selection.selectedBranchIndex >= 0) {
 					requireCompilerInvariant(
 						selection.selectedBranchIndex < static_cast<int>(section->codeLines.size()),
@@ -811,7 +824,9 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
-			generateExpressionCode(context, lineExpression);
+			llvm::Value *lineResult = generateExpressionCode(context, lineExpression);
+			if (lastResult)
+				*lastResult = lineResult;
 		}
 	}
 

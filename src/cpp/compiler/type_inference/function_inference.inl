@@ -2,6 +2,8 @@
 
 #include "compilerUtils.h"
 #include "const_evaluation.inl"
+#include <set>
+#include <tuple>
 static bool
 inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 static bool inferExpression(
@@ -70,16 +72,23 @@ static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instant
 // tracked constant value, and the surrounding loop mutation scope. Skipping
 // any of these would let later code fold branches against values the callee
 // already overwrote, or treat a loop-carried global as loop-invariant.
-static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
-	for (VariableReference *reference : inst.writtenGlobalReferences) {
+static void mergeGlobalWritesIntoCaller(
+	InferenceContext &context, const std::unordered_set<VariableReference *> &writtenGlobalReferences,
+	const std::unordered_map<VariableReference *, CompileTimeValue> &finalGlobalConstantValues
+) {
+	for (VariableReference *reference : writtenGlobalReferences) {
 		context.noteWrittenGlobalReference(reference);
-		auto it = inst.finalGlobalConstantValues.find(reference);
-		context.setKnownConstant(reference, it != inst.finalGlobalConstantValues.end() ? it->second : CompileTimeValue{});
+		auto it = finalGlobalConstantValues.find(reference);
+		context.setKnownConstant(reference, it != finalGlobalConstantValues.end() ? it->second : CompileTimeValue{});
 		if (context.inLoopMutationScope()) {
 			context.noteLoopMutation(reference);
 			context.setKnownConstant(reference, {});
 		}
 	}
+}
+
+static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
+	mergeGlobalWritesIntoCaller(context, inst.writtenGlobalReferences, inst.finalGlobalConstantValues);
 }
 
 static void markCurrentInstantiationImpure(InferenceContext &context) {
@@ -222,6 +231,7 @@ static bool runInstantiationReinferenceLoop(
 ) {
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
+	bool attemptedDeducedReturnReinference = false;
 	while (true) {
 		InstantiationProgressSnapshot beforePass = snapshotInstantiationProgress(instantiation);
 		bool inferenceSucceeded = inferPass();
@@ -233,6 +243,14 @@ static bool runInstantiationReinferenceLoop(
 			return true;
 		}
 		if (afterPass == beforePass) {
+			if (context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced() &&
+				instantiation.needsReinfer && !attemptedDeducedReturnReinference) {
+				attemptedDeducedReturnReinference = true;
+				context.typesValid = true;
+				context.clearTypeFailure();
+				context.observedInProgressUndeducedInstantiation = false;
+				continue;
+			}
 			if (canDeferToCaller && context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced())
 				return true;
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
@@ -245,10 +263,11 @@ static bool runInstantiationReinferenceLoop(
 		}
 		context.typesValid = true;
 		context.clearTypeFailure();
+		context.observedInProgressUndeducedInstantiation = false;
 	}
 }
 
-static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
+static void rollbackTrialJournal(InferenceContext::TrialJournal &journal, TrialInstantiationCache *trialCache = nullptr) {
 	for (Section *section : journal.touchedSections)
 		resetSectionExpressionTypes(section);
 	for (auto it = journal.variableTypeUndo.rbegin(); it != journal.variableTypeUndo.rend(); ++it) {
@@ -277,11 +296,8 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 			crashCompilerBug("trial rollback expected to erase a provisional section instantiation, but it was missing");
 		it->section->instantiations.erase(instantiationIt);
 	}
-	for (auto it = journal.classInstantiationSizes.rbegin(); it != journal.classInstantiationSizes.rend(); ++it) {
-		if (it->first->instantiations.size() < it->second)
-			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");
-		it->first->instantiations.resize(it->second);
-	}
+	if (trialCache)
+		pruneInvalidTrialInstantiationCacheEntries(*trialCache);
 }
 
 static std::string encodeTrialCompileTimeValue(const CompileTimeValue &value) {
@@ -356,22 +372,17 @@ static std::vector<std::pair<std::string, CompileTimeValue>> collectTrialCompile
 	);
 }
 
-static std::string buildTrialInstantiationCacheKey(
+static TrialInstantiationCacheKey buildTrialInstantiationCacheKey(
 	Section *section, bool sectionHasCommittedOrdering, const std::vector<DataType> &argTypes,
 	const std::vector<std::pair<std::string, CompileTimeValue>> &compileTimeParameters
 ) {
-	std::string key = std::to_string(reinterpret_cast<uintptr_t>(section));
-	key += sectionHasCommittedOrdering ? "|ordered" : "|unordered";
-	for (const DataType &type : argTypes) {
-		key += "|arg:";
-		key += encodeDataTypeForCacheKey(type);
-	}
-	for (const auto &[name, value] : compileTimeParameters) {
-		key += "|param:";
-		key += name;
-		key += "=";
-		key += encodeTrialCompileTimeValue(value);
-	}
+	TrialInstantiationCacheKey key;
+	key.section = section;
+	key.sectionHasCommittedOrdering = sectionHasCommittedOrdering;
+	key.argumentTypes = argTypes;
+	key.compileTimeParameters.reserve(compileTimeParameters.size());
+	for (const auto &[name, value] : compileTimeParameters)
+		key.compileTimeParameters.push_back({name, encodeTrialCompileTimeValue(value)});
 	return key;
 }
 
@@ -381,8 +392,11 @@ static InstantiationKey getOrCreateNonFlexInstantiationKey(
 	const std::vector<DataType> &argTypes, const std::unordered_set<std::string> &requiredCompileTimeParameters,
 	ReadCompileTimeFn &&readCompileTime
 ) {
-	return findMatchingInstantiationKey(section, paramBindings, argTypes, readCompileTime)
-		.value_or(buildInstantiationKey(requiredCompileTimeParameters, paramBindings, argTypes, readCompileTime));
+	InstantiationKey requestedKey =
+		buildInstantiationKey(requiredCompileTimeParameters, paramBindings, argTypes, readCompileTime);
+	if (!section || section->instantiations.contains(requestedKey))
+		return requestedKey;
+	return findMatchingInstantiationKey(section, paramBindings, argTypes, readCompileTime).value_or(std::move(requestedKey));
 }
 
 static bool traceTrialInstantiationCacheEnabled() {
@@ -390,13 +404,13 @@ static bool traceTrialInstantiationCacheEnabled() {
 	return enabled;
 }
 
-static void traceTrialInstantiationCacheEvent(std::string_view event, PatternDefinition *definition, const std::string &key) {
+static void traceTrialInstantiationCacheEvent(std::string_view event, PatternDefinition *definition) {
 	if (!traceTrialInstantiationCacheEnabled())
 		return;
 	std::cerr << "[trial-inst-cache] " << event;
 	if (definition)
 		std::cerr << " function='" << std::string(definition->range.subString) << "'";
-	std::cerr << " key='" << key << "'\n";
+	std::cerr << '\n';
 }
 
 static bool inferExpression(
@@ -792,7 +806,9 @@ static DataType requestKnownOrInferExpressionType(
 	auto readKnownType = [&](Expression *expression) -> DataType {
 		if (!expression || !expression->type.isDeduced())
 			return {};
-		return concretizeClassType(expression->type);
+		if (!dataTypeReferencesAvailableClassInstantiations(expression->type))
+			return {};
+		return expression->type;
 	};
 	DataType type = readKnownType(expr);
 	if (type.isDeduced())
@@ -817,8 +833,8 @@ static DataType ensureExpressionTypeWithCurrentGrouping(
 }
 
 static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType &falseTypeInput, DataType &outType) {
-	DataType trueType = concretizeClassType(trueTypeInput);
-	DataType falseType = concretizeClassType(falseTypeInput);
+	DataType trueType = trueTypeInput;
+	DataType falseType = falseTypeInput;
 	if (!trueType.isDeduced() || !falseType.isDeduced())
 		return false;
 	if (trueType == falseType) {
@@ -844,20 +860,44 @@ static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType
 static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, const DataType &valueType) {
 	if (!var)
 		return;
-	var->type = concretizeClassType(valueType);
+	var->type = valueType;
 	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
 	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
 }
 
-static bool isVariableAssignmentCompatible(const DataType &targetType, const DataType &valueType) {
-	DataType concreteTargetType = targetType;
-	DataType concreteValueType = valueType;
-	if (!concreteTargetType.isDeduced() || !concreteValueType.isDeduced())
-		return false;
-	if (concreteTargetType == concreteValueType)
+static bool
+refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType) {
+	if (ClassDefinition::typeStructurallyRefines(incomingType, currentType)) {
+		refinedType = incomingType;
 		return true;
-	return concreteTargetType.kind == DataType::Kind::Int && concreteValueType.kind == DataType::Kind::Int &&
-		   concreteTargetType.pointerDepth == 0 && concreteValueType.pointerDepth == 0;
+	}
+	if (ClassDefinition::typeStructurallyRefines(currentType, incomingType)) {
+		refinedType = currentType;
+		return true;
+	}
+	return false;
+}
+
+static bool mergeVariableAssignmentType(const DataType &targetType, const DataType &valueType, DataType &mergedType) {
+	if (!targetType.isDeduced() || !valueType.isDeduced())
+		return false;
+	if (targetType == valueType) {
+		mergedType = targetType;
+		return true;
+	}
+	if (refineUnspecifiedClassInstantiation(targetType, valueType, mergedType))
+		return true;
+	if (targetType.kind == DataType::Kind::Int && valueType.kind == DataType::Kind::Int && targetType.pointerDepth == 0 &&
+		valueType.pointerDepth == 0) {
+		mergedType = targetType;
+		return true;
+	}
+	return false;
+}
+
+static bool isVariableAssignmentCompatible(const DataType &targetType, const DataType &valueType) {
+	DataType mergedType;
+	return mergeVariableAssignmentType(targetType, valueType, mergedType);
 }
 
 static Diagnostic
@@ -867,9 +907,8 @@ static Diagnostic buildAssignmentTypeChangeDiagnostic(
 	const std::string &currentTypeOriginFloatLiteralReplacement, Expression *valueExpr, const DataType &valueType,
 	ParseContext &parseContext
 );
-static int getRefinedClassInstantiationIndex(
-	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
-);
+static int
+getRefinedClassInstantiationIndex(ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType);
 
 static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
 	if (token.empty())
@@ -953,16 +992,7 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return {};
 	}
 	if (kind == IntrinsicKind::SizeOf) {
-		CompileTimeValue typeValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		auto *typeRef = std::get_if<TypeReferenceValue>(&typeValue);
-		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
-			return {};
-		DataType valueType = typeRef->type.toReferencedType();
-		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
-			!valueType.classDefinition->instantiations.empty()) {
-			valueType.classInstIndex = 0;
-		}
-		return static_cast<double>(valueType.getByteSize());
+		return {};
 	}
 	if (kind == IntrinsicKind::Select) {
 		CompileTimeValue conditionValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
@@ -1455,6 +1485,12 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			}
 			return evaluatePureExpression(expandedBody, state, frame, expandedBindingFrameStack);
 		}
+		if (expr->usesTrialInstantiationSummary) {
+			requireCompilerInvariant(
+				state.inferenceContext && state.inferenceContext->trial, "trial instantiation summary escaped trial inference"
+			);
+			return {pureExecutionStoredValue(expr, state), false};
+		}
 		std::vector<std::pair<std::string, Expression *>> parameterBindings;
 		std::vector<std::pair<std::string, CompileTimeValue>> argumentValues;
 		if (!collectKnownCallArgumentValues(expr, selectedDefinition, [&](Expression *argumentExpression) {
@@ -1763,10 +1799,18 @@ static void inferOrderedExpression(
 	// Recurse into arguments first (bottom-up)
 	for (size_t i = 0; i < expr->arguments.size(); i++) {
 		Expression *arg = expr->arguments[i];
+		bool savedAllowTrialSummaryReuse = context.allowTrialSummaryReuse;
+		if (expr->kind == Expression::Kind::IntrinsicCall && i > 0 &&
+			intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(i))) {
+			// Compile-time-only consumers need executable pure-call bodies, not
+			// type-only trial summaries whose runtime argument values are unknown.
+			context.allowTrialSummaryReuse = false;
+		}
 		bool preserveArgumentGrouping =
 			preserveCurrentGrouping && (!context.fixedGroupingRoots || context.fixedGroupingRoots->contains(arg));
 		bool inferred = preserveArgumentGrouping ? inferExpressionWithCurrentGrouping(arg, context, flexBindingFrameStack)
 												 : inferExpression(arg, context, false, flexBindingFrameStack);
+		context.allowTrialSummaryReuse = savedAllowTrialSummaryReuse;
 		if (!inferred)
 			return;
 		expr->arguments[i] = arg;
@@ -1843,8 +1887,7 @@ static void inferOrderedExpression(
 						return;
 				}
 				DataType boundType = ensureExpressionType(flexBinding, context, flexBindingFrameStack);
-				if (boundType.isDeduced())
-					expr->type = boundType;
+				expr->type = boundType;
 				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);
 				if (!isCompileTimeKnown(variableValue) && expr->type.kind == DataType::Kind::Type)
 					variableValue = TypeReferenceValue::exact(expr->type);
@@ -1867,8 +1910,7 @@ static void inferOrderedExpression(
 			}
 			if (!context.trial && context.currentInstantiation && var->isGlobal && !expressionIsLValueOnlyUse(context, expr))
 				markCurrentInstantiationImpure(context);
-			if (var->type.isDeduced())
-				expr->type = var->type;
+			expr->type = var->type;
 		}
 		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
 		break;
@@ -1974,8 +2016,11 @@ static void inferOrderedExpression(
 					DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 					DataType promoted;
-					bool pointerEquality = (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) &&
-										   leftType.isPointer() && rightType.isPointer() && leftType == rightType;
+					DataType refinedPointerType;
+					bool pointerEquality =
+						(kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
+						rightType.isPointer() &&
+						(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
 					if (!pointerEquality && !DataType::promoteArithmetic(leftType, rightType, promoted)) {
 						setConfiguredTypeFailure(
 							expr->range, "incompatible operand types", "message",
@@ -1996,8 +2041,17 @@ static void inferOrderedExpression(
 					DataType returnType = returnValueExpression
 											  ? ensureExpressionType(returnValueExpression, context, flexBindingFrameStack)
 											  : DataType{DataType::Kind::Void};
-					if (returnType.isDeduced() &&
-						!reconcileFunctionReturnType(context, expr, sourceReturnValueExpression, returnType))
+					if (!returnType.isDeduced()) {
+						if (context.observedInProgressUndeducedInstantiation && context.currentInstantiation) {
+							context.currentInstantiation->needsReinfer = true;
+							expr->type = {DataType::Kind::Void};
+							break;
+						}
+						context.setTypeFailure("return value type is unresolved");
+						context.typesValid = false;
+						break;
+					}
+					if (!reconcileFunctionReturnType(context, expr, sourceReturnValueExpression, returnType))
 						break;
 					if (returnValueExpression)
 						context.setExpressionValue(expr, context.lookupExpressionValue(returnValueExpression));
@@ -2042,7 +2096,7 @@ static void inferOrderedExpression(
 				} else if (kind == IntrinsicKind::Dereference) {
 					DataType ptrType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					if (ptrType.isDeduced() && ptrType.isPointer())
-						expr->type = concretizeClassType(ptrType.dereferenced());
+						expr->type = ptrType.dereferenced();
 				} else if (kind == IntrinsicKind::LoadAt) {
 					DataType ptrType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					if (ptrType.isDeduced() && ptrType.isPointer()) {
@@ -2141,7 +2195,7 @@ static void inferOrderedExpression(
 					DataType castResultType;
 					if (typeArgType.kind == DataType::Kind::Type &&
 						!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
-						DataType requestedType = concretizeClassType(typeArgType.toReferencedType());
+						DataType requestedType = typeArgType.toReferencedType();
 						setConfiguredTypeFailure(
 							expr->range, "unsupported cast", "message",
 							{{"from_type", typeToUserName(valueType, context.parseContext)},
@@ -2272,6 +2326,11 @@ static void inferOrderedExpression(
 					if (typeArgType.referencedKind == DataType::Kind::Type ||
 						typeArgType.referencedKind == DataType::Kind::Unresolved) {
 						setConfiguredTypeFailure(expr->range, "size of type invalid");
+						break;
+					}
+					DataType measuredType = typeArgType.toReferencedType();
+					if (!measuredType.isConcrete()) {
+						setConfiguredTypeFailure(expr->range, "size of type must be concrete");
 						break;
 					}
 					expr->type = {DataType::Kind::Int, 8};
@@ -2604,16 +2663,14 @@ static void inferOrderedExpression(
 															   )) {
 							expr->type = instantiatedTypeRef.toReferencedType();
 						} else {
-							DataType targetType = concretizeClassType(typeRefType.toReferencedType());
+							DataType targetType = typeRefType.toReferencedType();
 							if (expr->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
 								targetType.classInstIndex >= 0) {
 								const auto &fieldTypes =
 									targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
 								bool allCompatible = constructionArgumentTypes.size() == fieldTypes.size();
 								for (size_t i = 0; allCompatible && i < fieldTypes.size(); i++) {
-									if (!DataType::supportsRuntimeConversion(
-											concretizeClassType(constructionArgumentTypes[i]), fieldTypes[i]
-										))
+									if (!DataType::supportsRuntimeConversion(constructionArgumentTypes[i], fieldTypes[i]))
 										allCompatible = false;
 								}
 								if (allCompatible)
@@ -2627,14 +2684,13 @@ static void inferOrderedExpression(
 							expr->type = targetType;
 					}
 				} else if (kind == IntrinsicKind::Property) {
-					DataType instType =
-						concretizeClassType(ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack));
+					DataType instType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 					if (!instType.isDeduced()) {
 						context.typesValid = false;
 						break;
 					}
 					if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-						instType = concretizeClassType(instType.dereferenced());
+						instType = instType.dereferenced();
 					std::string fieldName;
 					CompileTimeValue propertyValue =
 						resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context);
@@ -2654,6 +2710,10 @@ static void inferOrderedExpression(
 						break;
 					}
 					if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex >= 0) {
+						requireCompilerInvariant(
+							instType.classInstIndex < static_cast<int>(instType.classDefinition->instantiations.size()),
+							"property access refers to a missing class instantiation"
+						);
 						if (!fieldName.empty()) {
 							ClassDefinition *classDef = instType.classDefinition;
 							for (size_t i = 0; i < classDef->fields.size(); i++) {
@@ -2688,6 +2748,7 @@ static void inferOrderedExpression(
 	case Expression::Kind::PatternCall: {
 		expr->selectedPatternDefinition = nullptr;
 		expr->selectedInstantiation = nullptr;
+		expr->usesTrialInstantiationSummary = false;
 		auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
 		if (definitionsHaveUnresolvedTypeConstraints(defs)) {
 			if (!context.unresolvedPatternConstraintSignal)
@@ -2823,12 +2884,18 @@ static void inferOrderedExpression(
 			}
 			std::shared_ptr<InstantiatedSectionBody> flexBody = context.parseContext.cloneSectionBody(matchedSection);
 			matchedSection->inferring = true;
+			context.activeFlexInferenceBodies.push_back(flexBody);
 			bool bodyInferred = matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
 				InstantiatedSectionBody *activeBody =
 					definitionBodySection == matchedSection ? flexBody.get() : flexBody->bodyForChild(definitionBodySection);
 				requireCompilerInvariant(activeBody, "flex clone is missing its definition body");
 				return inferSection(definitionBodySection, activeBody, nullptr, context, callBindingFrameStack);
 			});
+			requireCompilerInvariant(
+				!context.activeFlexInferenceBodies.empty() && context.activeFlexInferenceBodies.back() == flexBody,
+				"active flex inference body stack diverged"
+			);
+			context.activeFlexInferenceBodies.pop_back();
 			matchedSection->inferring = false;
 			if (!bodyInferred || !context.typesValid)
 				break;
@@ -2880,26 +2947,32 @@ static void inferOrderedExpression(
 			std::unordered_set<std::string> explicitCompileTimeParameters =
 				collectExplicitCompileTimeParameters(def, paramBindings, expr->patternMatch->nodesPassed, argTypes);
 			std::vector<std::pair<std::string, CompileTimeValue>> trialCompileTimeParameters;
-			std::string trialCacheKey;
+			TrialInstantiationCacheKey trialCacheKey;
+			bool hasTrialCacheKey = false;
 			if (context.trial && context.allowTrialSummaryReuse) {
 				trialCompileTimeParameters =
 					collectTrialCompileTimeParameters(context, paramBindings, explicitCompileTimeParameters);
 				trialCacheKey = buildTrialInstantiationCacheKey(
 					matchedSection, !matchedSection->instantiations.empty(), argTypes, trialCompileTimeParameters
 				);
+				hasTrialCacheKey = true;
 				auto trialCache = context.ensureTrialInstantiationCache();
+				pruneInvalidTrialInstantiationCacheEntries(*trialCache);
 				auto cachedTrial = trialCache->find(trialCacheKey);
 				if (cachedTrial != trialCache->end()) {
-					traceTrialInstantiationCacheEvent("hit", def, trialCacheKey);
-					context.typesValid = true;
+					traceTrialInstantiationCacheEvent("hit", def);
+					expr->usesTrialInstantiationSummary = true;
 					if (cachedTrial->second.returnType.isDeduced())
 						expr->type = cachedTrial->second.returnType;
 					context.setExpressionValue(expr, cachedTrial->second.returnValue);
+					mergeGlobalWritesIntoCaller(
+						context, cachedTrial->second.writtenGlobalReferences, cachedTrial->second.finalGlobalConstantValues
+					);
 					if (cachedTrial->second.purity == InstantiationPurity::Impure)
 						markCurrentInstantiationImpure(context);
 					break;
 				}
-				traceTrialInstantiationCacheEvent("miss", def, trialCacheKey);
+				traceTrialInstantiationCacheEvent("miss", def);
 			}
 
 			auto evaluateParameterValue = [&](Expression *argumentExpression) {
@@ -2923,6 +2996,8 @@ static void inferOrderedExpression(
 			std::optional<InstantiationKey> refinedInstantiationKey;
 			bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
 			if (!inst.inferring && !hasReusableInstantiation) {
+				bool callerObservedInProgressInstantiation = context.observedInProgressUndeducedInstantiation;
+				context.observedInProgressUndeducedInstantiation = false;
 				ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 				if (context.trial)
 					inst.body = context.parseContext.cloneSectionBody(matchedSection);
@@ -2981,6 +3056,10 @@ static void inferOrderedExpression(
 				context.currentKnownConstants = std::move(callerKnownConstants);
 				context.currentInstantiation = savedInst;
 				inst.valid = inferenceSucceeded;
+				bool calleeRemainsUndeduced = context.observedInProgressUndeducedInstantiation &&
+											  (!inst.returnType.isDeduced() || inst.needsReinfer || !inst.valid);
+				context.observedInProgressUndeducedInstantiation =
+					callerObservedInProgressInstantiation || calleeRemainsUndeduced;
 				if (inst.needsReinfer && savedInst && !context.trial)
 					savedInst->needsReinfer = true;
 				refinedInstantiationKey =
@@ -3002,6 +3081,10 @@ static void inferOrderedExpression(
 			// If no return intrinsic was found, default to Void
 			if (!inst.inferring && !inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&
 				inst.returnType.kind == DataType::Kind::Any) {
+				if (context.trial) {
+					requireCompilerInvariant(context.trialJournal, "trial default return type requires a rollback journal");
+					context.trialJournal->recordInstantiationReturnTypeWrite(&inst);
+				}
 				inst.returnType = {DataType::Kind::Void};
 			}
 			CompileTimeValue inferredReturnValue{};
@@ -3010,17 +3093,23 @@ static void inferOrderedExpression(
 				inferredReturnValue = evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context);
 				context.setExpressionValue(expr, inferredReturnValue);
 			}
-			bool canCacheStableTrialInstantiation = context.trial && context.allowTrialSummaryReuse && !trialCacheKey.empty() &&
+			bool canCacheStableTrialInstantiation = context.trial && context.allowTrialSummaryReuse && hasTrialCacheKey &&
 													context.typesValid && inst.valid && !inst.inferring && !inst.needsReinfer &&
 													inst.returnType.isDeduced() &&
-													!context.observedInProgressUndeducedInstantiation;
+													inst.requiredCompileTimeParameters == explicitCompileTimeParameters &&
+													inst.returnType.kind != DataType::Kind::Void;
 			if (canCacheStableTrialInstantiation) {
 				TrialInstantiationSummary summary;
 				summary.returnType = inst.returnType;
 				summary.returnValue = inferredReturnValue;
 				summary.purity = inst.purity;
-				(*context.ensureTrialInstantiationCache())[trialCacheKey] = std::move(summary);
-				traceTrialInstantiationCacheEvent("store", def, trialCacheKey);
+				summary.writtenGlobalReferences = inst.writtenGlobalReferences;
+				summary.finalGlobalConstantValues = inst.finalGlobalConstantValues;
+				if (trialInstantiationCacheEntryIsValid(trialCacheKey, summary)) {
+					auto trialCache = context.ensureTrialInstantiationCache();
+					(*trialCache)[trialCacheKey] = std::move(summary);
+					traceTrialInstantiationCacheEvent("store", def);
+				}
 			}
 			if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
 				retargetTrialSectionInstantiationWriteOrCrash(

@@ -90,6 +90,7 @@ static void resetExpressionTypes(Expression *expr, std::unordered_set<Expression
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedCallableDefinition = nullptr;
 	expr->selectedInstantiation = nullptr;
+	expr->usesTrialInstantiationSummary = false;
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
 	expr->inferredFlexBody.reset();
@@ -553,6 +554,7 @@ static bool validateGroupingInTrial(
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.currentKnownConstants = context.currentKnownConstants;
+	trialContext.observedInProgressUndeducedInstantiation = context.observedInProgressUndeducedInstantiation;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
 	trialContext.trialJournal = &journal;
@@ -607,7 +609,7 @@ static bool validateGroupingInTrial(
 	}
 	if (trialSucceeded && trialContext.typesValid && resolvedGroupingRoots)
 		*resolvedGroupingRoots = std::move(trialFixedGroupingRoots);
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(journal, trialContext.trialInstantiationCache.get());
 	applyGroupingSnapshot(originalGrouping);
 	expr = originalGrouping.root;
 	recomputeRanges(expr);
@@ -1164,11 +1166,8 @@ static bool inferExpression(
 		auto *savedFixedGroupingRoots = context.fixedGroupingRoots;
 		auto *savedResolvedGroupingRoots = context.resolvedGroupingRoots;
 		bool savedDetectGroupingAmbiguityDuringInfer = context.detectGroupingAmbiguity;
-		bool savedAllowTrialSummaryReuse = context.allowTrialSummaryReuse;
 		if (!collectGroupingAmbiguity)
 			context.detectGroupingAmbiguity = false;
-		if (!collectGroupingAmbiguity)
-			context.allowTrialSummaryReuse = false;
 		std::unordered_set<Expression *> commitResolvedGroupingRoots;
 		context.fixedGroupingRoots = selectedFixedGroupingRoots.empty() ? nullptr : &selectedFixedGroupingRoots;
 		context.resolvedGroupingRoots = &commitResolvedGroupingRoots;
@@ -1176,7 +1175,6 @@ static bool inferExpression(
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguityDuringInfer;
-		context.allowTrialSummaryReuse = savedAllowTrialSummaryReuse;
 		if (context.typesValid && requireVoidResult) {
 			DataType lineType = expr ? expr->type : DataType{};
 			if (!lineType.isDeduced() || lineType.kind != DataType::Kind::Void) {

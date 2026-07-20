@@ -52,6 +52,8 @@ struct DefinitionPatternElement : public PatternElement {
 	Range firstImplicitPromotionUseRange;
 	// if set, this VariableLike repeats an earlier VariableLike with the same text in the same definition
 	Range firstDuplicateVariableLikeRange;
+	// A plain word that forms an entire concrete pattern spelling is always literal.
+	bool isLiteralInSingleWordSpelling = false;
 
 	using PatternElement::PatternElement;
 	// Construct from a base PatternElement (for converting getPatternElements results)
@@ -75,13 +77,16 @@ void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector
 // insertion, removal, specificity, spelling, and overlap checks agree exactly.
 std::vector<std::vector<DefinitionPatternElement>> canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements);
 
+bool hasSingleWordPatternSpelling(const std::vector<DefinitionPatternElement> &elements);
+
 bool visitPatternNameWithFoundState(
 	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
 	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch
 );
 
 inline bool canPromoteVariableLikeElement(const DefinitionPatternElement &element) {
-	return element.type == PatternElement::Type::VariableLike && !element.firstDuplicateVariableLikeRange.line;
+	return element.type == PatternElement::Type::VariableLike && !element.firstDuplicateVariableLikeRange.line &&
+		   !element.isLiteralInSingleWordSpelling;
 }
 
 // Visit all leaf (non-Choice) elements recursively, including inside Choice alternatives

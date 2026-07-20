@@ -1,0 +1,38 @@
+function [a|] pointer to pointed_type:
+    replacement:
+        @intrinsic("add pointer depth", pointed_type)
+
+function i32:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+function value as destination_type:
+    replacement:
+        @intrinsic("cast", value, destination_type)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class:
+    patterns:
+        [a|] sample
+    members:
+        number
+
+function build {boolean:condition}:
+    execute:
+        if condition:
+            @intrinsic("return", 0 as a pointer to sample)
+        @intrinsic("store", instance, @intrinsic("construct", sample, 1))
+        @intrinsic("return", @intrinsic("address of", instance))
+
+discard build @intrinsic("equal", 0, 0)

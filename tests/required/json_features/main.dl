@@ -1,0 +1,16 @@
+import json.dl
+
+set parsed to parse "{\"unicode\":\"A\\u00df\\u6771\\ud834\\udd1e\",\"raw\":\"é\",\"number\":-1.25e2,\"items\":[\"text\",false,null],\"nested\":{}}" as json
+print json parsing succeeded for parsed as line
+set document to the value of parsed
+print json text named "unicode" in document as line
+print json text named "raw" in document as line
+print json number named "number" in document as line
+set items to json member named "items" in document
+print json text at index 0 in items as line
+print json boolean at index 1 in items as line
+print ((json value at index 2 in items) is json null) as line
+print (document has json member named "nested") as line
+print (document has json member named "missing") as line
+print the number of json members in document as line
+free json result parsed

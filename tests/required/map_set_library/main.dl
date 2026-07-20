@@ -1,0 +1,37 @@
+import map.dl
+import set.dl
+
+set alice to the string form of "alice"
+set bob to the string form of "bob"
+set ages to an empty map from string to integer
+put 30 for alice in ages
+put 40 for bob in ages
+put 31 for alice in ages
+print the number of entries in ages as line
+print (ages contains key alice) as line
+print the value for alice in ages as line
+remove alice from ages
+print (ages contains key alice) as line
+print the value for bob in ages as line
+clear ages
+print the number of entries in ages as line
+
+set answer to the string form of "answer"
+set labels to an empty map from integer to string
+put answer for 42 in labels
+print the value for 42 in labels as line
+
+set names to an empty set of string
+add alice to names
+add bob to names
+add alice to names
+print the size of names as line
+print (names contains alice) as line
+remove alice from names
+print (names contains alice) as line
+clear names
+print the size of names as line
+
+free map ages
+free map labels
+free set names

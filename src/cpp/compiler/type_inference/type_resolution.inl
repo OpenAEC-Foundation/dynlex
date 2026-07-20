@@ -4,6 +4,9 @@
 #include "const_evaluation.inl"
 #include <limits>
 
+static std::string encodeDataTypeForCacheKey(const DataType &type);
+static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &value);
+
 static std::optional<DataType> parseNumericTokenType(std::string_view token, bool emitSPIRV) {
 	if (token.empty())
 		return std::nullopt;
@@ -139,6 +142,156 @@ static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameS
 	return bindingContext;
 }
 
+struct ActiveClassInstantiation {
+	ParseContext *parseContext{};
+	ClassDefinition *classDefinition{};
+	std::string requestKey;
+	int symbolicIndex = -1;
+};
+
+struct ClassInstantiationTransaction {
+	ParseContext *parseContext{};
+	std::unordered_map<ClassDefinition *, size_t> originalInstantiationSizes;
+	std::vector<std::pair<ClassDefinition *, std::string>> insertedRequestKeys;
+	bool failed = false;
+};
+
+static thread_local std::vector<ActiveClassInstantiation> activeClassInstantiations;
+static thread_local std::optional<ClassInstantiationTransaction> activeClassInstantiationTransaction;
+static thread_local int nextSymbolicClassInstantiationIndex = -2;
+static thread_local size_t classInstantiationRollbackVersion = 0;
+
+static std::string buildClassInstantiationRequestKey(
+	const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext,
+	const std::vector<DataType> *constructionArgumentTypes
+) {
+	std::vector<std::tuple<std::string, DataType, CompileTimeValue>> parameters;
+	if (!bindingFrameStack.empty()) {
+		for (const auto &[name, expression] : bindingFrameStack.topFrame().bindings) {
+			DataType type = resolveKnownExpressionType(expression, bindingFrameStack, inferenceContext);
+			CompileTimeValue value = resolveStoredCompileTimeValue(expression, bindingFrameStack, inferenceContext);
+			parameters.push_back({name, std::move(type), std::move(value)});
+		}
+	}
+	std::sort(parameters.begin(), parameters.end(), [](const auto &left, const auto &right) {
+		return std::get<0>(left) < std::get<0>(right);
+	});
+
+	std::string key;
+	for (const auto &[name, type, value] : parameters) {
+		key += std::to_string(name.size()) + ":" + name;
+		key += "=" + encodeDataTypeForCacheKey(type);
+		key += ":" + encodeCompileTimeValueForCacheKey(value) + ";";
+	}
+	if (constructionArgumentTypes) {
+		key += "#construct";
+		for (const DataType &type : *constructionArgumentTypes)
+			key += ":" + encodeDataTypeForCacheKey(type);
+	}
+	return key;
+}
+
+static void recordClassInstantiationAppend(ClassDefinition *classDefinition) {
+	requireCompilerInvariant(
+		activeClassInstantiationTransaction.has_value(), "class instantiation append has no active transaction"
+	);
+	activeClassInstantiationTransaction->originalInstantiationSizes.try_emplace(
+		classDefinition, classDefinition->instantiations.size()
+	);
+}
+
+static void cacheClassInstantiationRequest(ClassDefinition *classDefinition, const std::string &requestKey, int index) {
+	auto [it, inserted] = classDefinition->instantiationIndicesByRequest.emplace(requestKey, index);
+	if (!inserted) {
+		requireCompilerInvariant(it->second == index, "class instantiation request resolved to inconsistent indices");
+		return;
+	}
+	requireCompilerInvariant(
+		activeClassInstantiationTransaction.has_value(), "class instantiation request cache has no active transaction"
+	);
+	activeClassInstantiationTransaction->insertedRequestKeys.push_back({classDefinition, requestKey});
+}
+
+static void rollbackClassInstantiationTransaction() {
+	requireCompilerInvariant(
+		activeClassInstantiationTransaction.has_value(), "cannot roll back a missing class instantiation transaction"
+	);
+	for (auto it = activeClassInstantiationTransaction->insertedRequestKeys.rbegin();
+		 it != activeClassInstantiationTransaction->insertedRequestKeys.rend(); ++it) {
+		it->first->instantiationIndicesByRequest.erase(it->second);
+	}
+	for (const auto &[classDefinition, originalSize] : activeClassInstantiationTransaction->originalInstantiationSizes) {
+		requireCompilerInvariant(
+			classDefinition->instantiations.size() >= originalSize,
+			"class instantiation transaction observed an unexpected instantiation-list shrink"
+		);
+		classDefinition->instantiations.resize(originalSize);
+	}
+	classInstantiationRollbackVersion++;
+}
+
+static bool
+replaceSymbolicClassInstantiation(DataType &type, ClassDefinition *classDefinition, int symbolicIndex, int concreteIndex) {
+	bool changed = false;
+	if (type.classDefinition == classDefinition && type.classInstIndex == symbolicIndex) {
+		type.classInstIndex = concreteIndex;
+		changed = true;
+	}
+	if (type.arrayElementType)
+		changed =
+			replaceSymbolicClassInstantiation(*type.arrayElementType, classDefinition, symbolicIndex, concreteIndex) || changed;
+	return changed;
+}
+
+static void resolveStoredSymbolicClassInstantiation(ClassDefinition *classDefinition, int symbolicIndex, int concreteIndex) {
+	requireCompilerInvariant(
+		activeClassInstantiationTransaction.has_value(), "symbolic class instantiation has no active transaction"
+	);
+	for (const auto &[mutatedClassDefinition, originalSize] : activeClassInstantiationTransaction->originalInstantiationSizes) {
+		for (size_t index = originalSize; index < mutatedClassDefinition->instantiations.size(); index++) {
+			for (DataType &fieldType : mutatedClassDefinition->instantiations[index].fieldTypes)
+				replaceSymbolicClassInstantiation(fieldType, classDefinition, symbolicIndex, concreteIndex);
+		}
+	}
+}
+
+struct ScopedActiveClassInstantiation {
+	bool ownsTransaction;
+	bool completed = false;
+
+	ScopedActiveClassInstantiation(
+		ParseContext &parseContext, ClassDefinition *classDefinition, std::string requestKey, int symbolicIndex
+	)
+		: ownsTransaction(activeClassInstantiations.empty()) {
+		if (ownsTransaction) {
+			requireCompilerInvariant(
+				!activeClassInstantiationTransaction.has_value(), "class instantiation transaction leaked between resolutions"
+			);
+			activeClassInstantiationTransaction = ClassInstantiationTransaction{&parseContext, {}, {}, false};
+		} else {
+			requireCompilerInvariant(
+				activeClassInstantiationTransaction && activeClassInstantiationTransaction->parseContext == &parseContext,
+				"nested class instantiation crossed parse contexts"
+			);
+		}
+		activeClassInstantiations.push_back({&parseContext, classDefinition, std::move(requestKey), symbolicIndex});
+	}
+
+	~ScopedActiveClassInstantiation() {
+		requireCompilerInvariant(!activeClassInstantiations.empty(), "active class instantiation stack underflow");
+		activeClassInstantiations.pop_back();
+		if (!completed)
+			activeClassInstantiationTransaction->failed = true;
+		if (!ownsTransaction)
+			return;
+		requireCompilerInvariant(activeClassInstantiations.empty(), "outer class instantiation did not unwind last");
+		if (activeClassInstantiationTransaction->failed)
+			rollbackClassInstantiationTransaction();
+		activeClassInstantiationTransaction.reset();
+		nextSymbolicClassInstantiationIndex = -2;
+	}
+};
+
 static TypeResolutionKey buildTypeResolutionKey(const Expression *expression, const BindingFrameStack &bindingFrameStack) {
 	TypeResolutionKey typeResolutionKey;
 	typeResolutionKey.expression = expression;
@@ -148,20 +301,21 @@ static TypeResolutionKey buildTypeResolutionKey(const Expression *expression, co
 
 static bool tryResolveCastResultType(const DataType &fromType, const DataType &typeArgType, DataType &outType);
 
-static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack) {
+static DataType
+resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext) {
 	if (expr && expr->kind == Expression::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
-		return concretizeClassType(expr->type);
+		return expr->type;
 	}
 	Expression *directResolved = resolveThroughBindings(expr, bindingFrameStack);
 	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
-		return concretizeClassType(directResolved->type);
+		return directResolved->type;
 	BindingFrameStack effectiveBindingFrameStack;
 	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack);
 	if (!resolved)
 		return {};
 	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
 	if (!bindingFrameStack.hasBindings() && !dependsOnBindings && resolved->type.isDeduced())
-		return concretizeClassType(resolved->type);
+		return resolved->type;
 	TypeResolutionKey typeResolutionKey = buildTypeResolutionKey(resolved, effectiveBindingFrameStack);
 	if (containsActiveTypeResolutionKey(typeResolutionKey))
 		return {};
@@ -195,11 +349,12 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 	if (resolved->kind == Expression::Kind::ArrayLiteral) {
 		if (resolved->arguments.empty())
 			return {};
-		DataType elementType = resolveKnownExpressionType(resolved->arguments[0], effectiveBindingFrameStack);
+		DataType elementType = resolveKnownExpressionType(resolved->arguments[0], effectiveBindingFrameStack, inferenceContext);
 		if (!elementType.isDeduced())
 			return {};
 		for (size_t i = 1; i < resolved->arguments.size(); i++) {
-			DataType nextType = resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack);
+			DataType nextType =
+				resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack, inferenceContext);
 			DataType merged;
 			if (!mergeArrayElementType(elementType, nextType, merged))
 				return {};
@@ -219,7 +374,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			var =
 				resolved->range.line->section ? resolved->range.line->section->findVariable(resolved->variable->name) : nullptr;
 		if (var && var->type.isDeduced())
-			return concretizeClassType(var->type);
+			return var->type;
 		if (std::optional<DataType> numericTokenType = parseNumericTokenType(
 				resolved->variable->name,
 				activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV
@@ -227,7 +382,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			return *numericTokenType;
 	}
 	if (resolved->kind == Expression::Kind::TypedPlaceholder && resolved->type.isDeduced())
-		return concretizeClassType(resolved->type);
+		return resolved->type;
 	PatternDefinition *selectedPatternDefinition =
 		resolved->kind == Expression::Kind::PatternCall ? resolved->selectedPatternDefinition : nullptr;
 	if (resolved->kind == Expression::Kind::IntrinsicCall) {
@@ -237,10 +392,12 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			switch (info->returnKind) {
 			case IntrinsicReturnKind::SameAsArgs:
 				if (resolved->arguments.size() == 2)
-					return resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					return resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 				if (resolved->arguments.size() > 2) {
-					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType leftType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
+					DataType rightType =
+						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 					DataType result;
 					if (DataType::promoteArithmetic(leftType, rightType, result))
 						return result;
@@ -248,14 +405,17 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				return {};
 			case IntrinsicReturnKind::SameAsInts:
 				if (resolved->arguments.size() == 2) {
-					DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType valueType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 					if (valueType.isInteger())
 						return valueType;
 					return {};
 				}
 				if (resolved->arguments.size() > 2) {
-					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType leftType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
+					DataType rightType =
+						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 					DataType result;
 					if (DataType::promoteBitwise(leftType, rightType, result))
 						return result;
@@ -263,22 +423,27 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				return {};
 			case IntrinsicReturnKind::Bool:
 				if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType leftType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
+					DataType rightType =
+						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 					if (leftType.kind == DataType::Kind::Bool && rightType.kind == DataType::Kind::Bool) {
 						return {DataType::Kind::Bool};
 					}
 					return {};
 				}
 				if (kind == IntrinsicKind::Not) {
-					DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType valueType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 					if (valueType.kind == DataType::Kind::Bool)
 						return {DataType::Kind::Bool};
 					return {};
 				}
 				if (resolved->arguments.size() > 2) {
-					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType leftType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
+					DataType rightType =
+						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 					DataType promoted;
 					bool pointerEquality = (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) &&
 										   leftType.isPointer() && rightType.isPointer() && leftType == rightType;
@@ -290,7 +455,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				if (kind == IntrinsicKind::If || kind == IntrinsicKind::ElseIf || kind == IntrinsicKind::LoopWhile) {
 					if (resolved->arguments.size() <= 1)
 						return {};
-					DataType conditionType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+					DataType conditionType =
+						resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 					if (conditionType.kind != DataType::Kind::Bool)
 						return {};
 				}
@@ -303,9 +469,9 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 		}
 		if (kind == IntrinsicKind::Property) {
 			DataType instType =
-				concretizeClassType(resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack));
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-				instType = concretizeClassType(instType.dereferenced());
+				instType = instType.dereferenced();
 			std::string fieldName;
 			if (activeTypeResolutionParseContext) {
 				CompileTimeValue propertyValue =
@@ -327,33 +493,38 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				}
 			}
 		} else if (kind == IntrinsicKind::Dereference) {
-			DataType ptrType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType ptrType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (ptrType.isDeduced() && ptrType.isPointer())
-				return concretizeClassType(ptrType.dereferenced());
+				return ptrType.dereferenced();
 		} else if (kind == IntrinsicKind::AddressOf) {
-			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType valueType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (valueType.isDeduced())
 				return valueType.pointed();
 		} else if (kind == IntrinsicKind::Call) {
 			if (resolved->arguments.size() <= 3)
 				return {};
-			DataType retTypeRef = resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack);
+			DataType retTypeRef =
+				resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack, inferenceContext);
 			if (retTypeRef.kind != DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Type ||
 				retTypeRef.referencedKind == DataType::Kind::Unresolved)
 				return {};
 			for (size_t i = 4; i < resolved->arguments.size(); i++) {
-				DataType argType = resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack);
+				DataType argType =
+					resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack, inferenceContext);
 				if (argType.kind == DataType::Kind::Type)
 					return {};
 			}
-			return concretizeClassType(retTypeRef.toReferencedType());
+			return retTypeRef.toReferencedType();
 		} else if (kind == IntrinsicKind::Function) {
 			return {DataType::Kind::Int, 1, 1};
 		} else if (kind == IntrinsicKind::Return) {
 			return {DataType::Kind::Void};
 		} else if (kind == IntrinsicKind::Cast) {
-			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+			DataType valueType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
+			DataType typeArgType =
+				resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 			DataType resultType;
 			if (tryResolveCastResultType(valueType, typeArgType, resultType))
 				return resultType;
@@ -384,7 +555,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			if (getCompileTimeConstraintValue(sourceValue))
 				return {DataType::Kind::Constraint};
 		} else if (kind == IntrinsicKind::TypeOf) {
-			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType valueType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (valueType.isDeduced()) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
@@ -399,7 +571,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::SizeOf) {
-			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType typeArgType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
 				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
@@ -420,7 +593,7 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			Expression *selectedBranch =
 				resolveCompileTimeSelectBranch(resolved, *activeTypeResolutionParseContext, effectiveBindingFrameStack);
 			if (selectedBranch)
-				return resolveKnownExpressionType(selectedBranch, effectiveBindingFrameStack);
+				return resolveKnownExpressionType(selectedBranch, effectiveBindingFrameStack, inferenceContext);
 		} else if (kind == IntrinsicKind::Array) {
 			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
@@ -429,7 +602,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				typeRef.referencedKind = DataType::Kind::Array;
 				typeRef.arraySize = static_cast<int>(*size);
 				if (resolved->arguments.size() > 2) {
-					DataType elemTypeRef = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+					DataType elemTypeRef =
+						resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 					if (elemTypeRef.kind == DataType::Kind::Constraint)
 						return {DataType::Kind::Constraint};
 					if (elemTypeRef.kind == DataType::Kind::Type)
@@ -452,7 +626,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 2) {
 				DataType elemTypeRef;
-				DataType elementExpressionType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+				DataType elementExpressionType =
+					resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 				if (elementExpressionType.kind == DataType::Kind::Constraint)
 					return {DataType::Kind::Constraint};
 				if (elementExpressionType.kind == DataType::Kind::Type)
@@ -482,7 +657,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			typeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
 			if (resolved->arguments.size() > 3) {
 				DataType elemTypeRef;
-				DataType elementExpressionType = resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack);
+				DataType elementExpressionType =
+					resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack, inferenceContext);
 				if (elementExpressionType.kind == DataType::Kind::Constraint)
 					return {DataType::Kind::Constraint};
 				if (elementExpressionType.kind == DataType::Kind::Type)
@@ -492,7 +668,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::AddPointerDepth) {
-			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType typeArgType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (typeArgType.kind == DataType::Kind::Constraint) {
 				CompileTimeValue sourceValue =
 					::resolveStoredCompileTimeValue(resolved->arguments[1], effectiveBindingFrameStack);
@@ -505,7 +682,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				return typeArgType;
 			}
 		} else if (kind == IntrinsicKind::Construct) {
-			DataType typeRefType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			DataType typeRefType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext);
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
 				DataType arrayType = typeRefType.toReferencedType();
 				if (arrayType.arraySize == static_cast<int>(resolved->arguments.size()) - 2) {
@@ -513,7 +691,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 						arrayType.arrayElementType ? *arrayType.arrayElementType : DataType{DataType::Kind::Unresolved};
 					bool allDeduced = true;
 					for (size_t i = 2; i < resolved->arguments.size(); i++) {
-						DataType argType = resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack);
+						DataType argType =
+							resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack, inferenceContext);
 						if (!argType.isDeduced())
 							allDeduced = false;
 						if (!arrayType.arrayElementType) {
@@ -533,7 +712,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				argumentTypes.reserve(resolved->arguments.size() - 2);
 				bool allArgumentsDeduced = true;
 				for (size_t i = 2; i < resolved->arguments.size(); i++) {
-					DataType argumentType = resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack);
+					DataType argumentType =
+						resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack, inferenceContext);
 					if (!argumentType.isDeduced()) {
 						allArgumentsDeduced = false;
 						break;
@@ -549,13 +729,13 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 					return instantiatedTypeRef.toReferencedType();
 				}
 
-				DataType targetType = concretizeClassType(typeRefType.toReferencedType());
+				DataType targetType = typeRefType.toReferencedType();
 				if (resolved->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
 					targetType.classInstIndex >= 0) {
 					const auto &fieldTypes = targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
 					bool allCompatible = argumentTypes.size() == fieldTypes.size();
 					for (size_t i = 0; allCompatible && i < fieldTypes.size(); i++) {
-						if (!DataType::supportsRuntimeConversion(concretizeClassType(argumentTypes[i]), fieldTypes[i]))
+						if (!DataType::supportsRuntimeConversion(argumentTypes[i], fieldTypes[i]))
 							allCompatible = false;
 					}
 					if (allCompatible)
@@ -563,7 +743,8 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 				}
 			} else if (typeRefType.kind == DataType::Kind::Type && resolved->arguments.size() == 3) {
 				DataType targetType = typeRefType.toReferencedType();
-				DataType valueType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
+				DataType valueType =
+					resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext);
 				if (valueType.isDeduced())
 					return targetType;
 			}
@@ -580,9 +761,9 @@ static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameS
 		BindingFrameStack mergedBindingFrameStack = bindingFrameStack;
 		materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
 		pushBindingScope(mergedBindingFrameStack, std::move(innerBindings));
-		return resolveKnownExpressionType(bodyExpr, mergedBindingFrameStack);
+		return resolveKnownExpressionType(bodyExpr, mergedBindingFrameStack, inferenceContext);
 	}
-	return concretizeClassType(resolved->type);
+	return resolved->type;
 }
 
 static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
@@ -609,7 +790,7 @@ static DataType toTypeReference(const DataType &valueType) {
 		return {};
 	if (valueType.kind == DataType::Kind::Type)
 		return valueType;
-	DataType concreteValueType = concretizeClassType(valueType);
+	DataType concreteValueType = valueType;
 	DataType typeReference;
 	typeReference.kind = DataType::Kind::Type;
 	typeReference.referencedKind = concreteValueType.kind;
@@ -675,7 +856,7 @@ static bool resolveCompileTimeTypeReference(
 	if (resolved->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Type) {
-			DataType resolvedType = resolveKnownExpressionType(resolved, effectiveBindingFrameStack);
+			DataType resolvedType = resolveKnownExpressionType(resolved, effectiveBindingFrameStack, inferenceContext);
 			if (resolvedType.kind == DataType::Kind::Type) {
 				outTypeRef = resolvedType;
 				return true;
@@ -854,7 +1035,7 @@ static bool resolveCompileTimeTypeReference(
 static bool
 completeBoundClassFieldType(const DataType &fieldConstraintInput, const DataType &argumentTypeInput, DataType &outFieldType) {
 	DataType fieldConstraint = fieldConstraintInput;
-	DataType argumentType = concretizeClassType(argumentTypeInput);
+	DataType argumentType = argumentTypeInput;
 	if (!argumentType.isConcrete())
 		return false;
 	if (fieldConstraint.kind == DataType::Kind::Any) {
@@ -900,6 +1081,24 @@ static DataType instantiateBoundClassType(
 	if (constructionArgumentTypes && constructionArgumentTypes->size() != classDef->fields.size())
 		return {};
 
+	std::string requestKey = buildClassInstantiationRequestKey(bindingFrameStack, inferenceContext, constructionArgumentTypes);
+	auto completedRequest = classDef->instantiationIndicesByRequest.find(requestKey);
+	if (completedRequest != classDef->instantiationIndicesByRequest.end()) {
+		requireCompilerInvariant(
+			completedRequest->second >= 0 && completedRequest->second < static_cast<int>(classDef->instantiations.size()),
+			"cached class instantiation request refers to a missing instantiation"
+		);
+		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second, nullptr, DataType::Kind::Class};
+	}
+	for (auto active = activeClassInstantiations.rbegin(); active != activeClassInstantiations.rend(); ++active) {
+		if (active->parseContext != &parseContext || active->classDefinition != classDef || active->requestKey != requestKey)
+			continue;
+		return {DataType::Kind::Type, 0, 0, classDef, active->symbolicIndex, nullptr, DataType::Kind::Class};
+	}
+
+	int symbolicIndex = nextSymbolicClassInstantiationIndex--;
+	ScopedActiveClassInstantiation activeInstantiation(parseContext, classDef, requestKey, symbolicIndex);
+
 	struct ScopedKnownConstantsOverride {
 		InferenceContext *context{};
 		std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
@@ -917,8 +1116,10 @@ static DataType instantiateBoundClassType(
 	for (size_t fieldIndex = 0; fieldIndex < classDef->fields.size(); fieldIndex++) {
 		FieldDefinition &field = classDef->fields[fieldIndex];
 		DataType fieldType = field.declaredType;
-		if (fieldType.kind == DataType::Kind::Any && !constructionArgumentTypes)
+		if (fieldType.kind == DataType::Kind::Any && !constructionArgumentTypes) {
+			activeInstantiation.completed = true;
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+		}
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
 			expandPendingTypeReferenceExpression(
 				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
@@ -932,7 +1133,7 @@ static DataType instantiateBoundClassType(
 				DataType inferredTypeRef;
 				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef))
 					return {};
-				fieldType = concretizeClassType(inferredTypeRef.toReferencedType());
+				fieldType = inferredTypeRef.toReferencedType();
 			} else {
 				DataType resolvedTypeRef;
 				if (!resolveCompileTimeTypeReference(
@@ -940,10 +1141,8 @@ static DataType instantiateBoundClassType(
 					) ||
 					resolvedTypeRef.kind != DataType::Kind::Type)
 					return {};
-				fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
+				fieldType = resolvedTypeRef.toReferencedType();
 			}
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
 		}
 
 		if (constructionArgumentTypes) {
@@ -952,12 +1151,34 @@ static DataType instantiateBoundClassType(
 				return {};
 			fieldType = std::move(completedFieldType);
 		} else if (!fieldType.isConcrete()) {
+			activeInstantiation.completed = true;
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 		}
 		fieldTypes.push_back(fieldType);
 	}
 
-	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	int instIndex = -1;
+	for (int candidateIndex = 0; candidateIndex < static_cast<int>(classDef->instantiations.size()); candidateIndex++) {
+		std::vector<DataType> candidateFieldTypes = fieldTypes;
+		for (DataType &candidateFieldType : candidateFieldTypes)
+			replaceSymbolicClassInstantiation(candidateFieldType, classDef, symbolicIndex, candidateIndex);
+		if (candidateFieldTypes != classDef->instantiations[candidateIndex].fieldTypes)
+			continue;
+		fieldTypes = std::move(candidateFieldTypes);
+		instIndex = candidateIndex;
+		break;
+	}
+	if (instIndex < 0) {
+		int newIndex = static_cast<int>(classDef->instantiations.size());
+		for (DataType &fieldType : fieldTypes)
+			replaceSymbolicClassInstantiation(fieldType, classDef, symbolicIndex, newIndex);
+		recordClassInstantiationAppend(classDef);
+		instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+		requireCompilerInvariant(instIndex == newIndex, "new recursive class instantiation did not use its planned index");
+	}
+	resolveStoredSymbolicClassInstantiation(classDef, symbolicIndex, instIndex);
+	cacheClassInstantiationRequest(classDef, requestKey, instIndex);
+	activeInstantiation.completed = true;
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
 }
 
@@ -970,31 +1191,18 @@ static bool instantiateClassFromArgumentTypes(
 	std::vector<DataType> fieldTypes;
 	fieldTypes.reserve(argumentTypes.size());
 	for (size_t i = 0; i < argumentTypes.size(); i++) {
-		DataType argumentType = concretizeClassType(argumentTypes[i]);
+		DataType argumentType = argumentTypes[i];
 		if (!argumentType.isConcrete())
 			return false;
-		DataType fieldType = classDef->fields[i].declaredType;
+		DataType fieldConstraint = classDef->fields[i].declaredType;
 		if (baseClassInstIndex >= 0 && static_cast<size_t>(baseClassInstIndex) < classDef->instantiations.size() &&
 			i < classDef->instantiations[baseClassInstIndex].fieldTypes.size()) {
-			fieldType = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
+			fieldConstraint = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
 		}
-		if (fieldType.kind == DataType::Kind::Any) {
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Array && fieldType.arraySize >= 0 &&
-				   (!fieldType.arrayElementType || !fieldType.arrayElementType->isDeduced())) {
-			if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldType.arraySize)
-				return false;
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
-		}
-
-		if (!DataType::supportsRuntimeConversion(argumentType, fieldType))
+		DataType fieldType;
+		if (!completeBoundClassFieldType(fieldConstraint, argumentType, fieldType))
 			return false;
-
-		if (!fieldType.isConcrete())
-			return false;
-		fieldTypes.push_back(fieldType);
+		fieldTypes.push_back(std::move(fieldType));
 	}
 
 	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
@@ -1027,14 +1235,6 @@ static std::string formatTypeList(const std::vector<DataType> &types, ParseConte
 		out += typeToUserName(types[i], parseContext);
 	}
 	return out;
-}
-
-static DataType concretizeClassType(DataType type) {
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
-		!type.classDefinition->instantiations.empty()) {
-		type.classInstIndex = 0;
-	}
-	return type;
 }
 
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName) {
@@ -1251,7 +1451,7 @@ static bool tryResolveCastResultType(const DataType &fromType, const DataType &t
 		return false;
 	if (typeArgType.kind != DataType::Kind::Type)
 		return false;
-	DataType toType = concretizeClassType(typeArgType.toReferencedType());
+	DataType toType = typeArgType.toReferencedType();
 	if (!isSupportedCastConversion(fromType, toType))
 		return false;
 	outType = toType;
@@ -1276,9 +1476,99 @@ struct TrialInstantiationSummary {
 	DataType returnType{};
 	CompileTimeValue returnValue{};
 	InstantiationPurity purity = InstantiationPurity::Pure;
+	std::unordered_set<VariableReference *> writtenGlobalReferences;
+	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 };
 
-using TrialInstantiationCache = std::unordered_map<std::string, TrialInstantiationSummary>;
+struct TrialInstantiationCacheKey {
+	Section *section{};
+	bool sectionHasCommittedOrdering = false;
+	std::vector<DataType> argumentTypes;
+	std::vector<std::pair<std::string, std::string>> compileTimeParameters;
+	bool operator==(const TrialInstantiationCacheKey &) const = default;
+
+	bool operator<(const TrialInstantiationCacheKey &other) const {
+		if (section != other.section)
+			return std::less<Section *>{}(section, other.section);
+		return std::tie(sectionHasCommittedOrdering, argumentTypes, compileTimeParameters) <
+			   std::tie(other.sectionHasCommittedOrdering, other.argumentTypes, other.compileTimeParameters);
+	}
+};
+
+struct TrialInstantiationCache : std::map<TrialInstantiationCacheKey, TrialInstantiationSummary> {
+	size_t validatedClassInstantiationRollbackVersion = classInstantiationRollbackVersion;
+};
+
+static bool dataTypeReferencesExistingClassInstantiations(
+	const DataType &type, std::set<std::pair<ClassDefinition *, int>> &visitedInstantiations,
+	bool allowActiveSymbolicInstantiation
+) {
+	if (type.arrayElementType && !dataTypeReferencesExistingClassInstantiations(
+									 *type.arrayElementType, visitedInstantiations, allowActiveSymbolicInstantiation
+								 ))
+		return false;
+	bool hasClassPayload = type.kind == DataType::Kind::Class ||
+						   (type.kind == DataType::Kind::Type && type.referencedKind == DataType::Kind::Class);
+	if (!hasClassPayload)
+		return true;
+	if (!type.classDefinition)
+		return false;
+	if (type.classInstIndex == -1)
+		return true;
+	if (type.classInstIndex < -1) {
+		if (!allowActiveSymbolicInstantiation)
+			return false;
+		return std::any_of(activeClassInstantiations.begin(), activeClassInstantiations.end(), [&](const auto &active) {
+			return active.classDefinition == type.classDefinition && active.symbolicIndex == type.classInstIndex;
+		});
+	}
+	if (type.classInstIndex >= static_cast<int>(type.classDefinition->instantiations.size()))
+		return false;
+	auto instantiation = std::make_pair(type.classDefinition, type.classInstIndex);
+	if (!visitedInstantiations.insert(instantiation).second)
+		return true;
+	for (const DataType &fieldType : type.classDefinition->instantiations[type.classInstIndex].fieldTypes) {
+		if (!dataTypeReferencesExistingClassInstantiations(fieldType, visitedInstantiations, allowActiveSymbolicInstantiation))
+			return false;
+	}
+	return true;
+}
+
+static bool dataTypeReferencesExistingClassInstantiations(const DataType &type) {
+	std::set<std::pair<ClassDefinition *, int>> visitedInstantiations;
+	return dataTypeReferencesExistingClassInstantiations(type, visitedInstantiations, false);
+}
+
+static bool dataTypeReferencesAvailableClassInstantiations(const DataType &type) {
+	std::set<std::pair<ClassDefinition *, int>> visitedInstantiations;
+	return dataTypeReferencesExistingClassInstantiations(type, visitedInstantiations, true);
+}
+
+static bool
+trialInstantiationCacheEntryIsValid(const TrialInstantiationCacheKey &key, const TrialInstantiationSummary &summary) {
+	for (const DataType &argumentType : key.argumentTypes) {
+		if (!dataTypeReferencesExistingClassInstantiations(argumentType))
+			return false;
+	}
+	if (!dataTypeReferencesExistingClassInstantiations(summary.returnType))
+		return false;
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&summary.returnValue))
+		return dataTypeReferencesExistingClassInstantiations(typeReference->type);
+	return true;
+}
+
+static void pruneInvalidTrialInstantiationCacheEntries(TrialInstantiationCache &cache) {
+	if (cache.validatedClassInstantiationRollbackVersion == classInstantiationRollbackVersion)
+		return;
+	for (auto entry = cache.begin(); entry != cache.end();) {
+		if (!trialInstantiationCacheEntryIsValid(entry->first, entry->second)) {
+			entry = cache.erase(entry);
+		} else {
+			entry++;
+		}
+	}
+	cache.validatedClassInstantiationRollbackVersion = classInstantiationRollbackVersion;
+}
 
 struct InferenceContext {
 	struct OperandGroupingWarning {
@@ -1324,8 +1614,6 @@ struct InferenceContext {
 
 		std::vector<VariableUndo> variableTypeUndo;
 		std::unordered_set<Variable *> seenVariables;
-		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
-		std::unordered_set<ClassDefinition *> seenClassDefinitions;
 		std::vector<Section *> touchedSections;
 		std::unordered_set<Section *> seenSections;
 		std::vector<SectionInstantiationUndo> sectionInstantiationUndo;
@@ -1353,13 +1641,6 @@ struct InferenceContext {
 				return;
 			seenVariables.insert(var);
 			variableTypeUndo.push_back({var, var->type, var->typeOriginRange, var->typeOriginFloatLiteralReplacement});
-		}
-
-		void recordClassInstantiationAppend(ClassDefinition *classDef) {
-			if (!classDef || seenClassDefinitions.contains(classDef))
-				return;
-			seenClassDefinitions.insert(classDef);
-			classInstantiationSizes.push_back({classDef, classDef->instantiations.size()});
 		}
 
 		void recordTouchedSection(Section *section) {
@@ -1431,6 +1712,7 @@ struct InferenceContext {
 
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
+	std::vector<std::shared_ptr<InstantiatedSectionBody>> activeFlexInferenceBodies;
 	std::unordered_map<VariableReference *, CompileTimeValue> currentKnownConstants;
 	std::vector<std::unordered_set<VariableReference *>> loopMutationStack;
 	bool typesValid = true;

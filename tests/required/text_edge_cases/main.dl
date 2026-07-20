@@ -1,0 +1,13 @@
+import text.dl
+
+set empty to the string form of ""
+print empty trimmed as line
+print (empty starts with "") as line
+print (empty ends with "") as line
+print (the index of "" in empty starting at 0) as line
+print ("aaaa" with "aa" replaced by "b") as line
+
+set pieces to split ",a,,b," at ","
+print the length of pieces as line
+print (pieces joined with "-") as line
+free split text pieces

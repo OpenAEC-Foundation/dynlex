@@ -206,6 +206,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
+	clone->usesTrialInstantiationSummary = preserveInferenceMetadata && expression->usesTrialInstantiationSummary;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)

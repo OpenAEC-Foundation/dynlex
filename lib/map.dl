@@ -1,0 +1,69 @@
+# DynLex Map Library
+
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] map
+    members:
+        keys
+        values
+
+function an empty map from {type:key_type} to {type:value_type}:
+    execute:
+        set keys to an empty list of key_type
+        set values to an empty list of value_type
+        set initial_value to @intrinsic("construct", a map, keys, values)
+        set result to allocate 1 slots of initial_value
+        return result
+
+function [the|] number of entries in {a pointer to map:mapping}:
+    execute:
+        return the length of the keys of mapping
+
+function [the|] index of key in {a pointer to map:mapping}:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of the keys of mapping:
+            if item cursor of the keys of mapping = key:
+                return cursor
+            set cursor to cursor + 1
+        return 0 - 1
+
+function {a pointer to map:mapping} contains key {any:searched_key}:
+    execute:
+        return the index of searched_key in mapping >= 0
+
+function [the|] value for key in {a pointer to map:mapping}:
+    execute:
+        set position to the index of key in mapping
+        if position < 0:
+            @intrinsic("call", "libc", "abort", void)
+        return item position of the values of mapping
+
+function put value for key in {a pointer to map:mapping}:
+    execute:
+        set position to the index of key in mapping
+        if position >= 0:
+            store value into the data of the values of mapping at position
+        else:
+            append key to the keys of mapping
+            append value to the values of mapping
+
+function remove key from {a pointer to map:mapping}:
+    execute:
+        set position to the index of key in mapping
+        if position >= 0:
+            remove item position from the keys of mapping
+            remove item position from the values of mapping
+
+function clear {a pointer to map:mapping}:
+    execute:
+        clear the keys of mapping
+        clear the values of mapping
+
+function free map {a pointer to map:mapping}:
+    execute:
+        free list the keys of mapping
+        free list the values of mapping
+        @intrinsic("call", "libc", "free", void, mapping)

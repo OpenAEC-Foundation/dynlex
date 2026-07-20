@@ -12,7 +12,10 @@ static bool finalizeDeferredGroupingAmbiguities(ParseContext &parseContext) {
 
 		InferenceContext context(parseContext);
 		context.detectGroupingAmbiguity = true;
-		std::shared_ptr<InstantiatedSectionBody> body;
+		std::shared_ptr<InstantiatedSectionBody> replayBody;
+		if (deferred.replayFlexBody)
+			replayBody = parseContext.cloneSectionBody(deferred.rootSection);
+		InstantiatedSectionBody *body = replayBody.get();
 		ScopedSectionLocalVariableState localVariableState(deferred.rootSection);
 		if (deferred.instantiation) {
 			if (!deferred.instantiation->valid || deferred.instantiation->needsReinfer ||
@@ -21,14 +24,15 @@ static bool finalizeDeferredGroupingAmbiguities(ParseContext &parseContext) {
 			}
 			if (deferred.instantiation->inferring)
 				crashCompilerBug("deferred grouping ambiguity reached finalization during function inference");
-			body = deferred.instantiation->body;
+			if (!body)
+				body = deferred.instantiation->body.get();
 			if (!body)
 				crashCompilerBug("deferred grouping ambiguity has no instantiated function body");
 			context.currentInstantiation = deferred.instantiation;
 			deferred.instantiation->inferring = true;
 		}
 
-		bool inferred = inferSection(deferred.rootSection, body.get(), nullptr, context, {});
+		bool inferred = inferSection(deferred.rootSection, body, nullptr, context, deferred.bindingFrameStack);
 		if (deferred.instantiation)
 			deferred.instantiation->inferring = false;
 		if (!inferred || !context.typesValid)

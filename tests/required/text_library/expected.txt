@@ -1,0 +1,12 @@
+Hello, DynLex!
+hello, dynlex!
+HELLO, DYNLEX!
+1
+1
+1
+DynLex
+Hello, world!
+hahaha
+3
+green
+red | green | blue

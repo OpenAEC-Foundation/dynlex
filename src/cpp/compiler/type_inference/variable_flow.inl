@@ -45,30 +45,25 @@ buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const Da
 	);
 }
 
-static int getRefinedClassInstantiationIndex(
-	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
-) {
+static int
+getRefinedClassInstantiationIndex(ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType) {
 	if (!classDef || instIndex < 0 || instIndex >= (int)classDef->instantiations.size())
 		return -1;
 	const auto &baseFieldTypes = classDef->instantiations[instIndex].fieldTypes;
 	if (fieldIndex >= baseFieldTypes.size())
 		return -1;
-	if (baseFieldTypes[fieldIndex].isDeduced())
-		crashCompilerBug("class field refinement requested for an already typed field");
+	DataType refinedFieldType = fieldType;
+	if (baseFieldTypes[fieldIndex].isDeduced()) {
+		if (!mergeVariableAssignmentType(baseFieldTypes[fieldIndex], fieldType, refinedFieldType))
+			return -1;
+		if (refinedFieldType == baseFieldTypes[fieldIndex])
+			return instIndex;
+	}
 	const DataType &declaredFieldType = classDef->fields[fieldIndex].declaredType;
 	if (declaredFieldType.isDeduced() && !isVariableAssignmentCompatible(declaredFieldType, fieldType))
 		return -1;
 	std::vector<DataType> refinedFieldTypes = baseFieldTypes;
-	refinedFieldTypes[fieldIndex] = fieldType;
-	bool instantiationExists = false;
-	for (const auto &inst : classDef->instantiations) {
-		if (inst.fieldTypes == refinedFieldTypes) {
-			instantiationExists = true;
-			break;
-		}
-	}
-	if (!instantiationExists && context.trial && context.trialJournal)
-		context.trialJournal->recordClassInstantiationAppend(classDef);
+	refinedFieldTypes[fieldIndex] = refinedFieldType;
 	int existingIndex = classDef->getOrCreateInstantiation(refinedFieldTypes);
 	return existingIndex;
 }

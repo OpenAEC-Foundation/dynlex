@@ -3,6 +3,7 @@
 #include "transformedPattern.h"
 #include <cctype>
 #include <unordered_map>
+#include <unordered_set>
 using namespace std::literals;
 
 std::vector<PatternElement> getPatternElements(std::string_view patternString) {
@@ -235,6 +236,27 @@ canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
 	return paths;
 }
 
+bool hasSingleWordPatternSpelling(const std::vector<DefinitionPatternElement> &elements) {
+	for (const auto &path : canonicalPatternPaths(elements)) {
+		if (path.size() == 1 && path.front().type == PatternElement::Type::VariableLike)
+			return true;
+	}
+	return false;
+}
+
+static void markSingleWordLiteralElements(std::vector<DefinitionPatternElement> &elements) {
+	std::unordered_set<size_t> literalStartPositions;
+	for (const auto &path : canonicalPatternPaths(elements)) {
+		if (path.size() == 1 && path.front().type == PatternElement::Type::VariableLike)
+			literalStartPositions.insert(path.front().startPos);
+	}
+
+	forEachLeafElement(elements, [&](DefinitionPatternElement &element) {
+		if (element.type == PatternElement::Type::VariableLike && literalStartPositions.contains(element.startPos))
+			element.isLiteralInSingleWordSpelling = true;
+	});
+}
+
 bool visitPatternNameWithFoundState(
 	std::vector<DefinitionPatternElement> &elements, const std::string &name, bool foundBefore,
 	const std::function<bool(DefinitionPatternElement &)> &onFirstMatch
@@ -386,5 +408,7 @@ bool parsePatternElements(
 
 	normalizePatternElements(result);
 	markDuplicateVariableLikeElements(patternRange, result);
+	if (offset == 0)
+		markSingleWordLiteralElements(result);
 	return true;
 }

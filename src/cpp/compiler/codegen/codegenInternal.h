@@ -51,7 +51,9 @@ llvm::DIType *getDIType(ParseContext &context, DataType type);
 llvm::DIFile *getOrCreateDIFile(ParseContext &context, lsp::SourceFile *sourceFile);
 
 // Function/section code generation (codegen.cpp)
-bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
+bool generateSectionCode(
+	ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr, llvm::Value **lastResult = nullptr
+);
 llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr);
 void emitFlexBodySection(
 	ParseContext &context, Section *bodySection, InstantiatedSectionBody *body = nullptr, bool finalizeControlFlow = true

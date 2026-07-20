@@ -1,0 +1,28 @@
+function [a|] byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function i32:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function [a|] pointer to pointed_type:
+    replacement:
+        @intrinsic("add pointer depth", pointed_type)
+
+function [the|] size of type_to_measure:
+    replacement:
+        @intrinsic("size of", type_to_measure)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+class:
+    patterns:
+        [a|] padded value
+    members:
+        data as a pointer to byte
+        length as i32
+
+discard @intrinsic("call", "libc", "printf", i32, "%lld\n", the size of a padded value)

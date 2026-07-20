@@ -55,6 +55,10 @@ struct Expression {
 	// For non-flex PatternCalls: the exact monomorphized callee selected during
 	// type inference. Later stages consume this instance without rebuilding its key.
 	Instantiation *selectedInstantiation{};
+	// Trial summaries provide complete inference results without retaining a
+	// rolled-back monomorphized body. Pure evaluation must consume the summary's
+	// stored value instead of traversing that unavailable body.
+	bool usesTrialInstantiationSummary = false;
 	// For flex PatternCalls: the call-site-specific expanded expression selected
 	// during type inference. Function-flex codegen clones this complete body
 	// expression. Section-flex control-flow inspection reuses it as the inferred

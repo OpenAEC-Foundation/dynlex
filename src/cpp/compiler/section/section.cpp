@@ -11,6 +11,7 @@
 #include "variable.h"
 #include <cctype>
 #include <iostream>
+#include <regex>
 #include <stack>
 using namespace std::literals;
 
@@ -591,35 +592,35 @@ Expression *Section::detectPatternsRecursively(
 		));
 	};
 
+	static const std::regex leftWhitespaceRegex("^(\\s*)");
+	static const std::regex rightWhitespaceRegex("(\\s*)$");
+	static const std::regex repeatedOrNonSpaceWhitespaceRegex("\\s{2,}|[^\\S ]");
 	std::smatch matches;
 
 	// Trim left
-	std::regex_search(reference->pattern.text, matches, std::regex("^(\\s*)"));
+	std::regex_search(reference->pattern.text, matches, leftWhitespaceRegex);
 	std::string leftWhiteSpace = matches[0];
 	if (!leftWhiteSpace.empty()) {
-		if (leftWhiteSpace != " ") {
+		if (leftWhiteSpace != " ")
 			addWhiteSpaceWarning(0, leftWhiteSpace.size());
-		}
 		reference->pattern.replacePattern(0, leftWhiteSpace.size(), "");
 	}
 
 	// Trim right
-	std::regex_search(reference->pattern.text, matches, std::regex("(\\s*)$"));
+	std::regex_search(reference->pattern.text, matches, rightWhitespaceRegex);
 	std::string rightWhiteSpace = matches[0];
 	if (!rightWhiteSpace.empty()) {
-		if (rightWhiteSpace != " ") {
+		if (rightWhiteSpace != " ")
 			addWhiteSpaceWarning(matches.position(), reference->pattern.text.size());
-		}
 		reference->pattern.replacePattern(matches.position(), reference->pattern.text.size(), "");
 	}
 
 	// Normalize whitespace
-	std::regex spaceRegex = std::regex("\\s{2,}|[^\\S ]");
 	size_t lastIndex = 0;
 	std::cmatch charMatches;
 	while (std::regex_search(
 		reference->pattern.text.c_str() + lastIndex, reference->pattern.text.c_str() + reference->pattern.text.size(),
-		charMatches, spaceRegex
+		charMatches, repeatedOrNonSpaceWhitespaceRegex
 	)) {
 		size_t matchPos = lastIndex + charMatches.position();
 		size_t endPos = matchPos + charMatches.length();

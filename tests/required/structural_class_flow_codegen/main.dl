@@ -1,0 +1,45 @@
+function [a|] pointer to pointed_type:
+    replacement:
+        @intrinsic("add pointer depth", pointed_type)
+
+function value as destination_type:
+    replacement:
+        @intrinsic("cast", value, destination_type)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+class:
+    patterns:
+        [a|] storage
+    members:
+        data
+
+class:
+    patterns:
+        [a|] node
+    members:
+        items
+
+function build:
+    execute:
+        set provisional_pointer to 0 as a pointer to node
+        set provisional_storage to @intrinsic("construct", a storage, provisional_pointer)
+        set node_value to @intrinsic("construct", a node, provisional_storage)
+        set result to @intrinsic("address of", node_value)
+        set concrete_pointer to 0 as a pointer to node
+        set concrete_storage to @intrinsic("construct", a storage, concrete_pointer)
+        @intrinsic("store", @intrinsic("property", result, "items"), concrete_storage)
+        discard @intrinsic("not equal", result, 0 as a pointer to node)
+        return result
+
+discard build

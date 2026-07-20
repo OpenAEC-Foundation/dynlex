@@ -2,6 +2,19 @@
 
 #include "operand_reordering.inl"
 
+static bool
+instantiatedSectionBodyContains(const InstantiatedSectionBody *rootBody, const InstantiatedSectionBody *searchedBody) {
+	if (!rootBody || !searchedBody)
+		return false;
+	if (rootBody == searchedBody)
+		return true;
+	for (const std::shared_ptr<InstantiatedSectionBody> &childBody : rootBody->childBodies) {
+		if (instantiatedSectionBodyContains(childBody.get(), searchedBody))
+			return true;
+	}
+	return false;
+}
+
 static Variable *findOwnSectionVariable(Section *section, const std::string &name) {
 	if (!section)
 		return nullptr;
@@ -16,7 +29,7 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 		Variable *parameterVariable = findOwnSectionVariable(section, name);
 		if (!parameterVariable || parameterVariable->isGlobal)
 			continue;
-		parameterVariable->type = concretizeClassType(parameterType);
+		parameterVariable->type = parameterType;
 		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
 		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}
@@ -28,22 +41,30 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 	}
 }
 
-static bool isLoopSectionOpening(Expression *openingExpression) {
-	if (!openingExpression)
-		return false;
-	Expression *header = openingExpression;
-	if (header->kind == Expression::Kind::PatternCall)
-		header = header->inferredFlexExpansion;
+static Expression *resolveInferredControlHeader(Expression *header, InferenceContext &context) {
+	std::unordered_set<Expression *> visited;
+	bool outermost = true;
+	while (header && header->kind == Expression::Kind::PatternCall) {
+		requireCompilerInvariant(
+			visited.insert(header).second, "control-flow header contains a cyclic inferred flex expansion"
+		);
+		PatternDefinition *definition = header->selectedPatternDefinition;
+		if (!flexPatternCanForwardControlHeader(definition, outermost))
+			return nullptr;
+		header = context.lookupFlexExpansion(header);
+		outermost = false;
+	}
+	return header;
+}
+
+static bool isLoopSectionOpening(Expression *openingExpression, InferenceContext &context) {
+	Expression *header = resolveInferredControlHeader(openingExpression, context);
 	return header && header->kind == Expression::Kind::IntrinsicCall &&
 		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
 }
 
 static std::optional<std::string> finalizedControlHeaderKind(Expression *expression, InferenceContext &context) {
-	if (!expression)
-		return std::nullopt;
-	Expression *header = expression;
-	if (header->kind == Expression::Kind::PatternCall)
-		header = context.lookupFlexExpansion(header);
+	Expression *header = resolveInferredControlHeader(expression, context);
 	if (!header || header->kind != Expression::Kind::IntrinsicCall)
 		return std::nullopt;
 	if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
@@ -62,6 +83,7 @@ static std::optional<std::string> inferControlHeaderKindForLookahead(
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.currentKnownConstants = context.currentKnownConstants;
+	trialContext.observedInProgressUndeducedInstantiation = context.observedInProgressUndeducedInstantiation;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
 	trialContext.trialJournal = &journal;
@@ -74,7 +96,7 @@ static std::optional<std::string> inferControlHeaderKindForLookahead(
 	std::optional<std::string> kind;
 	if (inferExpression(trialExpression, trialContext, alreadyOrdered, bindingFrameStack, false) && trialContext.typesValid)
 		kind = finalizedControlHeaderKind(trialExpression, trialContext);
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(journal, trialContext.trialInstantiationCache.get());
 	applyGroupingSnapshot(originalGrouping);
 	recomputeRanges(expression);
 	resetExpressionTypes(expression);
@@ -121,7 +143,7 @@ static bool inferSection(
 		seedNonFlexSectionParameterState(section, context);
 	}
 
-	bool loopSection = isLoopSectionOpening(openingExpression);
+	bool loopSection = isLoopSectionOpening(openingExpression, context);
 	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
 	if (loopSection) {
 		constantsAtLoopEntry = context.currentKnownConstants;
@@ -148,9 +170,7 @@ static bool inferSection(
 		if (!line || !lineExpression)
 			return std::nullopt;
 
-		Expression *header = lineExpression;
-		if (header->kind == Expression::Kind::PatternCall)
-			header = context.lookupFlexExpansion(header);
+		Expression *header = resolveInferredControlHeader(lineExpression, context);
 		if (!header || header->kind != Expression::Kind::IntrinsicCall)
 			return std::nullopt;
 		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
@@ -187,9 +207,18 @@ static bool inferSection(
 			context.typesValid = false;
 			return false;
 		}
-		Section *inferenceRootSection = context.currentInstantiation && context.currentInstantiation->body
-											? context.currentInstantiation->body->sourceSection
-											: context.parseContext.mainSection;
+		std::shared_ptr<InstantiatedSectionBody> replayBodyOwner;
+		for (auto activeBody = context.activeFlexInferenceBodies.rbegin();
+			 activeBody != context.activeFlexInferenceBodies.rend(); ++activeBody) {
+			if (instantiatedSectionBodyContains(activeBody->get(), body)) {
+				replayBodyOwner = *activeBody;
+				break;
+			}
+		}
+		Section *inferenceRootSection = replayBodyOwner ? section
+														: (context.currentInstantiation && context.currentInstantiation->body
+															   ? context.currentInstantiation->body->sourceSection
+															   : context.parseContext.mainSection);
 		requireCompilerInvariant(line->section, "inferred code line has no owning section");
 		bool lineBelongsToInferenceRoot =
 			line->section == inferenceRootSection || line->section->isDescendantOf(inferenceRootSection);
@@ -206,6 +235,8 @@ static bool inferSection(
 					line,
 					inferenceRootSection,
 					context.currentInstantiation,
+					static_cast<bool>(replayBodyOwner),
+					bindingFrameStack,
 					context.captureInferenceTraceRelatedInfo(lineExpression),
 				});
 			}
@@ -292,9 +323,9 @@ static bool inferSection(
 				};
 			}
 
-			if (branchKnown && selectedBranch.has_value()) {
+			if (branchKnown) {
 				context.currentKnownConstants = constantsBeforeChain;
-				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
+				if (selectedBranch.has_value() && !inferOpenedSection(section->codeLines[*selectedBranch]))
 					return false;
 			} else {
 				std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchStates;
@@ -408,7 +439,7 @@ static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstrai
 	DataType parameterType;
 	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
 	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
-	rollbackTrialJournal(journal);
+	rollbackTrialJournal(journal, trialContext.trialInstantiationCache.get());
 	applyGroupingSnapshot(originalGrouping);
 	item.expression = originalGrouping.root;
 	recomputeRanges(item.expression);
@@ -766,8 +797,14 @@ bool ensureSectionInstantiationInferred(
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
 
-	if (!inst.needsReinfer && !context.observedInProgressUndeducedInstantiation && inst.returnType.kind == DataType::Kind::Any)
+	if (!inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&
+		inst.returnType.kind == DataType::Kind::Any) {
+		if (context.trial) {
+			requireCompilerInvariant(context.trialJournal, "trial callable default return type requires a rollback journal");
+			context.trialJournal->recordInstantiationReturnTypeWrite(&inst);
+		}
 		inst.returnType = {DataType::Kind::Void};
+	}
 
 	return inst.returnType.isDeduced();
 }

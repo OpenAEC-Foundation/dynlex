@@ -30,14 +30,6 @@ llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index) {
 	return builder.getInt32(index);
 }
 
-static DataType concretizeClassType(DataType type) {
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
-		!type.classDefinition->instantiations.empty()) {
-		type.classInstIndex = 0;
-	}
-	return type;
-}
-
 // Get the DWARF debug type for a given DataType
 llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (!context.diBuilder)
@@ -192,10 +184,16 @@ FlexScopeGuard::~FlexScopeGuard() {
 		context.flexBindingFrames = savedBindingFrames;
 }
 
-DataType finalizedExpressionType(ParseContext &, Expression *expr) {
+DataType finalizedExpressionType(ParseContext &context, Expression *expr) {
 	requireCompilerInvariant(expr != nullptr, "codegen requested the type of a null expression");
 	requireCompilerInvariant(expr->type.isDeduced(), "expression reached codegen without a finalized inferred type");
-	return concretizeClassType(expr->type);
+	if (expr->kind == Expression::Kind::Variable && expr->variable) {
+		VariableReference *definition = normalizeBindingReference(expr->variable);
+		auto finalizedType = context.finalizedVariableTypes.find(definition);
+		if (finalizedType != context.finalizedVariableTypes.end())
+			return finalizedType->second;
+	}
+	return expr->type;
 }
 
 PatternDefinition *finalizedPatternDefinition(ParseContext &, Expression *expr) {
@@ -242,13 +240,17 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 			return;
 		if (expression->kind == Expression::Kind::Variable && expression->variable &&
 			normalizeBindingReference(expression->variable) == definition && expression->type.isDeduced()) {
-			DataType expressionType = concretizeClassType(expression->type);
-			if (type)
-				requireCompilerInvariant(
-					*type == expressionType, "variable has inconsistent finalized types in one instantiation"
-				);
-			else
+			DataType expressionType = expression->type;
+			if (!type) {
 				type = expressionType;
+			} else if (ClassDefinition::typeStructurallyRefines(expressionType, *type)) {
+				type = expressionType;
+			} else {
+				requireCompilerInvariant(
+					ClassDefinition::typeStructurallyRefines(*type, expressionType),
+					"variable has incompatible finalized types in one instantiation"
+				);
+			}
 		}
 		for (Expression *argument : expression->arguments)
 			visitExpression(argument);
@@ -262,6 +264,14 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 // Allocate all variables for a section at its start from finalized inference metadata.
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
 	for (auto &[name, varDef] : section->variableDefinitions) {
+		Variable *var = section->findVariable(name);
+		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
+		std::optional<DataType> finalizedType;
+		if (body)
+			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
+		DataType varType = finalizedType.value_or(var->type);
+		if (varType.isDeduced())
+			context.finalizedVariableTypes[normalizeBindingReference(varDef)] = varType;
 		// Call-bound parameters already have storage behind their argument
 		// pointer; variable resolution finds them there first. Parameters the
 		// active match did not bind (their choice alternative was not taken)
@@ -270,12 +280,6 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 			(context.currentCodegenInstantiation &&
 			 context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)))
 			continue;
-		Variable *var = section->findVariable(name);
-		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
-		std::optional<DataType> finalizedType;
-		if (body)
-			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
-		DataType varType = finalizedType.value_or(var->type);
 		// Compile-time-only parameters (fixed values, type and constraint
 		// parameters) have no runtime representation to allocate.
 		if (!varType.isRuntimeValueType())

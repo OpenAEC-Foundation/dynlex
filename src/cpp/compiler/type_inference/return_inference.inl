@@ -121,6 +121,15 @@ static bool reconcileFunctionReturnType(
 	}
 	if (instantiation.returnType == returnType)
 		return true;
+	DataType refinedReturnType;
+	if (refineUnspecifiedClassInstantiation(instantiation.returnType, returnType, refinedReturnType)) {
+		if (context.trial) {
+			requireCompilerInvariant(context.trialJournal, "trial return-type refinement requires a rollback journal");
+			context.trialJournal->recordInstantiationReturnTypeWrite(&instantiation);
+		}
+		instantiation.returnType = refinedReturnType;
+		return true;
+	}
 	context.fail(buildIncompatibleReturnTypeDiagnostic(
 		context, returnExpression, returnValueExpression, instantiation.returnType, returnType
 	));

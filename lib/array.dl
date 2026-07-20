@@ -30,9 +30,9 @@ function allocate count slots of value:
         return array
 
 function store value into array at index:
-    execute:
+    replacement:
         @intrinsic("store at", array, index, value)
 
 function item index of array:
-    execute:
-        return @intrinsic("load at", array, index)
+    replacement:
+        @intrinsic("load at", array, index)

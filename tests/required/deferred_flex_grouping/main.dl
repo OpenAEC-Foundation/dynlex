@@ -1,0 +1,48 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function left = right:
+    replacement:
+        @intrinsic("equal", left, right)
+
+function not value:
+    replacement:
+        @intrinsic("not", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class:
+    patterns:
+        [a|] container
+    members:
+        stored_value
+
+class:
+    patterns:
+        [a|] box
+    members:
+        values
+
+function {container:values} contains value:
+    execute:
+        return the stored_value of values = value
+
+function {box:object} contains value:
+    execute:
+        return the values of object contains value
+
+flex function add value to {box:object}:
+    replacement:
+        if not object contains value:
+            @intrinsic("discard", value)
+
+set values to @intrinsic("construct", a container, 2)
+set object to @intrinsic("construct", a box, values)
+add 1 to object
