@@ -53,9 +53,12 @@ enum class IntrinsicPurityKind {
 	X(And, "and", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                               \
 	X(Or, "or", 3, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                                 \
 	X(Not, "not", 2, IntrinsicReturnKind::Bool, 0, 0, IntrinsicPurityKind::Pure)                                               \
+	X(SetSubject, "set subject", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                              \
+	X(Subject, "subject", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                     \
+	X(LifecycleValue, "lifecycle value", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(Discard, "discard", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                       \
 	X(Store, "store", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom)                                         \
-	X(StoreAt, "store at", 4, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
+	X(StoreAt, "store at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
 	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                  \
 	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                                 \
@@ -71,7 +74,6 @@ enum class IntrinsicPurityKind {
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
-	X(LoadAt, "load at", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                                    \
 	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Custom)                                 \
 	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                                           \
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                      \
@@ -86,7 +88,8 @@ enum class IntrinsicPurityKind {
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
 	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                             \
 	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                      \
-	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)                                     \
+	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                                     \
+	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)                    \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
 	X(Array, "array", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
 	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
@@ -204,6 +207,12 @@ inline bool isComparisonIntrinsicKind(IntrinsicKind kind) {
 	}
 }
 
+constexpr bool isExternalCallIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall;
+}
+
+constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) { return kind == IntrinsicKind::VariadicCall ? 5 : 4; }
+
 inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {
 	const IntrinsicInfo *info = findIntrinsic(name);
 	if (!info || info->compileTimeArgMin == 0 || argIndex < info->compileTimeArgMin)
@@ -237,7 +246,6 @@ static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Return));
 static_assert(intrinsicPurityKind(IntrinsicKind::Store) == IntrinsicPurityKind::Custom);
 static_assert(intrinsicPurityKind(IntrinsicKind::Property) == IntrinsicPurityKind::Custom);
 static_assert(intrinsicPurityKind(IntrinsicKind::Call) == IntrinsicPurityKind::Impure);
-static_assert(intrinsicPurityKind(IntrinsicKind::LoadAt) == IntrinsicPurityKind::Impure);
 
 #undef DYNLEX_INTRINSIC_FIXED_TABLE
 #undef DYNLEX_INTRINSIC_RANGED_TABLE

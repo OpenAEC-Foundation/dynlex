@@ -1,0 +1,13 @@
+import lib/std.dl
+
+function set a private subject:
+    execute:
+        set the subject to 2
+
+function preserve the caller subject:
+    execute:
+        set the subject to 1
+        set a private subject
+        print it as line
+
+preserve the caller subject

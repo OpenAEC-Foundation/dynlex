@@ -1,0 +1,17 @@
+import lib/std.dl
+
+flex section around:
+    replacement:
+        set marker to 1
+        execute the body
+        set marker to 2
+
+set marker to 0
+set result to 0
+around:
+    if marker = 1:
+        set result to 10
+    else:
+        set result to 20
+
+print result as line

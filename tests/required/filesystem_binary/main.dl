@@ -1,0 +1,13 @@
+import lib/filesystem.dl
+
+set path to "tests/required/filesystem_binary/content.tmp"
+delete path
+
+set binary_contents to a new string buffer with length 3
+store 65 as a byte into the data of binary_contents at 0
+store 0 as a byte into the data of binary_contents at 1
+store 66 as a byte into the data of binary_contents at 2
+write binary_contents to path
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", @intrinsic("cast", it succeeded, an integer)))
+
+delete path

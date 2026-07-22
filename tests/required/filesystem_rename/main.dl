@@ -1,0 +1,12 @@
+import lib/filesystem.dl
+
+set source_path to "tests/required/filesystem_rename/source.tmp"
+set moved_path to "tests/required/filesystem_rename/moved.tmp"
+delete source_path
+delete moved_path
+
+write the string form of "contents" to source_path
+rename source_path to moved_path
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n%d\n%d\n", @intrinsic("cast", it succeeded, an integer), @intrinsic("cast", source_path is readable, an integer), @intrinsic("cast", moved_path is readable, an integer)))
+
+delete moved_path

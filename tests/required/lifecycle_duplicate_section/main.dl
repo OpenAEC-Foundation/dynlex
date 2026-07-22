@@ -1,0 +1,13 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] duplicate managed value
+    members:
+        number as integer
+    retain:
+        discard @intrinsic("lifecycle value")
+    retain:
+        discard @intrinsic("lifecycle value")
+    release:
+        discard @intrinsic("lifecycle value")

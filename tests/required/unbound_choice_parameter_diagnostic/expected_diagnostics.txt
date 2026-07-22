@@ -1,7 +1,7 @@
-tests/required/unbound_choice_parameter_diagnostic/main.dl:5:10-22: Error: No overload matches call 'alpha + beta' for argument types [a 32 bit integer, unresolved(?)]. Available overloads: '{string:left} + {string:right}', 'left[ |]+[ |]right'
-  note: parameter 'beta' is not bound by this call: the matched alternative does not include it tests/required/unbound_choice_parameter_diagnostic/main.dl:3:25-29
-  note: while inferring call 'return alpha + beta' with arguments [a 32 bit integer, unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:5:10-22
-  note: while inferring call 'return alpha + beta' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:5:3-22
-  note: while inferring call 'combine 1 nothing' with arguments [a 32 bit integer] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:7:8-25
-  note: while inferring call 'print (combine 1 nothing' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:7:1-25
-  note: while inferring call 'print (combine 1 nothing) as line' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:7:1-34
+tests/required/unbound_choice_parameter_diagnostic/main.dl:10-22: Error: No overload matches call 'alpha + beta' for argument types [a 32 bit integer, unresolved(?)]. Available overloads: '{string:left} + {string:right}', 'left[ |]+[ |]right'
+  note: parameter 'beta' is not bound by this call: the matched alternative does not include it tests/required/unbound_choice_parameter_diagnostic/main.dl:25-29
+  note: while inferring call 'return alpha + beta' with arguments [a 32 bit integer, unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:10-22
+  note: while inferring call 'return alpha + beta' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:3-22
+  note: while inferring call 'combine 1 nothing' with arguments [a 32 bit integer] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:8-25
+  note: while inferring call 'print (combine 1 nothing' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:1-25
+  note: while inferring call 'print (combine 1 nothing) as line' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_diagnostic/main.dl:1-34

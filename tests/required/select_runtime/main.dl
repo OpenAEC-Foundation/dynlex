@@ -32,7 +32,7 @@ function left = right:
 
 function print msg:
     execute:
-        discard @intrinsic("call", "libc", "printf", a 32 bit integer, "%d\n", msg as a 32 bit integer)
+        discard @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%d\n", msg as a 32 bit integer)
 
 set runtime_true to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
 set runtime_false to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 2)

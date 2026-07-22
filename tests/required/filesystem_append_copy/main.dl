@@ -1,0 +1,17 @@
+import lib/filesystem.dl
+
+set path to "tests/required/filesystem_append_copy/content.tmp"
+delete path
+
+set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "wb")
+@intrinsic("discard", @intrinsic("call", "libc", "fputs", an integer, "alpha", stream))
+@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
+append the string form of "-beta" to path
+set contents to allocate 11 bytes
+set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "rb")
+@intrinsic("discard", @intrinsic("call", "libc", "fgets", a pointer to byte, contents, 11, stream))
+@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", contents))
+@intrinsic("call", "libc", "free", void, contents)
+
+delete path

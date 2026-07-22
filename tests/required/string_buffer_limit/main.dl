@@ -1,0 +1,3 @@
+import lib/std.dl
+
+print the maximum string buffer length as line

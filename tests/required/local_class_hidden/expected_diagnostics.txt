@@ -1,0 +1,1 @@
+tests/required/local_class_hidden/main.dl:1-24: Error: This pattern couldn't be resolved

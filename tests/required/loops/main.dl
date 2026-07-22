@@ -24,7 +24,7 @@ function value as [a|an|] {fixed integer:bits} bit integer:
 
 function print msg as line:
     execute:
-        discard @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
+        discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", msg as a 64 bit integer)
 
 function left < right:
 	execute:

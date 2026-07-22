@@ -192,6 +192,10 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
+	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : Expression::SectionOutcome{};
+	clone->sectionBodyReachable = !preserveInferenceMetadata || expression->sectionBodyReachable;
+	clone->sectionBodyInferred = preserveInferenceMetadata && expression->sectionBodyInferred;
+	clone->sectionBodyFallsThrough = !preserveInferenceMetadata || expression->sectionBodyFallsThrough;
 	clone->branchSelection = preserveInferenceMetadata ? expression->branchSelection : std::nullopt;
 	clone->reusableTemplateExpression =
 		expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
@@ -206,6 +210,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
+	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)

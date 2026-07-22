@@ -1,0 +1,6 @@
+import lib/filesystem.dl
+
+set null_data to 0 as a pointer to byte
+set negative_path to new string from data null_data with length -1
+delete negative_path
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", @intrinsic("cast", it succeeded, an integer)))

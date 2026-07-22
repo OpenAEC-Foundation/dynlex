@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function selected value for {fixed integer:n}:
+    execute:
+        match n:
+            case n:
+                return 17
+            otherwise:
+                return 0
+
+print selected value for 3 as line

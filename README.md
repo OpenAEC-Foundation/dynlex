@@ -24,13 +24,26 @@ DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) 
 This target requires Emscripten (`emcmake`, `emcc`) and an LLVM build/toolchain compatible with the Emscripten target (`LLVM_DIR` if needed).
 Host-native LLVM installs (for example `/usr/lib/llvm-*`) are not wasm-linkable for this target.
 
+Install the pinned Emscripten and WebAssembly LLVM toolchain. This is separate from the native dependency installation because building LLVM for WebAssembly is substantial:
+
+```bash
+./scripts/install.sh --web
+```
+
+The web installer defaults to Emscripten 6.0.3, LLVM 20.1.8, two parallel LLVM build jobs, and these locations:
+
+- `$HOME/emsdk`
+- `$HOME/toolchains/llvm-wasm-20`
+
+Override them with `DYNLEX_EMSCRIPTEN_VERSION`, `DYNLEX_LLVM_WASM_RELEASE`, `DYNLEX_LLVM_WASM_JOBS`, `DYNLEX_EMSDK_ROOT`, or `DYNLEX_LLVM_WASM_ROOT`. The LLVM release must have the configured DynLex LLVM major version.
+
 Build compiler WASM artifacts and copy them into the web app:
 
 ```bash
-source ~/emsdk/emsdk_env.sh
-export LLVM_DIR="$HOME/toolchains/llvm-wasm-20/install/lib/cmake/llvm"
 ./scripts/build_web.sh
 ```
+
+The build script uses the installed default paths automatically. Set `DYNLEX_EMSDK_ROOT`, `DYNLEX_LLVM_WASM_ROOT`, or `LLVM_DIR` when using custom locations.
 
 `./scripts/build_web.sh` refreshes `src/web/ide/public/compiler/dynlex_web.js` and
 `src/web/ide/public/compiler/dynlex_web.wasm`; commit those files when updating the deployed web compiler.

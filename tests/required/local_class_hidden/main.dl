@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/required/local_class_hidden/helper.dl
+
+discard a hidden record

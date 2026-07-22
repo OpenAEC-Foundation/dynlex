@@ -7,7 +7,7 @@
 - **Auto-instantiation from declared types** — When all fields have declared types, a `ClassInstantiation` is created at definition time. No `construct` call needed for foreign structs.
 - **Class cast via TypeReference** — `@intrinsic("cast", ptr, class_pattern)` where the class pattern resolves as a TypeReference. Codegen is a no-op (passes the pointer through, copies struct on store). Enables property access on C struct pointers.
 - **`padding: N` directive** in members section — Inserts padding fields to align the next field to an N-byte boundary. Needed when flattening C sub-structs (e.g. `FT_Bitmap` inside `FT_GlyphSlotRec`).
-- **`alignment: N` property** on class definitions — Stores the struct alignment in `ClassDefinition`.
+- **`alignment: N` property** on class definitions — Aligns class storage and rounds the class size to the requested target-correct boundary.
 - **Property access pattern** added to `lib/std.dl` — `the {word:prop} of owner` / `owner's {word:prop}`.
 
 ### FreeType struct definitions (in `lib/font.dl`)

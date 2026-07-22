@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function run static branch:
+    execute:
+        if true:
+            discard 1
+        else:
+            set unreachable_value to 2
+            print unreachable_value as line
+
+run static branch

@@ -1,0 +1,11 @@
+import lib/std.dl
+
+flex section around:
+    replacement:
+        set marker to 1
+        execute the body
+        set marker to 2
+
+set marker to 0
+around:
+    print marker as line

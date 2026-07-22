@@ -1,0 +1,45 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [an|] example action
+    members:
+        succeeded as boolean
+
+function a new example action which succeeded if outcome:
+    replacement:
+        @intrinsic("construct", an example action, outcome)
+
+function {example action:action} succeeded:
+    execute:
+        return action's succeeded
+
+flex function perform a successful example action:
+    replacement:
+        set the subject to a new example action which succeeded if true
+
+flex function perform a failed example action:
+    replacement:
+        set the subject to a new example action which succeeded if false
+
+function preserve subject through branch condition:
+    execute:
+        set the subject to a new example action which succeeded if true
+        if condition:
+            discard 1
+        else:
+            discard 2
+        print if it succeeded
+        print "" as line
+
+perform a successful example action and print if it succeeded
+print "" as line
+perform a failed example action and print if it succeeded
+print "" as line
+perform a successful example action
+print if it succeeded
+print "" as line
+print true and false as line
+print true and true as line
+preserve subject through branch true
+preserve subject through branch false

@@ -1,0 +1,28 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] layout sample
+    members:
+        marker as byte
+        text as string
+        count as i32
+
+class:
+    patterns:
+        [an|a|] aligned layout sample
+    alignment:
+        16
+    members:
+        marker as byte
+        padding:
+            8
+        count as i32
+        tail as byte
+
+print the size of a string as line
+print the size of a layout sample as line
+print the size of an aligned layout sample as line
+set aligned to @intrinsic("construct", an aligned layout sample, 1 as a byte, 42, 2 as a byte)
+print the count of aligned as line
+print the tail of aligned as line

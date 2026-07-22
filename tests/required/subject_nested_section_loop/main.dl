@@ -1,0 +1,9 @@
+import lib/std.dl
+
+function publish subject through nested loop:
+    execute:
+        loop 0 times:
+            set the subject to 1
+        discard it
+
+publish subject through nested loop

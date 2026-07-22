@@ -1,0 +1,316 @@
+# DynLex Filesystem Library
+
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] file action
+    members:
+        succeeded as boolean
+
+class:
+    patterns:
+        [a|] file read action
+    members:
+        contents as string
+        succeeded as boolean
+
+local class:
+    patterns:
+        [a|] filesystem path
+    members:
+        data as pointer to byte
+        storage as string
+        valid as boolean
+
+function {file action:action} succeeded:
+    execute:
+        return action's succeeded
+
+function {file read action:action} succeeded:
+    execute:
+        return action's succeeded
+
+local function a new file action which succeeded if outcome:
+    replacement:
+        @intrinsic("construct", a file action, outcome)
+
+local function a new file read action containing contents which succeeded if outcome:
+    replacement:
+        @intrinsic("construct", a file read action, contents, outcome)
+
+local function a failed file read action:
+    execute:
+        return a new file read action containing the string form of "" which succeeded if false
+
+local class:
+    patterns:
+        [a|] filesystem stream transfer
+    members:
+        count as a word sized integer
+        succeeded as boolean
+
+local function a new filesystem stream transfer of count bytes which succeeded if outcome:
+    replacement:
+        @intrinsic("construct", a filesystem stream transfer, count, outcome)
+
+local function an invalid filesystem path:
+    execute:
+        set empty_storage to @intrinsic("construct", a string, @intrinsic("cast", 0, a pointer to byte), 0, @intrinsic("cast", 0, a pointer to integer))
+        return @intrinsic("construct", a filesystem path, @intrinsic("cast", 0, a pointer to byte), empty_storage, false)
+
+local function a filesystem path for {cstring:input}:
+    execute:
+        if input = @intrinsic("cast", 0, a pointer to byte):
+            return an invalid filesystem path
+        set empty_storage to @intrinsic("construct", a string, @intrinsic("cast", 0, a pointer to byte), 0, @intrinsic("cast", 0, a pointer to integer))
+        return @intrinsic("construct", a filesystem path, input, empty_storage, true)
+
+local function a filesystem path for {string:input}:
+    execute:
+        if not input is valid:
+            return an invalid filesystem path
+        if input's length = 0:
+            set empty_storage to a new string buffer with length 0
+            return @intrinsic("construct", a filesystem path, the data of empty_storage, empty_storage, true)
+        set zero_byte to @intrinsic("call", "libc", "memchr", a pointer to byte, the data of input, 0, @intrinsic("cast", input's length, a word sized integer))
+        if zero_byte != @intrinsic("cast", 0, a pointer to byte):
+            return an invalid filesystem path
+        set storage to a new string buffer with length input's length
+        discard @intrinsic("call", "libc", "memcpy", a pointer to byte, the data of storage, the data of input, @intrinsic("cast", input's length, a word sized integer))
+        return @intrinsic("construct", a filesystem path, the data of storage, storage, true)
+
+local function allocate a filesystem buffer with size byte_count:
+    execute:
+        return @intrinsic("call", "libc", "calloc", a pointer to byte, byte_count, @intrinsic("cast", 1, a word sized integer))
+
+local function resize filesystem buffer input to size byte_count:
+    execute:
+        return @intrinsic("call", "libc", "realloc", a pointer to byte, input, byte_count)
+
+local function read up to count bytes into buffer from stream:
+    execute:
+        return @intrinsic("call", "libc", "fread", a word sized integer, buffer, @intrinsic("cast", 1, a word sized integer), count, stream)
+
+local function write count bytes from buffer to stream:
+    execute:
+        return @intrinsic("call", "libc", "fwrite", a word sized integer, buffer, @intrinsic("cast", 1, a word sized integer), count, stream)
+
+local function transfer bytes from source_stream to destination_stream:
+    execute:
+        set buffer_size to @intrinsic("cast", 4096, a word sized integer)
+        set buffer to allocate a filesystem buffer with size buffer_size
+        if buffer = @intrinsic("cast", 0, a pointer to byte):
+            return a new filesystem stream transfer of 0 bytes which succeeded if false
+
+        set transferred to @intrinsic("cast", 0, a word sized integer)
+        set is_copying to true
+        set succeeded to true
+        loop while is_copying:
+            set read_count to read up to buffer_size bytes into buffer from source_stream
+            if read_count > @intrinsic("cast", 0, a word sized integer):
+                set written to write read_count bytes from buffer to destination_stream
+                set transferred to transferred + written
+                if written != read_count:
+                    set succeeded to false
+                    set is_copying to false
+            if is_copying and read_count < buffer_size:
+                if @intrinsic("call", "libc", "ferror", an integer, source_stream) != 0:
+                    set succeeded to false
+                set is_copying to false
+
+        @intrinsic("call", "libc", "free", void, buffer)
+        return a new filesystem stream transfer of transferred bytes which succeeded if succeeded
+
+local function store {string:contents} at {cstring:path} with {cstring:mode}:
+    execute:
+        if not contents is valid:
+            return false
+        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, mode)
+        if stream = @intrinsic("cast", 0, a pointer to byte):
+            return false
+
+        set expected to @intrinsic("cast", contents's length, a word sized integer)
+        set written to @intrinsic("cast", 0, a word sized integer)
+        if expected > @intrinsic("cast", 0, a word sized integer):
+            set written to write expected bytes from the data of contents to stream
+        set close_result to @intrinsic("call", "libc", "fclose", an integer, stream)
+        return (written = expected) and (close_result = 0)
+
+local function perform reading of path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a failed file read action
+        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
+        if stream = @intrinsic("cast", 0, a pointer to byte):
+            return a failed file read action
+
+        set capacity to @intrinsic("cast", 4096, a word sized integer)
+        set maximum_length to @intrinsic("cast", the maximum string buffer length, a word sized integer)
+        set length to @intrinsic("cast", 0, a word sized integer)
+        set buffer to allocate a filesystem buffer with size (capacity + 1)
+        if buffer = @intrinsic("cast", 0, a pointer to byte):
+            discard @intrinsic("call", "libc", "fclose", an integer, stream)
+            return a failed file read action
+
+        set is_reading to true
+        set succeeded to true
+        loop while is_reading:
+            set available to capacity - length
+            set read_count to read up to available bytes into buffer + length from stream
+            set length to length + read_count
+
+            if read_count < available:
+                if @intrinsic("call", "libc", "ferror", an integer, stream) != 0:
+                    set succeeded to false
+                set is_reading to false
+            else:
+                if capacity = maximum_length:
+                    set next_byte to @intrinsic("call", "libc", "fgetc", an integer, stream)
+                    if (next_byte != -1) or (@intrinsic("call", "libc", "ferror", an integer, stream) != 0):
+                        set succeeded to false
+                    set is_reading to false
+                else:
+                    set next_capacity to maximum_length
+                    if capacity <= maximum_length / 2:
+                        set next_capacity to capacity * 2
+                    set resized to resize filesystem buffer buffer to size (next_capacity + 1)
+                    if resized = @intrinsic("cast", 0, a pointer to byte):
+                        set succeeded to false
+                        set is_reading to false
+                    else:
+                        set buffer to resized
+                        set capacity to next_capacity
+
+        if @intrinsic("call", "libc", "fclose", an integer, stream) != 0:
+            set succeeded to false
+
+        if not succeeded:
+            @intrinsic("call", "libc", "free", void, buffer)
+            return a failed file read action
+
+        set result_contents to a new string buffer with length @intrinsic("cast", length, an integer)
+        discard @intrinsic("call", "libc", "memcpy", a pointer to byte, the data of result_contents, buffer, length)
+        @intrinsic("call", "libc", "free", void, buffer)
+        return a new file read action containing result_contents which succeeded if true
+
+local function perform writing of {string:contents} to path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a new file action which succeeded if false
+        set succeeded to store contents at prepared_path's data with "wb"
+        return a new file action which succeeded if succeeded
+
+local function perform appending of {string:contents} to path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a new file action which succeeded if false
+        set succeeded to store contents at prepared_path's data with "ab"
+        return a new file action which succeeded if succeeded
+
+local function perform deletion of path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a new file action which succeeded if false
+        set result to @intrinsic("call", "libc", "remove", an integer, prepared_path's data)
+        return a new file action which succeeded if result = 0
+
+local function perform renaming of source to destination:
+    execute:
+        set source_path to a filesystem path for source
+        set destination_path to a filesystem path for destination
+        if (not source_path's valid) or (not destination_path's valid):
+            return a new file action which succeeded if false
+        set result to @intrinsic("call", "libc", "rename", an integer, source_path's data, destination_path's data)
+        return a new file action which succeeded if result = 0
+
+local function perform copying of source to destination:
+    execute:
+        set source_path to a filesystem path for source
+        set destination_path to a filesystem path for destination
+        if (not source_path's valid) or (not destination_path's valid):
+            return a new file action which succeeded if false
+        set source_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, source_path's data, "rb")
+        if source_stream = @intrinsic("cast", 0, a pointer to byte):
+            return a new file action which succeeded if false
+        set staging_stream to @intrinsic("call", "libc", "tmpfile", a pointer to byte)
+        if staging_stream = @intrinsic("cast", 0, a pointer to byte):
+            discard @intrinsic("call", "libc", "fclose", an integer, source_stream)
+            return a new file action which succeeded if false
+
+        set staged to transfer bytes from source_stream to staging_stream
+        set source_close_result to @intrinsic("call", "libc", "fclose", an integer, source_stream)
+        set staging_flush_result to @intrinsic("call", "libc", "fflush", an integer, staging_stream)
+        set staging_succeeded to staged's succeeded
+        if source_close_result != 0:
+            set staging_succeeded to false
+        if staging_flush_result != 0:
+            set staging_succeeded to false
+        if not staging_succeeded:
+            discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+            return a new file action which succeeded if false
+
+        @intrinsic("call", "libc", "rewind", void, staging_stream)
+        set prefix_count to @intrinsic("cast", 0, a word sized integer)
+        set first_byte to 0 as a byte
+        if staged's count > @intrinsic("cast", 0, a word sized integer):
+            set prefix_count to read up to 1 bytes into the address of first_byte from staging_stream
+            if prefix_count != @intrinsic("cast", 1, a word sized integer):
+                discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+                return a new file action which succeeded if false
+
+        set destination_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, destination_path's data, "wb")
+        if destination_stream = @intrinsic("cast", 0, a pointer to byte):
+            discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+            return a new file action which succeeded if false
+
+        set prefix_written to @intrinsic("cast", 0, a word sized integer)
+        if prefix_count > @intrinsic("cast", 0, a word sized integer):
+            set prefix_written to write prefix_count bytes from the address of first_byte to destination_stream
+        set remainder to transfer bytes from staging_stream to destination_stream
+        set succeeded to (prefix_written = prefix_count) and remainder's succeeded
+        if prefix_written + remainder's count != staged's count:
+            set succeeded to false
+        if @intrinsic("call", "libc", "fclose", an integer, destination_stream) != 0:
+            set succeeded to false
+        if @intrinsic("call", "libc", "fclose", an integer, staging_stream) != 0:
+            set succeeded to false
+        return a new file action which succeeded if succeeded
+
+flex function read path:
+    replacement:
+        set the subject to perform reading of path
+
+flex function write {string:contents} to path:
+    replacement:
+        set the subject to perform writing of contents to path
+
+flex function append {string:contents} to path:
+    replacement:
+        set the subject to perform appending of contents to path
+
+flex function delete path:
+    replacement:
+        set the subject to perform deletion of path
+
+flex function rename source to destination:
+    replacement:
+        set the subject to perform renaming of source to destination
+
+flex function copy source to destination:
+    replacement:
+        set the subject to perform copying of source to destination
+
+function path is readable:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return false
+        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
+        if stream = @intrinsic("cast", 0, a pointer to byte):
+            return false
+        return @intrinsic("call", "libc", "fclose", an integer, stream) = 0

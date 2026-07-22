@@ -37,11 +37,14 @@ struct SyntaxConfig {
 	std::string replacementSectionName = "replacement";
 	std::string patternsSectionName = "patterns";
 	std::string membersSectionName = "members";
+	std::string retainSectionName = "retain";
+	std::string releaseSectionName = "release";
 	std::string globalsSectionName = "globals";
 	std::string beforeSectionName = "before";
 	std::string afterSectionName = "after";
 	std::string precedenceDefaultName = "default";
 	std::string alignmentName = "alignment";
+	std::string paddingName = "padding";
 };
 
 bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath);

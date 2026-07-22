@@ -25,3 +25,15 @@ repeat nested 3:
     add 5 to nested
 
 print nested as a line
+
+flex section skip counter:
+    replacement:
+        add 1 to counter
+        loop 0 times:
+            execute the body
+
+set skipped to 0
+skip skipped:
+    add 100 to skipped
+
+print skipped as a line

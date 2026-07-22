@@ -15,6 +15,6 @@ set values to [7]
         "printf",
         an integer,
         "%d\n",
-        @intrinsic("load at", @intrinsic("address of", values), 0)
+        @intrinsic("dereference", @intrinsic("cast", @intrinsic("address of", values), @intrinsic("add pointer depth", @intrinsic("type", "int"))))
     )
 )

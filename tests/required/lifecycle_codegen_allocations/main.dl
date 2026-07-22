@@ -1,0 +1,16 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] lifecycle allocation probe
+    members:
+        marker as integer
+    retain:
+        set temporary to the string form of "retain"
+        discard temporary's length
+    release:
+        set temporary to the string form of "release"
+        discard temporary's length
+
+set probe to @intrinsic("construct", a lifecycle allocation probe, 0)
+discard probe

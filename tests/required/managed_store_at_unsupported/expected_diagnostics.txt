@@ -1,0 +1,2 @@
+tests/required/managed_store_at_unsupported/main.dl:1-63: Error: store at cannot store managed values because raw pointer storage has no initialization state
+  note: while inferring intrinsic 'store at' in '@intrinsic("store at", @intrinsic("address of", value), value)' with arguments [i8*, class*, class] -> undeduced tests/required/managed_store_at_unsupported/main.dl:1-63

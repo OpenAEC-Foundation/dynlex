@@ -1,0 +1,1 @@
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "nothing to format\n")

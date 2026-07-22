@@ -1,0 +1,16 @@
+import lib/std.dl
+
+function print owner count of {string:value}:
+    execute:
+        print @intrinsic("dereference", the owner of value) as line
+
+function exercise string ownership:
+    execute:
+        set first to the string form of 1001
+        print owner count of first
+        set second to first
+        print owner count of first
+        set second to the string form of 2002
+        print owner count of first
+
+exercise string ownership

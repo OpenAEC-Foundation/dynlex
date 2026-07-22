@@ -1,11 +1,9 @@
 #include "paddingSection.h"
-#include "classSection.h"
 #include "membersSection.h"
 
-bool PaddingSection::applyValue(ParseContext & /*context*/, CodeLine * /*line*/, int value) {
+bool PaddingSection::applyValue(ParseContext &context, CodeLine *line, int value) {
+	if (!validateByteAlignment(context, line, value))
+		return false;
 	auto *membersSection = static_cast<MembersSection *>(parent);
-	auto *classSection = static_cast<ClassSection *>(membersSection->parent);
-	if (value > classSection->classDefinition->alignment)
-		classSection->classDefinition->alignment = value;
-	return true;
+	return membersSection->setNextFieldAlignment(context, line, static_cast<unsigned>(value));
 }

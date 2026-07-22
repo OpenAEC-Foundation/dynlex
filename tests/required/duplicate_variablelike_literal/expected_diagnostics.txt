@@ -1,6 +1,6 @@
-tests/required/duplicate_variablelike_literal/main.dl:3:36-41: Warning: Repeated pattern word 'width' stays literal because it already became a parameter
-  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:3:30-35
-tests/required/duplicate_variablelike_literal/main.dl:3:52-57: Warning: Repeated pattern word 'depth' stays literal because it already became a parameter
-  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:3:46-51
-tests/required/duplicate_variablelike_literal/main.dl:8:41-46: Warning: Repeated pattern word 'width' stays literal because it already became a parameter
-  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:8:19-24
+tests/required/duplicate_variablelike_literal/main.dl:36-41: Warning: Repeated pattern word 'width' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:30-35
+tests/required/duplicate_variablelike_literal/main.dl:52-57: Warning: Repeated pattern word 'depth' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:46-51
+tests/required/duplicate_variablelike_literal/main.dl:41-46: Warning: Repeated pattern word 'width' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/duplicate_variablelike_literal/main.dl:19-24

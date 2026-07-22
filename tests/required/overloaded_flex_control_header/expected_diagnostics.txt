@@ -1,0 +1,2 @@
+tests/required/overloaded_flex_control_header/main.dl:14-36: Error: flex sections cannot be overloaded
+  note: conflicts with this flex section tests/required/overloaded_flex_control_header/main.dl:14-40

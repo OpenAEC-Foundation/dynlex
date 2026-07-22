@@ -1,0 +1,6 @@
+tests/required/incompatible_switch_return_types/main.dl:17-29: Error: Function has multiple reachable return types: a 32 bit integer and a boolean
+  note: while inferring intrinsic 'return' in '@intrinsic("return", value)' with arguments [i8*, a boolean] -> undeduced lib/std.dl:9-36
+  note: while inferring call 'return false' with arguments [a boolean] -> undeduced tests/required/incompatible_switch_return_types/main.dl:17-29
+  note: while inferring call 'choose value for 1' with arguments [a 32 bit integer] -> undeduced tests/required/incompatible_switch_return_types/main.dl:7-25
+  note: while inferring call 'print choose value for 1' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_switch_return_types/main.dl:1-25
+  note: while inferring call 'print choose value for 1 as line' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_switch_return_types/main.dl:1-33

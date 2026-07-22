@@ -10,8 +10,8 @@ class:
     patterns: widget
     alignment: 16
     members:
-        x as a 32 bit integer, y as a 32 bit integer
         padding: 8
+        x as a 32 bit integer, y as a 32 bit integer
 
 class:
     patterns: pair

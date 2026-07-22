@@ -1,0 +1,7 @@
+local function hidden helper:
+    execute:
+        return 7
+
+function public helper:
+    execute:
+        return hidden helper

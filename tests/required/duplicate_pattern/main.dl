@@ -8,8 +8,8 @@ function discard val:
 
 function test:
 	execute:
-		discard @intrinsic("call", "libc", "printf", an integer, "1")
+		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "1")
 
 function te[st|]:
 	execute:
-		discard @intrinsic("call", "libc", "printf", an integer, "2")
+		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "2")

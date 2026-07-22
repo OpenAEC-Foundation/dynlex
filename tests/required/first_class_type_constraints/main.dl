@@ -80,7 +80,7 @@ function describe pair {array of 2 any:value}:
 
 function print value:
     execute:
-        discard @intrinsic("call", "libc", "printf", integer, "%d\n", value)
+        discard @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value)
 
 print capture 12
 print capture integer

@@ -10,5 +10,5 @@ fill plan levels jump_ms slide_ms with count count using seed 1337
 
 set i to 0
 loop while i < count:
-	discard @intrinsic("call", "libc", "printf", an integer, "step=%ld level=%ld jump_ms=%ld slide_ms=%ld\n", i as a 64 bit integer, item i of levels as a 64 bit integer, item i of jump_ms as a 64 bit integer, item i of slide_ms as a 64 bit integer)
+	discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "step=%ld level=%ld jump_ms=%ld slide_ms=%ld\n", i as a 64 bit integer, item i of levels as a 64 bit integer, item i of jump_ms as a 64 bit integer, item i of slide_ms as a 64 bit integer)
 	set i to i + 1

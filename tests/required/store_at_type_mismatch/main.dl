@@ -1,0 +1,11 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] box
+    members:
+        value as integer
+
+set target to 1
+set box_value to @intrinsic("construct", a box, 2)
+@intrinsic("store at", @intrinsic("address of", target), box_value)

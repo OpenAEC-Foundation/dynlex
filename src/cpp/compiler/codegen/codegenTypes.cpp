@@ -20,10 +20,39 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
+#include <tuple>
 #include <unordered_map>
 
 // Get the LLVM type for a given DataType
-llvm::Type *getLLVMType(ParseContext &context, DataType type) { return type.toLLVM(*context.llvmContext); }
+llvm::Type *getLLVMType(ParseContext &context, DataType type) {
+	return type.toLLVM(*context.llvmContext, context.llvmModule->getDataLayout());
+}
+
+llvm::Align getLLVMABIAlignment(ParseContext &context, DataType type) {
+	return llvm::Align(type.getABIAlignment(context.llvmModule->getDataLayout(), *context.llvmContext));
+}
+
+unsigned getClassFieldLLVMIndex(ParseContext &context, const DataType &classType, int fieldIndex) {
+	requireCompilerInvariant(
+		classType.kind == DataType::Kind::Class && classType.classDefinition && classType.classInstIndex >= 0,
+		"class field access requires a concrete class type"
+	);
+	requireCompilerInvariant(
+		classType.classInstIndex < static_cast<int>(classType.classDefinition->instantiations.size()),
+		"class field access references a missing instantiation"
+	);
+	(void)getLLVMType(context, classType);
+	const ClassInstantiation &instantiation = classType.classDefinition->instantiations[classType.classInstIndex];
+	requireCompilerInvariant(
+		fieldIndex >= 0 && fieldIndex < static_cast<int>(instantiation.fieldTypes.size()),
+		"class field access references a missing field"
+	);
+	requireCompilerInvariant(
+		instantiation.llvmFieldIndices.size() == instantiation.fieldTypes.size(),
+		"class layout is missing logical-to-LLVM field indices"
+	);
+	return instantiation.llvmFieldIndices[fieldIndex];
+}
 
 llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -50,7 +79,9 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	if (type.pointerDepth > 0) {
 		DataType inner = type;
 		inner.pointerDepth--;
-		return context.diBuilder->createPointerType(getDIType(context, inner), 64);
+		return context.diBuilder->createPointerType(
+			getDIType(context, inner), context.llvmModule->getDataLayout().getPointerSizeInBits()
+		);
 	}
 
 	switch (type.kind) {
@@ -72,7 +103,11 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 		if (!elementType)
 			return nullptr;
 		auto subscripts = context.diBuilder->getOrCreateArray({context.diBuilder->getOrCreateSubrange(0, type.arraySize)});
-		return context.diBuilder->createArrayType(static_cast<uint64_t>(type.getByteSize()) * 8, 0, elementType, subscripts);
+		const llvm::DataLayout &dataLayout = context.llvmModule->getDataLayout();
+		return context.diBuilder->createArrayType(
+			type.getByteSize(dataLayout, *context.llvmContext) * 8, type.getABIAlignment(dataLayout, *context.llvmContext) * 8,
+			elementType, subscripts
+		);
 	}
 	case DataType::Kind::Vector:
 	case DataType::Kind::Matrix:
@@ -87,21 +122,30 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 			return nullptr;
 		file = getOrCreateDIFile(context, type.classDefinition->range.line->sourceFile);
 
-		// Calculate struct layout
+		llvm::StructType *llvmStruct = llvm::cast<llvm::StructType>(getLLVMType(context, type));
+		const llvm::DataLayout &dataLayout = context.llvmModule->getDataLayout();
+		const llvm::StructLayout *structLayout = dataLayout.getStructLayout(llvmStruct);
 		std::vector<llvm::Metadata *> members;
-		uint64_t offsetBits = 0;
 		for (size_t i = 0; i < fields.size() && i < inst.fieldTypes.size(); i++) {
 			llvm::DIType *fieldDIType = getDIType(context, inst.fieldTypes[i]);
-			uint64_t fieldSizeBits = fieldDIType ? fieldDIType->getSizeInBits() : 64;
+			llvm::Type *llvmFieldType = getLLVMType(context, inst.fieldTypes[i]);
+			llvm::TypeSize fieldSize = dataLayout.getTypeSizeInBits(llvmFieldType);
+			requireCompilerInvariant(!fieldSize.isScalable(), "debug metadata requires a fixed-size class field");
+			uint64_t fieldSizeBits = fieldSize.getFixedValue();
+			uint64_t fieldAlignmentBits =
+				std::max<uint64_t>(inst.fieldTypes[i].getABIAlignment(dataLayout, *context.llvmContext), fields[i].alignment) *
+				8;
+			uint64_t offsetBits = structLayout->getElementOffset(inst.llvmFieldIndices[i]) * 8;
 			auto *member = context.diBuilder->createMemberType(
-				nullptr, fields[i].name, file, 0, fieldSizeBits, 0, offsetBits, llvm::DINode::FlagZero, fieldDIType
+				nullptr, fields[i].name, file, 0, fieldSizeBits, fieldAlignmentBits, offsetBits, llvm::DINode::FlagZero,
+				fieldDIType
 			);
 			members.push_back(member);
-			offsetBits += fieldSizeBits;
 		}
 		std::string className = type.classDefinition->patternNames.empty() ? "class" : type.classDefinition->patternNames[0];
 		return context.diBuilder->createStructType(
-			nullptr, className, file, 0, offsetBits, 0, llvm::DINode::FlagZero, nullptr,
+			nullptr, className, file, 0, structLayout->getSizeInBytes() * 8,
+			type.getABIAlignment(dataLayout, *context.llvmContext) * 8, llvm::DINode::FlagZero, nullptr,
 			context.diBuilder->getOrCreateArray(members)
 		);
 	}
@@ -139,10 +183,10 @@ llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValu
 	if (condType.kind == DataType::Kind::Bool)
 		return condValue; // already i1
 	if (condType.kind == DataType::Kind::Float) {
-		llvm::Type *floatTy = condType.toLLVM(*context.llvmContext);
+		llvm::Type *floatTy = getLLVMType(context, condType);
 		return builder.CreateFCmpONE(condValue, llvm::ConstantFP::get(floatTy, 0.0), name);
 	}
-	llvm::Type *intTy = condType.toLLVM(*context.llvmContext);
+	llvm::Type *intTy = getLLVMType(context, condType);
 	return builder.CreateICmpNE(condValue, llvm::ConstantInt::get(intTy, 0), name);
 }
 
@@ -202,7 +246,7 @@ PatternDefinition *finalizedPatternDefinition(ParseContext &, Expression *expr) 
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
 
-	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	auto &defs = expr->patternMatch->matchingDefinitions;
 	requireCompilerInvariant(expr->selectedPatternDefinition, "pattern call reached codegen without a finalized overload");
 	requireCompilerInvariant(
 		std::find(defs.begin(), defs.end(), expr->selectedPatternDefinition) != defs.end(),
@@ -218,13 +262,23 @@ llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &na
 	llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
 	llvm::Type *llvmType = getLLVMType(context, type);
 	llvm::AllocaInst *alloca = entryBuilder.CreateAlloca(llvmType, nullptr, name);
-	alloca->setAlignment(llvm::Align(8));
+	alloca->setAlignment(getLLVMABIAlignment(context, type));
 	return alloca;
 }
 
 // Generate a unique function name for a pattern
 std::string getPatternFunctionName(Section *section) {
-	std::string name = (std::string)section->patternDefinitions.front()->range.subString;
+	requireCompilerInvariant(section != nullptr, "function naming requires a section");
+	std::string name;
+	if (!section->patternDefinitions.empty()) {
+		name = std::string(section->patternDefinitions.front()->range.subString);
+	} else if ((section->type == SectionType::Retain || section->type == SectionType::Release) && section->parent &&
+			   !section->parent->patternDefinitions.empty()) {
+		name = sectionTypeToString(section->type) + " " +
+			   std::string(section->parent->patternDefinitions.front()->range.subString);
+	} else {
+		crashCompilerBug("generated function section has no pattern identity");
+	}
 	for (char &c : name) {
 		if (!isalnum(c) && c != '_') {
 			c = (c == ' ') ? '_' : (c % 10 + '0');
@@ -261,7 +315,18 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 
 // Allocate all variables for a section at its start from finalized inference metadata.
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body) {
-	for (auto &[name, varDef] : section->variableDefinitions) {
+	std::vector<std::pair<std::string, VariableReference *>> definitions(
+		section->variableDefinitions.begin(), section->variableDefinitions.end()
+	);
+	std::ranges::sort(definitions, [](const auto &left, const auto &right) {
+		requireCompilerInvariant(left.second != nullptr, "section variable definition is null");
+		requireCompilerInvariant(right.second != nullptr, "section variable definition is null");
+		requireCompilerInvariant(left.second->range.line != nullptr, "section variable definition has no source line");
+		requireCompilerInvariant(right.second->range.line != nullptr, "section variable definition has no source line");
+		return std::tuple(left.second->range.line->mergedLineIndex, left.second->range.start(), left.first) <
+			   std::tuple(right.second->range.line->mergedLineIndex, right.second->range.start(), right.first);
+	});
+	for (auto &[name, varDef] : definitions) {
 		// Call-bound parameters already have storage behind their argument
 		// pointer; variable resolution finds them there first. Parameters the
 		// active match did not bind (their choice alternative was not taken)
@@ -285,15 +350,18 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		if (var && var->isGlobal) {
 			// Create or get existing global variable
 			if (!context.globalLLVMVariables.contains(name)) {
-				llvm::Type *llvmType = varType.toLLVM(*context.llvmContext);
+				llvm::Type *llvmType = getLLVMType(context, varType);
 				llvm::Constant *initializer = llvm::Constant::getNullValue(llvmType);
 				auto *globalVar = new llvm::GlobalVariable(
 					*context.llvmModule, llvmType, false, // not constant
 					llvm::GlobalValue::InternalLinkage, initializer, name
 				);
+				globalVar->setAlignment(getLLVMABIAlignment(context, varType));
 				context.globalLLVMVariables[name] = globalVar;
 				// Store in alloca field so existing code can find it
 				varDef->alloca = reinterpret_cast<llvm::AllocaInst *>(globalVar);
+				if (typeHasManagedLifecycle(varType))
+					registerManagedGlobalStorage(context, globalVar, varType);
 
 				// Emit debug info for global variable
 				if (context.diBuilder && varDef->range.line) {
@@ -309,6 +377,8 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		} else {
 			// Local variable - create alloca as before
 			varDef->alloca = createEntryAlloca(context, name, varType);
+			if (typeHasManagedLifecycle(varType))
+				registerManagedStorage(context, varDef->alloca, varType, section);
 
 			// Emit debug info for local variable
 			if (context.diBuilder && varDef->range.line && context.currentDebugScope) {
@@ -364,7 +434,7 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	if (fromType == toType || !val)
 		return val;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	llvm::Type *targetLLVM = toType.toLLVM(*context.llvmContext);
+	llvm::Type *targetLLVM = getLLVMType(context, toType);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
 	if (fromType.isPointer() && toType.isPointer())

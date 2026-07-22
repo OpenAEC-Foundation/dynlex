@@ -1,0 +1,1 @@
+tests/required/lifecycle_returns_value/main.dl:5-11: Error: retain and release sections cannot return a value

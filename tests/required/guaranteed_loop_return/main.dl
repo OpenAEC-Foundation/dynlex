@@ -1,0 +1,17 @@
+import lib/std.dl
+
+function value from a guaranteed loop:
+    execute:
+        set unrelated to 0
+        loop while true:
+            set unrelated to 1
+            return 1
+
+function value after an unreachable loop:
+    execute:
+        loop while false:
+            return false
+        return 2
+
+print value from a guaranteed loop as line
+print value after an unreachable loop as line

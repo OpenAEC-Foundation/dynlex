@@ -1,0 +1,11 @@
+import lib/filesystem.dl
+
+set string_path to the string form of "tests/required/filesystem_paths/string.tmp"
+delete string_path
+
+write the string form of "string path" to string_path
+print if it succeeded
+print "" as line
+delete string_path
+print if it succeeded
+print "" as line

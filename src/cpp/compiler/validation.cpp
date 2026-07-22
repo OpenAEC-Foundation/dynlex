@@ -23,7 +23,7 @@ static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
 
 static Bindings buildBindings(Expression *expr) {
 	Bindings result;
-	PatternDefinition *def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
+	PatternDefinition *def = expr->patternMatch->matchingDefinitions[0];
 	collectPatternCallBindings(expr, def, result);
 	return result;
 }
@@ -56,9 +56,8 @@ static VarUsage analyzeVariableUsage(
 
 	case Expression::Kind::PatternCall: {
 		PatternDefinition *def = nullptr;
-		if (expr->patternMatch && expr->patternMatch->matchedEndNode &&
-			!expr->patternMatch->matchedEndNode->matchingDefinitions.empty())
-			def = expr->patternMatch->matchedEndNode->matchingDefinitions[0];
+		if (expr->patternMatch && expr->patternMatch->matchedEndNode && !expr->patternMatch->matchingDefinitions.empty())
+			def = expr->patternMatch->matchingDefinitions[0];
 		if (def && def->section && def->section->isFlex) {
 			Bindings merged = bindings;
 			for (auto &[key, val] : buildBindings(expr))

@@ -8,6 +8,7 @@
 #include <string_view>
 
 namespace llvm {
+class DataLayout;
 class Type;
 class LLVMContext;
 } // namespace llvm
@@ -196,7 +197,8 @@ struct DataType {
 		return false;
 	}
 
-	int getByteSize() const;
+	uint64_t getByteSize(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const;
+	uint64_t getABIAlignment(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const;
 
 	// Return this type with one more level of indirection
 	DataType pointed() const {
@@ -336,10 +338,12 @@ struct DataType {
 		return result;
 	}
 
-	llvm::Type *toLLVM(llvm::LLVMContext &ctx) const;
+	llvm::Type *toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dataLayout) const;
 
 	std::string toString() const;
 };
+
+bool typeHasManagedLifecycle(const DataType &type);
 
 inline int defaultFloatByteSize(bool emitSPIRV) { return emitSPIRV ? 4 : 8; }
 

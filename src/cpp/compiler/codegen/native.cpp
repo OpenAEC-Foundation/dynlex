@@ -71,6 +71,24 @@ bool linkerReportsMissingLibrary(llvm::StringRef output, const std::vector<std::
 
 } // namespace
 
+std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &context, std::string &errorMessage) {
+	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmPrinter();
+	llvm::InitializeNativeTargetAsmParser();
+
+	std::string targetTriple = llvm::sys::getDefaultTargetTriple();
+	context.llvmModule->setTargetTriple(targetTriple);
+	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);
+	if (!target)
+		return nullptr;
+
+	llvm::TargetOptions options;
+	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
+		targetTriple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
+		context.options.optimizationLevel >= 2 ? llvm::CodeGenOptLevel::Aggressive : llvm::CodeGenOptLevel::Default
+	));
+}
+
 bool emitNativeExecutable(ParseContext &context) {
 	auto pushPlainError = [&](std::string message) {
 		Diagnostic diagnostic;
@@ -80,39 +98,16 @@ bool emitNativeExecutable(ParseContext &context) {
 		context.diagnostics.push_back(std::move(diagnostic));
 	};
 
-	// Initialize native target
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-	llvm::InitializeNativeTargetAsmParser();
-
-	std::string targetTriple = llvm::sys::getDefaultTargetTriple();
-	context.llvmModule->setTargetTriple(targetTriple);
-	const llvm::Triple parsedTargetTriple(targetTriple);
-
-	// Find target
 	std::string error;
-	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
-	if (!target) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "failed to get target", Range(), "error", error)
-		);
-		return false;
-	}
-
-	// Create target machine
-	llvm::TargetOptions options;
-	auto targetMachine = target->createTargetMachine(
-		targetTriple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
-		context.options.optimizationLevel >= 2 ? llvm::CodeGenOptLevel::Aggressive : llvm::CodeGenOptLevel::Default
-	);
-
+	std::unique_ptr<llvm::TargetMachine> targetMachine = createNativeTargetMachine(context, error);
 	if (!targetMachine) {
-		context.diagnostics.push_back(Diagnostic(context, Diagnostic::Level::Error, "failed to create target machine", Range())
+		context.diagnostics.push_back(
+			Diagnostic(context, Diagnostic::Level::Error, "native target not available", Range(), "error", error)
 		);
 		return false;
 	}
-
 	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
 
 	// Determine output path
 	std::string outputPath = context.options.outputPath;

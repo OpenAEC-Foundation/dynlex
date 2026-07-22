@@ -1,1 +1,1 @@
-tests/required/unknown_type_constraint/main.dl:1:10-37: Error: Type constraint 'missing type' does not refer to a known type
+tests/required/unknown_type_constraint/main.dl:10-37: Error: Type constraint 'missing type' does not refer to a known type

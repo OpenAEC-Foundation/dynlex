@@ -69,6 +69,10 @@ We sort all expression arguments by their source position, since they did not ge
 
 # Type Resolution Stage
 
+Before type resolution starts, the compiler initializes the selected target's LLVM data layout. This does not generate or
+reorder code. It supplies the target ABI facts needed by compile-time operations such as `size of`; later code generation uses
+the same module and layout.
+
 We loop over the code like it would get executed.
 
 Before inferring executable code, we infer every pattern argument type constraint with the same expression inference engine.
@@ -96,13 +100,17 @@ this implies:
 
 The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
 
-We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later.
+Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Flex sections cannot be overloaded, so selecting an overload cannot create a control-flow classification dependency.
+
+A section flex replacement is executed line by line in source order during inference, compile-time execution, and code generation. `execute body` transfers execution to the caller body at that exact point; if neither an outcome nor an executed `execute body` consumes it, the caller body executes after the replacement. Variables introduced by the active replacement scopes are bound structurally while the caller body runs, then those bindings end when control returns to the replacement. These rules use the already-selected flex definition, inferred replacement body, and section ownership stacks. They do not rediscover behavior from pattern text.
+
+We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later. Execution-state maps retain an explicit unknown entry after a write or control-flow merge invalidates a previously known value, so an older expression value cannot reappear as the current variable value.
 
 We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.
 
 **ALL** types of each previous line have to be deduced right away, except in recursive function code. we loop over the function code again if not all types were resolved. if no progress is being made, we emit diagnostics.
 
-We only go over loops once. Variables modified there are marked as non-constant.
+Each loop pass walks its body once in execution order. Loop inference joins the entry state with the state produced by one body pass, then repeats the ordinary header and body walk until constants and the subject reach a fixed point. A statically true first header uses the first iteration's result as the fixed-point entry because that iteration is guaranteed; an unknown first header also retains the zero-iteration entry path. Assignments remain precise within each pass, and only values which actually differ across reachable iteration counts become unknown. A body proven unreachable by the header is not inferred and does not contribute variable, subject, or return-type state.
 
 We infer top-down, left to right. So we infer the top-level expression. Before inferring it, we infer the arguments. If those arguments are expressions with arguments as well, no problem, since we infer recursively.
 
@@ -232,6 +240,8 @@ layout to the same expression nodes.
 
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
+A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate with the same local ordering replaces the retained transaction, so the final accepted subgroupings are promoted together.
+
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
 
 reusable expression trees are cloned only to own per-usage inference state: once for each function instantiation and flex expansion. the original tree is unmodified.
@@ -288,6 +298,14 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 # Code Generation Stage
 
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
+
+External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
+library function names. `@intrinsic("call", library, function, return_type, arguments...)` emits a fixed signature.
+`@intrinsic("variadic call", library, function, return_type, fixed_argument_count, arguments...)` emits the first
+`fixed_argument_count` argument types as the fixed prefix and marks the remaining parameters variadic. Only the variadic suffix
+receives C's default argument promotions: booleans and integers narrower than 32 bits become 32-bit integers, 32-bit floats become
+64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
+compile-time build information.
 
 # LSP Interaction
 

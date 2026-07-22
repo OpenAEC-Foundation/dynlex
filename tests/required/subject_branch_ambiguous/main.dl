@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function choose subject for condition:
+    execute:
+        if condition:
+            set the subject to 1
+        else:
+            set the subject to 2
+        print it
+
+choose subject for true

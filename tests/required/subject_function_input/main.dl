@@ -1,0 +1,12 @@
+import lib/std.dl
+
+function consume a private subject:
+    execute:
+        discard it
+
+function call with a caller subject:
+    execute:
+        set the subject to 1
+        consume a private subject
+
+call with a caller subject

@@ -19,7 +19,6 @@
 
 namespace llvm {
 class Function;
-class BasicBlock;
 } // namespace llvm
 
 struct ParseContext;
@@ -96,6 +95,7 @@ struct Instantiation {
 	std::shared_ptr<InstantiatedSectionBody> body;
 	llvm::Function *llvmFunction = nullptr;
 	llvm::Function *llvmCallableFunction = nullptr;
+	bool fallsThrough = true;
 	bool inferring = false;
 	bool needsReinfer = false;
 	bool valid = true;
@@ -143,11 +143,6 @@ struct Section {
 	std::vector<std::string> globalVariables;
 	// precedence declarations: patterns that this definition evaluates before/after
 	std::vector<std::string> beforePatterns, afterPatterns;
-	// Control flow blocks for this section body (set by intrinsics like loop_while, if, etc.)
-	// exitBlock: where code continues after this section (always set for control flow)
-	// branchBackBlock: if set, branch here at end of body (for loops); null for if/switch
-	llvm::BasicBlock *exitBlock{};
-	llvm::BasicBlock *branchBackBlock{};
 	void collectPatternReferencesAndSections(
 		std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
 		std::list<Section *> &sections, bool insideDefinition = false

@@ -1,0 +1,23 @@
+import lib/std.dl
+
+local function secret:
+    execute:
+        return 22
+
+local class:
+    patterns:
+        [a|] shared record
+    members:
+        number as integer
+
+local flex section when shared condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function result from second module:
+    execute:
+        set record to @intrinsic("construct", a shared record, secret)
+        set output to 0
+        when shared true:
+            set output to record's number
+        return output

@@ -8,4 +8,7 @@ struct IntegerSettingSection : public Section {
 	Section *createSection(ParseContext &context, CodeLine *line) override;
 
 	virtual bool applyValue(ParseContext &context, CodeLine *line, int value) = 0;
+
+  protected:
+	bool validateByteAlignment(ParseContext &context, CodeLine *line, int value) const;
 };

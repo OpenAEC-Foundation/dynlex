@@ -16,7 +16,7 @@ function fixed tofix:
 
 function say msg:
 	execute:
-		discard @intrinsic("call", "libc", "printf", an integer, "%s\n", msg)
+		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", msg)
 
 function value as [a|an|] {fixed integer:bits} bit integer:
 	replacement:
@@ -24,7 +24,7 @@ function value as [a|an|] {fixed integer:bits} bit integer:
 
 function print msg:
 	execute:
-		discard @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
+		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", msg as a 64 bit integer)
 
 function customadder:
 	execute:

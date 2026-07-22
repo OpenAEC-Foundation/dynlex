@@ -304,6 +304,26 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 					return false;
 				continue;
 			}
+			if (child->key == "retain") {
+				if (!assignNameValue(context, path, *child, config.retainSectionName))
+					return false;
+				continue;
+			}
+			if (child->key == "release") {
+				if (!assignNameValue(context, path, *child, config.releaseSectionName))
+					return false;
+				continue;
+			}
+			if (child->key == "alignment") {
+				if (!assignNameValue(context, path, *child, config.alignmentName))
+					return false;
+				continue;
+			}
+			if (child->key == "padding") {
+				if (!assignNameValue(context, path, *child, config.paddingName))
+					return false;
+				continue;
+			}
 			addConfigError(context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'class'");
 			return false;
 		}
@@ -501,6 +521,12 @@ SyntaxConfig::Messages::Messages() {
 	set("missing body section", "message", "Code without body section");
 	set("unknown section", "message", "Unknown section: {section}");
 	set("unexpected class line", "message", "unexpected line in class definition");
+	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");
+	set("multiple reachable return types", "message",
+		"Function has multiple reachable return types: {first_type} and {second_type}");
+	set("store at managed value unsupported", "message",
+		"store at cannot store managed values because raw pointer storage has no initialization state");
+	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
 }
 
 const std::string *SyntaxConfig::Messages::find(std::string_view key, std::string_view variant) const {

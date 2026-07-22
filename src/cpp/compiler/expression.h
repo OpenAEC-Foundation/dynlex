@@ -20,9 +20,28 @@ struct Instantiation;
 struct InstantiatedSectionBody;
 
 struct Expression {
+	struct SectionOutcome {
+		enum class Kind {
+			None,
+			Conditional,
+			AlternativeConditional,
+			Alternative,
+			Loop,
+			Switch,
+			Case,
+			DefaultCase,
+			FunctionReturn
+		};
+
+		Kind kind = Kind::None;
+		CompileTimeValue conditionValue{};
+		DataType conditionType;
+	};
+
 	struct BranchSelection {
 		bool known = false;
 		int selectedBranchIndex = -1;
+		bool fallsThrough = true;
 	};
 
 	enum class Kind {
@@ -52,16 +71,32 @@ struct Expression {
 	PatternDefinition *selectedPatternDefinition{};
 	// For the function intrinsic: the exact callable definition selected during inference.
 	PatternDefinition *selectedCallableDefinition{};
+	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.
+	Expression *subjectSetter{};
 	// For non-flex PatternCalls: the exact monomorphized callee selected during
 	// type inference. Later stages consume this instance without rebuilding its key.
 	Instantiation *selectedInstantiation{};
 	// For flex PatternCalls: the call-site-specific expanded expression selected
 	// during type inference. Function-flex codegen clones this complete body
-	// expression. Section-flex control-flow inspection reuses it as the inferred
-	// header while structural codegen traverses the complete replacement section.
+	// expression. Section-flex inference consumes its recorded outcome while
+	// structural codegen traverses the complete replacement section.
 	Expression *inferredFlexExpansion{};
 	// Section flexes own the complete call-site-specific replacement structure.
 	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
+	// Control-flow intrinsics produce section outcomes during ordinary inference.
+	// Flex calls forward the outcome of their inferred replacement expression.
+	SectionOutcome sectionOutcome;
+	// Branch headers are inferred even when compile-time control flow proves
+	// their bodies unreachable. Later stages skip those uninferred bodies.
+	bool sectionBodyReachable = true;
+	// Set when a section flex executes or otherwise consumes its caller body
+	// while its replacement is inferred. The enclosing source walk must not
+	// infer that body a second time.
+	bool sectionBodyInferred = false;
+	// The control-flow result produced while consuming that body. This remains
+	// separate from sectionOutcome because the flex still forwards the header
+	// outcome (for example, Conditional) to the enclosing section walk.
+	bool sectionBodyFallsThrough = true;
 	std::optional<BranchSelection> branchSelection;
 	// Reusable body clones point to the corresponding immutable template node.
 	// Directly-owned expressions leave this null.

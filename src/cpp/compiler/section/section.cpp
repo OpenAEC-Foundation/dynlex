@@ -728,7 +728,7 @@ void Section::addPatternReference(PatternReference *reference) {
 }
 
 void Section::incrementUnresolved() {
-	if (unresolvedCount == 0 && parent) {
+	if (unresolvedCount == 0 && parent && type != SectionType::Retain && type != SectionType::Release) {
 		parent->incrementUnresolved();
 	}
 	unresolvedCount++;
@@ -736,7 +736,7 @@ void Section::incrementUnresolved() {
 
 void Section::decrementUnresolved() {
 	unresolvedCount--;
-	if (unresolvedCount == 0 && parent) {
+	if (unresolvedCount == 0 && parent && type != SectionType::Retain && type != SectionType::Release) {
 		parent->decrementUnresolved();
 	}
 }

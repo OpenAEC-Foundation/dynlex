@@ -19,6 +19,10 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Alignment;
 	if (str == "padding")
 		return SectionType::Padding;
+	if (str == "retain")
+		return SectionType::Retain;
+	if (str == "release")
+		return SectionType::Release;
 	if (str == "globals")
 		return SectionType::Globals;
 	if (str == "before")
@@ -48,6 +52,10 @@ std::string sectionTypeToString(SectionType type) {
 		return "alignment";
 	case SectionType::Padding:
 		return "padding";
+	case SectionType::Retain:
+		return "retain";
+	case SectionType::Release:
+		return "release";
 	case SectionType::Globals:
 		return "globals";
 	case SectionType::Before:

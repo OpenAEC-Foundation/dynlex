@@ -1,0 +1,6 @@
+import lib/filesystem.dl
+
+set invalid_path to new string from data "A" with length 2
+print invalid_path is readable as line
+delete invalid_path and print if it succeeded
+print "" as line

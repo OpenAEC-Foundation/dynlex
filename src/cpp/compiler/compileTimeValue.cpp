@@ -190,7 +190,7 @@ static std::string_view currentBuildTargetName(const ParseContext &context) {
 }
 
 std::optional<DataType> buildInfoValueType(std::string_view key) {
-	if (key == "word size" || key == "optimization level")
+	if (key == "word size" || key == "c long size" || key == "optimization level")
 		return DataType{DataType::Kind::Int, 4};
 	return std::nullopt;
 }
@@ -198,6 +198,8 @@ std::optional<DataType> buildInfoValueType(std::string_view key) {
 CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key) {
 	if (key == "word size")
 		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(void *) * 8);
+	if (key == "c long size")
+		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(long) * 8);
 	if (key == "optimization level")
 		return static_cast<double>(context.options.optimizationLevel);
 	return {};

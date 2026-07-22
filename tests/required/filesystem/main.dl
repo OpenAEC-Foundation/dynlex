@@ -1,0 +1,8 @@
+import lib/filesystem.dl
+
+set path to "tests/required/filesystem/delete.tmp"
+delete path
+write the string form of "delete me" to path
+
+delete path and print if it succeeded
+print "" as line

@@ -7,6 +7,9 @@
 struct Section;
 struct Instantiation;
 struct PatternTreeNode;
+namespace lsp {
+struct SourceFile;
+}
 struct PatternDefinition {
 	Range range;
 	// the section that contains this pattern definition
@@ -52,3 +55,6 @@ struct PatternDefinition {
 		}
 	}
 };
+
+bool isPatternDefinitionVisibleFromSource(const PatternDefinition &definition, const lsp::SourceFile &sourceFile);
+bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const PatternDefinition &right);

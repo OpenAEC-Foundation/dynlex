@@ -1,0 +1,38 @@
+import lib/std.dl
+
+flex function nested condition value:
+    replacement:
+        @intrinsic("if", value)
+
+flex function twice nested condition value:
+    replacement:
+        nested condition value
+
+flex section when nested condition:
+    replacement:
+        twice nested condition condition
+
+flex function nested loop condition value:
+    replacement:
+        @intrinsic("loop while", value)
+
+flex section while nested condition:
+    replacement:
+        nested loop condition condition
+
+function publish branch for condition:
+    execute:
+        when nested condition:
+            set the subject to 1
+        else:
+            set the subject to 2
+        discard it
+
+function publish loop for condition:
+    execute:
+        while nested condition:
+            set the subject to 3
+        discard it
+
+publish branch for true
+publish loop for false

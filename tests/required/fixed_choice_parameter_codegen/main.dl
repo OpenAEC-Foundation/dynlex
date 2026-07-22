@@ -10,4 +10,4 @@ function emit [fixed {fixed integer:value}|plain]:
 	execute:
 		@intrinsic("return", value)
 
-@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int"), "%d\n", emit fixed 81))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\n", emit fixed 81))

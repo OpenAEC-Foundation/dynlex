@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function finish immediately:
+    execute:
+        @intrinsic("return")
+        print 2 as line
+
+finish immediately
+print 1 as line
+@intrinsic("return")
+print 3 as line

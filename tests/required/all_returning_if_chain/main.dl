@@ -1,0 +1,12 @@
+import lib/std.dl
+
+function value for condition:
+    execute:
+        if condition:
+            return 41
+        else:
+            return 42
+        return "unreachable"
+
+print value for true as line
+print value for false as line

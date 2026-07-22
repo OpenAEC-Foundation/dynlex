@@ -4,11 +4,11 @@ import lib/std.dl
 
 function allocate count bytes:
     execute:
-        return @intrinsic("call", "libc", "calloc", a pointer to a byte, count, 1)
+        return @intrinsic("call", "libc", "calloc", a pointer to a byte, count as a word sized integer, 1 as a word sized integer)
 
 function allocate count bytes as output_type:
     replacement:
-        @intrinsic("call", "libc", "calloc", output_type, count, 1)
+        @intrinsic("call", "libc", "calloc", output_type, count as a word sized integer, 1 as a word sized integer)
 
 function allocate count items:
     replacement:
@@ -31,8 +31,8 @@ function allocate count slots of value:
 
 function store value into array at index:
     execute:
-        @intrinsic("store at", array, index, value)
+        @intrinsic("store at", array + index, value)
 
 function item index of array:
     execute:
-        return @intrinsic("load at", array, index)
+        return @intrinsic("dereference", array + index)

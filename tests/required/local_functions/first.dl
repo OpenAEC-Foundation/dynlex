@@ -1,0 +1,34 @@
+
+import lib/std.dl
+
+local function secret:
+    execute:
+        return 11
+
+local class:
+    patterns:
+        [a|] shared record
+    members:
+        number as integer
+
+local flex section when shared condition:
+    replacement:
+        @intrinsic("if", condition)
+
+local function visibility hidden_parameter after:
+    execute:
+        discard hidden_parameter
+
+function visibility visible_parameter before:
+    execute:
+        discard visible_parameter
+
+function result from first module:
+    execute:
+        set record to @intrinsic("construct", a shared record, secret)
+        set output to 0
+        when shared true:
+            set output to record's number
+        return output
+
+visibility 1 after

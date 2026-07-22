@@ -110,6 +110,7 @@ struct MatchProgress {
 	MatchContinuationState continuationState() const;
 	bool canStartSubmatch() const;
 	bool canBeSubmatch() const;
+	std::vector<PatternDefinition *> visibleDefinitions() const;
 	CompletedMatchProgress completedSubmatch() const;
 	MatchProgress resumeParent(const MatchProgress &parentProgress) const;
 	static MatchProgress resumeParent(const MatchProgress &parentProgress, const CompletedMatchProgress &submatch);

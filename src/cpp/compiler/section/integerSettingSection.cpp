@@ -36,3 +36,13 @@ Section *IntegerSettingSection::createSection(ParseContext &context, CodeLine *l
 	));
 	return nullptr;
 }
+
+bool IntegerSettingSection::validateByteAlignment(ParseContext &context, CodeLine *line, int value) const {
+	if (value > 0 && (value & (value - 1)) == 0)
+		return true;
+	context.addDiagnostic(Diagnostic(
+		context, Diagnostic::Level::Error, sectionTypeToString(type) + " must be a positive power of two",
+		Range(line, line->patternText)
+	));
+	return false;
+}

@@ -1,1 +1,1 @@
-tests/required/impure_type_constraint/main.dl:10:10-33: Error: Type constraint 'bad type' must be pure
+tests/required/impure_type_constraint/main.dl:10-33: Error: Type constraint 'bad type' must be pure

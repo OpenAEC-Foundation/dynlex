@@ -6,6 +6,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 LLVM_VERSION="$(dynlex_install_llvm_version)"
 
+if [ "${1:-}" = "--web" ]; then
+    if [ "$#" -ne 1 ]; then
+        echo "Usage: $0 [--web]" >&2
+        exit 2
+    fi
+    exec "$SCRIPT_DIR/install_web_toolchain.sh"
+fi
+if [ "$#" -ne 0 ]; then
+    echo "Usage: $0 [--web]" >&2
+    exit 2
+fi
+
 require_sudo() {
     if ! command -v sudo >/dev/null 2>&1; then
         echo "Error: sudo is required for system package installation."

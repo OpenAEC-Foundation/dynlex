@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function choose value for n:
+    execute:
+        match on n:
+            case 1:
+                return 10
+            otherwise:
+                discard 20
+
+print choose value for 1 as line

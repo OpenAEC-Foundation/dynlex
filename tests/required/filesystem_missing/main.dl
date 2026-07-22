@@ -1,0 +1,8 @@
+import lib/filesystem.dl
+
+set path to "tests/required/filesystem_missing/missing.tmp"
+delete path
+
+read path
+print if it succeeded
+print "" as line

@@ -8,7 +8,7 @@ function initialize value:
 
 function initialize {integer:value}:
     execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "printf", integer, "%d\n", value))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
 
 initialize result
 initialize result

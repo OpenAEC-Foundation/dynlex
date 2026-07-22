@@ -1,0 +1,13 @@
+import lib/std.dl
+
+flex section around result:
+    replacement:
+        set marker to 1
+        execute the body
+        set result to marker
+
+set observed to 0
+around observed:
+    set marker to 3
+
+print observed as line

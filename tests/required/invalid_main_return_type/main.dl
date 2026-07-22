@@ -1,0 +1,11 @@
+flex function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        [a|] box
+    members:
+        value as integer
+
+@intrinsic("return", @intrinsic("construct", a box, 1))

@@ -17,7 +17,9 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 	std::string destinationText = destinationExpr && !destinationExpr->range.subString.empty()
 									  ? (std::string)destinationExpr->range.subString
 									  : "<expression>";
-	context.setTypeFailure("assignment target '" + destinationText + "' is not writable");
+	std::string detail = "assignment target '" + destinationText + "' is not writable";
+	context.setTypeFailure(detail);
+	context.fail(buildFailureDetailDiagnostic(destinationExpr->range, std::move(detail)));
 }
 
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
@@ -40,8 +42,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	}
 	if (!valueType.isDeduced()) {
 		if (valueDependsOnInProgressInstantiation && context.currentInstantiation) {
-			if (!context.trial)
-				context.currentInstantiation->needsReinfer = true;
+			markInstantiationForReinference(context, context.currentInstantiation);
 			return;
 		}
 		// A silent pass would let an unresolved store reach codegen. Fail the
@@ -54,9 +55,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value unresolved",
 			"message", {{"value", valueText}}
 		));
-		context.typeFailureRelatedInfo.insert(
-			context.typeFailureRelatedInfo.end(), unboundParameterInfo.begin(), unboundParameterInfo.end()
-		);
+		context.insertTypeFailureCause(std::move(unboundParameterInfo));
 		return;
 	}
 	if (!valueType.isRuntimeValueType()) {
@@ -72,7 +71,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
 		Variable *variable = section ? section->findVariable(destinationExpr->variable->name) : nullptr;
 		if (!variable) {
-			setInvalidStoreDestinationFailure(destinationExpr, context);
+			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
 		}
 
@@ -82,16 +81,11 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			if (!variable->type.isDeduced() || variable->type == valueType)
 				commitVariableTypeFromValue(variable, valueExpr, valueType);
 			destinationExpr->type = variable->type;
+			expr->arguments[1]->type = variable->type;
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
-			if (!context.trial)
-				destinationExpr->compileTimeValue = assignedValue;
 			if (variable->isGlobal)
 				context.noteWrittenGlobalReference(variable->definition);
 			context.setKnownConstant(variable->definition, assignedValue);
-			if (context.inLoopMutationScope()) {
-				context.noteLoopMutation(variable->definition);
-				context.setKnownConstant(variable->definition, {});
-			}
 			return;
 		}
 
@@ -112,7 +106,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 
 	if (destinationExpr->kind != Expression::Kind::IntrinsicCall ||
 		intrinsicKind(destinationExpr->intrinsicName) != IntrinsicKind::Property) {
-		setInvalidStoreDestinationFailure(destinationExpr, context);
+		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
 	}
 
@@ -127,8 +121,16 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		ownerExpr ? concretizeClassType(ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, resolvedBindingFrameStack))
 				  : DataType{};
 	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0) {
-		setInvalidStoreDestinationFailure(destinationExpr, context);
+		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
+	}
+	if (!instanceType.isPointer()) {
+		bool ownerIsVariable = ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable;
+		Section *ownerSection = ownerIsVariable && ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
+		if (!ownerSection || !ownerSection->findVariable(ownerExpr->variable->name)) {
+			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
+			return;
+		}
 	}
 
 	Expression *propertyExpr = resolveThroughBindings(destinationExpr->arguments[2], resolvedBindingFrameStack);
@@ -136,7 +138,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	if (auto *str = std::get_if<std::string>(&propertyExpr->literalValue))
 		fieldName = *str;
 	if (fieldName.empty()) {
-		setInvalidStoreDestinationFailure(destinationExpr, context);
+		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
 	}
 
@@ -182,5 +184,5 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		return;
 	}
 
-	setInvalidStoreDestinationFailure(destinationExpr, context);
+	setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 }

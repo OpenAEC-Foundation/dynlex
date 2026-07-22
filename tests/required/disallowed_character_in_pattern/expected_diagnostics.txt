@@ -1,1 +1,1 @@
-tests/required/disallowed_character_in_pattern/main.dl:1:16-17: Error: Disallowed character U+0007
+tests/required/disallowed_character_in_pattern/main.dl:16-17: Error: Disallowed character U+0007

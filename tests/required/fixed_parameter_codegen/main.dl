@@ -32,4 +32,4 @@ function selected {fixed integer:n} x {fixed integer:m}:
             return 7
 
 set result to selected 4 x 4
-@intrinsic("discard", @intrinsic("call", "libc", "printf", an integer, "%d\n", result))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", result))

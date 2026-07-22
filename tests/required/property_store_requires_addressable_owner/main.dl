@@ -1,0 +1,9 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] box
+    members:
+        value as integer
+
+set the value of @intrinsic("construct", a box, 1) to 2

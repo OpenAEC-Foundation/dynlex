@@ -1,0 +1,4 @@
+lib/std.dl:9-30: Error: no subject has been set
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' with arguments [i8*] -> undeduced lib/std.dl:9-30
+  note: while inferring call 'print it' -> undeduced tests/required/subject_unset/main.dl:7-9
+  note: while inferring call 'print it' with arguments [unresolved(?)] -> undeduced tests/required/subject_unset/main.dl:1-9

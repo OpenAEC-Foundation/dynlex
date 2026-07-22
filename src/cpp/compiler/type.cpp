@@ -1,9 +1,52 @@
 #include "type.h"
 #include "classDefinition.h"
 #include "compilerUtils.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
+#include "llvm/Support/MathExtras.h"
+#include <set>
+
+namespace {
+
+uint64_t fixedAllocationSize(const llvm::DataLayout &dataLayout, llvm::Type *type) {
+	llvm::TypeSize allocationSize = dataLayout.getTypeAllocSize(type);
+	requireCompilerInvariant(!allocationSize.isScalable(), "class layout requires fixed-size fields");
+	return allocationSize.getFixedValue();
+}
+
+using ClassInstanceKey = std::pair<const ClassDefinition *, int>;
+
+bool typeHasManagedLifecycle(const DataType &type, std::set<ClassInstanceKey> &visited) {
+	if (type.kind == DataType::Kind::Array)
+		return type.arrayElementType && typeHasManagedLifecycle(*type.arrayElementType, visited);
+	if (type.kind != DataType::Kind::Class || type.isPointer())
+		return false;
+	requireCompilerInvariant(
+		type.classDefinition && type.classInstIndex >= 0, "managed lifecycle requires a concrete class type"
+	);
+	const ClassDefinition &definition = *type.classDefinition;
+	requireCompilerInvariant(
+		type.classInstIndex < static_cast<int>(definition.instantiations.size()),
+		"managed lifecycle references a missing class instantiation"
+	);
+	requireCompilerInvariant(
+		static_cast<bool>(definition.retainSection) == static_cast<bool>(definition.releaseSection),
+		"managed class has an incomplete lifecycle"
+	);
+	if (definition.retainSection)
+		return true;
+	if (!visited.insert({&definition, type.classInstIndex}).second)
+		return false;
+	for (const DataType &fieldType : definition.instantiations[type.classInstIndex].fieldTypes) {
+		if (typeHasManagedLifecycle(fieldType, visited))
+			return true;
+	}
+	return false;
+}
+
+} // namespace
 
 std::string DataType::toString() const {
 	std::string result;
@@ -53,31 +96,32 @@ std::string DataType::toString() const {
 	return result;
 }
 
-int DataType::getByteSize() const {
-	if (pointerDepth > 0)
-		return 8;
-	switch (kind) {
-	case Kind::Bool:
-		return 1;
-	case Kind::Int:
-	case Kind::Float:
-		return numericSize;
-	case Kind::Array:
-		return arrayElementType ? arrayElementType->getByteSize() * arraySize : 0;
-	case Kind::Vector:
-		return arrayElementType ? arrayElementType->getByteSize() * arraySize : 0;
-	case Kind::Matrix:
-		return arrayElementType ? arrayElementType->getByteSize() * arraySize * matrixRowCount : 0;
-	case Kind::Class:
-		if (classDefinition && classInstIndex >= 0 && classInstIndex < static_cast<int>(classDefinition->instantiations.size()))
-			return classDefinition->instantiations[classInstIndex].byteSize;
-		return 0;
-	default:
-		return 0;
-	}
+uint64_t DataType::getByteSize(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const {
+	requireCompilerInvariant(isRuntimeValueType(), "byte size requires a concrete runtime value type");
+	llvm::Type *llvmType = toLLVM(llvmContext, dataLayout);
+	requireCompilerInvariant(llvmType->isSized(), "byte size requires a sized LLVM type");
+	return fixedAllocationSize(dataLayout, llvmType);
 }
 
-llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
+uint64_t DataType::getABIAlignment(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const {
+	llvm::Type *llvmType = toLLVM(llvmContext, dataLayout);
+	if (kind == Kind::Class && pointerDepth == 0) {
+		requireCompilerInvariant(
+			classDefinition && classInstIndex >= 0 && classInstIndex < static_cast<int>(classDefinition->instantiations.size()),
+			"class alignment requires a concrete class instantiation"
+		);
+		uint64_t alignment = classDefinition->instantiations[classInstIndex].llvmABIAlignment;
+		requireCompilerInvariant(alignment > 0, "class layout is missing its ABI alignment");
+		return alignment;
+	}
+	if (kind == Kind::Array && pointerDepth == 0) {
+		requireCompilerInvariant(static_cast<bool>(arrayElementType), "array alignment requires an element type");
+		return arrayElementType->getABIAlignment(dataLayout, llvmContext);
+	}
+	return dataLayout.getABITypeAlign(llvmType).value();
+}
+
+llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dataLayout) const {
 	// Any pointer type maps to opaque ptr
 	if (pointerDepth > 0)
 		return llvm::PointerType::getUnqual(ctx);
@@ -111,15 +155,15 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		}
 	case Kind::Array:
 		requireCompilerInvariant(arrayElementType && arraySize >= 0, "Array type must have element type and size");
-		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx), arraySize);
+		return llvm::ArrayType::get(arrayElementType->toLLVM(ctx, dataLayout), arraySize);
 	case Kind::Vector:
 		requireCompilerInvariant(arrayElementType && arraySize > 0, "Vector type must have element type and size");
-		return llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
+		return llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx, dataLayout), arraySize);
 	case Kind::Matrix: {
 		requireCompilerInvariant(
 			arrayElementType && arraySize > 0 && matrixRowCount > 0, "Matrix type must have element type and dimensions"
 		);
-		llvm::Type *rowVectorType = llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx), arraySize);
+		llvm::Type *rowVectorType = llvm::FixedVectorType::get(arrayElementType->toLLVM(ctx, dataLayout), arraySize);
 		return llvm::ArrayType::get(rowVectorType, matrixRowCount);
 	}
 	case Kind::Class: {
@@ -128,27 +172,33 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		);
 		ClassInstantiation &inst = classDefinition->instantiations[classInstIndex];
 		if (!inst.llvmStructType) {
+			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
 			inst.llvmFieldIndices.clear();
-			int offset = 0;
+			uint64_t offset = 0;
+			uint64_t structAlignment = 1;
+			requireCompilerInvariant(
+				inst.fieldTypes.size() == classDefinition->fields.size(),
+				"class instantiation field count differs from its definition"
+			);
 			for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-				// Align field to its natural alignment
-				int fieldSize = inst.fieldTypes[i].isPointer() ? 8 : inst.fieldTypes[i].numericSize;
-				if (!fieldSize)
-					fieldSize = 1; // bool
-				int fieldAlign = fieldSize;
-				int padding = (fieldAlign - (offset % fieldAlign)) % fieldAlign;
-				if (padding > 0) {
-					llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), padding));
-					offset += padding;
-				}
-
+				llvm::Type *fieldType = inst.fieldTypes[i].toLLVM(ctx, dataLayout);
+				uint64_t fieldAlignment = inst.fieldTypes[i].getABIAlignment(dataLayout, ctx);
+				fieldAlignment = std::max<uint64_t>(fieldAlignment, classDefinition->fields[i].alignment);
+				uint64_t fieldOffset = llvm::alignTo(offset, fieldAlignment);
+				if (fieldOffset != offset)
+					llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), fieldOffset - offset));
 				inst.llvmFieldIndices.push_back(llvmFields.size());
-				llvmFields.push_back(inst.fieldTypes[i].toLLVM(ctx));
-				offset += fieldSize;
+				llvmFields.push_back(fieldType);
+				offset = fieldOffset + fixedAllocationSize(dataLayout, fieldType);
+				structAlignment = std::max(structAlignment, fieldAlignment);
 			}
-			inst.byteSize = offset;
-			inst.llvmStructType = llvm::StructType::create(ctx, llvmFields, "class");
+			structAlignment = std::max<uint64_t>(structAlignment, classDefinition->alignment);
+			uint64_t allocationSize = llvm::alignTo(offset, structAlignment);
+			if (allocationSize != offset)
+				llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), allocationSize - offset));
+			inst.llvmStructType->setBody(llvmFields);
+			inst.llvmABIAlignment = structAlignment;
 		}
 		return inst.llvmStructType;
 	}
@@ -162,4 +212,9 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx) const {
 		crashCompilerBug("Any type must be resolved before codegen");
 	}
 	crashCompilerBug("Unknown type kind");
+}
+
+bool typeHasManagedLifecycle(const DataType &type) {
+	std::set<ClassInstanceKey> visited;
+	return typeHasManagedLifecycle(type, visited);
 }

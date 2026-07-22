@@ -1,0 +1,8 @@
+import lib/std.dl
+
+set selector to 0 as a byte
+match on selector:
+    case -1:
+        print 1 as line
+    case 255:
+        print 2 as line

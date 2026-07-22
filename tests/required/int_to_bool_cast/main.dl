@@ -6,7 +6,7 @@ function wasm output msg:
 
 function native output msg:
     replacement:
-        @intrinsic("call", "libc", "printf", an integer, "%ld\n", msg as a 64 bit integer)
+        @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", msg as a 64 bit integer)
 
 function output msg:
     execute:

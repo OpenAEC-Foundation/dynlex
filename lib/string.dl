@@ -8,6 +8,20 @@ class:
     members:
         data as pointer to byte
         length as i32
+        owner as pointer to integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != 0 as a pointer to integer:
+            set references to @intrinsic("dereference", owner)
+            @intrinsic("store at", owner, references + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != 0 as a pointer to integer:
+            set references to @intrinsic("dereference", owner)
+            if references = 1:
+                @intrinsic("call", "libc", "free", void, owner)
+            else:
+                @intrinsic("store at", owner, references - 1)
 
 function cstring:
     replacement:
@@ -15,7 +29,19 @@ function cstring:
 
 function new string from data ptr with length len:
     replacement:
-        @intrinsic("construct", a string, ptr, len)
+        @intrinsic("construct", a string, ptr, len, 0 as a pointer to integer)
+
+function {string:value} is valid:
+    execute:
+        if value's length < 0:
+            return false
+        if value's length = 0:
+            return true
+        return the data of value != (0 as a pointer to byte)
+
+local function new owned string from data ptr with length len owned by owner:
+    replacement:
+        @intrinsic("construct", a string, ptr, len, owner)
 
 function character index of {string:str}:
     execute:
@@ -55,15 +81,31 @@ function {cstring:left} = {cstring:right}:
 
 # --- Conversions to string ---
 
+local function stop because string allocation failed:
+    execute:
+        @intrinsic("call", "libc", "abort", void)
+
+function [the|] maximum string buffer length:
+    execute:
+        return 2147483647 - ((the size of an integer) + 1)
+
 function a new string buffer with length len:
     execute:
-        return new string from data (allocate (len + 1) bytes) with length len
+        set metadata_size to the size of an integer
+        set maximum_length to the maximum string buffer length
+        if (len < 0) or (len > maximum_length):
+            stop because string allocation failed
+        set owner to allocate (len + (metadata_size + 1)) bytes as a pointer to integer
+        if @intrinsic("equal", owner, 0 as a pointer to integer):
+            stop because string allocation failed
+        set data to (owner + 1) as a pointer to byte
+        return new owned string from data data with length len owned by owner
 
-function copy {string:source} into target at offset offset:
+function copy {string:source} into target at index:
     execute:
         set i to 0
         loop while i < source's length:
-            store character i of source into target at offset + i
+            store character i of source into target at index + i
             set i to i + 1
 
 function the count of decimal digits in {integer:value}:
@@ -187,7 +229,7 @@ function value as [a|] line:
 
 function write {string:msg}:
     execute:
-        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if the build target is wasm, else @intrinsic("call", "libc", "printf", an integer, "%.*s", msg's length, the data of msg)
+        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if the build target is wasm, else @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.*s", msg's length, the data of msg)
 
 function print msg:
     execute:

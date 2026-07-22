@@ -23,6 +23,7 @@ class Module;
 class IRBuilderBase;
 class Value;
 class GlobalVariable;
+class Function;
 class SwitchInst;
 class BasicBlock;
 class DIBuilder;
@@ -39,9 +40,21 @@ struct ParseContext {
 
 	struct SectionFlexBodyFrame {
 		Section *definitionSection = nullptr;
+		InstantiatedSectionBody *definitionBody = nullptr;
 		Section *bodySection = nullptr;
 		InstantiatedSectionBody *instantiatedBody = nullptr;
+		Expression *openingExpression = nullptr;
+		llvm::BasicBlock *exitBlock = nullptr;
+		llvm::BasicBlock *branchBackBlock = nullptr;
+		llvm::BasicBlock *continuationBlock = nullptr;
 		bool bodyEmitted = false;
+	};
+
+	struct ManagedStorageState {
+		llvm::Value *address{};
+		llvm::Value *initializedAddress{};
+		DataType type;
+		Section *ownerSection{};
 	};
 
 	enum class ShaderStage { Fragment, Vertex };
@@ -99,6 +112,9 @@ struct ParseContext {
 	llvm::LLVMContext *llvmContext{};
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
+	llvm::Function *mainLLVMFunction{};
+	llvm::BasicBlock *mainCleanupBlock{};
+	llvm::AllocaInst *mainReturnStorage{};
 
 	// Debug info (initialized when emitDebugInfo is true, not for SPIR-V)
 	llvm::DIBuilder *diBuilder{};
@@ -139,6 +155,13 @@ struct ParseContext {
 	std::unordered_set<llvm::SwitchInst *> switchesWithDefaultCase;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
+	// Subject values are call-site-local temporaries keyed by their inferred assignment expression.
+	std::unordered_map<const Expression *, llvm::Value *> subjectStorage;
+	// Runtime storage that owns values with class-defined or recursively derived
+	// lifecycle behavior. Locals are scoped per generated function; globals are
+	// released from main after all user code has completed.
+	std::vector<ManagedStorageState> managedLocalStorage;
+	std::vector<ManagedStorageState> managedGlobalStorage;
 
 	// Libraries required for linking (collected from @intrinsic("call", ...) calls)
 	std::unordered_set<std::string> requiredLibraries;
@@ -293,11 +316,30 @@ inline Expression *flexPatternBodyExpression(PatternDefinition *definition) {
 	return bodyExpression;
 }
 
+inline Expression *singleExpressionFlexFunctionOutcome(PatternDefinition *definition) {
+	if (!definition || !definition->section || !definition->section->isFlex ||
+		definition->section->type != SectionType::Function)
+		return nullptr;
+	Expression *outcomeExpression = nullptr;
+	size_t expressionLineCount = 0;
+	definition->section->forEachDefinitionBodySection([&](Section *bodySection) {
+		for (CodeLine *line : bodySection->codeLines) {
+			if (!line || !line->expression)
+				continue;
+			expressionLineCount++;
+			if (!line->sectionOpening)
+				outcomeExpression = line->expression;
+		}
+		return true;
+	});
+	return expressionLineCount == 1 ? outcomeExpression : nullptr;
+}
+
 inline Expression *
 expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingFrame &outBindings) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return nullptr;
-	auto &defs = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	auto &defs = expr->patternMatch->matchingDefinitions;
 	if (def)
 		requireCompilerInvariant(
 			std::find(defs.begin(), defs.end(), def) != defs.end(),

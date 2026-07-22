@@ -1,0 +1,7 @@
+import lib/filesystem.dl
+
+set null_data to 0 as a pointer to byte
+set invalid_path to new string from data null_data with length 1
+delete invalid_path
+print if it succeeded
+print "" as line

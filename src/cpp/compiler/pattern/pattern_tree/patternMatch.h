@@ -23,6 +23,7 @@ struct MatchedArgument {
 
 struct PatternMatch {
 	PatternTreeNode *matchedEndNode;
+	std::vector<PatternDefinition *> matchingDefinitions{};
 	size_t lineStartPos;
 	size_t lineEndPos;
 	std::vector<PatternTreeNode *> nodesPassed{};

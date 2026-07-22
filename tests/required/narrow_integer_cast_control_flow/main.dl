@@ -1,0 +1,12 @@
+import lib/std.dl
+
+function value after a narrow cast:
+    execute:
+        set narrowed to 255 as a byte
+        if narrowed < 0:
+            return 1
+        else:
+            return false
+
+set selected to value after a narrow cast
+print selected as line

@@ -35,4 +35,4 @@ loop while i < count:
 	set i to i + 1
 
 set average_jump to total_jump / count
-discard @intrinsic("call", "libc", "printf", an integer, "INSPECT avg_jump=%ld min_jump=%ld max_jump=%ld highest_level=%ld longest_staircase=%ld\n", average_jump as a 64 bit integer, min_jump as a 64 bit integer, max_jump as a 64 bit integer, highest_level as a 64 bit integer, longest_staircase as a 64 bit integer)
+discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "INSPECT avg_jump=%ld min_jump=%ld max_jump=%ld highest_level=%ld longest_staircase=%ld\n", average_jump as a 64 bit integer, min_jump as a 64 bit integer, max_jump as a 64 bit integer, highest_level as a 64 bit integer, longest_staircase as a 64 bit integer)

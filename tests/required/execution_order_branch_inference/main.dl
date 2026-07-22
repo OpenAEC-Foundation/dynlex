@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function branch value for condition:
+    execute:
+        set result to 1
+        if condition:
+            set result to 2
+        else if result = 1:
+            set result to 3
+        else:
+            set result to 4
+        return result
+
+print branch value for true as line
+print branch value for false as line

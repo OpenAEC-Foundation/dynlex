@@ -12,6 +12,14 @@ dynlex_install_llvm_version() {
     fi
 }
 
+dynlex_wasm_llvm_release() {
+    echo 20.1.8
+}
+
+dynlex_emscripten_version() {
+    echo 6.0.3
+}
+
 dynlex_detect_installed_llvm_version() {
     if [ -n "${DYNLEX_LLVM_VERSION:-}" ]; then
         echo "$DYNLEX_LLVM_VERSION"

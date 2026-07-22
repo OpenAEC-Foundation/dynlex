@@ -2,6 +2,7 @@
 #include "expression.h"
 #include "parseContext.h"
 #include "pathUtils.h"
+#include "pattern/patternDefinition.h"
 #include "pattern/patternReference.h"
 #include "pattern/pattern_tree/matchProgress.h"
 #include "pattern/pattern_tree/patternElement.h"
@@ -181,6 +182,43 @@ std::vector<PatternTreeNode *> deduplicateNodes(const std::vector<PatternTreeNod
 	return result;
 }
 
+SourceFile *completionSourceFile(const CompletionContext &context) {
+	requireCompilerInvariant(context.parseContext != nullptr, "pattern completion requires a parse context");
+	const std::string requestedUri = pathutil::toAbsoluteUri(context.uri);
+	for (const auto &[ignoredPath, sourceFile] : context.parseContext->importedFiles) {
+		(void)ignoredPath;
+		requireCompilerInvariant(sourceFile != nullptr, "imported source map contains a null source file");
+		if (pathutil::toAbsoluteUri(sourceFile->uri) == requestedUri)
+			return sourceFile;
+	}
+	crashCompilerBug("completion source file is missing from the imported source map");
+}
+
+bool subtreeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &sourceFile) {
+	if (!node)
+		return false;
+	std::vector<PatternTreeNode *> pending = {node};
+	std::set<PatternTreeNode *> visited;
+	while (!pending.empty()) {
+		PatternTreeNode *current = pending.back();
+		pending.pop_back();
+		if (!current || !visited.insert(current).second)
+			continue;
+		for (PatternDefinition *definition : current->matchingDefinitions) {
+			requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
+			if (isPatternDefinitionVisibleFromSource(*definition, sourceFile))
+				return true;
+		}
+		for (const auto &[ignoredLiteral, child] : current->literalChildren) {
+			(void)ignoredLiteral;
+			pending.push_back(child);
+		}
+		pending.push_back(current->argumentChild);
+		pending.push_back(current->wordChild);
+	}
+	return false;
+}
+
 std::vector<PatternTreeNode *>
 advanceCompletionStates(const std::vector<PatternTreeNode *> &states, const PatternElement &element) {
 	std::vector<PatternTreeNode *> next;
@@ -254,15 +292,19 @@ std::string extendLiteralSuggestion(std::string literal, PatternTreeNode *node) 
 
 void collectNextLiteralSuggestions(
 	const std::vector<PatternTreeNode *> &states, std::vector<CompletionItem> &items, std::set<std::string> &seen,
-	std::string_view detailPrefix
+	std::string_view detailPrefix, const SourceFile &sourceFile
 ) {
 	std::vector<std::string> literals;
 	for (PatternTreeNode *node : states) {
 		if (!node)
 			continue;
 		for (const auto &[text, child] : node->literalChildren) {
+			if (!subtreeHasVisibleDefinition(child, sourceFile))
+				continue;
 			if (text == " " && child && !child->literalChildren.empty()) {
 				for (const auto &[nextText, nextChild] : child->literalChildren) {
+					if (!subtreeHasVisibleDefinition(nextChild, sourceFile))
+						continue;
 					literals.push_back(extendLiteralSuggestion(text + nextText, nextChild));
 				}
 			}
@@ -277,44 +319,46 @@ void collectNextLiteralSuggestions(
 	}
 }
 
-std::string firstParameterName(const PatternTreeNode *node) {
-	if (!node) {
-		return {};
+std::set<std::string> visibleParameterNames(const PatternTreeNode *node, const SourceFile &sourceFile) {
+	std::set<std::string> names;
+	if (!node)
+		return names;
+	for (const auto &[definition, name] : node->parameterNames) {
+		requireCompilerInvariant(definition != nullptr, "pattern parameter metadata contains a null definition");
+		if (!name.empty() && isPatternDefinitionVisibleFromSource(*definition, sourceFile))
+			names.insert(name);
 	}
-	for (const auto &[_, name] : node->parameterNames) {
-		if (!name.empty()) {
-			return name;
-		}
-	}
-	return {};
+	return names;
 }
 
 void collectPlaceholderSuggestions(
 	const std::vector<PatternTreeNode *> &states, std::vector<CompletionItem> &items, std::set<std::string> &seen,
-	std::string_view detailPrefix
+	std::string_view detailPrefix, const SourceFile &sourceFile
 ) {
 	auto addPlaceholderSuggestionsForNode = [&](PatternTreeNode *node) {
 		if (!node)
 			return;
-		if (node->argumentChild) {
-			std::string name = firstParameterName(node->argumentChild);
-			if (name.empty()) {
-				name = "expression";
+		if (node->argumentChild && subtreeHasVisibleDefinition(node->argumentChild, sourceFile)) {
+			std::set<std::string> names = visibleParameterNames(node->argumentChild, sourceFile);
+			if (names.empty())
+				names.insert("expression");
+			for (const std::string &name : names) {
+				addCompletionItem(
+					items, seen, "<" + name + ">", CompletionItemKind::Snippet, std::string(detailPrefix) + " argument", {},
+					"2_" + name
+				);
 			}
-			addCompletionItem(
-				items, seen, "<" + name + ">", CompletionItemKind::Snippet, std::string(detailPrefix) + " argument", {},
-				"2_" + name
-			);
 		}
-		if (node->wordChild) {
-			std::string name = firstParameterName(node->wordChild);
-			if (name.empty()) {
-				name = "word";
+		if (node->wordChild && subtreeHasVisibleDefinition(node->wordChild, sourceFile)) {
+			std::set<std::string> names = visibleParameterNames(node->wordChild, sourceFile);
+			if (names.empty())
+				names.insert("word");
+			for (const std::string &name : names) {
+				addCompletionItem(
+					items, seen, "<" + name + ">", CompletionItemKind::Snippet, std::string(detailPrefix) + " captured word",
+					{}, "2_" + name
+				);
 			}
-			addCompletionItem(
-				items, seen, "<" + name + ">", CompletionItemKind::Snippet, std::string(detailPrefix) + " captured word", {},
-				"2_" + name
-			);
 		}
 	};
 
@@ -492,6 +536,7 @@ void collectPatternTreeCompletions(
 	}
 
 	std::vector<PatternTreeNode *> states = {root};
+	SourceFile *sourceFile = completionSourceFile(context);
 	for (const PatternElement &element : elements) {
 		states = advanceCompletionStates(states, element);
 		if (states.empty()) {
@@ -505,6 +550,8 @@ void collectPatternTreeCompletions(
 
 		for (PatternTreeNode *node : states) {
 			for (const auto &[literal, child] : node->literalChildren) {
+				if (!subtreeHasVisibleDefinition(child, *sourceFile))
+					continue;
 				if (!literal.starts_with(partialElement.text)) {
 					continue;
 				}
@@ -529,13 +576,15 @@ void collectPatternTreeCompletions(
 		}
 
 		exactMatchStates = deduplicateNodes(exactMatchStates);
-		collectNextLiteralSuggestions(exactMatchStates, items, seenLabels, std::string(detailPrefix) + " next token");
-		collectPlaceholderSuggestions(exactMatchStates, items, seenLabels, detailPrefix);
+		collectNextLiteralSuggestions(
+			exactMatchStates, items, seenLabels, std::string(detailPrefix) + " next token", *sourceFile
+		);
+		collectPlaceholderSuggestions(exactMatchStates, items, seenLabels, detailPrefix, *sourceFile);
 		return;
 	}
 
-	collectNextLiteralSuggestions(states, items, seenLabels, std::string(detailPrefix) + " next token");
-	collectPlaceholderSuggestions(states, items, seenLabels, detailPrefix);
+	collectNextLiteralSuggestions(states, items, seenLabels, std::string(detailPrefix) + " next token", *sourceFile);
+	collectPlaceholderSuggestions(states, items, seenLabels, detailPrefix, *sourceFile);
 }
 
 std::vector<PatternTreeNode *>
@@ -548,6 +597,8 @@ collectMatcherFrontierNodes(const CompletionContext &context, SectionType sectio
 	std::string normalizedPrefix = normalizeCompletionPatternPrefix(linePrefix);
 	Expression expr;
 	expr.range.subString = normalizedPrefix;
+	CodeLine syntheticLine(std::string_view{}, completionSourceFile(context));
+	expr.range.line = &syntheticLine;
 	PatternReference reference(&expr, sectionType);
 	reference.patternElements = getPatternElements(reference.pattern.text);
 
@@ -577,14 +628,15 @@ void collectMatcherFrontierCompletions(
 	}
 
 	states = deduplicateNodes(states);
+	SourceFile *sourceFile = completionSourceFile(context);
 
 	TextEdit insertionEdit;
 	insertionEdit.range = makeRange(context.line, context.character, context.character);
 
 	std::vector<CompletionItem> frontierItems;
 	std::set<std::string> localSeen;
-	collectNextLiteralSuggestions(states, frontierItems, localSeen, std::string(detailPrefix) + " next token");
-	collectPlaceholderSuggestions(states, frontierItems, localSeen, detailPrefix);
+	collectNextLiteralSuggestions(states, frontierItems, localSeen, std::string(detailPrefix) + " next token", *sourceFile);
+	collectPlaceholderSuggestions(states, frontierItems, localSeen, detailPrefix, *sourceFile);
 
 	for (CompletionItem &item : frontierItems) {
 		item.textEdit = insertionEdit;
@@ -612,10 +664,11 @@ void collectExpressionPostfixCompletions(
 	}
 
 	std::vector<PatternTreeNode *> states = {root->argumentChild};
+	SourceFile *sourceFile = completionSourceFile(context);
 	std::vector<CompletionItem> postfixItems;
 	std::set<std::string> localSeen;
-	collectNextLiteralSuggestions(states, postfixItems, localSeen, "function pattern next token");
-	collectPlaceholderSuggestions(states, postfixItems, localSeen, "function pattern");
+	collectNextLiteralSuggestions(states, postfixItems, localSeen, "function pattern next token", *sourceFile);
+	collectPlaceholderSuggestions(states, postfixItems, localSeen, "function pattern", *sourceFile);
 
 	TextEdit insertionEdit;
 	insertionEdit.range = makeRange(context.line, context.character, context.character);

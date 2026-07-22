@@ -97,6 +97,11 @@ if match:
 for prefix in sorted(path_prefixes, key=len, reverse=True):
     text = text.replace(prefix + "/", "")
 
+# Source line numbers change whenever unrelated lines are inserted. Required
+# fixtures keep stable file and column ranges while the compiler still reports
+# the complete source location to users.
+text = re.sub(r"(?P<path>(?:[A-Za-z]:)?[^:\n]*?\.dl):\d+:(?P<columns>\d+-\d+)", r"\g<path>:\g<columns>", text)
+
 sys.stdout.write("\n".join(line.rstrip() for line in text.splitlines()).rstrip())
 PY
 }
@@ -385,6 +390,15 @@ run_auxiliary_test() {
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
+run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
+run_auxiliary_test \
+    "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \
+    "$TESTS_DIR/lifecycle_codegen_allocations/main.dl"
+run_auxiliary_test \
+    "callable_lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_callable_lifecycle_codegen.py" "$COMPILER" \
+    "$TESTS_DIR/callable_managed_argument/main.dl"
+run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
+run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

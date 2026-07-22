@@ -1,0 +1,24 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] late managed box {fixed integer:n}
+    members:
+        values as an array of n items
+    retain:
+        discard @intrinsic("lifecycle value")
+    release:
+        discard @intrinsic("lifecycle value")
+
+class:
+    patterns:
+        [an|] outer managed value
+    members:
+        number as integer
+    retain:
+        discard @intrinsic("construct", a late managed box 2, [1, 2])
+    release:
+        discard @intrinsic("construct", a late managed box 2, [1, 2])
+
+set value to @intrinsic("construct", an outer managed value, 1)
+discard value

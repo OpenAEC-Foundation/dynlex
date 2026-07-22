@@ -1,1 +1,1 @@
-tests/required/intrinsic_diagnostic_range/main.dl:1:1-22: Error: case requires a body section
+tests/required/intrinsic_diagnostic_range/main.dl:1-22: Error: case requires a body section

@@ -1,2 +1,2 @@
-tests/required/mixed_flex_duplicate/main.dl:9:10-33: Error: Duplicate pattern definition
-  note: Conflicts with this definition tests/required/mixed_flex_duplicate/main.dl:5:10-33
+tests/required/mixed_flex_duplicate/main.dl:10-33: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/mixed_flex_duplicate/main.dl:10-33

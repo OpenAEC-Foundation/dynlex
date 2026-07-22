@@ -24,6 +24,9 @@ enum class SectionType {
 	Alignment,
 	// alignment directive inside members
 	Padding,
+	// class-defined managed-value lifecycle bodies
+	Retain,
+	Release,
 	// globals declaration in a function
 	Globals,
 	// precedence declarations

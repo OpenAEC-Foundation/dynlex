@@ -1,0 +1,3 @@
+import lib/std.dl
+
+discard @intrinsic("lifecycle value")

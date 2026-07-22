@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/required/local_function_hidden/helper.dl
+
+hidden helper

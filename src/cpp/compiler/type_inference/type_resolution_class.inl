@@ -1,0 +1,397 @@
+static DataType toTypeReference(const DataType &valueType) {
+	if (!valueType.isDeduced())
+		return {};
+	if (valueType.kind == DataType::Kind::Type)
+		return valueType;
+	DataType concreteValueType = concretizeClassType(valueType);
+	DataType typeReference;
+	typeReference.kind = DataType::Kind::Type;
+	typeReference.referencedKind = concreteValueType.kind;
+	typeReference.numericSize = concreteValueType.numericSize;
+	typeReference.pointerDepth = concreteValueType.pointerDepth;
+	typeReference.classDefinition = concreteValueType.classDefinition;
+	typeReference.classInstIndex = concreteValueType.classInstIndex;
+	typeReference.arraySize = concreteValueType.arraySize;
+	typeReference.matrixRowCount = concreteValueType.matrixRowCount;
+	if (concreteValueType.arrayElementType)
+		typeReference.arrayElementType = std::make_shared<DataType>(*concreteValueType.arrayElementType);
+	return typeReference;
+}
+
+static bool resolveCompileTimeTypeReference(
+	ParseContext &parseContext, Expression *expr, const BindingFrameStack &bindingFrameStack, DataType &outTypeRef,
+	InferenceContext *inferenceContext, const std::vector<DataType> *constructionArgumentTypes
+) {
+	if (!expr)
+		return false;
+	CompileTimeValue directValue = lookupCompileTimeExpressionValue(expr, inferenceContext);
+	if (auto *compileTimeTypeRef = std::get_if<TypeReferenceValue>(&directValue)) {
+		bool requiresClassCompletion = constructionArgumentTypes &&
+									   compileTimeTypeRef->type.referencedKind == DataType::Kind::Class &&
+									   compileTimeTypeRef->type.classInstIndex < 0;
+		if (isConcreteTypeReferenceValue(compileTimeTypeRef->type) && !requiresClassCompletion) {
+			outTypeRef = compileTimeTypeRef->type;
+			return true;
+		}
+	}
+	bool expressionTypeRequiresClassCompletion =
+		constructionArgumentTypes && expr->type.referencedKind == DataType::Kind::Class && expr->type.classInstIndex < 0;
+	if (isConcreteTypeReferenceValue(expr->type) && !expressionTypeRequiresClassCompletion) {
+		outTypeRef = expr->type;
+		return true;
+	}
+	BindingFrameStack effectiveBindingFrameStack;
+	Expression *resolved =
+		prepareCompileTimeTypeReferenceExpression(expr, bindingFrameStack, effectiveBindingFrameStack, inferenceContext);
+	if (!resolved)
+		return false;
+	CompileTimeValue resolvedValue = lookupCompileTimeExpressionValue(resolved, inferenceContext);
+	if (auto *compileTimeTypeRef = std::get_if<TypeReferenceValue>(&resolvedValue)) {
+		bool requiresClassCompletion = constructionArgumentTypes &&
+									   compileTimeTypeRef->type.referencedKind == DataType::Kind::Class &&
+									   compileTimeTypeRef->type.classInstIndex < 0;
+		if (isConcreteTypeReferenceValue(compileTimeTypeRef->type) && !requiresClassCompletion) {
+			outTypeRef = compileTimeTypeRef->type;
+			return true;
+		}
+	}
+	bool resolvedTypeRequiresClassCompletion = constructionArgumentTypes &&
+											   resolved->type.referencedKind == DataType::Kind::Class &&
+											   resolved->type.classInstIndex < 0;
+	if (isConcreteTypeReferenceValue(resolved->type) && !resolvedTypeRequiresClassCompletion) {
+		outTypeRef = resolved->type;
+		return true;
+	}
+
+	if (resolved->kind == Expression::Kind::Variable && resolved->variable)
+		return false;
+
+	if (resolved->kind == Expression::Kind::IntrinsicCall) {
+		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
+		if (kind == IntrinsicKind::Type) {
+			DataType resolvedType = resolveKnownExpressionType(resolved, effectiveBindingFrameStack);
+			if (resolvedType.kind == DataType::Kind::Type) {
+				outTypeRef = resolvedType;
+				return true;
+			}
+		}
+		if (kind == IntrinsicKind::AddPointerDepth) {
+			DataType innerTypeRef;
+			if (!resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, innerTypeRef, inferenceContext
+				) ||
+				innerTypeRef.kind != DataType::Kind::Type)
+				return false;
+			innerTypeRef.pointerDepth++;
+			outTypeRef = innerTypeRef;
+			return true;
+		}
+		if (kind == IntrinsicKind::Array) {
+			int arraySize = 0;
+			if (!resolveStoredCompileTimeInteger(
+					resolved->arguments[1], effectiveBindingFrameStack, arraySize, inferenceContext
+				))
+				return false;
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Array;
+			outTypeRef.arraySize = arraySize;
+			if (resolved->arguments.size() > 2) {
+				DataType elementTypeRef;
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef, inferenceContext
+					) ||
+					elementTypeRef.kind != DataType::Kind::Type)
+					return false;
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
+			}
+			return true;
+		}
+		if (kind == IntrinsicKind::Multiply && resolved->arguments.size() > 2) {
+			DataType arrayTypeRef;
+			int factor = 0;
+			if (resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[1], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
+				) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				resolveStoredCompileTimeInteger(resolved->arguments[2], effectiveBindingFrameStack, factor, inferenceContext) &&
+				factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+			if (resolveCompileTimeTypeReference(
+					parseContext, resolved->arguments[2], effectiveBindingFrameStack, arrayTypeRef, inferenceContext
+				) &&
+				arrayTypeRef.kind == DataType::Kind::Type && arrayTypeRef.referencedKind == DataType::Kind::Array &&
+				resolveStoredCompileTimeInteger(resolved->arguments[1], effectiveBindingFrameStack, factor, inferenceContext) &&
+				factor >= 0) {
+				arrayTypeRef.arraySize *= factor;
+				outTypeRef = arrayTypeRef;
+				return true;
+			}
+		}
+		if (kind == IntrinsicKind::Vector) {
+			int vectorSize = 0;
+			if (!resolveStoredCompileTimeInteger(
+					resolved->arguments[1], effectiveBindingFrameStack, vectorSize, inferenceContext
+				) ||
+				vectorSize < 1)
+				return false;
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Vector;
+			outTypeRef.arraySize = vectorSize;
+			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+			if (resolved->arguments.size() > 2) {
+				DataType elementTypeRef;
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[2], effectiveBindingFrameStack, elementTypeRef, inferenceContext
+					) ||
+					elementTypeRef.kind != DataType::Kind::Type)
+					return false;
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
+			}
+			return true;
+		}
+		if (kind == IntrinsicKind::Matrix) {
+			int rows = 0;
+			int columns = 0;
+			if (!resolveStoredCompileTimeInteger(resolved->arguments[1], effectiveBindingFrameStack, rows, inferenceContext) ||
+				!resolveStoredCompileTimeInteger(
+					resolved->arguments[2], effectiveBindingFrameStack, columns, inferenceContext
+				) ||
+				rows < 1 || columns < 1)
+				return false;
+			outTypeRef.kind = DataType::Kind::Type;
+			outTypeRef.referencedKind = DataType::Kind::Matrix;
+			outTypeRef.matrixRowCount = rows;
+			outTypeRef.arraySize = columns;
+			outTypeRef.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+			if (resolved->arguments.size() > 3) {
+				DataType elementTypeRef;
+				if (!resolveCompileTimeTypeReference(
+						parseContext, resolved->arguments[3], effectiveBindingFrameStack, elementTypeRef, inferenceContext
+					) ||
+					elementTypeRef.kind != DataType::Kind::Type)
+					return false;
+				outTypeRef.arrayElementType = std::make_shared<DataType>(elementTypeRef.toReferencedType());
+			}
+			return true;
+		}
+		if (kind == IntrinsicKind::Select) {
+			Expression *selectedBranch =
+				resolveCompileTimeSelectBranch(resolved, parseContext, effectiveBindingFrameStack, inferenceContext);
+			if (selectedBranch)
+				return resolveCompileTimeTypeReference(
+					parseContext, selectedBranch, effectiveBindingFrameStack, outTypeRef, inferenceContext,
+					constructionArgumentTypes
+				);
+		}
+	}
+
+	if (resolved->kind == Expression::Kind::PatternCall) {
+		PatternDefinition *def = resolved->selectedPatternDefinition;
+		if (!def || !def->section)
+			return false;
+
+		if (!def->section->isFlex && def->section->type == SectionType::Class) {
+			BindingFrame callBindings;
+			collectPatternCallBindings(resolved, def, callBindings);
+			for (auto &[name, boundExpr] : callBindings.bindings) {
+				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
+				if (resolvedExpr)
+					boundExpr = resolvedExpr;
+			}
+			for (auto &[parameterDefinition, boundExpr] : callBindings.parameterBindings) {
+				(void)parameterDefinition;
+				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
+				if (resolvedExpr)
+					boundExpr = resolvedExpr;
+			}
+			BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
+			callBindingFrameStack.pushFrame(std::move(callBindings));
+			outTypeRef = instantiateBoundClassType(
+				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack,
+				inferenceContext, constructionArgumentTypes
+			);
+			return outTypeRef.kind == DataType::Kind::Type;
+		}
+		if (!def->section->isFlex) {
+			Instantiation *selectedInstantiation = resolved->selectedInstantiation;
+			if (!selectedInstantiation || !selectedInstantiation->valid || !selectedInstantiation->returnType.isDeduced())
+				return false;
+			DataType resolvedReturnTypeRef = toTypeReference(selectedInstantiation->returnType);
+			if (resolvedReturnTypeRef.kind != DataType::Kind::Type)
+				return false;
+			outTypeRef = resolvedReturnTypeRef;
+			return true;
+		}
+
+		BindingFrame innerBindings;
+		Expression *bodyExpr = nullptr;
+		Expression *inferredFlexExpansion = lookupInferenceFlexExpansion(inferenceContext, resolved);
+		if (inferredFlexExpansion) {
+			collectPatternCallBindings(resolved, def, innerBindings);
+			bodyExpr = inferredFlexExpansion;
+		}
+		if (!bodyExpr)
+			return false;
+		BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
+		materializeFlexBindingsInCallerScope(innerBindings, callBindingFrameStack);
+		callBindingFrameStack.pushFrame(std::move(innerBindings));
+		return resolveCompileTimeTypeReference(
+			parseContext, bodyExpr, callBindingFrameStack, outTypeRef, inferenceContext, constructionArgumentTypes
+		);
+	}
+	return false;
+}
+
+static bool
+completeBoundClassFieldType(const DataType &fieldConstraintInput, const DataType &argumentTypeInput, DataType &outFieldType) {
+	DataType fieldConstraint = fieldConstraintInput;
+	DataType argumentType = concretizeClassType(argumentTypeInput);
+	if (!argumentType.isConcrete())
+		return false;
+	if (fieldConstraint.kind == DataType::Kind::Any) {
+		outFieldType = argumentType;
+		return true;
+	}
+	if (fieldConstraint.kind == DataType::Kind::Array && !fieldConstraint.isConcrete()) {
+		if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldConstraint.arraySize ||
+			!argumentType.arrayElementType)
+			return false;
+		if (fieldConstraint.arrayElementType) {
+			DataType completedElementType;
+			if (!completeBoundClassFieldType(
+					*fieldConstraint.arrayElementType, *argumentType.arrayElementType, completedElementType
+				))
+				return false;
+			outFieldType = fieldConstraint;
+			outFieldType.arrayElementType = std::make_shared<DataType>(std::move(completedElementType));
+		} else {
+			outFieldType = argumentType;
+		}
+		return outFieldType.isConcrete();
+	}
+	if (fieldConstraint.kind == DataType::Kind::Class && fieldConstraint.classDefinition &&
+		fieldConstraint.classInstIndex < 0) {
+		if (argumentType.kind != DataType::Kind::Class || argumentType.classDefinition != fieldConstraint.classDefinition)
+			return false;
+		outFieldType = argumentType;
+		return true;
+	}
+	if (!fieldConstraint.isConcrete() || !DataType::supportsRuntimeConversion(argumentType, fieldConstraint))
+		return false;
+	outFieldType = fieldConstraint;
+	return true;
+}
+
+static DataType instantiateBoundClassType(
+	ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack,
+	InferenceContext *inferenceContext, const std::vector<DataType> *constructionArgumentTypes
+) {
+	if (!classDef)
+		return {};
+	if (constructionArgumentTypes && constructionArgumentTypes->size() != classDef->fields.size())
+		return {};
+
+	struct ScopedKnownConstantsOverride {
+		InferenceContext *context{};
+		std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+
+		explicit ScopedKnownConstantsOverride(InferenceContext *inferenceContext)
+			: context(inferenceContext), savedKnownConstants(snapshotKnownConstantsForClassInstantiation(inferenceContext)) {}
+
+		~ScopedKnownConstantsOverride() { restoreKnownConstantsForClassInstantiation(context, std::move(savedKnownConstants)); }
+	} scopedKnownConstantsOverride(inferenceContext);
+
+	seedKnownConstantsForClassInstantiation(bindingFrameStack, inferenceContext);
+
+	std::vector<DataType> fieldTypes;
+	fieldTypes.reserve(classDef->fields.size());
+	for (size_t fieldIndex = 0; fieldIndex < classDef->fields.size(); fieldIndex++) {
+		FieldDefinition &field = classDef->fields[fieldIndex];
+		DataType fieldType = field.declaredType;
+		if (fieldType.kind == DataType::Kind::Any && !constructionArgumentTypes)
+			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
+			expandPendingTypeReferenceExpression(
+				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
+			);
+			if (inferenceContext) {
+				Expression *typeExpression = fieldType.typeExpression;
+				resetExpressionTypes(typeExpression);
+				if (!inferExpression(typeExpression, *inferenceContext, false, bindingFrameStack, false))
+					return {};
+				fieldType.typeExpression = typeExpression;
+				DataType inferredTypeRef;
+				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef))
+					return {};
+				fieldType = concretizeClassType(inferredTypeRef.toReferencedType());
+			} else {
+				DataType resolvedTypeRef;
+				if (!resolveCompileTimeTypeReference(
+						parseContext, fieldType.typeExpression, bindingFrameStack, resolvedTypeRef, inferenceContext
+					) ||
+					resolvedTypeRef.kind != DataType::Kind::Type)
+					return {};
+				fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
+			}
+		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
+			fieldType = concretizeClassType(fieldType);
+		}
+
+		if (constructionArgumentTypes) {
+			DataType completedFieldType;
+			if (!completeBoundClassFieldType(fieldType, (*constructionArgumentTypes)[fieldIndex], completedFieldType))
+				return {};
+			fieldType = std::move(completedFieldType);
+		} else if (!fieldType.isConcrete()) {
+			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+		}
+		fieldTypes.push_back(fieldType);
+	}
+
+	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
+}
+
+static bool instantiateClassFromArgumentTypes(
+	ClassDefinition *classDef, const std::vector<DataType> &argumentTypes, DataType &outTypeRef, int baseClassInstIndex
+) {
+	if (!classDef || classDef->fields.size() != argumentTypes.size())
+		return false;
+
+	std::vector<DataType> fieldTypes;
+	fieldTypes.reserve(argumentTypes.size());
+	for (size_t i = 0; i < argumentTypes.size(); i++) {
+		DataType argumentType = concretizeClassType(argumentTypes[i]);
+		if (!argumentType.isConcrete())
+			return false;
+		DataType fieldType = classDef->fields[i].declaredType;
+		if (baseClassInstIndex >= 0 && static_cast<size_t>(baseClassInstIndex) < classDef->instantiations.size() &&
+			i < classDef->instantiations[baseClassInstIndex].fieldTypes.size()) {
+			fieldType = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
+		}
+		if (fieldType.kind == DataType::Kind::Any) {
+			fieldType = argumentType;
+		} else if (fieldType.kind == DataType::Kind::Array && fieldType.arraySize >= 0 &&
+				   (!fieldType.arrayElementType || !fieldType.arrayElementType->isDeduced())) {
+			if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldType.arraySize)
+				return false;
+			fieldType = argumentType;
+		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
+			fieldType = concretizeClassType(fieldType);
+		}
+
+		if (!DataType::supportsRuntimeConversion(argumentType, fieldType))
+			return false;
+
+		if (!fieldType.isConcrete())
+			return false;
+		fieldTypes.push_back(fieldType);
+	}
+
+	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	outTypeRef = {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
+	return true;
+}

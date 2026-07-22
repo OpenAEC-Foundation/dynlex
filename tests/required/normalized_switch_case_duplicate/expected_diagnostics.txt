@@ -1,0 +1,1 @@
+tests/required/normalized_switch_case_duplicate/main.dl:5-13: Error: this match already has this case value

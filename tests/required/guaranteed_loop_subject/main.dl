@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function publish subject in guaranteed loop:
+    execute:
+        set keep_going to true
+        loop while keep_going:
+            set the subject to 1
+            set keep_going to false
+        print it as line
+
+publish subject in guaranteed loop

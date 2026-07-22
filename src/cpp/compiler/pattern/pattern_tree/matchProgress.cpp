@@ -1,5 +1,6 @@
 #include "matchProgress.h"
 #include "parseContext.h"
+#include "patternDefinition.h"
 #include "patternReference.h"
 #include <algorithm>
 #include <iterator>
@@ -101,7 +102,22 @@ MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternRef
 bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr; }
 
 bool MatchProgress::isSubmatchComplete() const {
-	return parents && canBeSubmatch() && currentNode && !currentNode->matchingDefinitions.empty();
+	return parents && canBeSubmatch() && currentNode && !visibleDefinitions().empty();
+}
+
+std::vector<PatternDefinition *> MatchProgress::visibleDefinitions() const {
+	std::vector<PatternDefinition *> result;
+	if (!currentNode)
+		return result;
+	const lsp::SourceFile *sourceFile =
+		patternReference && patternReference->range().line ? patternReference->range().line->sourceFile : nullptr;
+	requireCompilerInvariant(sourceFile != nullptr, "pattern matching requires a source file");
+	for (PatternDefinition *definition : currentNode->matchingDefinitions) {
+		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
+		if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
+			result.push_back(definition);
+	}
+	return result;
 }
 
 MatchControlState MatchProgress::controlState() const {
@@ -195,7 +211,7 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 		}
 	}
 
-	if (!currentNode->matchingDefinitions.empty()) {
+	if (!visibleDefinitions().empty()) {
 		// end node found — precedence and ordering are handled later during type inference
 		if (!parents && sourceElementIndex == patternReference->patternElements.size()) {
 			addMatchData(match);
@@ -350,6 +366,7 @@ MatchProgress MatchProgress::resumeParent(const MatchProgress &parentProgress, c
 
 void MatchProgress::addMatchData(PatternMatch &match) const {
 	match.matchedEndNode = currentNode;
+	match.matchingDefinitions = visibleDefinitions();
 	match.lineStartPos = patternReference->pattern.getLinePos(patternStartPos);
 	match.lineEndPos = patternReference->pattern.getLinePos(patternPos);
 }

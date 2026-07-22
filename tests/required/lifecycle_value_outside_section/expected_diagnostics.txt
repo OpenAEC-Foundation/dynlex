@@ -1,0 +1,3 @@
+tests/required/lifecycle_value_outside_section/main.dl:9-38: Error: lifecycle value is only available in retain and release sections
+  note: while inferring intrinsic 'lifecycle value' in 'discard @intrinsic("lifecycle value")' with arguments [i8*] -> undeduced tests/required/lifecycle_value_outside_section/main.dl:9-38
+  note: while inferring call 'discard @intrinsic("lifecycle value")' with arguments [unresolved(?)] -> undeduced tests/required/lifecycle_value_outside_section/main.dl:1-38

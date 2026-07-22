@@ -41,6 +41,7 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 		context.addSourceToken(fieldRange, ParseContext::SourceTokenKind::Variable);
 		fieldDefinition = {std::string(fieldText), Range(fieldRange.line, fieldRange.line->patternText), {DataType::Kind::Any}};
 	}
+	fieldDefinition.alignment = static_cast<MembersSection *>(fieldRange.line->section)->takeNextFieldAlignment();
 	section->classDefinition->fields.push_back(fieldDefinition);
 	return true;
 }
@@ -48,7 +49,8 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 bool MembersSection::processLine(ParseContext &context, CodeLine *line) { return ListingSection::processLine(context, line); }
 
 Section *MembersSection::createSection(ParseContext &context, CodeLine *line) {
-	if (line->patternText == "padding") {
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
+	if (matchesConfiguredKeyword(line->patternText, syntax.paddingName)) {
 		return new PaddingSection(this);
 	}
 
@@ -62,4 +64,33 @@ bool MembersSection::addItem(ParseContext &context, Range itemRange) {
 
 void MembersSection::addSeparator(ParseContext &context, Range separatorRange) {
 	context.addSourceToken(separatorRange, ParseContext::SourceTokenKind::Keyword);
+}
+
+bool MembersSection::setNextFieldAlignment(ParseContext &context, CodeLine *line, unsigned alignment) {
+	if (nextFieldAlignment != 0) {
+		context.addDiagnostic(Diagnostic(
+			context, Diagnostic::Level::Error, "padding must be followed by a member before another padding directive",
+			Range(line, line->patternText)
+		));
+		return false;
+	}
+	nextFieldAlignment = alignment;
+	nextFieldAlignmentRange = Range(line, line->patternText);
+	return true;
+}
+
+unsigned MembersSection::takeNextFieldAlignment() {
+	unsigned alignment = nextFieldAlignment;
+	nextFieldAlignment = 0;
+	nextFieldAlignmentRange = {};
+	return alignment;
+}
+
+bool MembersSection::finalize(ParseContext &context) {
+	if (nextFieldAlignment == 0)
+		return true;
+	context.addDiagnostic(
+		Diagnostic(context, Diagnostic::Level::Error, "padding must be followed by a member", nextFieldAlignmentRange)
+	);
+	return false;
 }

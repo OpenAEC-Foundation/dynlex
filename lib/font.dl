@@ -64,7 +64,8 @@ class:
         advance_x as i64
         advance_y as i64
         format as i32
-        bitmap_align_pad as i32
+        padding:
+            8
         bitmap_rows as i32
         bitmap_width as i32
         bitmap_pitch as i32

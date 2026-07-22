@@ -1,0 +1,18 @@
+import lib/std.dl
+
+function choose value for n:
+    execute:
+        set result to 20
+        match on n:
+            case 1:
+                discard (invoke wider specialization)
+                set result to 10
+            otherwise:
+                discard result
+        return result
+
+function invoke wider specialization:
+    execute:
+        return choose value for (2 as a 64 bit integer)
+
+discard (choose value for 1)

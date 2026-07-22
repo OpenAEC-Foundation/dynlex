@@ -1,0 +1,13 @@
+import lib/std.dl
+
+function value for n:
+    execute:
+        match on n:
+            case -1:
+                return 7
+            otherwise:
+                return 9
+
+set input to 255 as a byte
+set selected to value for input
+print selected as line

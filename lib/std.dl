@@ -22,6 +22,14 @@ function discard val:
     replacement:
         @intrinsic("discard", val)
 
+flex function set the subject to value:
+    replacement:
+        @intrinsic("set subject", value)
+
+flex function it:
+    replacement:
+        @intrinsic("subject")
+
 # --- Primitive types ---
 
 function [an|a|] integer:
@@ -157,6 +165,14 @@ function [the|] build info {fixed cstring:key}:
 function [the|] build word size:
     replacement:
         @intrinsic("build info", "word size")
+
+function [a|] word sized integer:
+    replacement:
+        @intrinsic("type", "int", @intrinsic("build info", "word size"))
+
+function [a|] c long integer:
+    replacement:
+        @intrinsic("type", "int", @intrinsic("build info", "c long size"))
 
 function [the|] build optimization level:
     replacement:
@@ -420,10 +436,16 @@ function not value:
     execute:
         return @intrinsic("not", value)
 
-function left and right:
+function {boolean:left} and {boolean:right}:
     before: $ or $
     execute:
         return @intrinsic("and", left, right)
+
+flex function {void:left} and {void:right}:
+    before: $ or $
+    replacement:
+        left
+        right
 
 function left or right:
     before: default
@@ -431,6 +453,10 @@ function left or right:
         return @intrinsic("or", left, right)
 
 # --- Control flow ---
+
+function if {boolean:condition}:
+    execute:
+        return condition
 
 flex function loop while condition:
     replacement:

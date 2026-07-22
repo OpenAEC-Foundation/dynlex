@@ -53,7 +53,7 @@ static SemanticTokenType getPatternCallTokenType(const Expression *expr) {
 	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
 		return SemanticTokenType::Function;
 	PatternDefinition *definition = expr->selectedPatternDefinition;
-	const auto &definitions = expr->patternMatch->matchedEndNode->matchingDefinitions;
+	const auto &definitions = expr->patternMatch->matchingDefinitions;
 	if (!definition && definitions.size() == 1)
 		definition = definitions.front();
 	if (!definition || !definition->section)
@@ -170,7 +170,8 @@ static void addPatternReferenceSignatureTokens(
 	ParseContext &context, const ::Range &range, SectionType patternType,
 	const std::function<void(const ::Range &, SemanticTokenType, bool)> &addToken
 ) {
-	PatternDefinition *targetDefinition = findDefinitionBySignature(context, patternType, range.subString);
+	PatternDefinition *targetDefinition =
+		findDefinitionBySignature(context, patternType, range.subString, range.line ? range.line->sourceFile : nullptr);
 	SemanticTokenType signatureType =
 		targetDefinition ? classifySectionCallTokenType(targetDefinition->section) : SemanticTokenType::Function;
 

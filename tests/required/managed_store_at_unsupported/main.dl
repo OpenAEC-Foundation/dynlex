@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set value to the string form of "source"
+@intrinsic("store at", @intrinsic("address of", value), value)

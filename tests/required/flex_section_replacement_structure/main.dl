@@ -17,4 +17,4 @@ flex section repeat count:
 repeat 3:
     @intrinsic("store", total, @intrinsic("add", total, 2))
 
-@intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int", 32), "%d\n", total))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", total))

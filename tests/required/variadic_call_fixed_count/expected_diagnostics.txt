@@ -1,0 +1,2 @@
+tests/required/variadic_call_fixed_count/main.dl:78-79: Error: Intrinsic 'variadic call' fixed argument count cannot exceed its 1 call argument
+  note: while inferring intrinsic 'variadic call' in '@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "nothing to format\n")' with arguments [i8*, i8*, i8*, type, a 32 bit integer, i8*] -> undeduced tests/required/variadic_call_fixed_count/main.dl:1-103

@@ -1,91 +1,21 @@
 #pragma once
 
 #include "operand_reordering.inl"
+#include "section_inference_helpers.inl"
 
-static Variable *findOwnSectionVariable(Section *section, const std::string &name) {
-	if (!section)
-		return nullptr;
-	auto it = section->variables.find(name);
-	return it != section->variables.end() ? it->second : nullptr;
-}
-
-static void seedNonFlexSectionParameterState(Section *section, InferenceContext &context) {
-	if (!section || !context.currentInstantiation || section->isFlex || section->patternDefinitions.empty())
-		return;
-	for (const auto &[name, parameterType] : context.currentInstantiation->parameterTypesByName) {
-		Variable *parameterVariable = findOwnSectionVariable(section, name);
-		if (!parameterVariable || parameterVariable->isGlobal)
-			continue;
-		parameterVariable->type = concretizeClassType(parameterType);
-		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
-		parameterVariable->typeOriginFloatLiteralReplacement.clear();
-	}
-	for (const auto &[name, value] : context.currentInstantiation->constantParameterValues) {
-		Variable *parameterVariable = findOwnSectionVariable(section, name);
-		if (parameterVariable) {
-			context.setKnownConstant(parameterVariable->definition, value);
-		}
-	}
-}
-
-static bool isLoopSectionOpening(Expression *openingExpression) {
-	if (!openingExpression)
-		return false;
-	Expression *header = openingExpression;
-	if (header->kind == Expression::Kind::PatternCall)
-		header = header->inferredFlexExpansion;
-	return header && header->kind == Expression::Kind::IntrinsicCall &&
-		   intrinsicKind(header->intrinsicName) == IntrinsicKind::LoopWhile;
-}
-
-static std::optional<std::string> finalizedControlHeaderKind(Expression *expression, InferenceContext &context) {
-	if (!expression)
-		return std::nullopt;
-	Expression *header = expression;
-	if (header->kind == Expression::Kind::PatternCall)
-		header = context.lookupFlexExpansion(header);
-	if (!header || header->kind != Expression::Kind::IntrinsicCall)
-		return std::nullopt;
-	if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
-		return std::nullopt;
-	return header->intrinsicName;
-}
-
-static std::optional<std::string> inferControlHeaderKindForLookahead(
-	Expression *expression, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &bindingFrameStack
-) {
-	if (!expression)
-		return std::nullopt;
-	GroupingSnapshot originalGrouping = captureGroupingSnapshot(expression);
-	resetExpressionTypes(expression);
-	InferenceContext::TrialJournal journal;
-	InferenceContext trialContext(context.parseContext, true);
-	trialContext.currentInstantiation = context.currentInstantiation;
-	trialContext.currentKnownConstants = context.currentKnownConstants;
-	trialContext.inheritedTrialExpressionValues =
-		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
-	trialContext.trialJournal = &journal;
-	trialContext.trialInstantiationCache =
-		context.trialInstantiationCache ? context.trialInstantiationCache : context.ensureTrialInstantiationCache();
-	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
-	trialContext.allowTrialSummaryReuse = true;
-	trialContext.detectGroupingAmbiguity = false;
-	Expression *trialExpression = expression;
-	std::optional<std::string> kind;
-	if (inferExpression(trialExpression, trialContext, alreadyOrdered, bindingFrameStack, false) && trialContext.typesValid)
-		kind = finalizedControlHeaderKind(trialExpression, trialContext);
-	rollbackTrialJournal(journal);
-	applyGroupingSnapshot(originalGrouping);
-	recomputeRanges(expression);
-	resetExpressionTypes(expression);
-	return kind;
-}
-
-static bool inferSection(
+static bool inferSectionLineRange(
 	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
-	const BindingFrameStack &bindingFrameStack
+	const BindingFrameStack &bindingFrameStack, size_t startLineIndex, bool initializeSection, bool *fallsThrough,
+	bool stabilizeLoop = true
 ) {
 	requireCompilerInvariant(!body || body->sourceSection == section, "active instantiated body does not match section");
+	InstantiatedSectionBody *savedInstantiatedBody = context.currentInstantiatedSectionBody;
+	context.currentInstantiatedSectionBody = body;
+	struct InstantiatedBodyRestore {
+		InferenceContext &context;
+		InstantiatedSectionBody *savedBody;
+		~InstantiatedBodyRestore() { context.currentInstantiatedSectionBody = savedBody; }
+	} instantiatedBodyRestore{context, savedInstantiatedBody};
 	// The first valid inference determines operand ordering per code line. Later
 	// passes reuse the committed grouping stored on the line itself.
 	if (context.trial && context.trialJournal)
@@ -98,9 +28,10 @@ static bool inferSection(
 			context.trialJournal->recordVariableWrite(variable);
 		}
 	}
-	resetSectionExpressionTypes(section, body);
-	resetSectionLocalVariableTypes(section);
-	if (section->isFlex || section->patternDefinitions.empty()) {
+	resetSectionExpressionTypes(section, body, startLineIndex);
+	if (initializeSection)
+		resetSectionLocalVariableTypes(section);
+	if (initializeSection && (section->isFlex || section->patternDefinitions.empty())) {
 		for (auto &[name, boundVar] : section->variables) {
 			if (!boundVar)
 				continue;
@@ -117,54 +48,32 @@ static bool inferSection(
 			CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
 			context.setKnownConstant(boundVar->definition, boundValue);
 		}
-	} else {
+	} else if (initializeSection) {
 		seedNonFlexSectionParameterState(section, context);
 	}
 
-	bool loopSection = isLoopSectionOpening(openingExpression);
+	bool loopSection = stabilizeLoop && sectionOutcomeIsLoop(openingExpression);
 	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
+	InferenceContext::SubjectState subjectAtLoopEntry;
 	if (loopSection) {
-		constantsAtLoopEntry = context.currentKnownConstants;
-		context.pushLoopMutationScope();
+		constantsAtLoopEntry = context.currentVariableValues;
+		subjectAtLoopEntry = context.currentSubject;
 	}
-	struct LoopMutationScopeGuard {
-		InferenceContext &context;
-		bool active;
-		explicit LoopMutationScopeGuard(InferenceContext &context, bool active) : context(context), active(active) {}
-		std::unordered_set<VariableReference *> finish() {
-			if (!active)
-				return {};
-			active = false;
-			return context.popLoopMutationScope();
-		}
-		~LoopMutationScopeGuard() {
-			if (active)
-				context.popLoopMutationScope();
-		}
-	} loopMutationScope(context, loopSection);
 
-	auto controlHeaderInfo = [&](CodeLine *line,
-								 Expression *lineExpression) -> std::optional<std::pair<std::string, Expression *>> {
-		if (!line || !lineExpression)
-			return std::nullopt;
-
-		Expression *header = lineExpression;
-		if (header->kind == Expression::Kind::PatternCall)
-			header = context.lookupFlexExpansion(header);
-		if (!header || header->kind != Expression::Kind::IntrinsicCall)
-			return std::nullopt;
-		if (header->intrinsicName != "if" && header->intrinsicName != "else if" && header->intrinsicName != "else")
-			return std::nullopt;
-		return std::make_optional(std::make_pair(header->intrinsicName, header));
-	};
-
-	auto inferOpenedSection = [&](CodeLine *line) {
+	auto inferOpenedSection = [&](CodeLine *line, bool *openedSectionFallsThrough = nullptr) {
 		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
 			return true;
 		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
 		Expression *activeOpeningExpression =
 			body && line->sectionOpening ? body->findCloneOf(line->expression) : line->expression;
-		if (!inferSection(line->sectionOpening, openedBody, activeOpeningExpression, context, bindingFrameStack)) {
+		if (activeOpeningExpression && activeOpeningExpression->sectionBodyInferred) {
+			if (openedSectionFallsThrough)
+				*openedSectionFallsThrough = activeOpeningExpression->sectionBodyFallsThrough;
+			return true;
+		}
+		if (!inferSection(
+				line->sectionOpening, openedBody, activeOpeningExpression, context, bindingFrameStack, openedSectionFallsThrough
+			)) {
 			context.typesValid = false;
 			return false;
 		}
@@ -175,7 +84,7 @@ static bool inferSection(
 			return true;
 		applyCodeLineGrouping(line, lineExpression, context);
 		bool alreadyOrdered = codeLineCanReuseGrouping(line, context);
-		bool ambiguityChecked = !context.trial && context.detectGroupingAmbiguity;
+		bool ambiguityChecked = context.detectGroupingAmbiguity;
 		if (!inferExpression(
 				lineExpression, context, alreadyOrdered, bindingFrameStack, section->type != SectionType::Replacement
 			)) {
@@ -186,143 +95,364 @@ static bool inferSection(
 		return true;
 	};
 
-	for (size_t i = 0; i < section->codeLines.size(); i++) {
+	if (openingExpression && openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
+		struct SwitchBranch {
+			size_t lineIndex;
+			std::optional<std::int64_t> value;
+			bool isDefault;
+		};
+		auto entryConstants = context.currentVariableValues;
+		InferenceContext::SubjectState entrySubject = context.currentSubject;
+		std::vector<SwitchBranch> branches;
+		std::optional<size_t> defaultBranch;
+		std::unordered_set<std::int64_t> caseValues;
+		DataType selectorType = openingExpression->sectionOutcome.conditionType;
+		requireCompilerInvariant(selectorType.isInteger(), "inferred switch outcome has no integer selector type");
+		for (size_t index = 0; index < section->codeLines.size(); index++) {
+			CodeLine *line = section->codeLines[index];
+			Expression *&lineExpression = body ? body->lineExpression(index) : line->expression;
+			if (!inferLineExpression(line, lineExpression))
+				return false;
+			Expression::SectionOutcome::Kind kind =
+				lineExpression ? lineExpression->sectionOutcome.kind : Expression::SectionOutcome::Kind::None;
+			if (kind != Expression::SectionOutcome::Kind::Case && kind != Expression::SectionOutcome::Kind::DefaultCase) {
+				context.fail(Diagnostic(
+					context.parseContext, Diagnostic::Level::Error, "switch body requires case",
+					lineExpression ? lineExpression->range : Range(line, line->patternText)
+				));
+				return false;
+			}
+			bool isDefault = kind == Expression::SectionOutcome::Kind::DefaultCase;
+			std::optional<std::int64_t> caseValue;
+			if (!isDefault) {
+				caseValue = getCompileTimeIntegerValue(lineExpression->sectionOutcome.conditionValue);
+				if (!caseValue) {
+					context.fail(Diagnostic(
+						context.parseContext, Diagnostic::Level::Error, "case value must be constant integer",
+						lineExpression->range
+					));
+					return false;
+				}
+				caseValue = normalizeSignedIntegerToType(*caseValue, selectorType);
+			}
+			if (isDefault) {
+				if (defaultBranch) {
+					context.fail(Diagnostic(
+						context.parseContext, Diagnostic::Level::Error, "duplicate default case", lineExpression->range
+					));
+					return false;
+				}
+				defaultBranch = branches.size();
+			} else if (!caseValues.insert(*caseValue).second) {
+				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				);
+				return false;
+			}
+			branches.push_back({index, caseValue, isDefault});
+		}
+
+		std::optional<std::int64_t> selector = getCompileTimeIntegerValue(openingExpression->sectionOutcome.conditionValue);
+		if (selector)
+			selector = normalizeSignedIntegerToType(*selector, selectorType);
+		bool selectionKnown = selector.has_value();
+		std::optional<size_t> selectedBranch;
+		if (selectionKnown) {
+			for (size_t index = 0; index < branches.size(); index++) {
+				if (!branches[index].isDefault && branches[index].value == selector) {
+					selectedBranch = index;
+					break;
+				}
+			}
+			if (!selectedBranch)
+				selectedBranch = defaultBranch;
+		}
+
+		std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> fallthroughConstantStates;
+		std::vector<InferenceContext::SubjectState> fallthroughSubjectStates;
+		auto inferBranch = [&](const SwitchBranch &branch) {
+			context.currentVariableValues = entryConstants;
+			context.currentSubject = entrySubject;
+			bool branchFallsThrough = true;
+			if (!inferOpenedSection(section->codeLines[branch.lineIndex], &branchFallsThrough))
+				return false;
+			if (branchFallsThrough) {
+				fallthroughConstantStates.push_back(context.currentVariableValues);
+				fallthroughSubjectStates.push_back(context.currentSubject);
+			}
+			return true;
+		};
+		for (size_t index = 0; index < branches.size(); index++) {
+			Expression *&branchExpression = body ? body->lineExpression(branches[index].lineIndex)
+												 : section->codeLines[branches[index].lineIndex]->expression;
+			bool reachable = !selectionKnown || selectedBranch == index;
+			branchExpression->sectionBodyReachable = reachable;
+			if (reachable && !inferBranch(branches[index]))
+				return false;
+		}
+		if ((selectionKnown && !selectedBranch) || (!selectionKnown && !defaultBranch)) {
+			fallthroughConstantStates.push_back(entryConstants);
+			fallthroughSubjectStates.push_back(entrySubject);
+		}
+		bool sectionFallsThrough = !fallthroughConstantStates.empty();
+		openingExpression->branchSelection = Expression::BranchSelection{
+			.known = selectionKnown,
+			.selectedBranchIndex =
+				selectionKnown && selectedBranch ? static_cast<int>(branches[*selectedBranch].lineIndex) : -1,
+			.fallsThrough = sectionFallsThrough,
+		};
+		if (sectionFallsThrough)
+			mergeSectionExecutionStates(context, fallthroughConstantStates, fallthroughSubjectStates);
+		if (fallsThrough)
+			*fallsThrough = sectionFallsThrough;
+		context.typesValid = true;
+		return true;
+	}
+
+	bool sectionFallsThrough = true;
+	for (size_t i = startLineIndex; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
 		Expression *&lineExpression = body ? body->lineExpression(i) : line->expression;
-		auto constantsBeforeLine = context.currentKnownConstants;
+		auto constantsBeforeLine = context.currentVariableValues;
+		auto subjectBeforeLine = context.currentSubject;
 		if (!inferLineExpression(line, lineExpression))
 			return false;
-		auto headerInfo = controlHeaderInfo(line, lineExpression);
-		if (headerInfo && headerInfo->first == "if") {
+		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+			sectionFallsThrough = false;
+			break;
+		}
+		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
 			auto constantsBeforeChain = std::move(constantsBeforeLine);
+			auto subjectBeforeChain = subjectBeforeLine;
 			size_t chainEnd = i;
-			while (chainEnd + 1 < section->codeLines.size()) {
-				CodeLine *next = section->codeLines[chainEnd + 1];
+			std::optional<size_t> selectedBranch;
+			bool branchKnown = true;
+			bool fallthroughReachable = true;
+			std::unordered_map<VariableReference *, CompileTimeValue> fallthroughConstants = context.currentVariableValues;
+			InferenceContext::SubjectState fallthroughSubject = context.currentSubject;
+			std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchConstantStates;
+			std::vector<InferenceContext::SubjectState> branchSubjectStates;
+			for (size_t k = i;; k++) {
+				CodeLine *branchLine = section->codeLines[k];
+				Expression *&branchExpression = body ? body->lineExpression(k) : branchLine->expression;
+				if (k > i) {
+					context.currentVariableValues = fallthroughReachable ? fallthroughConstants : constantsBeforeChain;
+					context.currentSubject = fallthroughReachable ? fallthroughSubject : subjectBeforeChain;
+					if (!inferLineExpression(branchLine, branchExpression))
+						return false;
+				}
+				Expression::SectionOutcome outcome = branchExpression->sectionOutcome;
+				requireCompilerInvariant(
+					(k == i && outcome.kind == Expression::SectionOutcome::Kind::Conditional) ||
+						(k > i && (outcome.kind == Expression::SectionOutcome::Kind::AlternativeConditional ||
+								   outcome.kind == Expression::SectionOutcome::Kind::Alternative)),
+					"branch chain contains an invalid section outcome"
+				);
+				bool bodyReachable = false;
+				if (fallthroughReachable) {
+					if (outcome.kind == Expression::SectionOutcome::Kind::Alternative) {
+						bodyReachable = true;
+						fallthroughReachable = false;
+						if (branchKnown)
+							selectedBranch = k;
+					} else if (const auto *condition = std::get_if<bool>(&outcome.conditionValue)) {
+						if (*condition) {
+							bodyReachable = true;
+							fallthroughReachable = false;
+							if (branchKnown)
+								selectedBranch = k;
+						}
+					} else {
+						bodyReachable = true;
+						branchKnown = false;
+					}
+				}
+				branchExpression->sectionBodyReachable = bodyReachable;
+				auto branchEntryConstants = context.currentVariableValues;
+				auto branchEntrySubject = context.currentSubject;
+				if (bodyReachable) {
+					bool bodyFallsThrough = true;
+					if (!inferOpenedSection(branchLine, &bodyFallsThrough))
+						return false;
+					if (bodyFallsThrough) {
+						branchConstantStates.push_back(context.currentVariableValues);
+						branchSubjectStates.push_back(context.currentSubject);
+					}
+				}
+				context.currentVariableValues = std::move(branchEntryConstants);
+				context.currentSubject = branchEntrySubject;
+				if (fallthroughReachable) {
+					fallthroughConstants = context.currentVariableValues;
+					fallthroughSubject = context.currentSubject;
+				}
+				chainEnd = k;
+				if (k + 1 >= section->codeLines.size())
+					break;
+				CodeLine *next = section->codeLines[k + 1];
 				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
 					break;
-				Expression *&nextExpression = body ? body->lineExpression(chainEnd + 1) : next->expression;
+				Expression *&nextExpression = body ? body->lineExpression(k + 1) : next->expression;
 				applyCodeLineGrouping(next, nextExpression, context);
-				std::optional<std::string> nextKind = finalizedControlHeaderKind(nextExpression, context);
-				if (!nextKind) {
-					nextKind = inferControlHeaderKindForLookahead(
+				std::optional<Expression::SectionOutcome::Kind> nextOutcome = finalizedBranchOutcome(nextExpression);
+				if (!nextOutcome) {
+					nextOutcome = inferExpressionSectionOutcomeInTrial(
 						nextExpression, context, codeLineCanReuseGrouping(next, context), bindingFrameStack
 					);
 				}
-				if (!nextKind)
-					break;
-				if (*nextKind != "else if" && *nextKind != "else")
-					break;
-				chainEnd++;
-			}
-
-			for (size_t k = i + 1; k <= chainEnd; k++) {
-				CodeLine *header = section->codeLines[k];
-				Expression *&headerExpression = body ? body->lineExpression(k) : header->expression;
-				if (!inferLineExpression(header, headerExpression))
-					return false;
-			}
-
-			std::optional<size_t> selectedBranch;
-			bool branchKnown = true;
-			for (size_t k = i; k <= chainEnd; k++) {
-				Expression *branchExpression = body ? body->lineExpression(k) : section->codeLines[k]->expression;
-				auto branchInfo = controlHeaderInfo(section->codeLines[k], branchExpression);
-				if (!branchInfo) {
-					branchKnown = false;
-					break;
-				}
-				const std::string &branchKind = branchInfo->first;
-				Expression *header = branchInfo->second;
-				if (branchKind == "else") {
-					if (!selectedBranch.has_value())
-						selectedBranch = k;
-					break;
-				}
-				if (header->arguments.size() < 2) {
-					branchKnown = false;
-					break;
-				}
-				CompileTimeValue conditionValue = context.lookupExpressionValue(header->arguments[1]);
-				auto *condition = std::get_if<bool>(&conditionValue);
-				if (!condition) {
-					branchKnown = false;
-					break;
-				}
-				if (*condition) {
-					selectedBranch = k;
+				if (!nextOutcome || (*nextOutcome != Expression::SectionOutcome::Kind::AlternativeConditional &&
+									 *nextOutcome != Expression::SectionOutcome::Kind::Alternative)) {
 					break;
 				}
 			}
 
-			if (!context.trial) {
-				Expression *&firstHeaderExpression = body ? body->lineExpression(i) : line->expression;
-				requireCompilerInvariant(firstHeaderExpression, "if chain is missing its inferred header expression");
-				firstHeaderExpression->branchSelection = Expression::BranchSelection{
-					.known = branchKnown,
-					.selectedBranchIndex = branchKnown && selectedBranch.has_value() ? static_cast<int>(*selectedBranch) : -1,
-				};
+			Expression *&firstHeaderExpression = body ? body->lineExpression(i) : line->expression;
+			requireCompilerInvariant(firstHeaderExpression, "if chain is missing its inferred header expression");
+			if (fallthroughReachable) {
+				branchConstantStates.push_back(std::move(fallthroughConstants));
+				branchSubjectStates.push_back(fallthroughSubject);
 			}
-
-			if (branchKnown && selectedBranch.has_value()) {
-				context.currentKnownConstants = constantsBeforeChain;
-				if (!inferOpenedSection(section->codeLines[*selectedBranch]))
-					return false;
-			} else {
-				std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchStates;
-				bool hasElseBranch = false;
-				for (size_t k = i; k <= chainEnd; k++) {
-					Expression *branchExpression = body ? body->lineExpression(k) : section->codeLines[k]->expression;
-					auto branchInfo = controlHeaderInfo(section->codeLines[k], branchExpression);
-					if (branchInfo && branchInfo->first == "else")
-						hasElseBranch = true;
-					context.currentKnownConstants = constantsBeforeChain;
-					if (!inferOpenedSection(section->codeLines[k]))
-						return false;
-					branchStates.push_back(context.currentKnownConstants);
-				}
-				if (!hasElseBranch)
-					branchStates.push_back(constantsBeforeChain);
-				std::unordered_map<VariableReference *, CompileTimeValue> mergedConstants =
-					branchStates.empty() ? constantsBeforeChain : branchStates.front();
-				for (size_t idx = 1; idx < branchStates.size(); ++idx) {
-					const auto &other = branchStates[idx];
-					for (auto it = mergedConstants.begin(); it != mergedConstants.end();) {
-						auto otherIt = other.find(it->first);
-						if (otherIt == other.end() || otherIt->second != it->second) {
-							it = mergedConstants.erase(it);
-						} else {
-							++it;
-						}
-					}
-				}
-				context.currentKnownConstants = std::move(mergedConstants);
+			bool chainFallsThrough = !branchConstantStates.empty();
+			firstHeaderExpression->branchSelection = Expression::BranchSelection{
+				.known = branchKnown,
+				.selectedBranchIndex = branchKnown && selectedBranch.has_value() ? static_cast<int>(*selectedBranch) : -1,
+				.fallsThrough = chainFallsThrough,
+			};
+			if (!chainFallsThrough) {
+				sectionFallsThrough = false;
+				i = chainEnd;
+				break;
 			}
+			mergeSectionExecutionStates(context, branchConstantStates, branchSubjectStates);
 
 			i = chainEnd;
 			continue;
 		}
 
-		if (!inferOpenedSection(line))
-			return false;
-	}
-	if (loopSection) {
-		std::unordered_set<VariableReference *> loopMutations = loopMutationScope.finish();
-		bool needsLoopReinference = false;
-		for (VariableReference *ref : loopMutations) {
-			if (constantsAtLoopEntry.contains(ref)) {
-				needsLoopReinference = true;
+		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop) {
+			const bool *condition = std::get_if<bool>(&lineExpression->sectionOutcome.conditionValue);
+			if (!line->sectionOpening) {
+				sectionFallsThrough = true;
+				if ((!condition || *condition) && i + 1 < section->codeLines.size() &&
+					!inferSectionLineRange(
+						section, body, lineExpression, context, bindingFrameStack, i + 1, false, &sectionFallsThrough
+					)) {
+					return false;
+				}
 				break;
 			}
+			if (condition && !*condition) {
+				lineExpression->sectionBodyReachable = false;
+				continue;
+			}
+			bool loopFallsThrough = true;
+			if (!inferOpenedSection(line, &loopFallsThrough))
+				return false;
+			if (!loopFallsThrough) {
+				sectionFallsThrough = false;
+				break;
+			}
+			continue;
 		}
-		if (needsLoopReinference) {
-			context.currentKnownConstants = constantsAtLoopEntry;
-			for (VariableReference *ref : loopMutations)
-				context.setKnownConstant(ref, {});
-			return inferSection(section, body, openingExpression, context, bindingFrameStack);
+		bool openedSectionFallsThrough = true;
+		if (!inferOpenedSection(line, &openedSectionFallsThrough))
+			return false;
+		if ((!lineExpression || lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::None ||
+			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) &&
+			!openedSectionFallsThrough) {
+			sectionFallsThrough = false;
+			break;
 		}
 	}
+	if (loopSection) {
+		const bool *entryCondition = std::get_if<bool>(&openingExpression->sectionOutcome.conditionValue);
+		bool firstIterationGuaranteed = entryCondition && *entryCondition;
+		if (!sectionFallsThrough) {
+			if (!firstIterationGuaranteed) {
+				context.currentVariableValues = std::move(constantsAtLoopEntry);
+				context.currentSubject = subjectAtLoopEntry;
+				sectionFallsThrough = true;
+			}
+		} else {
+			auto constantsAfterFirstIteration = context.currentVariableValues;
+			auto subjectAfterFirstIteration = context.currentSubject;
+			const auto &baseConstants = firstIterationGuaranteed ? constantsAfterFirstIteration : constantsAtLoopEntry;
+			const auto &baseSubject = firstIterationGuaranteed ? subjectAfterFirstIteration : subjectAtLoopEntry;
+			if (!firstIterationGuaranteed) {
+				mergeSectionExecutionStates(
+					context, {constantsAtLoopEntry, constantsAfterFirstIteration},
+					{subjectAtLoopEntry, subjectAfterFirstIteration}
+				);
+			}
+
+			while (true) {
+				Expression::SectionOutcome nextHeaderOutcome;
+				if (!inferNextLoopHeaderOutcomeInTrial(openingExpression, context, bindingFrameStack, nextHeaderOutcome))
+					return false;
+				const bool *condition = std::get_if<bool>(&nextHeaderOutcome.conditionValue);
+				if (condition && !*condition) {
+					sectionFallsThrough = true;
+					break;
+				}
+
+				auto constantsAtIterationEntry = context.currentVariableValues;
+				auto subjectAtIterationEntry = context.currentSubject;
+				bool iterationFallsThrough = true;
+				if (!inferSectionLineRange(
+						section, body, openingExpression, context, bindingFrameStack, startLineIndex, false,
+						&iterationFallsThrough, false
+					)) {
+					return false;
+				}
+				if (!iterationFallsThrough) {
+					sectionFallsThrough = !condition;
+					if (sectionFallsThrough) {
+						context.currentVariableValues = std::move(constantsAtIterationEntry);
+						context.currentSubject = subjectAtIterationEntry;
+					}
+					break;
+				}
+
+				mergeSectionExecutionStates(
+					context, {baseConstants, context.currentVariableValues}, {baseSubject, context.currentSubject}
+				);
+				if (context.currentVariableValues == constantsAtIterationEntry &&
+					context.currentSubject == subjectAtIterationEntry) {
+					sectionFallsThrough = !condition;
+					break;
+				}
+			}
+			if (firstIterationGuaranteed && sectionFallsThrough)
+				openingExpression->sectionOutcome.conditionValue = {};
+		}
+	}
+	if (fallsThrough)
+		*fallsThrough = sectionFallsThrough;
 	context.typesValid = true;
 	return true;
+}
+
+static bool inferSection(
+	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
+	const BindingFrameStack &bindingFrameStack, bool *fallsThrough
+) {
+	return inferSectionLineRange(section, body, openingExpression, context, bindingFrameStack, 0, true, fallsThrough);
+}
+
+static void emitPendingInferenceFailure(InferenceContext &context) {
+	if (context.trial || context.suppressDiagnostics || context.suppressReinferPassDiagnostics)
+		return;
+	bool errorAlreadyReported = std::ranges::any_of(context.parseContext.diagnostics, [](const Diagnostic &diagnostic) {
+		return diagnostic.level == Diagnostic::Level::Error;
+	});
+	if (errorAlreadyReported)
+		return;
+	if (context.hasTypeFailureDiagnostic) {
+		context.addDiagnostic(context.typeFailureDiagnostic);
+		return;
+	}
+	requireCompilerInvariant(!context.typeFailureDetail.empty(), "type inference failed without a diagnostic");
+	context.addDiagnostic(buildTypeFailureDiagnostic(
+		context.parseContext, context.typeFailureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
+	));
 }
 
 struct PatternTypeConstraintWorkItem {
@@ -519,6 +649,86 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 	return true;
 }
 
+static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
+	std::vector<ClassSection *> classes;
+	std::function<void(Section *)> collectClasses = [&](Section *section) {
+		if (!section)
+			return;
+		if (section->type == SectionType::Class)
+			classes.push_back(static_cast<ClassSection *>(section));
+		for (Section *child : section->children)
+			collectClasses(child);
+	};
+	collectClasses(parseContext.mainSection);
+
+	for (ClassSection *classSection : classes) {
+		ClassDefinition *definition = classSection->classDefinition;
+		requireCompilerInvariant(definition != nullptr, "class section is missing its class definition");
+		if (static_cast<bool>(definition->retainSection) != static_cast<bool>(definition->releaseSection)) {
+			parseContext.diagnostics.push_back(Diagnostic(
+				parseContext, Diagnostic::Level::Error, "managed class requires both retain and release sections",
+				classSection->openingLine ? Range(classSection->openingLine, classSection->openingLine->patternText) : Range()
+			));
+			return false;
+		}
+	}
+
+	std::vector<size_t> inferredInstantiationCounts(classes.size(), 0);
+	while (true) {
+		bool madeProgress = false;
+		for (size_t classIndex = 0; classIndex < classes.size(); classIndex++) {
+			ClassSection *classSection = classes[classIndex];
+			ClassDefinition *definition = classSection->classDefinition;
+			if (!definition->retainSection)
+				continue;
+			while (inferredInstantiationCounts[classIndex] < definition->instantiations.size()) {
+				size_t index = inferredInstantiationCounts[classIndex];
+				DataType classType{DataType::Kind::Class};
+				classType.classDefinition = definition;
+				classType.classInstIndex = static_cast<int>(index);
+				Expression placeholder;
+				placeholder.kind = Expression::Kind::TypedPlaceholder;
+				placeholder.type = classType;
+				placeholder.range = classSection->openingLine
+										? Range(classSection->openingLine, classSection->openingLine->patternText)
+										: Range();
+				std::vector<std::pair<std::string, Expression *>> bindings = {
+					{std::string(managedLifecycleParameterName), &placeholder}
+				};
+				std::vector<DataType> argumentTypes = {classType};
+				for (Section *lifecycleSection : {definition->retainSection, definition->releaseSection}) {
+					if (!ensureSectionInstantiationInferred(
+							parseContext, lifecycleSection, nullptr, bindings, argumentTypes, {},
+							callerContext.currentInstantiation, &callerContext
+						)) {
+						return false;
+					}
+					InstantiationKey key{.argumentTypes = argumentTypes, .compileTimeParameters = {}};
+					auto instantiation = lifecycleSection->instantiations.find(key);
+					requireCompilerInvariant(
+						instantiation != lifecycleSection->instantiations.end(),
+						"managed lifecycle inference did not retain its instantiation"
+					);
+					if (instantiation->second.returnType.kind != DataType::Kind::Void) {
+						parseContext.diagnostics.push_back(Diagnostic(
+							parseContext, Diagnostic::Level::Error, "retain and release sections cannot return a value",
+							lifecycleSection->openingLine
+								? Range(lifecycleSection->openingLine, lifecycleSection->openingLine->patternText)
+								: Range()
+						));
+						return false;
+					}
+				}
+				inferredInstantiationCounts[classIndex]++;
+				madeProgress = true;
+			}
+		}
+		if (!madeProgress)
+			break;
+	}
+	return true;
+}
+
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!inferPatternTypeConstraints(parseContext))
@@ -526,9 +736,11 @@ bool inferTypes(ParseContext &parseContext) {
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
 	InferenceContext context(parseContext);
-	context.currentKnownConstants.clear();
-	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {}))
+	context.currentVariableValues.clear();
+	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
+		emitPendingInferenceFailure(context);
 		return false;
+	}
 	std::function<bool(Section *)> inferExposedFunctions = [&](Section *section) {
 		if (!section)
 			return true;
@@ -547,8 +759,14 @@ bool inferTypes(ParseContext &parseContext) {
 		}
 		return true;
 	};
-	if (!inferExposedFunctions(parseContext.mainSection))
+	if (!inferExposedFunctions(parseContext.mainSection)) {
+		emitPendingInferenceFailure(context);
 		return false;
+	}
+	if (!inferManagedClassLifecycles(parseContext, context)) {
+		emitPendingInferenceFailure(context);
+		return false;
+	}
 
 	// Validate variables — all must have deduced types
 	// Skip definition body sections: their variables are inferred when the definition is instantiated/expanded.
@@ -566,26 +784,38 @@ bool inferTypes(ParseContext &parseContext) {
 				valid = false;
 			}
 		}
-		for (Section *child : section->children)
+		for (Section *child : section->children) {
+			Expression *openingExpression = child && child->openingLine ? child->openingLine->expression : nullptr;
+			if (openingExpression && !openingExpression->sectionBodyReachable)
+				continue;
 			validateVariables(child);
+		}
 	};
 	validateVariables(parseContext.mainSection);
 
 	// Validate non-flex functions have deduced return types
 	std::function<void(Section *)> validateReturnTypes = [&](Section *section) {
 		if (section->type == SectionType::Function && !section->isFlex && !section->patternDefinitions.empty()) {
+			PatternDefinition *definition = section->patternDefinitions.front();
 			for (auto &[argTypes, inst] : section->instantiations) {
 				(void)argTypes;
 				if (!inst.valid)
 					continue;
 				if (!inst.returnType.isDeduced()) {
 					parseContext.diagnostics.push_back(Diagnostic(
-						parseContext, Diagnostic::Level::Error, "function has no deduced return type",
-						section->patternDefinitions.front()->range, "function",
-						(std::string)section->patternDefinitions.front()->range.subString
+						parseContext, Diagnostic::Level::Error, "function has no deduced return type", definition->range,
+						"function", (std::string)definition->range.subString
 					));
 					valid = false;
 					break; // one error per section is enough
+				}
+				if (inst.returnType.kind != DataType::Kind::Void && inst.fallsThrough) {
+					parseContext.diagnostics.push_back(Diagnostic(
+						parseContext, Diagnostic::Level::Error, "function has missing return path", definition->range,
+						"function", (std::string)definition->range.subString
+					));
+					valid = false;
+					break;
 				}
 			}
 		}
@@ -656,14 +886,9 @@ bool ensureSectionInstantiationInferred(
 		// Do not seed from the caller's tracked constants: the instantiation is
 		// cached and reused under other global states (see the non-flex call
 		// path in function_inference.inl).
-		context.allowTrialSummaryReuse = callerContext->allowTrialSummaryReuse;
 		context.inheritedTrialExpressionValues =
 			callerContext->trial ? &callerContext->trialExpressionValues : callerContext->inheritedTrialExpressionValues;
 		context.trialJournal = callerContext->trialJournal;
-		context.trialInstantiationCache =
-			callerContext->trialInstantiationCache
-				? callerContext->trialInstantiationCache
-				: (callerContext->trial ? callerContext->ensureTrialInstantiationCache() : nullptr);
 		context.unresolvedPatternConstraintSignal = callerContext->unresolvedPatternConstraintSignal;
 		context.suppressDiagnostics = callerContext->suppressDiagnostics;
 		context.suppressReinferPassDiagnostics = callerContext->suppressReinferPassDiagnostics;
@@ -678,10 +903,12 @@ bool ensureSectionInstantiationInferred(
 	context.currentInstantiation = &inst;
 	if (context.trial)
 		inst.body = parseContext.cloneSectionBody(section);
-	bool inferenceSucceeded = inferSection(section, inst.body.get(), nullptr, context, {});
+	bool instantiationFallsThrough = true;
+	bool inferenceSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
+	inst.fallsThrough = instantiationFallsThrough;
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
-		auto knownIt = context.currentKnownConstants.find(reference);
-		if (knownIt != context.currentKnownConstants.end() && isCompileTimeKnown(knownIt->second))
+		auto knownIt = context.currentVariableValues.find(reference);
+		if (knownIt != context.currentVariableValues.end() && isCompileTimeKnown(knownIt->second))
 			inst.finalGlobalConstantValues[reference] = knownIt->second;
 	}
 	context.currentInstantiation = savedInst;

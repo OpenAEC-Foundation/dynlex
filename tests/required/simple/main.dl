@@ -44,7 +44,7 @@ function wasm print msg:
 
 function native print msg:
     replacement:
-        @intrinsic("call", "libc", "printf", a 32 bit integer, "%ld", msg as a 64 bit integer)
+        @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%ld", msg as a 64 bit integer)
 
 function print msg:
     execute:

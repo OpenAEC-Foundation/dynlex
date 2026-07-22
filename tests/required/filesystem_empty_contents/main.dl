@@ -1,0 +1,10 @@
+import lib/filesystem.dl
+
+set output_path to "tests/required/filesystem_empty_contents/output.tmp"
+delete output_path
+set null_data to 0 as a pointer to byte
+set empty_contents to new string from data null_data with length 0
+write empty_contents to output_path and print if it succeeded
+print "" as line
+delete output_path and print if it succeeded
+print "" as line
