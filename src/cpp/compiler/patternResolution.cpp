@@ -22,6 +22,12 @@
 #include <unordered_set>
 
 namespace {
+enum class ClassPropertyAccessorSyntax {
+	NonPossessive,
+	SingularPossessive,
+	PluralPossessive,
+};
+
 static CodeLine *createGeneratedLine(
 	ParseContext &context, const Range &sourceRange, Section *section, std::string text, int logicalLineOffset = 0
 ) {
@@ -41,9 +47,20 @@ static CodeLine *createGeneratedLine(
 
 static PatternDefinition *createClassPropertyPatternDefinition(
 	ParseContext &context, FunctionSection *accessorSection, ClassDefinition *classDefinition, const FieldDefinition &field,
-	bool possessive
+	ClassPropertyAccessorSyntax syntax
 ) {
-	std::string patternText = possessive ? "instance's " + field.name : "the " + field.name + " of instance";
+	std::string patternText;
+	switch (syntax) {
+	case ClassPropertyAccessorSyntax::NonPossessive:
+		patternText = "the " + field.name + " of instance";
+		break;
+	case ClassPropertyAccessorSyntax::SingularPossessive:
+		patternText = "instance's " + field.name;
+		break;
+	case ClassPropertyAccessorSyntax::PluralPossessive:
+		patternText = "instance' " + field.name;
+		break;
+	}
 	CodeLine *patternLine = createGeneratedLine(context, field.range, accessorSection, patternText);
 	auto *definition = new PatternDefinition(Range(patternLine, patternLine->fullText), accessorSection);
 	definition->hasPrebuiltPatternElements = true;
@@ -68,7 +85,7 @@ static PatternDefinition *createClassPropertyPatternDefinition(
 		definition->patternElements.push_back(std::move(instance));
 	};
 
-	if (possessive) {
+	if (syntax != ClassPropertyAccessorSyntax::NonPossessive) {
 		addInstance(0);
 		addLiteralSequence(patternText.substr(8), 8);
 	} else {
@@ -97,8 +114,15 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 			auto *accessorSection = new FunctionSection(context.mainSection);
 			accessorSection->isFlex = true;
 			accessorSection->isLocal = classSection->isLocal;
-			createClassPropertyPatternDefinition(context, accessorSection, classDefinition, field, false);
-			createClassPropertyPatternDefinition(context, accessorSection, classDefinition, field, true);
+			createClassPropertyPatternDefinition(
+				context, accessorSection, classDefinition, field, ClassPropertyAccessorSyntax::NonPossessive
+			);
+			createClassPropertyPatternDefinition(
+				context, accessorSection, classDefinition, field, ClassPropertyAccessorSyntax::SingularPossessive
+			);
+			createClassPropertyPatternDefinition(
+				context, accessorSection, classDefinition, field, ClassPropertyAccessorSyntax::PluralPossessive
+			);
 
 			auto *replacementSection = new ReplacementSection(accessorSection);
 			accessorSection->executionSection = replacementSection;

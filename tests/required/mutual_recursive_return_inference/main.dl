@@ -1,0 +1,21 @@
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function first value:
+    execute:
+        if @intrinsic("greater than", value, 0):
+            @intrinsic("return", second @intrinsic("subtract", value, 1))
+        @intrinsic("return", @intrinsic("equal", 1, 2))
+
+function second value:
+    execute:
+        if @intrinsic("greater than", value, 0):
+            @intrinsic("return", first @intrinsic("subtract", value, 1))
+        @intrinsic("return", @intrinsic("equal", 1, 2))
+
+discard (first 2)

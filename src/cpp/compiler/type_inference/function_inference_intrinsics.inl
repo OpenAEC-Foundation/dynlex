@@ -90,8 +90,11 @@ case Expression::Kind::IntrinsicCall: {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				DataType promoted;
-				bool pointerEquality = (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) &&
-									   leftType.isPointer() && rightType.isPointer() && leftType == rightType;
+				DataType refinedPointerType;
+				bool pointerEquality =
+					(kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
+					rightType.isPointer() &&
+					(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
 				if (!pointerEquality && !DataType::promoteArithmetic(leftType, rightType, promoted)) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
@@ -108,17 +111,27 @@ case Expression::Kind::IntrinsicCall: {
 			CompileTimeValue conditionValue;
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {
-				DataType retType{DataType::Kind::Void};
-				Range returnRange =
-					context.activeFlexCallStack.empty() ? expr->range : context.activeFlexCallStack.back()->range;
-				if (expr->arguments.size() > 1)
-					retType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!retType.isDeduced())
+				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
+				Expression *sourceReturnValueExpression =
+					returnValueExpression ? resolveThroughBindings(returnValueExpression, flexBindingFrameStack) : nullptr;
+				DataType retType = returnValueExpression
+									   ? ensureExpressionType(returnValueExpression, context, flexBindingFrameStack)
+									   : DataType{DataType::Kind::Void};
+				if (!retType.isDeduced()) {
+					if (context.observedInProgressUndeducedInstantiation && context.currentInstantiation) {
+						markInstantiationForReinference(context, context.currentInstantiation);
+						expr->type = {DataType::Kind::Void};
+						break;
+					}
+					context.setTypeFailure("return value type is unresolved");
 					break;
+				}
 				if (context.currentInstantiation) {
-					if (!setCurrentInstantiationReturnType(context, retType, returnRange))
+					if (!reconcileFunctionReturnType(context, expr, sourceReturnValueExpression, retType))
 						break;
 				} else if (retType.kind != DataType::Kind::Void) {
+					Range returnRange =
+						context.activeFlexCallStack.empty() ? expr->range : context.activeFlexCallStack.back()->range;
 					DataType programReturnType{DataType::Kind::Int, 4};
 					if (!DataType::supportsRuntimeConversion(retType, programReturnType)) {
 						std::string detail = renderConfiguredMessage(
@@ -174,17 +187,13 @@ case Expression::Kind::IntrinsicCall: {
 				expr->sectionOutcome = sectionOutcomeForIntrinsic(kind, conditionValue, sectionConditionType);
 			if (kind == IntrinsicKind::Store)
 				inferStoreEffects(expr, context, flexBindingFrameStack);
-			if (kind == IntrinsicKind::StoreAt) {
+			if (kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) {
 				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
 					setConfiguredTypeFailure(expr->range, "store at requires pointer");
 					break;
 				}
-				DataType elementType = concretizeClassType(pointerType.dereferenced());
-				if (typeHasManagedLifecycle(elementType)) {
-					setConfiguredTypeFailure(expr->range, "store at managed value unsupported");
-					break;
-				}
+				DataType elementType = pointerType.dereferenced();
 				DataType valueType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				if (!context.typesValid)
 					break;
@@ -194,6 +203,13 @@ case Expression::Kind::IntrinsicCall: {
 						{{"value_type", typeToUserName(valueType, context.parseContext)},
 						 {"element_type", typeToUserName(elementType, context.parseContext)}}
 					);
+					break;
+				}
+			}
+			if (kind == IntrinsicKind::DestroyAt) {
+				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
+					setConfiguredTypeFailure(expr->range, "store at requires pointer");
 					break;
 				}
 			}
@@ -242,6 +258,17 @@ case Expression::Kind::IntrinsicCall: {
 				if (expr->subjectSetter->arguments.size() <= 1)
 					crashCompilerBug("subject assignment is missing its value expression");
 				expr->type = ensureExpressionType(expr->subjectSetter->arguments[1], context, flexBindingFrameStack);
+			} else if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+				if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
+					failWithDetail(expr->range, "Command-line arguments are unavailable for this target", 0);
+					break;
+				}
+				if (kind == IntrinsicKind::CommandLineArgumentCount) {
+					expr->type = {DataType::Kind::Int, 4};
+				} else {
+					expr->type = {DataType::Kind::Int, 1};
+					expr->type.pointerDepth = 2;
+				}
 			} else if (kind == IntrinsicKind::AddressOf) {
 				DataType varType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (varType.isDeduced())
@@ -249,7 +276,7 @@ case Expression::Kind::IntrinsicCall: {
 			} else if (kind == IntrinsicKind::Dereference) {
 				DataType ptrType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (ptrType.isDeduced() && ptrType.isPointer())
-					expr->type = concretizeClassType(ptrType.dereferenced());
+					expr->type = ptrType.dereferenced();
 			} else if (isExternalCallIntrinsicKind(kind)) {
 				for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
 					Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
@@ -377,7 +404,7 @@ case Expression::Kind::IntrinsicCall: {
 				DataType castResultType;
 				if (typeArgType.kind == DataType::Kind::Type &&
 					!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
-					DataType requestedType = concretizeClassType(typeArgType.toReferencedType());
+					DataType requestedType = typeArgType.toReferencedType();
 					setConfiguredTypeFailure(
 						expr->range, "unsupported cast", "message",
 						{{"from_type", typeToUserName(valueType, context.parseContext)},
@@ -833,16 +860,14 @@ case Expression::Kind::IntrinsicCall: {
 														   )) {
 						expr->type = instantiatedTypeRef.toReferencedType();
 					} else {
-						DataType targetType = concretizeClassType(typeRefType.toReferencedType());
+						DataType targetType = typeRefType.toReferencedType();
 						if (expr->arguments.size() == targetType.classDefinition->fields.size() + 2 &&
 							targetType.classInstIndex >= 0) {
 							const auto &fieldTypes =
 								targetType.classDefinition->instantiations[targetType.classInstIndex].fieldTypes;
 							bool allCompatible = constructionArgumentTypes.size() == fieldTypes.size();
 							for (size_t i = 0; allCompatible && i < fieldTypes.size(); i++) {
-								if (!DataType::supportsRuntimeConversion(
-										concretizeClassType(constructionArgumentTypes[i]), fieldTypes[i]
-									))
+								if (!DataType::supportsRuntimeConversion(constructionArgumentTypes[i], fieldTypes[i]))
 									allCompatible = false;
 							}
 							if (allCompatible)
@@ -856,14 +881,13 @@ case Expression::Kind::IntrinsicCall: {
 						expr->type = targetType;
 				}
 			} else if (kind == IntrinsicKind::Property) {
-				DataType instType =
-					concretizeClassType(ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack));
+				DataType instType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (!instType.isDeduced()) {
 					context.typesValid = false;
 					break;
 				}
 				if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-					instType = concretizeClassType(instType.dereferenced());
+					instType = instType.dereferenced();
 				std::string fieldName;
 				CompileTimeValue propertyValue =
 					resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context);

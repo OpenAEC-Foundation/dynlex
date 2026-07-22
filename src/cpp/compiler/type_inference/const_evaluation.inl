@@ -87,10 +87,11 @@ static Expression *resolveThroughBindingsDeep(
 }
 
 // Convenience: resolve an expression through bindings, then return its type.
-static DataType concretizeClassType(DataType type);
 static std::string extractFieldName(Expression *expr);
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName);
-static DataType resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack);
+static DataType resolveKnownExpressionType(
+	Expression *expr, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext = nullptr
+);
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged);
 static DataType instantiateBoundClassType(
 	ParseContext &parseContext, ClassDefinition *classDef, const BindingFrameStack &bindingFrameStack,

@@ -492,6 +492,8 @@ static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanc
 static void commitCodeLineGrouping(CodeLine *line, Expression *&expr, InferenceContext &context, bool ambiguityChecked) {
 	GroupingSnapshot grouping = captureGroupingSnapshot(expr);
 	if (context.trial) {
+		if (context.groupingTrialJournal)
+			context.groupingTrialJournal->recordCodeLineGroupingWrite(context.trialCodeLineGroupings, line);
 		auto &trialGrouping = context.trialCodeLineGroupings[line];
 		trialGrouping.reusableTemplate = expr && expr->reusableTemplateExpression;
 		trialGrouping.grouping = trialGrouping.reusableTemplate ? reusableTemplateGrouping(grouping) : std::move(grouping);
@@ -628,15 +630,16 @@ class GroupingInferenceTransaction {
 		  savedTypeFailureSnapshot(context.typeFailureSnapshot), savedTypeFailureDiagnostic(context.typeFailureDiagnostic),
 		  savedTypeFailurePriority(context.typeFailurePriority),
 		  savedHasTypeFailureDiagnostic(context.hasTypeFailureDiagnostic), savedTrialJournal(context.trialJournal),
-		  savedFixedGroupingRoots(context.fixedGroupingRoots), savedResolvedGroupingRoots(context.resolvedGroupingRoots),
+		  savedGroupingTrialJournal(context.groupingTrialJournal), savedFixedGroupingRoots(context.fixedGroupingRoots),
+		  savedResolvedGroupingRoots(context.resolvedGroupingRoots),
 		  savedDetectGroupingAmbiguity(context.detectGroupingAmbiguity),
 		  savedPendingOperandGroupingWarnings(context.pendingOperandGroupingWarnings),
-		  savedExpressionStack(context.expressionStack), savedTrialExpressionValues(context.trialExpressionValues),
+		  savedExpressionStack(context.expressionStack),
 		  savedInheritedTrialExpressionValues(context.inheritedTrialExpressionValues),
-		  savedTrialCodeLineGroupings(context.trialCodeLineGroupings),
-		  savedTrialCallableInstantiations(context.trialCallableInstantiations), trialFixedGroupingRoots(fixedGroupingRoots) {
+		  trialFixedGroupingRoots(fixedGroupingRoots) {
 		context.trial = true;
 		context.trialJournal = &journal;
+		context.groupingTrialJournal = &groupingJournal;
 		context.detectGroupingAmbiguity = true;
 		context.pendingOperandGroupingWarnings = &groupingWarnings;
 		context.fixedGroupingRoots = &trialFixedGroupingRoots;
@@ -659,6 +662,7 @@ class GroupingInferenceTransaction {
 
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
+		groupingJournal.rollback();
 		rollbackTrialJournal(journal);
 		restoreSavedState();
 		active = false;
@@ -698,6 +702,8 @@ class GroupingInferenceTransaction {
 			context.trialExpressionValues.clear();
 			context.trialCallableInstantiations.clear();
 		}
+		if (savedGroupingTrialJournal)
+			savedGroupingTrialJournal->absorb(std::move(groupingJournal));
 		restoreConfiguration();
 		active = false;
 	}
@@ -706,6 +712,7 @@ class GroupingInferenceTransaction {
 	InferenceContext &context;
 	GroupingSnapshot originalGrouping;
 	InferenceContext::TrialJournal journal;
+	InferenceContext::GroupingTrialJournal groupingJournal;
 	bool savedTrial;
 	Instantiation *savedCurrentInstantiation;
 	InstantiatedSectionBody *savedCurrentInstantiatedSectionBody;
@@ -726,15 +733,13 @@ class GroupingInferenceTransaction {
 	int savedTypeFailurePriority;
 	bool savedHasTypeFailureDiagnostic;
 	InferenceContext::TrialJournal *savedTrialJournal;
+	InferenceContext::GroupingTrialJournal *savedGroupingTrialJournal;
 	const std::unordered_set<Expression *> *savedFixedGroupingRoots;
 	std::unordered_set<Expression *> *savedResolvedGroupingRoots;
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
-	std::unordered_map<Expression *, CompileTimeValue> savedTrialExpressionValues;
 	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
-	std::unordered_map<CodeLine *, InferenceContext::TrialCodeLineGrouping> savedTrialCodeLineGroupings;
-	std::unordered_map<PatternDefinition *, Instantiation *> savedTrialCallableInstantiations;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
 	bool active = true;
@@ -743,6 +748,7 @@ class GroupingInferenceTransaction {
 		context.trial = savedTrial;
 		context.currentInstantiation = savedCurrentInstantiation;
 		context.trialJournal = savedTrialJournal;
+		context.groupingTrialJournal = savedGroupingTrialJournal;
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguity;
@@ -769,9 +775,6 @@ class GroupingInferenceTransaction {
 		context.typeFailurePriority = savedTypeFailurePriority;
 		context.hasTypeFailureDiagnostic = savedHasTypeFailureDiagnostic;
 		context.expressionStack = std::move(savedExpressionStack);
-		context.trialExpressionValues = std::move(savedTrialExpressionValues);
-		context.trialCodeLineGroupings = std::move(savedTrialCodeLineGroupings);
-		context.trialCallableInstantiations = std::move(savedTrialCallableInstantiations);
 		restoreConfiguration();
 	}
 };

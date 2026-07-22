@@ -72,10 +72,11 @@ namespace {
 struct VariableAllocaSnapshotEntry {
 	VariableReference *reference = nullptr;
 	llvm::AllocaInst *alloca = nullptr;
+	std::optional<DataType> finalizedType;
 };
 
 static void collectVariableAllocaSnapshotEntries(
-	Section *section, std::unordered_set<VariableReference *> &visitedReferences,
+	ParseContext &context, Section *section, std::unordered_set<VariableReference *> &visitedReferences,
 	std::vector<VariableAllocaSnapshotEntry> &entries
 ) {
 	if (!section)
@@ -84,18 +85,24 @@ static void collectVariableAllocaSnapshotEntries(
 		(void)ignoredName;
 		if (!definitionReference || !visitedReferences.insert(definitionReference).second)
 			continue;
-		entries.push_back({definitionReference, definitionReference->alloca});
+		auto finalizedType = context.finalizedVariableTypes.find(definitionReference);
+		entries.push_back(
+			{definitionReference, definitionReference->alloca,
+			 finalizedType == context.finalizedVariableTypes.end() ? std::nullopt
+																   : std::optional<DataType>(finalizedType->second)}
+		);
 	}
 	for (Section *child : section->children)
-		collectVariableAllocaSnapshotEntries(child, visitedReferences, entries);
+		collectVariableAllocaSnapshotEntries(context, child, visitedReferences, entries);
 }
 
 struct ScopedVariableAllocaRestore {
+	ParseContext &context;
 	std::vector<VariableAllocaSnapshotEntry> entries;
 
-	explicit ScopedVariableAllocaRestore(Section *section) {
+	explicit ScopedVariableAllocaRestore(ParseContext &context, Section *section) : context(context) {
 		std::unordered_set<VariableReference *> visitedReferences;
-		collectVariableAllocaSnapshotEntries(section, visitedReferences, entries);
+		collectVariableAllocaSnapshotEntries(context, section, visitedReferences, entries);
 	}
 
 	~ScopedVariableAllocaRestore() {
@@ -104,6 +111,10 @@ struct ScopedVariableAllocaRestore {
 				entry.reference != nullptr, "ScopedVariableAllocaRestore contains null definition reference"
 			);
 			entry.reference->alloca = entry.alloca;
+			if (entry.finalizedType)
+				context.finalizedVariableTypes[entry.reference] = *entry.finalizedType;
+			else
+				context.finalizedVariableTypes.erase(entry.reference);
 		}
 	}
 };
@@ -252,7 +263,7 @@ Instantiation *generateSpecializedFunction(
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
-	ScopedVariableAllocaRestore functionVariableAllocas(section);
+	ScopedVariableAllocaRestore functionVariableAllocas(context, section);
 
 	// Generate function body
 	requireCompilerInvariant(
@@ -673,7 +684,7 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			collectPatternCallBindings(expr, matchedDef, innerBindings);
 			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
 			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
-			ScopedVariableAllocaRestore flexVariableAllocas(matchedSection);
+			ScopedVariableAllocaRestore flexVariableAllocas(context, matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);

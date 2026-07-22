@@ -1,0 +1,335 @@
+# DynLex Regular Expression Library
+
+import lib/string.dl
+
+class:
+    patterns:
+        [a|] regular expression
+    members:
+        pattern as a string
+        error_position as i32
+
+function regex closing bracket in {string:pattern} from {integer:start} to {integer:finish}:
+    execute:
+        set cursor to start
+        loop while @intrinsic("less than", cursor, finish):
+            set token to character cursor of pattern
+            if @intrinsic("equal", token, 92):
+                set cursor to @intrinsic("add", cursor, 2)
+            else if @intrinsic("equal", token, 93):
+                return cursor
+            else:
+                set cursor to @intrinsic("add", cursor, 1)
+        return @intrinsic("subtract", 0, 1)
+
+function regex closing parenthesis in {string:pattern} from {integer:start} to {integer:finish}:
+    execute:
+        set depth to 1
+        set cursor to start
+        loop while @intrinsic("less than", cursor, finish):
+            set token to character cursor of pattern
+            if @intrinsic("equal", token, 92):
+                set cursor to @intrinsic("add", cursor, 2)
+            else if @intrinsic("equal", token, 91):
+                set closing_bracket to regex closing bracket in pattern from @intrinsic("add", cursor, 1) to finish
+                if @intrinsic("less than", closing_bracket, 0):
+                    return @intrinsic("subtract", 0, 1)
+                set cursor to @intrinsic("add", closing_bracket, 1)
+            else if @intrinsic("equal", token, 40):
+                set depth to @intrinsic("add", depth, 1)
+                set cursor to @intrinsic("add", cursor, 1)
+            else if @intrinsic("equal", token, 41):
+                set depth to @intrinsic("subtract", depth, 1)
+                if @intrinsic("equal", depth, 0):
+                    return cursor
+                set cursor to @intrinsic("add", cursor, 1)
+            else:
+                set cursor to @intrinsic("add", cursor, 1)
+        return @intrinsic("subtract", 0, 1)
+
+function [the|] regex error position in {string:pattern}:
+    execute:
+        set depth to 0
+        set cursor to 0
+        set may_quantify to 0
+        set needs_alternative to 1
+        loop while @intrinsic("less than", cursor, the length of pattern):
+            set token to character cursor of pattern
+            if @intrinsic("equal", token, 92):
+                if @intrinsic("greater than or equal", @intrinsic("add", cursor, 1), the length of pattern):
+                    return cursor
+                set cursor to @intrinsic("add", cursor, 2)
+                set may_quantify to 1
+                set needs_alternative to 0
+            else if @intrinsic("equal", token, 91):
+                set closing_bracket to regex closing bracket in pattern from @intrinsic("add", cursor, 1) to the length of pattern
+                if @intrinsic("less than", closing_bracket, 0):
+                    return cursor
+                set content_start to @intrinsic("add", cursor, 1)
+                if @intrinsic("and", @intrinsic("less than", content_start, closing_bracket), @intrinsic("equal", character content_start of pattern, 94)):
+                    set content_start to @intrinsic("add", content_start, 1)
+                if @intrinsic("greater than or equal", content_start, closing_bracket):
+                    return cursor
+                set cursor to @intrinsic("add", closing_bracket, 1)
+                set may_quantify to 1
+                set needs_alternative to 0
+            else if @intrinsic("equal", token, 40):
+                set depth to @intrinsic("add", depth, 1)
+                set cursor to @intrinsic("add", cursor, 1)
+                set may_quantify to 0
+                set needs_alternative to 1
+            else if @intrinsic("equal", token, 41):
+                if @intrinsic("or", @intrinsic("equal", depth, 0), @intrinsic("equal", needs_alternative, 1)):
+                    return cursor
+                set depth to @intrinsic("subtract", depth, 1)
+                set cursor to @intrinsic("add", cursor, 1)
+                set may_quantify to 1
+                set needs_alternative to 0
+            else if @intrinsic("equal", token, 124):
+                if @intrinsic("equal", needs_alternative, 1):
+                    return cursor
+                set cursor to @intrinsic("add", cursor, 1)
+                set may_quantify to 0
+                set needs_alternative to 1
+            else if @intrinsic("or", @intrinsic("equal", token, 42), @intrinsic("or", @intrinsic("equal", token, 43), @intrinsic("equal", token, 63))):
+                if @intrinsic("equal", may_quantify, 0):
+                    return cursor
+                set cursor to @intrinsic("add", cursor, 1)
+                set may_quantify to 0
+                set needs_alternative to 0
+            else:
+                set cursor to @intrinsic("add", cursor, 1)
+                set may_quantify to 1
+                if @intrinsic("or", @intrinsic("equal", token, 94), @intrinsic("equal", token, 36)):
+                    set may_quantify to 0
+                set needs_alternative to 0
+        if @intrinsic("or", @intrinsic("not equal", depth, 0), @intrinsic("and", @intrinsic("equal", needs_alternative, 1), @intrinsic("greater than", the length of pattern, 0))):
+            return the length of pattern
+        return @intrinsic("subtract", 0, 1)
+
+function [the|] regex error position in {cstring:pattern}:
+    execute:
+        return the regex error position in the string form of pattern
+
+function compile {string:pattern} as [a|] regular expression:
+    execute:
+        return @intrinsic("construct", a regular expression, pattern, (the regex error position in pattern))
+
+function compile {cstring:pattern} as [a|] regular expression:
+    execute:
+        return compile the string form of pattern as a regular expression
+
+function {regular expression:expression} is valid:
+    execute:
+        return @intrinsic("less than", the error_position of expression, 0)
+
+function [the|] error position of {regular expression:expression}:
+    execute:
+        return the error_position of expression
+
+function regex first top level alternative in {string:pattern} from {integer:start} to {integer:finish}:
+    execute:
+        set depth to 0
+        set cursor to start
+        loop while @intrinsic("less than", cursor, finish):
+            set token to character cursor of pattern
+            if @intrinsic("equal", token, 92):
+                set cursor to @intrinsic("add", cursor, 2)
+            else if @intrinsic("equal", token, 91):
+                set cursor to regex closing bracket in pattern from @intrinsic("add", cursor, 1) to finish
+                set cursor to @intrinsic("add", cursor, 1)
+            else if @intrinsic("equal", token, 40):
+                set depth to @intrinsic("add", depth, 1)
+                set cursor to @intrinsic("add", cursor, 1)
+            else if @intrinsic("equal", token, 41):
+                set depth to @intrinsic("subtract", depth, 1)
+                set cursor to @intrinsic("add", cursor, 1)
+            else if @intrinsic("and", @intrinsic("equal", token, 124), @intrinsic("equal", depth, 0)):
+                return cursor
+            else:
+                set cursor to @intrinsic("add", cursor, 1)
+        return @intrinsic("subtract", 0, 1)
+
+function regex shorthand code matches character value:
+    execute:
+        set is_digit to @intrinsic("and", @intrinsic("greater than or equal", value, 48), @intrinsic("less than or equal", value, 57))
+        set is_lowercase to @intrinsic("and", @intrinsic("greater than or equal", value, 97), @intrinsic("less than or equal", value, 122))
+        set is_uppercase to @intrinsic("and", @intrinsic("greater than or equal", value, 65), @intrinsic("less than or equal", value, 90))
+        set is_word to @intrinsic("or", is_digit, @intrinsic("or", is_lowercase, @intrinsic("or", is_uppercase, @intrinsic("equal", value, 95))))
+        set is_space to @intrinsic("or", @intrinsic("equal", value, 32), @intrinsic("and", @intrinsic("greater than or equal", value, 9), @intrinsic("less than or equal", value, 13)))
+        if @intrinsic("equal", code, 100):
+            return is_digit
+        if @intrinsic("equal", code, 68):
+            return @intrinsic("not", is_digit)
+        if @intrinsic("equal", code, 119):
+            return is_word
+        if @intrinsic("equal", code, 87):
+            return @intrinsic("not", is_word)
+        if @intrinsic("equal", code, 115):
+            return is_space
+        if @intrinsic("equal", code, 83):
+            return @intrinsic("not", is_space)
+        return @intrinsic("equal", code, value)
+
+function regex code is a shorthand class:
+    execute:
+        return @intrinsic("or", @intrinsic("equal", code, 100), @intrinsic("or", @intrinsic("equal", code, 68), @intrinsic("or", @intrinsic("equal", code, 119), @intrinsic("or", @intrinsic("equal", code, 87), @intrinsic("or", @intrinsic("equal", code, 115), @intrinsic("equal", code, 83))))))
+
+function regex class at {integer:class_start} ending at {integer:class_finish} matches character value in {string:pattern}:
+    execute:
+        set cursor to @intrinsic("add", class_start, 1)
+        set negated to 0
+        if @intrinsic("equal", character cursor of pattern, 94):
+            set negated to 1
+            set cursor to @intrinsic("add", cursor, 1)
+        set found to 0
+        loop while @intrinsic("less than", cursor, class_finish):
+            set range_start to character cursor of pattern
+            if @intrinsic("equal", range_start, 92):
+                set cursor to @intrinsic("add", cursor, 1)
+                set range_start to character cursor of pattern
+                set cursor to @intrinsic("add", cursor, 1)
+                if regex range_start is a shorthand class:
+                    if regex shorthand range_start matches character value:
+                        set found to 1
+                else:
+                    if @intrinsic("equal", value, range_start):
+                        set found to 1
+            else:
+                set cursor to @intrinsic("add", cursor, 1)
+                set range_finish to range_start
+                if @intrinsic("and", @intrinsic("less than", @intrinsic("add", cursor, 1), class_finish), @intrinsic("equal", character cursor of pattern, 45)):
+                    set cursor to @intrinsic("add", cursor, 1)
+                    set range_finish to character cursor of pattern
+                    if @intrinsic("equal", range_finish, 92):
+                        set cursor to @intrinsic("add", cursor, 1)
+                        set range_finish to character cursor of pattern
+                    set cursor to @intrinsic("add", cursor, 1)
+                if @intrinsic("and", @intrinsic("greater than or equal", value, range_start), @intrinsic("less than or equal", value, range_finish)):
+                    set found to 1
+        if @intrinsic("equal", negated, 1):
+            return @intrinsic("equal", found, 0)
+        return @intrinsic("equal", found, 1)
+
+function regex pattern in {string:regex_source} from {integer:pattern_start} to {integer:pattern_finish} matches {string:input} from {integer:text_start} to {integer:text_finish}:
+    execute:
+        if @intrinsic("greater than or equal", pattern_start, pattern_finish):
+            return @intrinsic("equal", text_start, text_finish)
+        set separator to regex first top level alternative in regex_source from pattern_start to pattern_finish
+        if @intrinsic("greater than or equal", separator, 0):
+            if (regex pattern in regex_source from pattern_start to separator matches input from text_start to text_finish):
+                return @intrinsic("equal", 0, 0)
+            return (regex pattern in regex_source from @intrinsic("add", separator, 1) to pattern_finish matches input from text_start to text_finish)
+
+        set token to character pattern_start of regex_source
+        set atom_finish to @intrinsic("add", pattern_start, 1)
+        if @intrinsic("equal", token, 92):
+            set atom_finish to @intrinsic("add", pattern_start, 2)
+        else if @intrinsic("equal", token, 91):
+            set atom_finish to @intrinsic("add", regex closing bracket in regex_source from @intrinsic("add", pattern_start, 1) to pattern_finish, 1)
+        else if @intrinsic("equal", token, 40):
+            set atom_finish to @intrinsic("add", regex closing parenthesis in regex_source from @intrinsic("add", pattern_start, 1) to pattern_finish, 1)
+
+        set quantifier to 0
+        set remainder_start to atom_finish
+        if @intrinsic("less than", remainder_start, pattern_finish):
+            set possible_quantifier to character remainder_start of regex_source
+            if @intrinsic("or", @intrinsic("equal", possible_quantifier, 42), @intrinsic("or", @intrinsic("equal", possible_quantifier, 43), @intrinsic("equal", possible_quantifier, 63))):
+                set quantifier to possible_quantifier
+                set remainder_start to @intrinsic("add", remainder_start, 1)
+
+        if @intrinsic("or", @intrinsic("equal", quantifier, 42), @intrinsic("equal", quantifier, 63)):
+            if (regex pattern in regex_source from remainder_start to pattern_finish matches input from text_start to text_finish):
+                return @intrinsic("equal", 0, 0)
+
+        set atom_text_finish to text_start
+        loop while @intrinsic("less than or equal", atom_text_finish, text_finish):
+            set atom_matches to 0
+            if @intrinsic("equal", token, 94):
+                if @intrinsic("and", @intrinsic("equal", text_start, 0), @intrinsic("equal", atom_text_finish, text_start)):
+                    set atom_matches to 1
+            else if @intrinsic("equal", token, 36):
+                if @intrinsic("and", @intrinsic("equal", text_start, the length of input), @intrinsic("equal", atom_text_finish, text_start)):
+                    set atom_matches to 1
+            else if @intrinsic("equal", token, 40):
+                if (regex pattern in regex_source from @intrinsic("add", pattern_start, 1) to @intrinsic("subtract", atom_finish, 1) matches input from text_start to atom_text_finish):
+                    set atom_matches to 1
+            else if @intrinsic("and", @intrinsic("equal", atom_text_finish, @intrinsic("add", text_start, 1)), @intrinsic("less than", text_start, the length of input)):
+                if @intrinsic("equal", token, 91):
+                    if (regex class at pattern_start ending at @intrinsic("subtract", atom_finish, 1) matches character (character text_start of input) in regex_source):
+                        set atom_matches to 1
+                else if @intrinsic("equal", token, 46):
+                    if @intrinsic("not equal", character text_start of input, 10):
+                        set atom_matches to 1
+                else:
+                    set literal to token
+                    if @intrinsic("equal", token, 92):
+                        set literal to character @intrinsic("add", pattern_start, 1) of regex_source
+                        if regex literal is a shorthand class:
+                            if regex shorthand literal matches character character text_start of input:
+                                set atom_matches to 1
+                        else if @intrinsic("equal", character text_start of input, literal):
+                            set atom_matches to 1
+                    else if @intrinsic("equal", character text_start of input, literal):
+                        set atom_matches to 1
+
+            if @intrinsic("equal", atom_matches, 1):
+                if (regex pattern in regex_source from remainder_start to pattern_finish matches input from atom_text_finish to text_finish):
+                    return @intrinsic("equal", 0, 0)
+                if @intrinsic("and", @intrinsic("greater than", atom_text_finish, text_start), @intrinsic("or", @intrinsic("equal", quantifier, 42), @intrinsic("equal", quantifier, 43))):
+                    if (regex pattern in regex_source from pattern_start to pattern_finish matches input from atom_text_finish to text_finish):
+                        return @intrinsic("equal", 0, 0)
+            set atom_text_finish to @intrinsic("add", atom_text_finish, 1)
+        return @intrinsic("equal", 0, 1)
+
+function {string:text} matches {regular expression:expression}:
+    execute:
+        if @intrinsic("not", expression is valid):
+            @intrinsic("call", "libc", "abort", void)
+        return (regex pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from 0 to the length of text)
+
+function {cstring:text} matches {regular expression:expression}:
+    execute:
+        return the string form of text matches expression
+
+function {string:text} contains a match for {regular expression:expression}:
+    execute:
+        if @intrinsic("not", expression is valid):
+            @intrinsic("call", "libc", "abort", void)
+        set start to 0
+        loop while @intrinsic("less than or equal", start, the length of text):
+            set finish to start
+            loop while @intrinsic("less than or equal", finish, the length of text):
+                if (regex pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from start to finish):
+                    return @intrinsic("equal", 0, 0)
+                set finish to @intrinsic("add", finish, 1)
+            set start to @intrinsic("add", start, 1)
+        return @intrinsic("equal", 0, 1)
+
+function {cstring:text} contains a match for {regular expression:expression}:
+    execute:
+        return the string form of text contains a match for expression
+
+function {string:text} matches regular expression {string:pattern}:
+    execute:
+        return text matches (compile pattern as a regular expression)
+
+function {string:text} matches regular expression {cstring:pattern}:
+    execute:
+        return text matches (compile pattern as a regular expression)
+
+function {cstring:text} matches regular expression {cstring:pattern}:
+    execute:
+        return (the string form of text) matches regular expression (the string form of pattern)
+
+function {string:text} contains a match for regular expression {string:pattern}:
+    execute:
+        return text contains a match for (compile pattern as a regular expression)
+
+function {string:text} contains a match for regular expression {cstring:pattern}:
+    execute:
+        return text contains a match for (compile pattern as a regular expression)
+
+function {cstring:text} contains a match for regular expression {cstring:pattern}:
+    execute:
+        return (the string form of text) contains a match for regular expression (the string form of pattern)

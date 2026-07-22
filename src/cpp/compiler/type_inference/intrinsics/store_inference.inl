@@ -75,11 +75,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			return;
 		}
 
-		if (!variable->type.isDeduced() || isVariableAssignmentCompatible(variable->type, valueType)) {
+		DataType mergedVariableType = valueType;
+		if (!variable->type.isDeduced() || mergeVariableAssignmentType(variable->type, valueType, mergedVariableType)) {
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordVariableWrite(variable);
-			if (!variable->type.isDeduced() || variable->type == valueType)
-				commitVariableTypeFromValue(variable, valueExpr, valueType);
+			if (!variable->type.isDeduced() || variable->type == valueType || variable->type != mergedVariableType)
+				commitVariableTypeFromValue(variable, valueExpr, mergedVariableType);
 			destinationExpr->type = variable->type;
 			expr->arguments[1]->type = variable->type;
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
@@ -118,8 +119,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	Expression *ownerExpr =
 		resolveThroughBindingsDeep(destinationExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack);
 	DataType instanceType =
-		ownerExpr ? concretizeClassType(ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, resolvedBindingFrameStack))
-				  : DataType{};
+		ownerExpr ? ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, resolvedBindingFrameStack) : DataType{};
 	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0) {
 		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
@@ -148,24 +148,27 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			continue;
 		const DataType &currentFieldType = classDefinition->instantiations[instanceType.classInstIndex].fieldTypes[i];
 		if (currentFieldType.isDeduced()) {
-			if (isVariableAssignmentCompatible(currentFieldType, valueType))
-				return;
-			std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
-											  ? std::string(destinationSourceExpr->range.subString)
-											  : fieldName;
-			context.setTypeFailure(renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
-				"message",
-				{{"name", destinationName},
-				 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
-				 {"to_type", typeToUserName(valueType, context.parseContext)}}
-			));
-			if (!context.trial) {
-				context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
-					destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext
+			DataType mergedFieldType;
+			if (!mergeVariableAssignmentType(currentFieldType, valueType, mergedFieldType)) {
+				std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
+												  ? std::string(destinationSourceExpr->range.subString)
+												  : fieldName;
+				context.setTypeFailure(renderConfiguredMessage(
+					syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
+					"variable type change", "message",
+					{{"name", destinationName},
+					 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
+					 {"to_type", typeToUserName(valueType, context.parseContext)}}
 				));
+				if (!context.trial) {
+					context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
+						destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext
+					));
+				}
+				return;
 			}
-			return;
+			if (mergedFieldType == currentFieldType)
+				return;
 		}
 		int refinedInstIndex =
 			getRefinedClassInstantiationIndex(context, classDefinition, instanceType.classInstIndex, i, valueType);

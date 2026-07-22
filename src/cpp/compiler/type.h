@@ -140,6 +140,10 @@ struct DataType {
 	bool isConcrete() const {
 		if (!isDeduced())
 			return false;
+		// A pointer has a complete runtime representation even while a recursive
+		// pointee class is still being instantiated.
+		if (pointerDepth > 0)
+			return kind != Kind::Class || classDefinition;
 		if (kind == Kind::Array)
 			return arraySize >= 0 && arrayElementType && arrayElementType->isConcrete();
 		if (kind == Kind::Vector)

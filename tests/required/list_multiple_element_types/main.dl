@@ -1,0 +1,11 @@
+import list.dl
+
+set word to the string form of "one"
+set words to an empty list of string
+set numbers to an empty list of integer
+append word to words
+append 2 to numbers
+print item 0 of words as line
+print item 0 of numbers as line
+free list words
+free list numbers

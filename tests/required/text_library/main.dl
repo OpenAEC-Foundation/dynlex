@@ -1,0 +1,20 @@
+import text.dl
+
+set padded to the string form of "  Hello, DynLex!  "
+set clean to padded trimmed
+print clean as line
+print (the lowercase form of clean) as line
+print (the uppercase form of clean) as line
+print (clean starts with "Hello") as line
+print (clean ends with "Lex!") as line
+print (clean contains "lo, Dyn") as line
+print (the substring of clean from 7 with length 6) as line
+print (clean with "DynLex" replaced by "world") as line
+print ("ha" repeated 3 times) as line
+
+set csv to the string form of "red,green,blue"
+set parts to split csv at ","
+print the length of parts as line
+print item 1 of parts as line
+print (parts joined with " | ") as line
+free split text parts

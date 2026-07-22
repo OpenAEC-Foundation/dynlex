@@ -115,6 +115,8 @@ struct ParseContext {
 	llvm::Function *mainLLVMFunction{};
 	llvm::BasicBlock *mainCleanupBlock{};
 	llvm::AllocaInst *mainReturnStorage{};
+	llvm::GlobalVariable *commandLineArgumentCountGlobal{};
+	llvm::GlobalVariable *commandLineArgumentValuesGlobal{};
 
 	// Debug info (initialized when emitDebugInfo is true, not for SPIR-V)
 	llvm::DIBuilder *diBuilder{};
@@ -147,6 +149,8 @@ struct ParseContext {
 	std::vector<SectionFlexBodyFrame> sectionFlexBodyFrames;
 	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
 	const Instantiation *currentCodegenInstantiation{};
+	// Most-refined type of each variable in the active monomorphized function or flex expansion.
+	std::unordered_map<VariableReference *, DataType> finalizedVariableTypes;
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
@@ -302,17 +306,22 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 	});
 }
 
-inline Expression *flexPatternBodyExpression(PatternDefinition *definition) {
+inline Expression *flexPatternBodyExpression(PatternDefinition *definition, bool *isOnlyExpression = nullptr) {
 	if (!definition || !definition->section || !definition->section->isFlex)
 		return nullptr;
 	Expression *bodyExpression = nullptr;
+	size_t expressionCount = 0;
 	definition->section->forEachDefinitionBodySection([&](Section *bodySection) {
 		for (CodeLine *line : bodySection->codeLines) {
-			if (line && line->expression)
+			if (line && line->expression) {
 				bodyExpression = line->expression;
+				expressionCount++;
+			}
 		}
 		return true;
 	});
+	if (isOnlyExpression)
+		*isOnlyExpression = expressionCount == 1;
 	return bodyExpression;
 }
 

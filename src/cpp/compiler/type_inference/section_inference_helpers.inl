@@ -14,7 +14,7 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 		Variable *parameterVariable = findOwnSectionVariable(section, name);
 		if (!parameterVariable || parameterVariable->isGlobal)
 			continue;
-		parameterVariable->type = concretizeClassType(parameterType);
+		parameterVariable->type = parameterType;
 		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
 		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}

@@ -25,14 +25,6 @@ static std::string formatTypeList(const std::vector<DataType> &types, ParseConte
 	return out;
 }
 
-static DataType concretizeClassType(DataType type) {
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
-		!type.classDefinition->instantiations.empty()) {
-		type.classInstIndex = 0;
-	}
-	return type;
-}
-
 static DataType resolveBuiltInPropertyType(const DataType &ownerType, const std::string &fieldName) {
 	if (fieldName == "data" && ownerType.isBytePointer())
 		return ownerType;
@@ -247,7 +239,7 @@ static bool tryResolveCastResultType(const DataType &fromType, const DataType &t
 		return false;
 	if (typeArgType.kind != DataType::Kind::Type)
 		return false;
-	DataType toType = concretizeClassType(typeArgType.toReferencedType());
+	DataType toType = typeArgType.toReferencedType();
 	if (!isSupportedCastConversion(fromType, toType))
 		return false;
 	outType = toType;

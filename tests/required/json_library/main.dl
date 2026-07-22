@@ -1,0 +1,16 @@
+import json.dl
+
+set parsed to parse "{\"name\":\"DynLex\",\"enabled\":true,\"values\":[1,2.5,null]}" as json
+print json parsing succeeded for parsed as line
+set document to the value of parsed
+print json text named "name" in document as line
+print json boolean named "enabled" in document as line
+set values to json member named "values" in document
+print the number of json items in values as line
+print json number at index 1 in values as line
+free json result parsed
+
+set invalid to parse "{\"missing\":}" as json
+print json parsing succeeded for invalid as line
+print the json error position in invalid as line
+free json result invalid

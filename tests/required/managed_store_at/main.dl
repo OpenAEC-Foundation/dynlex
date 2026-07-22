@@ -1,0 +1,5 @@
+import lib/std.dl
+
+set value to the string form of 1001
+@intrinsic("store at", @intrinsic("address of", value), value)
+print @intrinsic("dereference", the owner of value) as line

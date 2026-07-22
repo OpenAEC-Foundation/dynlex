@@ -524,8 +524,6 @@ SyntaxConfig::Messages::Messages() {
 	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");
 	set("multiple reachable return types", "message",
 		"Function has multiple reachable return types: {first_type} and {second_type}");
-	set("store at managed value unsupported", "message",
-		"store at cannot store managed values because raw pointer storage has no initialization state");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
 }
 

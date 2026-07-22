@@ -1,0 +1,10 @@
+# DynLex File Operations Library
+
+import lib/std.dl
+
+function move {cstring:source} to {cstring:destination}:
+    execute:
+        set result to @intrinsic("call", "libc", "rename", an integer, source, destination)
+        if result != 0:
+            @intrinsic("call", "libc", "perror", void, source)
+            @intrinsic("call", "libc", "exit", void, 1)

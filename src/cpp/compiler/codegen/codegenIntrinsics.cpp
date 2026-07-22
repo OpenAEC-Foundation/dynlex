@@ -7,6 +7,7 @@
 #include "sectionFlexBody.h"
 #include "type.h"
 #include "variable.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -404,6 +405,13 @@ llvm::Value *generateIntrinsicCode(
 			crashCompilerBug("lifecycle value reached codegen without its managed value binding");
 		return builder.CreateLoad(getLLVMType(context, resultType), value->second, "lifecycle_value");
 	}
+	if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+		llvm::GlobalVariable *global = kind == IntrinsicKind::CommandLineArgumentCount
+										   ? context.commandLineArgumentCountGlobal
+										   : context.commandLineArgumentValuesGlobal;
+		requireCompilerInvariant(global != nullptr, "command-line argument intrinsic reached codegen without native ABI state");
+		return builder.CreateLoad(global->getValueType(), global, global->getName() + ".value");
+	}
 
 	if (kind == IntrinsicKind::SetSubject) {
 		DataType valueType = finalizedExpressionType(context, args[1]);
@@ -472,10 +480,6 @@ llvm::Value *generateIntrinsicCode(
 			DataType ownerType = finalizedExpressionType(context, instExpr);
 			bool ownerIsClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.isPointer();
 			DataType instType = ownerIsClassPointer ? ownerType.dereferenced() : ownerType;
-			if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex < 0 &&
-				!instType.classDefinition->instantiations.empty()) {
-				instType.classInstIndex = 0;
-			}
 			ClassDefinition *classDef = instType.classDefinition;
 			Expression *propExpr = resolveVariableBinding(context, destExpr->arguments[2]);
 			std::string fieldName = getStringLiteral(propExpr);
@@ -506,7 +510,7 @@ llvm::Value *generateIntrinsicCode(
 			// Restore scope state — the else branch evaluates args[1] directly
 			context.flexBindingFrames = savedBindingFrames;
 
-			llvm::Value *ptr = getVariablePointer(context, args[1]);
+			llvm::Value *ptr = getVariablePointer(context, destExpr);
 			// A silently skipped store would corrupt program behavior far from
 			// the cause; storage for every reachable destination must exist.
 			if (!ptr)
@@ -514,7 +518,7 @@ llvm::Value *generateIntrinsicCode(
 			if (!val)
 				crashCompilerBug("store value reached codegen without a generated value");
 			{
-				DataType destType = finalizedExpressionType(context, args[1]);
+				DataType destType = finalizedExpressionType(context, destExpr);
 				if (typeHasManagedLifecycle(destType)) {
 					val = ensureType(context, val, valType, destType);
 					if (!managedExpressionResultIsOwned(context, args[2]))
@@ -644,48 +648,51 @@ llvm::Value *generateIntrinsicCode(
 		DataType leftType = finalizedExpressionType(context, args[1]);
 		DataType rightType = finalizedExpressionType(context, args[2]);
 
-		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-			rightType.isPointer() && leftType == rightType) {
-			llvm::Value *cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
-															: builder.CreateICmpNE(left, right, "pne");
-			requireCompilerInvariant(resultType.isDeduced(), "Comparison result type must be deduced before codegen");
-			if (resultType.kind == DataType::Kind::Bool)
-				return cmp;
-			return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
-		}
-		DataType promoted;
-		DataType::promoteArithmetic(leftType, rightType, promoted);
-
-		left = ensureType(context, left, leftType, promoted);
-		right = ensureType(context, right, rightType, promoted);
-
 		llvm::Value *cmp;
-		if (promoted.kind == DataType::Kind::Float) {
-			if (kind == IntrinsicKind::LessThan)
-				cmp = builder.CreateFCmpOLT(left, right, "flt");
-			else if (kind == IntrinsicKind::LessThanOrEqual)
-				cmp = builder.CreateFCmpOLE(left, right, "fle");
-			else if (kind == IntrinsicKind::GreaterThan)
-				cmp = builder.CreateFCmpOGT(left, right, "fgt");
-			else if (kind == IntrinsicKind::GreaterThanOrEqual)
-				cmp = builder.CreateFCmpOGE(left, right, "fge");
-			else if (kind == IntrinsicKind::Equal)
-				cmp = builder.CreateFCmpOEQ(left, right, "feq");
-			else
-				cmp = builder.CreateFCmpONE(left, right, "fne");
+		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
+			rightType.isPointer()) {
+			DataType comparisonType = leftType;
+			if (ClassDefinition::typeStructurallyRefines(rightType, leftType))
+				comparisonType = rightType;
+			left = ensureType(context, left, leftType, comparisonType);
+			right = ensureType(context, right, rightType, comparisonType);
+			cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
+											   : builder.CreateICmpNE(left, right, "pne");
 		} else {
-			if (kind == IntrinsicKind::LessThan)
-				cmp = builder.CreateICmpSLT(left, right, "lt");
-			else if (kind == IntrinsicKind::LessThanOrEqual)
-				cmp = builder.CreateICmpSLE(left, right, "le");
-			else if (kind == IntrinsicKind::GreaterThan)
-				cmp = builder.CreateICmpSGT(left, right, "gt");
-			else if (kind == IntrinsicKind::GreaterThanOrEqual)
-				cmp = builder.CreateICmpSGE(left, right, "ge");
-			else if (kind == IntrinsicKind::Equal)
-				cmp = builder.CreateICmpEQ(left, right, "eq");
-			else
-				cmp = builder.CreateICmpNE(left, right, "ne");
+			DataType promoted;
+			requireCompilerInvariant(
+				DataType::promoteArithmetic(leftType, rightType, promoted),
+				"comparison operands accepted by inference have no common codegen type"
+			);
+			left = ensureType(context, left, leftType, promoted);
+			right = ensureType(context, right, rightType, promoted);
+			if (promoted.kind == DataType::Kind::Float) {
+				if (kind == IntrinsicKind::LessThan)
+					cmp = builder.CreateFCmpOLT(left, right, "flt");
+				else if (kind == IntrinsicKind::LessThanOrEqual)
+					cmp = builder.CreateFCmpOLE(left, right, "fle");
+				else if (kind == IntrinsicKind::GreaterThan)
+					cmp = builder.CreateFCmpOGT(left, right, "fgt");
+				else if (kind == IntrinsicKind::GreaterThanOrEqual)
+					cmp = builder.CreateFCmpOGE(left, right, "fge");
+				else if (kind == IntrinsicKind::Equal)
+					cmp = builder.CreateFCmpOEQ(left, right, "feq");
+				else
+					cmp = builder.CreateFCmpONE(left, right, "fne");
+			} else {
+				if (kind == IntrinsicKind::LessThan)
+					cmp = builder.CreateICmpSLT(left, right, "lt");
+				else if (kind == IntrinsicKind::LessThanOrEqual)
+					cmp = builder.CreateICmpSLE(left, right, "le");
+				else if (kind == IntrinsicKind::GreaterThan)
+					cmp = builder.CreateICmpSGT(left, right, "gt");
+				else if (kind == IntrinsicKind::GreaterThanOrEqual)
+					cmp = builder.CreateICmpSGE(left, right, "ge");
+				else if (kind == IntrinsicKind::Equal)
+					cmp = builder.CreateICmpEQ(left, right, "eq");
+				else
+					cmp = builder.CreateICmpNE(left, right, "ne");
+			}
 		}
 
 		requireCompilerInvariant(resultType.isDeduced(), "Comparison result type must be deduced before codegen");
@@ -825,18 +832,38 @@ llvm::Value *generateIntrinsicCode(
 		return builder.CreateAlignedLoad(elemLLVMType, ptrVal, getLLVMABIAlignment(context, elemType), "deref");
 	}
 
-	// Pointer store intrinsic
-	if (kind == IntrinsicKind::StoreAt) {
+	// Pointer storage intrinsics
+	if (kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) {
 		llvm::Value *ptr = generateExpressionCode(context, args[1]);
 		llvm::Value *value = generateExpressionCode(context, args[2]);
 		DataType ptrType = finalizedExpressionType(context, args[1]);
-		requireCompilerInvariant(ptrType.isPointer(), "store at reached codegen with a non-pointer destination");
+		requireCompilerInvariant(ptrType.isPointer(), "pointer store reached codegen with a non-pointer destination");
 		DataType elementType = ptrType.dereferenced();
-		requireCompilerInvariant(
-			!typeHasManagedLifecycle(elementType), "managed store at reached codegen despite inference rejection"
-		);
 		value = ensureType(context, value, finalizedExpressionType(context, args[2]), elementType);
-		builder.CreateAlignedStore(value, ptr, getLLVMABIAlignment(context, elementType));
+		if (typeHasManagedLifecycle(elementType)) {
+			if (!managedExpressionResultIsOwned(context, args[2]))
+				retainManagedValue(context, elementType, value);
+			if (kind == IntrinsicKind::StoreAt)
+				storeManagedValue(context, ptr, elementType, value);
+			else
+				builder.CreateAlignedStore(value, ptr, getLLVMABIAlignment(context, elementType));
+		} else {
+			builder.CreateAlignedStore(value, ptr, getLLVMABIAlignment(context, elementType));
+		}
+		return nullptr;
+	}
+
+	if (kind == IntrinsicKind::DestroyAt) {
+		llvm::Value *ptr = generateExpressionCode(context, args[1]);
+		DataType ptrType = finalizedExpressionType(context, args[1]);
+		requireCompilerInvariant(ptrType.isPointer(), "destroy at reached codegen with a non-pointer destination");
+		DataType elementType = ptrType.dereferenced();
+		if (typeHasManagedLifecycle(elementType)) {
+			llvm::Value *value = builder.CreateAlignedLoad(
+				getLLVMType(context, elementType), ptr, getLLVMABIAlignment(context, elementType), "destroy_value"
+			);
+			releaseManagedValue(context, elementType, value);
+		}
 		return nullptr;
 	}
 

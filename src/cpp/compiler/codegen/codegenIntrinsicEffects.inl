@@ -426,10 +426,7 @@ if (kind == IntrinsicKind::SizeOf) {
 	if (typeArgType.kind != DataType::Kind::Type)
 		return nullptr;
 	DataType valueType = typeArgType.toReferencedType();
-	if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
-		!valueType.classDefinition->instantiations.empty()) {
-		valueType.classInstIndex = 0;
-	}
+	requireCompilerInvariant(valueType.isConcrete(), "size of reached codegen with a non-concrete type");
 	return builder.getInt64(valueType.getByteSize(context.llvmModule->getDataLayout(), *context.llvmContext));
 }
 
@@ -507,7 +504,7 @@ if (kind == IntrinsicKind::Construct) {
 
 	ClassDefinition *classDef = resultType.classDefinition;
 	DataType concreteType = resultType;
-	if (concreteType.classInstIndex < 0) {
+	if (concreteType.classInstIndex == -1) {
 		std::vector<DataType> fieldTypes;
 		fieldTypes.reserve(args.size() - 2);
 		for (size_t i = 2; i < args.size(); i++)
@@ -551,10 +548,6 @@ if (kind == IntrinsicKind::Property) {
 	DataType ownerType = finalizedExpressionType(context, ownerExpr);
 	bool ownerIsClassPointer = ownerType.isPointer() && ownerType.kind == DataType::Kind::Class;
 	DataType instType = ownerIsClassPointer ? ownerType.dereferenced() : ownerType;
-	if (instType.kind == DataType::Kind::Class && instType.classDefinition && instType.classInstIndex < 0 &&
-		!instType.classDefinition->instantiations.empty()) {
-		instType.classInstIndex = 0;
-	}
 	ClassDefinition *classDef = instType.classDefinition;
 
 	// Get field name from string literal

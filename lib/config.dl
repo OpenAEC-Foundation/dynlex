@@ -68,6 +68,10 @@ dynlex options:
         function has missing return path: "Function '{function}' does not return a value on every reachable path"
         multiple reachable return types: "Function has multiple reachable return types: {first_type} and {second_type}"
         program return value invalid: "Program return value must be convertible to a 32 bit integer, got {value_type}"
+        incompatible return type:
+            message: "Function return type is {expected_type}, but this return statement produces {actual_type}"
+            related origin: "Function return type was first inferred as {type} here"
+            quick fix convert: "Convert returned value to {type}"
         variable type change:
             message: "Variable '{name}' cannot change type from {from_type} to {to_type}"
             related origin: "Variable '{name}' first became {type} here"
@@ -104,7 +108,6 @@ dynlex options:
         min max requires arithmetic operands: "min/max operands must be arithmetic-compatible"
         address of requires variable: "address of requires a variable"
         store at requires pointer: "store at requires a pointer argument"
-        store at managed value unsupported: "store at cannot store managed values because raw pointer storage has no initialization state"
         store at value incompatible: "store at cannot store {value_type} through a pointer to {element_type}"
         loop while requires body section: "loop while requires a body section"
         if requires body section: "if requires a body section"

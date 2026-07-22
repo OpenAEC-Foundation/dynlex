@@ -1,0 +1,58 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to value:
+    replacement:
+        @intrinsic("store", var, value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function left + right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function left - right:
+    execute:
+        return @intrinsic("subtract", left, right)
+
+function left < right:
+    execute:
+        return @intrinsic("less than", left, right)
+
+function left > right:
+    execute:
+        return @intrinsic("greater than", left, right)
+
+flex function repeat while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section loop while condition:
+    replacement:
+        repeat while condition
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function count from initial:
+    execute:
+        set total to initial
+        set cursor to 0
+        loop while cursor < 2:
+            if cursor > 0:
+                set total to total + 1
+            set cursor to cursor + 1
+        return total
+
+set initial to @intrinsic("call", "libc", "rand", integer)
+set result to count from initial
+set difference to result - initial
+discard @intrinsic("call", "libc", "printf", integer, "%d\n", difference)

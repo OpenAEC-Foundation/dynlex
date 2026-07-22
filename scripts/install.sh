@@ -45,6 +45,7 @@ install_linux_deps() {
             "clang-tidy-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION" \
             "llvm-$LLVM_VERSION-dev" \
+            binutils \
             libcurl4-openssl-dev \
             libedit-dev \
             libfreetype-dev \
@@ -69,6 +70,7 @@ install_linux_deps() {
             clang-tools-extra \
             llvm \
             llvm-devel \
+            binutils \
             freetype-devel \
             glfw-devel \
             json-devel \
@@ -92,6 +94,7 @@ install_linux_deps() {
             glfw \
             libglvnd \
             llvm \
+            binutils \
             nlohmann-json \
             ccache \
             cmake \
@@ -112,6 +115,7 @@ install_linux_deps() {
             clang-tools \
             llvm \
             llvm-devel \
+            binutils \
             freetype2-devel \
             libglfw-devel \
             Mesa-libGL-devel \

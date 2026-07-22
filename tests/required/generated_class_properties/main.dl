@@ -46,8 +46,11 @@ set text_value to @intrinsic("construct", text, 7)
 set text_length to the length of text_value
 set holder_value to @intrinsic("construct", holder, "hello")
 set nested_length to the length of the data of holder_value
+set points to @intrinsic("construct", point, 20, 30)
+set points' x to 21
 
 @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", the x of p))
 @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", the x of p_pointer))
 @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", text_length))
 @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", nested_length))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", points' x))

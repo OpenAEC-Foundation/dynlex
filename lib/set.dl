@@ -1,0 +1,44 @@
+# DynLex Set Library
+
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] unique set
+    members:
+        values
+
+function an empty set of {type:element_type}:
+    execute:
+        set values to an empty list of element_type
+        set initial_value to @intrinsic("construct", a unique set, values)
+        set result to allocate 1 slots of initial_value
+        return result
+
+function [the|] size of {a pointer to unique set:items}:
+    execute:
+        return the length of the values of items
+
+function {a pointer to unique set:items} contains value:
+    execute:
+        return the values of items contains value
+
+function add value to {a pointer to unique set:items}:
+    execute:
+        if not items contains value:
+            append value to the values of items
+
+function remove value from {a pointer to unique set:items}:
+    execute:
+        set position to the index of value in the values of items
+        if position >= 0:
+            remove item position from the values of items
+
+function clear {a pointer to unique set:items}:
+    execute:
+        clear the values of items
+
+function free set {a pointer to unique set:items}:
+    execute:
+        free list the values of items
+        @intrinsic("call", "libc", "free", void, items)

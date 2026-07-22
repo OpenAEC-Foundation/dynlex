@@ -387,8 +387,9 @@ bool resolvePatterns(ParseContext &context) {
 			for (PatternDefinition *definition : section->patternDefinitions) {
 				if (!definition->resolved) {
 					definition->resolved = true;
+					bool resolveImmediately = hasSingleWordPatternSpelling(definition->patternElements);
 					forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-						if (element.type == PatternElement::Type::VariableLike) {
+						if (!resolveImmediately && canPromoteVariableLikeElement(element)) {
 							if (definition->patternElements.size() > 1) {
 								if (section->variableLikeCounts[element.text] != 0) {
 									definition->resolved = false;

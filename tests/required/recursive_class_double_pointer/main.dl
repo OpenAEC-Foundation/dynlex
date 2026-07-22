@@ -1,0 +1,30 @@
+function [a|] pointer to pointed_type:
+    replacement:
+        @intrinsic("add pointer depth", pointed_type)
+
+function i32:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function value as destination_type:
+    replacement:
+        @intrinsic("cast", value, destination_type)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+class:
+    patterns:
+        [a|] recursive value
+    members:
+        children as a pointer to a pointer to recursive value
+        length as i32
+
+set empty_children to 0 as a pointer to a pointer to recursive value
+set initial_value to @intrinsic("construct", a recursive value, empty_children, 0)
+discard the children of initial_value

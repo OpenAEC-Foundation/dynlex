@@ -627,7 +627,7 @@ std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(
 
 static DataType concretizeCallableParameterType(const DefinitionPatternElement &element) {
 	DataType type = element.resolvedParameterType;
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex < 0 &&
+	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex == -1 &&
 		!type.classDefinition->instantiations.empty()) {
 		type.classInstIndex = 0;
 	}

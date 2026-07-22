@@ -3,7 +3,7 @@ static DataType toTypeReference(const DataType &valueType) {
 		return {};
 	if (valueType.kind == DataType::Kind::Type)
 		return valueType;
-	DataType concreteValueType = concretizeClassType(valueType);
+	DataType concreteValueType = valueType;
 	DataType typeReference;
 	typeReference.kind = DataType::Kind::Type;
 	typeReference.referencedKind = concreteValueType.kind;
@@ -69,7 +69,7 @@ static bool resolveCompileTimeTypeReference(
 	if (resolved->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
 		if (kind == IntrinsicKind::Type) {
-			DataType resolvedType = resolveKnownExpressionType(resolved, effectiveBindingFrameStack);
+			DataType resolvedType = resolveKnownExpressionType(resolved, effectiveBindingFrameStack, inferenceContext);
 			if (resolvedType.kind == DataType::Kind::Type) {
 				outTypeRef = resolvedType;
 				return true;
@@ -248,7 +248,7 @@ static bool resolveCompileTimeTypeReference(
 static bool
 completeBoundClassFieldType(const DataType &fieldConstraintInput, const DataType &argumentTypeInput, DataType &outFieldType) {
 	DataType fieldConstraint = fieldConstraintInput;
-	DataType argumentType = concretizeClassType(argumentTypeInput);
+	DataType argumentType = argumentTypeInput;
 	if (!argumentType.isConcrete())
 		return false;
 	if (fieldConstraint.kind == DataType::Kind::Any) {
@@ -294,6 +294,24 @@ static DataType instantiateBoundClassType(
 	if (constructionArgumentTypes && constructionArgumentTypes->size() != classDef->fields.size())
 		return {};
 
+	std::string requestKey = buildClassInstantiationRequestKey(bindingFrameStack, inferenceContext, constructionArgumentTypes);
+	auto completedRequest = classDef->instantiationIndicesByRequest.find(requestKey);
+	if (completedRequest != classDef->instantiationIndicesByRequest.end()) {
+		requireCompilerInvariant(
+			completedRequest->second >= 0 && completedRequest->second < static_cast<int>(classDef->instantiations.size()),
+			"cached class instantiation request refers to a missing instantiation"
+		);
+		return {DataType::Kind::Type, 0, 0, classDef, completedRequest->second, nullptr, DataType::Kind::Class};
+	}
+	for (auto active = activeClassInstantiations.rbegin(); active != activeClassInstantiations.rend(); ++active) {
+		if (active->parseContext != &parseContext || active->classDefinition != classDef || active->requestKey != requestKey)
+			continue;
+		return {DataType::Kind::Type, 0, 0, classDef, active->symbolicIndex, nullptr, DataType::Kind::Class};
+	}
+
+	int symbolicIndex = nextSymbolicClassInstantiationIndex--;
+	ScopedActiveClassInstantiation activeInstantiation(parseContext, classDef, requestKey, symbolicIndex);
+
 	struct ScopedKnownConstantsOverride {
 		InferenceContext *context{};
 		std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
@@ -311,8 +329,10 @@ static DataType instantiateBoundClassType(
 	for (size_t fieldIndex = 0; fieldIndex < classDef->fields.size(); fieldIndex++) {
 		FieldDefinition &field = classDef->fields[fieldIndex];
 		DataType fieldType = field.declaredType;
-		if (fieldType.kind == DataType::Kind::Any && !constructionArgumentTypes)
+		if (fieldType.kind == DataType::Kind::Any && !constructionArgumentTypes) {
+			activeInstantiation.completed = true;
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
+		}
 		if (fieldType.kind == DataType::Kind::Unresolved && fieldType.typeExpression) {
 			expandPendingTypeReferenceExpression(
 				fieldType.typeExpression, field.range.line ? field.range.line->section : nullptr
@@ -326,7 +346,7 @@ static DataType instantiateBoundClassType(
 				DataType inferredTypeRef;
 				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef))
 					return {};
-				fieldType = concretizeClassType(inferredTypeRef.toReferencedType());
+				fieldType = inferredTypeRef.toReferencedType();
 			} else {
 				DataType resolvedTypeRef;
 				if (!resolveCompileTimeTypeReference(
@@ -334,10 +354,8 @@ static DataType instantiateBoundClassType(
 					) ||
 					resolvedTypeRef.kind != DataType::Kind::Type)
 					return {};
-				fieldType = concretizeClassType(resolvedTypeRef.toReferencedType());
+				fieldType = resolvedTypeRef.toReferencedType();
 			}
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
 		}
 
 		if (constructionArgumentTypes) {
@@ -346,12 +364,34 @@ static DataType instantiateBoundClassType(
 				return {};
 			fieldType = std::move(completedFieldType);
 		} else if (!fieldType.isConcrete()) {
+			activeInstantiation.completed = true;
 			return {DataType::Kind::Type, 0, 0, classDef, -1, nullptr, DataType::Kind::Class};
 		}
 		fieldTypes.push_back(fieldType);
 	}
 
-	int instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+	int instIndex = -1;
+	for (int candidateIndex = 0; candidateIndex < static_cast<int>(classDef->instantiations.size()); candidateIndex++) {
+		std::vector<DataType> candidateFieldTypes = fieldTypes;
+		for (DataType &candidateFieldType : candidateFieldTypes)
+			replaceSymbolicClassInstantiation(candidateFieldType, classDef, symbolicIndex, candidateIndex);
+		if (candidateFieldTypes != classDef->instantiations[candidateIndex].fieldTypes)
+			continue;
+		fieldTypes = std::move(candidateFieldTypes);
+		instIndex = candidateIndex;
+		break;
+	}
+	if (instIndex < 0) {
+		int newIndex = static_cast<int>(classDef->instantiations.size());
+		for (DataType &fieldType : fieldTypes)
+			replaceSymbolicClassInstantiation(fieldType, classDef, symbolicIndex, newIndex);
+		recordClassInstantiationAppend(classDef);
+		instIndex = classDef->getOrCreateInstantiation(fieldTypes);
+		requireCompilerInvariant(instIndex == newIndex, "new recursive class instantiation did not use its planned index");
+	}
+	resolveStoredSymbolicClassInstantiation(classDef, symbolicIndex, instIndex);
+	cacheClassInstantiationRequest(classDef, requestKey, instIndex);
+	activeInstantiation.completed = true;
 	return {DataType::Kind::Type, 0, 0, classDef, instIndex, nullptr, DataType::Kind::Class};
 }
 
@@ -364,29 +404,16 @@ static bool instantiateClassFromArgumentTypes(
 	std::vector<DataType> fieldTypes;
 	fieldTypes.reserve(argumentTypes.size());
 	for (size_t i = 0; i < argumentTypes.size(); i++) {
-		DataType argumentType = concretizeClassType(argumentTypes[i]);
+		DataType argumentType = argumentTypes[i];
 		if (!argumentType.isConcrete())
 			return false;
-		DataType fieldType = classDef->fields[i].declaredType;
+		DataType fieldConstraint = classDef->fields[i].declaredType;
 		if (baseClassInstIndex >= 0 && static_cast<size_t>(baseClassInstIndex) < classDef->instantiations.size() &&
 			i < classDef->instantiations[baseClassInstIndex].fieldTypes.size()) {
-			fieldType = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
+			fieldConstraint = classDef->instantiations[baseClassInstIndex].fieldTypes[i];
 		}
-		if (fieldType.kind == DataType::Kind::Any) {
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Array && fieldType.arraySize >= 0 &&
-				   (!fieldType.arrayElementType || !fieldType.arrayElementType->isDeduced())) {
-			if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldType.arraySize)
-				return false;
-			fieldType = argumentType;
-		} else if (fieldType.kind == DataType::Kind::Class && fieldType.classInstIndex < 0) {
-			fieldType = concretizeClassType(fieldType);
-		}
-
-		if (!DataType::supportsRuntimeConversion(argumentType, fieldType))
-			return false;
-
-		if (!fieldType.isConcrete())
+		DataType fieldType;
+		if (!completeBoundClassFieldType(fieldConstraint, argumentType, fieldType))
 			return false;
 		fieldTypes.push_back(fieldType);
 	}

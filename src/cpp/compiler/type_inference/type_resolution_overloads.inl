@@ -70,6 +70,7 @@ struct InferenceContext {
 		struct InstantiationUndo {
 			Instantiation *instantiation;
 			DataType returnType;
+			Range returnTypeOriginRange;
 			std::unordered_set<VariableReference *> writtenGlobalReferences;
 			InstantiationPurity purity;
 			bool fallsThrough;
@@ -140,8 +141,9 @@ struct InferenceContext {
 				return;
 			seenInstantiations.insert(instantiation);
 			instantiationUndo.push_back(
-				{instantiation, instantiation->returnType, instantiation->writtenGlobalReferences, instantiation->purity,
-				 instantiation->fallsThrough, instantiation->needsReinfer}
+				{instantiation, instantiation->returnType, instantiation->returnTypeOriginRange,
+				 instantiation->writtenGlobalReferences, instantiation->purity, instantiation->fallsThrough,
+				 instantiation->needsReinfer}
 			);
 		}
 
@@ -199,6 +201,112 @@ struct InferenceContext {
 		}
 	};
 
+	struct GroupingTrialJournal {
+		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeValue>;
+		using CodeLineGroupingMap = std::unordered_map<CodeLine *, TrialCodeLineGrouping>;
+		using CallableInstantiationMap = std::unordered_map<PatternDefinition *, Instantiation *>;
+
+		struct ExpressionValueUndo {
+			ExpressionValueMap *map;
+			Expression *expression;
+			bool existed;
+			CompileTimeValue value;
+		};
+
+		struct CodeLineGroupingUndo {
+			CodeLineGroupingMap *map;
+			CodeLine *line;
+			bool existed;
+			TrialCodeLineGrouping grouping;
+		};
+
+		struct CallableInstantiationUndo {
+			CallableInstantiationMap *map;
+			PatternDefinition *definition;
+			bool existed;
+			Instantiation *instantiation;
+		};
+
+		std::vector<ExpressionValueUndo> expressionValueUndo;
+		std::vector<CodeLineGroupingUndo> codeLineGroupingUndo;
+		std::vector<CallableInstantiationUndo> callableInstantiationUndo;
+
+		void recordExpressionValueWrite(ExpressionValueMap &map, Expression *expression) {
+			if (std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &undo) {
+				return undo.map == &map && undo.expression == expression;
+			}))
+				return;
+			auto existing = map.find(expression);
+			expressionValueUndo.push_back(
+				{&map, expression, existing != map.end(), existing != map.end() ? existing->second : CompileTimeValue{}}
+			);
+		}
+
+		void recordCodeLineGroupingWrite(CodeLineGroupingMap &map, CodeLine *line) {
+			if (std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &undo) {
+				return undo.map == &map && undo.line == line;
+			}))
+				return;
+			auto existing = map.find(line);
+			codeLineGroupingUndo.push_back(
+				{&map, line, existing != map.end(), existing != map.end() ? existing->second : TrialCodeLineGrouping{}}
+			);
+		}
+
+		void recordCallableInstantiationWrite(CallableInstantiationMap &map, PatternDefinition *definition) {
+			if (std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &undo) {
+				return undo.map == &map && undo.definition == definition;
+			}))
+				return;
+			auto existing = map.find(definition);
+			callableInstantiationUndo.push_back(
+				{&map, definition, existing != map.end(), existing != map.end() ? existing->second : nullptr}
+			);
+		}
+
+		void absorb(GroupingTrialJournal &&nested) {
+			for (ExpressionValueUndo &undo : nested.expressionValueUndo) {
+				if (!std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &existing) {
+					return existing.map == undo.map && existing.expression == undo.expression;
+				}))
+					expressionValueUndo.push_back(std::move(undo));
+			}
+			for (CodeLineGroupingUndo &undo : nested.codeLineGroupingUndo) {
+				if (!std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &existing) {
+					return existing.map == undo.map && existing.line == undo.line;
+				}))
+					codeLineGroupingUndo.push_back(std::move(undo));
+			}
+			for (CallableInstantiationUndo &undo : nested.callableInstantiationUndo) {
+				if (!std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &existing) {
+					return existing.map == undo.map && existing.definition == undo.definition;
+				}))
+					callableInstantiationUndo.push_back(std::move(undo));
+			}
+		}
+
+		void rollback() {
+			for (auto undo = callableInstantiationUndo.rbegin(); undo != callableInstantiationUndo.rend(); ++undo) {
+				if (undo->existed)
+					(*undo->map)[undo->definition] = undo->instantiation;
+				else
+					undo->map->erase(undo->definition);
+			}
+			for (auto undo = codeLineGroupingUndo.rbegin(); undo != codeLineGroupingUndo.rend(); ++undo) {
+				if (undo->existed)
+					(*undo->map)[undo->line] = std::move(undo->grouping);
+				else
+					undo->map->erase(undo->line);
+			}
+			for (auto undo = expressionValueUndo.rbegin(); undo != expressionValueUndo.rend(); ++undo) {
+				if (undo->existed)
+					(*undo->map)[undo->expression] = std::move(undo->value);
+				else
+					undo->map->erase(undo->expression);
+			}
+		}
+	};
+
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
@@ -222,6 +330,7 @@ struct InferenceContext {
 	int typeFailurePriority = -1;
 	bool hasTypeFailureDiagnostic = false;
 	TrialJournal *trialJournal{};
+	GroupingTrialJournal *groupingTrialJournal{};
 	// Signature inference sets this signal while probing a type-constraint
 	// expression. Encountering an overload whose own signature is unresolved
 	// defers the probe instead of choosing a declaration-order candidate.
@@ -381,6 +490,8 @@ struct InferenceContext {
 		if (!expression)
 			return;
 		if (trial) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordExpressionValueWrite(trialExpressionValues, expression);
 			if (isCompileTimeKnown(value))
 				trialExpressionValues[expression] = value;
 			else

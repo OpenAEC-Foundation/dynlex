@@ -25,7 +25,7 @@ function allocate count slots of value:
         set array to allocate count slots of the type of value
         set i to 0
         loop while i < count:
-            store value into array at i
+            @intrinsic("initialize at", (array + i), value)
             set i to i + 1
         return array
 

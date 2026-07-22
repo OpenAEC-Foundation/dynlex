@@ -1,59 +1,6 @@
 #include "llvm/IR/Module.h"
 
-static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType &falseTypeInput, DataType &outType) {
-	DataType trueType = concretizeClassType(trueTypeInput);
-	DataType falseType = concretizeClassType(falseTypeInput);
-	if (!trueType.isDeduced() || !falseType.isDeduced())
-		return false;
-	if (trueType == falseType) {
-		outType = trueType;
-		return true;
-	}
-	if (trueType.kind == DataType::Kind::Type && falseType.kind == DataType::Kind::Type) {
-		outType = {DataType::Kind::Type};
-		outType.referencedKind = DataType::Kind::Type;
-		return true;
-	}
-	if (trueType.isNumeric() && falseType.isNumeric())
-		return DataType::promoteArithmetic(trueType, falseType, outType);
-	if (trueType.isVector() && falseType.isVector() && trueType.vectorSize() == falseType.vectorSize())
-		return DataType::promoteArithmetic(trueType, falseType, outType);
-	if (trueType.isMatrix() && falseType.isMatrix() && trueType.matrixRows() == falseType.matrixRows() &&
-		trueType.matrixColumns() == falseType.matrixColumns()) {
-		return DataType::promoteArithmetic(trueType, falseType, outType);
-	}
-	return false;
-}
-
-static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, const DataType &valueType) {
-	if (!var)
-		return;
-	var->type = concretizeClassType(valueType);
-	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
-	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
-}
-
-static bool isVariableAssignmentCompatible(const DataType &targetType, const DataType &valueType) {
-	DataType concreteTargetType = targetType;
-	DataType concreteValueType = valueType;
-	if (!concreteTargetType.isDeduced() || !concreteValueType.isDeduced())
-		return false;
-	if (concreteTargetType == concreteValueType)
-		return true;
-	return concreteTargetType.kind == DataType::Kind::Int && concreteValueType.kind == DataType::Kind::Int &&
-		   concreteTargetType.pointerDepth == 0 && concreteValueType.pointerDepth == 0;
-}
-
-static Diagnostic
-buildVariableTypeChangeDiagnostic(Variable *var, Expression *valueExpr, const DataType &valueType, ParseContext &parseContext);
-static Diagnostic buildAssignmentTypeChangeDiagnostic(
-	const std::string &name, const DataType &currentType, Range currentTypeOriginRange,
-	const std::string &currentTypeOriginFloatLiteralReplacement, Expression *valueExpr, const DataType &valueType,
-	ParseContext &parseContext
-);
-static int getRefinedClassInstantiationIndex(
-	InferenceContext &context, ClassDefinition *classDef, int instIndex, size_t fieldIndex, const DataType &fieldType
-);
+#include "function_inference_type_merging.inl"
 
 static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
 	if (token.empty())
@@ -939,9 +886,11 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 		instantiation != definition->section->instantiations.end(),
 		"callable inference did not retain its selected instantiation"
 	);
-	if (context.trial)
+	if (context.trial) {
+		if (context.groupingTrialJournal)
+			context.groupingTrialJournal->recordCallableInstantiationWrite(context.trialCallableInstantiations, definition);
 		context.trialCallableInstantiations[definition] = &instantiation->second;
-	else
+	} else
 		definition->callableInstantiation = &instantiation->second;
 	return &instantiation->second;
 }
@@ -986,4 +935,5 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 }
 
 #include "intrinsics/store_inference.inl"
+#include "return_inference.inl"
 #include "variable_flow.inl"

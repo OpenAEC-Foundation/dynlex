@@ -1,0 +1,15 @@
+function discard value:
+    replacement:
+        @intrinsic("discard", value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function mixed return:
+    execute:
+        if @intrinsic("cast", @intrinsic("call", "libc", "rand", @intrinsic("type", "int")), @intrinsic("type", "bool")):
+            @intrinsic("return")
+        @intrinsic("return", 1)
+
+discard mixed return

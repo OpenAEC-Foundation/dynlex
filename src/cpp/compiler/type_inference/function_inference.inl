@@ -88,30 +88,6 @@ static void markCurrentInstantiationImpure(InferenceContext &context) {
 	context.currentInstantiation->purity = InstantiationPurity::Impure;
 }
 
-static bool setCurrentInstantiationReturnType(InferenceContext &context, const DataType &returnType, Range returnRange) {
-	if (!context.currentInstantiation || context.currentInstantiation->returnType == returnType)
-		return true;
-	if (context.currentInstantiation->returnType.isDeduced()) {
-		const DataType &existingType = context.currentInstantiation->returnType;
-		std::vector<std::pair<std::string, std::string>> replacements = {
-			{"first_type", typeToUserName(existingType, context.parseContext)},
-			{"second_type", typeToUserName(returnType, context.parseContext)},
-		};
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, returnRange), "multiple reachable return types", "message", replacements
-		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(returnRange, detail));
-		return false;
-	}
-	if (context.trial) {
-		requireCompilerInvariant(context.trialJournal, "trial return-type mutation requires a rollback journal");
-		context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
-	}
-	context.currentInstantiation->returnType = returnType;
-	return true;
-}
-
 static void mergeInstantiationPurityIntoCaller(InferenceContext &context, const Instantiation &inst) {
 	if (inst.purity == InstantiationPurity::Impure)
 		markCurrentInstantiationImpure(context);
@@ -288,6 +264,7 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 	}
 	for (auto it = journal.instantiationUndo.rbegin(); it != journal.instantiationUndo.rend(); ++it) {
 		it->instantiation->returnType = it->returnType;
+		it->instantiation->returnTypeOriginRange = it->returnTypeOriginRange;
 		it->instantiation->writtenGlobalReferences = std::move(it->writtenGlobalReferences);
 		it->instantiation->purity = it->purity;
 		it->instantiation->fallsThrough = it->fallsThrough;
@@ -757,7 +734,7 @@ static DataType requestKnownOrInferExpressionType(
 	auto readKnownType = [&](Expression *expression) -> DataType {
 		if (!expression || !expression->type.isDeduced())
 			return {};
-		return concretizeClassType(expression->type);
+		return expression->type;
 	};
 	DataType type = readKnownType(expr);
 	if (type.isDeduced())

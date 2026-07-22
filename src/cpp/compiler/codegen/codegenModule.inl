@@ -73,6 +73,17 @@ bool generateCode(ParseContext &context) {
 	}
 
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
+	const bool supportsCommandLineArguments = !context.options.emitSPIRV && !context.options.emitWASM;
+	if (supportsCommandLineArguments) {
+		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
+			"dynlex.command_line_argument_count"
+		);
+		context.commandLineArgumentValuesGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, builder.getPtrTy(), false, llvm::GlobalValue::InternalLinkage,
+			llvm::Constant::getNullValue(builder.getPtrTy()), "dynlex.command_line_argument_values"
+		);
+	}
 
 	// In SPIR-V mode, declare shader I/O globals before generating code
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
@@ -101,21 +112,38 @@ bool generateCode(ParseContext &context) {
 		// "shader uniform" intrinsics are encountered (see generateIntrinsicCode).
 	}
 
-	// Create main function: void main() for shaders, int main() for CPU/WASM
+	// Create main function: void main() for shaders, int main() for WASM,
+	// and int main(int, char **) for native programs.
 	llvm::Function *mainFunc;
 	if (context.options.emitSPIRV) {
 		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getVoidTy(), false);
 		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
-	} else {
+	} else if (context.options.emitWASM) {
 		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getInt32Ty(), false);
 		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
+	} else {
+		llvm::FunctionType *mainType =
+			llvm::FunctionType::get(builder.getInt32Ty(), {builder.getInt32Ty(), builder.getPtrTy()}, false);
+		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
+		auto argument = mainFunc->arg_begin();
+		argument->setName("argument_count");
+		(++argument)->setName("argument_values");
 	}
 
 	// Create debug info subprogram for main
 	if (context.diBuilder) {
 		llvm::DIFile *mainFile = getOrCreateDIFile(context, context.mainSourceFile);
 		unsigned mainLine = 1;
-		auto *mainFuncDIType = context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(std::nullopt));
+		std::vector<llvm::Metadata *> mainTypeMetadata;
+		mainTypeMetadata.push_back(context.options.emitSPIRV ? nullptr : getDIType(context, {DataType::Kind::Int, 4}));
+		if (supportsCommandLineArguments) {
+			mainTypeMetadata.push_back(getDIType(context, {DataType::Kind::Int, 4}));
+			DataType argumentValuesType{DataType::Kind::Int, 1};
+			argumentValuesType.pointerDepth = 2;
+			mainTypeMetadata.push_back(getDIType(context, argumentValuesType));
+		}
+		auto *mainFuncDIType =
+			context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(mainTypeMetadata));
 		auto *mainSP = context.diBuilder->createFunction(
 			mainFile, "main", "main", mainFile, mainLine, mainFuncDIType, mainLine, llvm::DINode::FlagPrototyped,
 			llvm::DISubprogram::SPFlagDefinition
@@ -126,6 +154,22 @@ bool generateCode(ParseContext &context) {
 
 	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
 	builder.SetInsertPoint(entry);
+	if (supportsCommandLineArguments) {
+		auto argument = mainFunc->arg_begin();
+		llvm::Value *rawArgumentCount = &*argument++;
+		llvm::Value *rawArgumentValues = &*argument;
+		llvm::Value *hasExecutableName = builder.CreateICmpSGT(rawArgumentCount, builder.getInt32(0), "has_executable_name");
+		llvm::Value *userArgumentCount = builder.CreateSelect(
+			hasExecutableName, builder.CreateSub(rawArgumentCount, builder.getInt32(1)), builder.getInt32(0),
+			"user_argument_count"
+		);
+		llvm::Value *firstUserArgument =
+			builder.CreateGEP(builder.getPtrTy(), rawArgumentValues, builder.getInt32(1), "first_user_argument");
+		llvm::Value *userArgumentValues =
+			builder.CreateSelect(hasExecutableName, firstUserArgument, rawArgumentValues, "user_argument_values");
+		builder.CreateStore(userArgumentCount, context.commandLineArgumentCountGlobal);
+		builder.CreateStore(userArgumentValues, context.commandLineArgumentValuesGlobal);
+	}
 	context.mainLLVMFunction = mainFunc;
 	context.mainCleanupBlock = llvm::BasicBlock::Create(*context.llvmContext, "main.cleanup", mainFunc);
 	if (!context.options.emitSPIRV)

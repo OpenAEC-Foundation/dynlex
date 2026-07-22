@@ -59,6 +59,8 @@ enum class IntrinsicPurityKind {
 	X(Discard, "discard", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                       \
 	X(Store, "store", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Custom)                                         \
 	X(StoreAt, "store at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
+	X(InitializeAt, "initialize at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
+	X(DestroyAt, "destroy at", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                \
 	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                  \
 	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                                 \
@@ -74,6 +76,10 @@ enum class IntrinsicPurityKind {
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
+	X(CommandLineArgumentCount, "command line argument count", 1, IntrinsicReturnKind::Custom, 0, 0,                           \
+	  IntrinsicPurityKind::Impure)                                                                                             \
+	X(CommandLineArgumentValues, "command line argument values", 1, IntrinsicReturnKind::Custom, 0, 0,                         \
+	  IntrinsicPurityKind::Impure)                                                                                             \
 	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Custom)                                 \
 	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                                           \
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                      \

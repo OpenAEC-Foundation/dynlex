@@ -1,6 +1,6 @@
 #pragma once
 
-#include "type.h"
+#include "classDefinition.h"
 #include <functional>
 #include <memory>
 #include <optional>
@@ -117,8 +117,14 @@ struct TypeConstraint {
 			return false;
 		if (constrainsClassDefinition && argumentType.classDefinition != classDefinition)
 			return false;
-		if (classInstantiationIndex && argumentType.classInstIndex != *classInstantiationIndex)
-			return false;
+		if (classInstantiationIndex && argumentType.classInstIndex != *classInstantiationIndex) {
+			DataType constrainedClassType{DataType::Kind::Class};
+			constrainedClassType.pointerDepth = pointerDepth.value_or(0);
+			constrainedClassType.classDefinition = classDefinition;
+			constrainedClassType.classInstIndex = *classInstantiationIndex;
+			if (!ClassDefinition::typeStructurallyRefines(argumentType, constrainedClassType))
+				return false;
+		}
 		if (elementConstraint) {
 			if (!argumentType.arrayElementType || !elementConstraint->accepts(*argumentType.arrayElementType, true))
 				return false;
@@ -134,11 +140,24 @@ struct TypeConstraint {
 		};
 		if (incompatible(kind, other.kind) || incompatible(numericSize, other.numericSize) ||
 			incompatible(pointerDepth, other.pointerDepth) || incompatible(arraySize, other.arraySize) ||
-			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns) ||
-			incompatible(classInstantiationIndex, other.classInstantiationIndex))
+			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns))
 			return false;
 		if (constrainsClassDefinition && other.constrainsClassDefinition && classDefinition != other.classDefinition)
 			return false;
+		if (classInstantiationIndex && other.classInstantiationIndex &&
+			*classInstantiationIndex != *other.classInstantiationIndex) {
+			DataType leftClassType{DataType::Kind::Class};
+			leftClassType.pointerDepth = pointerDepth.value_or(0);
+			leftClassType.classDefinition = classDefinition;
+			leftClassType.classInstIndex = *classInstantiationIndex;
+			DataType rightClassType{DataType::Kind::Class};
+			rightClassType.pointerDepth = other.pointerDepth.value_or(0);
+			rightClassType.classDefinition = other.classDefinition;
+			rightClassType.classInstIndex = *other.classInstantiationIndex;
+			if (!ClassDefinition::typeStructurallyRefines(leftClassType, rightClassType) &&
+				!ClassDefinition::typeStructurallyRefines(rightClassType, leftClassType))
+				return false;
+		}
 		if (elementConstraint && other.elementConstraint && !elementConstraint->structurallyOverlaps(*other.elementConstraint))
 			return false;
 		return true;

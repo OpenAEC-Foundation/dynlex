@@ -174,6 +174,7 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		if (!inst.llvmStructType) {
 			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
+			llvmFields.reserve(inst.fieldTypes.size());
 			inst.llvmFieldIndices.clear();
 			uint64_t offset = 0;
 			uint64_t structAlignment = 1;

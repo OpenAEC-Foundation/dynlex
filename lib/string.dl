@@ -79,6 +79,32 @@ function {cstring:left} = {cstring:right}:
             set index to index + 1
         return false
 
+function {string:left} = {string:right}:
+    execute:
+        if the length of left != the length of right:
+            return false
+        set position to 0
+        loop while position < the length of left:
+            if character position of left != character position of right:
+                return false
+            set position to position + 1
+        return true
+
+function {string:left} = {cstring:right}:
+    execute:
+        if the length of left != the length of right:
+            return false
+        set position to 0
+        loop while position < the length of left:
+            if character position of left != character position of right:
+                return false
+            set position to position + 1
+        return true
+
+function {cstring:left} = {string:right}:
+    execute:
+        return right = left
+
 # --- Conversions to string ---
 
 local function stop because string allocation failed:
@@ -101,11 +127,45 @@ function a new string buffer with length len:
         set data to (owner + 1) as a pointer to byte
         return new owned string from data data with length len owned by owner
 
-function copy {string:source} into target at index:
+function character value is ascii whitespace:
+    execute:
+        return (value = 32) or ((value = 9) or ((value = 10) or (value = 13)))
+
+function [the|] substring of {string:text} from {integer:start} with length {integer:requested_length}:
+    execute:
+        if (start < 0) or ((requested_length < 0) or (start + requested_length > the length of text)):
+            @intrinsic("call", "libc", "abort", void)
+        set result to a new string buffer with length requested_length
+        set cursor to 0
+        loop while cursor < requested_length:
+            store character start + cursor of text into the data of result at cursor
+            set cursor to cursor + 1
+        return result
+
+function [the|] substring of {cstring:text} from {integer:start} with length {integer:requested_length}:
+    execute:
+        return the substring of the string form of text from start with length requested_length
+
+function {string:text} has {string:fragment} at offset {integer:position}:
+    execute:
+        if position < 0 or position + the length of fragment > the length of text:
+            return false
+        set cursor to 0
+        loop while cursor < the length of fragment:
+            if character position + cursor of text != character cursor of fragment:
+                return false
+            set cursor to cursor + 1
+        return true
+
+function {string:text} has {cstring:fragment} at offset {integer:position}:
+    execute:
+        return text has the string form of fragment at offset position
+
+function copy {string:source} into target at offset {integer:destination_offset}:
     execute:
         set i to 0
         loop while i < source's length:
-            store character i of source into target at index + i
+            store character i of source into target at destination_offset + i
             set i to i + 1
 
 function the count of decimal digits in {integer:value}:

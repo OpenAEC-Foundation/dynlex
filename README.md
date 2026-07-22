@@ -16,7 +16,7 @@ A natural-language-like programming language that compiles to native code via LL
 ./scripts/build.sh
 ```
 
-Requires C++23, CMake, Ninja, `nlohmann_json`, and LLVM 20+.
+Requires C++23, CMake, Ninja, `nlohmann_json`, LLVM 20+, and GNU binutils on ELF systems.
 
 ## Browser Compiler (Phase 1)
 
@@ -132,9 +132,23 @@ the package paths used by `scripts/build.sh`.
 
 ## Usage
 
+Compile a source file:
+
 ```bash
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
+
+Or execute DynLex source directly. Command-line source automatically imports
+`lib/commands.dl`, which provides the standard library and command-oriented
+libraries such as file operations:
+
+```bash
+./build/dynlex print 3
+./build/dynlex 'move "a.txt" to "b.txt"'
+```
+
+The outer single quotes in the second example preserve DynLex's string quotes
+when the source passes through the shell.
 
 ## Release
 
