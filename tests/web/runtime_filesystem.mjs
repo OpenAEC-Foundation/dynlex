@@ -9,10 +9,29 @@ import {
 const filesystemImportNames = [
   "abort",
   "dynlex_filesystem_clear_error",
-  "dynlex_filesystem_create_directory",
+  "dynlex_filesystem_create_directories",
+  "dynlex_filesystem_directory_copy_name",
+  "dynlex_filesystem_directory_next",
+  "dynlex_filesystem_directory_open",
+  "dynlex_filesystem_directory_release",
+  "dynlex_filesystem_directory_retain",
   "dynlex_filesystem_error_message",
-  "dynlex_filesystem_remove",
+  "dynlex_filesystem_file_finish",
+  "dynlex_filesystem_file_open",
+  "dynlex_filesystem_file_read",
+  "dynlex_filesystem_file_release",
+  "dynlex_filesystem_file_retain",
+  "dynlex_filesystem_file_rewind",
+  "dynlex_filesystem_file_write",
+  "dynlex_filesystem_remove_tree",
+  "dynlex_filesystem_rename",
   "dynlex_filesystem_status",
+  "dynlex_filesystem_temporary_directory_copy_path",
+  "dynlex_filesystem_temporary_directory_create",
+  "dynlex_filesystem_temporary_directory_path_length",
+  "dynlex_filesystem_temporary_directory_release",
+  "dynlex_filesystem_temporary_directory_retain",
+  "dynlex_filesystem_temporary_file_open",
   "fclose",
   "ferror",
   "fflush",
@@ -102,12 +121,15 @@ writeCString(1240, "missing/child");
 writeCString(1270, "missing/file.bin");
 writeCString(1300, "metadata-directory/subtree");
 writeCString(1340, "metadata-directory/moved.bin");
-assert.equal(env.dynlex_filesystem_create_directory(1240), -1, "a directory requires an existing parent");
+assert.equal(env.dynlex_filesystem_create_directories(1240, 13), 0, "parent directories are created recursively");
+assert.equal(env.dynlex_filesystem_remove_tree(1240, 13), 0);
+assert.equal(env.dynlex_filesystem_remove_tree(1240, 7), 0);
 assert.equal(env.fopen(1270, 1088), 0, "a file requires an existing parent");
-assert.equal(env.dynlex_filesystem_create_directory(1160), 0);
-assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+assert.equal(env.dynlex_filesystem_create_directories(1160, 18), 0);
+assert.equal(env.dynlex_filesystem_create_directories(1160, 18), 0, "directory creation is idempotent");
+assert.equal(env.dynlex_filesystem_status(1160, 18, 6000, 6008), 1);
 let view = new DataView(memory.buffer);
-assert.equal(view.getInt32(6000, true), 0);
+assert.equal(view.getInt32(6000, true), 2);
 const directoryCreationTime = view.getBigInt64(6008, true);
 assert.equal(directoryCreationTime > 0n, true);
 assert.equal(env.fopen(1160, 1096), 0, "directories must not open as regular files");
@@ -116,32 +138,131 @@ stream = env.fopen(1200, 1088);
 assert.notEqual(stream, 0);
 assert.equal(env.fwrite(2060, 1, 2, stream), 2);
 assert.equal(env.fclose(stream), 0);
-assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 18, 6000, 6008), 1);
 const directoryAfterFileCreation = new DataView(memory.buffer).getBigInt64(6008, true);
 assert.equal(directoryAfterFileCreation > directoryCreationTime, true);
-assert.equal(env.dynlex_filesystem_status(1200, 6000, 6008), 0);
+assert.equal(env.dynlex_filesystem_status(1200, 27, 6000, 6008), 1);
 view = new DataView(memory.buffer);
 assert.equal(view.getInt32(6000, true), 1);
 assert.equal(view.getBigInt64(6008, true) > 0n, true);
 assert.equal(env.rename(1200, 1270), -1, "rename requires an existing destination parent");
-assert.equal(env.dynlex_filesystem_status(1200, 6000, 6008), 0, "failed rename must preserve the source");
+assert.equal(env.dynlex_filesystem_status(1200, 27, 6000, 6008), 1, "failed rename must preserve the source");
 assert.equal(env.rename(1160, 1300), -1, "a directory cannot be renamed into its own subtree");
 assert.equal(env.rename(1200, 1340), 0);
-assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 18, 6000, 6008), 1);
 const directoryAfterRename = new DataView(memory.buffer).getBigInt64(6008, true);
 assert.equal(directoryAfterRename > directoryAfterFileCreation, true);
 
 env.dynlex_filesystem_clear_error();
-assert.equal(env.dynlex_filesystem_create_directory(1160), -1);
+assert.equal(env.dynlex_filesystem_create_directories(1160, 18), 0);
+assert.equal(env.dynlex_filesystem_file_open(1160, 18, 1), 0);
 const errorLength = env.dynlex_filesystem_error_message(0, 0);
 assert.equal(errorLength > 0, true);
 assert.equal(env.dynlex_filesystem_error_message(6100, 128), errorLength);
-assert.match(new TextDecoder().decode(bytes.subarray(6100, 6100 + errorLength)), /exists/i);
-assert.equal(env.dynlex_filesystem_remove(1160), -1, "non-empty directories must not be removed");
-assert.equal(env.dynlex_filesystem_remove(1340), 0);
-assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+assert.match(new TextDecoder().decode(bytes.subarray(6100, 6100 + errorLength)), /regular file/i);
+assert.equal(env.remove(1160), -1, "non-empty directories must not be removed by the C remove import");
+assert.equal(env.remove(1340), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 18, 6000, 6008), 1);
 assert.equal(new DataView(memory.buffer).getBigInt64(6008, true) > directoryAfterRename, true);
-assert.equal(env.dynlex_filesystem_remove(1160), 0);
+assert.equal(env.remove(1160), 0);
+
+writeCString(1400, "capability-tree/one/two");
+writeCString(1450, "capability-tree/payload.bin");
+writeCString(1500, "capability-tree/link");
+writeCString(1540, "outside.bin");
+writeCString(1580, "missing-capability");
+writeCString(1620, "capability-tree/device");
+writeCString(1660, "capability-tree///");
+assert.equal(env.dynlex_filesystem_create_directories(1400, 23), 0);
+assert.equal(env.dynlex_filesystem_create_directories(1400, 23), 0);
+assert.equal(
+  env.dynlex_filesystem_status(1660, 18, 6000, 6008),
+  1,
+  "public runtime paths must ignore trailing separators consistently with native targets"
+);
+
+let runtimeFile = env.dynlex_filesystem_file_open(1450, 27, 2);
+assert.notEqual(runtimeFile, 0);
+env.dynlex_filesystem_file_retain(runtimeFile);
+bytes.set([65, 0, 66, 67, 68], 7000);
+assert.equal(env.dynlex_filesystem_file_write(runtimeFile, 7000, 5, 7020), 0);
+assert.equal(new DataView(memory.buffer).getUint32(7020, true), 5);
+assert.equal(env.dynlex_filesystem_file_finish(runtimeFile), 0);
+env.dynlex_filesystem_file_release(runtimeFile);
+
+filesystem.files.set("outside.bin", {
+  data: new Uint8Array([99]),
+  modificationTime: filesystem.lastTimestamp + 1
+});
+filesystem.symlinks.set("capability-tree/link", {
+  target: "outside.bin",
+  modificationTime: filesystem.lastTimestamp + 2
+});
+filesystem.others.set("capability-tree/device", {
+  modificationTime: filesystem.lastTimestamp + 3
+});
+filesystem.lastTimestamp += 3;
+assert.equal(env.dynlex_filesystem_status(1500, 20, 6000, 6008), 1);
+assert.equal(new DataView(memory.buffer).getInt32(6000, true), 3, "status must classify links without following");
+assert.equal(env.dynlex_filesystem_status(1620, 22, 6000, 6008), 1);
+assert.equal(new DataView(memory.buffer).getInt32(6000, true), 4);
+assert.equal(env.dynlex_filesystem_status(1580, 18, 6000, 6008), 0, "missing is not an error");
+
+const directoryHandle = env.dynlex_filesystem_directory_open(1400, 15);
+assert.notEqual(directoryHandle, 0);
+env.dynlex_filesystem_directory_retain(directoryHandle);
+const enumerated = new Map();
+while (env.dynlex_filesystem_directory_next(directoryHandle, 7040, 7044) === 1) {
+  const kind = new DataView(memory.buffer).getInt32(7040, true);
+  const length = new DataView(memory.buffer).getUint32(7044, true);
+  assert.equal(env.dynlex_filesystem_directory_copy_name(directoryHandle, 7060, length + 1), 0);
+  enumerated.set(new TextDecoder().decode(bytes.subarray(7060, 7060 + length)), kind);
+}
+env.dynlex_filesystem_directory_release(directoryHandle);
+assert.deepEqual(enumerated, new Map([
+  ["payload.bin", 1],
+  ["one", 2],
+  ["link", 3],
+  ["device", 4]
+]));
+
+runtimeFile = env.dynlex_filesystem_file_open(1450, 27, 1);
+assert.notEqual(runtimeFile, 0);
+env.dynlex_filesystem_file_retain(runtimeFile);
+assert.equal(env.dynlex_filesystem_file_read(runtimeFile, 7100, 3, 7120, 7124), 0);
+assert.equal(new DataView(memory.buffer).getUint32(7120, true), 3);
+assert.equal(new DataView(memory.buffer).getInt32(7124, true), 0);
+assert.deepEqual([...bytes.subarray(7100, 7103)], [65, 0, 66]);
+assert.equal(env.dynlex_filesystem_file_read(runtimeFile, 7100, 3, 7120, 7124), 0);
+assert.equal(new DataView(memory.buffer).getUint32(7120, true), 2);
+assert.equal(new DataView(memory.buffer).getInt32(7124, true), 1);
+assert.deepEqual([...bytes.subarray(7100, 7102)], [67, 68]);
+env.dynlex_filesystem_file_release(runtimeFile);
+
+const temporaryHandles = [
+  env.dynlex_filesystem_temporary_directory_create(),
+  env.dynlex_filesystem_temporary_directory_create()
+];
+const temporaryPaths = [];
+for (const handle of temporaryHandles) {
+  assert.notEqual(handle, 0);
+  env.dynlex_filesystem_temporary_directory_retain(handle);
+  const length = env.dynlex_filesystem_temporary_directory_path_length(handle);
+  assert.equal(env.dynlex_filesystem_temporary_directory_copy_path(handle, 7200, length + 1), 0);
+  temporaryPaths.push(new TextDecoder().decode(bytes.subarray(7200, 7200 + length)));
+  env.dynlex_filesystem_temporary_directory_release(handle);
+}
+assert.equal(temporaryPaths.every((path) => path.startsWith("/tmp/")), true);
+assert.notEqual(temporaryPaths[0], temporaryPaths[1]);
+assert.equal(env.dynlex_filesystem_remove_tree(7200, new TextEncoder().encode(temporaryPaths[1]).length), 0);
+writeCString(7200, temporaryPaths[0]);
+assert.equal(env.dynlex_filesystem_remove_tree(7200, new TextEncoder().encode(temporaryPaths[0]).length), 0);
+
+assert.equal(env.dynlex_filesystem_remove_tree(1400, 15), 0);
+assert.equal(filesystem.files.has("outside.bin"), true, "tree removal must not traverse symbolic links");
+assert.equal(env.dynlex_filesystem_status(1400, 15, 6000, 6008), 0);
+bytes.set([0x80], 7300);
+assert.equal(env.dynlex_filesystem_status(7300, 1, 6000, 6008), -1, "public paths require UTF-8");
 
 writeCString(1120, "persist.bin");
 stream = env.fopen(1120, 1088);

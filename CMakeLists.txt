@@ -306,9 +306,15 @@ if(NOT EMSCRIPTEN)
         src/runtime/runtimeError.c
     )
     if(WIN32)
-        list(APPEND DYNLEX_RUNTIME_SOURCES src/runtime/processRuntimeWindows.c)
+        list(APPEND DYNLEX_RUNTIME_SOURCES
+            src/runtime/filesystemRuntimeWindows.c
+            src/runtime/processRuntimeWindows.c
+        )
     else()
-        list(APPEND DYNLEX_RUNTIME_SOURCES src/runtime/processRuntimePosix.c)
+        list(APPEND DYNLEX_RUNTIME_SOURCES
+            src/runtime/filesystemRuntimePosix.c
+            src/runtime/processRuntimePosix.c
+        )
     endif()
     add_library(dynlex_runtime STATIC ${DYNLEX_RUNTIME_SOURCES})
     set_target_properties(dynlex_runtime PROPERTIES

@@ -1,3 +1,10 @@
+import {
+  createFileImports,
+  createRuntimeFilesystem,
+  readCString,
+  writeCString
+} from "./runtimeFilesystem.js";
+
 const supportedEnvImports = new Set([
   "__indirect_function_table",
   "__linear_memory",
@@ -7,10 +14,29 @@ const supportedEnvImports = new Set([
   "abort",
   "calloc",
   "dynlex_filesystem_clear_error",
-  "dynlex_filesystem_create_directory",
+  "dynlex_filesystem_create_directories",
+  "dynlex_filesystem_directory_copy_name",
+  "dynlex_filesystem_directory_next",
+  "dynlex_filesystem_directory_open",
+  "dynlex_filesystem_directory_release",
+  "dynlex_filesystem_directory_retain",
   "dynlex_filesystem_error_message",
-  "dynlex_filesystem_remove",
+  "dynlex_filesystem_file_finish",
+  "dynlex_filesystem_file_open",
+  "dynlex_filesystem_file_read",
+  "dynlex_filesystem_file_release",
+  "dynlex_filesystem_file_retain",
+  "dynlex_filesystem_file_rewind",
+  "dynlex_filesystem_file_write",
+  "dynlex_filesystem_remove_tree",
+  "dynlex_filesystem_rename",
   "dynlex_filesystem_status",
+  "dynlex_filesystem_temporary_directory_copy_path",
+  "dynlex_filesystem_temporary_directory_create",
+  "dynlex_filesystem_temporary_directory_path_length",
+  "dynlex_filesystem_temporary_directory_release",
+  "dynlex_filesystem_temporary_directory_retain",
+  "dynlex_filesystem_temporary_file_open",
   "dynlex_print_i64",
   "dynlex_print_string",
   "fclose",
@@ -44,6 +70,7 @@ const supportedEnvImports = new Set([
 ]);
 
 export { inspectRuntimeWasmLayout } from "./runtimeLayout.js";
+export { createRuntimeFilesystem };
 
 export function toNumber(value) {
   return Number(value);
@@ -62,15 +89,6 @@ export function isSupportedRuntimeImport(importSpec) {
   return supportedEnvImports.has(importSpec.name) || importSpec.name.startsWith("GOT.");
 }
 
-export function createRuntimeFilesystem() {
-  const timestamp = Date.now();
-  return {
-    directories: new Map([["", timestamp]]),
-    files: new Map(),
-    lastTimestamp: timestamp
-  };
-}
-
 function cStringBytes(memory, pointer) {
   const bytes = new Uint8Array(memory.buffer);
   const start = toNonNegativeInteger(pointer);
@@ -81,35 +99,11 @@ function cStringBytes(memory, pointer) {
   return bytes.subarray(start, end);
 }
 
-function readCString(memory, pointer) {
-  return new TextDecoder().decode(cStringBytes(memory, pointer));
-}
-
-function readFilesystemPath(memory, pointer) {
-  const bytes = cStringBytes(memory, pointer);
-  const chunks = [];
-  for (let offset = 0; offset < bytes.length; offset += 32768) {
-    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
-  }
-  return chunks.join("");
-}
-
 function readUtf8(memory, pointer, length) {
   const bytes = new Uint8Array(memory.buffer);
   const start = toNonNegativeInteger(pointer);
   const maxLength = Math.max(0, Math.min(bytes.length - start, toNonNegativeInteger(length)));
   return new TextDecoder().decode(bytes.subarray(start, start + maxLength));
-}
-
-function writeCString(memory, pointer, text, limit) {
-  const bytes = new Uint8Array(memory.buffer);
-  const start = toNonNegativeInteger(pointer);
-  const encoded = new TextEncoder().encode(text);
-  const maxContent = limit > 0 ? Math.max(0, Math.min(limit - 1, encoded.length)) : 0;
-  bytes.set(encoded.subarray(0, maxContent), start);
-  if (limit > 0 && start + maxContent < bytes.length) {
-    bytes[start + maxContent] = 0;
-  }
 }
 
 function createVarargsReader(memory, pointer) {
@@ -297,368 +291,15 @@ function buildFormatStringOutput(memory, formatText, varargsPointer) {
   return output;
 }
 
-function createFileImports(memory, filesystem) {
-  const streams = new Map();
-  let nextStream = 1;
-  let lastErrorMessage = "";
-
-  function clearError() {
-    lastErrorMessage = "";
-  }
-
-  function fail(message, result = -1) {
-    lastErrorMessage = message;
-    return result;
-  }
-
-  function nextModificationTime() {
-    filesystem.lastTimestamp = Math.max(Date.now(), filesystem.lastTimestamp + 1);
-    return filesystem.lastTimestamp;
-  }
-
-  function pathHasChildren(path) {
-    const prefix = `${path}/`;
-    return [...filesystem.files.keys(), ...filesystem.directories.keys()].some(
-      (candidate) => candidate.startsWith(prefix)
-    );
-  }
-
-  function parentDirectory(path) {
-    const separator = path.lastIndexOf("/");
-    return separator < 0 ? "" : path.slice(0, separator);
-  }
-
-  function requireParentDirectory(path) {
-    if (!filesystem.directories.has(parentDirectory(path))) {
-      fail("Parent directory does not exist");
-      return false;
-    }
-    return true;
-  }
-
-  function touchParentDirectories(...paths) {
-    const parents = new Set(paths.map(parentDirectory));
-    for (const parent of parents) {
-      if (!filesystem.directories.has(parent)) {
-        throw new WebAssembly.RuntimeError("Filesystem directory hierarchy is inconsistent");
-      }
-      filesystem.directories.set(parent, nextModificationTime());
-    }
-  }
-
-  function streamFor(handle) {
-    return streams.get(toNonNegativeInteger(handle));
-  }
-
-  function openNode(node, mode) {
-    const handle = nextStream++;
-    streams.set(handle, {
-      append: mode.startsWith("a"),
-      error: false,
-      node,
-      position: mode.startsWith("a") ? node.data.length : 0,
-      readable: mode.startsWith("r") || mode.includes("+"),
-      writable: mode.startsWith("w") || mode.startsWith("a") || mode.includes("+")
-    });
-    return handle;
-  }
-
-  function byteRange(pointer, length) {
-    const start = toNonNegativeInteger(pointer);
-    const count = toNonNegativeInteger(length);
-    const end = start + count;
-    if (!Number.isSafeInteger(end) || end > memory.buffer.byteLength) {
-      return null;
-    }
-    return { count, end, start };
-  }
-
-  function resizeNode(node, size) {
-    if (node.data.length >= size) {
-      return;
-    }
-    const resized = new Uint8Array(size);
-    resized.set(node.data);
-    node.data = resized;
-  }
-
-  function removePath(pathPointer) {
-    const path = readFilesystemPath(memory, pathPointer);
-    if (!path) {
-      return fail("Invalid filesystem path");
-    }
-    if (filesystem.files.delete(path)) {
-      touchParentDirectories(path);
-      return 0;
-    }
-    if (!filesystem.directories.has(path)) {
-      return fail("No such file or directory");
-    }
-    if (pathHasChildren(path)) {
-      return fail("Directory is not empty");
-    }
-    filesystem.directories.delete(path);
-    touchParentDirectories(path);
-    return 0;
-  }
-
-  return {
-    fclose(handle) {
-      const key = toNonNegativeInteger(handle);
-      if (!streams.has(key)) {
-        return fail("Invalid file stream");
-      }
-      streams.delete(key);
-      return 0;
-    },
-    ferror(handle) {
-      const stream = streamFor(handle);
-      return stream?.error ? 1 : 0;
-    },
-    fflush(handle) {
-      return streamFor(handle) ? 0 : fail("Invalid file stream");
-    },
-    fgetc(handle) {
-      const stream = streamFor(handle);
-      if (!stream || !stream.readable) {
-        if (stream) {
-          stream.error = true;
-        }
-        fail("File stream is not readable");
-        return -1;
-      }
-      if (stream.position >= stream.node.data.length) {
-        return -1;
-      }
-      return stream.node.data[stream.position++];
-    },
-    fopen(pathPointer, modePointer) {
-      const path = readFilesystemPath(memory, pathPointer);
-      const mode = readCString(memory, modePointer);
-      if (!path || !/^[rwa][b+]*$/.test(mode)) {
-        fail("Invalid filesystem path or file mode");
-        return 0;
-      }
-      if (filesystem.directories.has(path)) {
-        fail("Path is a directory");
-        return 0;
-      }
-      let node = filesystem.files.get(path);
-      if (mode.startsWith("r")) {
-        if (!node) {
-          fail("No such file or directory");
-          return 0;
-        }
-        return openNode(node, mode);
-      }
-      if (mode.startsWith("w")) {
-        const created = !node;
-        if (created && !requireParentDirectory(path)) {
-          return 0;
-        }
-        node = { data: new Uint8Array(0), modificationTime: nextModificationTime() };
-        filesystem.files.set(path, node);
-        if (created) {
-          touchParentDirectories(path);
-        }
-        return openNode(node, mode);
-      }
-      if (!node) {
-        if (!requireParentDirectory(path)) {
-          return 0;
-        }
-        node = { data: new Uint8Array(0), modificationTime: nextModificationTime() };
-        filesystem.files.set(path, node);
-        touchParentDirectories(path);
-      }
-      return openNode(node, mode);
-    },
-    fread(buffer, sizeValue, countValue, handle) {
-      const stream = streamFor(handle);
-      const size = toNonNegativeInteger(sizeValue);
-      const count = toNonNegativeInteger(countValue);
-      const requested = size * count;
-      if (!stream || !stream.readable || !Number.isSafeInteger(requested)) {
-        if (stream) {
-          stream.error = true;
-        }
-        fail("File read failed");
-        return 0;
-      }
-      if (size === 0 || count === 0) {
-        return 0;
-      }
-      const available = Math.max(0, stream.node.data.length - stream.position);
-      const transferred = Math.min(requested, available);
-      const range = byteRange(buffer, transferred);
-      if (!range) {
-        stream.error = true;
-        fail("File read buffer is outside program memory");
-        return 0;
-      }
-      new Uint8Array(memory.buffer).set(
-        stream.node.data.subarray(stream.position, stream.position + transferred),
-        range.start
-      );
-      stream.position += transferred;
-      return Math.floor(transferred / size);
-    },
-    fwrite(buffer, sizeValue, countValue, handle) {
-      const stream = streamFor(handle);
-      const size = toNonNegativeInteger(sizeValue);
-      const count = toNonNegativeInteger(countValue);
-      const requested = size * count;
-      const range = byteRange(buffer, requested);
-      if (!stream || !stream.writable || !Number.isSafeInteger(requested) || !range) {
-        if (stream) {
-          stream.error = true;
-        }
-        fail("File write failed");
-        return 0;
-      }
-      if (size === 0 || count === 0) {
-        return 0;
-      }
-      if (stream.append) {
-        stream.position = stream.node.data.length;
-      }
-      resizeNode(stream.node, stream.position + requested);
-      stream.node.data.set(new Uint8Array(memory.buffer).subarray(range.start, range.end), stream.position);
-      stream.position += requested;
-      stream.node.modificationTime = nextModificationTime();
-      return count;
-    },
-    remove(pathPointer) {
-      return removePath(pathPointer);
-    },
-    rename(sourcePointer, destinationPointer) {
-      const source = readFilesystemPath(memory, sourcePointer);
-      const destination = readFilesystemPath(memory, destinationPointer);
-      const node = filesystem.files.get(source);
-      if (!source || !destination) {
-        return fail("Invalid filesystem path");
-      }
-      if (source === destination) {
-        return node || filesystem.directories.has(source) ? 0 : fail("No such file or directory");
-      }
-      if (!requireParentDirectory(destination)) {
-        return -1;
-      }
-      if (node) {
-        if (filesystem.directories.has(destination)) {
-          return fail("Destination path is a directory");
-        }
-        filesystem.files.delete(source);
-        filesystem.files.set(destination, node);
-        touchParentDirectories(source, destination);
-        return 0;
-      }
-      if (!filesystem.directories.has(source)) {
-        return fail("No such file or directory");
-      }
-      if (destination.startsWith(`${source}/`)) {
-        return fail("A directory cannot be moved into itself");
-      }
-      if (filesystem.files.has(destination) || filesystem.directories.has(destination)) {
-        return fail("Destination path already exists");
-      }
-      const sourcePrefix = `${source}/`;
-      const movedFiles = [...filesystem.files.entries()].filter(([path]) => path.startsWith(sourcePrefix));
-      const movedDirectories = [...filesystem.directories.entries()].filter(([path]) => path.startsWith(sourcePrefix));
-      const sourceModificationTime = filesystem.directories.get(source);
-      filesystem.directories.delete(source);
-      filesystem.directories.set(destination, sourceModificationTime);
-      for (const [path, childNode] of movedFiles) {
-        filesystem.files.delete(path);
-        filesystem.files.set(destination + path.slice(source.length), childNode);
-      }
-      for (const [path, modificationTime] of movedDirectories) {
-        filesystem.directories.delete(path);
-        filesystem.directories.set(destination + path.slice(source.length), modificationTime);
-      }
-      touchParentDirectories(source, destination);
-      return 0;
-    },
-    rewind(handle) {
-      const stream = streamFor(handle);
-      if (!stream) {
-        throw new WebAssembly.RuntimeError("rewind received an invalid stream");
-      }
-      stream.position = 0;
-      stream.error = false;
-    },
-    tmpfile() {
-      return openNode({ data: new Uint8Array(0), modificationTime: nextModificationTime() }, "w+b");
-    },
-    dynlex_filesystem_clear_error() {
-      clearError();
-    },
-    dynlex_filesystem_create_directory(pathPointer) {
-      clearError();
-      const path = readFilesystemPath(memory, pathPointer);
-      if (!path) {
-        return fail("Invalid filesystem path");
-      }
-      if (filesystem.files.has(path) || filesystem.directories.has(path)) {
-        return fail("Path already exists");
-      }
-      if (!requireParentDirectory(path)) {
-        return -1;
-      }
-      filesystem.directories.set(path, nextModificationTime());
-      touchParentDirectories(path);
-      return 0;
-    },
-    dynlex_filesystem_error_message(bufferPointer, capacityValue) {
-      if (!lastErrorMessage) {
-        lastErrorMessage = "Filesystem operation failed";
-      }
-      const capacity = toNonNegativeInteger(capacityValue);
-      if (bufferPointer && capacity > 0) {
-        const range = byteRange(bufferPointer, capacity);
-        if (!range) {
-          throw new WebAssembly.RuntimeError("Filesystem error-message buffer is outside program memory");
-        }
-        writeCString(memory, bufferPointer, lastErrorMessage, capacity);
-      }
-      return new TextEncoder().encode(lastErrorMessage).length;
-    },
-    dynlex_filesystem_remove(pathPointer) {
-      clearError();
-      return removePath(pathPointer);
-    },
-    dynlex_filesystem_status(pathPointer, regularFilePointer, modificationTimePointer) {
-      clearError();
-      const path = readFilesystemPath(memory, pathPointer);
-      if (!path) {
-        return fail("Invalid filesystem path");
-      }
-      const node = filesystem.files.get(path);
-      const directoryModificationTime = filesystem.directories.get(path);
-      const isDirectory = directoryModificationTime !== undefined;
-      if (!node && !isDirectory) {
-        return fail("No such file or directory");
-      }
-      const regularRange = byteRange(regularFilePointer, 4);
-      const modificationRange = byteRange(modificationTimePointer, 8);
-      if (!regularRange || !modificationRange) {
-        return fail("Filesystem status output is outside program memory");
-      }
-      const view = new DataView(memory.buffer);
-      view.setInt32(regularRange.start, node ? 1 : 0, true);
-      const modificationTime = node?.modificationTime ?? directoryModificationTime;
-      view.setBigInt64(modificationRange.start, BigInt(modificationTime), true);
-      return 0;
-    }
-  };
-}
-
 export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layout) {
   if (
     !filesystem ||
     !(filesystem.files instanceof Map) ||
     !(filesystem.directories instanceof Map) ||
-    !Number.isSafeInteger(filesystem.lastTimestamp)
+    !(filesystem.others instanceof Map) ||
+    !(filesystem.symlinks instanceof Map) ||
+    !Number.isSafeInteger(filesystem.lastTimestamp) ||
+    !Number.isSafeInteger(filesystem.temporaryDirectoryCounter)
   ) {
     throw new TypeError("DynLex runtime requires a filesystem");
   }

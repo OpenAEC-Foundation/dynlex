@@ -17,11 +17,88 @@ class:
         succeeded as boolean
         error_message as string
 
+class:
+    patterns:
+        [a|] filesystem entry status
+    members:
+        succeeded as boolean
+        found as boolean
+        regular_file as boolean
+        directory as boolean
+        symbolic_link as boolean
+        other as boolean
+        modification_time as i64
+        error_message as string
+
+class:
+    patterns:
+        [a|] directory enumeration
+    members:
+        handle as pointer
+        succeeded as boolean
+        error_message as string
+    retain:
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_directory_retain", void, handle)
+    release:
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_directory_release", void, handle)
+
+class:
+    patterns:
+        [a|] directory entry result
+    members:
+        succeeded as boolean
+        has_entry as boolean
+        name as string
+        regular_file as boolean
+        directory as boolean
+        symbolic_link as boolean
+        other as boolean
+        error_message as string
+
+class:
+    patterns:
+        [a|] file input stream
+    members:
+        handle as pointer
+        succeeded as boolean
+        error_message as string
+    retain:
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, handle)
+    release:
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, handle)
+
+class:
+    patterns:
+        [a|] file chunk read result
+    members:
+        succeeded as boolean
+        data as string
+        count as a word sized integer
+        end_of_file as boolean
+        error_message as string
+
+class:
+    patterns:
+        [a|] temporary directory result
+    members:
+        succeeded as boolean
+        directory_path as string
+        error_message as string
+
 local class:
     patterns:
         [a|] filesystem path
     members:
         data as pointer to byte
+        length as a word sized integer
         storage as string
         valid as boolean
 
@@ -87,38 +164,93 @@ local function a failed file read action:
     execute:
         return a failed file read action reporting the current filesystem error message
 
+local function a failed filesystem entry status reporting message:
+    replacement:
+        @intrinsic(
+            "construct",
+            a filesystem entry status,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            0 as a 64 bit integer,
+            message
+        )
+
+local function a failed directory enumeration reporting message:
+    replacement:
+        @intrinsic(
+            "construct",
+            a directory enumeration,
+            @intrinsic("cast", 0, a pointer to byte),
+            false,
+            message
+        )
+
+local function a failed directory entry result reporting message:
+    replacement:
+        @intrinsic(
+            "construct",
+            a directory entry result,
+            false,
+            false,
+            the string form of "",
+            false,
+            false,
+            false,
+            false,
+            message
+        )
+
+local function a failed file input stream reporting message:
+    replacement:
+        @intrinsic(
+            "construct",
+            a file input stream,
+            @intrinsic("cast", 0, a pointer to byte),
+            false,
+            message
+        )
+
+local function a failed file chunk read result reporting message:
+    replacement:
+        @intrinsic(
+            "construct",
+            a file chunk read result,
+            false,
+            the string form of "",
+            @intrinsic("cast", 0, a word sized integer),
+            false,
+            message
+        )
+
+local function a failed temporary directory result reporting message:
+    replacement:
+        @intrinsic("construct", a temporary directory result, false, the string form of "", message)
+
 local class:
     patterns:
         [a|] filesystem stream transfer
     members:
         count as a word sized integer
+        end_of_file as boolean
         succeeded as boolean
         error message as string
 
-local function a new successful filesystem stream transfer of count bytes:
+local function a new successful filesystem stream transfer of count bytes with end state end_of_file:
     replacement:
-        @intrinsic("construct", a filesystem stream transfer, count, true, an empty filesystem error message)
+        @intrinsic("construct", a filesystem stream transfer, count, end_of_file, true, an empty filesystem error message)
 
 local function a failed filesystem stream transfer of count bytes reporting message:
     replacement:
-        @intrinsic("construct", a filesystem stream transfer, count, false, message)
-
-local class:
-    patterns:
-        [a|] filesystem status
-    members:
-        regular_file as boolean
-        modification_time as i64
-        succeeded as boolean
-
-local function a filesystem status which failed:
-    replacement:
-        @intrinsic("construct", a filesystem status, false, 0 as a 64 bit integer, false)
+        @intrinsic("construct", a filesystem stream transfer, count, false, false, message)
 
 local function an invalid filesystem path:
     execute:
         set empty_storage to @intrinsic("construct", a string, @intrinsic("cast", 0, a pointer to byte), 0, @intrinsic("cast", 0, a pointer to integer))
-        return @intrinsic("construct", a filesystem path, @intrinsic("cast", 0, a pointer to byte), empty_storage, false)
+        return @intrinsic("construct", a filesystem path, @intrinsic("cast", 0, a pointer to byte), @intrinsic("cast", 0, a word sized integer), empty_storage, false)
 
 local function an invalid filesystem path error message:
     execute:
@@ -133,21 +265,20 @@ local function a filesystem path for {cstring:input}:
         if input = @intrinsic("cast", 0, a pointer to byte):
             return an invalid filesystem path
         set empty_storage to @intrinsic("construct", a string, @intrinsic("cast", 0, a pointer to byte), 0, @intrinsic("cast", 0, a pointer to integer))
-        return @intrinsic("construct", a filesystem path, input, empty_storage, true)
+        return @intrinsic("construct", a filesystem path, input, @intrinsic("cast", the length of input, a word sized integer), empty_storage, true)
 
 local function a filesystem path for {string:input}:
     execute:
         if not input is valid:
             return an invalid filesystem path
         if input's length = 0:
-            set empty_storage to a new string buffer with length 0
-            return @intrinsic("construct", a filesystem path, the data of empty_storage, empty_storage, true)
+            return an invalid filesystem path
         set zero_byte to @intrinsic("call", "libc", "memchr", a pointer to byte, the data of input, 0, @intrinsic("cast", input's length, a word sized integer))
         if zero_byte != @intrinsic("cast", 0, a pointer to byte):
             return an invalid filesystem path
         set storage to a new string buffer with length input's length
         discard @intrinsic("call", "libc", "memcpy", a pointer to byte, the data of storage, the data of input, @intrinsic("cast", input's length, a word sized integer))
-        return @intrinsic("construct", a filesystem path, the data of storage, storage, true)
+        return @intrinsic("construct", a filesystem path, the data of storage, @intrinsic("cast", storage's length, a word sized integer), storage, true)
 
 local function allocate a filesystem buffer with size byte_count:
     execute:
@@ -157,13 +288,41 @@ local function resize filesystem buffer input to size byte_count:
     execute:
         return @intrinsic("call", "libc", "realloc", a pointer to byte, input, byte_count)
 
-local function read up to count bytes into buffer from stream:
+local function transfer up to count bytes into buffer from stream:
     execute:
-        return @intrinsic("call", "libc", "fread", a word sized integer, buffer, @intrinsic("cast", 1, a word sized integer), count, stream)
+        set transferred to @intrinsic("cast", 0, a word sized integer)
+        set end_of_file to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_read",
+            an integer,
+            stream,
+            buffer,
+            count,
+            the address of transferred,
+            the address of end_of_file
+        )
+        if outcome != 0:
+            return a failed filesystem stream transfer of transferred bytes reporting the current filesystem error message
+        return a new successful filesystem stream transfer of transferred bytes with end state (end_of_file != 0)
 
-local function write count bytes from buffer to stream:
+local function transfer count bytes from buffer to stream:
     execute:
-        return @intrinsic("call", "libc", "fwrite", a word sized integer, buffer, @intrinsic("cast", 1, a word sized integer), count, stream)
+        set transferred to @intrinsic("cast", 0, a word sized integer)
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_write",
+            an integer,
+            stream,
+            buffer,
+            count,
+            the address of transferred
+        )
+        if outcome != 0:
+            return a failed filesystem stream transfer of transferred bytes reporting the current filesystem error message
+        return a new successful filesystem stream transfer of transferred bytes with end state false
 
 local function transfer bytes from source_stream to destination_stream:
     execute:
@@ -177,47 +336,64 @@ local function transfer bytes from source_stream to destination_stream:
         set succeeded to true
         set error_message to an empty filesystem error message
         loop while is_copying:
-            set read_count to read up to buffer_size bytes into buffer from source_stream
-            if read_count > @intrinsic("cast", 0, a word sized integer):
-                set written to write read_count bytes from buffer to destination_stream
-                set transferred to transferred + written
-                if written != read_count:
-                    set error_message to the current filesystem error message
+            set read_result to transfer up to buffer_size bytes into buffer from source_stream
+            if not read_result's succeeded:
+                set error_message to read_result's error message
+                set succeeded to false
+                set is_copying to false
+            if is_copying and read_result's count > @intrinsic("cast", 0, a word sized integer):
+                set write_result to transfer read_result's count bytes from buffer to destination_stream
+                set transferred to transferred + write_result's count
+                if not write_result's succeeded:
+                    set error_message to write_result's error message
                     set succeeded to false
                     set is_copying to false
-            if is_copying and read_count < buffer_size:
-                if @intrinsic("call", "libc", "ferror", an integer, source_stream) != 0:
-                    set error_message to the current filesystem error message
-                    set succeeded to false
+            if is_copying and read_result's end_of_file:
                 set is_copying to false
 
         @intrinsic("call", "libc", "free", void, buffer)
         if succeeded:
-            return a new successful filesystem stream transfer of transferred bytes
+            return a new successful filesystem stream transfer of transferred bytes with end state true
         return a failed filesystem stream transfer of transferred bytes reporting error_message
 
-local function store {string:contents} at {cstring:path} with {cstring:mode}:
+local function store {string:contents} at {filesystem path:path} with mode:
     execute:
         if not contents is valid:
             return a new file action which failed reporting invalid file contents error message
         clear the filesystem error
-        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, mode)
+        set stream to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_open",
+            a pointer to byte,
+            path's data,
+            path's length,
+            mode
+        )
         if stream = @intrinsic("cast", 0, a pointer to byte):
             return a new file action which failed
 
         set expected to @intrinsic("cast", contents's length, a word sized integer)
-        set written to @intrinsic("cast", 0, a word sized integer)
+        set write_result to a new successful filesystem stream transfer of 0 bytes with end state false
         if expected > @intrinsic("cast", 0, a word sized integer):
-            set written to write expected bytes from the data of contents to stream
-        set succeeded to written = expected
+            set write_result to transfer expected bytes from the data of contents to stream
+        set succeeded to write_result's succeeded and write_result's count = expected
         set error_message to an empty filesystem error message
         if not succeeded:
-            set error_message to the current filesystem error message
-        set close_result to @intrinsic("call", "libc", "fclose", an integer, stream)
-        if close_result != 0:
+            set error_message to write_result's error message
+        set finish_result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_finish",
+            an integer,
+            stream
+        )
+        if finish_result != 0:
             if succeeded:
                 set error_message to the current filesystem error message
             set succeeded to false
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, stream)
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, stream)
         if succeeded:
             return a new file action which succeeded
         return a new file action which failed reporting error_message
@@ -228,9 +404,18 @@ local function perform reading of path:
         if not prepared_path's valid:
             return a failed file read action reporting an invalid filesystem path error message
         clear the filesystem error
-        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
+        set stream to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_open",
+            a pointer to byte,
+            prepared_path's data,
+            prepared_path's length,
+            1
+        )
         if stream = @intrinsic("cast", 0, a pointer to byte):
             return a failed file read action
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, stream)
 
         set capacity to @intrinsic("cast", 4096, a word sized integer)
         set maximum_length to @intrinsic("cast", the maximum string buffer length, a word sized integer)
@@ -238,7 +423,7 @@ local function perform reading of path:
         set buffer to allocate a filesystem buffer with size (capacity + 1)
         if buffer = @intrinsic("cast", 0, a pointer to byte):
             set error_message to the current filesystem error message
-            discard @intrinsic("call", "libc", "fclose", an integer, stream)
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, stream)
             return a failed file read action reporting error_message
 
         set is_reading to true
@@ -246,20 +431,25 @@ local function perform reading of path:
         set error_message to an empty filesystem error message
         loop while is_reading:
             set available to capacity - length
-            set read_count to read up to available bytes into buffer + length from stream
-            set length to length + read_count
-
-            if read_count < available:
-                if @intrinsic("call", "libc", "ferror", an integer, stream) != 0:
-                    set error_message to the current filesystem error message
-                    set succeeded to false
+            set read_result to transfer up to available bytes into buffer + length from stream
+            set length to length + read_result's count
+            if not read_result's succeeded:
+                set error_message to read_result's error message
+                set succeeded to false
                 set is_reading to false
-            else:
+            if is_reading and read_result's end_of_file:
+                set is_reading to false
+            if is_reading and length = capacity:
                 if capacity = maximum_length:
-                    set next_byte to @intrinsic("call", "libc", "fgetc", an integer, stream)
-                    if (next_byte != -1) or (@intrinsic("call", "libc", "ferror", an integer, stream) != 0):
-                        set error_message to the current filesystem error message
+                    set extra_byte to 0 as a byte
+                    set extra_result to transfer up to 1 bytes into the address of extra_byte from stream
+                    if not extra_result's succeeded:
+                        set error_message to extra_result's error message
                         set succeeded to false
+                    else:
+                        if extra_result's count > @intrinsic("cast", 0, a word sized integer):
+                            set error_message to the string form of "File contents exceed the maximum string length"
+                            set succeeded to false
                     set is_reading to false
                 else:
                     set next_capacity to maximum_length
@@ -274,11 +464,7 @@ local function perform reading of path:
                         set buffer to resized
                         set capacity to next_capacity
 
-        set close_result to @intrinsic("call", "libc", "fclose", an integer, stream)
-        if close_result != 0:
-            if succeeded:
-                set error_message to the current filesystem error message
-            set succeeded to false
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, stream)
 
         if not succeeded:
             @intrinsic("call", "libc", "free", void, buffer)
@@ -294,14 +480,14 @@ local function perform writing of {string:contents} to path:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
-        return store contents at prepared_path's data with "wb"
+        return store contents at prepared_path with 2
 
 local function perform appending of {string:contents} to path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
-        return store contents at prepared_path's data with "ab"
+        return store contents at prepared_path with 3
 
 local function perform deletion of path:
     execute:
@@ -309,7 +495,14 @@ local function perform deletion of path:
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_remove", an integer, prepared_path's data)
+        set result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_remove_tree",
+            an integer,
+            prepared_path's data,
+            prepared_path's length
+        )
         return a new file action which succeeded if (result = 0)
 
 local function perform renaming of source to destination:
@@ -319,7 +512,16 @@ local function perform renaming of source to destination:
         if (not source_path's valid) or (not destination_path's valid):
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic("call", "libc", "rename", an integer, source_path's data, destination_path's data)
+        set result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_rename",
+            an integer,
+            source_path's data,
+            source_path's length,
+            destination_path's data,
+            destination_path's length
+        )
         return a new file action which succeeded if (result = 0)
 
 local function perform copying of source to destination:
@@ -329,91 +531,143 @@ local function perform copying of source to destination:
         if (not source_path's valid) or (not destination_path's valid):
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set source_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, source_path's data, "rb")
+        set source_stream to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_open",
+            a pointer to byte,
+            source_path's data,
+            source_path's length,
+            1
+        )
         if source_stream = @intrinsic("cast", 0, a pointer to byte):
             return a new file action which failed
-        set staging_stream to @intrinsic("call", "libc", "tmpfile", a pointer to byte)
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, source_stream)
+        set staging_stream to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_file_open",
+            a pointer to byte
+        )
         if staging_stream = @intrinsic("cast", 0, a pointer to byte):
             set error_message to the current filesystem error message
-            discard @intrinsic("call", "libc", "fclose", an integer, source_stream)
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, source_stream)
             return a new file action which failed reporting error_message
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, staging_stream)
 
         set staged to transfer bytes from source_stream to staging_stream
         set error_message to staged's error message
         set staging_succeeded to staged's succeeded
-        set source_close_result to @intrinsic("call", "libc", "fclose", an integer, source_stream)
-        if source_close_result != 0:
-            if staging_succeeded:
-                set error_message to the current filesystem error message
-            set staging_succeeded to false
-        set staging_flush_result to @intrinsic("call", "libc", "fflush", an integer, staging_stream)
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, source_stream)
+        set staging_flush_result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_finish",
+            an integer,
+            staging_stream
+        )
         if staging_flush_result != 0:
             if staging_succeeded:
                 set error_message to the current filesystem error message
             set staging_succeeded to false
         if not staging_succeeded:
-            discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, staging_stream)
             return a new file action which failed reporting error_message
 
-        @intrinsic("call", "libc", "rewind", void, staging_stream)
-        set prefix_count to @intrinsic("cast", 0, a word sized integer)
-        set first_byte to 0 as a byte
-        if staged's count > @intrinsic("cast", 0, a word sized integer):
-            set prefix_count to read up to 1 bytes into the address of first_byte from staging_stream
-            if prefix_count != @intrinsic("cast", 1, a word sized integer):
-                set error_message to the current filesystem error message
-                discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
-                return a new file action which failed reporting error_message
+        set rewind_result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_rewind",
+            an integer,
+            staging_stream
+        )
+        if rewind_result != 0:
+            set error_message to the current filesystem error message
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, staging_stream)
+            return a new file action which failed reporting error_message
 
-        set destination_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, destination_path's data, "wb")
+        set destination_stream to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_open",
+            a pointer to byte,
+            destination_path's data,
+            destination_path's length,
+            2
+        )
         if destination_stream = @intrinsic("cast", 0, a pointer to byte):
             set error_message to the current filesystem error message
-            discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, staging_stream)
             return a new file action which failed reporting error_message
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, destination_stream)
 
-        set prefix_written to @intrinsic("cast", 0, a word sized integer)
         set succeeded to true
-        if prefix_count > @intrinsic("cast", 0, a word sized integer):
-            set prefix_written to write prefix_count bytes from the address of first_byte to destination_stream
-            if prefix_written != prefix_count:
-                set error_message to the current filesystem error message
-                set succeeded to false
-        set remainder to a new successful filesystem stream transfer of 0 bytes
-        if succeeded:
-            set remainder to transfer bytes from staging_stream to destination_stream
-            if not remainder's succeeded:
-                set error_message to remainder's error message
-                set succeeded to false
-        if prefix_written + remainder's count != staged's count:
+        set copied to transfer bytes from staging_stream to destination_stream
+        if (not copied's succeeded) or (copied's count != staged's count):
+            set error_message to copied's error message
+            set succeeded to false
+        set destination_finish_result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_finish",
+            an integer,
+            destination_stream
+        )
+        if destination_finish_result != 0:
             if succeeded:
                 set error_message to the current filesystem error message
             set succeeded to false
-        set destination_close_result to @intrinsic("call", "libc", "fclose", an integer, destination_stream)
-        if destination_close_result != 0:
-            if succeeded:
-                set error_message to the current filesystem error message
-            set succeeded to false
-        set staging_close_result to @intrinsic("call", "libc", "fclose", an integer, staging_stream)
-        if staging_close_result != 0:
-            if succeeded:
-                set error_message to the current filesystem error message
-            set succeeded to false
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, destination_stream)
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, staging_stream)
         if succeeded:
             return a new file action which succeeded
         return a new file action which failed reporting error_message
 
-local function filesystem status for path:
+function inspect filesystem entry at {any:path}:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
-            return a filesystem status which failed
+            return a failed filesystem entry status reporting an invalid filesystem path error message
         clear the filesystem error
-        set regular_file to 0
+        set kind to 0
         set modification_time to 0 as a 64 bit integer
-        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_status", an integer, prepared_path's data, the address of regular_file, the address of modification_time)
-        if result != 0:
-            return a filesystem status which failed
-        return @intrinsic("construct", a filesystem status, regular_file != 0, modification_time, true)
+        set result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_status",
+            an integer,
+            prepared_path's data,
+            prepared_path's length,
+            the address of kind,
+            the address of modification_time
+        )
+        if result < 0:
+            return a failed filesystem entry status reporting the current filesystem error message
+        if result = 0:
+            return @intrinsic(
+                "construct",
+                a filesystem entry status,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                0 as a 64 bit integer,
+                an empty filesystem error message
+            )
+        return @intrinsic(
+            "construct",
+            a filesystem entry status,
+            true,
+            true,
+            kind = 1,
+            kind = 2,
+            kind = 3,
+            kind = 4,
+            modification_time,
+            an empty filesystem error message
+        )
 
 local function perform directory creation at path:
     execute:
@@ -421,7 +675,14 @@ local function perform directory creation at path:
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_create_directory", an integer, prepared_path's data)
+        set result to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_create_directories",
+            an integer,
+            prepared_path's data,
+            prepared_path's length
+        )
         return a new file action which succeeded if (result = 0)
 
 flex function read path:
@@ -452,23 +713,237 @@ flex function create directory at path:
     replacement:
         set the subject to perform directory creation at path
 
+function create directory tree at path:
+    execute:
+        return perform directory creation at path
+
+function remove filesystem tree at path:
+    execute:
+        return perform deletion of path
+
+function open directory at path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a failed directory enumeration reporting an invalid filesystem path error message
+        set handle to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_directory_open",
+            a pointer to byte,
+            prepared_path's data,
+            prepared_path's length
+        )
+        if handle = @intrinsic("cast", 0, a pointer to byte):
+            return a failed directory enumeration reporting the current filesystem error message
+        return @intrinsic(
+            "construct",
+            a directory enumeration,
+            handle,
+            true,
+            an empty filesystem error message
+        )
+
+function read next directory entry from {directory enumeration:enumeration}:
+    execute:
+        if not enumeration's succeeded:
+            return a failed directory entry result reporting enumeration's error_message
+        set kind to 0
+        set name_length to @intrinsic("cast", 0, a word sized integer)
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_directory_next",
+            an integer,
+            enumeration's handle,
+            the address of kind,
+            the address of name_length
+        )
+        if outcome < 0:
+            return a failed directory entry result reporting the current filesystem error message
+        if outcome = 0:
+            return @intrinsic(
+                "construct",
+                a directory entry result,
+                true,
+                false,
+                the string form of "",
+                false,
+                false,
+                false,
+                false,
+                an empty filesystem error message
+            )
+        if name_length > @intrinsic("cast", the maximum string buffer length, a word sized integer):
+            return a failed directory entry result reporting the string form of "Directory entry name is too large"
+        set name to a new string buffer with length @intrinsic("cast", name_length, an integer)
+        set copied to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_directory_copy_name",
+            an integer,
+            enumeration's handle,
+            the data of name,
+            name_length + 1
+        )
+        if copied != 0:
+            return a failed directory entry result reporting the current filesystem error message
+        return @intrinsic(
+            "construct",
+            a directory entry result,
+            true,
+            true,
+            name,
+            kind = 1,
+            kind = 2,
+            kind = 3,
+            kind = 4,
+            an empty filesystem error message
+        )
+
+function open file at path for streaming reads:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a failed file input stream reporting an invalid filesystem path error message
+        set handle to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_open",
+            a pointer to byte,
+            prepared_path's data,
+            prepared_path's length,
+            1
+        )
+        if handle = @intrinsic("cast", 0, a pointer to byte):
+            return a failed file input stream reporting the current filesystem error message
+        return @intrinsic(
+            "construct",
+            a file input stream,
+            handle,
+            true,
+            an empty filesystem error message
+        )
+
+function read up to {integer:byte_limit} bytes from {file input stream:stream}:
+    execute:
+        if not stream's succeeded:
+            return a failed file chunk read result reporting stream's error_message
+        if byte_limit < 0:
+            return a failed file chunk read result reporting the string form of "File read size must not be negative"
+        if byte_limit > the maximum string buffer length:
+            return a failed file chunk read result reporting the string form of "File read size exceeds the maximum string length"
+        set requested_length to byte_limit as an integer
+        set buffer to a new string buffer with length requested_length
+        set read_count to @intrinsic("cast", 0, a word sized integer)
+        set end_of_file to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_file_read",
+            an integer,
+            stream's handle,
+            the data of buffer,
+            requested_length as a word sized integer,
+            the address of read_count,
+            the address of end_of_file
+        )
+        if outcome != 0:
+            return a failed file chunk read result reporting the current filesystem error message
+        set contents to buffer
+        if read_count < requested_length as a word sized integer:
+            set contents to the substring of buffer from 0 with length read_count as an integer
+        return @intrinsic(
+            "construct",
+            a file chunk read result,
+            true,
+            contents,
+            read_count,
+            end_of_file != 0,
+            an empty filesystem error message
+        )
+
+function create a temporary directory:
+    execute:
+        set handle to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_directory_create",
+            a pointer to byte
+        )
+        if handle = @intrinsic("cast", 0, a pointer to byte):
+            return a failed temporary directory result reporting the current filesystem error message
+        @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_directory_retain",
+            void,
+            handle
+        )
+        set path_length to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_directory_path_length",
+            a word sized integer,
+            handle
+        )
+        if path_length > @intrinsic("cast", the maximum string buffer length, a word sized integer):
+            @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_filesystem_temporary_directory_release",
+                void,
+                handle
+            )
+            return a failed temporary directory result reporting the string form of "Temporary directory path is too large"
+        set path to a new string buffer with length path_length as an integer
+        set copied to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_directory_copy_path",
+            an integer,
+            handle,
+            the data of path,
+            path_length + 1
+        )
+        set error_message to an empty filesystem error message
+        if copied != 0:
+            set error_message to the current filesystem error message
+        @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_temporary_directory_release",
+            void,
+            handle
+        )
+        if copied != 0:
+            return a failed temporary directory result reporting error_message
+        return @intrinsic(
+            "construct",
+            a temporary directory result,
+            true,
+            path,
+            an empty filesystem error message
+        )
+
 function path is a regular file:
     execute:
-        set status to filesystem status for path
-        return status's succeeded and status's regular_file
+        set status to inspect filesystem entry at path
+        return ((status's succeeded) and (status's found)) and (status's regular_file)
 
 function [the|] modification time of path:
     execute:
-        set status to filesystem status for path
+        set status to inspect filesystem entry at path
         return status's modification_time
 
 function path is readable:
     execute:
-        set status to filesystem status for path
-        if (not status's succeeded) or (not status's regular_file):
+        set status to inspect filesystem entry at path
+        if not status's succeeded:
             return false
-        set prepared_path to a filesystem path for path
-        set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
-        if stream = @intrinsic("cast", 0, a pointer to byte):
+        if not status's found:
             return false
-        return @intrinsic("call", "libc", "fclose", an integer, stream) = 0
+        if not status's regular_file:
+            return false
+        set stream to open file at path for streaming reads
+        return stream's succeeded
