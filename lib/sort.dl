@@ -1,0 +1,96 @@
+# Deterministic bytewise ordering and stable sorting utilities.
+
+import lib/list.dl
+
+function [the|] unsigned byte value of byte_value:
+    execute:
+        return (byte_value as i32) bitwise and 255
+
+function bytewise compare {string:left} with {string:right}:
+    execute:
+        set shared_length to the minimum of the length of left and the length of right
+        set position to 0
+        loop while position < shared_length:
+            set left_byte to the unsigned byte value of character position of left
+            set right_byte to the unsigned byte value of character position of right
+            if left_byte < right_byte:
+                return 0 - 1
+            if left_byte > right_byte:
+                return 1
+            set position to position + 1
+        if the length of left < the length of right:
+            return 0 - 1
+        if the length of left > the length of right:
+            return 1
+        return 0
+
+function bytewise compare {cstring:left} with {string:right}:
+    execute:
+        return bytewise compare the string form of left with right
+
+function bytewise compare {string:left} with {cstring:right}:
+    execute:
+        return bytewise compare left with the string form of right
+
+function bytewise compare {cstring:left} with {cstring:right}:
+    execute:
+        return bytewise compare the string form of left with the string form of right
+
+function stable bytewise order for {a pointer to list:keys}:
+    execute:
+        set permutation to an empty list of i32
+        set source_index to 0
+        loop while source_index < the length of keys:
+            set insertion_position to the length of permutation
+            append source_index to permutation
+            set searching to true
+            loop while searching and insertion_position > 0:
+                set previous_source_index to item insertion_position - 1 of permutation
+                set current_key to item source_index of keys
+                set previous_key to item previous_source_index of keys
+                if bytewise compare current_key with previous_key < 0:
+                    replace item at index insertion_position in permutation with previous_source_index
+                    replace item at index insertion_position - 1 in permutation with source_index
+                    set insertion_position to insertion_position - 1
+                else:
+                    set searching to false
+            set source_index to source_index + 1
+        return permutation
+
+local function apply stable order {a pointer to list:permutation} to {a pointer to list:values}:
+    execute:
+        if the length of permutation != the length of values:
+            @intrinsic("call", "libc", "abort", void)
+        set sorted to an empty list of the type of item 0 of values
+        set position to 0
+        loop while position < the length of permutation:
+            set source_index to item position of permutation
+            if source_index < 0 or source_index >= the length of values:
+                @intrinsic("call", "libc", "abort", void)
+            append item source_index of values to sorted
+            set position to position + 1
+        clear values
+        set position to 0
+        loop while position < the length of sorted:
+            append item position of sorted to values
+            set position to position + 1
+        free list sorted
+
+function stable sort {a pointer to list:strings} in bytewise order:
+    execute:
+        if the length of strings = 0:
+            @intrinsic("return")
+        set permutation to stable bytewise order for strings
+        apply stable order permutation to strings
+        free list permutation
+
+function stable sort {a pointer to list:records} using bytewise keys {a pointer to list:keys}:
+    execute:
+        if the length of records != the length of keys:
+            @intrinsic("call", "libc", "abort", void)
+        if the length of records = 0:
+            @intrinsic("return")
+        set permutation to stable bytewise order for keys
+        apply stable order permutation to records
+        apply stable order permutation to keys
+        free list permutation

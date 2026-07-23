@@ -1,0 +1,28 @@
+1
+2
+1
+hello world
+hello # world
+line
+next
+it's here
+1
+[]
+scheme:value
+value
+done
+11:1
+1:0
+0:3:3:indentation does not match the established width
+0:2:3:a scalar entry cannot contain nested entries
+0:3:13:indentation can only increase by one level
+0:1:1:expected a mapping entry with ':'
+0:1:1:a mapping key cannot be empty
+0:1:6:unterminated quoted scalar
+0:1:14:unexpected text after quoted scalar
+0:2:1:duplicate mapping key
+0:2:1:tabs are not allowed for indentation
+0:1:3:an indented entry must follow a parent entry
+0:2:3:expected a mapping entry with ':'
+0:1:1:quoted mapping keys are not supported
+0:1:10:unsupported quoted scalar escape
