@@ -7,6 +7,7 @@ class:
         [a|] file action
     members:
         succeeded as boolean
+        error_message as string
 
 class:
     patterns:
@@ -14,6 +15,7 @@ class:
     members:
         contents as string
         succeeded as boolean
+        error_message as string
 
 local class:
     patterns:
@@ -31,17 +33,59 @@ function {file read action:action} succeeded:
     execute:
         return action's succeeded
 
-local function a new file action which succeeded if outcome:
-    replacement:
-        @intrinsic("construct", a file action, outcome)
+function [the|] error message of {file action:action}:
+    execute:
+        return action's error_message
 
-local function a new file read action containing contents which succeeded if outcome:
+function [the|] error message of {file read action:action}:
+    execute:
+        return action's error_message
+
+local function an empty filesystem error message:
+    execute:
+        return the string form of ""
+
+local function clear the filesystem error:
     replacement:
-        @intrinsic("construct", a file read action, contents, outcome)
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_clear_error", void)
+
+local function the current filesystem error message:
+    execute:
+        set message_length to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_error_message", a word sized integer, @intrinsic("cast", 0, a pointer to byte), @intrinsic("cast", 0, a word sized integer))
+        set error_text to a new string buffer with length @intrinsic("cast", message_length, an integer)
+        if message_length > @intrinsic("cast", 0, a word sized integer):
+            discard @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_error_message", a word sized integer, the data of error_text, message_length + 1)
+        return error_text
+
+local function a new file action which succeeded:
+    replacement:
+        @intrinsic("construct", a file action, true, an empty filesystem error message)
+
+local function a new file action which failed reporting message:
+    replacement:
+        @intrinsic("construct", a file action, false, message)
+
+local function a new file action which failed:
+    execute:
+        return a new file action which failed reporting the current filesystem error message
+
+local function a new file action which succeeded if outcome:
+    execute:
+        if outcome:
+            return a new file action which succeeded
+        return a new file action which failed
+
+local function a new file read action containing contents which succeeded:
+    replacement:
+        @intrinsic("construct", a file read action, contents, true, an empty filesystem error message)
+
+local function a failed file read action reporting message:
+    replacement:
+        @intrinsic("construct", a file read action, the string form of "", false, message)
 
 local function a failed file read action:
     execute:
-        return a new file read action containing the string form of "" which succeeded if false
+        return a failed file read action reporting the current filesystem error message
 
 local class:
     patterns:
@@ -49,15 +93,40 @@ local class:
     members:
         count as a word sized integer
         succeeded as boolean
+        error message as string
 
-local function a new filesystem stream transfer of count bytes which succeeded if outcome:
+local function a new successful filesystem stream transfer of count bytes:
     replacement:
-        @intrinsic("construct", a filesystem stream transfer, count, outcome)
+        @intrinsic("construct", a filesystem stream transfer, count, true, an empty filesystem error message)
+
+local function a failed filesystem stream transfer of count bytes reporting message:
+    replacement:
+        @intrinsic("construct", a filesystem stream transfer, count, false, message)
+
+local class:
+    patterns:
+        [a|] filesystem status
+    members:
+        regular_file as boolean
+        modification_time as i64
+        succeeded as boolean
+
+local function a filesystem status which failed:
+    replacement:
+        @intrinsic("construct", a filesystem status, false, 0 as a 64 bit integer, false)
 
 local function an invalid filesystem path:
     execute:
         set empty_storage to @intrinsic("construct", a string, @intrinsic("cast", 0, a pointer to byte), 0, @intrinsic("cast", 0, a pointer to integer))
         return @intrinsic("construct", a filesystem path, @intrinsic("cast", 0, a pointer to byte), empty_storage, false)
+
+local function an invalid filesystem path error message:
+    execute:
+        return the string form of "Invalid filesystem path"
+
+local function invalid file contents error message:
+    execute:
+        return the string form of "Invalid file contents"
 
 local function a filesystem path for {cstring:input}:
     execute:
@@ -101,47 +170,64 @@ local function transfer bytes from source_stream to destination_stream:
         set buffer_size to @intrinsic("cast", 4096, a word sized integer)
         set buffer to allocate a filesystem buffer with size buffer_size
         if buffer = @intrinsic("cast", 0, a pointer to byte):
-            return a new filesystem stream transfer of 0 bytes which succeeded if false
+            return a failed filesystem stream transfer of 0 bytes reporting the current filesystem error message
 
         set transferred to @intrinsic("cast", 0, a word sized integer)
         set is_copying to true
         set succeeded to true
+        set error_message to an empty filesystem error message
         loop while is_copying:
             set read_count to read up to buffer_size bytes into buffer from source_stream
             if read_count > @intrinsic("cast", 0, a word sized integer):
                 set written to write read_count bytes from buffer to destination_stream
                 set transferred to transferred + written
                 if written != read_count:
+                    set error_message to the current filesystem error message
                     set succeeded to false
                     set is_copying to false
             if is_copying and read_count < buffer_size:
                 if @intrinsic("call", "libc", "ferror", an integer, source_stream) != 0:
+                    set error_message to the current filesystem error message
                     set succeeded to false
                 set is_copying to false
 
         @intrinsic("call", "libc", "free", void, buffer)
-        return a new filesystem stream transfer of transferred bytes which succeeded if succeeded
+        if succeeded:
+            return a new successful filesystem stream transfer of transferred bytes
+        return a failed filesystem stream transfer of transferred bytes reporting error_message
 
 local function store {string:contents} at {cstring:path} with {cstring:mode}:
     execute:
         if not contents is valid:
-            return false
+            return a new file action which failed reporting invalid file contents error message
+        clear the filesystem error
         set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, mode)
         if stream = @intrinsic("cast", 0, a pointer to byte):
-            return false
+            return a new file action which failed
 
         set expected to @intrinsic("cast", contents's length, a word sized integer)
         set written to @intrinsic("cast", 0, a word sized integer)
         if expected > @intrinsic("cast", 0, a word sized integer):
             set written to write expected bytes from the data of contents to stream
+        set succeeded to written = expected
+        set error_message to an empty filesystem error message
+        if not succeeded:
+            set error_message to the current filesystem error message
         set close_result to @intrinsic("call", "libc", "fclose", an integer, stream)
-        return (written = expected) and (close_result = 0)
+        if close_result != 0:
+            if succeeded:
+                set error_message to the current filesystem error message
+            set succeeded to false
+        if succeeded:
+            return a new file action which succeeded
+        return a new file action which failed reporting error_message
 
 local function perform reading of path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
-            return a failed file read action
+            return a failed file read action reporting an invalid filesystem path error message
+        clear the filesystem error
         set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
         if stream = @intrinsic("cast", 0, a pointer to byte):
             return a failed file read action
@@ -151,11 +237,13 @@ local function perform reading of path:
         set length to @intrinsic("cast", 0, a word sized integer)
         set buffer to allocate a filesystem buffer with size (capacity + 1)
         if buffer = @intrinsic("cast", 0, a pointer to byte):
+            set error_message to the current filesystem error message
             discard @intrinsic("call", "libc", "fclose", an integer, stream)
-            return a failed file read action
+            return a failed file read action reporting error_message
 
         set is_reading to true
         set succeeded to true
+        set error_message to an empty filesystem error message
         loop while is_reading:
             set available to capacity - length
             set read_count to read up to available bytes into buffer + length from stream
@@ -163,12 +251,14 @@ local function perform reading of path:
 
             if read_count < available:
                 if @intrinsic("call", "libc", "ferror", an integer, stream) != 0:
+                    set error_message to the current filesystem error message
                     set succeeded to false
                 set is_reading to false
             else:
                 if capacity = maximum_length:
                     set next_byte to @intrinsic("call", "libc", "fgetc", an integer, stream)
                     if (next_byte != -1) or (@intrinsic("call", "libc", "ferror", an integer, stream) != 0):
+                        set error_message to the current filesystem error message
                         set succeeded to false
                     set is_reading to false
                 else:
@@ -177,82 +267,93 @@ local function perform reading of path:
                         set next_capacity to capacity * 2
                     set resized to resize filesystem buffer buffer to size (next_capacity + 1)
                     if resized = @intrinsic("cast", 0, a pointer to byte):
+                        set error_message to the current filesystem error message
                         set succeeded to false
                         set is_reading to false
                     else:
                         set buffer to resized
                         set capacity to next_capacity
 
-        if @intrinsic("call", "libc", "fclose", an integer, stream) != 0:
+        set close_result to @intrinsic("call", "libc", "fclose", an integer, stream)
+        if close_result != 0:
+            if succeeded:
+                set error_message to the current filesystem error message
             set succeeded to false
 
         if not succeeded:
             @intrinsic("call", "libc", "free", void, buffer)
-            return a failed file read action
+            return a failed file read action reporting error_message
 
         set result_contents to a new string buffer with length @intrinsic("cast", length, an integer)
         discard @intrinsic("call", "libc", "memcpy", a pointer to byte, the data of result_contents, buffer, length)
         @intrinsic("call", "libc", "free", void, buffer)
-        return a new file read action containing result_contents which succeeded if true
+        return a new file read action containing result_contents which succeeded
 
 local function perform writing of {string:contents} to path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
-            return a new file action which succeeded if false
-        set succeeded to store contents at prepared_path's data with "wb"
-        return a new file action which succeeded if succeeded
+            return a new file action which failed reporting an invalid filesystem path error message
+        return store contents at prepared_path's data with "wb"
 
 local function perform appending of {string:contents} to path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
-            return a new file action which succeeded if false
-        set succeeded to store contents at prepared_path's data with "ab"
-        return a new file action which succeeded if succeeded
+            return a new file action which failed reporting an invalid filesystem path error message
+        return store contents at prepared_path's data with "ab"
 
 local function perform deletion of path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
-            return a new file action which succeeded if false
-        set result to @intrinsic("call", "libc", "remove", an integer, prepared_path's data)
-        return a new file action which succeeded if result = 0
+            return a new file action which failed reporting an invalid filesystem path error message
+        clear the filesystem error
+        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_remove", an integer, prepared_path's data)
+        return a new file action which succeeded if (result = 0)
 
 local function perform renaming of source to destination:
     execute:
         set source_path to a filesystem path for source
         set destination_path to a filesystem path for destination
         if (not source_path's valid) or (not destination_path's valid):
-            return a new file action which succeeded if false
+            return a new file action which failed reporting an invalid filesystem path error message
+        clear the filesystem error
         set result to @intrinsic("call", "libc", "rename", an integer, source_path's data, destination_path's data)
-        return a new file action which succeeded if result = 0
+        return a new file action which succeeded if (result = 0)
 
 local function perform copying of source to destination:
     execute:
         set source_path to a filesystem path for source
         set destination_path to a filesystem path for destination
         if (not source_path's valid) or (not destination_path's valid):
-            return a new file action which succeeded if false
+            return a new file action which failed reporting an invalid filesystem path error message
+        clear the filesystem error
         set source_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, source_path's data, "rb")
         if source_stream = @intrinsic("cast", 0, a pointer to byte):
-            return a new file action which succeeded if false
+            return a new file action which failed
         set staging_stream to @intrinsic("call", "libc", "tmpfile", a pointer to byte)
         if staging_stream = @intrinsic("cast", 0, a pointer to byte):
+            set error_message to the current filesystem error message
             discard @intrinsic("call", "libc", "fclose", an integer, source_stream)
-            return a new file action which succeeded if false
+            return a new file action which failed reporting error_message
 
         set staged to transfer bytes from source_stream to staging_stream
-        set source_close_result to @intrinsic("call", "libc", "fclose", an integer, source_stream)
-        set staging_flush_result to @intrinsic("call", "libc", "fflush", an integer, staging_stream)
+        set error_message to staged's error message
         set staging_succeeded to staged's succeeded
+        set source_close_result to @intrinsic("call", "libc", "fclose", an integer, source_stream)
         if source_close_result != 0:
+            if staging_succeeded:
+                set error_message to the current filesystem error message
             set staging_succeeded to false
+        set staging_flush_result to @intrinsic("call", "libc", "fflush", an integer, staging_stream)
         if staging_flush_result != 0:
+            if staging_succeeded:
+                set error_message to the current filesystem error message
             set staging_succeeded to false
         if not staging_succeeded:
             discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
-            return a new file action which succeeded if false
+            return a new file action which failed reporting error_message
 
         @intrinsic("call", "libc", "rewind", void, staging_stream)
         set prefix_count to @intrinsic("cast", 0, a word sized integer)
@@ -260,26 +361,68 @@ local function perform copying of source to destination:
         if staged's count > @intrinsic("cast", 0, a word sized integer):
             set prefix_count to read up to 1 bytes into the address of first_byte from staging_stream
             if prefix_count != @intrinsic("cast", 1, a word sized integer):
+                set error_message to the current filesystem error message
                 discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
-                return a new file action which succeeded if false
+                return a new file action which failed reporting error_message
 
         set destination_stream to @intrinsic("call", "libc", "fopen", a pointer to byte, destination_path's data, "wb")
         if destination_stream = @intrinsic("cast", 0, a pointer to byte):
+            set error_message to the current filesystem error message
             discard @intrinsic("call", "libc", "fclose", an integer, staging_stream)
-            return a new file action which succeeded if false
+            return a new file action which failed reporting error_message
 
         set prefix_written to @intrinsic("cast", 0, a word sized integer)
+        set succeeded to true
         if prefix_count > @intrinsic("cast", 0, a word sized integer):
             set prefix_written to write prefix_count bytes from the address of first_byte to destination_stream
-        set remainder to transfer bytes from staging_stream to destination_stream
-        set succeeded to (prefix_written = prefix_count) and remainder's succeeded
+            if prefix_written != prefix_count:
+                set error_message to the current filesystem error message
+                set succeeded to false
+        set remainder to a new successful filesystem stream transfer of 0 bytes
+        if succeeded:
+            set remainder to transfer bytes from staging_stream to destination_stream
+            if not remainder's succeeded:
+                set error_message to remainder's error message
+                set succeeded to false
         if prefix_written + remainder's count != staged's count:
+            if succeeded:
+                set error_message to the current filesystem error message
             set succeeded to false
-        if @intrinsic("call", "libc", "fclose", an integer, destination_stream) != 0:
+        set destination_close_result to @intrinsic("call", "libc", "fclose", an integer, destination_stream)
+        if destination_close_result != 0:
+            if succeeded:
+                set error_message to the current filesystem error message
             set succeeded to false
-        if @intrinsic("call", "libc", "fclose", an integer, staging_stream) != 0:
+        set staging_close_result to @intrinsic("call", "libc", "fclose", an integer, staging_stream)
+        if staging_close_result != 0:
+            if succeeded:
+                set error_message to the current filesystem error message
             set succeeded to false
-        return a new file action which succeeded if succeeded
+        if succeeded:
+            return a new file action which succeeded
+        return a new file action which failed reporting error_message
+
+local function filesystem status for path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a filesystem status which failed
+        clear the filesystem error
+        set regular_file to 0
+        set modification_time to 0 as a 64 bit integer
+        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_status", an integer, prepared_path's data, the address of regular_file, the address of modification_time)
+        if result != 0:
+            return a filesystem status which failed
+        return @intrinsic("construct", a filesystem status, regular_file != 0, modification_time, true)
+
+local function perform directory creation at path:
+    execute:
+        set prepared_path to a filesystem path for path
+        if not prepared_path's valid:
+            return a new file action which failed reporting an invalid filesystem path error message
+        clear the filesystem error
+        set result to @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_create_directory", an integer, prepared_path's data)
+        return a new file action which succeeded if (result = 0)
 
 flex function read path:
     replacement:
@@ -305,11 +448,26 @@ flex function copy source to destination:
     replacement:
         set the subject to perform copying of source to destination
 
+flex function create directory at path:
+    replacement:
+        set the subject to perform directory creation at path
+
+function path is a regular file:
+    execute:
+        set status to filesystem status for path
+        return status's succeeded and status's regular_file
+
+function [the|] modification time of path:
+    execute:
+        set status to filesystem status for path
+        return status's modification_time
+
 function path is readable:
     execute:
-        set prepared_path to a filesystem path for path
-        if not prepared_path's valid:
+        set status to filesystem status for path
+        if (not status's succeeded) or (not status's regular_file):
             return false
+        set prepared_path to a filesystem path for path
         set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, prepared_path's data, "rb")
         if stream = @intrinsic("cast", 0, a pointer to byte):
             return false

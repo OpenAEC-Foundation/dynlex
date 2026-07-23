@@ -300,8 +300,26 @@ if(EMSCRIPTEN AND NOT DYNLEX_WEB)
 endif()
 
 if(NOT EMSCRIPTEN)
+    add_library(dynlex_runtime STATIC src/runtime/filesystemRuntime.c)
+    set_target_properties(dynlex_runtime PROPERTIES
+        C_STANDARD 11
+        C_STANDARD_REQUIRED ON
+        POSITION_INDEPENDENT_CODE ON
+    )
+    if(MSVC)
+        target_compile_options(dynlex_runtime PRIVATE /W4 /WX)
+    else()
+        target_compile_options(dynlex_runtime PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+
     add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
                                     ${PROJECT_CONFIGS})
+    add_dependencies(${PROJECT_NAME} dynlex_runtime)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        DYNLEX_RUNTIME_LIBRARY_BUILD_PATH="$<TARGET_FILE:dynlex_runtime>"
+        DYNLEX_RUNTIME_LIBRARY_FILENAME="$<TARGET_FILE_NAME:dynlex_runtime>"
+        DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex"
+    )
 
     target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
     dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
@@ -363,6 +381,12 @@ if(DYNLEX_WEB)
         "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json','_dynlex_web_get_lsp_hover_json','_dynlex_web_get_lsp_definition_json','_dynlex_web_get_lsp_semantic_tokens_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
+    file(GLOB_RECURSE DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
+        CONFIGURE_DEPENDS
+        LIST_DIRECTORIES false
+        "${CMAKE_SOURCE_DIR}/lib/*"
+    )
+    set_property(TARGET dynlex_web APPEND PROPERTY LINK_DEPENDS ${DYNLEX_WEB_EMBEDDED_LIBRARY_FILES})
     target_link_options(dynlex_web PRIVATE
         "-sWASM=1"
         "-sALLOW_MEMORY_GROWTH=1"
@@ -383,6 +407,9 @@ endif()
 #
 if(TARGET ${PROJECT_NAME})
     install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(TARGET dynlex_runtime)
+    install(TARGETS dynlex_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
 endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
 if(WIN32 AND TARGET ${PROJECT_NAME})

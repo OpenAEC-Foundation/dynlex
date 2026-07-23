@@ -1,0 +1,33 @@
+import lib/filesystem.dl
+
+set directory_path to "tests/required/filesystem_metadata/directory.tmp"
+set file_path to "tests/required/filesystem_metadata/directory.tmp/file.tmp"
+set missing_path to "tests/required/filesystem_metadata/missing.tmp"
+
+delete file_path
+delete directory_path
+
+create directory at directory_path and print if it succeeded
+print "" as line
+print (the length of (the error message of it)) as line
+print directory_path is a regular file as line
+print directory_path is readable as line
+
+write the string form of "metadata" to file_path and print if it succeeded
+print "" as line
+print (the length of (the error message of it)) as line
+print file_path is a regular file as line
+print (the modification time of file_path) > 0 as line
+
+read missing_path and print if it succeeded
+print "" as line
+print (the length of the error message of it) > 0 as line
+
+create directory at directory_path and print if it succeeded
+print "" as line
+print (the length of the error message of it) > 0 as line
+
+delete file_path and print if it succeeded
+print "" as line
+delete directory_path and print if it succeeded
+print "" as line

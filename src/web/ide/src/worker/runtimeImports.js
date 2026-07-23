@@ -6,6 +6,11 @@ const supportedEnvImports = new Set([
   "__table_base",
   "abort",
   "calloc",
+  "dynlex_filesystem_clear_error",
+  "dynlex_filesystem_create_directory",
+  "dynlex_filesystem_error_message",
+  "dynlex_filesystem_remove",
+  "dynlex_filesystem_status",
   "dynlex_print_i64",
   "dynlex_print_string",
   "fclose",
@@ -38,6 +43,8 @@ const supportedEnvImports = new Set([
   "tmpfile"
 ]);
 
+export { inspectRuntimeWasmLayout } from "./runtimeLayout.js";
+
 export function toNumber(value) {
   return Number(value);
 }
@@ -56,127 +63,12 @@ export function isSupportedRuntimeImport(importSpec) {
 }
 
 export function createRuntimeFilesystem() {
-  return { files: new Map() };
-}
-
-function wasmReader(wasmBytes) {
-  const bytes = wasmBytes instanceof Uint8Array ? wasmBytes : new Uint8Array(wasmBytes);
+  const timestamp = Date.now();
   return {
-    bytes,
-    offset: 0,
-    readByte() {
-      if (this.offset >= this.bytes.length) {
-        throw new WebAssembly.CompileError("Unexpected end of WebAssembly module");
-      }
-      return this.bytes[this.offset++];
-    },
-    readUnsignedLeb() {
-      let result = 0n;
-      let shift = 0n;
-      for (let index = 0; index < 5; index += 1) {
-        const byte = this.readByte();
-        result |= BigInt(byte & 0x7f) << shift;
-        if ((byte & 0x80) === 0) {
-          const number = Number(result);
-          if (!Number.isSafeInteger(number)) {
-            throw new WebAssembly.CompileError("WebAssembly integer exceeds JavaScript's safe range");
-          }
-          return number;
-        }
-        shift += 7n;
-      }
-      throw new WebAssembly.CompileError("Invalid WebAssembly unsigned LEB128 integer");
-    },
-    readSignedI32Leb() {
-      let result = 0n;
-      let shift = 0n;
-      let byte = 0;
-      for (let index = 0; index < 5; index += 1) {
-        byte = this.readByte();
-        result |= BigInt(byte & 0x7f) << shift;
-        shift += 7n;
-        if ((byte & 0x80) === 0) {
-          if ((byte & 0x40) !== 0 && shift < 32n) {
-            result |= -1n << shift;
-          }
-          return Number(BigInt.asIntN(32, result));
-        }
-      }
-      throw new WebAssembly.CompileError("Invalid WebAssembly signed LEB128 integer");
-    },
-    skip(length) {
-      const end = this.offset + length;
-      if (!Number.isSafeInteger(end) || end > this.bytes.length) {
-        throw new WebAssembly.CompileError("WebAssembly section exceeds module length");
-      }
-      this.offset = end;
-    }
+    directories: new Map([["", timestamp]]),
+    files: new Map(),
+    lastTimestamp: timestamp
   };
-}
-
-function readActiveDataOffset(reader) {
-  if (reader.readByte() !== 0x41) {
-    throw new WebAssembly.CompileError("DynLex data segment has a non-constant offset");
-  }
-  const offset = reader.readSignedI32Leb();
-  if (offset < 0 || reader.readByte() !== 0x0b) {
-    throw new WebAssembly.CompileError("DynLex data segment has an invalid offset expression");
-  }
-  return offset;
-}
-
-export function inspectRuntimeWasmLayout(wasmBytes) {
-  const reader = wasmReader(wasmBytes);
-  const expectedHeader = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
-  for (const expected of expectedHeader) {
-    if (reader.readByte() !== expected) {
-      throw new WebAssembly.CompileError("Invalid WebAssembly module header");
-    }
-  }
-
-  let staticDataEnd = 0;
-  while (reader.offset < reader.bytes.length) {
-    const sectionId = reader.readByte();
-    const sectionSize = reader.readUnsignedLeb();
-    const sectionEnd = reader.offset + sectionSize;
-    if (!Number.isSafeInteger(sectionEnd) || sectionEnd > reader.bytes.length) {
-      throw new WebAssembly.CompileError("WebAssembly section exceeds module length");
-    }
-    if (sectionId !== 11) {
-      reader.offset = sectionEnd;
-      continue;
-    }
-
-    const segmentCount = reader.readUnsignedLeb();
-    for (let index = 0; index < segmentCount; index += 1) {
-      const flags = reader.readUnsignedLeb();
-      let offset = null;
-      if (flags === 0) {
-        offset = readActiveDataOffset(reader);
-      } else if (flags === 2) {
-        const memoryIndex = reader.readUnsignedLeb();
-        if (memoryIndex !== 0) {
-          throw new WebAssembly.CompileError("DynLex data segment targets an unsupported memory");
-        }
-        offset = readActiveDataOffset(reader);
-      } else if (flags !== 1) {
-        throw new WebAssembly.CompileError(`Unsupported WebAssembly data segment flags ${flags}`);
-      }
-      const dataLength = reader.readUnsignedLeb();
-      if (offset !== null) {
-        const segmentEnd = offset + dataLength;
-        if (!Number.isSafeInteger(segmentEnd)) {
-          throw new WebAssembly.CompileError("DynLex static data size exceeds JavaScript's safe range");
-        }
-        staticDataEnd = Math.max(staticDataEnd, segmentEnd);
-      }
-      reader.skip(dataLength);
-    }
-    if (reader.offset !== sectionEnd) {
-      throw new WebAssembly.CompileError("DynLex data section length is inconsistent");
-    }
-  }
-  return { staticDataEnd };
 }
 
 function cStringBytes(memory, pointer) {
@@ -408,6 +300,51 @@ function buildFormatStringOutput(memory, formatText, varargsPointer) {
 function createFileImports(memory, filesystem) {
   const streams = new Map();
   let nextStream = 1;
+  let lastErrorMessage = "";
+
+  function clearError() {
+    lastErrorMessage = "";
+  }
+
+  function fail(message, result = -1) {
+    lastErrorMessage = message;
+    return result;
+  }
+
+  function nextModificationTime() {
+    filesystem.lastTimestamp = Math.max(Date.now(), filesystem.lastTimestamp + 1);
+    return filesystem.lastTimestamp;
+  }
+
+  function pathHasChildren(path) {
+    const prefix = `${path}/`;
+    return [...filesystem.files.keys(), ...filesystem.directories.keys()].some(
+      (candidate) => candidate.startsWith(prefix)
+    );
+  }
+
+  function parentDirectory(path) {
+    const separator = path.lastIndexOf("/");
+    return separator < 0 ? "" : path.slice(0, separator);
+  }
+
+  function requireParentDirectory(path) {
+    if (!filesystem.directories.has(parentDirectory(path))) {
+      fail("Parent directory does not exist");
+      return false;
+    }
+    return true;
+  }
+
+  function touchParentDirectories(...paths) {
+    const parents = new Set(paths.map(parentDirectory));
+    for (const parent of parents) {
+      if (!filesystem.directories.has(parent)) {
+        throw new WebAssembly.RuntimeError("Filesystem directory hierarchy is inconsistent");
+      }
+      filesystem.directories.set(parent, nextModificationTime());
+    }
+  }
 
   function streamFor(handle) {
     return streams.get(toNonNegativeInteger(handle));
@@ -445,11 +382,31 @@ function createFileImports(memory, filesystem) {
     node.data = resized;
   }
 
+  function removePath(pathPointer) {
+    const path = readFilesystemPath(memory, pathPointer);
+    if (!path) {
+      return fail("Invalid filesystem path");
+    }
+    if (filesystem.files.delete(path)) {
+      touchParentDirectories(path);
+      return 0;
+    }
+    if (!filesystem.directories.has(path)) {
+      return fail("No such file or directory");
+    }
+    if (pathHasChildren(path)) {
+      return fail("Directory is not empty");
+    }
+    filesystem.directories.delete(path);
+    touchParentDirectories(path);
+    return 0;
+  }
+
   return {
     fclose(handle) {
       const key = toNonNegativeInteger(handle);
       if (!streams.has(key)) {
-        return -1;
+        return fail("Invalid file stream");
       }
       streams.delete(key);
       return 0;
@@ -459,7 +416,7 @@ function createFileImports(memory, filesystem) {
       return stream?.error ? 1 : 0;
     },
     fflush(handle) {
-      return streamFor(handle) ? 0 : -1;
+      return streamFor(handle) ? 0 : fail("Invalid file stream");
     },
     fgetc(handle) {
       const stream = streamFor(handle);
@@ -467,6 +424,7 @@ function createFileImports(memory, filesystem) {
         if (stream) {
           stream.error = true;
         }
+        fail("File stream is not readable");
         return -1;
       }
       if (stream.position >= stream.node.data.length) {
@@ -478,20 +436,40 @@ function createFileImports(memory, filesystem) {
       const path = readFilesystemPath(memory, pathPointer);
       const mode = readCString(memory, modePointer);
       if (!path || !/^[rwa][b+]*$/.test(mode)) {
+        fail("Invalid filesystem path or file mode");
+        return 0;
+      }
+      if (filesystem.directories.has(path)) {
+        fail("Path is a directory");
         return 0;
       }
       let node = filesystem.files.get(path);
       if (mode.startsWith("r")) {
-        return node ? openNode(node, mode) : 0;
+        if (!node) {
+          fail("No such file or directory");
+          return 0;
+        }
+        return openNode(node, mode);
       }
       if (mode.startsWith("w")) {
-        node = { data: new Uint8Array(0) };
+        const created = !node;
+        if (created && !requireParentDirectory(path)) {
+          return 0;
+        }
+        node = { data: new Uint8Array(0), modificationTime: nextModificationTime() };
         filesystem.files.set(path, node);
+        if (created) {
+          touchParentDirectories(path);
+        }
         return openNode(node, mode);
       }
       if (!node) {
-        node = { data: new Uint8Array(0) };
+        if (!requireParentDirectory(path)) {
+          return 0;
+        }
+        node = { data: new Uint8Array(0), modificationTime: nextModificationTime() };
         filesystem.files.set(path, node);
+        touchParentDirectories(path);
       }
       return openNode(node, mode);
     },
@@ -504,6 +482,7 @@ function createFileImports(memory, filesystem) {
         if (stream) {
           stream.error = true;
         }
+        fail("File read failed");
         return 0;
       }
       if (size === 0 || count === 0) {
@@ -514,6 +493,7 @@ function createFileImports(memory, filesystem) {
       const range = byteRange(buffer, transferred);
       if (!range) {
         stream.error = true;
+        fail("File read buffer is outside program memory");
         return 0;
       }
       new Uint8Array(memory.buffer).set(
@@ -533,6 +513,7 @@ function createFileImports(memory, filesystem) {
         if (stream) {
           stream.error = true;
         }
+        fail("File write failed");
         return 0;
       }
       if (size === 0 || count === 0) {
@@ -544,21 +525,58 @@ function createFileImports(memory, filesystem) {
       resizeNode(stream.node, stream.position + requested);
       stream.node.data.set(new Uint8Array(memory.buffer).subarray(range.start, range.end), stream.position);
       stream.position += requested;
+      stream.node.modificationTime = nextModificationTime();
       return count;
     },
     remove(pathPointer) {
-      const path = readFilesystemPath(memory, pathPointer);
-      return path && filesystem.files.delete(path) ? 0 : -1;
+      return removePath(pathPointer);
     },
     rename(sourcePointer, destinationPointer) {
       const source = readFilesystemPath(memory, sourcePointer);
       const destination = readFilesystemPath(memory, destinationPointer);
       const node = filesystem.files.get(source);
-      if (!source || !destination || !node) {
+      if (!source || !destination) {
+        return fail("Invalid filesystem path");
+      }
+      if (source === destination) {
+        return node || filesystem.directories.has(source) ? 0 : fail("No such file or directory");
+      }
+      if (!requireParentDirectory(destination)) {
         return -1;
       }
-      filesystem.files.delete(source);
-      filesystem.files.set(destination, node);
+      if (node) {
+        if (filesystem.directories.has(destination)) {
+          return fail("Destination path is a directory");
+        }
+        filesystem.files.delete(source);
+        filesystem.files.set(destination, node);
+        touchParentDirectories(source, destination);
+        return 0;
+      }
+      if (!filesystem.directories.has(source)) {
+        return fail("No such file or directory");
+      }
+      if (destination.startsWith(`${source}/`)) {
+        return fail("A directory cannot be moved into itself");
+      }
+      if (filesystem.files.has(destination) || filesystem.directories.has(destination)) {
+        return fail("Destination path already exists");
+      }
+      const sourcePrefix = `${source}/`;
+      const movedFiles = [...filesystem.files.entries()].filter(([path]) => path.startsWith(sourcePrefix));
+      const movedDirectories = [...filesystem.directories.entries()].filter(([path]) => path.startsWith(sourcePrefix));
+      const sourceModificationTime = filesystem.directories.get(source);
+      filesystem.directories.delete(source);
+      filesystem.directories.set(destination, sourceModificationTime);
+      for (const [path, childNode] of movedFiles) {
+        filesystem.files.delete(path);
+        filesystem.files.set(destination + path.slice(source.length), childNode);
+      }
+      for (const [path, modificationTime] of movedDirectories) {
+        filesystem.directories.delete(path);
+        filesystem.directories.set(destination + path.slice(source.length), modificationTime);
+      }
+      touchParentDirectories(source, destination);
       return 0;
     },
     rewind(handle) {
@@ -570,13 +588,78 @@ function createFileImports(memory, filesystem) {
       stream.error = false;
     },
     tmpfile() {
-      return openNode({ data: new Uint8Array(0) }, "w+b");
+      return openNode({ data: new Uint8Array(0), modificationTime: nextModificationTime() }, "w+b");
+    },
+    dynlex_filesystem_clear_error() {
+      clearError();
+    },
+    dynlex_filesystem_create_directory(pathPointer) {
+      clearError();
+      const path = readFilesystemPath(memory, pathPointer);
+      if (!path) {
+        return fail("Invalid filesystem path");
+      }
+      if (filesystem.files.has(path) || filesystem.directories.has(path)) {
+        return fail("Path already exists");
+      }
+      if (!requireParentDirectory(path)) {
+        return -1;
+      }
+      filesystem.directories.set(path, nextModificationTime());
+      touchParentDirectories(path);
+      return 0;
+    },
+    dynlex_filesystem_error_message(bufferPointer, capacityValue) {
+      if (!lastErrorMessage) {
+        lastErrorMessage = "Filesystem operation failed";
+      }
+      const capacity = toNonNegativeInteger(capacityValue);
+      if (bufferPointer && capacity > 0) {
+        const range = byteRange(bufferPointer, capacity);
+        if (!range) {
+          throw new WebAssembly.RuntimeError("Filesystem error-message buffer is outside program memory");
+        }
+        writeCString(memory, bufferPointer, lastErrorMessage, capacity);
+      }
+      return new TextEncoder().encode(lastErrorMessage).length;
+    },
+    dynlex_filesystem_remove(pathPointer) {
+      clearError();
+      return removePath(pathPointer);
+    },
+    dynlex_filesystem_status(pathPointer, regularFilePointer, modificationTimePointer) {
+      clearError();
+      const path = readFilesystemPath(memory, pathPointer);
+      if (!path) {
+        return fail("Invalid filesystem path");
+      }
+      const node = filesystem.files.get(path);
+      const directoryModificationTime = filesystem.directories.get(path);
+      const isDirectory = directoryModificationTime !== undefined;
+      if (!node && !isDirectory) {
+        return fail("No such file or directory");
+      }
+      const regularRange = byteRange(regularFilePointer, 4);
+      const modificationRange = byteRange(modificationTimePointer, 8);
+      if (!regularRange || !modificationRange) {
+        return fail("Filesystem status output is outside program memory");
+      }
+      const view = new DataView(memory.buffer);
+      view.setInt32(regularRange.start, node ? 1 : 0, true);
+      const modificationTime = node?.modificationTime ?? directoryModificationTime;
+      view.setBigInt64(modificationRange.start, BigInt(modificationTime), true);
+      return 0;
     }
   };
 }
 
 export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layout) {
-  if (!filesystem || !(filesystem.files instanceof Map)) {
+  if (
+    !filesystem ||
+    !(filesystem.files instanceof Map) ||
+    !(filesystem.directories instanceof Map) ||
+    !Number.isSafeInteger(filesystem.lastTimestamp)
+  ) {
     throw new TypeError("DynLex runtime requires a filesystem");
   }
   if (!layout || !Number.isSafeInteger(layout.staticDataEnd) || layout.staticDataEnd < 0) {

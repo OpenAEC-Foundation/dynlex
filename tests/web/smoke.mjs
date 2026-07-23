@@ -174,6 +174,26 @@ if (readOutput !== "1\nsaved-data\n1") {
   throw new Error(`Unexpected persistent filesystem output: ${JSON.stringify(readOutput)}`);
 }
 
+const metadataOutput = await compileAndRun(`import lib/filesystem.dl
+
+create directory at "metadata" and print if it succeeded
+print "" as line
+print "metadata" is a regular file as line
+print "metadata" is readable as line
+write the string form of "contents" to "metadata/file.txt" and print if it succeeded
+print "" as line
+print "metadata/file.txt" is a regular file as line
+print (the modification time of "metadata/file.txt") > 0 as line
+read "missing.txt" and print if it succeeded
+print "" as line
+print (the length of the error message of it) > 0 as line
+delete "metadata/file.txt"
+delete "metadata"
+`);
+if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
+  throw new Error(`Unexpected filesystem metadata output: ${JSON.stringify(metadataOutput)}`);
+}
+
 const variadicOutput = await compileAndRun(
   `@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %.1f %d %s\\n", @intrinsic("cast", 7, @intrinsic("type", "int", 8)), @intrinsic("cast", 1.5, @intrinsic("type", "float", 32)), @intrinsic("cast", 1, @intrinsic("type", "bool")), "ok"))`
 );

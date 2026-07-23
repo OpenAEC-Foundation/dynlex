@@ -8,6 +8,11 @@ import {
 
 const filesystemImportNames = [
   "abort",
+  "dynlex_filesystem_clear_error",
+  "dynlex_filesystem_create_directory",
+  "dynlex_filesystem_error_message",
+  "dynlex_filesystem_remove",
+  "dynlex_filesystem_status",
   "fclose",
   "ferror",
   "fflush",
@@ -90,6 +95,53 @@ assert.equal(env.fopen(1024, 1096), 0);
 assert.notEqual(env.fopen(1056, 1096), 0);
 assert.equal(env.remove(1056), 0);
 assert.equal(env.remove(1056), -1);
+
+writeCString(1160, "metadata-directory");
+writeCString(1200, "metadata-directory/file.bin");
+writeCString(1240, "missing/child");
+writeCString(1270, "missing/file.bin");
+writeCString(1300, "metadata-directory/subtree");
+writeCString(1340, "metadata-directory/moved.bin");
+assert.equal(env.dynlex_filesystem_create_directory(1240), -1, "a directory requires an existing parent");
+assert.equal(env.fopen(1270, 1088), 0, "a file requires an existing parent");
+assert.equal(env.dynlex_filesystem_create_directory(1160), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+let view = new DataView(memory.buffer);
+assert.equal(view.getInt32(6000, true), 0);
+const directoryCreationTime = view.getBigInt64(6008, true);
+assert.equal(directoryCreationTime > 0n, true);
+assert.equal(env.fopen(1160, 1096), 0, "directories must not open as regular files");
+
+stream = env.fopen(1200, 1088);
+assert.notEqual(stream, 0);
+assert.equal(env.fwrite(2060, 1, 2, stream), 2);
+assert.equal(env.fclose(stream), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+const directoryAfterFileCreation = new DataView(memory.buffer).getBigInt64(6008, true);
+assert.equal(directoryAfterFileCreation > directoryCreationTime, true);
+assert.equal(env.dynlex_filesystem_status(1200, 6000, 6008), 0);
+view = new DataView(memory.buffer);
+assert.equal(view.getInt32(6000, true), 1);
+assert.equal(view.getBigInt64(6008, true) > 0n, true);
+assert.equal(env.rename(1200, 1270), -1, "rename requires an existing destination parent");
+assert.equal(env.dynlex_filesystem_status(1200, 6000, 6008), 0, "failed rename must preserve the source");
+assert.equal(env.rename(1160, 1300), -1, "a directory cannot be renamed into its own subtree");
+assert.equal(env.rename(1200, 1340), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+const directoryAfterRename = new DataView(memory.buffer).getBigInt64(6008, true);
+assert.equal(directoryAfterRename > directoryAfterFileCreation, true);
+
+env.dynlex_filesystem_clear_error();
+assert.equal(env.dynlex_filesystem_create_directory(1160), -1);
+const errorLength = env.dynlex_filesystem_error_message(0, 0);
+assert.equal(errorLength > 0, true);
+assert.equal(env.dynlex_filesystem_error_message(6100, 128), errorLength);
+assert.match(new TextDecoder().decode(bytes.subarray(6100, 6100 + errorLength)), /exists/i);
+assert.equal(env.dynlex_filesystem_remove(1160), -1, "non-empty directories must not be removed");
+assert.equal(env.dynlex_filesystem_remove(1340), 0);
+assert.equal(env.dynlex_filesystem_status(1160, 6000, 6008), 0);
+assert.equal(new DataView(memory.buffer).getBigInt64(6008, true) > directoryAfterRename, true);
+assert.equal(env.dynlex_filesystem_remove(1160), 0);
 
 writeCString(1120, "persist.bin");
 stream = env.fopen(1120, 1088);

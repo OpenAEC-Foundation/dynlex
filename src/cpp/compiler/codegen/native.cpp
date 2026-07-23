@@ -15,6 +15,7 @@
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/Triple.h"
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -81,6 +82,23 @@ executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef
 }
 
 std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library) {
+	if (library == "dynlex_runtime") {
+		static const std::string runtimeLibraryPath = [] {
+			std::string executable = llvm::sys::fs::getMainExecutable(
+				nullptr, reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&nativeLibraryArguments))
+			);
+			std::filesystem::path installPrefix = std::filesystem::path(executable).parent_path().parent_path();
+			std::filesystem::path installedPath =
+				installPrefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
+			if (std::filesystem::exists(installedPath))
+				return installedPath.string();
+			std::filesystem::path buildPath(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH);
+			if (std::filesystem::exists(buildPath))
+				return buildPath.string();
+			return installedPath.string();
+		}();
+		return {runtimeLibraryPath};
+	}
 	if (targetTriple.isOSDarwin() && library == "GL")
 		return {"-framework", "OpenGL"};
 
