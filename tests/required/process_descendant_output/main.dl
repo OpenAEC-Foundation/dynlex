@@ -1,0 +1,41 @@
+import lib/process.dl
+
+function [the|] descendant process test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set setup_command to a process command for the descendant process test interpreter
+add "-c" as an argument to setup_command
+add "import os; os.remove('descendant-finished.tmp') if os.path.exists('descendant-finished.tmp') else None" as an argument to setup_command
+use "tests/required/process_descendant_output" as the working directory of setup_command
+set setup_result to run setup_command
+
+set command to a process command for the descendant process test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import subprocess,sys,time\ncode=\"import os\\nchunk=b'D'*4096\\ntry:\\n while True:\\n  os.write(1,chunk)\\n  os.write(2,chunk)\\nexcept OSError:\\n open('descendant-finished.tmp','w').close()\"\nsubprocess.Popen([sys.executable,'-c',code])\ntime.sleep(0.1)" as an argument to command
+use "tests/required/process_descendant_output" as the working directory of command
+set child to launch command
+
+set status to wait for child
+set output to read available the standard output of child
+set error to read available the standard error of child
+set cleanup_result to clean up child
+
+set verification_command to a process command for the descendant process test interpreter
+add "-c" as an argument to verification_command
+add "import os,time; time.sleep(1); finished=os.path.exists('descendant-finished.tmp'); print(finished); os.remove('descendant-finished.tmp') if finished else None" as an argument to verification_command
+use "tests/required/process_descendant_output" as the working directory of verification_command
+set verification_result to run verification_command
+
+print setup_result's succeeded as line
+print child's launched as line
+print status's succeeded as line
+print status's finished as line
+print output's succeeded as line
+print (output's contents's length > 0) as line
+print error's succeeded as line
+print (error's contents's length > 0) as line
+print cleanup_result's succeeded as line
+print verification_result's succeeded as line
+print (verification_result's standard output = "True\n") as line

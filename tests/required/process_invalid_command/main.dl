@@ -1,0 +1,19 @@
+import lib/process.dl
+
+set invalid_argument to a new string buffer with length 3
+store 65 as a byte into the data of invalid_argument at 0
+store 0 as a byte into the data of invalid_argument at 1
+store 66 as a byte into the data of invalid_argument at 2
+
+set command to a process command for "unused-executable"
+add invalid_argument as an argument to command
+set child to launch command
+set expected_error to the string form of "Process argument must not be null or contain a zero byte"
+
+print (not child's launched) as line
+print (the starting error of child = expected_error) as line
+
+set result to run command
+print (not result's launched) as line
+print (not result's succeeded) as line
+print (result's error message = expected_error) as line

@@ -209,9 +209,7 @@ case Expression::Kind::PatternCall: {
 			if (!context.sectionFlexBodyFrames[frameIndex].bodyInferred &&
 				expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
 				Section *executionSection = bodyExpr->range.line ? bodyExpr->range.line->section : matchedSection;
-				if (!inferSectionFlexCallerBodyFrame(
-						context.sectionFlexBodyFrames[frameIndex], executionSection, expr, context
-					)) {
+				if (!inferSectionFlexCallerBodyFrame(frameIndex, executionSection, expr, context)) {
 					break;
 				}
 			}

@@ -1,0 +1,40 @@
+import lib/process.dl
+
+function [the|] lifecycle test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set discovery_command to a process command for the lifecycle test interpreter
+add "-c" as an argument to discovery_command
+add "import sys; sys.stdout.write(sys.executable)" as an argument to discovery_command
+set discovery_result to run discovery_command
+set interpreter_path to discovery_result's standard output
+
+set setup_command to a process command for interpreter_path
+add "-c" as an argument to setup_command
+add "import os; os.remove('sentinel.tmp') if os.path.exists('sentinel.tmp') else None" as an argument to setup_command
+use "tests/required/process_lifecycle_cleanup" as the working directory of setup_command
+set setup_result to run setup_command
+
+function launch an abandoned process using interpreter:
+    execute:
+        set command to a process command for interpreter
+        add "-c" as an argument to command
+        add "import time; time.sleep(0.4); open('sentinel.tmp', 'w').close()" as an argument to command
+        use "tests/required/process_lifecycle_cleanup" as the working directory of command
+        set child to launch command
+        return child launched
+
+set abandoned_process_launched to launch an abandoned process using interpreter_path
+
+set verification_command to a process command for interpreter_path
+add "-c" as an argument to verification_command
+add "import os,time; time.sleep(1); existed=os.path.exists('sentinel.tmp'); print(existed); os.remove('sentinel.tmp') if existed else None" as an argument to verification_command
+use "tests/required/process_lifecycle_cleanup" as the working directory of verification_command
+set verification_result to run verification_command
+
+print discovery_result's succeeded as line
+print setup_result's succeeded as line
+print abandoned_process_launched as line
+print verification_result's succeeded as line
+print (verification_result's standard output = "False\n") as line

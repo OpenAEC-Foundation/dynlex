@@ -5,9 +5,12 @@ static bool inferSection(
 );
 
 static bool inferSectionFlexCallerBodyFrame(
-	InferenceContext::SectionFlexBodyInferenceFrame &targetFrame, Section *executionSection, Expression *executeBodyCallSite,
-	InferenceContext &context
+	size_t targetFrameIndex, Section *executionSection, Expression *executeBodyCallSite, InferenceContext &context
 ) {
+	requireCompilerInvariant(
+		targetFrameIndex < context.sectionFlexBodyFrames.size(), "section flex body inference frame is not active"
+	);
+	InferenceContext::SectionFlexBodyInferenceFrame &targetFrame = context.sectionFlexBodyFrames[targetFrameIndex];
 	requireCompilerInvariant(
 		targetFrame.definitionSection && targetFrame.definitionBody && targetFrame.bodySection,
 		"section flex body inference frame is incomplete"
@@ -22,6 +25,7 @@ static bool inferSectionFlexCallerBodyFrame(
 
 	targetFrame.bodyInferred = true;
 	targetFrame.executeBodyCallSite = executeBodyCallSite;
+	Section *definitionSection = targetFrame.definitionSection;
 	Section *bodySection = targetFrame.bodySection;
 	InstantiatedSectionBody *instantiatedBody = targetFrame.instantiatedBody;
 	BindingFrameStack callerBindings = targetFrame.callerBindings;
@@ -38,7 +42,12 @@ static bool inferSectionFlexCallerBodyFrame(
 	}
 	bool callerBodyFallsThrough = true;
 	bool inferred = inferSection(bodySection, instantiatedBody, nullptr, context, callerBindings, &callerBodyFallsThrough);
-	targetFrame.bodyFallsThrough = callerBodyFallsThrough;
+	requireCompilerInvariant(
+		targetFrameIndex < context.sectionFlexBodyFrames.size() &&
+			context.sectionFlexBodyFrames[targetFrameIndex].definitionSection == definitionSection,
+		"section flex body inference frame stack changed while inferring its body"
+	);
+	context.sectionFlexBodyFrames[targetFrameIndex].bodyFallsThrough = callerBodyFallsThrough;
 	if (inferred && executeBodyCallSite)
 		executeBodyCallSite->sectionOutcome.kind =
 			callerBodyFallsThrough ? Expression::SectionOutcome::Kind::None : Expression::SectionOutcome::Kind::FunctionReturn;
@@ -66,7 +75,8 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 	}
 	Expression *executeBodyCallSite =
 		context.activeFlexCallStack.empty() ? executeBodyExpression : context.activeFlexCallStack.back();
-	return inferSectionFlexCallerBodyFrame(*targetFrame, executionSection, executeBodyCallSite, context);
+	size_t targetFrameIndex = static_cast<size_t>(targetFrame - context.sectionFlexBodyFrames.data());
+	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyCallSite, context);
 }
 
 // Infer the type of an expression bottom-up.

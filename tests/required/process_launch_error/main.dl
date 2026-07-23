@@ -1,0 +1,12 @@
+import lib/process.dl
+
+set command to a process command for "dynlex-executable-that-does-not-exist-72f4a7"
+set child to launch command
+print (not child's launched) as line
+set launch_error to (the starting error of child)
+print (not (launch_error = "")) as line
+
+set result to run command
+print (not result's launched) as line
+print (not result's succeeded) as line
+print (not (result's error message = "")) as line

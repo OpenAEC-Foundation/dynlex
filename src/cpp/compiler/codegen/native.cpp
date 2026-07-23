@@ -97,7 +97,10 @@ std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple
 				return buildPath.string();
 			return installedPath.string();
 		}();
-		return {runtimeLibraryPath};
+		std::vector<std::string> arguments = {runtimeLibraryPath};
+		if (!targetTriple.isOSWindows())
+			arguments.push_back("-pthread");
+		return arguments;
 	}
 	if (targetTriple.isOSDarwin() && library == "GL")
 		return {"-framework", "OpenGL"};

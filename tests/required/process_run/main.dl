@@ -1,0 +1,61 @@
+import lib/process.dl
+
+function [the|] process test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set discovery_command to a process command for the process test interpreter
+add "-c" as an argument to discovery_command
+add "import sys; sys.stdout.write(sys.executable)" as an argument to discovery_command
+set discovery_result to run discovery_command
+set interpreter_path to discovery_result's standard output
+
+print discovery_result's succeeded as line
+
+set command to a process command for interpreter_path
+add "-c" as an argument to command
+add "import os,sys; data=sys.stdin.read(); ascii_case=os.environ.get('DYNLEX_MIXED_CASE') == 'third' and os.environ.get('dynlex_mixed_case') == ('third' if os.name == 'nt' else 'second'); unicode_case=os.environ.get('DYNLEX_Ä') == 'third' and os.environ.get('dynlex_ä') == ('third' if os.name == 'nt' else 'second'); print(sys.argv[1] + '|' + data + '|' + os.path.basename(os.getcwd()) + '|' + os.environ['DYNLEX_PROCESS_VALUE'] + '|' + str(os.environ.get('PATH') == 'dynlex-overridden-path') + '|' + str('DYNLEX_REMOVED' in os.environ) + '|' + str(sys.argv[2] == '') + '|' + str(sys.argv[3] == 'trailing' + chr(92)) + '|' + str(ascii_case) + '|' + str(unicode_case)); print('separate error', file=sys.stderr); sys.exit(7)" as an argument to command
+add "literal $HOME ; * \"quoted\"" as an argument to command
+add "" as an argument to command
+set trailing_argument to a new string buffer with length 9
+copy (the string form of "trailing") into the data of trailing_argument at offset 0
+store 92 as a byte into the data of trailing_argument at 8
+add trailing_argument as an argument to command
+use "tests/required/process_run" as the working directory of command
+set environment variable "DYNLEX_PROCESS_VALUE" of command to "overridden"
+set environment variable "PATH" of command to "dynlex-overridden-path"
+set environment variable "DYNLEX_MIXED_CASE" of command to "first"
+set environment variable "dynlex_mixed_case" of command to "second"
+set environment variable "DYNLEX_MIXED_CASE" of command to "third"
+set environment variable "DYNLEX_Ä" of command to "first"
+set environment variable "dynlex_ä" of command to "second"
+set environment variable "DYNLEX_Ä" of command to "third"
+set environment variable "DYNLEX_REMOVED" of command to "temporary"
+unset environment variable "DYNLEX_REMOVED" of command
+set result to run command using (the string form of "standard input")
+
+print result's launched as line
+print result's succeeded as line
+print result's exit code as line
+print (result's standard output = "literal $HOME ; * \"quoted\"|standard input|process_run|overridden|True|False|True|True|True|True\n") as line
+print (result's standard error = "separate error\n") as line
+print (result's error message = "") as line
+
+set unset_command to a process command for interpreter_path
+add "-c" as an argument to unset_command
+add "import os; print('PATH' in os.environ)" as an argument to unset_command
+unset environment variable "PATH" of unset_command
+set unset_result to run unset_command
+
+print unset_result's succeeded as line
+print (unset_result's standard output = "False\n") as line
+
+set isolated_command to a process command for interpreter_path
+add "-c" as an argument to isolated_command
+add "import os; print(os.environ.get('DYNLEX_ONLY', 'missing') + '|' + str('PATH' in os.environ))" as an argument to isolated_command
+do not inherit the environment in isolated_command
+set environment variable "DYNLEX_ONLY" of isolated_command to "present"
+set isolated_result to run isolated_command
+
+print isolated_result's succeeded as line
+print (isolated_result's standard output = "present|False\n") as line

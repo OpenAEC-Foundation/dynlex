@@ -1,0 +1,25 @@
+import lib/process.dl
+
+function [the|] communication error test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set input_size to 262144
+set input to a new string buffer with length input_size
+set input_index to 0
+loop while input_index < input_size:
+    store 73 as a byte into the data of input at input_index
+    set input_index to input_index + 1
+
+set command to a process command for the communication error test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import os,sys; print('before close'); print('input rejected', file=sys.stderr); os.close(0); sys.exit(9)" as an argument to command
+set result to run command using input
+
+print result's launched as line
+print (not result's succeeded) as line
+print (result's standard output = "before close\n") as line
+print (result's standard error = "input rejected\n") as line
+print (result's exit code = (9 as a 64 bit integer)) as line
+print (not (result's error message = "")) as line

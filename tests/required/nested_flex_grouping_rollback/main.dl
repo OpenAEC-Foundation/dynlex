@@ -1,0 +1,38 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function left + right:
+    execute:
+        return @intrinsic("add", left, right)
+
+function left < right:
+    execute:
+        return @intrinsic("less than", left, right)
+
+flex function loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section loop while condition:
+    replacement:
+        loop while condition
+
+flex function execute body:
+    replacement:
+        @intrinsic("execute body")
+
+flex section loop count times:
+    replacement:
+        set iteration to 0
+        loop while iteration < count:
+            execute body
+            set iteration to iteration + 1
+
+set value to 0
+loop 3 times:
+    set value to value + 1

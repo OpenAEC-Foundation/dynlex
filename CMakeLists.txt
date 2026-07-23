@@ -300,7 +300,17 @@ if(EMSCRIPTEN AND NOT DYNLEX_WEB)
 endif()
 
 if(NOT EMSCRIPTEN)
-    add_library(dynlex_runtime STATIC src/runtime/filesystemRuntime.c)
+    set(DYNLEX_RUNTIME_SOURCES
+        src/runtime/filesystemRuntime.c
+        src/runtime/processRuntime.c
+        src/runtime/runtimeError.c
+    )
+    if(WIN32)
+        list(APPEND DYNLEX_RUNTIME_SOURCES src/runtime/processRuntimeWindows.c)
+    else()
+        list(APPEND DYNLEX_RUNTIME_SOURCES src/runtime/processRuntimePosix.c)
+    endif()
+    add_library(dynlex_runtime STATIC ${DYNLEX_RUNTIME_SOURCES})
     set_target_properties(dynlex_runtime PROPERTIES
         C_STANDARD 11
         C_STANDARD_REQUIRED ON
