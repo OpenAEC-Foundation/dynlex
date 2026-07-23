@@ -87,6 +87,9 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			if (variable->isGlobal)
 				context.noteWrittenGlobalReference(variable->definition);
 			context.setKnownConstant(variable->definition, assignedValue);
+			context.setAddressProvenance(
+				variable->definition, inferAddressProvenance(valueExpr, context, valueBindingFrameStack)
+			);
 			return;
 		}
 
@@ -143,6 +146,30 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	}
 
 	ClassDefinition *classDefinition = instanceType.classDefinition;
+	AddressProvenance assignedProvenance = inferAddressProvenance(valueExpr, context, valueBindingFrameStack);
+	auto updateOwnerAddressProvenance = [&]() {
+		if (!instanceType.isPointer()) {
+			Variable *ownerVariable = ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable
+										  ? variableForAddressTarget(ownerExpr->variable)
+										  : nullptr;
+			if (!ownerVariable)
+				crashCompilerBug("validated class property owner variable could not be resolved");
+			AddressProvenance ownerProvenance = context.lookupAddressProvenance(ownerVariable->definition);
+			joinAddressProvenance(ownerProvenance, assignedProvenance);
+			context.setAddressProvenance(ownerVariable->definition, std::move(ownerProvenance));
+			return;
+		}
+		AddressProvenance ownerPointer = inferAddressProvenance(ownerExpr, context, resolvedBindingFrameStack);
+		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerPointer);
+		if (ownerPointer.unknown)
+			noteUnknownAddressWrite(context);
+		for (VariableReference *ownerTarget : ownerTargets) {
+			AddressProvenance ownerProvenance = context.lookupAddressProvenance(ownerTarget);
+			joinAddressProvenance(ownerProvenance, assignedProvenance);
+			context.setAddressProvenance(ownerTarget, std::move(ownerProvenance));
+			noteAddressTargetWrite(context, ownerTarget);
+		}
+	};
 	for (size_t i = 0; i < classDefinition->fields.size(); i++) {
 		if (classDefinition->fields[i].name != fieldName)
 			continue;
@@ -167,8 +194,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				}
 				return;
 			}
-			if (mergedFieldType == currentFieldType)
+			if (mergedFieldType == currentFieldType) {
+				updateOwnerAddressProvenance();
 				return;
+			}
 		}
 		int refinedInstIndex =
 			getRefinedClassInstantiationIndex(context, classDefinition, instanceType.classInstIndex, i, valueType);
@@ -184,6 +213,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				ownerVariable->type.classInstIndex = refinedInstIndex;
 			}
 		}
+		updateOwnerAddressProvenance();
 		return;
 	}
 

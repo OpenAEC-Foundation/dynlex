@@ -279,6 +279,7 @@ case Expression::Kind::PatternCall: {
 				inst.body = context.parseContext.cloneSectionBody(matchedSection);
 			Instantiation *savedInst = context.currentInstantiation;
 			auto callerKnownConstants = context.currentVariableValues;
+			auto callerAddressState = context.currentAddressState;
 			InferenceContext::SubjectState callerSubject = context.currentSubject;
 			bool instantiationFallsThrough = true;
 			bool inferenceSucceeded = runInstantiationReinferenceLoop(
@@ -287,6 +288,13 @@ case Expression::Kind::PatternCall: {
 				seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 				inst.writtenGlobalReferences.clear();
 				inst.finalGlobalConstantValues.clear();
+				inst.finalGlobalAddressProvenance.clear();
+				inst.addressTakenGlobalReferences.clear();
+				inst.externallyEscapedGlobalProvenance = {};
+				inst.returnAddressProvenance = {};
+				inst.hasReturnAddressProvenance = false;
+				inst.writesThroughUnknownAddress = false;
+				inst.externallyEscapesUnknownAddress = false;
 				inst.requiredCompileTimeParameters = explicitCompileTimeParameters;
 				inst.purity = InstantiationPurity::Pure;
 				inst.pureReturnValuesByArguments.clear();
@@ -315,6 +323,7 @@ case Expression::Kind::PatternCall: {
 				// globals, and their values differ per call. Parameter
 				// constants arrive through the instantiation key instead.
 				context.currentVariableValues.clear();
+				context.currentAddressState = {};
 				context.currentSubject = {};
 				bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
 				context.suppressReinferPassDiagnostics = true;
@@ -328,6 +337,20 @@ case Expression::Kind::PatternCall: {
 					auto knownIt = context.currentVariableValues.find(reference);
 					if (knownIt != context.currentVariableValues.end() && isCompileTimeKnown(knownIt->second))
 						inst.finalGlobalConstantValues[reference] = knownIt->second;
+					auto provenance = context.currentAddressState->variables.find(reference);
+					inst.finalGlobalAddressProvenance[reference] = provenance != context.currentAddressState->variables.end()
+																	   ? provenance->second
+																	   : AddressProvenance{.mayTargets = {}, .unknown = true};
+				}
+				for (VariableReference *reference : context.currentAddressState->addressTakenVariables) {
+					Variable *variable = variableForAddressTarget(reference);
+					if (variable && variable->isGlobal)
+						inst.addressTakenGlobalReferences.insert(reference);
+				}
+				for (VariableReference *reference : context.currentAddressState->externallyEscaped.mayTargets) {
+					Variable *variable = variableForAddressTarget(reference);
+					if (variable && variable->isGlobal)
+						inst.externallyEscapedGlobalProvenance.mayTargets.insert(reference);
 				}
 				context.suppressReinferPassDiagnostics = savedReinferSuppression;
 				inst.inferring = false;
@@ -335,6 +358,7 @@ case Expression::Kind::PatternCall: {
 			}
 			);
 			context.currentVariableValues = std::move(callerKnownConstants);
+			context.currentAddressState = std::move(callerAddressState);
 			context.currentSubject = callerSubject;
 			context.currentInstantiation = savedInst;
 			inst.valid = inferenceSucceeded;
@@ -356,6 +380,22 @@ case Expression::Kind::PatternCall: {
 			break;
 		mergeCalleeGlobalWritesIntoCaller(context, inst);
 		mergeInstantiationPurityIntoCaller(context, inst);
+		AddressProvenance callArgumentProvenance;
+		for (const auto &[parameterName, argumentExpression] : paramBindings) {
+			(void)parameterName;
+			joinAddressProvenance(
+				callArgumentProvenance, inferAddressProvenance(argumentExpression, context, flexBindingFrameStack)
+			);
+		}
+		if (inst.purity == InstantiationPurity::Impure) {
+			invalidateAddressTargets(context, callArgumentProvenance, true);
+		}
+		if (inst.writesThroughUnknownAddress)
+			invalidateAddressTargets(context, {.mayTargets = {}, .unknown = true}, true);
+		if (inst.externallyEscapesUnknownAddress) {
+			callArgumentProvenance.unknown = true;
+			retainExternalAddress(context, callArgumentProvenance);
+		}
 
 		// If no return intrinsic was found, default to Void
 		if (!inst.inferring && !inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&

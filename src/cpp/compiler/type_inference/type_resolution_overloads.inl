@@ -69,12 +69,7 @@ struct InferenceContext {
 
 		struct InstantiationUndo {
 			Instantiation *instantiation;
-			DataType returnType;
-			Range returnTypeOriginRange;
-			std::unordered_set<VariableReference *> writtenGlobalReferences;
-			InstantiationPurity purity;
-			bool fallsThrough;
-			bool needsReinfer;
+			std::unique_ptr<Instantiation> value;
 		};
 
 		std::vector<VariableUndo> variableTypeUndo;
@@ -140,11 +135,7 @@ struct InferenceContext {
 			if (!instantiation || seenInstantiations.contains(instantiation))
 				return;
 			seenInstantiations.insert(instantiation);
-			instantiationUndo.push_back(
-				{instantiation, instantiation->returnType, instantiation->returnTypeOriginRange,
-				 instantiation->writtenGlobalReferences, instantiation->purity, instantiation->fallsThrough,
-				 instantiation->needsReinfer}
-			);
+			instantiationUndo.push_back({instantiation, std::make_unique<Instantiation>(*instantiation)});
 		}
 
 		void absorb(TrialJournal &&nested) {
@@ -317,6 +308,9 @@ struct InferenceContext {
 	// Flow-sensitive variable values. A monostate entry explicitly records that
 	// a previously evaluated variable is unknown in the current execution state.
 	std::unordered_map<VariableReference *, CompileTimeValue> currentVariableValues;
+	// Flow-sensitive provenance for pointer variables whose runtime value may
+	// address local or global variables tracked by constant inference.
+	AddressInferenceState currentAddressState;
 	SubjectState currentSubject;
 	bool typesValid = true;
 	bool trial = false;
@@ -518,6 +512,21 @@ struct InferenceContext {
 		if (!key)
 			return;
 		currentVariableValues[key] = value;
+	}
+
+	AddressProvenance lookupAddressProvenance(VariableReference *reference) const {
+		VariableReference *key = normalizeReference(reference);
+		if (!key)
+			return {.mayTargets = {}, .unknown = true};
+		auto it = currentAddressState->variables.find(key);
+		return it != currentAddressState->variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
+	}
+
+	void setAddressProvenance(VariableReference *reference, AddressProvenance provenance) {
+		VariableReference *key = normalizeReference(reference);
+		if (!key)
+			return;
+		currentAddressState->variables[key] = std::move(provenance);
 	}
 
 	void noteWrittenGlobalReference(VariableReference *reference) {

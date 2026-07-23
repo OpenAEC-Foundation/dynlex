@@ -1,0 +1,17 @@
+function pointer write
+direct store at
+aliased store at
+initialize at
+identity pointer return
+double pointer write
+pointer arithmetic write
+numeric-left pointer arithmetic write
+property-held pointer write
+pointer-owner property write
+byte-pointer data property write
+reassigned property-held pointer write
+integer pointer round trip
+callee global pointer write
+returned global pointer write
+branch pointer merge
+loop pointer merge

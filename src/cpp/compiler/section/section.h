@@ -1,4 +1,5 @@
 #pragma once
+#include "addressProvenance.h"
 #include "codeLine.h"
 #include "compileTimeInfo.h"
 #include "patternDefinition.h"
@@ -91,6 +92,13 @@ struct Instantiation {
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
+	VariableAddressProvenance finalGlobalAddressProvenance;
+	std::unordered_set<VariableReference *> addressTakenGlobalReferences;
+	AddressProvenance externallyEscapedGlobalProvenance;
+	AddressProvenance returnAddressProvenance;
+	bool hasReturnAddressProvenance = false;
+	bool writesThroughUnknownAddress = false;
+	bool externallyEscapesUnknownAddress = false;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	InstantiationPurity purity = InstantiationPurity::Pure;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;

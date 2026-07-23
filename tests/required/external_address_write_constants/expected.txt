@@ -1,0 +1,4 @@
+integer out-parameter
+pointer out-parameter
+aliased out-parameter
+integer-encoded out-parameter

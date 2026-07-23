@@ -1,5 +1,6 @@
 #pragma once
 
+#include "addressProvenance.h"
 #include "compiler.h"
 #include "const_evaluation.inl"
 #include <limits>
@@ -90,9 +91,12 @@ static bool readInferredTypeReferenceValue(Expression *expression, InferenceCont
 
 static std::unordered_map<VariableReference *, CompileTimeValue>
 snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext);
+static AddressInferenceState snapshotAddressStateForClassInstantiation(InferenceContext *inferenceContext);
 static void restoreKnownConstantsForClassInstantiation(
 	InferenceContext *inferenceContext, std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants
 );
+static void
+restoreAddressStateForClassInstantiation(InferenceContext *inferenceContext, AddressInferenceState savedAddressState);
 static void
 seedKnownConstantsForClassInstantiation(const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext);
 

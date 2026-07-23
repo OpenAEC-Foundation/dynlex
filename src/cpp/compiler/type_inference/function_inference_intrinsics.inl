@@ -146,6 +146,17 @@ case Expression::Kind::IntrinsicCall: {
 					context.setExpressionValue(expr, {});
 				else
 					context.setExpressionValue(expr, context.lookupExpressionValue(expr->arguments[1]));
+				if (context.currentInstantiation) {
+					if (context.trial) {
+						requireCompilerInvariant(context.trialJournal, "trial return provenance requires a rollback journal");
+						context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
+					}
+					AddressProvenance returnProvenance =
+						returnValueExpression ? inferAddressProvenance(returnValueExpression, context, flexBindingFrameStack)
+											  : AddressProvenance{};
+					joinAddressProvenance(context.currentInstantiation->returnAddressProvenance, returnProvenance);
+					context.currentInstantiation->hasReturnAddressProvenance = true;
+				}
 				if (!context.typesValid)
 					break;
 			}
@@ -205,6 +216,10 @@ case Expression::Kind::IntrinsicCall: {
 					);
 					break;
 				}
+				applyStoreThroughAddress(
+					context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), expr->arguments[2],
+					flexBindingFrameStack
+				);
 			}
 			if (kind == IntrinsicKind::DestroyAt) {
 				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
@@ -337,6 +352,10 @@ case Expression::Kind::IntrinsicCall: {
 				}
 				if (!context.typesValid)
 					break;
+				for (size_t i = runtimeArgumentStart; i < expr->arguments.size(); i++) {
+					retainExternalAddress(context, inferAddressProvenance(expr->arguments[i], context, flexBindingFrameStack));
+				}
+				invalidateExternalCallWrites(context);
 				if (retTypeRef.kind == DataType::Kind::Type)
 					expr->type = retTypeRef.toReferencedType();
 			} else if (kind == IntrinsicKind::Function) {

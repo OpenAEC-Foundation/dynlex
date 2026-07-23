@@ -1,0 +1,161 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+function write through pointer:
+    execute:
+        @intrinsic("store at", pointer, 37)
+
+function identity value:
+    execute:
+        @intrinsic("return", value)
+
+function opaque zero:
+    execute:
+        @intrinsic("return", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0))
+
+function write indirectly through pointer_holder:
+    execute:
+        set pointer_value to @intrinsic("dereference", pointer_holder)
+        @intrinsic("store at", pointer_value, 53)
+
+function publish global address:
+    globals:
+        global_address
+        global_value
+    execute:
+        set global_address to @intrinsic("address of", global_value)
+
+function global value address:
+    globals:
+        returned_global_value
+    execute:
+        @intrinsic("return", @intrinsic("address of", returned_global_value))
+
+class:
+    patterns:
+        address holder
+    members:
+        stored_address
+
+set function_value to 0
+write through @intrinsic("address of", function_value)
+if @intrinsic("equal", function_value, 37):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "function pointer write"))
+
+set direct_value to 0
+@intrinsic("store at", @intrinsic("address of", direct_value), 41)
+if @intrinsic("equal", direct_value, 41):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "direct store at"))
+
+set aliased_value to 0
+set aliased_address to @intrinsic("address of", aliased_value)
+@intrinsic("store at", aliased_address, 43)
+if @intrinsic("equal", aliased_value, 43):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "aliased store at"))
+
+set initialized_value to 0
+@intrinsic("initialize at", @intrinsic("address of", initialized_value), 47)
+if @intrinsic("equal", initialized_value, 47):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "initialize at"))
+
+set identity_value to 0
+set identity_address to identity @intrinsic("address of", identity_value)
+@intrinsic("store at", identity_address, 49)
+if @intrinsic("equal", identity_value, 49):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "identity pointer return"))
+
+set double_pointer_value to 0
+set double_pointer_target to @intrinsic("address of", double_pointer_value)
+set double_pointer_holder to @intrinsic("address of", double_pointer_target)
+write indirectly through double_pointer_holder
+if @intrinsic("equal", double_pointer_value, 53):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "double pointer write"))
+
+set offset_value to 0
+set offset_address to @intrinsic("add", @intrinsic("address of", offset_value), 0)
+@intrinsic("store at", offset_address, 61)
+if @intrinsic("equal", offset_value, 61):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "pointer arithmetic write"))
+
+set reverse_offset_value to 0
+set reverse_offset_address to @intrinsic("add", opaque zero, @intrinsic("address of", reverse_offset_value))
+@intrinsic("store at", reverse_offset_address, 63)
+if @intrinsic("equal", reverse_offset_value, 63):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "numeric-left pointer arithmetic write"))
+
+set property_value to 0
+set holder_value to @intrinsic("construct", address holder, @intrinsic("address of", property_value))
+@intrinsic("store at", @intrinsic("property", holder_value, "stored_address"), 67)
+if @intrinsic("equal", property_value, 67):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "property-held pointer write"))
+
+set pointer_owner_property_value to 0
+set pointer_owner_holder to @intrinsic("construct", address holder, @intrinsic("address of", pointer_owner_property_value))
+set pointer_owner_holder_address to @intrinsic("address of", pointer_owner_holder)
+@intrinsic("store at", @intrinsic("property", pointer_owner_holder_address, "stored_address"), 68)
+if @intrinsic("equal", pointer_owner_property_value, 68):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "pointer-owner property write"))
+
+set byte_property_value to @intrinsic("cast", 0, @intrinsic("type", "int", 8))
+set byte_property_address to @intrinsic("address of", byte_property_value)
+@intrinsic("store at", @intrinsic("property", byte_property_address, "data"), @intrinsic("cast", 6, @intrinsic("type", "int", 8)))
+if @intrinsic("equal", byte_property_value, @intrinsic("cast", 6, @intrinsic("type", "int", 8))):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "byte-pointer data property write"))
+
+set reassigned_property_first_value to 0
+set reassigned_property_second_value to 0
+set reassigned_holder to @intrinsic("construct", address holder, @intrinsic("address of", reassigned_property_first_value))
+set @intrinsic("property", reassigned_holder, "stored_address") to @intrinsic("address of", reassigned_property_second_value)
+@intrinsic("store at", @intrinsic("property", reassigned_holder, "stored_address"), 69)
+if @intrinsic("equal", reassigned_property_second_value, 69):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "reassigned property-held pointer write"))
+
+set round_trip_value to 0
+set encoded_address to @intrinsic("cast", @intrinsic("address of", round_trip_value), @intrinsic("type", "int", @intrinsic("build info", "word size")))
+set decoded_address to @intrinsic("cast", encoded_address, @intrinsic("add pointer depth", @intrinsic("type", "int", 32)))
+@intrinsic("store at", decoded_address, 71)
+if @intrinsic("equal", round_trip_value, 71):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "integer pointer round trip"))
+
+set global_value to 0
+set global_address to @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int", 32)))
+publish global address
+@intrinsic("store at", global_address, 73)
+if @intrinsic("equal", global_value, 73):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "callee global pointer write"))
+
+set returned_global_value to 0
+set returned_global_address to global value address
+@intrinsic("store at", returned_global_address, 75)
+if @intrinsic("equal", returned_global_value, 75):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "returned global pointer write"))
+
+set branch_first_value to 0
+set branch_second_value to 0
+set branch_address to @intrinsic("address of", branch_first_value)
+set branch_condition to @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 1), 1)
+if branch_condition:
+    set branch_address to @intrinsic("address of", branch_second_value)
+@intrinsic("store at", branch_address, 79)
+if @intrinsic("equal", branch_second_value, 79):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "branch pointer merge"))
+
+set loop_first_value to 0
+set loop_second_value to 0
+set loop_address to @intrinsic("address of", loop_first_value)
+set loop_condition to @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 1), 1)
+loop while loop_condition:
+    set loop_address to @intrinsic("address of", loop_second_value)
+    set loop_condition to @intrinsic("equal", 0, 1)
+@intrinsic("store at", loop_address, 83)
+if @intrinsic("equal", loop_second_value, 83):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "loop pointer merge"))

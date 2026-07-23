@@ -1,0 +1,30 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+set integer_value to 0
+@intrinsic("discard", @intrinsic("variadic call", "libc", "sscanf", @intrinsic("type", "int", 32), 2, "17", "%d", @intrinsic("address of", integer_value)))
+if @intrinsic("equal", integer_value, 17):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "integer out-parameter"))
+
+set end_pointer to @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int", 8)))
+@intrinsic("discard", @intrinsic("call", "libc", "strtol", @intrinsic("type", "int", @intrinsic("build info", "c long size")), "23tail", @intrinsic("address of", end_pointer), 10))
+if @intrinsic("not equal", end_pointer, @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int", 8)))):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "pointer out-parameter"))
+
+set aliased_integer_value to 0
+set integer_address to @intrinsic("address of", aliased_integer_value)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "sscanf", @intrinsic("type", "int", 32), 2, "31", "%d", integer_address))
+if @intrinsic("equal", aliased_integer_value, 31):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "aliased out-parameter"))
+
+set encoded_integer_value to 0
+set encoded_integer_address to @intrinsic("cast", @intrinsic("address of", encoded_integer_value), @intrinsic("type", "int", @intrinsic("build info", "word size")))
+set decoded_integer_address to @intrinsic("cast", encoded_integer_address, @intrinsic("add pointer depth", @intrinsic("type", "int", 32)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "sscanf", @intrinsic("type", "int", 32), 2, "59", "%d", decoded_integer_address))
+if @intrinsic("equal", encoded_integer_value, 59):
+    @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "integer-encoded out-parameter"))

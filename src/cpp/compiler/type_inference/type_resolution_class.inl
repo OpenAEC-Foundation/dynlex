@@ -312,15 +312,20 @@ static DataType instantiateBoundClassType(
 	int symbolicIndex = nextSymbolicClassInstantiationIndex--;
 	ScopedActiveClassInstantiation activeInstantiation(parseContext, classDef, requestKey, symbolicIndex);
 
-	struct ScopedKnownConstantsOverride {
+	struct ScopedInferenceVariableStateOverride {
 		InferenceContext *context{};
 		std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+		AddressInferenceState savedAddressState;
 
-		explicit ScopedKnownConstantsOverride(InferenceContext *inferenceContext)
-			: context(inferenceContext), savedKnownConstants(snapshotKnownConstantsForClassInstantiation(inferenceContext)) {}
+		explicit ScopedInferenceVariableStateOverride(InferenceContext *inferenceContext)
+			: context(inferenceContext), savedKnownConstants(snapshotKnownConstantsForClassInstantiation(inferenceContext)),
+			  savedAddressState(snapshotAddressStateForClassInstantiation(inferenceContext)) {}
 
-		~ScopedKnownConstantsOverride() { restoreKnownConstantsForClassInstantiation(context, std::move(savedKnownConstants)); }
-	} scopedKnownConstantsOverride(inferenceContext);
+		~ScopedInferenceVariableStateOverride() {
+			restoreKnownConstantsForClassInstantiation(context, std::move(savedKnownConstants));
+			restoreAddressStateForClassInstantiation(context, std::move(savedAddressState));
+		}
+	} scopedInferenceVariableStateOverride(inferenceContext);
 
 	seedKnownConstantsForClassInstantiation(bindingFrameStack, inferenceContext);
 

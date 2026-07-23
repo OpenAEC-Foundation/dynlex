@@ -622,8 +622,8 @@ class GroupingInferenceTransaction {
 		  savedActiveFlexDefinitionStack(context.activeFlexDefinitionStack),
 		  savedActiveFlexCallStack(context.activeFlexCallStack),
 		  savedFlexCallSiteSectionStack(context.flexCallSiteSectionStack), savedKnownConstants(context.currentVariableValues),
-		  savedSubject(context.currentSubject), savedTypesValid(context.typesValid),
-		  savedSuppressDiagnostics(context.suppressDiagnostics),
+		  savedAddressState(context.currentAddressState), savedSubject(context.currentSubject),
+		  savedTypesValid(context.typesValid), savedSuppressDiagnostics(context.suppressDiagnostics),
 		  savedSuppressReinferPassDiagnostics(context.suppressReinferPassDiagnostics),
 		  savedObservedInProgressUndeducedInstantiation(context.observedInProgressUndeducedInstantiation),
 		  savedTypeFailureDetail(context.typeFailureDetail), savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo),
@@ -721,6 +721,7 @@ class GroupingInferenceTransaction {
 	std::vector<Expression *> savedActiveFlexCallStack;
 	std::vector<Section *> savedFlexCallSiteSectionStack;
 	std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+	AddressInferenceState savedAddressState;
 	InferenceContext::SubjectState savedSubject;
 	bool savedTypesValid;
 	bool savedSuppressDiagnostics;
@@ -763,6 +764,7 @@ class GroupingInferenceTransaction {
 		context.activeFlexCallStack = std::move(savedActiveFlexCallStack);
 		context.flexCallSiteSectionStack = std::move(savedFlexCallSiteSectionStack);
 		context.currentVariableValues = std::move(savedKnownConstants);
+		context.currentAddressState = std::move(savedAddressState);
 		context.currentSubject = savedSubject;
 		context.typesValid = savedTypesValid;
 		context.suppressDiagnostics = savedSuppressDiagnostics;

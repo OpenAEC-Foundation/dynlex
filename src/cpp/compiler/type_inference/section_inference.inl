@@ -47,6 +47,7 @@ static bool inferSectionLineRange(
 			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
 			CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
 			context.setKnownConstant(boundVar->definition, boundValue);
+			context.setAddressProvenance(boundVar->definition, inferAddressProvenance(boundExpr, context, bindingFrameStack));
 		}
 	} else if (initializeSection) {
 		seedNonFlexSectionParameterState(section, context);
@@ -54,9 +55,11 @@ static bool inferSectionLineRange(
 
 	bool loopSection = stabilizeLoop && sectionOutcomeIsLoop(openingExpression);
 	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
+	AddressInferenceState addressesAtLoopEntry;
 	InferenceContext::SubjectState subjectAtLoopEntry;
 	if (loopSection) {
 		constantsAtLoopEntry = context.currentVariableValues;
+		addressesAtLoopEntry = context.currentAddressState;
 		subjectAtLoopEntry = context.currentSubject;
 	}
 
@@ -102,6 +105,7 @@ static bool inferSectionLineRange(
 			bool isDefault;
 		};
 		auto entryConstants = context.currentVariableValues;
+		auto entryAddresses = context.currentAddressState;
 		InferenceContext::SubjectState entrySubject = context.currentSubject;
 		std::vector<SwitchBranch> branches;
 		std::optional<size_t> defaultBranch;
@@ -168,15 +172,18 @@ static bool inferSectionLineRange(
 		}
 
 		std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> fallthroughConstantStates;
+		std::vector<AddressInferenceState> fallthroughAddressStates;
 		std::vector<InferenceContext::SubjectState> fallthroughSubjectStates;
 		auto inferBranch = [&](const SwitchBranch &branch) {
 			context.currentVariableValues = entryConstants;
+			context.currentAddressState = entryAddresses;
 			context.currentSubject = entrySubject;
 			bool branchFallsThrough = true;
 			if (!inferOpenedSection(section->codeLines[branch.lineIndex], &branchFallsThrough))
 				return false;
 			if (branchFallsThrough) {
 				fallthroughConstantStates.push_back(context.currentVariableValues);
+				fallthroughAddressStates.push_back(context.currentAddressState);
 				fallthroughSubjectStates.push_back(context.currentSubject);
 			}
 			return true;
@@ -191,6 +198,7 @@ static bool inferSectionLineRange(
 		}
 		if ((selectionKnown && !selectedBranch) || (!selectionKnown && !defaultBranch)) {
 			fallthroughConstantStates.push_back(entryConstants);
+			fallthroughAddressStates.push_back(entryAddresses);
 			fallthroughSubjectStates.push_back(entrySubject);
 		}
 		bool sectionFallsThrough = !fallthroughConstantStates.empty();
@@ -201,7 +209,7 @@ static bool inferSectionLineRange(
 			.fallsThrough = sectionFallsThrough,
 		};
 		if (sectionFallsThrough)
-			mergeSectionExecutionStates(context, fallthroughConstantStates, fallthroughSubjectStates);
+			mergeSectionExecutionStates(context, fallthroughConstantStates, fallthroughAddressStates, fallthroughSubjectStates);
 		if (fallsThrough)
 			*fallsThrough = sectionFallsThrough;
 		context.typesValid = true;
@@ -213,6 +221,7 @@ static bool inferSectionLineRange(
 		CodeLine *line = section->codeLines[i];
 		Expression *&lineExpression = body ? body->lineExpression(i) : line->expression;
 		auto constantsBeforeLine = context.currentVariableValues;
+		auto addressesBeforeLine = context.currentAddressState;
 		auto subjectBeforeLine = context.currentSubject;
 		if (!inferLineExpression(line, lineExpression))
 			return false;
@@ -222,20 +231,24 @@ static bool inferSectionLineRange(
 		}
 		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
 			auto constantsBeforeChain = std::move(constantsBeforeLine);
+			auto addressesBeforeChain = std::move(addressesBeforeLine);
 			auto subjectBeforeChain = subjectBeforeLine;
 			size_t chainEnd = i;
 			std::optional<size_t> selectedBranch;
 			bool branchKnown = true;
 			bool fallthroughReachable = true;
 			std::unordered_map<VariableReference *, CompileTimeValue> fallthroughConstants = context.currentVariableValues;
+			AddressInferenceState fallthroughAddresses = context.currentAddressState;
 			InferenceContext::SubjectState fallthroughSubject = context.currentSubject;
 			std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchConstantStates;
+			std::vector<AddressInferenceState> branchAddressStates;
 			std::vector<InferenceContext::SubjectState> branchSubjectStates;
 			for (size_t k = i;; k++) {
 				CodeLine *branchLine = section->codeLines[k];
 				Expression *&branchExpression = body ? body->lineExpression(k) : branchLine->expression;
 				if (k > i) {
 					context.currentVariableValues = fallthroughReachable ? fallthroughConstants : constantsBeforeChain;
+					context.currentAddressState = fallthroughReachable ? fallthroughAddresses : addressesBeforeChain;
 					context.currentSubject = fallthroughReachable ? fallthroughSubject : subjectBeforeChain;
 					if (!inferLineExpression(branchLine, branchExpression))
 						return false;
@@ -268,6 +281,7 @@ static bool inferSectionLineRange(
 				}
 				branchExpression->sectionBodyReachable = bodyReachable;
 				auto branchEntryConstants = context.currentVariableValues;
+				auto branchEntryAddresses = context.currentAddressState;
 				auto branchEntrySubject = context.currentSubject;
 				if (bodyReachable) {
 					bool bodyFallsThrough = true;
@@ -275,13 +289,16 @@ static bool inferSectionLineRange(
 						return false;
 					if (bodyFallsThrough) {
 						branchConstantStates.push_back(context.currentVariableValues);
+						branchAddressStates.push_back(context.currentAddressState);
 						branchSubjectStates.push_back(context.currentSubject);
 					}
 				}
 				context.currentVariableValues = std::move(branchEntryConstants);
+				context.currentAddressState = std::move(branchEntryAddresses);
 				context.currentSubject = branchEntrySubject;
 				if (fallthroughReachable) {
 					fallthroughConstants = context.currentVariableValues;
+					fallthroughAddresses = context.currentAddressState;
 					fallthroughSubject = context.currentSubject;
 				}
 				chainEnd = k;
@@ -308,6 +325,7 @@ static bool inferSectionLineRange(
 			requireCompilerInvariant(firstHeaderExpression, "if chain is missing its inferred header expression");
 			if (fallthroughReachable) {
 				branchConstantStates.push_back(std::move(fallthroughConstants));
+				branchAddressStates.push_back(std::move(fallthroughAddresses));
 				branchSubjectStates.push_back(fallthroughSubject);
 			}
 			bool chainFallsThrough = !branchConstantStates.empty();
@@ -321,7 +339,7 @@ static bool inferSectionLineRange(
 				i = chainEnd;
 				break;
 			}
-			mergeSectionExecutionStates(context, branchConstantStates, branchSubjectStates);
+			mergeSectionExecutionStates(context, branchConstantStates, branchAddressStates, branchSubjectStates);
 
 			i = chainEnd;
 			continue;
@@ -368,18 +386,21 @@ static bool inferSectionLineRange(
 		if (!sectionFallsThrough) {
 			if (!firstIterationGuaranteed) {
 				context.currentVariableValues = std::move(constantsAtLoopEntry);
+				context.currentAddressState = std::move(addressesAtLoopEntry);
 				context.currentSubject = subjectAtLoopEntry;
 				sectionFallsThrough = true;
 			}
 		} else {
 			auto constantsAfterFirstIteration = context.currentVariableValues;
+			auto addressesAfterFirstIteration = context.currentAddressState;
 			auto subjectAfterFirstIteration = context.currentSubject;
 			const auto &baseConstants = firstIterationGuaranteed ? constantsAfterFirstIteration : constantsAtLoopEntry;
+			const auto &baseAddresses = firstIterationGuaranteed ? addressesAfterFirstIteration : addressesAtLoopEntry;
 			const auto &baseSubject = firstIterationGuaranteed ? subjectAfterFirstIteration : subjectAtLoopEntry;
 			if (!firstIterationGuaranteed) {
 				mergeSectionExecutionStates(
 					context, {constantsAtLoopEntry, constantsAfterFirstIteration},
-					{subjectAtLoopEntry, subjectAfterFirstIteration}
+					{addressesAtLoopEntry, addressesAfterFirstIteration}, {subjectAtLoopEntry, subjectAfterFirstIteration}
 				);
 			}
 
@@ -394,6 +415,7 @@ static bool inferSectionLineRange(
 				}
 
 				auto constantsAtIterationEntry = context.currentVariableValues;
+				auto addressesAtIterationEntry = context.currentAddressState;
 				auto subjectAtIterationEntry = context.currentSubject;
 				bool iterationFallsThrough = true;
 				if (!inferSectionLineRange(
@@ -406,15 +428,18 @@ static bool inferSectionLineRange(
 					sectionFallsThrough = !condition;
 					if (sectionFallsThrough) {
 						context.currentVariableValues = std::move(constantsAtIterationEntry);
+						context.currentAddressState = std::move(addressesAtIterationEntry);
 						context.currentSubject = subjectAtIterationEntry;
 					}
 					break;
 				}
 
 				mergeSectionExecutionStates(
-					context, {baseConstants, context.currentVariableValues}, {baseSubject, context.currentSubject}
+					context, {baseConstants, context.currentVariableValues}, {baseAddresses, context.currentAddressState},
+					{baseSubject, context.currentSubject}
 				);
 				if (context.currentVariableValues == constantsAtIterationEntry &&
+					context.currentAddressState == addressesAtIterationEntry &&
 					context.currentSubject == subjectAtIterationEntry) {
 					sectionFallsThrough = !condition;
 					break;
@@ -435,24 +460,6 @@ static bool inferSection(
 	const BindingFrameStack &bindingFrameStack, bool *fallsThrough
 ) {
 	return inferSectionLineRange(section, body, openingExpression, context, bindingFrameStack, 0, true, fallsThrough);
-}
-
-static void emitPendingInferenceFailure(InferenceContext &context) {
-	if (context.trial || context.suppressDiagnostics || context.suppressReinferPassDiagnostics)
-		return;
-	bool errorAlreadyReported = std::ranges::any_of(context.parseContext.diagnostics, [](const Diagnostic &diagnostic) {
-		return diagnostic.level == Diagnostic::Level::Error;
-	});
-	if (errorAlreadyReported)
-		return;
-	if (context.hasTypeFailureDiagnostic) {
-		context.addDiagnostic(context.typeFailureDiagnostic);
-		return;
-	}
-	requireCompilerInvariant(!context.typeFailureDetail.empty(), "type inference failed without a diagnostic");
-	context.addDiagnostic(buildTypeFailureDiagnostic(
-		context.parseContext, context.typeFailureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
-	));
 }
 
 struct PatternTypeConstraintWorkItem {
@@ -737,6 +744,7 @@ bool inferTypes(ParseContext &parseContext) {
 		return false;
 	InferenceContext context(parseContext);
 	context.currentVariableValues.clear();
+	context.currentAddressState = {};
 	if (!inferSection(parseContext.mainSection, nullptr, nullptr, context, {})) {
 		emitPendingInferenceFailure(context);
 		return false;
@@ -879,6 +887,13 @@ bool ensureSectionInstantiationInferred(
 
 	inst.writtenGlobalReferences.clear();
 	inst.finalGlobalConstantValues.clear();
+	inst.finalGlobalAddressProvenance.clear();
+	inst.addressTakenGlobalReferences.clear();
+	inst.externallyEscapedGlobalProvenance = {};
+	inst.returnAddressProvenance = {};
+	inst.hasReturnAddressProvenance = false;
+	inst.writesThroughUnknownAddress = false;
+	inst.externallyEscapesUnknownAddress = false;
 	inst.purity = InstantiationPurity::Pure;
 	inst.pureReturnValuesByArguments.clear();
 	InferenceContext context(parseContext, callerContext && callerContext->trial);
@@ -910,6 +925,20 @@ bool ensureSectionInstantiationInferred(
 		auto knownIt = context.currentVariableValues.find(reference);
 		if (knownIt != context.currentVariableValues.end() && isCompileTimeKnown(knownIt->second))
 			inst.finalGlobalConstantValues[reference] = knownIt->second;
+		auto provenance = context.currentAddressState->variables.find(reference);
+		inst.finalGlobalAddressProvenance[reference] = provenance != context.currentAddressState->variables.end()
+														   ? provenance->second
+														   : AddressProvenance{.mayTargets = {}, .unknown = true};
+	}
+	for (VariableReference *reference : context.currentAddressState->addressTakenVariables) {
+		Variable *variable = variableForAddressTarget(reference);
+		if (variable && variable->isGlobal)
+			inst.addressTakenGlobalReferences.insert(reference);
+	}
+	for (VariableReference *reference : context.currentAddressState->externallyEscaped.mayTargets) {
+		Variable *variable = variableForAddressTarget(reference);
+		if (variable && variable->isGlobal)
+			inst.externallyEscapedGlobalProvenance.mayTargets.insert(reference);
 	}
 	context.currentInstantiation = savedInst;
 	inst.inferring = false;

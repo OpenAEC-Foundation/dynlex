@@ -41,13 +41,32 @@ static std::optional<Expression::SectionOutcome::Kind> finalizedBranchOutcome(Ex
 	return kind;
 }
 
+static void emitPendingInferenceFailure(InferenceContext &context) {
+	if (context.trial || context.suppressDiagnostics || context.suppressReinferPassDiagnostics)
+		return;
+	bool errorAlreadyReported = std::ranges::any_of(context.parseContext.diagnostics, [](const Diagnostic &diagnostic) {
+		return diagnostic.level == Diagnostic::Level::Error;
+	});
+	if (errorAlreadyReported)
+		return;
+	if (context.hasTypeFailureDiagnostic) {
+		context.addDiagnostic(context.typeFailureDiagnostic);
+		return;
+	}
+	requireCompilerInvariant(!context.typeFailureDetail.empty(), "type inference failed without a diagnostic");
+	context.addDiagnostic(buildTypeFailureDiagnostic(
+		context.parseContext, context.typeFailureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
+	));
+}
+
 static void mergeSectionExecutionStates(
 	InferenceContext &context, const std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> &constantStates,
-	const std::vector<InferenceContext::SubjectState> &subjectStates
+	const std::vector<AddressInferenceState> &addressStates, const std::vector<InferenceContext::SubjectState> &subjectStates
 ) {
 	requireCompilerInvariant(!constantStates.empty(), "section state merge requires a reachable path");
 	requireCompilerInvariant(
-		constantStates.size() == subjectStates.size(), "section constant and subject state counts diverged"
+		constantStates.size() == addressStates.size() && constantStates.size() == subjectStates.size(),
+		"section execution state counts diverged"
 	);
 	std::unordered_map<VariableReference *, CompileTimeValue> mergedConstants;
 	for (const auto &state : constantStates) {
@@ -68,6 +87,7 @@ static void mergeSectionExecutionStates(
 			mergedValue = first->second;
 	}
 	context.currentVariableValues = std::move(mergedConstants);
+	context.currentAddressState = mergeAddressInferenceStates(addressStates);
 	context.currentSubject = subjectStates.front();
 	for (size_t index = 1; index < subjectStates.size(); index++) {
 		if (subjectStates[index] != context.currentSubject) {
@@ -89,6 +109,7 @@ static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOut
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.inheritSectionExecutionState(context);
 	trialContext.currentVariableValues = context.currentVariableValues;
+	trialContext.currentAddressState = context.currentAddressState;
 	trialContext.currentSubject = context.currentSubject;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
@@ -117,6 +138,7 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	trialContext.currentInstantiation = context.currentInstantiation;
 	trialContext.inheritSectionExecutionState(context);
 	trialContext.currentVariableValues = context.currentVariableValues;
+	trialContext.currentAddressState = context.currentAddressState;
 	trialContext.currentSubject = context.currentSubject;
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;

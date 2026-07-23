@@ -47,6 +47,13 @@ struct InstantiationProgressSnapshot {
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
+	VariableAddressProvenance finalGlobalAddressProvenance;
+	std::unordered_set<VariableReference *> addressTakenGlobalReferences;
+	AddressProvenance externallyEscapedGlobalProvenance;
+	AddressProvenance returnAddressProvenance;
+	bool hasReturnAddressProvenance;
+	bool writesThroughUnknownAddress;
+	bool externallyEscapesUnknownAddress;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	InstantiationPurity purity;
 	bool fallsThrough;
@@ -54,28 +61,49 @@ struct InstantiationProgressSnapshot {
 	bool operator==(const InstantiationProgressSnapshot &other) const = default;
 };
 
-static InstantiationProgressSnapshot snapshotInstantiationProgress(const Instantiation &instantiation) {
-	return {
-		instantiation.returnType,
-		instantiation.argumentTypes,
-		instantiation.constantParameterValues,
-		instantiation.writtenGlobalReferences,
-		instantiation.finalGlobalConstantValues,
-		instantiation.requiredCompileTimeParameters,
-		instantiation.purity,
-		instantiation.fallsThrough,
-	};
+static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgress(const Instantiation &instantiation) {
+	auto snapshot = std::make_unique<InstantiationProgressSnapshot>();
+	snapshot->returnType = instantiation.returnType;
+	snapshot->argumentTypes = instantiation.argumentTypes;
+	snapshot->constantParameterValues = instantiation.constantParameterValues;
+	snapshot->writtenGlobalReferences = instantiation.writtenGlobalReferences;
+	snapshot->finalGlobalConstantValues = instantiation.finalGlobalConstantValues;
+	snapshot->finalGlobalAddressProvenance = instantiation.finalGlobalAddressProvenance;
+	snapshot->addressTakenGlobalReferences = instantiation.addressTakenGlobalReferences;
+	snapshot->externallyEscapedGlobalProvenance = instantiation.externallyEscapedGlobalProvenance;
+	snapshot->returnAddressProvenance = instantiation.returnAddressProvenance;
+	snapshot->hasReturnAddressProvenance = instantiation.hasReturnAddressProvenance;
+	snapshot->writesThroughUnknownAddress = instantiation.writesThroughUnknownAddress;
+	snapshot->externallyEscapesUnknownAddress = instantiation.externallyEscapesUnknownAddress;
+	snapshot->requiredCompileTimeParameters = instantiation.requiredCompileTimeParameters;
+	snapshot->purity = instantiation.purity;
+	snapshot->fallsThrough = instantiation.fallsThrough;
+	return snapshot;
 }
+
+static void joinAddressProvenance(AddressProvenance &destination, const AddressProvenance &source);
 
 // Applies a callee's global write effects to the caller context, mirroring a
 // direct store to each written global: the caller's own effect summary and the
 // value produced by the callee in the current execution state.
 static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
+	context.currentAddressState->addressTakenVariables.insert(
+		inst.addressTakenGlobalReferences.begin(), inst.addressTakenGlobalReferences.end()
+	);
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		context.noteWrittenGlobalReference(reference);
 		auto it = inst.finalGlobalConstantValues.find(reference);
 		context.setKnownConstant(reference, it != inst.finalGlobalConstantValues.end() ? it->second : CompileTimeValue{});
+		auto provenance = inst.finalGlobalAddressProvenance.find(reference);
+		AddressProvenance finalProvenance = provenance != inst.finalGlobalAddressProvenance.end()
+												? provenance->second
+												: AddressProvenance{.mayTargets = {}, .unknown = true};
+		context.setAddressProvenance(reference, finalProvenance);
+		context.currentAddressState->addressTakenVariables.insert(
+			finalProvenance.mayTargets.begin(), finalProvenance.mayTargets.end()
+		);
 	}
+	joinAddressProvenance(context.currentAddressState->externallyEscaped, inst.externallyEscapedGlobalProvenance);
 }
 
 static void markCurrentInstantiationImpure(InferenceContext &context) {
@@ -205,6 +233,8 @@ markIntrinsicImpurityIfNeeded(Expression *expr, InferenceContext &context, const
 	crashCompilerBug("unhandled intrinsic purity kind");
 }
 
+#include "address_provenance_inference.inl"
+
 static void setRecursiveInferenceFailure(
 	InferenceContext &context, PatternDefinition *definition, const Range &fallbackRange, std::string functionName
 ) {
@@ -229,16 +259,16 @@ static bool runInstantiationReinferenceLoop(
 	size_t reinferPass = 0;
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {
-		InstantiationProgressSnapshot beforePass = snapshotInstantiationProgress(instantiation);
+		std::unique_ptr<InstantiationProgressSnapshot> beforePass = snapshotInstantiationProgress(instantiation);
 		bool inferenceSucceeded = inferPass();
-		InstantiationProgressSnapshot afterPass = snapshotInstantiationProgress(instantiation);
+		std::unique_ptr<InstantiationProgressSnapshot> afterPass = snapshotInstantiationProgress(instantiation);
 		if (!inferenceSucceeded || !context.typesValid) {
 			if (!instantiation.needsReinfer)
 				return false;
 		} else if (!instantiation.needsReinfer) {
 			return true;
 		}
-		if (afterPass == beforePass) {
+		if (*afterPass == *beforePass) {
 			if (canDeferToCaller && context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced())
 				return true;
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
@@ -263,12 +293,7 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 		it->variable->typeOriginFloatLiteralReplacement = it->typeOriginFloatLiteralReplacement;
 	}
 	for (auto it = journal.instantiationUndo.rbegin(); it != journal.instantiationUndo.rend(); ++it) {
-		it->instantiation->returnType = it->returnType;
-		it->instantiation->returnTypeOriginRange = it->returnTypeOriginRange;
-		it->instantiation->writtenGlobalReferences = std::move(it->writtenGlobalReferences);
-		it->instantiation->purity = it->purity;
-		it->instantiation->fallsThrough = it->fallsThrough;
-		it->instantiation->needsReinfer = it->needsReinfer;
+		*it->instantiation = std::move(*it->value);
 	}
 	for (auto it = journal.sectionInstantiationUndo.rbegin(); it != journal.sectionInstantiationUndo.rend(); ++it) {
 		auto instantiationIt = it->section->instantiations.find(it->key);
