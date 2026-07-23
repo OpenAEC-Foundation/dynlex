@@ -90,15 +90,25 @@ run_with_timeout() {
     local seconds="$1"
     shift
     local arguments_file=""
-    if [[ "${1:-}" == "--arguments-file" ]]; then
+    local standard_input_file=""
+    local working_directory_file=""
+    while [[ "${1:-}" == --* ]]; do
         if [[ $# -lt 2 ]]; then
-            echo "run_with_timeout: --arguments-file requires a path" >&2
+            echo "run_with_timeout: ${1:-option} requires a path" >&2
             return 125
         fi
-        arguments_file="$2"
+        case "$1" in
+        --arguments-file) arguments_file="$2" ;;
+        --standard-input-file) standard_input_file="$2" ;;
+        --working-directory-file) working_directory_file="$2" ;;
+        *)
+            echo "run_with_timeout: unknown option $1" >&2
+            return 125
+            ;;
+        esac
         shift 2
-    fi
-    python3 - "$seconds" "$arguments_file" "$@" <<'PY'
+    done
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$working_directory_file" "$PROJECT_DIR" "$@" <<'PY'
 import os
 from pathlib import Path
 import signal
@@ -107,7 +117,10 @@ import sys
 
 timeout_seconds = int(sys.argv[1])
 arguments_file = sys.argv[2]
-cmd = sys.argv[3:]
+standard_input_file = sys.argv[3]
+working_directory_file = sys.argv[4]
+project_directory = Path(sys.argv[5])
+cmd = sys.argv[6:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -124,10 +137,36 @@ if arguments_file:
         except UnicodeDecodeError as error:
             sys.stderr.write(f"Invalid UTF-8 in argument metadata line {index}: {error}\n")
             sys.exit(125)
+standard_input = None
+if standard_input_file:
+    standard_input = Path(standard_input_file).read_bytes()
+
+working_directory = None
+if working_directory_file:
+    try:
+        working_directory_text = Path(working_directory_file).read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        sys.stderr.write(f"Invalid UTF-8 in working-directory metadata: {error}\n")
+        sys.exit(125)
+    working_directory_text = working_directory_text.rstrip("\r\n")
+    if not working_directory_text or "\n" in working_directory_text or "\r" in working_directory_text or "\0" in working_directory_text:
+        sys.stderr.write("Working-directory metadata must contain one non-empty path\n")
+        sys.exit(125)
+    working_directory = Path(working_directory_text)
+    if not working_directory.is_absolute():
+        working_directory = project_directory / working_directory
+    if not working_directory.is_dir():
+        sys.stderr.write(f"Test working directory does not exist: {working_directory}\n")
+        sys.exit(125)
+
 popen_options = {
     "stdout": subprocess.PIPE,
     "stderr": subprocess.PIPE,
 }
+if standard_input is not None:
+    popen_options["stdin"] = subprocess.PIPE
+if working_directory is not None:
+    popen_options["cwd"] = working_directory
 if os.name == "nt":
     popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 else:
@@ -136,7 +175,7 @@ else:
 process = subprocess.Popen(cmd, **popen_options)
 
 try:
-    stdout, stderr = process.communicate(timeout=timeout_seconds)
+    stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
 except subprocess.TimeoutExpired:
     termination_error = b""
     if os.name == "nt":
@@ -215,6 +254,8 @@ for test_dir in "$TESTS_DIR"/*/; do
     output_binary="$test_dir/main.out"
     stack_limit_file="$test_dir/stack_limit_kb.txt"
     arguments_file="$test_dir/arguments.txt"
+    standard_input_file="$test_dir/standard_input.txt"
+    working_directory_file="$test_dir/working_directory.txt"
     expected_runtime_failure_file="$test_dir/expected_runtime_failure.txt"
     if [[ "$is_windows" == "true" ]]; then
         output_binary="$test_dir/main.exe"
@@ -346,6 +387,12 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ -f "$arguments_file" ]]; then
         run_command+=(--arguments-file "$arguments_file")
     fi
+    if [[ -f "$standard_input_file" ]]; then
+        run_command+=(--standard-input-file "$standard_input_file")
+    fi
+    if [[ -f "$working_directory_file" ]]; then
+        run_command+=(--working-directory-file "$working_directory_file")
+    fi
     actual_output=$("${run_command[@]}" "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
@@ -465,6 +512,7 @@ run_auxiliary_test \
     "$TESTS_DIR/callable_managed_argument/main.dl"
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
+run_auxiliary_test "web_runtime_path_host" 10 node "$PROJECT_DIR/tests/web/runtime_path_host.mjs"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"

@@ -4,6 +4,7 @@ import {
   readCString,
   writeCString
 } from "./runtimeFilesystem.js";
+import { createHostImports, createPathImports } from "./runtimePathHost.js";
 
 const supportedEnvImports = new Set([
   "__indirect_function_table",
@@ -37,6 +38,18 @@ const supportedEnvImports = new Set([
   "dynlex_filesystem_temporary_directory_release",
   "dynlex_filesystem_temporary_directory_retain",
   "dynlex_filesystem_temporary_file_open",
+  "dynlex_host_error_message",
+  "dynlex_host_executable_directory",
+  "dynlex_host_executable_path",
+  "dynlex_host_platform_is_windows",
+  "dynlex_host_read_standard_input_line",
+  "dynlex_path_binary",
+  "dynlex_path_error_message",
+  "dynlex_path_file_uri",
+  "dynlex_path_is_absolute",
+  "dynlex_path_native_style",
+  "dynlex_path_native_style_supported",
+  "dynlex_path_unary",
   "dynlex_print_i64",
   "dynlex_print_string",
   "fclose",
@@ -604,7 +617,9 @@ export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layou
     time() {
       return BigInt(Math.floor(Date.now() / 1000));
     },
-    ...createFileImports(memory, filesystem)
+    ...createFileImports(memory, filesystem),
+    ...createHostImports(memory),
+    ...createPathImports(memory, allocateBytes)
   };
 
   for (const importSpec of importSpecs) {

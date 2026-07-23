@@ -1,0 +1,15 @@
+import lib/host.dl
+
+set line to read one line from standard input
+print line's succeeded as line
+print (line's contents = "last line") as line
+print (line's contents's length = 9) as line
+print line's end of file as line
+print ((line's error message) = "") as line
+
+set after_end to read one line from standard input
+print after_end's succeeded as line
+print (after_end's contents = "") as line
+print after_end's end of file as line
+print ((after_end's error message) = "") as line
+print (line's contents = "last line") as line

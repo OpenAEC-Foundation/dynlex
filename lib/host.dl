@@ -1,0 +1,179 @@
+# DynLex Native Host Library
+
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] host text result
+    members:
+        succeeded as boolean
+        value as string
+        error message as string
+
+class:
+    patterns:
+        [a|] standard input line result
+    members:
+        succeeded as boolean
+        contents as string
+        end of file as boolean
+        error message as string
+
+local function an empty host string:
+    execute:
+        return the string form of ""
+
+local function [the|] current host error message:
+    execute:
+        set message_length to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_host_error_message",
+            a word sized integer,
+            0 as a pointer to byte,
+            0 as a word sized integer
+        )
+        set error_text to a new string buffer with length message_length as an integer
+        if message_length > 0 as a word sized integer:
+            discard @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_error_message",
+                a word sized integer,
+                the data of error_text,
+                message_length + 1
+            )
+        return error_text
+
+function [the|] host platform is Windows:
+    execute:
+        return @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_host_platform_is_windows",
+            a 32 bit integer
+        ) != 0
+
+local function retrieve host executable value {integer:kind}:
+    execute:
+        set output_length to 0 as a word sized integer
+        set outcome to 0
+        if kind = 1:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_executable_path",
+                an integer,
+                0 as a pointer to byte,
+                0 as a word sized integer,
+                the address of output_length
+            )
+        else:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_executable_directory",
+                an integer,
+                0 as a pointer to byte,
+                0 as a word sized integer,
+                the address of output_length
+            )
+        if outcome != 0:
+            return @intrinsic(
+                "construct",
+                a host text result,
+                false,
+                an empty host string,
+                the current host error message
+            )
+
+        set output to a new string buffer with length output_length as an integer
+        if kind = 1:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_executable_path",
+                an integer,
+                the data of output,
+                output_length,
+                the address of output_length
+            )
+        else:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_executable_directory",
+                an integer,
+                the data of output,
+                output_length,
+                the address of output_length
+            )
+        if outcome != 0:
+            return @intrinsic(
+                "construct",
+                a host text result,
+                false,
+                an empty host string,
+                the current host error message
+            )
+        return @intrinsic(
+            "construct",
+            a host text result,
+            true,
+            output,
+            an empty host string
+        )
+
+function [the|] running executable path:
+    execute:
+        return retrieve host executable value 1
+
+function [the|] running executable directory:
+    execute:
+        return retrieve host executable value 2
+
+function read one line from [the|] standard input:
+    execute:
+        set data to 0 as a pointer to byte
+        set length to 0 as a word sized integer
+        set end_of_file to 0 as a 32 bit integer
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_host_read_standard_input_line",
+            an integer,
+            the address of data,
+            the address of length,
+            the address of end_of_file
+        )
+        if outcome != 0:
+            @intrinsic("call", "libc", "free", void, data)
+            return @intrinsic(
+                "construct",
+                a standard input line result,
+                false,
+                an empty host string,
+                false,
+                the current host error message
+            )
+
+        set contents to a new string buffer with length length as an integer
+        if length > 0 as a word sized integer:
+            discard @intrinsic(
+                "call",
+                "libc",
+                "memcpy",
+                a pointer to byte,
+                the data of contents,
+                data,
+                length
+            )
+        @intrinsic("call", "libc", "free", void, data)
+        return @intrinsic(
+            "construct",
+            a standard input line result,
+            true,
+            contents,
+            end_of_file != 0,
+            an empty host string
+        )
