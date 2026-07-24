@@ -1,0 +1,64 @@
+import lib/json_rpc_session.dl
+
+function [the|] json rpc session test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set script to "import json,sys\ndef read():\n headers={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  name,value=line.decode('ascii').split(':',1);headers[name.lower()]=value.strip()\n return json.loads(sys.stdin.buffer.read(int(headers['content-length'])))\ndef send(message):\n payload=json.dumps(message,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(payload)).encode()+b'\\r\\n\\r\\n'+payload);sys.stdout.buffer.flush()\nfirst=read();assert first['id']=='1' and first['method']=='first'\nsend({'jsonrpc':'2.0','method':'note','params':{'value':3}})\nsend({'jsonrpc':'2.0','id':7,'method':'workspace/configuration','params':{'items':[]}})\nreply=read();assert reply=={'jsonrpc':'2.0','id':7,'result':['configured']}\nsend({'jsonrpc':'2.0','id':'1','result':{'ok':True}})\nsecond=read();assert second['id']=='2' and second['method']=='second'\nsend({'jsonrpc':'2.0','id':'2','error':{'code':-32001,'message':'rejected','data':{'why':'test'}}})"
+set command to a process command for the json rpc session test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add script as an argument to command
+set child to launch command
+set opened to connect json rpc to child
+set session to start a json rpc session with opened's connection
+
+set empty_parameters to a new json value of kind the json object kind
+set first_send to send json rpc request "first" with empty_parameters using session
+print first_send's succeeded as line
+print (first_send's request id = "1") as line
+
+set first_id to first_send's request id
+set paused to await json rpc response for first_id using session
+print (paused's status = the json rpc server request pending status) as line
+set server_request to take next json rpc server request from session
+print server_request's succeeded as line
+print (json text named "method" in server_request's message = "workspace/configuration") as line
+set configuration_result to a new json value of kind the json array kind
+set configured_text to a new json value of kind the json text kind
+set the text of configured_text to the string form of "configured"
+append json item configured_text to configuration_result
+set server_request_message to server_request's message
+set replied to reply to json rpc request server_request_message with configuration_result using session
+print replied's succeeded as line
+free json value configuration_result
+free json rpc queued message server_request
+
+set first_response to await json rpc response for first_id using session
+print first_response's succeeded as line
+set first_result to first_response's result
+print json boolean named "ok" in first_result as line
+free json rpc response first_response
+
+set notification to take next json rpc notification from session
+print notification's succeeded as line
+print (json text named "method" in notification's message = "note") as line
+free json rpc queued message notification
+
+set second_send to send json rpc request "second" with empty_parameters using session
+print (second_send's request id = "2") as line
+set second_id to second_send's request id
+set second_response to await json rpc response for second_id using session
+print (second_response's status = the json rpc remote error status) as line
+print (second_response's remote error code = (0 - 32001)) as line
+print (second_response's remote error message = "rejected") as line
+print (json text named "why" in second_response's remote error data = "test") as line
+free json rpc response second_response
+
+free json value empty_parameters
+set session_connection to session's connection
+set closed_input to close the input of session_connection
+set closed to close json rpc connection session_connection
+print closed_input's succeeded as line
+print closed's succeeded as line
+free json rpc session session
