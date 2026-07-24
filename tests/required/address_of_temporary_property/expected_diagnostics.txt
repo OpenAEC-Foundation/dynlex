@@ -1,0 +1,1 @@
+tests/required/address_of_temporary_property/main.dl:23-113: Error: address of requires an addressable value

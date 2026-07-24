@@ -1,0 +1,1 @@
+tests/required/lvalue_address_failure_property/main.dl:72-129: Error: address of requires an addressable value

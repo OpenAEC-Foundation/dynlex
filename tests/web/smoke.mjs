@@ -194,6 +194,55 @@ if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
   throw new Error(`Unexpected filesystem metadata output: ${JSON.stringify(metadataOutput)}`);
 }
 
+const pathOutput = await compileAndRun(`import lib/path.dl
+
+set posix to the POSIX path style
+set explicit_path to a path from file URI "file:///tmp/%C3%A9%20path" using posix
+print explicit_path's succeeded as line
+print explicit_path's supported as line
+print (explicit_path's value = "/tmp/é path") as line
+set explicit_uri to a file URI for "/tmp/é path" using posix
+print (explicit_uri's succeeded and (explicit_uri's supported and (explicit_uri's value = "file:///tmp/%C3%A9%20path"))) as line
+
+set native_resolution to resolve file URI the string form of "file:///tmp/native"
+print (not native_resolution's succeeded) as line
+print (not native_resolution's supported) as line
+print (native_resolution's value = "") as line
+print (not (native_resolution's error message = "")) as line
+set native_uri to a file URI from native path the string form of "/tmp/native"
+print (not native_uri's succeeded) as line
+print (not native_uri's supported) as line
+print (not (native_uri's error message = "")) as line
+`);
+if (pathOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+  throw new Error(`Unexpected browser path output: ${JSON.stringify(pathOutput)}`);
+}
+
+const hostOutput = await compileAndRun(`import lib/host.dl
+
+set executable to the running executable path
+set directory to the running executable directory
+set platform to whether the host platform is Windows
+set input_chunk to read a chunk from standard input
+print (not executable's succeeded) as line
+print (not executable's supported) as line
+print (not (executable's error message = "")) as line
+print (not directory's succeeded) as line
+print (not directory's supported) as line
+print (not (directory's error message = "")) as line
+print (not platform's succeeded) as line
+print (not platform's supported) as line
+print (not (platform's error message = "")) as line
+print (not input_chunk's succeeded) as line
+print (not input_chunk's supported) as line
+print (input_chunk's contents = "") as line
+print (not input_chunk's end of file) as line
+print (not (input_chunk's error message = "")) as line
+`);
+if (hostOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+  throw new Error(`Unexpected browser host output: ${JSON.stringify(hostOutput)}`);
+}
+
 const variadicOutput = await compileAndRun(
   `@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %.1f %d %s\\n", @intrinsic("cast", 7, @intrinsic("type", "int", 8)), @intrinsic("cast", 1.5, @intrinsic("type", "float", 32)), @intrinsic("cast", 1, @intrinsic("type", "bool")), "ok"))`
 );

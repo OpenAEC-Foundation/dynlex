@@ -32,6 +32,67 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 }
 
 static AddressProvenance
+inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
+
+static std::optional<AddressProvenance>
+inferLValueAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
+	BindingFrameStack resolvedBindingFrameStack;
+	Expression *resolvedExpression =
+		resolveThroughBindingsDeep(expression, bindingFrameStack, resolvedBindingFrameStack, &context);
+	if (!resolvedExpression)
+		crashCompilerBug("lvalue address provenance inference lost its expression while resolving bindings");
+
+	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable) {
+		VariableReference *target = context.normalizeReference(resolvedExpression->variable);
+		if (!target)
+			return std::nullopt;
+		context.currentAddressState->addressTakenVariables.insert(target);
+		return AddressProvenance{.mayTargets = {target}};
+	}
+
+	if (resolvedExpression->kind != Expression::Kind::IntrinsicCall)
+		return std::nullopt;
+
+	IntrinsicKind kind = intrinsicKind(resolvedExpression->intrinsicName);
+	if (kind == IntrinsicKind::Dereference) {
+		if (resolvedExpression->arguments.size() <= 1)
+			crashCompilerBug("dereference lvalue address provenance is missing its pointer argument");
+		return inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
+	}
+	if (kind != IntrinsicKind::Property)
+		return std::nullopt;
+	if (resolvedExpression->arguments.size() <= 2)
+		crashCompilerBug("property lvalue address provenance is missing an owner or field name");
+
+	Expression *ownerExpression = resolvedExpression->arguments[1];
+	DataType ownerType = resolveKnownExpressionType(ownerExpression, resolvedBindingFrameStack);
+	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
+	DataType classType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	if (classType.kind != DataType::Kind::Class || classType.isPointer() || !classType.classDefinition ||
+		classType.classInstIndex < 0)
+		return std::nullopt;
+
+	CompileTimeValue fieldValue =
+		resolveStoredCompileTimeValue(resolvedExpression->arguments[2], resolvedBindingFrameStack, &context);
+	std::string fieldName;
+	if (const auto *propertyName = std::get_if<std::string>(&fieldValue))
+		fieldName = *propertyName;
+	if (fieldName.empty()) {
+		Expression *fieldExpression = resolveThroughBindings(resolvedExpression->arguments[2], resolvedBindingFrameStack);
+		fieldName = extractFieldName(fieldExpression);
+	}
+	bool fieldExists = std::ranges::any_of(classType.classDefinition->fields, [&](const FieldDefinition &field) {
+		return field.name == fieldName;
+	});
+	if (!fieldExists)
+		return std::nullopt;
+
+	if (ownerIsDirectClassPointer)
+		return inferAddressProvenance(ownerExpression, context, resolvedBindingFrameStack);
+	return inferLValueAddressProvenance(ownerExpression, context, resolvedBindingFrameStack);
+}
+
+static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	if (!expression)
 		crashCompilerBug("address provenance inference received a null expression");
@@ -69,17 +130,9 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 
 	IntrinsicKind kind = intrinsicKind(resolvedExpression->intrinsicName);
 	if (kind == IntrinsicKind::AddressOf) {
-		BindingFrameStack targetBindingFrameStack;
-		Expression *targetExpression = resolveThroughBindingsDeep(
-			resolvedExpression->arguments[1], resolvedBindingFrameStack, targetBindingFrameStack, &context
-		);
-		if (!targetExpression || targetExpression->kind != Expression::Kind::Variable || !targetExpression->variable)
-			return {.mayTargets = {}, .unknown = true};
-		VariableReference *target = context.normalizeReference(targetExpression->variable);
-		if (!target)
-			return {.mayTargets = {}, .unknown = true};
-		context.currentAddressState->addressTakenVariables.insert(target);
-		return {.mayTargets = {target}};
+		std::optional<AddressProvenance> provenance =
+			inferLValueAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
+		return provenance.value_or(AddressProvenance{.mayTargets = {}, .unknown = true});
 	}
 	if (kind == IntrinsicKind::Cast && resolvedExpression->arguments.size() > 2) {
 		AddressProvenance source = inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);

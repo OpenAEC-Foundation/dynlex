@@ -1,0 +1,1 @@
+tests/required/lvalue_address_failure_lifecycle/main.dl:31-58: Error: address of requires an addressable value

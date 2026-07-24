@@ -1,1 +1,0 @@
-tests/required/address_of_requires_variable/main.dl:34-35: Error: address of requires a variable

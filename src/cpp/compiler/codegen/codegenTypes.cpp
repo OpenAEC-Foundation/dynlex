@@ -54,6 +54,16 @@ unsigned getClassFieldLLVMIndex(ParseContext &context, const DataType &classType
 	return instantiation.llvmFieldIndices[fieldIndex];
 }
 
+llvm::Value *
+createClassFieldPointer(ParseContext &context, const DataType &classType, int fieldIndex, llvm::Value *classPointer) {
+	requireCompilerInvariant(classPointer != nullptr, "class field access requires an instance pointer");
+	requireCompilerInvariant(!classType.isPointer(), "class field access requires a class value type");
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	return builder.CreateStructGEP(
+		getLLVMType(context, classType), classPointer, getClassFieldLLVMIndex(context, classType, fieldIndex), "field_ptr"
+	);
+}
+
 llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	return builder.getInt32(index);
@@ -402,35 +412,93 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 	}
 }
 
-// Get the pointer for a variable expression (for store operations).
-// Recursively resolves through nested flex binding scopes to find the actual variable.
-llvm::Value *getVariablePointer(ParseContext &context, Expression *expr) {
+LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr) {
 	ensureFlexBindingRootFrame(context);
-	BindingScopeTrail scopeTrail;
-	// Resolve through flex binding layers and keep a trail so we can restore
-	// the exact stack state before returning to the caller.
-	expr = resolveVariableBindingAcrossScopes(expr, context.flexBindingFrames, &scopeTrail);
+	BindingFrameStack savedBindingFrames = context.flexBindingFrames;
+	struct BindingFramesRestore {
+		ParseContext &context;
+		BindingFrameStack savedBindingFrames;
+		~BindingFramesRestore() { context.flexBindingFrames = savedBindingFrames; }
+	} restore{context, savedBindingFrames};
 
-	llvm::Value *result = nullptr;
+	resolveThroughFlexLayers(context, expr);
+	if (!expr)
+		return {};
 
-	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+	if (expr->kind == Expression::Kind::Variable && expr->variable) {
 		std::string varName = expr->variable->name;
-
 		auto bindingIt = context.patternBindings.find(varName);
-		if (bindingIt != context.patternBindings.end()) {
-			result = bindingIt->second;
-		} else {
-			VariableReference *varRef = expr->variable;
-			VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-			if (definition->alloca)
-				result = definition->alloca;
+		if (bindingIt != context.patternBindings.end())
+			return {bindingIt->second, LValueAddressStatus::Addressable};
+		VariableReference *definition = normalizeBindingReference(expr->variable);
+		if (definition && definition->alloca)
+			return {definition->alloca, LValueAddressStatus::Addressable};
+		return {};
+	}
+
+	if (expr->kind != Expression::Kind::IntrinsicCall)
+		return {};
+
+	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+	if (kind == IntrinsicKind::Dereference) {
+		requireCompilerInvariant(expr->arguments.size() > 1, "dereference lvalue is missing its pointer argument");
+		CodegenResult pointer = generateExpressionCode(context, expr->arguments[1]);
+		if (!pointer)
+			return {nullptr, LValueAddressStatus::Failed};
+		requireCompilerInvariant(pointer.value != nullptr, "dereference lvalue produced no pointer value");
+		return {pointer.value, LValueAddressStatus::Addressable};
+	}
+
+	if (kind != IntrinsicKind::Property)
+		return {};
+
+	requireCompilerInvariant(expr->arguments.size() > 2, "property lvalue is missing an owner or field name");
+	Expression *ownerExpression = expr->arguments[1];
+	DataType ownerType = finalizedExpressionType(context, ownerExpression);
+	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
+	DataType classType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	if (classType.kind != DataType::Kind::Class || classType.isPointer() || !classType.classDefinition ||
+		classType.classInstIndex < 0)
+		return {};
+
+	std::string fieldName;
+	CompileTimeValue propertyValue = resolveStoredCompileTimeValue(expr->arguments[2], context.flexBindingFrames);
+	if (const auto *propertyName = std::get_if<std::string>(&propertyValue))
+		fieldName = *propertyName;
+	if (fieldName.empty()) {
+		Expression *fieldExpression = resolveVariableBinding(context, expr->arguments[2]);
+		if (fieldExpression && fieldExpression->kind == Expression::Kind::Literal) {
+			if (const auto *propertyName = std::get_if<std::string>(&fieldExpression->literalValue))
+				fieldName = *propertyName;
 		}
 	}
 
-	// Restore all popped scopes in reverse order.
-	restoreBindingScopes(context.flexBindingFrames, scopeTrail);
+	int fieldIndex = -1;
+	for (size_t index = 0; index < classType.classDefinition->fields.size(); index++) {
+		if (classType.classDefinition->fields[index].name == fieldName) {
+			fieldIndex = static_cast<int>(index);
+			break;
+		}
+	}
+	if (fieldIndex < 0)
+		return {};
 
-	return result;
+	llvm::Value *ownerAddress = nullptr;
+	if (ownerIsDirectClassPointer) {
+		CodegenResult owner = generateExpressionCode(context, ownerExpression);
+		if (!owner)
+			return {nullptr, LValueAddressStatus::Failed};
+		requireCompilerInvariant(owner.value != nullptr, "class pointer lvalue owner produced no pointer value");
+		ownerAddress = owner.value;
+	} else {
+		LValueAddressResult owner = generateLValueAddress(context, ownerExpression);
+		if (owner.status != LValueAddressStatus::Addressable)
+			return owner;
+		ownerAddress = owner.address;
+	}
+
+	llvm::Value *fieldAddress = createClassFieldPointer(context, classType, fieldIndex, ownerAddress);
+	return {fieldAddress, LValueAddressStatus::Addressable};
 }
 
 // Ensure a value has the target LLVM type by inserting conversions if needed
