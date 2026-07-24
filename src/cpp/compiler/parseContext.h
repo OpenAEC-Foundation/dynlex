@@ -250,21 +250,30 @@ inline void forEachPatternParameterName(
 ) {
 	if (!definition)
 		return;
-	std::vector<std::tuple<size_t, PatternTreeNode *, std::string>> orderedParameters;
-	for (PatternTreeNode *node : nodesPassed) {
-		if (!node)
+	requireCompilerInvariant(
+		definition->indexedPaths.size() == definition->indexedNodePaths.size(),
+		"pattern parameter traversal requires complete indexed path metadata"
+	);
+	size_t matchedPathIndex = definition->indexedNodePaths.size();
+	for (size_t pathIndex = 0; pathIndex < definition->indexedNodePaths.size(); pathIndex++) {
+		if (definition->indexedNodePaths[pathIndex] != nodesPassed)
 			continue;
-		auto paramIt = node->parameterNames.find(definition);
-		auto startIt = node->definitionStartPositions.find(definition);
-		if (paramIt == node->parameterNames.end() || startIt == node->definitionStartPositions.end())
-			continue;
-		orderedParameters.push_back({startIt->second, node, paramIt->second});
+		matchedPathIndex = pathIndex;
+		break;
 	}
-	std::sort(orderedParameters.begin(), orderedParameters.end(), [](const auto &left, const auto &right) {
-		return std::get<0>(left) < std::get<0>(right);
-	});
-	for (const auto &[ignoredStartPos, node, parameterName] : orderedParameters)
-		onPatternParameterName(parameterName, node);
+	requireCompilerInvariant(
+		matchedPathIndex != definition->indexedNodePaths.size(),
+		"matched pattern nodes do not identify an indexed definition path"
+	);
+
+	const auto &elements = definition->indexedPaths[matchedPathIndex];
+	requireCompilerInvariant(elements.size() == nodesPassed.size(), "matched pattern path metadata has the wrong size");
+	for (size_t elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
+		const PatternElement &element = elements[elementIndex];
+		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+			continue;
+		onPatternParameterName(element.text, nodesPassed[elementIndex], element.startPos);
+	}
 }
 
 template <typename OnPatternBindingFn>
@@ -274,7 +283,7 @@ inline void forEachPatternCallBinding(Expression *expr, PatternDefinition *defin
 	size_t argIndex = 0;
 	forEachPatternParameterName(
 		expr->patternMatch->nodesPassed, definition,
-		[&](const std::string &parameterName, PatternTreeNode *) {
+		[&](const std::string &parameterName, PatternTreeNode *, size_t) {
 		if (argIndex < expr->arguments.size())
 			onPatternBinding(parameterName, expr->arguments[argIndex++]);
 	}

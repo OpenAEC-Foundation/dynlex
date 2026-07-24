@@ -153,7 +153,8 @@ static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts, bool allowUnmatchedVariables,
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr, const char *phase = "body",
 	PatternReference **activeReference = nullptr, PatternMatch **activeMatch = nullptr,
-	bool *activeReferenceNeedsRematch = nullptr, std::vector<Section *> *pendingPromotionCleanupSections = nullptr
+	bool *activeReferenceNeedsRematch = nullptr, bool *deferredActiveRematch = nullptr,
+	std::vector<Section *> *pendingPromotionCleanupSections = nullptr
 ) {
 	return std::erase_if(references, [&](PatternReference *reference) {
 		PatternMatch *match = context.match(reference);
@@ -218,8 +219,11 @@ static bool resolveReferences(
 			traceResolution(std::string(phase) + " resolved " + referenceTraceId(reference));
 			if (activeReferenceNeedsRematch && *activeReferenceNeedsRematch) {
 				requireCompilerInvariant(
-					defToRefs && pendingPromotionCleanupSections, "active pattern rematch requires resolution bookkeeping"
+					defToRefs && deferredActiveRematch && pendingPromotionCleanupSections,
+					"active pattern rematch requires resolution bookkeeping"
 				);
+				*deferredActiveRematch = true;
+				*activeReferenceNeedsRematch = false;
 				if (activeReference)
 					*activeReference = nullptr;
 				if (activeMatch)
@@ -498,11 +502,12 @@ bool resolvePatterns(ParseContext &context) {
 		activeResolvingReference = nullptr;
 		activeResolvingMatch = nullptr;
 		activeReferenceNeedsRematch = false;
+		bool deferredActiveRematch = false;
 		bool resolvedReference = resolveReferences(
 			context, bodyReferences, true, unResolvedSections.empty(), &definitionToReferences, "body",
-			&activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &pendingPromotionCleanupSections
+			&activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
+			&pendingPromotionCleanupSections
 		);
-		bool deferredActiveRematch = activeReferenceNeedsRematch;
 		activeResolvingReference = nullptr;
 		activeResolvingMatch = nullptr;
 		activeReferenceNeedsRematch = false;

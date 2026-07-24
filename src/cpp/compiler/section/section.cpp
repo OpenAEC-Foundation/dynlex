@@ -701,7 +701,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 				return true;
 			} else if (element.type == PatternElement::Type::Word) {
 				// Word captures match by name but stay as Word — the parameter
-				// is bound to a string literal at call time via parameterNames on the tree node
+				// is bound to a string literal at call time through its indexed path.
 				markFound();
 				return true;
 			}

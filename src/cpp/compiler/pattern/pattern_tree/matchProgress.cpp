@@ -15,8 +15,10 @@ static size_t firstDefinitionStartPos(const PatternTreeNode *node) {
 	if (!node)
 		return std::numeric_limits<size_t>::max();
 	size_t firstStartPos = std::numeric_limits<size_t>::max();
-	for (const auto &[ignoredDefinition, startPos] : node->definitionStartPositions)
-		firstStartPos = std::min(firstStartPos, startPos);
+	for (const auto &[ignoredDefinition, occurrences] : node->definitionOccurrences) {
+		for (const PatternDefinitionOccurrence &occurrence : occurrences)
+			firstStartPos = std::min(firstStartPos, occurrence.startPos);
+	}
 	return firstStartPos;
 }
 

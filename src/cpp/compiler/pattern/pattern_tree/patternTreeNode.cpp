@@ -41,17 +41,22 @@ static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &
 		else
 			parent->literalChildren[element.text] = child;
 	}
-	child->definitionStartPositions[definition] = element.startPos;
+	std::string parameterName;
 	if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
-		child->parameterNames[definition] = element.text;
+		parameterName = element.text;
+	child->definitionOccurrences[definition].push_back({element.startPos, std::move(parameterName)});
 	return child;
 }
 
-static PatternTreeNode *
+static std::vector<PatternTreeNode *>
 addElementPath(PatternTreeNode *current, const std::vector<PatternElement> &path, PatternDefinition *definition) {
-	for (const PatternElement &element : path)
+	std::vector<PatternTreeNode *> nodes;
+	nodes.reserve(path.size());
+	for (const PatternElement &element : path) {
 		current = addChild(current, element, definition);
-	return current;
+		nodes.push_back(current);
+	}
+	return nodes;
 }
 
 static std::vector<std::vector<PatternElement>>
@@ -258,7 +263,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 	requireCompilerInvariant(definition != nullptr, "pattern tree insertion requires a definition");
 	requireCompilerInvariant(
 		definition->indexedTree == nullptr && definition->indexedTreeType == SectionType::Count &&
-			definition->indexedPaths.empty() && definition->endNodes.empty(),
+			definition->indexedPaths.empty() && definition->indexedNodePaths.empty() && definition->endNodes.empty(),
 		"pattern tree insertion received an already-indexed definition"
 	);
 	definition->indexedPaths = snapshotCanonicalPatternPaths(definition->patternElements);
@@ -266,20 +271,22 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 	definition->indexedTreeType = treeType;
 	std::unordered_set<PatternTreeNode *> seenEndpoints;
 	for (const auto &path : definition->indexedPaths) {
-		PatternTreeNode *node = addElementPath(this, path, definition);
-		if (seenEndpoints.insert(node).second)
-			definition->endNodes.push_back(node);
+		std::vector<PatternTreeNode *> nodePath = addElementPath(this, path, definition);
+		PatternTreeNode *endpoint = nodePath.empty() ? this : nodePath.back();
+		definition->indexedNodePaths.push_back(std::move(nodePath));
+		if (seenEndpoints.insert(endpoint).second)
+			definition->endNodes.push_back(endpoint);
 		// Add this definition to the endpoint
-		if (std::find(node->matchingDefinitions.begin(), node->matchingDefinitions.end(), definition) ==
-			node->matchingDefinitions.end()) {
-			node->matchingDefinitions.push_back(definition);
+		if (std::find(endpoint->matchingDefinitions.begin(), endpoint->matchingDefinitions.end(), definition) ==
+			endpoint->matchingDefinitions.end()) {
+			endpoint->matchingDefinitions.push_back(definition);
 		}
 	}
 	requirePatternDefinitionIndexed(definition);
 }
 
 // Recursively remove a definition from the tree, walking the element path.
-// Only removes the definition from matchingDefinitions/parameterNames at the endpoint.
+// Only removes the definition from matchingDefinitions at the endpoint.
 // Does NOT detach empty nodes — keeping the trie structure intact ensures that
 // insertion during re-add finds the same nodes, preserving existing
 // PatternMatch::matchedEndNode pointers.
@@ -289,9 +296,7 @@ static PatternTreeNode *stepAndCleanChild(PatternTreeNode *current, const Patter
 	PatternTreeNode *child = findChild(current, elem);
 	if (!child)
 		return nullptr;
-	child->definitionStartPositions.erase(definition);
-	if (elem.type == PatternElement::Type::Variable || elem.type == PatternElement::Type::Word)
-		child->parameterNames.erase(definition);
+	child->definitionOccurrences.erase(definition);
 	return child;
 }
 
@@ -305,8 +310,7 @@ removeDefinitionPath(PatternTreeNode *current, const std::vector<PatternElement>
 	// Endpoint: remove this definition from matchingDefinitions
 	auto &defs = current->matchingDefinitions;
 	defs.erase(std::remove(defs.begin(), defs.end(), definition), defs.end());
-	current->parameterNames.erase(definition);
-	current->definitionStartPositions.erase(definition);
+	current->definitionOccurrences.erase(definition);
 }
 
 static void requireDefinitionAbsentFromPaths(
@@ -318,12 +322,8 @@ static void requireDefinitionAbsentFromPaths(
 			current = findChild(current, element);
 			requireCompilerInvariant(current != nullptr, "stored pattern path disappeared during removal");
 			requireCompilerInvariant(
-				!current->definitionStartPositions.contains(const_cast<PatternDefinition *>(definition)),
-				"obsolete pattern path retains definition position metadata"
-			);
-			requireCompilerInvariant(
-				!current->parameterNames.contains(const_cast<PatternDefinition *>(definition)),
-				"obsolete pattern path retains parameter metadata"
+				!current->definitionOccurrences.contains(const_cast<PatternDefinition *>(definition)),
+				"obsolete pattern path retains definition occurrence metadata"
 			);
 		}
 		requireCompilerInvariant(
@@ -345,6 +345,7 @@ void PatternTreeNode::removePatternDefinition(PatternDefinition *definition) {
 	definition->indexedTree = nullptr;
 	definition->indexedTreeType = SectionType::Count;
 	definition->indexedPaths.clear();
+	definition->indexedNodePaths.clear();
 	definition->endNodes.clear();
 }
 
@@ -358,26 +359,30 @@ void PatternTreeNode::requirePatternDefinitionIndexed(const PatternDefinition *d
 		pathsEqual(definition->indexedPaths, snapshotCanonicalPatternPaths(definition->patternElements)),
 		"indexed pattern paths do not match the definition's current canonical paths"
 	);
+	requireCompilerInvariant(
+		definition->indexedNodePaths.size() == definition->indexedPaths.size(),
+		"indexed pattern node paths do not match stored element paths"
+	);
 
 	std::vector<PatternTreeNode *> expectedEndpoints;
 	std::unordered_set<PatternTreeNode *> seenEndpoints;
-	for (const auto &path : definition->indexedPaths) {
+	std::unordered_map<PatternTreeNode *, std::vector<PatternDefinitionOccurrence>> expectedOccurrences;
+	for (size_t pathIndex = 0; pathIndex < definition->indexedPaths.size(); pathIndex++) {
+		const auto &path = definition->indexedPaths[pathIndex];
+		const auto &storedNodePath = definition->indexedNodePaths[pathIndex];
+		requireCompilerInvariant(storedNodePath.size() == path.size(), "indexed pattern node path has the wrong element count");
 		PatternTreeNode *current = const_cast<PatternTreeNode *>(this);
-		for (const PatternElement &element : path) {
+		for (size_t elementIndex = 0; elementIndex < path.size(); elementIndex++) {
+			const PatternElement &element = path[elementIndex];
 			current = findChild(current, element);
 			requireCompilerInvariant(current != nullptr, "indexed pattern snapshot has no trie path");
-			auto startPosition = current->definitionStartPositions.find(const_cast<PatternDefinition *>(definition));
 			requireCompilerInvariant(
-				startPosition != current->definitionStartPositions.end() && startPosition->second == element.startPos,
-				"indexed pattern position metadata does not match its definition"
+				storedNodePath[elementIndex] == current, "indexed pattern node path does not match its trie path"
 			);
-			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) {
-				auto parameterName = current->parameterNames.find(const_cast<PatternDefinition *>(definition));
-				requireCompilerInvariant(
-					parameterName != current->parameterNames.end() && parameterName->second == element.text,
-					"indexed pattern parameter metadata does not match its definition"
-				);
-			}
+			std::string parameterName;
+			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
+				parameterName = element.text;
+			expectedOccurrences[current].push_back({element.startPos, std::move(parameterName)});
 		}
 		requireCompilerInvariant(
 			std::find(current->matchingDefinitions.begin(), current->matchingDefinitions.end(), definition) !=
@@ -386,6 +391,13 @@ void PatternTreeNode::requirePatternDefinitionIndexed(const PatternDefinition *d
 		);
 		if (seenEndpoints.insert(current).second)
 			expectedEndpoints.push_back(current);
+	}
+	for (const auto &[node, occurrences] : expectedOccurrences) {
+		auto storedOccurrences = node->definitionOccurrences.find(const_cast<PatternDefinition *>(definition));
+		requireCompilerInvariant(
+			storedOccurrences != node->definitionOccurrences.end() && storedOccurrences->second == occurrences,
+			"indexed pattern occurrence metadata does not match its definition"
+		);
 	}
 	requireCompilerInvariant(expectedEndpoints == definition->endNodes, "indexed pattern endpoints do not match stored paths");
 }

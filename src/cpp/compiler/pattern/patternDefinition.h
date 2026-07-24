@@ -34,6 +34,7 @@ struct PatternDefinition {
 	PatternTreeNode *indexedTree{};
 	SectionType indexedTreeType = SectionType::Count;
 	std::vector<std::vector<PatternElement>> indexedPaths;
+	std::vector<std::vector<PatternTreeNode *>> indexedNodePaths;
 	// the exact trie endpoint nodes this definition currently ends at
 	std::vector<PatternTreeNode *> endNodes;
 	// precedence level (higher = evaluated first). 0 = no precedence declared.

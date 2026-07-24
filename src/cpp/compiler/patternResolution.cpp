@@ -630,12 +630,22 @@ static void eraseOwnedSectionVariable(Section *section, const std::string &name,
 	delete variable;
 }
 
-static Range definitionNodeRange(const PatternDefinition *definition, const PatternTreeNode *node) {
-	auto startIt = node->definitionStartPositions.find(const_cast<PatternDefinition *>(definition));
-	return Range(
-		definition->range.line, definition->range.start() + static_cast<int>(startIt->second),
-		definition->range.start() + static_cast<int>(startIt->second + node->text.length())
+static std::vector<Range> definitionNodeRanges(const PatternDefinition *definition, const PatternTreeNode *node) {
+	auto occurrenceIt = node->definitionOccurrences.find(const_cast<PatternDefinition *>(definition));
+	requireCompilerInvariant(
+		occurrenceIt != node->definitionOccurrences.end(), "matched pattern node has no definition occurrence"
 	);
+	std::vector<Range> ranges;
+	std::unordered_set<size_t> seenStartPositions;
+	for (const PatternDefinitionOccurrence &occurrence : occurrenceIt->second) {
+		if (!seenStartPositions.insert(occurrence.startPos).second)
+			continue;
+		ranges.emplace_back(
+			definition->range.line, definition->range.start() + static_cast<int>(occurrence.startPos),
+			definition->range.start() + static_cast<int>(occurrence.startPos + node->text.length())
+		);
+	}
+	return ranges;
 }
 
 static Range definitionElementRange(const PatternDefinition *definition, const DefinitionPatternElement &element) {
@@ -658,11 +668,12 @@ collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinitio
 		PatternTreeNode *node = acceptedLiteral.node;
 		if (node->type != PatternElement::Type::VariableLike)
 			continue;
-		Range range = definitionNodeRange(definition, node);
-		std::string key = range.toString();
-		if (!seen.insert(key).second)
-			continue;
-		result.push_back({node->text, range});
+		for (Range range : definitionNodeRanges(definition, node)) {
+			std::string key = range.toString();
+			if (!seen.insert(key).second)
+				continue;
+			result.push_back({node->text, range});
+		}
 	}
 	return result;
 }

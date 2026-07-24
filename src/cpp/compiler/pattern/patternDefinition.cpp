@@ -33,7 +33,8 @@ void mutatePatternDefinition(ParseContext &context, PatternDefinition &definitio
 	requireCompilerInvariant(static_cast<bool>(mutation), "pattern definition mutation requires an operation");
 	if (!definition.indexedTree) {
 		requireCompilerInvariant(
-			definition.indexedTreeType == SectionType::Count && definition.indexedPaths.empty() && definition.endNodes.empty(),
+			definition.indexedTreeType == SectionType::Count && definition.indexedPaths.empty() &&
+				definition.indexedNodePaths.empty() && definition.endNodes.empty(),
 			"unindexed pattern definition retains trie metadata"
 		);
 		mutation();

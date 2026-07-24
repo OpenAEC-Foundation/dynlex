@@ -4,6 +4,13 @@
 #include <unordered_map>
 
 struct PatternDefinition;
+struct PatternDefinitionOccurrence {
+	size_t startPos;
+	std::string parameterName;
+
+	bool operator==(const PatternDefinitionOccurrence &) const = default;
+};
+
 struct PatternTreeNode : public PatternElement {
 	// the pattern definitions that end at this node (multiple when overloaded via type constraints)
 	std::vector<PatternDefinition *> matchingDefinitions;
@@ -13,11 +20,10 @@ struct PatternTreeNode : public PatternElement {
 	PatternTreeNode *argumentChild{};
 	// this child node captures a single word as a string literal ({word:name} syntax)
 	PatternTreeNode *wordChild{};
-	// for argument/word nodes: maps pattern definition to parameter name
-	// (multiple definitions can share the same argument node with different parameter names)
-	std::unordered_map<PatternDefinition *, std::string> parameterNames{};
-	// maps a definition to the pattern-token start offset represented by this node for that definition
-	std::unordered_map<PatternDefinition *, size_t> definitionStartPositions{};
+	// Every canonical-path occurrence that reaches this node. A definition can
+	// reach the same trie node more than once through converging choice
+	// alternatives, so source metadata is necessarily one-to-many.
+	std::unordered_map<PatternDefinition *, std::vector<PatternDefinitionOccurrence>> definitionOccurrences{};
 	using PatternElement::PatternElement;
 	// Add a definition to the tree and record the endpoint nodes on the definition itself.
 	void addPatternDefinition(PatternDefinition *definition, SectionType treeType);

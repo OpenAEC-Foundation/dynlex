@@ -540,10 +540,12 @@ static int countMatchedParameters(Expression *expression, PatternDefinition *def
 	if (!expression || !definition || !expression->patternMatch)
 		return 0;
 	int count = 0;
-	for (PatternTreeNode *node : expression->patternMatch->nodesPassed) {
-		if (node && node->parameterNames.contains(definition))
-			count++;
+	forEachPatternParameterName(
+		expression->patternMatch->nodesPassed, definition,
+		[&](const std::string &, PatternTreeNode *, size_t) {
+		count++;
 	}
+	);
 	return count;
 }
 

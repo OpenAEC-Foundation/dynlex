@@ -394,17 +394,20 @@ static bool definitionParameterAcceptsVoid(
 		return false;
 	size_t currentArgumentIndex = 0;
 	bool acceptsVoid = false;
-	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &, PatternTreeNode *node) {
+	forEachPatternParameterName(
+		nodesPassed, definition,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		if (acceptsVoid || currentArgumentIndex != argumentIndex) {
 			currentArgumentIndex++;
 			return;
 		}
-		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, node);
+		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(element != nullptr, "matched pattern parameter has no definition element");
 		acceptsVoid = element->resolvedTypeConstraint.isResolved() &&
 					  element->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
 		currentArgumentIndex++;
-	});
+	}
+	);
 	return acceptsVoid;
 }
 

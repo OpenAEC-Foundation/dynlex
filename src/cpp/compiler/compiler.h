@@ -66,7 +66,8 @@ PatternDefinition *selectOverload(
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
 	const std::vector<bool> & /*argCompileTimeKnown*/
 );
-const DefinitionPatternElement *matchedPatternParameterElement(PatternDefinition *definition, PatternTreeNode *matchedNode);
+const DefinitionPatternElement *
+matchedPatternParameterElement(PatternDefinition *definition, std::string_view parameterName, size_t startPos);
 bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType);
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
