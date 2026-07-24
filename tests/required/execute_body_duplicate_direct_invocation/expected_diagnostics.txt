@@ -1,0 +1,4 @@
+tests/required/execute_body_duplicate_direct_invocation/main.dl:9-35: Error: execute body can only run once per section flex call
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' with arguments [i8*] -> undeduced tests/required/execute_body_duplicate_direct_invocation/main.dl:9-35
+  note: while inferring call 'execute body directly twice' -> undeduced tests/required/execute_body_duplicate_direct_invocation/main.dl:9-36
+  note: while inferring call 'exercise direct duplicate' -> undeduced tests/required/execute_body_duplicate_direct_invocation/main.dl:1-26

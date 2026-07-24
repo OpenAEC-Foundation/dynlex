@@ -15,16 +15,33 @@ static bool inferSectionFlexCallerBodyFrame(
 		targetFrame.definitionSection && targetFrame.definitionBody && targetFrame.bodySection,
 		"section flex body inference frame is incomplete"
 	);
-	if (targetFrame.bodyInferred && targetFrame.executeBodyCallSite != executeBodyCallSite) {
+	std::vector<Expression *> invocationPath = context.activeFlexCallStack;
+	invocationPath.push_back(executeBodyCallSite);
+	ExpressionInvocationIdentity transferIdentity = expressionInvocationIdentity(invocationPath);
+	if (targetFrame.bodyInferred) {
+		requireCompilerInvariant(
+			targetFrame.bodyTransferIdentity.has_value(), "inferred section flex body has no transfer identity"
+		);
+	}
+	if (targetFrame.bodyInferred && *targetFrame.bodyTransferIdentity != transferIdentity) {
+		size_t differingComponent = 0;
+		const std::vector<const Expression *> &previousPath = targetFrame.bodyTransferIdentity->path;
+		while (differingComponent < previousPath.size() && differingComponent < transferIdentity.path.size() &&
+			   previousPath[differingComponent] == transferIdentity.path[differingComponent]) {
+			differingComponent++;
+		}
+		Expression *diagnosticExpression =
+			differingComponent < invocationPath.size() ? invocationPath[differingComponent] : executeBodyCallSite;
 		context.fail(Diagnostic(
 			context.parseContext, Diagnostic::Level::Error, "execute body can only run once per section flex call",
-			executeBodyCallSite ? executeBodyCallSite->range : Range()
+			diagnosticExpression ? diagnosticExpression->range : Range()
 		));
 		return false;
 	}
 
 	targetFrame.bodyInferred = true;
 	targetFrame.executeBodyCallSite = executeBodyCallSite;
+	targetFrame.bodyTransferIdentity = std::move(transferIdentity);
 	Section *definitionSection = targetFrame.definitionSection;
 	Section *bodySection = targetFrame.bodySection;
 	InstantiatedSectionBody *instantiatedBody = targetFrame.instantiatedBody;
@@ -73,10 +90,8 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 		));
 		return false;
 	}
-	Expression *executeBodyCallSite =
-		context.activeFlexCallStack.empty() ? executeBodyExpression : context.activeFlexCallStack.back();
 	size_t targetFrameIndex = static_cast<size_t>(targetFrame - context.sectionFlexBodyFrames.data());
-	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyCallSite, context);
+	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyExpression, context);
 }
 
 // Infer the type of an expression bottom-up.

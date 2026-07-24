@@ -1,3 +1,5 @@
+#include "expression_invocation_identity.h"
+
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged) {
 	if (!current.isDeduced() || !next.isDeduced())
 		return false;
@@ -41,6 +43,7 @@ struct InferenceContext {
 		InstantiatedSectionBody *instantiatedBody{};
 		BindingFrameStack callerBindings;
 		Expression *executeBodyCallSite{};
+		std::optional<ExpressionInvocationIdentity> bodyTransferIdentity;
 		bool bodyInferred = false;
 		bool bodyFallsThrough = true;
 	};

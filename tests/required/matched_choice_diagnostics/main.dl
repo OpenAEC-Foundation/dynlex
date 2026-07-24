@@ -1,0 +1,5 @@
+function [foo alpha|foo beta]:
+    replacement:
+        1
+
+@intrinsic("discard", 1 alpha)

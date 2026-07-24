@@ -1,0 +1,17 @@
+import std.dl
+
+function [foo|foo]:
+    replacement:
+        1
+
+function [take {word:left} alpha|take {word:right} beta]:
+    execute:
+        return 1
+
+function [recur|recur] argument marker:
+    replacement:
+        argument
+        recur marker marker
+
+print (take one alpha) as line
+print (take two beta) as line

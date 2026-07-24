@@ -325,10 +325,7 @@ promotePatternNameInSectionChain(ParseContext &context, Section *section, const 
 				}
 				if (!canPromoteVariableLikeElement(element))
 					return false;
-				element.promotedFromVariableLike = true;
-				if (!element.firstImplicitPromotionUseRange.line)
-					element.firstImplicitPromotionUseRange = useRange;
-				element.type = PatternElement::Type::Variable;
+				promoteImplicitPatternParameter(context, *definition, element, useRange);
 				foundInCurrent = true;
 				return true;
 			});
@@ -633,12 +630,29 @@ static void eraseOwnedSectionVariable(Section *section, const std::string &name,
 	delete variable;
 }
 
-static Range definitionNodeRange(const PatternDefinition *definition, const PatternTreeNode *node) {
-	auto startIt = node->definitionStartPositions.find(const_cast<PatternDefinition *>(definition));
-	return Range(
-		definition->range.line, definition->range.start() + static_cast<int>(startIt->second),
-		definition->range.start() + static_cast<int>(startIt->second + node->text.length())
-	);
+static std::vector<Range> definitionNodeRanges(
+	const PatternDefinition *definition, const PatternTreeNode *node, const std::vector<PatternTreeNode *> &matchedNodePath
+) {
+	std::vector<Range> ranges;
+	std::unordered_set<size_t> seenStartPositions;
+	for (size_t pathIndex : matchingPatternPathIndices(matchedNodePath, definition)) {
+		const auto &nodes = definition->indexedNodePaths[pathIndex];
+		const auto &elements = definition->indexedPaths[pathIndex];
+		for (size_t elementIndex = 0; elementIndex < nodes.size(); elementIndex++) {
+			if (nodes[elementIndex] != node)
+				continue;
+			size_t startPos = elements[elementIndex].startPos;
+			if (!seenStartPositions.insert(startPos).second)
+				break;
+			ranges.emplace_back(
+				definition->range.line, definition->range.start() + static_cast<int>(startPos),
+				definition->range.start() + static_cast<int>(startPos + node->text.length())
+			);
+			break;
+		}
+	}
+	requireCompilerInvariant(!ranges.empty(), "matched pattern node has no occurrence on its selected path");
+	return ranges;
 }
 
 static Range definitionElementRange(const PatternDefinition *definition, const DefinitionPatternElement &element) {
@@ -661,11 +675,12 @@ collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinitio
 		PatternTreeNode *node = acceptedLiteral.node;
 		if (node->type != PatternElement::Type::VariableLike)
 			continue;
-		Range range = definitionNodeRange(definition, node);
-		std::string key = range.toString();
-		if (!seen.insert(key).second)
-			continue;
-		result.push_back({node->text, range});
+		for (Range range : definitionNodeRanges(definition, node, match.nodesPassed)) {
+			std::string key = range.toString();
+			if (!seen.insert(key).second)
+				continue;
+			result.push_back({node->text, range});
+		}
 	}
 	return result;
 }
