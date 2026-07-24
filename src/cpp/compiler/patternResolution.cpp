@@ -630,21 +630,28 @@ static void eraseOwnedSectionVariable(Section *section, const std::string &name,
 	delete variable;
 }
 
-static std::vector<Range> definitionNodeRanges(const PatternDefinition *definition, const PatternTreeNode *node) {
-	auto occurrenceIt = node->definitionOccurrences.find(const_cast<PatternDefinition *>(definition));
-	requireCompilerInvariant(
-		occurrenceIt != node->definitionOccurrences.end(), "matched pattern node has no definition occurrence"
-	);
+static std::vector<Range> definitionNodeRanges(
+	const PatternDefinition *definition, const PatternTreeNode *node, const std::vector<PatternTreeNode *> &matchedNodePath
+) {
 	std::vector<Range> ranges;
 	std::unordered_set<size_t> seenStartPositions;
-	for (const PatternDefinitionOccurrence &occurrence : occurrenceIt->second) {
-		if (!seenStartPositions.insert(occurrence.startPos).second)
-			continue;
-		ranges.emplace_back(
-			definition->range.line, definition->range.start() + static_cast<int>(occurrence.startPos),
-			definition->range.start() + static_cast<int>(occurrence.startPos + node->text.length())
-		);
+	for (size_t pathIndex : matchingPatternPathIndices(matchedNodePath, definition)) {
+		const auto &nodes = definition->indexedNodePaths[pathIndex];
+		const auto &elements = definition->indexedPaths[pathIndex];
+		for (size_t elementIndex = 0; elementIndex < nodes.size(); elementIndex++) {
+			if (nodes[elementIndex] != node)
+				continue;
+			size_t startPos = elements[elementIndex].startPos;
+			if (!seenStartPositions.insert(startPos).second)
+				break;
+			ranges.emplace_back(
+				definition->range.line, definition->range.start() + static_cast<int>(startPos),
+				definition->range.start() + static_cast<int>(startPos + node->text.length())
+			);
+			break;
+		}
 	}
+	requireCompilerInvariant(!ranges.empty(), "matched pattern node has no occurrence on its selected path");
 	return ranges;
 }
 
@@ -668,7 +675,7 @@ collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinitio
 		PatternTreeNode *node = acceptedLiteral.node;
 		if (node->type != PatternElement::Type::VariableLike)
 			continue;
-		for (Range range : definitionNodeRanges(definition, node)) {
+		for (Range range : definitionNodeRanges(definition, node, match.nodesPassed)) {
 			std::string key = range.toString();
 			if (!seen.insert(key).second)
 				continue;

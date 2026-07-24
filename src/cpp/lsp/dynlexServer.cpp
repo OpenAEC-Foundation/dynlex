@@ -982,16 +982,16 @@ static std::vector<DataType> argumentTypesForDefinition(const Expression *expr, 
 		return argTypes;
 
 	std::vector<Expression *> sortedArgs = sortArgumentsByPosition(expr->arguments);
+	(void)matchingPatternPathIndices(expr->patternMatch->nodesPassed, definition);
 	size_t argIndex = 0;
-	forEachPatternParameterName(
-		expr->patternMatch->nodesPassed, definition,
-		[&](const std::string &, PatternTreeNode *, size_t) {
+	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
+		if (node->type != PatternElement::Type::Variable && node->type != PatternElement::Type::Word)
+			continue;
 		if (argIndex >= sortedArgs.size())
-			return;
+			break;
 		Expression *argExpr = sortedArgs[argIndex++];
 		argTypes.push_back(argExpr ? argExpr->type : DataType{});
 	}
-	);
 	return argTypes;
 }
 
