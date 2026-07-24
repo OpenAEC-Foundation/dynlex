@@ -526,6 +526,13 @@ local function validate json rpc json node {a pointer to json value:value} at de
                 set cursor to cursor + 1
         return a successful json rpc operation
 
+function validate json rpc json value {a pointer to json value:node}:
+    execute:
+        set seen to an empty list of a pointer to json value
+        set validation to validate json rpc json node node at depth 0 seen in seen
+        free list seen
+        return validation
+
 local function validate json rpc error object {a pointer to json value:error_value}:
     execute:
         if not error_value is a json object:
@@ -542,11 +549,9 @@ local function validate json rpc error object {a pointer to json value:error_val
             return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error message must be text"
         return a successful json rpc operation
 
-function validate outbound json rpc message {a pointer to json value:envelope_node}:
+function validate json rpc message {a pointer to json value:envelope_node}:
     execute:
-        set seen to an empty list of a pointer to json value
-        set json_validation to validate json rpc json node envelope_node at depth 0 seen in seen
-        free list seen
+        set json_validation to validate json rpc json value envelope_node
         if not json_validation's succeeded:
             return json_validation
         if not envelope_node is a json object:
@@ -571,8 +576,9 @@ function validate outbound json rpc message {a pointer to json value:envelope_no
                 return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC method names beginning with rpc. are reserved"
             if envelope_node has json member named "params":
                 set parameters to json member named "params" in envelope_node
-                if (not parameters is a json object) and (not parameters is a json array):
-                    return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC params must be an object or array"
+                set parameters_are_structured to parameters is a json object or parameters is a json array
+                if (not parameters_are_structured) and (not parameters is json null):
+                    return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC params must be an object, array, or null"
             if envelope_node has json member named "id":
                 if not json rpc identifier json member named "id" in envelope_node is valid:
                     return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC request ID must be an integer, string, or null"
@@ -586,6 +592,10 @@ function validate outbound json rpc message {a pointer to json value:envelope_no
         if has_error:
             return validate json rpc error object json member named "error" in envelope_node
         return a successful json rpc operation
+
+function validate outbound json rpc message {a pointer to json value:envelope_node}:
+    execute:
+        return validate json rpc message envelope_node
 
 function free json rpc receive result {json rpc receive result:outcome}:
     execute:
