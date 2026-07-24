@@ -1,0 +1,114 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function [a|] boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+function true:
+    replacement:
+        @intrinsic("cast", 1, a boolean)
+
+function false:
+    replacement:
+        @intrinsic("cast", 0, a boolean)
+
+function [a|] pointer to pointedtype:
+    replacement:
+        @intrinsic("add pointer depth", pointedtype)
+
+function value as destinationtype:
+    replacement:
+        @intrinsic("cast", value, destinationtype)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class:
+    patterns:
+        [a|] cell
+    members:
+        value
+
+class:
+    patterns:
+        [an|a|] owner
+    members:
+        cell as a pointer to cell
+
+class:
+    patterns:
+        [an|a|] outcome
+    members:
+        owner as a pointer to owner
+
+class:
+    patterns:
+        [an|a|] envelope
+    members:
+        outcome
+
+function a concrete outcome containing {a pointer to owner:owned_pointer}:
+    replacement:
+        @intrinsic("construct", an outcome, owned_pointer)
+
+function an empty outcome:
+    replacement:
+        @intrinsic("construct", an outcome, 0 as a pointer to owner)
+
+function a concrete envelope containing {a pointer to owner:owned_pointer}:
+    replacement:
+        @intrinsic("construct", an envelope, a concrete outcome containing owned_pointer)
+
+function an empty envelope:
+    replacement:
+        @intrinsic("construct", an envelope, an empty outcome)
+
+function choose outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    execute:
+        if condition:
+            return a concrete outcome containing owned_pointer
+        return an empty outcome
+
+function choose reversed outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    execute:
+        if condition:
+            return an empty outcome
+        return a concrete outcome containing owned_pointer
+
+function select outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    replacement:
+        @intrinsic("select", condition, a concrete outcome containing owned_pointer, an empty outcome)
+
+function select reversed outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    replacement:
+        @intrinsic("select", condition, an empty outcome, a concrete outcome containing owned_pointer)
+
+function choose envelope for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    execute:
+        if condition:
+            return an empty envelope
+        return a concrete envelope containing owned_pointer
+
+function select outcome array for {a pointer to owner:owned_pointer} when {boolean:condition}:
+    replacement:
+        @intrinsic("select", condition, [an empty outcome], [a concrete outcome containing owned_pointer])
+
+@intrinsic("store", cell_value, @intrinsic("construct", a cell, 41))
+@intrinsic("store", cell_pointer, @intrinsic("address of", cell_value))
+@intrinsic("store", owner_value, @intrinsic("construct", an owner, cell_pointer))
+@intrinsic("store", owner_pointer, @intrinsic("address of", owner_value))
+@intrinsic("discard", choose outcome for owner_pointer when true)
+@intrinsic("discard", choose outcome for owner_pointer when false)
+@intrinsic("discard", choose reversed outcome for owner_pointer when true)
+@intrinsic("discard", choose reversed outcome for owner_pointer when false)
+@intrinsic("discard", select outcome for owner_pointer when true)
+@intrinsic("discard", select outcome for owner_pointer when false)
+@intrinsic("discard", select reversed outcome for owner_pointer when true)
+@intrinsic("discard", select reversed outcome for owner_pointer when false)
+@intrinsic("discard", choose envelope for owner_pointer when true)
+@intrinsic("discard", choose envelope for owner_pointer when false)
+@intrinsic("discard", select outcome array for owner_pointer when true)
+@intrinsic("discard", select outcome array for owner_pointer when false)
