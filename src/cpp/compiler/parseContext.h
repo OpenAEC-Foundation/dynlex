@@ -9,6 +9,7 @@
 #include "section.h"
 #include "syntaxConfig.h"
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <list>
 #include <map>
@@ -58,6 +59,11 @@ struct ParseContext {
 	};
 
 	enum class ShaderStage { Fragment, Vertex };
+
+	// Installed only while pattern resolution owns the reference queues and
+	// definition-to-reference index. Indexed pattern elements may be changed
+	// only through this transaction.
+	std::function<void(PatternDefinition &, const std::function<void()> &)> indexedPatternDefinitionMutation;
 	// Highest compilation phase that completed successfully.
 	// Guarantees by stage:
 	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.

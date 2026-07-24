@@ -325,10 +325,7 @@ promotePatternNameInSectionChain(ParseContext &context, Section *section, const 
 				}
 				if (!canPromoteVariableLikeElement(element))
 					return false;
-				element.promotedFromVariableLike = true;
-				if (!element.firstImplicitPromotionUseRange.line)
-					element.firstImplicitPromotionUseRange = useRange;
-				element.type = PatternElement::Type::Variable;
+				promoteImplicitPatternParameter(context, *definition, element, useRange);
 				foundInCurrent = true;
 				return true;
 			});

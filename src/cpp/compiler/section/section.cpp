@@ -695,10 +695,7 @@ void Section::searchParentPatterns(ParseContext &context, VariableReference *ref
 				if (element.type != PatternElement::Type::Variable) {
 					if (!canPromoteVariableLikeElement(element))
 						return false;
-					element.promotedFromVariableLike = true;
-					if (!element.firstImplicitPromotionUseRange.line)
-						element.firstImplicitPromotionUseRange = reference->range;
-					element.type = PatternElement::Type::Variable;
+					promoteImplicitPatternParameter(context, *definition, element, reference->range);
 				}
 				markFound();
 				return true;

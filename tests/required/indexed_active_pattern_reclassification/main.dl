@@ -1,0 +1,4 @@
+function recur argument marker:
+    replacement:
+        argument
+        recur marker marker
