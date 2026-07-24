@@ -302,17 +302,24 @@ endif()
 if(NOT EMSCRIPTEN)
     set(DYNLEX_RUNTIME_SOURCES
         src/runtime/filesystemRuntime.c
+        src/runtime/hostRuntime.c
+        src/runtime/pathRuntime.c
+        src/runtime/pathUriRuntime.c
         src/runtime/processRuntime.c
         src/runtime/runtimeError.c
+        src/runtime/runtimeText.c
     )
     if(WIN32)
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimeWindows.c
+            src/runtime/hostRuntimeWindows.c
+            src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
         )
     else()
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimePosix.c
+            src/runtime/hostRuntimePosix.c
             src/runtime/processRuntimePosix.c
         )
     endif()

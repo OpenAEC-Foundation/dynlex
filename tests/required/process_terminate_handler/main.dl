@@ -1,4 +1,5 @@
 import lib/process.dl
+import lib/text.dl
 
 function [the|] terminate handler test interpreter:
     execute:
@@ -10,7 +11,17 @@ add "-c" as an argument to command
 add "import os,signal,sys,time\nif os.name != 'nt': signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\nprint('ready')\ntime.sleep(30)" as an argument to command
 set child to launch command
 
-set ready to read the standard output of child
+set ready_contents to the string form of ""
+set ready_succeeded to true
+set ready_complete to false
+set ready_stream_ended to false
+loop while ready_succeeded and ((not ready_complete) and (not ready_stream_ended)):
+    set ready_chunk to read the standard output of child
+    set ready_succeeded to ready_chunk's succeeded
+    if ready_succeeded:
+        set ready_contents to ready_contents + ready_chunk's contents
+        set ready_complete to ready_contents ends with "\n"
+        set ready_stream_ended to ready_chunk's end of stream
 set termination to terminate child
 set status to wait for child
 set expected_exit_code to 0 as a 64 bit integer
@@ -18,8 +29,8 @@ if the process platform is windows:
     set expected_exit_code to 1 as a 64 bit integer
 
 print child's launched as line
-print ready's succeeded as line
-print (ready's contents = "ready\n") as line
+print (ready_succeeded and ready_complete) as line
+print (ready_contents = "ready\n") as line
 print termination's succeeded as line
 print status's succeeded as line
 print status's finished as line
