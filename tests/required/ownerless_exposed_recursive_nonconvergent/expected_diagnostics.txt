@@ -1,0 +1,1 @@
+tests/required/ownerless_exposed_recursive_nonconvergent/main.dl:18-43: Error: Recursive type inference did not converge for function 'recursive {integer:value}'

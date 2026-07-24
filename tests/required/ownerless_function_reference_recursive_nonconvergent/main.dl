@@ -1,0 +1,9 @@
+import lib/std.dl
+
+function recursive reference {integer:value}:
+	execute:
+		if value > 0:
+			return recursive reference (value - 1)
+		return recursive reference value
+
+set recursive_function to the function named "recursive reference $"

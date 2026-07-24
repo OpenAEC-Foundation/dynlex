@@ -77,6 +77,7 @@ static bool inferExpression(
 		));
 	};
 	auto tryInfer = [&](bool collectGroupingAmbiguity = true) -> bool {
+		ScopedRecursiveInferenceObservation expressionObservation(context, context.currentInstantiation);
 		context.clearTypeFailure();
 		auto *savedFixedGroupingRoots = context.fixedGroupingRoots;
 		auto *savedResolvedGroupingRoots = context.resolvedGroupingRoots;
@@ -91,7 +92,7 @@ static bool inferExpression(
 		context.resolvedGroupingRoots = savedResolvedGroupingRoots;
 		context.detectGroupingAmbiguity = savedDetectGroupingAmbiguityDuringInfer;
 		if (context.typesValid && requireVoidResult) {
-			if (standaloneExpressionHasNonVoidResult(expr, context)) {
+			if (standaloneExpressionHasNonVoidResult(expr, context, expressionObservation.ownerObserved())) {
 				context.fail(
 					buildFailureDetailDiagnostic(
 						originalDiagnostic.range, "Standalone expression '" + std::string(expr->range.subString) +
