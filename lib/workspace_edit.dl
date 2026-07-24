@@ -1,0 +1,5 @@
+# Generic WorkspaceEdit parsing, planning, validation, and ordered application.
+
+import lib/workspace_edit_parse.dl
+import lib/workspace_edit_uri.dl
+import lib/workspace_edit_text.dl

@@ -1,0 +1,151 @@
+# File URI normalization and native workspace boundary validation.
+
+import lib/workspace_edit_types.dl
+import lib/path.dl
+import lib/filesystem.dl
+import lib/host.dl
+import lib/text.dl
+
+local function a failed workspace URI reporting {string:reason}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace URI result,
+            false,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            false,
+            reason
+        )
+
+local function a successful workspace URI with {string:normalized_path}, identity {string:normalized_identity}, relative path {string:relative}, and directory hint {boolean:directory_hint}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace URI result,
+            true,
+            normalized_path,
+            normalized_identity,
+            relative,
+            directory_hint,
+            an empty workspace edit text
+        )
+
+local function workspace URI {string:input} has a directory hint:
+    execute:
+        return the length of input > 0 and character (the length of input - 1) of input = 47
+
+local function workspace identity for {string:normalized_path} using {path style:style}:
+    execute:
+        if the value of style = the value of the Windows path style:
+            return the lowercase form of normalized_path
+        return normalized_path
+
+function normalize workspace file URI {string:input} using {path style:style}:
+    execute:
+        set decoded to the path from file URI input using style
+        if not decoded's succeeded:
+            return a failed workspace URI reporting decoded's error message
+        if not decoded's supported:
+            return a failed workspace URI reporting the string form of "File URI conversion is unsupported"
+        set normalized to lexically normalize decoded's value using style
+        if not normalized's succeeded:
+            return a failed workspace URI reporting normalized's error message
+        set absolute_check to whether path normalized's value is absolute using style
+        if not absolute_check's succeeded:
+            return a failed workspace URI reporting absolute_check's error message
+        if not absolute_check's value:
+            return a failed workspace URI reporting the string form of "File URI path must be absolute"
+        set identity to workspace identity for normalized's value using style
+        return a successful workspace URI with normalized's value, identity identity, relative path an empty workspace edit text, and directory hint (workspace URI input has a directory hint)
+
+function normalize workspace file URI {cstring:input} using {path style:style}:
+    execute:
+        return normalize workspace file URI the string form of input using style
+
+local function workspace relative path {string:relative} escapes its root:
+    execute:
+        if relative = "..":
+            return true
+        if relative starts with "../":
+            return true
+        if the length of relative >= 3 and character 0 of relative = 46 and character 1 of relative = 46 and character 2 of relative = 92:
+            return true
+        return false
+
+local function workspace path with forward separators {string:input}:
+    execute:
+        set output to a new string buffer with length the length of input
+        set character_index to 0
+        loop while character_index < the length of input:
+            set value to character character_index of input
+            if value = 92:
+                set value to 47
+            store value into the data of output at character_index
+            set character_index to character_index + 1
+        return output
+
+local function workspace path {string:absolute_path} traverses a symbolic link from {string:root} using {path style:style}:
+    execute:
+        set relative_result to make path absolute_path relative to base root using style
+        if not relative_result's succeeded:
+            return true
+        set relative to relative_result's value
+        if relative = ".":
+            set root_status to inspect filesystem entry at root
+            return (not root_status's succeeded) or root_status's symbolic_link
+        set normalized_separators to workspace path with forward separators relative
+        set current to root
+        set piece_start to 0
+        set unsafe to false
+        loop while piece_start < the length of normalized_separators and not unsafe:
+            set piece_end to piece_start
+            loop while piece_end < the length of normalized_separators and character piece_end of normalized_separators != 47:
+                set piece_end to piece_end + 1
+            set piece_length to piece_end - piece_start
+            if piece_length > 0:
+                set piece to the substring of normalized_separators from piece_start with length piece_length
+            else:
+                set piece to an empty workspace edit text
+            if piece_length > 0 and piece != ".":
+                set joined to join current with piece using style
+                if not joined's succeeded:
+                    set unsafe to true
+                else:
+                    set current to joined's value
+                    set entry_status to inspect filesystem entry at current
+                    if not entry_status's succeeded:
+                        set unsafe to true
+                    else if entry_status's found and entry_status's symbolic_link:
+                        set unsafe to true
+            set piece_start to piece_end + 1
+        return unsafe
+
+function normalize workspace file URI {string:input} inside native root {string:root}:
+    execute:
+        set native_style_result to the native path style
+        if not native_style_result's succeeded or not native_style_result's supported:
+            return a failed workspace URI reporting the string form of "Native path style is unsupported"
+        set style to native_style_result's value
+        set normalized_root_result to lexically normalize root using style
+        if not normalized_root_result's succeeded:
+            return a failed workspace URI reporting normalized_root_result's error message
+        set root_absolute to whether path normalized_root_result's value is absolute using style
+        if not root_absolute's succeeded or not root_absolute's value:
+            return a failed workspace URI reporting the string form of "Workspace root must be absolute"
+        set normalized to normalize workspace file URI input using style
+        if not normalized's succeeded:
+            return normalized
+        set relative_result to make path normalized's path relative to base normalized_root_result's value using style
+        if not relative_result's succeeded:
+            return a failed workspace URI reporting relative_result's error message
+        if workspace relative path relative_result's value escapes its root:
+            return a failed workspace URI reporting the string form of "File URI is outside the workspace"
+        if workspace path normalized's path traverses a symbolic link from normalized_root_result's value using style:
+            return a failed workspace URI reporting the string form of "Workspace edit paths may not traverse symbolic links"
+        return a successful workspace URI with normalized's path, identity normalized's identity, relative path relative_result's value, and directory hint normalized's directory_hint
+
+function normalize workspace file URI {cstring:input} inside native root {string:root}:
+    execute:
+        return normalize workspace file URI the string form of input inside native root root

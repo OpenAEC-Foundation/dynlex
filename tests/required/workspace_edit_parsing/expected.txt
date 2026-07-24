@@ -1,0 +1,12 @@
+1
+1
+1
+1
+4
+1
+file:///workspace/alpha.txt
+file:///workspace/beta.txt
+0
+1
+0
+Snippet edits are unsupported
