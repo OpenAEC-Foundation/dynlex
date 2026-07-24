@@ -243,26 +243,6 @@ static bool resolveReferences(
 			if (!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName))
 				return false;
 			// Single-word reference that didn't match any pattern — must be a variable.
-			// This confirms that the word is used as a parameter in the body, so promote
-			// any matching VariableLike elements in ancestor definitions from ambiguous (VL)
-			// to confirmed parameter (Variable). Without this, the ancestor definition stays
-			// unresolved because VL counts never reach 0 — the decrement checks for VL type
-			// but we've already reclassified the element as Variable.
-			Section *sec = reference->range().section();
-			while (sec) {
-				for (PatternDefinition *def : sec->patternDefinitions) {
-					visitPatternNameWithFoundState(def->patternElements, varName, false, [&](DefinitionPatternElement &elem) {
-						if (elem.type != PatternElement::Type::VariableLike || !canPromoteVariableLikeElement(elem))
-							return false;
-						if (elem.text == varName) {
-							promoteImplicitPatternParameter(context, *def, elem, reference->range());
-							return true;
-						}
-						return false;
-					});
-				}
-				sec = sec->parent;
-			}
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
 			reference->range().section()->addVariableReference(
@@ -290,8 +270,10 @@ bool resolvePatterns(ParseContext &context) {
 	bool hadPatternParseError = false;
 	for (Section *unResolvedSection : unResolvedSections) {
 		for (PatternDefinition *unresolvedDefinition : unResolvedSection->patternDefinitions) {
-			if (unresolvedDefinition->hasPrebuiltPatternElements)
+			if (unresolvedDefinition->hasPrebuiltPatternElements) {
+				unResolvedSection->indexExplicitParameters(*unresolvedDefinition);
 				continue;
+			}
 			std::vector<DefinitionPatternElement> parsedElements;
 			if (!parsePatternElements(
 					context, unresolvedDefinition->range, unresolvedDefinition->range.subString, parsedElements
@@ -300,6 +282,7 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			}
 			unresolvedDefinition->patternElements = std::move(parsedElements);
+			unResolvedSection->indexExplicitParameters(*unresolvedDefinition);
 		}
 	}
 	if (hadPatternParseError)
@@ -462,7 +445,7 @@ bool resolvePatterns(ParseContext &context) {
 					definition->resolved = true;
 					bool resolveImmediately = hasSingleWordPatternSpelling(definition->patternElements);
 					forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-						if (!resolveImmediately && canPromoteVariableLikeElement(element)) {
+						if (!resolveImmediately && section->canPromoteImplicitParameter(*definition, element)) {
 							if (definition->patternElements.size() > 1) {
 								if (section->variableLikeCounts[element.text] != 0) {
 									definition->resolved = false;

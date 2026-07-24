@@ -2,6 +2,7 @@
 #include "addressProvenance.h"
 #include "codeLine.h"
 #include "compileTimeInfo.h"
+#include "explicitParameterIndex.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "range.h"
@@ -124,6 +125,7 @@ struct Section {
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;
 	std::unordered_map<std::string, VariableReference *> variableDefinitions;
+	ExplicitParameterIndex explicitParameterIndex;
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
 	std::unordered_map<std::string, Variable *> variables;
@@ -168,6 +170,10 @@ struct Section {
 	);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
+	void indexExplicitParameters(PatternDefinition &definition);
+	bool canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const;
+	std::vector<Range> patternParameterCandidateRanges(const std::string &name) const;
+	VariableReference *resolvePatternParameterBinding(ParseContext &context, const std::string &name, const Range &useRange);
 	void addPatternReference(PatternReference *reference);
 	void incrementUnresolved();
 	void decrementUnresolved();

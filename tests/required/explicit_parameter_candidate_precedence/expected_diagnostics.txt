@@ -1,0 +1,4 @@
+tests/required/explicit_parameter_candidate_precedence/main.dl:68-75: Warning: Repeated pattern word 'support' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/explicit_parameter_candidate_precedence/main.dl:59-66
+tests/required/explicit_parameter_candidate_precedence/main.dl:32-37: Warning: Repeated pattern word 'value' stays literal because it already became a parameter
+  note: The first parameter occurrence was here: tests/required/explicit_parameter_candidate_precedence/main.dl:25-30

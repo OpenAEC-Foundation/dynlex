@@ -1,0 +1,17 @@
+function boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function {integer:left} + {integer:right}:
+    replacement:
+        @intrinsic("add", left, right)
+
+function choose [support|{boolean:support}]:
+    execute:
+        @intrinsic("discard", support + 1)
+
+choose support
