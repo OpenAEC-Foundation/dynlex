@@ -1,0 +1,5 @@
+tests/required/explicit_parameter_choice_unbound/main.dl:31-42: Error: No overload matches call 'support + 1' for argument types [unresolved(?), a 32 bit integer]. Available overloads: '{integer:left} + {integer:right}'
+  note: parameter 'support' is not bound by this call: the matched alternative does not include it tests/required/explicit_parameter_choice_unbound/main.dl:35-42
+  note: while inferring call 'support + 1' with arguments [unresolved(?), a 32 bit integer] -> undeduced tests/required/explicit_parameter_choice_unbound/main.dl:31-42
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", support + 1)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/explicit_parameter_choice_unbound/main.dl:9-43
+  note: while inferring call 'choose support' -> undeduced tests/required/explicit_parameter_choice_unbound/main.dl:1-15
