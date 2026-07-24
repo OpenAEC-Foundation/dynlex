@@ -1,7 +1,6 @@
 #pragma once
 #include "pattern_tree/patternElement.h"
 #include "range.h"
-#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,10 +10,7 @@ struct PatternDefinition;
 
 struct ExplicitParameterCandidate {
 	PatternDefinition *definition{};
-	size_t canonicalPathIndex{};
-	size_t pathElementIndex{};
 	PatternElement::Type captureType = PatternElement::Type::Count;
-	size_t sourceStartPos{};
 	Range sourceRange;
 };
 

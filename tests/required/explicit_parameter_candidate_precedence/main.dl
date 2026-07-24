@@ -18,6 +18,10 @@ function [before support {boolean:support}|after {boolean:support} support]:
     execute:
         return support
 
+function shared [before support|after support] {boolean:support}:
+    execute:
+        return support
+
 function label label {word:label}:
     execute:
         return label
@@ -40,6 +44,8 @@ class:
 @intrinsic("discard", control support @intrinsic("equal", 1, 1))
 @intrinsic("discard", before support @intrinsic("equal", 1, 1))
 @intrinsic("discard", after @intrinsic("equal", 1, 1) support)
+@intrinsic("discard", shared before support @intrinsic("equal", 1, 1))
+@intrinsic("discard", shared after support @intrinsic("equal", 1, 1))
 @intrinsic("discard", label label token)
 @intrinsic("discard", select value @intrinsic("equal", 1, 1))
 @intrinsic("discard", select @intrinsic("equal", 1, 1) value)
