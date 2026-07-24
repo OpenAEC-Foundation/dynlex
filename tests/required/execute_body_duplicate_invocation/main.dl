@@ -1,0 +1,15 @@
+flex function relay body:
+    replacement:
+        @intrinsic("execute body")
+
+flex section execute body twice:
+    replacement:
+        relay body
+        relay body
+
+function exercise duplicate:
+    execute:
+        execute body twice:
+            @intrinsic("discard", 0)
+
+exercise duplicate

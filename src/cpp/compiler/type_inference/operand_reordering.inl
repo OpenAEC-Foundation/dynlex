@@ -91,6 +91,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
 	expr->sectionOutcome = {};
+	expr->executionFallsThrough.reset();
 	expr->sectionBodyReachable = true;
 	expr->sectionBodyInferred = false;
 	expr->sectionBodyFallsThrough = true;
