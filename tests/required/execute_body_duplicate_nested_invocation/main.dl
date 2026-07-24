@@ -1,0 +1,20 @@
+flex function relay body:
+    replacement:
+        @intrinsic("execute body")
+
+flex function relay body again:
+    replacement:
+        relay body
+
+flex section execute nested body twice:
+    replacement:
+        relay body again
+        relay body again
+
+function exercise nested duplicate for condition:
+    execute:
+        @intrinsic("discard", condition)
+        execute nested body twice:
+            @intrinsic("discard", 0)
+
+@intrinsic("discard", exercise nested duplicate for @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0), 1))
