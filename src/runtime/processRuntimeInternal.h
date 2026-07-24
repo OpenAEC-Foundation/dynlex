@@ -70,6 +70,7 @@ int dynlex_platform_process_pump(DynlexProcess *process, int64_t timeout_millise
 int dynlex_platform_process_write(DynlexProcess *process, const char *data, size_t length, size_t *written);
 int dynlex_platform_process_close_input(DynlexProcess *process);
 int dynlex_platform_process_terminate(DynlexProcess *process);
+int dynlex_platform_process_kill(DynlexProcess *process);
 int dynlex_platform_process_cleanup(DynlexProcess *process);
 void dynlex_platform_process_destroy(DynlexProcess *process);
 void dynlex_platform_process_lock(DynlexProcess *process);

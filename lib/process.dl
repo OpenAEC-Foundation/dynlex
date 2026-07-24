@@ -132,6 +132,14 @@ class:
 
 class:
     patterns:
+        [a|] process activity result
+    members:
+        succeeded as boolean
+        activity as boolean
+        error_message as string
+
+class:
+    patterns:
         [a|] process result
     members:
         launched as boolean
@@ -356,6 +364,10 @@ function {process wait result:result}'s error message:
     execute:
         return result's error_message
 
+function {process activity result:result}'s error message:
+    execute:
+        return result's error_message
+
 function {process result:result}'s standard output:
     execute:
         return result's standard_output
@@ -539,18 +551,20 @@ function wait up to {integer:milliseconds} milliseconds for {process:child}:
 function wait for [the|] process activity using {process:child} with timeout {integer:milliseconds}:
     execute:
         if not child launched:
-            return a failed process action
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        set activity_value to 0
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_wait_activity",
             an integer,
             child's handle,
-            milliseconds
+            milliseconds,
+            the address of activity_value
         )
         if outcome != 0:
-            return a failed process action
-        return a successful process action
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        return @intrinsic("construct", a process activity result, true, activity_value != 0, an empty process error)
 
 function terminate {process:child}:
     execute:
@@ -560,6 +574,21 @@ function terminate {process:child}:
             "call",
             "dynlex_runtime",
             "dynlex_process_terminate",
+            an integer,
+            child's handle
+        )
+        if outcome != 0:
+            return a failed process action
+        return a successful process action
+
+function kill {process:child}:
+    execute:
+        if not child launched:
+            return a failed process action
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_kill",
             an integer,
             child's handle
         )

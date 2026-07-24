@@ -1,0 +1,41 @@
+import lib/process.dl
+
+function [the|] partial write test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set process_command to a process command for the partial write test interpreter
+add "-u" as an argument to process_command
+add "-c" as an argument to process_command
+add "import sys,time;time.sleep(0.1);data=sys.stdin.buffer.read();sys.stdout.write(str(len(data)));sys.stdout.flush()" as an argument to process_command
+set child to launch process_command
+
+set idle to wait for the process activity using child with timeout 10
+print (idle's succeeded and not idle's activity) as line
+
+set input to a new string buffer with length 1048576
+set first to write input to child
+print first's succeeded as line
+print (first's byte count > (0 as a word sized integer)) as line
+print (first's byte count < (the length of input as a word sized integer)) as line
+
+set written to first's byte count as an integer
+loop while written < the length of input:
+    set remaining to the substring of input from written with length the length of input - written
+    set outcome to write remaining to child
+    if (not outcome's succeeded) or (outcome's byte count = (0 as a word sized integer)):
+        print false as line
+        @intrinsic("call", "libc", "abort", void)
+    set chunk_length to outcome's byte count as an integer
+    set written to written + chunk_length
+
+set closed to close the standard input of child
+print closed's succeeded as line
+set ready to wait for the process activity using child with timeout 2000
+print (ready's succeeded and ready's activity) as line
+set output to read the standard output of child
+print output's contents as line
+set finished to wait up to 2000 milliseconds for child
+print (finished's succeeded and finished's finished) as line
+set cleaned to clean up child
+print cleaned's succeeded as line

@@ -13,7 +13,7 @@ set child to launch command
 print child launched as line
 
 set activity to wait for process activity using child with timeout 1000
-print activity's succeeded as line
+print (activity's succeeded and activity's activity) as line
 set error_output to read available the standard error of child
 print error_output's contents as line
 

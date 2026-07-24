@@ -654,6 +654,23 @@ int dynlex_platform_process_terminate(DynlexProcess *process) {
 	return -1;
 }
 
+int dynlex_platform_process_kill(DynlexProcess *process) {
+	DynlexPosixProcess *platform = process->platform;
+	if (update_process_status(process, false) != 0)
+		return -1;
+	if (process->finished)
+		return 0;
+	if (kill(platform->process_id, SIGKILL) == 0) {
+		process->termination_requested = true;
+		return update_process_status(process, false);
+	}
+	int error_number = errno;
+	if (error_number == ESRCH && update_process_status(process, false) == 0 && process->finished)
+		return 0;
+	dynlex_runtime_set_errno_error("Could not kill process", error_number);
+	return -1;
+}
+
 static void close_discarded_output(DynlexProcess *process, DynlexPosixProcess *platform) {
 	if (platform->standard_output >= 0) {
 		close(platform->standard_output);

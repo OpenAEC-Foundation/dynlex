@@ -953,6 +953,8 @@ int dynlex_platform_process_terminate(DynlexProcess *process) {
 	return -1;
 }
 
+int dynlex_platform_process_kill(DynlexProcess *process) { return dynlex_platform_process_terminate(process); }
+
 int dynlex_platform_process_cleanup(DynlexProcess *process) {
 	DynlexWindowsProcess *platform = process->platform;
 	close_handle(&platform->standard_input);

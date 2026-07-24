@@ -4,41 +4,42 @@ function [the|] strict transport test interpreter:
     execute:
         return "python" if the process platform is windows, else "python3"
 
-function strict transport test command for {string:hex_bytes} hanging {boolean:hang} with {string:standard_error}:
+function strict transport test command for {cstring:hex_bytes} hanging {boolean:hang} with {cstring:standard_error}:
     execute:
         set script to "import sys,time\nsys.stderr.write(sys.argv[3]);sys.stderr.flush()\nsys.stdout.buffer.write(bytes.fromhex(sys.argv[1]));sys.stdout.buffer.flush()\nif sys.argv[2]=='1': time.sleep(10)"
-        set command to a process command for the strict transport test interpreter
-        add "-u" as an argument to command
-        add "-c" as an argument to command
-        add script as an argument to command
-        add hex_bytes as an argument to command
-        add ("1" if hang, else "0") as an argument to command
-        add standard_error as an argument to command
-        return command
+        set process_command to a process command for the strict transport test interpreter
+        add "-u" as an argument to process_command
+        add "-c" as an argument to process_command
+        add script as an argument to process_command
+        add hex_bytes as an argument to process_command
+        add ("1" if hang, else "0") as an argument to process_command
+        add standard_error as an argument to process_command
+        return process_command
 
 function strict transport test limits:
     execute:
-        set limits to the default json rpc limits
-        set limits's maximum_header_length to 256
-        set limits's maximum_payload_length to 256
-        set limits's maximum_buffered_output_length to 512
-        set limits's maximum_standard_error_length to 256
-        set limits's graceful_close_timeout_milliseconds to 10
-        set limits's termination_timeout_milliseconds to 100
-        return limits
+        set configured_limits to the default json rpc limits
+        set configured_limits's maximum_header_length to 256
+        set configured_limits's maximum_payload_length to 256
+        set configured_limits's maximum_buffered_output_length to 512
+        set configured_limits's maximum_standard_error_length to 256
+        set configured_limits's graceful_close_timeout_milliseconds to 10
+        set configured_limits's termination_timeout_milliseconds to 100
+        return configured_limits
 
-function malformed frame {string:hex_bytes} has status {integer:expected_status} hanging {boolean:hang}:
+function malformed frame {cstring:hex_bytes} has status {integer:expected_status} hanging {boolean:hang}:
     execute:
-        set command to strict transport test command for hex_bytes hanging hang with ""
-        set opened to open a json rpc connection using command with limits strict transport test limits
+        set process_command to strict transport test command for hex_bytes hanging hang with ""
+        set opened to open a json rpc connection using process_command with limits strict transport test limits
         if not opened's succeeded:
             return false
         set connection to opened's connection
         set received to receive a json rpc message from connection
         set repeated to receive a json rpc message from connection
+        set was_broken to connection's state = the json rpc broken state
         set closed to close json rpc connection connection
         set passed to (received's status = expected_status) and (repeated's status = expected_status)
-        set passed to passed and (connection's state = the json rpc broken state)
+        set passed to passed and was_broken
         set passed to passed and closed's succeeded
         free json rpc receive result received
         free json rpc receive result repeated
