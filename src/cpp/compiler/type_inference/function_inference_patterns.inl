@@ -1,5 +1,6 @@
 case Expression::Kind::PatternCall: {
 	expr->selectedPatternDefinition = nullptr;
+	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	auto &defs = expr->patternMatch->matchingDefinitions;
 	if (definitionsHaveUnresolvedTypeConstraints(defs)) {
@@ -33,9 +34,9 @@ case Expression::Kind::PatternCall: {
 	};
 
 	// Select the best overload based on argument types
-	PatternDefinition *def =
+	PatternOverloadSelection overload =
 		selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown);
-	if (!def) {
+	if (!overload) {
 		std::string candidates;
 		std::unordered_set<std::string> uniqueCandidates;
 		for (PatternDefinition *candidate : defs) {
@@ -57,17 +58,20 @@ case Expression::Kind::PatternCall: {
 		context.setTypeFailure(detail);
 		std::vector<RelatedInfo> implicitPromotionRelatedInfo;
 		for (PatternDefinition *candidate : defs) {
-			std::vector<std::pair<std::string, Expression *>> candidateBindings;
-			collectPatternCallBindingPairs(expr, candidate, candidateBindings);
-			for (const auto &[parameterName, argumentExpression] : candidateBindings) {
-				if (!argumentExpression || argumentExpression->type.isDeduced() ||
-					argumentExpression->kind != Expression::Kind::Variable || !argumentExpression->variable ||
-					argumentExpression->variable->name != parameterName) {
-					continue;
+			for (size_t pathIndex : matchingPatternPathIndices(expr->patternMatch->nodesPassed, candidate)) {
+				std::vector<std::pair<std::string, Expression *>> candidateBindings;
+				collectPatternCallBindingPairsForPath(expr, candidate, pathIndex, candidateBindings);
+				for (const auto &[parameterName, argumentExpression] : candidateBindings) {
+					if (!argumentExpression || argumentExpression->type.isDeduced() ||
+						argumentExpression->kind != Expression::Kind::Variable || !argumentExpression->variable ||
+						argumentExpression->variable->name != parameterName) {
+						continue;
+					}
+					DefinitionPatternElement *parameterElement =
+						findParameterElement(candidate->patternElements, parameterName);
+					if (parameterElement && parameterElement->promotedFromVariableLike)
+						appendImplicitPromotionTrace(implicitPromotionRelatedInfo, candidate, parameterName);
 				}
-				DefinitionPatternElement *parameterElement = findParameterElement(candidate->patternElements, parameterName);
-				if (parameterElement && parameterElement->promotedFromVariableLike)
-					appendImplicitPromotionTrace(implicitPromotionRelatedInfo, candidate, parameterName);
 			}
 		}
 		for (Expression *argumentExpression : expr->arguments)
@@ -81,10 +85,11 @@ case Expression::Kind::PatternCall: {
 		);
 		break;
 	}
+	PatternDefinition *def = overload.definition;
 	for (size_t ai = 0; ai < argTypesForOverload.size(); ai++) {
 		if (argTypesForOverload[ai].kind != DataType::Kind::Void)
 			continue;
-		if (definitionParameterAcceptsVoid(def, expr->patternMatch->nodesPassed, ai))
+		if (definitionParameterAcceptsVoid(def, overload.pathIndex, ai))
 			continue;
 		std::string detail = renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, expr->arguments[ai]->range), "no overload matches call", "message",
@@ -98,6 +103,7 @@ case Expression::Kind::PatternCall: {
 	if (!context.typesValid)
 		break;
 	expr->selectedPatternDefinition = def;
+	expr->selectedPatternPathIndex = overload.pathIndex;
 
 	Section *matchedSection = def->section;
 
@@ -254,7 +260,7 @@ case Expression::Kind::PatternCall: {
 			argTypes.push_back(argType);
 		}
 		std::unordered_set<std::string> explicitCompileTimeParameters =
-			collectExplicitCompileTimeParameters(def, paramBindings, expr->patternMatch->nodesPassed, argTypes);
+			collectExplicitCompileTimeParameters(def, paramBindings, overload.pathIndex, argTypes);
 		auto evaluateParameterValue = [&](Expression *argumentExpression) {
 			(void)flexBindingFrameStack;
 			if (!argumentExpression)

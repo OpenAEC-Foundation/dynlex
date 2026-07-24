@@ -9,12 +9,14 @@
 #include "section.h"
 #include "syntaxConfig.h"
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <list>
 #include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace llvm {
@@ -58,6 +60,11 @@ struct ParseContext {
 	};
 
 	enum class ShaderStage { Fragment, Vertex };
+
+	// Installed only while pattern resolution owns the reference queues and
+	// definition-to-reference index. Indexed pattern elements may be changed
+	// only through this transaction.
+	std::function<void(PatternDefinition &, const std::function<void()> &)> indexedPatternDefinitionMutation;
 	// Highest compilation phase that completed successfully.
 	// Guarantees by stage:
 	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.
@@ -237,41 +244,73 @@ struct ParseContext {
 // and fills outBindings with parameter name → call-site argument expression.
 // Returns nullptr if expr is not a flex PatternCall. Does not modify any binding stack —
 // the caller decides how to apply the bindings (push onto codegen stack, or pass explicitly).
+// Return every authored canonical path represented by one structural trie
+// match. Callers must either evaluate all entries or use the path selected
+// during overload inference; choosing the first entry loses choice semantics.
+inline std::vector<size_t>
+matchingPatternPathIndices(const std::vector<PatternTreeNode *> &nodesPassed, const PatternDefinition *definition) {
+	requireCompilerInvariant(definition != nullptr, "matched path lookup requires a definition");
+	requireCompilerInvariant(
+		definition->indexedPaths.size() == definition->indexedNodePaths.size(),
+		"matched path lookup requires complete indexed path metadata"
+	);
+	std::vector<size_t> pathIndices;
+	for (size_t pathIndex = 0; pathIndex < definition->indexedNodePaths.size(); pathIndex++) {
+		if (definition->indexedNodePaths[pathIndex] == nodesPassed)
+			pathIndices.push_back(pathIndex);
+	}
+	requireCompilerInvariant(!pathIndices.empty(), "matched pattern nodes do not identify an indexed definition path");
+	return pathIndices;
+}
+
 template <typename OnPatternParameterNameFn>
 inline void forEachPatternParameterName(
-	const std::vector<PatternTreeNode *> &nodesPassed, PatternDefinition *definition,
-	OnPatternParameterNameFn &&onPatternParameterName
+	PatternDefinition *definition, size_t pathIndex, OnPatternParameterNameFn &&onPatternParameterName
 ) {
-	if (!definition)
-		return;
-	std::vector<std::tuple<size_t, PatternTreeNode *, std::string>> orderedParameters;
-	for (PatternTreeNode *node : nodesPassed) {
-		if (!node)
+	requireCompilerInvariant(definition != nullptr, "pattern parameter traversal requires a definition");
+	requireCompilerInvariant(
+		pathIndex < definition->indexedPaths.size() && pathIndex < definition->indexedNodePaths.size(),
+		"pattern parameter traversal received an invalid indexed path"
+	);
+	const auto &elements = definition->indexedPaths[pathIndex];
+	const auto &nodes = definition->indexedNodePaths[pathIndex];
+	requireCompilerInvariant(elements.size() == nodes.size(), "indexed pattern path metadata has the wrong size");
+	for (size_t elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
+		const PatternElement &element = elements[elementIndex];
+		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
 			continue;
-		auto paramIt = node->parameterNames.find(definition);
-		auto startIt = node->definitionStartPositions.find(definition);
-		if (paramIt == node->parameterNames.end() || startIt == node->definitionStartPositions.end())
-			continue;
-		orderedParameters.push_back({startIt->second, node, paramIt->second});
+		onPatternParameterName(element.text, nodes[elementIndex], element.startPos);
 	}
-	std::sort(orderedParameters.begin(), orderedParameters.end(), [](const auto &left, const auto &right) {
-		return std::get<0>(left) < std::get<0>(right);
+}
+
+template <typename OnPatternBindingFn>
+inline void forEachPatternCallBindingOnPath(
+	Expression *expr, PatternDefinition *definition, size_t pathIndex, OnPatternBindingFn &&onPatternBinding
+) {
+	requireCompilerInvariant(
+		expr && definition && expr->patternMatch, "pattern call binding requires a matched expression and definition"
+	);
+	requireCompilerInvariant(
+		pathIndex < definition->indexedNodePaths.size() &&
+			definition->indexedNodePaths[pathIndex] == expr->patternMatch->nodesPassed,
+		"pattern call binding path does not match the expression"
+	);
+	size_t argIndex = 0;
+	forEachPatternParameterName(definition, pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t) {
+		requireCompilerInvariant(argIndex < expr->arguments.size(), "pattern call has fewer arguments than parameters");
+		onPatternBinding(parameterName, expr->arguments[argIndex++]);
 	});
-	for (const auto &[ignoredStartPos, node, parameterName] : orderedParameters)
-		onPatternParameterName(parameterName, node);
+	requireCompilerInvariant(argIndex == expr->arguments.size(), "pattern call has more arguments than parameters");
 }
 
 template <typename OnPatternBindingFn>
 inline void forEachPatternCallBinding(Expression *expr, PatternDefinition *definition, OnPatternBindingFn &&onPatternBinding) {
-	if (!expr || !definition || !expr->patternMatch)
-		return;
-	size_t argIndex = 0;
-	forEachPatternParameterName(
-		expr->patternMatch->nodesPassed, definition,
-		[&](const std::string &parameterName, PatternTreeNode *) {
-		if (argIndex < expr->arguments.size())
-			onPatternBinding(parameterName, expr->arguments[argIndex++]);
-	}
+	requireCompilerInvariant(
+		expr && expr->selectedPatternDefinition == definition && expr->selectedPatternPathIndex.has_value(),
+		"pattern call binding requires a selected definition path"
+	);
+	forEachPatternCallBindingOnPath(
+		expr, definition, *expr->selectedPatternPathIndex, std::forward<OnPatternBindingFn>(onPatternBinding)
 	);
 }
 
@@ -290,6 +329,18 @@ inline void collectPatternCallBindingPairs(
 	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	});
+}
+
+inline void collectPatternCallBindingPairsForPath(
+	Expression *expr, PatternDefinition *definition, size_t pathIndex,
+	std::vector<std::pair<std::string, Expression *>> &outBindings
+) {
+	forEachPatternCallBindingOnPath(
+		expr, definition, pathIndex,
+		[&](const std::string &parameterName, Expression *argumentExpression) {
+		outBindings.push_back({parameterName, argumentExpression});
+	}
+	);
 }
 
 inline void collectPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings) {

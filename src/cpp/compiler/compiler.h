@@ -58,19 +58,29 @@ PatternDefinition *findDefinitionBySignature(
 	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
 );
 
-// Select the best overload from multiple definitions at the same trie endpoint.
+// Select the best definition/path occurrence at a trie endpoint. Every authored
+// path compatible with nodesPassed participates independently because
+// structurally identical choice alternatives can carry different constraints.
 // argTypes: the deduced types of the call-site arguments (in nodesPassed order).
-// Returns the best-matching definition, preferring type-constrained overloads over unconstrained ones.
-PatternDefinition *selectOverload(
+// Prefers type-constrained overloads over unconstrained ones.
+struct PatternOverloadSelection {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+
+	explicit operator bool() const { return definition != nullptr; }
+};
+
+PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
 	const std::vector<bool> & /*argCompileTimeKnown*/
 );
-const DefinitionPatternElement *matchedPatternParameterElement(PatternDefinition *definition, PatternTreeNode *matchedNode);
+const DefinitionPatternElement *
+matchedPatternParameterElement(PatternDefinition *definition, std::string_view parameterName, size_t startPos);
 bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType);
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
-	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
+	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings, size_t pathIndex,
+	const std::vector<DataType> &argTypes
 );
 
 void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings);

@@ -1,0 +1,10 @@
+function use b z:
+    replacement:
+        b
+        hold z
+
+function recur argument marker:
+    replacement:
+        argument
+        recur marker marker
+        use q z

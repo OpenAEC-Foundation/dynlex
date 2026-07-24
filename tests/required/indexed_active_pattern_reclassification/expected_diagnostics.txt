@@ -1,0 +1,1 @@
+tests/required/indexed_active_pattern_reclassification/main.dl:9-15: Error: This pattern couldn't be resolved

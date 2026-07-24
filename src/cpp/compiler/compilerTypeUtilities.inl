@@ -32,14 +32,11 @@ static const DefinitionPatternElement *findDefinitionParameterElementAt(
 	return nullptr;
 }
 
-const DefinitionPatternElement *matchedPatternParameterElement(PatternDefinition *definition, PatternTreeNode *matchedNode) {
-	if (!definition || !matchedNode)
+const DefinitionPatternElement *
+matchedPatternParameterElement(PatternDefinition *definition, std::string_view parameterName, size_t startPos) {
+	if (!definition)
 		return nullptr;
-	auto nameIt = matchedNode->parameterNames.find(definition);
-	auto startIt = matchedNode->definitionStartPositions.find(definition);
-	if (nameIt == matchedNode->parameterNames.end() || startIt == matchedNode->definitionStartPositions.end())
-		return nullptr;
-	return findDefinitionParameterElementAt(definition->patternElements, nameIt->second, startIt->second);
+	return findDefinitionParameterElementAt(definition->patternElements, parameterName, startPos);
 }
 
 bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType) {
@@ -52,75 +49,85 @@ bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &pa
 }
 
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
-	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes
+	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings, size_t pathIndex,
+	const std::vector<DataType> &argTypes
 ) {
 	requireCompilerInvariant(paramBindings.size() == argTypes.size(), "pattern parameter bindings and types diverged");
 	std::unordered_set<std::string> requiredParameters;
 	size_t bindingIndex = 0;
-	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &parameterName, PatternTreeNode *node) {
+	forEachPatternParameterName(
+		definition, pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(bindingIndex < argTypes.size(), "matched pattern has more parameters than call arguments");
-		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, node);
+		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(parameterElement != nullptr, "matched pattern parameter has no definition element");
 		if (patternParameterRequiresCompileTimeValue(*parameterElement, argTypes[bindingIndex]))
 			requiredParameters.insert(parameterName);
 		bindingIndex++;
-	});
+	}
+	);
 	requireCompilerInvariant(bindingIndex == argTypes.size(), "matched pattern has fewer parameters than call arguments");
 	return requiredParameters;
 }
 
-PatternDefinition *selectOverload(
+PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
 	const std::vector<bool> &argCompileTimeKnown
 ) {
 	if (definitions.empty())
-		return nullptr;
+		return {};
 
 	// Score each candidate: count how many type constraints match
-	PatternDefinition *best = nullptr;
+	PatternOverloadSelection best;
 	int bestScore = -1;
 
 	for (auto *candidate : definitions) {
-		int score = 0;
-		bool constraintFailed = false;
+		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, candidate)) {
+			int score = 0;
+			bool constraintFailed = false;
 
-		size_t argIdx = 0;
-		forEachPatternParameterName(nodesPassed, candidate, [&](const std::string &, PatternTreeNode *node) {
-			if (constraintFailed || argIdx >= argTypes.size()) {
-				argIdx++;
-				return;
-			}
-			const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(candidate, node);
-			requireCompilerInvariant(parameterElement != nullptr, "overload parameter has no definition element");
-			const DataType &argType = argTypes[argIdx];
-			if (!argType.isDeduced()) {
-				bool acceptsUnset =
-					candidate->section && candidate->section->isFlex && !parameterElement->resolvedTypeConstraint.isResolved();
-				if (!acceptsUnset)
-					constraintFailed = true;
-				argIdx++;
-				return;
-			}
-			if (parameterElement->resolvedTypeConstraint.isResolved()) {
-				bool compileTimeKnown = argIdx < argCompileTimeKnown.size() && argCompileTimeKnown[argIdx];
-				if (!parameterElement->resolvedTypeConstraint.accepts(argType, compileTimeKnown)) {
+			size_t argIdx = 0;
+			forEachPatternParameterName(
+				candidate, pathIndex,
+				[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+				if (constraintFailed || argIdx >= argTypes.size()) {
 					constraintFailed = true;
 					argIdx++;
 					return;
 				}
-				score += parameterElement->resolvedTypeConstraint.structuralSpecificity();
+				const DefinitionPatternElement *parameterElement =
+					matchedPatternParameterElement(candidate, parameterName, startPos);
+				requireCompilerInvariant(parameterElement != nullptr, "overload parameter has no definition element");
+				const DataType &argType = argTypes[argIdx];
+				if (!argType.isDeduced()) {
+					bool acceptsUnset = candidate->section && candidate->section->isFlex &&
+										!parameterElement->resolvedTypeConstraint.isResolved();
+					if (!acceptsUnset)
+						constraintFailed = true;
+					argIdx++;
+					return;
+				}
+				if (parameterElement->resolvedTypeConstraint.isResolved()) {
+					bool compileTimeKnown = argIdx < argCompileTimeKnown.size() && argCompileTimeKnown[argIdx];
+					if (!parameterElement->resolvedTypeConstraint.accepts(argType, compileTimeKnown)) {
+						constraintFailed = true;
+						argIdx++;
+						return;
+					}
+					score += parameterElement->resolvedTypeConstraint.structuralSpecificity();
+				}
+				argIdx++;
 			}
-			argIdx++;
-		});
-
-		if (constraintFailed)
-			continue;
-
-		if (score > bestScore) {
-			bestScore = score;
-			best = candidate;
+			);
+			if (argIdx != argTypes.size())
+				constraintFailed = true;
+			if (constraintFailed)
+				continue;
+			if (score > bestScore) {
+				bestScore = score;
+				best = {candidate, pathIndex};
+			}
 		}
 	}
 

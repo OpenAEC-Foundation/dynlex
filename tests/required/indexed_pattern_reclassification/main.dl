@@ -1,0 +1,17 @@
+function call a:
+    replacement:
+        a
+
+function use b z:
+    replacement:
+        b
+        hold z
+
+function call x:
+    replacement:
+        hold x
+
+function [target|objective] x y:
+    replacement:
+        call x
+        use y z
