@@ -1,0 +1,24 @@
+import lib/std.dl
+
+exposed function recursive:
+	execute:
+		@intrinsic("discard", recursive)
+		@intrinsic("return", 1)
+
+exposed function direct recursive {integer:value}:
+	execute:
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("return", direct recursive @intrinsic("subtract", value, 1))
+		@intrinsic("return", value)
+
+exposed function mutual first {integer:value}:
+	execute:
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("return", mutual second @intrinsic("subtract", value, 1))
+		@intrinsic("return", value)
+
+exposed function mutual second {integer:value}:
+	execute:
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("return", mutual first @intrinsic("subtract", value, 1))
+		@intrinsic("return", value)

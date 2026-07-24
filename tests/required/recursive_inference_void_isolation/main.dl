@@ -1,0 +1,59 @@
+flex section if condition:
+	replacement:
+		@intrinsic("if", condition)
+
+function standalone helper:
+	execute:
+		@intrinsic("discard", 0)
+
+function direct before:
+	execute:
+		@intrinsic("discard", 0)
+
+function direct after:
+	execute:
+		@intrinsic("discard", 0)
+
+function direct value:
+	execute:
+		direct before
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("store", ignored, direct @intrinsic("subtract", value, 1))
+		direct after
+		@intrinsic("return", value)
+
+function mutual first before:
+	execute:
+		@intrinsic("discard", 0)
+
+function mutual first after:
+	execute:
+		@intrinsic("discard", 0)
+
+function mutual second before:
+	execute:
+		@intrinsic("discard", 0)
+
+function mutual second after:
+	execute:
+		@intrinsic("discard", 0)
+
+function mutual first value:
+	execute:
+		mutual first before
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("store", ignored, mutual second @intrinsic("subtract", value, 1))
+		mutual first after
+		@intrinsic("return", value)
+
+function mutual second value:
+	execute:
+		mutual second before
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("store", ignored, mutual first @intrinsic("subtract", value, 1))
+		mutual second after
+		@intrinsic("return", value)
+
+standalone helper
+@intrinsic("discard", direct 2)
+@intrinsic("discard", mutual first 2)

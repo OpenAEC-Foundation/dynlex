@@ -29,22 +29,17 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		resolveThroughBindingsDeep(expr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
 	BindingFrameStack valueBindingFrameStack;
 	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], flexBindingFrameStack, valueBindingFrameStack);
-	bool callerObservedInProgressInstantiation = context.observedInProgressUndeducedInstantiation;
-	context.observedInProgressUndeducedInstantiation = false;
+	ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
-	bool valueDependsOnInProgressInstantiation = context.observedInProgressUndeducedInstantiation;
-	context.observedInProgressUndeducedInstantiation =
-		callerObservedInProgressInstantiation || valueDependsOnInProgressInstantiation;
+	bool valueDependsOnInProgressInstantiation = valueObservation.observed();
 
 	if (valueType.isMetaType()) {
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}
 	if (!valueType.isDeduced()) {
-		if (valueDependsOnInProgressInstantiation && context.currentInstantiation) {
-			markInstantiationForReinference(context, context.currentInstantiation);
+		if (valueDependsOnInProgressInstantiation && context.currentInstantiation)
 			return;
-		}
 		// A silent pass would let an unresolved store reach codegen. Fail the
 		// pass instead, so grouping trials and reinference retry, and a final
 		// diagnostic names the actual cause.

@@ -1,0 +1,5 @@
+function number:
+	execute:
+		@intrinsic("return", 1)
+
+number

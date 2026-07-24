@@ -1,0 +1,31 @@
+import lib/std.dl
+
+function recursive:
+	execute:
+		@intrinsic("discard", recursive)
+		@intrinsic("return", 1)
+
+function referenced direct recursive {integer:value}:
+	execute:
+		if value > 0:
+			return referenced direct recursive (value - 1)
+		return value
+
+function referenced mutual first {integer:value}:
+	execute:
+		if value > 0:
+			return referenced mutual second (value - 1)
+		return value
+
+function referenced mutual second {integer:value}:
+	execute:
+		if value > 0:
+			return referenced mutual first (value - 1)
+		return value
+
+@intrinsic("discard", @intrinsic("function", "recursive"))
+set direct_function to the function named "referenced direct recursive $"
+set mutual_function to the function named "referenced mutual first $"
+
+discard direct_function
+discard mutual_function

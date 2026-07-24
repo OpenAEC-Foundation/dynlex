@@ -241,10 +241,8 @@ case Expression::Kind::PatternCall: {
 				ensureArgumentTypeForPatternCall(argumentExpression, context, flexBindingFrameStack);
 			DataType argType = argTypeResult.type;
 			if (!argType.isDeduced()) {
-				if (argTypeResult.deferred && context.currentInstantiation) {
-					markInstantiationForReinference(context, context.currentInstantiation);
+				if (argTypeResult.deferred && context.currentInstantiation)
 					return;
-				}
 				if (context.trial) {
 					setConfiguredTypeFailure(expr->range, "undeduced argument type in trial inference");
 					DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
@@ -372,15 +370,14 @@ case Expression::Kind::PatternCall: {
 			context.currentSubject = callerSubject;
 			context.currentInstantiation = savedInst;
 			inst.valid = inferenceSucceeded;
-			if (inst.needsReinfer)
-				markInstantiationForReinference(context, savedInst);
+			if (inferenceSucceeded && inst.needsReinfer)
+				propagateUnresolvedRecursiveDependencyToCaller(context, savedInst);
 			refinedInstantiationKey =
 				buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 		} else if (inst.returnType.isDeduced()) {
 			expr->type = inst.returnType;
 		} else {
-			context.observedInProgressUndeducedInstantiation = true;
-			markInstantiationForReinference(context, context.currentInstantiation);
+			observeUnresolvedRecursiveDependency(context);
 		}
 		if (!inst.valid) {
 			context.typesValid = false;
@@ -408,8 +405,7 @@ case Expression::Kind::PatternCall: {
 		}
 
 		// If no return intrinsic was found, default to Void
-		if (!inst.inferring && !inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&
-			inst.returnType.kind == DataType::Kind::Any) {
+		if (!inst.inferring && !inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any) {
 			inst.returnType = {DataType::Kind::Void};
 		}
 		CompileTimeValue inferredReturnValue{};
