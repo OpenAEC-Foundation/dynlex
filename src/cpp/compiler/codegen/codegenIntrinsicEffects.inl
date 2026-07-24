@@ -15,16 +15,17 @@ if (kind == IntrinsicKind::ExecuteBody) {
 		context.addDiagnostic(
 			Diagnostic(context, Diagnostic::Level::Error, "execute body has no matching section flex body", callExpr->range)
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	if (targetFrame->bodyEmitted) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "execute body can only run once per section flex call", callExpr->range
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
-	emitSectionFlexCallerBody(context, *targetFrame, executionSection, false);
+	if (!emitSectionFlexCallerBody(context, *targetFrame, executionSection, false))
+		return CodegenResult::failure();
 	return nullptr;
 }
 
@@ -34,7 +35,7 @@ if (kind == IntrinsicKind::LoopWhile) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "loop while requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
@@ -48,7 +49,9 @@ if (kind == IntrinsicKind::LoopWhile) {
 
 	ParseContext::SectionFlexBodyFrame &bodyFrame = activeSectionFlexBodyFrame(context);
 	requireCompilerInvariant(bodyFrame.openingExpression, "loop codegen frame has no opening expression");
-	llvm::Value *condValue = generateExpressionCode(context, args[1]);
+	llvm::Value *condValue = nullptr;
+	if (!generateRuntimeValue(args[1], condValue))
+		return CodegenResult::failure();
 	DataType condType = finalizedExpressionType(context, args[1]);
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("loop while condition must be boolean after type inference");
@@ -74,7 +77,7 @@ if (kind == IntrinsicKind::If) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "if requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
@@ -82,7 +85,9 @@ if (kind == IntrinsicKind::If) {
 	llvm::BasicBlock *thenBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_then", func);
 	llvm::BasicBlock *exitBlock = llvm::BasicBlock::Create(*context.llvmContext, "if_exit", func);
 
-	llvm::Value *condValue = generateExpressionCode(context, args[1]);
+	llvm::Value *condValue = nullptr;
+	if (!generateRuntimeValue(args[1], condValue))
+		return CodegenResult::failure();
 	DataType condType = finalizedExpressionType(context, args[1]);
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("if condition must be boolean after type inference");
@@ -102,7 +107,7 @@ if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "else requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
@@ -128,7 +133,9 @@ if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 	if (kind == IntrinsicKind::ElseIf) {
 		llvm::BasicBlock *elifThenBlock = llvm::BasicBlock::Create(*context.llvmContext, "elif_then", func);
 
-		llvm::Value *condValue = generateExpressionCode(context, args[1]);
+		llvm::Value *condValue = nullptr;
+		if (!generateRuntimeValue(args[1], condValue))
+			return CodegenResult::failure();
 		DataType condType = finalizedExpressionType(context, args[1]);
 		if (condType.kind != DataType::Kind::Bool)
 			crashCompilerBug("else if condition must be boolean after type inference");
@@ -150,11 +157,13 @@ if (kind == IntrinsicKind::Switch) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "switch requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
 
-	llvm::Value *switchValue = generateExpressionCode(context, args[1]);
+	llvm::Value *switchValue = nullptr;
+	if (!generateRuntimeValue(args[1], switchValue))
+		return CodegenResult::failure();
 
 	// Ensure the value is an integer (LLVM switch requires integer operand)
 	DataType switchType = finalizedExpressionType(context, args[1]);
@@ -162,7 +171,7 @@ if (kind == IntrinsicKind::Switch) {
 		context.addDiagnostic(
 			Diagnostic(context, Diagnostic::Level::Error, "switch requires integer", args[1] ? args[1]->range : Range())
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	llvm::BasicBlock *defaultBlock = llvm::BasicBlock::Create(*context.llvmContext, "switch_default", func);
@@ -192,14 +201,14 @@ if (kind == IntrinsicKind::Case) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "case requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	if (!context.currentSwitchInst) {
 		context.addDiagnostic(
 			Diagnostic(context, Diagnostic::Level::Error, "case outside switch", intrinsicDiagnosticRange(context, callExpr))
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
@@ -225,21 +234,21 @@ if (kind == IntrinsicKind::DefaultCase) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "default case requires body section", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	if (!context.currentSwitchInst) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "default case outside switch", intrinsicDiagnosticRange(context, callExpr)
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	if (!context.switchesWithDefaultCase.insert(context.currentSwitchInst).second) {
 		context.addDiagnostic(
 			Diagnostic(context, Diagnostic::Level::Error, "duplicate default case", intrinsicDiagnosticRange(context, callExpr))
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	// Reuse the switch's default block: drop its placeholder branch to the
@@ -255,7 +264,8 @@ if (kind == IntrinsicKind::DefaultCase) {
 if (kind == IntrinsicKind::Return) {
 	if (args.size() <= 1) {
 		llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();
-		releaseManagedStorageForReturn(context);
+		if (!releaseManagedStorageForReturn(context))
+			return CodegenResult::failure();
 		if (currentFunction == context.mainLLVMFunction) {
 			requireCompilerInvariant(context.mainCleanupBlock, "main return requires an initialized cleanup block");
 			if (!context.options.emitSPIRV) {
@@ -268,7 +278,9 @@ if (kind == IntrinsicKind::Return) {
 		}
 		return nullptr;
 	}
-	llvm::Value *returnValue = generateExpressionCode(context, args[1]);
+	llvm::Value *returnValue = nullptr;
+	if (!generateRuntimeValue(args[1], returnValue))
+		return CodegenResult::failure();
 	DataType returnType = finalizedExpressionType(context, args[1]);
 	bool managedReturn = typeHasManagedLifecycle(returnType);
 	bool ownedReturn = managedReturn && managedExpressionResultIsOwned(context, args[1]);
@@ -276,25 +288,28 @@ if (kind == IntrinsicKind::Return) {
 	if (currentFunction == context.mainLLVMFunction) {
 		requireCompilerInvariant(context.mainCleanupBlock, "main return requires an initialized cleanup block");
 		if (context.options.emitSPIRV) {
-			if (ownedReturn)
-				releaseManagedValue(context, returnType, returnValue);
-			releaseManagedStorageForReturn(context);
+			if (ownedReturn && !releaseManagedValue(context, returnType, returnValue))
+				return CodegenResult::failure();
+			if (!releaseManagedStorageForReturn(context))
+				return CodegenResult::failure();
 			builder.CreateBr(context.mainCleanupBlock);
 			return nullptr;
 		}
 		requireCompilerInvariant(context.mainReturnStorage, "native main return requires initialized return storage");
-		if (managedReturn && !ownedReturn)
-			retainManagedValue(context, returnType, returnValue);
+		if (managedReturn && !ownedReturn && !retainManagedValue(context, returnType, returnValue))
+			return CodegenResult::failure();
 		DataType mainReturnType{DataType::Kind::Int, 4};
 		returnValue = ensureType(context, returnValue, returnType, mainReturnType);
-		releaseManagedStorageForReturn(context);
+		if (!releaseManagedStorageForReturn(context))
+			return CodegenResult::failure();
 		builder.CreateStore(returnValue, context.mainReturnStorage);
 		builder.CreateBr(context.mainCleanupBlock);
 		return nullptr;
 	}
-	if (managedReturn && !ownedReturn)
-		retainManagedValue(context, returnType, returnValue);
-	releaseManagedStorageForReturn(context);
+	if (managedReturn && !ownedReturn && !retainManagedValue(context, returnType, returnValue))
+		return CodegenResult::failure();
+	if (!releaseManagedStorageForReturn(context))
+		return CodegenResult::failure();
 	builder.CreateRet(returnValue);
 	return nullptr;
 }
@@ -333,7 +348,9 @@ if (isExternalCallIntrinsicKind(kind)) {
 				continue;
 			}
 		}
-		llvm::Value *argVal = generateExpressionCode(context, args[i]);
+		llvm::Value *argVal = nullptr;
+		if (!generateRuntimeValue(args[i], argVal))
+			return CodegenResult::failure();
 		requireCompilerInvariant(argVal != nullptr, "external call argument produced no runtime value after inference");
 		callArgs.push_back(argVal);
 		callArgumentTypes.push_back(argumentType);
@@ -379,7 +396,8 @@ if (isExternalCallIntrinsicKind(kind)) {
 
 	llvm::Value *callResult = builder.CreateCall(callee, callArgs);
 	for (auto iterator = ownedManagedArguments.rbegin(); iterator != ownedManagedArguments.rend(); iterator++)
-		releaseManagedValue(context, iterator->first, iterator->second);
+		if (!releaseManagedValue(context, iterator->first, iterator->second))
+			return CodegenResult::failure();
 	// If return type is void, return nullptr (no value to use)
 	if (returnType.kind == DataType::Kind::Void)
 		return nullptr;
@@ -394,9 +412,9 @@ if (kind == IntrinsicKind::Function) {
 		callExpr->selectedInstantiation == definition->callableInstantiation,
 		"function intrinsic callable selection diverged after inference"
 	);
-	llvm::Function *callableFunction = ensureCallableFunctionGenerated(context, definition, definition->section->isExposed);
-	if (!callableFunction)
-		return nullptr;
+	llvm::Function *callableFunction = nullptr;
+	if (!ensureCallableFunctionGenerated(context, definition, definition->section->isExposed, callableFunction))
+		return CodegenResult::failure();
 	if (callableFunction->getType() == builder.getPtrTy())
 		return callableFunction;
 	return builder.CreateBitCast(callableFunction, builder.getPtrTy(), "function_ptr");
@@ -404,7 +422,9 @@ if (kind == IntrinsicKind::Function) {
 
 if (kind == IntrinsicKind::Cast) {
 	// Format: args[1]=value, args[2]=type (TypeReference)
-	llvm::Value *val = generateExpressionCode(context, args[1]);
+	llvm::Value *val = nullptr;
+	if (!generateRuntimeValue(args[1], val))
+		return CodegenResult::failure();
 	DataType fromType = finalizedExpressionType(context, args[1]);
 
 	// Get target type from the TypeReference argument
@@ -455,9 +475,12 @@ if (kind == IntrinsicKind::Select) {
 	auto *condition = std::get_if<bool>(&conditionValue);
 	if (condition) {
 		Expression *selectedExpression = args[*condition ? 2 : 3];
-		llvm::Value *selectedValue = generateExpressionCode(context, selectedExpression);
-		if (typeHasManagedLifecycle(resultType) && !managedExpressionResultIsOwned(context, selectedExpression))
-			retainManagedValue(context, resultType, selectedValue);
+		llvm::Value *selectedValue = nullptr;
+		if (!generateRuntimeValue(selectedExpression, selectedValue))
+			return CodegenResult::failure();
+		if (typeHasManagedLifecycle(resultType) && !managedExpressionResultIsOwned(context, selectedExpression) &&
+			!retainManagedValue(context, resultType, selectedValue))
+			return CodegenResult::failure();
 		return selectedValue;
 	}
 	return buildRuntimeSelect(context, args, resultType);
@@ -474,11 +497,14 @@ if (kind == IntrinsicKind::Construct) {
 		llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
 		DataType elementType = *resultType.arrayElementType;
 		for (size_t i = 2; i < args.size(); i++) {
-			llvm::Value *elementVal = generateExpressionCode(context, args[i]);
+			llvm::Value *elementVal = nullptr;
+			if (!generateRuntimeValue(args[i], elementVal))
+				return CodegenResult::failure();
 			DataType fromType = finalizedExpressionType(context, args[i]);
 			elementVal = ensureType(context, elementVal, fromType, elementType);
-			if (typeHasManagedLifecycle(elementType) && !managedExpressionResultIsOwned(context, args[i]))
-				retainManagedValue(context, elementType, elementVal);
+			if (typeHasManagedLifecycle(elementType) && !managedExpressionResultIsOwned(context, args[i]) &&
+				!retainManagedValue(context, elementType, elementVal))
+				return CodegenResult::failure();
 			llvm::Value *elementPtr =
 				builder.CreateGEP(arrayType, alloca, {builder.getInt64(0), builder.getInt64(i - 2)}, "array_elem_ptr");
 			builder.CreateStore(elementVal, elementPtr);
@@ -497,7 +523,9 @@ if (kind == IntrinsicKind::Construct) {
 	}
 
 	if (resultType.kind != DataType::Kind::Class) {
-		llvm::Value *val = generateExpressionCode(context, args[2]);
+		llvm::Value *val = nullptr;
+		if (!generateRuntimeValue(args[2], val))
+			return CodegenResult::failure();
 		DataType fromType = finalizedExpressionType(context, args[2]);
 		return ensureType(context, val, fromType, resultType);
 	}
@@ -519,12 +547,15 @@ if (kind == IntrinsicKind::Construct) {
 	std::vector<std::pair<DataType, llvm::Value *>> ownedManagedFields;
 
 	for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-		llvm::Value *fieldVal = generateExpressionCode(context, args[i + 2]);
+		llvm::Value *fieldVal = nullptr;
+		if (!generateRuntimeValue(args[i + 2], fieldVal))
+			return CodegenResult::failure();
 		DataType fieldFromType = finalizedExpressionType(context, args[i + 2]);
 		fieldVal = ensureType(context, fieldVal, fieldFromType, inst.fieldTypes[i]);
 		if (typeHasManagedLifecycle(inst.fieldTypes[i])) {
-			if (!managedExpressionResultIsOwned(context, args[i + 2]))
-				retainManagedValue(context, inst.fieldTypes[i], fieldVal);
+			if (!managedExpressionResultIsOwned(context, args[i + 2]) &&
+				!retainManagedValue(context, inst.fieldTypes[i], fieldVal))
+				return CodegenResult::failure();
 			ownedManagedFields.push_back({inst.fieldTypes[i], fieldVal});
 		}
 		llvm::Value *fieldPtr = createClassFieldPointer(context, concreteType, static_cast<int>(i), alloca);
@@ -535,9 +566,11 @@ if (kind == IntrinsicKind::Construct) {
 		getLLVMType(context, concreteType), alloca, getLLVMABIAlignment(context, concreteType), "struct_load"
 	);
 	if (classDef->retainSection) {
-		retainManagedValue(context, concreteType, result);
+		if (!retainManagedValue(context, concreteType, result))
+			return CodegenResult::failure();
 		for (auto iterator = ownedManagedFields.rbegin(); iterator != ownedManagedFields.rend(); iterator++)
-			releaseManagedValue(context, iterator->first, iterator->second);
+			if (!releaseManagedValue(context, iterator->first, iterator->second))
+				return CodegenResult::failure();
 	}
 	return result;
 }
@@ -546,9 +579,9 @@ if (kind == IntrinsicKind::Property) {
 	// Format: args[1]=instance, args[2]=fieldname (string literal from {word:} capture)
 	Expression *ownerExpr = args[1];
 	DataType ownerType = finalizedExpressionType(context, ownerExpr);
-	bool ownerIsClassPointer = ownerType.isPointer() && ownerType.kind == DataType::Kind::Class;
-	DataType instType = ownerIsClassPointer ? ownerType.dereferenced() : ownerType;
-	ClassDefinition *classDef = instType.classDefinition;
+	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
+	DataType instType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	ClassDefinition *classDef = instType.isPointer() ? nullptr : instType.classDefinition;
 
 	// Get field name from string literal
 	std::string fieldName;
@@ -569,7 +602,7 @@ if (kind == IntrinsicKind::Property) {
 		context.diagnostics.push_back(Diagnostic(
 			context, Diagnostic::Level::Error, "class has no properties", args[1]->range, "type", instType.toString()
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	// Find field index
@@ -586,42 +619,35 @@ if (kind == IntrinsicKind::Property) {
 			context, Diagnostic::Level::Error, "class missing property", args[1]->range, "type", instType.toString(),
 			"property", fieldName
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 
 	DataType fieldType = classDef->instantiations[instType.classInstIndex].fieldTypes[fieldIdx];
-	if (ownerIsClassPointer) {
-		llvm::Value *instPtrValue = generateExpressionCode(context, ownerExpr);
-		if (!instPtrValue)
-			return nullptr;
-		llvm::Value *fieldPtr = createClassFieldPointer(context, instType, fieldIdx, instPtrValue);
+	LValueAddressResult propertyAddress = generateLValueAddress(context, callExpr);
+	if (propertyAddress.status == LValueAddressStatus::Failed)
+		return CodegenResult::failure();
+	if (propertyAddress.status == LValueAddressStatus::Addressable) {
+		requireCompilerInvariant(propertyAddress.address != nullptr, "addressable property produced no field address");
 		llvm::Value *fieldValue = builder.CreateAlignedLoad(
-			getLLVMType(context, fieldType), fieldPtr, getLLVMABIAlignment(context, fieldType), fieldName + "_val"
+			getLLVMType(context, fieldType), propertyAddress.address, getLLVMABIAlignment(context, fieldType),
+			fieldName + "_val"
 		);
-		if (typeHasManagedLifecycle(fieldType))
-			retainManagedValue(context, fieldType, fieldValue);
+		if (typeHasManagedLifecycle(fieldType) && !retainManagedValue(context, fieldType, fieldValue))
+			return CodegenResult::failure();
 		return fieldValue;
 	}
 
-	if (llvm::Value *instPtr = getVariablePointer(context, ownerExpr)) {
-		llvm::Value *fieldPtr = createClassFieldPointer(context, instType, fieldIdx, instPtr);
-		llvm::Value *fieldValue = builder.CreateAlignedLoad(
-			getLLVMType(context, fieldType), fieldPtr, getLLVMABIAlignment(context, fieldType), fieldName + "_val"
-		);
-		if (typeHasManagedLifecycle(fieldType))
-			retainManagedValue(context, fieldType, fieldValue);
-		return fieldValue;
-	}
-
-	llvm::Value *instValue = generateExpressionCode(context, ownerExpr);
-	if (!instValue)
-		return nullptr;
+	llvm::Value *instValue = nullptr;
+	if (!generateRuntimeValue(ownerExpr, instValue))
+		return CodegenResult::failure();
+	requireCompilerInvariant(instValue != nullptr, "class property rvalue owner produced no value");
 	llvm::Value *fieldValue =
 		builder.CreateExtractValue(instValue, {getClassFieldLLVMIndex(context, instType, fieldIdx)}, fieldName + "_val");
-	if (typeHasManagedLifecycle(fieldType))
-		retainManagedValue(context, fieldType, fieldValue);
-	if (typeHasManagedLifecycle(instType) && managedExpressionResultIsOwned(context, ownerExpr))
-		releaseManagedValue(context, instType, instValue);
+	if (typeHasManagedLifecycle(fieldType) && !retainManagedValue(context, fieldType, fieldValue))
+		return CodegenResult::failure();
+	if (typeHasManagedLifecycle(instType) && managedExpressionResultIsOwned(context, ownerExpr) &&
+		!releaseManagedValue(context, instType, instValue))
+		return CodegenResult::failure();
 	return fieldValue;
 }
 
@@ -638,14 +664,14 @@ if (kind == IntrinsicKind::ShaderInput) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "unknown shader input", Range(), "name", inputName)
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 	if (!global) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "shader input unavailable", args[1]->range, "name", inputName)
 		);
-		return nullptr;
+		return CodegenResult::failure();
 	}
 	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 	return builder.CreateLoad(vec4Ty, global, inputName);
@@ -659,7 +685,7 @@ if (kind == IntrinsicKind::ShaderUniform) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "shader uniform requires string literal", args[1] ? args[1]->range : Range()
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
@@ -677,12 +703,13 @@ if (kind == IntrinsicKind::ShaderUniform) {
 
 if (kind == IntrinsicKind::ShaderOutput) {
 	// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
-	llvm::Value *r = generateExpressionCode(context, args[1]);
-	llvm::Value *g = generateExpressionCode(context, args[2]);
-	llvm::Value *b = generateExpressionCode(context, args[3]);
-	llvm::Value *a = generateExpressionCode(context, args[4]);
-	if (!r || !g || !b || !a)
-		return nullptr;
+	llvm::Value *r = nullptr;
+	llvm::Value *g = nullptr;
+	llvm::Value *b = nullptr;
+	llvm::Value *a = nullptr;
+	if (!generateRuntimeValue(args[1], r) || !generateRuntimeValue(args[2], g) || !generateRuntimeValue(args[3], b) ||
+		!generateRuntimeValue(args[4], a))
+		return CodegenResult::failure();
 
 	DataType rType = finalizedExpressionType(context, args[1]);
 	DataType gType = finalizedExpressionType(context, args[2]);
@@ -709,7 +736,7 @@ if (kind == IntrinsicKind::ShaderOutput) {
 			context, Diagnostic::Level::Error, "shader output unavailable",
 			Range(args[1]->range.line, args[1]->range.start(), args[4]->range.end())
 		));
-		return nullptr;
+		return CodegenResult::failure();
 	}
 	builder.CreateStore(color, outGlobal);
 	return nullptr;
@@ -717,15 +744,15 @@ if (kind == IntrinsicKind::ShaderOutput) {
 
 if (kind == IntrinsicKind::ExtractElement) {
 	// @intrinsic("extract element", vector, index) → extract scalar from vector
-	llvm::Value *vec = generateExpressionCode(context, args[1]);
-	if (!vec)
-		return nullptr;
+	llvm::Value *vec = nullptr;
+	if (!generateRuntimeValue(args[1], vec))
+		return CodegenResult::failure();
 	if (auto *idxLit = std::get_if<double>(&args[2]->literalValue)) {
 		return builder.CreateExtractElement(vec, getVectorLaneIndexValue(context, static_cast<unsigned>(*idxLit)), "elem");
 	}
-	llvm::Value *idx = generateExpressionCode(context, args[2]);
-	if (!idx)
-		return nullptr;
+	llvm::Value *idx = nullptr;
+	if (!generateRuntimeValue(args[2], idx))
+		return CodegenResult::failure();
 	idx = ensureType(context, idx, finalizedExpressionType(context, args[2]), {DataType::Kind::Int, 4});
 	return builder.CreateExtractElement(vec, idx, "elem");
 }

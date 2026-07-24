@@ -1,0 +1,1 @@
+tests/required/lvalue_address_failure_argument/main.dl:9-36: Error: address of requires an addressable value

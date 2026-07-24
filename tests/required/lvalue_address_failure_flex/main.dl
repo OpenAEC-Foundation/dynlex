@@ -1,0 +1,5 @@
+function fail:
+    replacement:
+        @intrinsic("address of", 1)
+
+@intrinsic("discard", fail)

@@ -1,0 +1,16 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        failing lifecycle value
+    members:
+        marker as integer
+    retain:
+        @intrinsic("discard", @intrinsic("address of", 1))
+    release:
+        @intrinsic("discard", @intrinsic("lifecycle value"))
+
+@intrinsic("store", value, @intrinsic("construct", failing lifecycle value, 0))
+@intrinsic("discard", value)

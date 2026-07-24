@@ -1,0 +1,5 @@
+function consume value:
+    execute:
+        @intrinsic("discard", value)
+
+consume @intrinsic("address of", 1)

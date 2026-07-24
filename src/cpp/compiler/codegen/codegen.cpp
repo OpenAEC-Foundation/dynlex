@@ -74,7 +74,6 @@ struct VariableAllocaSnapshotEntry {
 	llvm::AllocaInst *alloca = nullptr;
 	std::optional<DataType> finalizedType;
 };
-
 static void collectVariableAllocaSnapshotEntries(
 	ParseContext &context, Section *section, std::unordered_set<VariableReference *> &visitedReferences,
 	std::vector<VariableAllocaSnapshotEntry> &entries
@@ -95,16 +94,13 @@ static void collectVariableAllocaSnapshotEntries(
 	for (Section *child : section->children)
 		collectVariableAllocaSnapshotEntries(context, child, visitedReferences, entries);
 }
-
 struct ScopedVariableAllocaRestore {
 	ParseContext &context;
 	std::vector<VariableAllocaSnapshotEntry> entries;
-
 	explicit ScopedVariableAllocaRestore(ParseContext &context, Section *section) : context(context) {
 		std::unordered_set<VariableReference *> visitedReferences;
 		collectVariableAllocaSnapshotEntries(context, section, visitedReferences, entries);
 	}
-
 	~ScopedVariableAllocaRestore() {
 		for (const VariableAllocaSnapshotEntry &entry : entries) {
 			requireCompilerInvariant(
@@ -118,32 +114,26 @@ struct ScopedVariableAllocaRestore {
 		}
 	}
 };
-
 struct ScopedActiveFlexDefinition {
 	ParseContext &context;
-
 	ScopedActiveFlexDefinition(ParseContext &ctx, Section *section) : context(ctx) {
 		requireCompilerInvariant(section != nullptr, "ScopedActiveFlexDefinition requires a section");
 		context.activeFlexDefinitionStack.push_back(section);
 	}
-
 	~ScopedActiveFlexDefinition() {
 		requireCompilerInvariant(!context.activeFlexDefinitionStack.empty(), "Missing active flex definition to pop");
 		context.activeFlexDefinitionStack.pop_back();
 	}
 };
-
 struct ScopedFlexCallSiteSection {
 	ParseContext &context;
 	bool pushed = false;
-
 	ScopedFlexCallSiteSection(ParseContext &ctx, Section *callSiteSection) : context(ctx) {
 		if (!callSiteSection)
 			return;
 		context.flexCallSiteSectionStack.push_back(callSiteSection);
 		pushed = true;
 	}
-
 	~ScopedFlexCallSiteSection() {
 		if (!pushed)
 			return;
@@ -151,10 +141,8 @@ struct ScopedFlexCallSiteSection {
 		context.flexCallSiteSectionStack.pop_back();
 	}
 };
-
 struct ScopedFlexCallSiteRange {
 	ParseContext &context;
-
 	ScopedFlexCallSiteRange(ParseContext &ctx, const Range &callRange) : context(ctx) {
 		Range diagnosticRange = callRange;
 		Section *callSection = callRange.line ? callRange.line->section : nullptr;
@@ -164,7 +152,6 @@ struct ScopedFlexCallSiteRange {
 		}
 		context.flexCallSiteRangeStack.push_back(diagnosticRange);
 	}
-
 	~ScopedFlexCallSiteRange() {
 		requireCompilerInvariant(!context.flexCallSiteRangeStack.empty(), "Missing flex call-site range to pop");
 		context.flexCallSiteRangeStack.pop_back();
@@ -174,7 +161,7 @@ struct ScopedFlexCallSiteRange {
 
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
 // The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
-Instantiation *generateSpecializedFunction(
+bool generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
 	Instantiation &instantiation
 ) {
@@ -273,6 +260,7 @@ Instantiation *generateSpecializedFunction(
 	// not taken) live as locals of this instantiation and need storage here;
 	// bound parameters are skipped because they resolve through patternBindings.
 	bool ownerVariablesAllocated = false;
+	bool bodySucceeded = true;
 	section->forEachDefinitionBodySection([&](Section *bodySection) {
 		if (bodySection != section && !ownerVariablesAllocated) {
 			allocateSectionVariables(context, section, activeInst.body.get());
@@ -281,14 +269,15 @@ Instantiation *generateSpecializedFunction(
 		InstantiatedSectionBody *body =
 			bodySection == section ? activeInst.body.get() : activeInst.body->bodyForChild(bodySection);
 		requireCompilerInvariant(body, "instantiated function body is missing a definition body section");
-		generateSectionCode(context, bodySection, body);
-		return true;
+		bodySucceeded = generateSectionCode(context, bodySection, body);
+		return bodySucceeded;
 	});
 
 	// Add implicit void return if the function returns void
-	if (activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->getTerminator()) {
-		releaseManagedStorageForReturn(context);
-		builder.CreateRetVoid();
+	if (bodySucceeded && activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->getTerminator()) {
+		bodySucceeded = releaseManagedStorageForReturn(context);
+		if (bodySucceeded)
+			builder.CreateRetVoid();
 	}
 
 	// Restore all codegen state
@@ -303,7 +292,7 @@ Instantiation *generateSpecializedFunction(
 		builder.SetInsertPoint(savedBlock, savedPoint);
 		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
-	return &activeInst;
+	return bodySucceeded;
 }
 
 static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argTypes) {
@@ -313,8 +302,10 @@ static std::string buildCallableFunctionName(PatternDefinition *definition, cons
 	return name;
 }
 
-llvm::Function *
-ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage) {
+bool ensureCallableFunctionGenerated(
+	ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage, llvm::Function *&generatedFunction
+) {
+	generatedFunction = nullptr;
 	requireCompilerInvariant(
 		definition && definition->section && definition->section->type == SectionType::Function && !definition->section->isFlex,
 		"non-callable definition reached callable codegen"
@@ -338,17 +329,16 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 	}
 
 	Section *section = definition->section;
-	if (!inst->llvmFunction) {
-		inst = generateSpecializedFunction(context, section, paramBindings, *inst);
-		requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
-	}
+	if (!inst->llvmFunction && !generateSpecializedFunction(context, section, paramBindings, *inst))
+		return false;
 	requireCompilerInvariant(inst->valid, "invalid callable instantiation reached codegen");
 	requireCompilerInvariant(!inst->needsReinfer, "unfinished callable instantiation reached codegen");
 	requireCompilerInvariant(inst->returnType.isDeduced(), "callable without a return type reached codegen");
 	if (inst->llvmCallableFunction) {
 		if (requireExternalLinkage)
 			inst->llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
-		return inst->llvmCallableFunction;
+		generatedFunction = inst->llvmCallableFunction;
+		return true;
 	}
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -381,11 +371,15 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 	std::vector<llvm::Value *> managedParameterStorage;
 	callArguments.reserve(argTypes.size());
 	argumentIndex = 0;
+	bool succeeded = true;
 	for (llvm::Argument &argument : callableFunction->args()) {
 		const DataType &argumentType = argTypes[argumentIndex];
 		llvm::AllocaInst *parameterAlloca = createEntryAlloca(context, parameters[argumentIndex].first, argumentType);
 		if (typeHasManagedLifecycle(argumentType)) {
-			retainManagedValue(context, argumentType, &argument);
+			if (!retainManagedValue(context, argumentType, &argument)) {
+				succeeded = false;
+				break;
+			}
 			registerManagedStorage(context, parameterAlloca, argumentType, section);
 			initializeManagedStorage(context, parameterAlloca, argumentType, &argument);
 			managedParameterStorage.push_back(parameterAlloca);
@@ -396,15 +390,23 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 		argumentIndex++;
 	}
 
-	llvm::CallInst *call = builder.CreateCall(inst->llvmFunction, callArguments);
-	for (auto iterator = managedParameterStorage.rbegin(); iterator != managedParameterStorage.rend(); iterator++)
-		releaseManagedTemporaryStorage(context, *iterator);
-	if (inst->returnType.kind == DataType::Kind::Void) {
-		builder.CreateRetVoid();
-	} else {
-		builder.CreateRet(call);
+	if (succeeded) {
+		llvm::CallInst *call = builder.CreateCall(inst->llvmFunction, callArguments);
+		for (auto iterator = managedParameterStorage.rbegin(); iterator != managedParameterStorage.rend(); iterator++) {
+			if (!releaseManagedTemporaryStorage(context, *iterator)) {
+				succeeded = false;
+				break;
+			}
+		}
+		if (succeeded) {
+			if (inst->returnType.kind == DataType::Kind::Void)
+				builder.CreateRetVoid();
+			else
+				builder.CreateRet(call);
+		}
 	}
-	requireCompilerInvariant(context.managedLocalStorage.empty(), "callable wrapper left managed storage unclosed");
+	if (succeeded)
+		requireCompilerInvariant(context.managedLocalStorage.empty(), "callable wrapper left managed storage unclosed");
 	context.managedLocalStorage = std::move(savedManagedLocalStorage);
 
 	if (savedBlock) {
@@ -412,7 +414,10 @@ ensureCallableFunctionGenerated(ParseContext &context, PatternDefinition *defini
 		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
 
-	return callableFunction;
+	if (!succeeded)
+		return false;
+	generatedFunction = callableFunction;
+	return true;
 }
 
 static bool generateExposedFunctions(ParseContext &context, Section *section) {
@@ -427,7 +432,8 @@ static bool generateExposedFunctions(ParseContext &context, Section *section) {
 			));
 			return false;
 		}
-		if (!ensureCallableFunctionGenerated(context, section->patternDefinitions.front(), true))
+		llvm::Function *generatedFunction = nullptr;
+		if (!ensureCallableFunctionGenerated(context, section->patternDefinitions.front(), true, generatedFunction))
 			return false;
 	}
 
@@ -478,7 +484,7 @@ static void finalizeFlexBodySectionControlFlow(ParseContext &context, ParseConte
 	}
 }
 
-void emitSectionFlexCallerBody(
+bool emitSectionFlexCallerBody(
 	ParseContext &context, ParseContext::SectionFlexBodyFrame &frame, Section *executionSection, bool finalizeControlFlow
 ) {
 	requireCompilerInvariant(
@@ -502,16 +508,19 @@ void emitSectionFlexCallerBody(
 	InstantiatedSectionBody *instantiatedBody = frame.instantiatedBody;
 	Section *definitionSection = frame.definitionSection;
 	frame.bodyEmitted = true;
-	generateSectionCode(context, bodySection, instantiatedBody);
-	requireCompilerInvariant(
-		frameIndex < context.sectionFlexBodyFrames.size() &&
-			context.sectionFlexBodyFrames[frameIndex].definitionSection == definitionSection,
-		"section-flex body frame stack changed while emitting its body"
-	);
-	if (finalizeControlFlow)
-		finalizeFlexBodySectionControlFlow(context, context.sectionFlexBodyFrames[frameIndex]);
+	bool succeeded = generateSectionCode(context, bodySection, instantiatedBody);
+	if (succeeded) {
+		requireCompilerInvariant(
+			frameIndex < context.sectionFlexBodyFrames.size() &&
+				context.sectionFlexBodyFrames[frameIndex].definitionSection == definitionSection,
+			"section-flex body frame stack changed while emitting its body"
+		);
+		if (finalizeControlFlow)
+			finalizeFlexBodySectionControlFlow(context, context.sectionFlexBodyFrames[frameIndex]);
+	}
 	if (pushedBindings)
 		context.flexBindingFrames.popFrame();
+	return succeeded;
 }
 
 static llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
@@ -558,7 +567,7 @@ generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &v
 }
 
 // Generate code for an expression
-llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
+CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return nullptr;
 
@@ -587,13 +596,16 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
 		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
-			llvm::Value *elementValue = generateExpressionCode(context, expr->arguments[i]);
+			CodegenResult element = generateExpressionCode(context, expr->arguments[i]);
+			if (!element)
+				return element;
+			llvm::Value *elementValue = element.value;
 			DataType fromType = finalizedExpressionType(context, expr->arguments[i]);
 			elementValue = ensureType(context, elementValue, fromType, *arrayType.arrayElementType);
 			if (typeHasManagedLifecycle(*arrayType.arrayElementType) &&
-				!managedExpressionResultIsOwned(context, expr->arguments[i])) {
-				retainManagedValue(context, *arrayType.arrayElementType, elementValue);
-			}
+				!managedExpressionResultIsOwned(context, expr->arguments[i]) &&
+				!retainManagedValue(context, *arrayType.arrayElementType, elementValue))
+				return CodegenResult::failure();
 			llvm::Value *elementPtr = builder.CreateGEP(
 				llvmArrayType, tempAlloca, {builder.getInt64(0), builder.getInt64(static_cast<int64_t>(i))}, "array_elem_ptr"
 			);
@@ -629,10 +641,10 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		}
 
 		llvm::Type *loadType = getLLVMType(context, varType);
-		auto loadOwnedValue = [&](llvm::Value *address, const std::string &valueName) {
+		auto loadOwnedValue = [&](llvm::Value *address, const std::string &valueName) -> CodegenResult {
 			llvm::Value *value = builder.CreateAlignedLoad(loadType, address, getLLVMABIAlignment(context, varType), valueName);
-			if (typeHasManagedLifecycle(varType))
-				retainManagedValue(context, varType, value);
+			if (typeHasManagedLifecycle(varType) && !retainManagedValue(context, varType, value))
+				return CodegenResult::failure();
 			return value;
 		};
 
@@ -724,18 +736,22 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			requireCompilerInvariant(
 				static_cast<bool>(expr->inferredFlexBody), "section flex reached codegen without its inferred replacement body"
 			);
+			bool succeeded = true;
 			matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
 				InstantiatedSectionBody *definitionBody = definitionBodySection == matchedSection
 															  ? expr->inferredFlexBody.get()
 															  : expr->inferredFlexBody->bodyForChild(definitionBodySection);
 				requireCompilerInvariant(definitionBody, "section flex inferred body is missing a definition section");
 				llvm::Value *definitionResult = nullptr;
-				generateSectionCode(context, definitionBodySection, definitionBody, &definitionResult);
+				if (!generateSectionCode(context, definitionBodySection, definitionBody, &definitionResult)) {
+					succeeded = false;
+					return false;
+				}
 				result = definitionResult;
 				return true;
 			});
 
-			if (bodySection) {
+			if (bodySection && succeeded) {
 				requireCompilerInvariant(
 					!context.sectionFlexBodyFrames.empty(), "Missing section flex body frame when leaving section flex"
 				);
@@ -748,10 +764,15 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 					Section *executionSection = expr->inferredFlexExpansion->range.line
 													? expr->inferredFlexExpansion->range.line->section
 													: matchedSection;
-					emitSectionFlexCallerBody(context, frame, executionSection);
+					succeeded = emitSectionFlexCallerBody(context, frame, executionSection);
 				} else {
 					finalizeFlexBodySectionControlFlow(context, frame);
 				}
+			}
+			if (bodySection) {
+				requireCompilerInvariant(
+					!context.sectionFlexBodyFrames.empty(), "Missing section flex body frame when leaving section flex"
+				);
 				context.sectionFlexBodyFrames.pop_back();
 			}
 
@@ -760,6 +781,8 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 			context.currentBodyInstantiation = savedBodyInstantiation;
 			context.currentSwitchInst = savedSwitchInst;
 			context.currentSwitchExitBlock = savedSwitchExitBlock;
+			if (!succeeded)
+				return CodegenResult::failure();
 			return result;
 		}
 
@@ -770,10 +793,8 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		requireCompilerInvariant(
 			argTypes.size() == paramBindings.size(), "selected instantiation argument count diverged from the call"
 		);
-		if (!inst->llvmFunction) {
-			inst = generateSpecializedFunction(context, matchedSection, paramBindings, *inst);
-			requireCompilerInvariant(inst != nullptr, "Missing generated instantiation");
-		}
+		if (!inst->llvmFunction && !generateSpecializedFunction(context, matchedSection, paramBindings, *inst))
+			return CodegenResult::failure();
 		llvm::Function *func = inst->llvmFunction;
 
 		// Build call arguments: pass variable pointers or temp allocas
@@ -783,20 +804,25 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 		args.reserve(runtimeParameterIndices.size());
 		for (size_t runtimeParameterIndex : runtimeParameterIndices) {
 			Expression *argExpr = paramBindings[runtimeParameterIndex].second;
-			llvm::Value *ptr = getVariablePointer(context, argExpr);
-			if (ptr) {
-				args.push_back(ptr);
+			LValueAddressResult lvalue = generateLValueAddress(context, argExpr);
+			if (lvalue.status == LValueAddressStatus::Failed)
+				return CodegenResult::failure();
+			if (lvalue.status == LValueAddressStatus::Addressable) {
+				requireCompilerInvariant(lvalue.address != nullptr, "addressable call argument produced no address");
+				args.push_back(lvalue.address);
 			} else {
-				llvm::Value *argVal = generateExpressionCode(context, argExpr);
-				if (!argVal)
-					crashCompilerBug("Runtime call argument produced no code");
+				CodegenResult generatedArgument = generateExpressionCode(context, argExpr);
+				if (!generatedArgument)
+					return generatedArgument;
+				llvm::Value *argVal = generatedArgument.value;
+				requireCompilerInvariant(argVal != nullptr, "runtime call argument produced no value");
 				llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[runtimeParameterIndex]);
 				const DataType &argumentType = argTypes[runtimeParameterIndex];
 				if (typeHasManagedLifecycle(argumentType)) {
 					Section *ownerSection = expr->range.line ? expr->range.line->section : nullptr;
 					requireCompilerInvariant(ownerSection != nullptr, "managed call temporary has no owning section");
-					if (!managedExpressionResultIsOwned(context, argExpr))
-						retainManagedValue(context, argumentType, argVal);
+					if (!managedExpressionResultIsOwned(context, argExpr) && !retainManagedValue(context, argumentType, argVal))
+						return CodegenResult::failure();
 					registerManagedStorage(context, tempAlloca, argumentType, ownerSection);
 					initializeManagedStorage(context, tempAlloca, argumentType, argVal);
 					managedTemporaryArguments.push_back(tempAlloca);
@@ -809,7 +835,8 @@ llvm::Value *generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		llvm::CallInst *call = builder.CreateCall(func, args);
 		for (auto iterator = managedTemporaryArguments.rbegin(); iterator != managedTemporaryArguments.rend(); iterator++)
-			releaseManagedTemporaryStorage(context, *iterator);
+			if (!releaseManagedTemporaryStorage(context, *iterator))
+				return CodegenResult::failure();
 		return call;
 	}
 
@@ -866,7 +893,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 						InstantiatedSectionBody *switchBody = body ? body->bodyForChild(switchSection) : nullptr;
 						InstantiatedSectionBody *selectedBody =
 							switchBody ? switchBody->bodyForChild(selectedLine->sectionOpening) : nullptr;
-						generateSectionCode(context, selectedLine->sectionOpening, selectedBody, &lastGeneratedValue);
+						if (!generateSectionCode(context, selectedLine->sectionOpening, selectedBody, &lastGeneratedValue))
+							return false;
 					}
 				}
 				if (!selection.fallsThrough)
@@ -905,7 +933,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 					if (selectedLine->sectionOpening) {
 						InstantiatedSectionBody *selectedBody =
 							body ? body->bodyForChild(selectedLine->sectionOpening) : nullptr;
-						generateSectionCode(context, selectedLine->sectionOpening, selectedBody, &lastGeneratedValue);
+						if (!generateSectionCode(context, selectedLine->sectionOpening, selectedBody, &lastGeneratedValue))
+							return false;
 					}
 				}
 				i = chainEnd;
@@ -939,7 +968,10 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 					llvm::DILocation::get(*context.llvmContext, line->sourceFileLineIndex + 1, 0, scope)
 				);
 			}
-			lastGeneratedValue = generateExpressionCode(context, lineExpression);
+			CodegenResult generatedLine = generateExpressionCode(context, lineExpression);
+			if (!generatedLine)
+				return false;
+			lastGeneratedValue = generatedLine.value;
 		}
 		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
 			break;
@@ -951,7 +983,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			break;
 	}
 
-	releaseManagedStorageForSection(context, section);
+	if (!releaseManagedStorageForSection(context, section))
+		return false;
 	if (generatedValue)
 		*generatedValue = lastGeneratedValue;
 	return true;

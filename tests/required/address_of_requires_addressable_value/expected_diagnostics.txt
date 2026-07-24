@@ -1,0 +1,1 @@
+tests/required/address_of_requires_addressable_value/main.dl:1-36: Error: address of requires an addressable value

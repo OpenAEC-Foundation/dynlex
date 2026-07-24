@@ -1,0 +1,14 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        box
+    members:
+        value as integer
+
+@intrinsic("store", value, @intrinsic("construct", box, 1))
+@intrinsic("store", pointer, @intrinsic("address of", value))
+@intrinsic("store", pointer_pointer, @intrinsic("address of", pointer))
+@intrinsic("discard", @intrinsic("address of", @intrinsic("property", pointer_pointer, "value")))

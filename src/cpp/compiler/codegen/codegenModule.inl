@@ -187,7 +187,8 @@ bool generateCode(ParseContext &context) {
 		builder.CreateBr(context.mainCleanupBlock);
 	}
 	builder.SetInsertPoint(context.mainCleanupBlock);
-	releaseAllManagedStorage(context);
+	if (!releaseAllManagedStorage(context))
+		return false;
 	if (context.options.emitSPIRV)
 		builder.CreateRetVoid();
 	else
