@@ -1,0 +1,7 @@
+import lib/std.dl
+
+exposed function recursive {integer:value}:
+	execute:
+		if @intrinsic("greater than", value, 0):
+			@intrinsic("return", recursive @intrinsic("subtract", value, 1))
+		@intrinsic("return", recursive value)

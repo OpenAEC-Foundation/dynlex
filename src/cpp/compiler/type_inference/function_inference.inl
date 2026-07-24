@@ -316,10 +316,15 @@ static void setRecursiveInferenceFailure(
 	Range diagnosticRange = definition ? definition->range : fallbackRange;
 	if (functionName.empty())
 		functionName = definition ? (std::string)definition->range.subString : "<expression>";
-	context.setTypeFailure(renderConfiguredMessage(
+	std::string detail = renderConfiguredMessage(
 		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge", "message",
 		{{"function", functionName}}
-	));
+	);
+	context.setTypeFailure(detail);
+	// Candidate failures from the final reinference pass are provisional: the
+	// fixed-point check owns the terminal cause once that pass makes no
+	// progress. Keep unrelated grouping priorities unchanged.
+	context.fail(buildFailureDetailDiagnostic(diagnosticRange, std::move(detail)), 2);
 }
 
 template <typename InferPassFn>

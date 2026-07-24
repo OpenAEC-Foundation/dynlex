@@ -783,21 +783,16 @@ class GroupingInferenceTransaction {
 	}
 };
 
-static bool
-standaloneExpressionHasNonVoidResult(Expression *expression, InferenceContext &context, bool observedRecursiveDependency) {
+static bool standaloneExpressionHasNonVoidResult(
+	Expression *expression, const InferenceContext &context, bool observedRecursiveDependency
+) {
 	DataType resultType = expression ? expression->type : DataType{};
 	if (resultType.isDeduced())
 		return resultType.kind != DataType::Kind::Void;
-	if (observedRecursiveDependency && context.currentInstantiation && context.currentInstantiation->needsReinfer)
-		return false;
-	PatternDefinition *definition = nullptr;
-	if (context.currentInstantiation && context.currentInstantiation->body &&
-		context.currentInstantiation->body->sourceSection &&
-		!context.currentInstantiation->body->sourceSection->patternDefinitions.empty()) {
-		definition = context.currentInstantiation->body->sourceSection->patternDefinitions.front();
-	}
-	setRecursiveInferenceFailure(context, definition, expression ? expression->range : Range{}, "");
-	context.typesValid = false;
+	requireCompilerInvariant(
+		observedRecursiveDependency && context.currentInstantiation && context.currentInstantiation->needsReinfer,
+		"standalone expression remained undeduced without a pending recursive reinference"
+	);
 	return false;
 }
 
@@ -827,11 +822,7 @@ static bool validateGroupingInTrial(
 	);
 	bool trialSucceeded = context.typesValid;
 	if (trialSucceeded && requireVoidResult) {
-		bool hasNonVoidResult =
-			standaloneExpressionHasNonVoidResult(expr, context, transaction->dependsOnRecursiveDependency());
-		if (!context.typesValid) {
-			trialSucceeded = false;
-		} else if (hasNonVoidResult) {
+		if (standaloneExpressionHasNonVoidResult(expr, context, transaction->dependsOnRecursiveDependency())) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
