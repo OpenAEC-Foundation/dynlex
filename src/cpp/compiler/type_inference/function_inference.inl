@@ -324,8 +324,7 @@ static void setRecursiveInferenceFailure(
 	// Candidate failures from the final reinference pass are provisional: the
 	// fixed-point check owns the terminal cause once that pass makes no
 	// progress. Keep unrelated grouping priorities unchanged.
-	Range failureRange =
-		context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : diagnosticRange;
+	Range failureRange = context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : diagnosticRange;
 	context.fail(buildFailureDetailDiagnostic(failureRange, std::move(detail)), 2);
 }
 
