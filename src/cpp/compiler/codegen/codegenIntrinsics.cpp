@@ -502,48 +502,6 @@ CodegenResult generateIntrinsicCode(
 				return CodegenResult::failure();
 			if (!storeManagedValue(context, ptr, destType, val))
 				return CodegenResult::failure();
-		} else if (destType.kind == DataType::Kind::Class && !destType.isPointer() && destType.classDefinition &&
-				   destType.classInstIndex >= 0) {
-			ClassDefinition *classDef = destType.classDefinition;
-			auto &destFields = classDef->instantiations[destType.classInstIndex].fieldTypes;
-			auto &srcFields = valType.classDefinition
-								  ? valType.classDefinition->instantiations[valType.classInstIndex].fieldTypes
-								  : destFields;
-			llvm::Value *srcPtr = val;
-			if (!srcPtr->getType()->isPointerTy()) {
-				llvm::AllocaInst *tmpStruct = createEntryAlloca(context, "struct_src", valType);
-				builder.CreateAlignedStore(srcPtr, tmpStruct, getLLVMABIAlignment(context, valType));
-				srcPtr = tmpStruct;
-			}
-			bool sameLayout = (srcFields.size() == destFields.size());
-			if (sameLayout) {
-				for (size_t i = 0; i < srcFields.size(); i++) {
-					if (srcFields[i] != destFields[i]) {
-						sameLayout = false;
-						break;
-					}
-				}
-			}
-			if (sameLayout) {
-				llvm::Type *structType = getLLVMType(context, destType);
-				llvm::Value *srcVal =
-					builder.CreateAlignedLoad(structType, srcPtr, getLLVMABIAlignment(context, valType), "struct_load");
-				builder.CreateAlignedStore(srcVal, ptr, getLLVMABIAlignment(context, destType));
-			} else {
-				llvm::Type *srcStructType = getLLVMType(context, valType);
-				llvm::Type *destStructType = getLLVMType(context, destType);
-				for (size_t i = 0; i < destFields.size(); i++) {
-					llvm::Value *srcFieldPtr = builder.CreateStructGEP(
-						srcStructType, srcPtr, getClassFieldLLVMIndex(context, valType, static_cast<int>(i)), "src_field"
-					);
-					llvm::Value *fieldVal = builder.CreateLoad(getLLVMType(context, srcFields[i]), srcFieldPtr, "field_val");
-					fieldVal = ensureType(context, fieldVal, srcFields[i], destFields[i]);
-					llvm::Value *destFieldPtr = builder.CreateStructGEP(
-						destStructType, ptr, getClassFieldLLVMIndex(context, destType, static_cast<int>(i)), "dest_field"
-					);
-					builder.CreateStore(fieldVal, destFieldPtr);
-				}
-			}
 		} else {
 			val = ensureType(context, val, valType, destType);
 			builder.CreateAlignedStore(val, ptr, getLLVMABIAlignment(context, destType));

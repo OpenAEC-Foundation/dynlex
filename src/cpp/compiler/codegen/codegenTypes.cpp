@@ -501,6 +501,98 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 	return {fieldAddress, LValueAddressStatus::Addressable};
 }
 
+static llvm::Value *
+convertStructurallyRefinedClass(ParseContext &context, llvm::Value *value, const DataType &fromType, const DataType &toType) {
+	requireCompilerInvariant(
+		fromType.kind == DataType::Kind::Class && toType.kind == DataType::Kind::Class && !fromType.isPointer() &&
+			!toType.isPointer() && fromType.classDefinition && fromType.classDefinition == toType.classDefinition &&
+			fromType.classInstIndex >= 0 && toType.classInstIndex >= 0,
+		"structural class conversion requires concrete instantiations of one class"
+	);
+	requireCompilerInvariant(
+		ClassDefinition::typeStructurallyRefines(toType, fromType),
+		"structural class conversion target does not refine its source"
+	);
+	requireCompilerInvariant(
+		value->getType() == getLLVMType(context, fromType), "structural class conversion value has the wrong source ABI"
+	);
+
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	const ClassInstantiation &fromInstantiation =
+		fromType.classDefinition->instantiations[static_cast<size_t>(fromType.classInstIndex)];
+	const ClassInstantiation &toInstantiation =
+		toType.classDefinition->instantiations[static_cast<size_t>(toType.classInstIndex)];
+	requireCompilerInvariant(
+		fromInstantiation.fieldTypes.size() == toInstantiation.fieldTypes.size(),
+		"structurally compatible class instantiations disagree on field count"
+	);
+
+	llvm::Value *result = llvm::UndefValue::get(getLLVMType(context, toType));
+	for (size_t fieldIndex = 0; fieldIndex < fromInstantiation.fieldTypes.size(); fieldIndex++) {
+		llvm::Value *fieldValue = builder.CreateExtractValue(
+			value, getClassFieldLLVMIndex(context, fromType, static_cast<int>(fieldIndex)), "class_field"
+		);
+		fieldValue =
+			ensureType(context, fieldValue, fromInstantiation.fieldTypes[fieldIndex], toInstantiation.fieldTypes[fieldIndex]);
+		result = builder.CreateInsertValue(
+			result, fieldValue, getClassFieldLLVMIndex(context, toType, static_cast<int>(fieldIndex)), "class_refine"
+		);
+	}
+	return result;
+}
+
+static llvm::Value *
+convertStructurallyRefinedArray(ParseContext &context, llvm::Value *value, const DataType &fromType, const DataType &toType) {
+	requireCompilerInvariant(
+		fromType.kind == DataType::Kind::Array && toType.kind == DataType::Kind::Array && !fromType.isPointer() &&
+			!toType.isPointer() && fromType.arrayElementType && toType.arrayElementType &&
+			ClassDefinition::typeStructurallyRefines(toType, fromType),
+		"structural array conversion target does not refine its source"
+	);
+	requireCompilerInvariant(
+		value->getType() == getLLVMType(context, fromType), "structural array conversion value has the wrong source ABI"
+	);
+
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::Value *result = llvm::UndefValue::get(getLLVMType(context, toType));
+	for (int elementIndex = 0; elementIndex < fromType.arraySize; elementIndex++) {
+		llvm::Value *elementValue = builder.CreateExtractValue(value, static_cast<unsigned>(elementIndex), "array_element");
+		elementValue = ensureType(context, elementValue, *fromType.arrayElementType, *toType.arrayElementType);
+		result = builder.CreateInsertValue(result, elementValue, static_cast<unsigned>(elementIndex), "array_refine");
+	}
+	return result;
+}
+
+static llvm::Value *convertMatrix(ParseContext &context, llvm::Value *value, const DataType &fromType, const DataType &toType) {
+	requireCompilerInvariant(
+		fromType.kind == DataType::Kind::Matrix && toType.kind == DataType::Kind::Matrix && !fromType.isPointer() &&
+			!toType.isPointer() && fromType.arrayElementType && toType.arrayElementType &&
+			fromType.matrixRows() == toType.matrixRows() && fromType.matrixColumns() == toType.matrixColumns(),
+		"matrix conversion requires matching dimensions"
+	);
+	requireCompilerInvariant(
+		value->getType() == getLLVMType(context, fromType), "matrix conversion value has the wrong source ABI"
+	);
+
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	auto *targetMatrixType = llvm::cast<llvm::ArrayType>(getLLVMType(context, toType));
+	llvm::Value *result = llvm::UndefValue::get(targetMatrixType);
+	for (int rowIndex = 0; rowIndex < toType.matrixRows(); rowIndex++) {
+		llvm::Value *sourceRow = builder.CreateExtractValue(value, static_cast<unsigned>(rowIndex), "matrix_row");
+		llvm::Value *targetRow = llvm::UndefValue::get(targetMatrixType->getElementType());
+		for (int columnIndex = 0; columnIndex < toType.matrixColumns(); columnIndex++) {
+			llvm::Value *elementValue =
+				builder.CreateExtractElement(sourceRow, getVectorLaneIndexValue(context, columnIndex), "matrix_element");
+			elementValue = ensureType(context, elementValue, *fromType.arrayElementType, *toType.arrayElementType);
+			targetRow = builder.CreateInsertElement(
+				targetRow, elementValue, getVectorLaneIndexValue(context, columnIndex), "matrix_cast"
+			);
+		}
+		result = builder.CreateInsertValue(result, targetRow, static_cast<unsigned>(rowIndex), "matrix_refine");
+	}
+	return result;
+}
+
 // Ensure a value has the target LLVM type by inserting conversions if needed
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType) {
 	if (fromType == toType || !val)
@@ -515,6 +607,18 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
 	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
+
+	if (fromType.kind == DataType::Kind::Class && toType.kind == DataType::Kind::Class && !fromType.isPointer() &&
+		!toType.isPointer())
+		return convertStructurallyRefinedClass(context, val, fromType, toType);
+
+	if (fromType.kind == DataType::Kind::Array && toType.kind == DataType::Kind::Array && !fromType.isPointer() &&
+		!toType.isPointer())
+		return convertStructurallyRefinedArray(context, val, fromType, toType);
+
+	if (fromType.kind == DataType::Kind::Matrix && toType.kind == DataType::Kind::Matrix && !fromType.isPointer() &&
+		!toType.isPointer())
+		return convertMatrix(context, val, fromType, toType);
 
 	// Numeric conversions
 	if (fromType.isNumeric() && toType.isNumeric()) {

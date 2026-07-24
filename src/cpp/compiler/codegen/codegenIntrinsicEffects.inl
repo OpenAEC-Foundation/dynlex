@@ -306,6 +306,14 @@ if (kind == IntrinsicKind::Return) {
 		builder.CreateBr(context.mainCleanupBlock);
 		return nullptr;
 	}
+	requireCompilerInvariant(
+		context.currentCodegenInstantiation != nullptr, "function return reached codegen without an active instantiation"
+	);
+	DataType functionReturnType = context.currentCodegenInstantiation->returnType;
+	returnValue = ensureType(context, returnValue, returnType, functionReturnType);
+	returnType = functionReturnType;
+	managedReturn = typeHasManagedLifecycle(returnType);
+	ownedReturn = managedReturn && managedExpressionResultIsOwned(context, args[1]);
 	if (managedReturn && !ownedReturn && !retainManagedValue(context, returnType, returnValue))
 		return CodegenResult::failure();
 	if (!releaseManagedStorageForReturn(context))

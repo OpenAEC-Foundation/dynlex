@@ -1,3 +1,16 @@
+static bool
+refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType) {
+	if (ClassDefinition::typeStructurallyRefines(incomingType, currentType)) {
+		refinedType = incomingType;
+		return true;
+	}
+	if (ClassDefinition::typeStructurallyRefines(currentType, incomingType)) {
+		refinedType = currentType;
+		return true;
+	}
+	return false;
+}
+
 static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType &falseTypeInput, DataType &outType) {
 	DataType trueType = trueTypeInput;
 	DataType falseType = falseTypeInput;
@@ -20,6 +33,8 @@ static bool mergeSelectBranchTypes(const DataType &trueTypeInput, const DataType
 		trueType.matrixColumns() == falseType.matrixColumns()) {
 		return DataType::promoteArithmetic(trueType, falseType, outType);
 	}
+	if (refineUnspecifiedClassInstantiation(trueType, falseType, outType))
+		return true;
 	return false;
 }
 
@@ -29,19 +44,6 @@ static void commitVariableTypeFromValue(Variable *var, Expression *valueExpr, co
 	var->type = valueType;
 	var->typeOriginRange = valueExpr ? valueExpr->range : Range();
 	var->typeOriginFloatLiteralReplacement = makeFloatLiteralReplacement(valueExpr);
-}
-
-static bool
-refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType) {
-	if (ClassDefinition::typeStructurallyRefines(incomingType, currentType)) {
-		refinedType = incomingType;
-		return true;
-	}
-	if (ClassDefinition::typeStructurallyRefines(currentType, incomingType)) {
-		refinedType = currentType;
-		return true;
-	}
-	return false;
 }
 
 static bool mergeVariableAssignmentType(const DataType &targetType, const DataType &valueType, DataType &mergedType) {
