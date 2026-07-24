@@ -1,0 +1,47 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set var to value:
+    replacement:
+        @intrinsic("store", var, value)
+
+function [a|] pointer to pointedtype:
+    replacement:
+        @intrinsic("add pointer depth", pointedtype)
+
+function void:
+    replacement:
+        @intrinsic("type", "void")
+
+class:
+    patterns:
+        [a|] cell
+    members:
+        value
+
+class:
+    patterns:
+        [a|] owner
+    members:
+        cell as a pointer to cell
+
+class:
+    patterns:
+        [a|] holder
+    members:
+        owner as a pointer to owner
+
+function value in {holder:container}:
+    execute:
+        set owned_pointer to container's owner
+        set selected_cell to owned_pointer's cell
+        return selected_cell's value
+
+set cell_value to @intrinsic("construct", a cell, 41)
+set cell_pointer to @intrinsic("address of", cell_value)
+set owner_value to @intrinsic("construct", a owner, cell_pointer)
+set owner_pointer to @intrinsic("address of", owner_value)
+set container to @intrinsic("construct", a holder, owner_pointer)
+set answer to @intrinsic("add", value in container, 1)
+@intrinsic("call", "libc", "exit", void, @intrinsic("subtract", answer, 42))
