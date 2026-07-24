@@ -87,6 +87,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 		expr->type = {};
 	expr->compileTimeValue = {};
 	expr->selectedPatternDefinition = nullptr;
+	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
@@ -539,9 +540,10 @@ static void commitTrialCodeLineGroupings(InferenceContext &context) {
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {
 	if (!expression || !definition || !expression->patternMatch)
 		return 0;
+	(void)matchingPatternPathIndices(expression->patternMatch->nodesPassed, definition);
 	int count = 0;
 	for (PatternTreeNode *node : expression->patternMatch->nodesPassed) {
-		if (node && node->parameterNames.contains(definition))
+		if (node->type == PatternElement::Type::Variable || node->type == PatternElement::Type::Word)
 			count++;
 	}
 	return count;

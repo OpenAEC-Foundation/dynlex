@@ -323,10 +323,14 @@ std::set<std::string> visibleParameterNames(const PatternTreeNode *node, const S
 	std::set<std::string> names;
 	if (!node)
 		return names;
-	for (const auto &[definition, name] : node->parameterNames) {
+	for (const auto &[definition, occurrences] : node->definitionOccurrences) {
 		requireCompilerInvariant(definition != nullptr, "pattern parameter metadata contains a null definition");
-		if (!name.empty() && isPatternDefinitionVisibleFromSource(*definition, sourceFile))
-			names.insert(name);
+		if (!isPatternDefinitionVisibleFromSource(*definition, sourceFile))
+			continue;
+		for (const PatternDefinitionOccurrence &occurrence : occurrences) {
+			if (!occurrence.parameterName.empty())
+				names.insert(occurrence.parameterName);
+		}
 	}
 	return names;
 }

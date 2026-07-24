@@ -1,0 +1,14 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+function choose [{integer:value}|{boolean:value}]:
+    replacement:
+        value
+
+@intrinsic("discard", choose 1)
+@intrinsic("discard", choose @intrinsic("equal", 1, 1))

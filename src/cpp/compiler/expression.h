@@ -68,6 +68,10 @@ struct Expression {
 	PatternMatch *patternMatch{};
 	// For PatternCall: overload selected during type inference.
 	PatternDefinition *selectedPatternDefinition{};
+	// Authored canonical path selected within the definition. Multiple choice
+	// alternatives can share one structural trie path while carrying different
+	// parameter constraints or names.
+	std::optional<size_t> selectedPatternPathIndex;
 	// For the function intrinsic: the exact callable definition selected during inference.
 	PatternDefinition *selectedCallableDefinition{};
 	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.

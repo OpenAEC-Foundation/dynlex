@@ -387,24 +387,25 @@ struct ArgumentTypeInferenceResult {
 	bool deferred = false;
 };
 
-static bool definitionParameterAcceptsVoid(
-	PatternDefinition *definition, const std::vector<PatternTreeNode *> &nodesPassed, size_t argumentIndex
-) {
+static bool definitionParameterAcceptsVoid(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex) {
 	if (!definition)
 		return false;
 	size_t currentArgumentIndex = 0;
 	bool acceptsVoid = false;
-	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &, PatternTreeNode *node) {
+	forEachPatternParameterName(
+		definition, pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		if (acceptsVoid || currentArgumentIndex != argumentIndex) {
 			currentArgumentIndex++;
 			return;
 		}
-		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, node);
+		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(element != nullptr, "matched pattern parameter has no definition element");
 		acceptsVoid = element->resolvedTypeConstraint.isResolved() &&
 					  element->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
 		currentArgumentIndex++;
-	});
+	}
+	);
 	return acceptsVoid;
 }
 
@@ -592,7 +593,13 @@ static void collectPatternCallTraceTargets(
 		if (!definition)
 			continue;
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
-		collectPatternCallBindingPairs(patternCallExpr, definition, paramBindings);
+		if (patternCallExpr->selectedPatternDefinition == definition && patternCallExpr->selectedPatternPathIndex.has_value()) {
+			collectPatternCallBindingPairs(patternCallExpr, definition, paramBindings);
+		} else {
+			for (size_t pathIndex : matchingPatternPathIndices(patternCallExpr->patternMatch->nodesPassed, definition)) {
+				collectPatternCallBindingPairsForPath(patternCallExpr, definition, pathIndex, paramBindings);
+			}
+		}
 		for (const auto &[parameterName, argumentExpression] : paramBindings) {
 			if (!expressionContainsTargetExpression(argumentExpression, targetExpression))
 				continue;
