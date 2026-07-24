@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -446,6 +447,9 @@ static int update_process_status(DynlexProcess *process, bool wait) {
 static bool requested_stream_ready(DynlexProcess *process, DynlexProcessStream stream) {
 	if (stream == 0)
 		return false;
+	if (stream == DYNLEX_PROCESS_STREAM_ANY)
+		return process->standard_output.length > 0 || process->standard_error.length > 0 ||
+			   (process->standard_output_closed && process->standard_error_closed);
 	DynlexProcessBuffer *buffer = stream == DYNLEX_PROCESS_STREAM_STDOUT ? &process->standard_output : &process->standard_error;
 	bool closed = stream == DYNLEX_PROCESS_STREAM_STDOUT ? process->standard_output_closed : process->standard_error_closed;
 	return buffer->length > 0 || closed;
@@ -468,8 +472,25 @@ static int close_output_after_exit(DynlexProcess *process, DynlexPosixProcess *p
 	return result;
 }
 
-int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProcessStream requested_stream) {
+static int64_t monotonic_milliseconds(void) {
+	struct timespec current;
+	if (clock_gettime(CLOCK_MONOTONIC, &current) != 0)
+		return -1;
+	return (int64_t)current.tv_sec * 1000 + current.tv_nsec / 1000000;
+}
+
+int dynlex_platform_process_pump(
+	DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream
+) {
 	DynlexPosixProcess *platform = process->platform;
+	int64_t started = 0;
+	if (timeout_milliseconds > 0) {
+		started = monotonic_milliseconds();
+		if (started < 0) {
+			dynlex_runtime_set_errno_error("Could not read the monotonic clock", errno);
+			return -1;
+		}
+	}
 	while (true) {
 		size_t read_output = 0;
 		size_t read_error = 0;
@@ -479,8 +500,23 @@ int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProces
 			return -1;
 		if (process->finished)
 			return close_output_after_exit(process, platform);
-		if (!wait || requested_stream_ready(process, requested_stream))
+		if (requested_stream_ready(process, requested_stream))
 			return 0;
+		if (timeout_milliseconds == 0)
+			return 0;
+
+		int poll_timeout = -1;
+		if (timeout_milliseconds > 0) {
+			int64_t current = monotonic_milliseconds();
+			if (current < 0) {
+				dynlex_runtime_set_errno_error("Could not read the monotonic clock", errno);
+				return -1;
+			}
+			int64_t remaining = timeout_milliseconds - (current - started);
+			if (remaining <= 0)
+				return 0;
+			poll_timeout = remaining > INT_MAX ? INT_MAX : (int)remaining;
+		}
 
 		struct pollfd descriptors[2];
 		nfds_t count = 0;
@@ -488,15 +524,31 @@ int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProces
 			descriptors[count++] = (struct pollfd){platform->standard_output, POLLIN | POLLHUP, 0};
 		if (platform->standard_error >= 0)
 			descriptors[count++] = (struct pollfd){platform->standard_error, POLLIN | POLLHUP, 0};
-		if (count == 0)
-			return update_process_status(process, true);
+		if (count == 0) {
+			if (timeout_milliseconds < 0)
+				return update_process_status(process, true);
+			int wait_result;
+			do {
+				wait_result = poll(NULL, 0, poll_timeout);
+			} while (wait_result < 0 && errno == EINTR);
+			if (wait_result < 0) {
+				dynlex_runtime_set_errno_error("Could not wait for process", errno);
+				return -1;
+			}
+			return update_process_status(process, false);
+		}
 		int poll_result;
 		do {
-			poll_result = poll(descriptors, count, -1);
+			poll_result = poll(descriptors, count, poll_timeout);
 		} while (poll_result < 0 && errno == EINTR);
 		if (poll_result < 0) {
 			dynlex_runtime_set_errno_error("Could not monitor process pipes", errno);
 			return -1;
+		}
+		if (poll_result == 0) {
+			if (update_process_status(process, false) != 0)
+				return -1;
+			return process->finished ? close_output_after_exit(process, platform) : 0;
 		}
 	}
 }
@@ -549,7 +601,7 @@ int dynlex_platform_process_write(DynlexProcess *process, const char *data, size
 			dynlex_runtime_set_errno_error("Could not write process standard input", error_number);
 			return -1;
 		}
-		if (dynlex_platform_process_pump(process, false, 0) != 0)
+		if (dynlex_platform_process_pump(process, 0, 0) != 0)
 			return -1;
 		struct pollfd descriptors[3];
 		nfds_t descriptor_count = 0;
@@ -566,7 +618,7 @@ int dynlex_platform_process_write(DynlexProcess *process, const char *data, size
 			dynlex_runtime_set_errno_error("Could not monitor process standard input", errno);
 			return -1;
 		}
-		if (dynlex_platform_process_pump(process, false, 0) != 0)
+		if (dynlex_platform_process_pump(process, 0, 0) != 0)
 			return -1;
 	}
 	return 0;

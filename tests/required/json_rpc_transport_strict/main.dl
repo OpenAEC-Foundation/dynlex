@@ -1,0 +1,77 @@
+import lib/json_rpc.dl
+
+function [the|] strict transport test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+function strict transport test command for {string:hex_bytes} hanging {boolean:hang} with {string:standard_error}:
+    execute:
+        set script to "import sys,time\nsys.stderr.write(sys.argv[3]);sys.stderr.flush()\nsys.stdout.buffer.write(bytes.fromhex(sys.argv[1]));sys.stdout.buffer.flush()\nif sys.argv[2]=='1': time.sleep(10)"
+        set command to a process command for the strict transport test interpreter
+        add "-u" as an argument to command
+        add "-c" as an argument to command
+        add script as an argument to command
+        add hex_bytes as an argument to command
+        add ("1" if hang, else "0") as an argument to command
+        add standard_error as an argument to command
+        return command
+
+function strict transport test limits:
+    execute:
+        set limits to the default json rpc limits
+        set limits's maximum_header_length to 256
+        set limits's maximum_payload_length to 256
+        set limits's maximum_buffered_output_length to 512
+        set limits's maximum_standard_error_length to 256
+        set limits's graceful_close_timeout_milliseconds to 10
+        set limits's termination_timeout_milliseconds to 100
+        return limits
+
+function malformed frame {string:hex_bytes} has status {integer:expected_status} hanging {boolean:hang}:
+    execute:
+        set command to strict transport test command for hex_bytes hanging hang with ""
+        set opened to open a json rpc connection using command with limits strict transport test limits
+        if not opened's succeeded:
+            return false
+        set connection to opened's connection
+        set received to receive a json rpc message from connection
+        set repeated to receive a json rpc message from connection
+        set closed to close json rpc connection connection
+        set passed to (received's status = expected_status) and (repeated's status = expected_status)
+        set passed to passed and (connection's state = the json rpc broken state)
+        set passed to passed and closed's succeeded
+        free json rpc receive result received
+        free json rpc receive result repeated
+        free json rpc connection connection
+        return passed
+
+print malformed frame "436f6e74656e742d4c656e6774683a20320a0a7b7d" has status the json rpc malformed frame status hanging true as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d583a20790d0d7b7d" has status the json rpc malformed frame status hanging true as line
+print malformed frame "583a206101620d0a436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" has status the json rpc malformed frame status hanging true as line
+print malformed frame "583a20617f620d0a436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" has status the json rpc malformed frame status hanging true as line
+print malformed frame "426164204e616d653a20780d0a436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d0a636f6e74656e742d6c656e6774683a20320d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+print malformed frame "583a20790d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d0a436f6e74656e742d547970653a206170706c69636174696f6e2f7673636f64652d6a736f6e7270633b20636861727365743d6c6174696e310d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d0a436f6e74656e742d547970653a206170706c69636174696f6e2f6a736f6e3b20636861727365743d7574662d380d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20310d0a0d0aff" has status the json rpc invalid utf8 status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20310d0a0d0a7b" has status the json rpc invalid json status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d0a0d0a5b5d" has status the json rpc invalid message status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20320d0a" has status the json rpc malformed frame status hanging false as line
+print malformed frame "436f6e74656e742d4c656e6774683a20330d0a0d0a7b7d" has status the json rpc malformed frame status hanging false as line
+
+set valid_command to strict transport test command for "436f6e74656e742d4c656e6774683a2033300d0a436f6e74656e742d547970653a204170706c69636174696f6e2f5673636f64652d4a736f6e727063203b2043686172736574203d20225554462d38220d0a0d0a7b226a736f6e727063223a22322e30222c226d6574686f64223a226d227d" hanging false with ""
+set valid_opened to open a json rpc connection using valid_command with limits strict transport test limits
+set valid_connection to valid_opened's connection
+set valid_message to receive a json rpc message from valid_connection
+print valid_message's succeeded as line
+free json rpc receive result valid_message
+set valid_eof to receive a json rpc message from valid_connection
+print ((valid_eof's status = the json rpc end of stream status) and (valid_connection's state = the json rpc peer closed state)) as line
+set repeated_eof to receive a json rpc message from valid_connection
+print (repeated_eof's status = the json rpc end of stream status) as line
+free json rpc receive result valid_eof
+free json rpc receive result repeated_eof
+set valid_closed to close json rpc connection valid_connection
+print valid_closed's succeeded as line
+free json rpc connection valid_connection

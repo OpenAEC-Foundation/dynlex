@@ -428,7 +428,7 @@ int dynlex_process_read(
 	DynlexProcessBuffer *captured = output_buffer(process, stream);
 	bool needs_pump = captured->length == 0 && !stream_is_closed(process, stream);
 	dynlex_platform_process_unlock(process);
-	if (needs_pump && dynlex_platform_process_pump(process, wait != 0, stream) != 0)
+	if (needs_pump && dynlex_platform_process_pump(process, wait != 0 ? -1 : 0, stream) != 0)
 		return -1;
 
 	dynlex_platform_process_lock(process);
@@ -448,7 +448,8 @@ int dynlex_process_read(
 }
 
 static int process_status(
-	DynlexProcess *process, bool wait, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
+	DynlexProcess *process, int64_t timeout_milliseconds, int32_t *finished, int64_t *exit_code, int32_t *terminated,
+	int32_t *termination_signal
 ) {
 	dynlex_runtime_clear_error();
 	if (ensure_usable_process(process) != 0)
@@ -457,7 +458,7 @@ static int process_status(
 		dynlex_runtime_set_error("Invalid process status arguments");
 		return -1;
 	}
-	if ((!process->finished || wait) && dynlex_platform_process_pump(process, wait, 0) != 0)
+	if (!process->finished && dynlex_platform_process_pump(process, timeout_milliseconds, 0) != 0)
 		return -1;
 	*finished = process->finished ? 1 : 0;
 	*exit_code = process->exit_code;
@@ -469,13 +470,38 @@ static int process_status(
 int dynlex_process_poll(
 	DynlexProcess *process, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
 ) {
-	return process_status(process, false, finished, exit_code, terminated, termination_signal);
+	return process_status(process, 0, finished, exit_code, terminated, termination_signal);
 }
 
 int dynlex_process_wait(
 	DynlexProcess *process, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
 ) {
-	return process_status(process, true, finished, exit_code, terminated, termination_signal);
+	return process_status(process, -1, finished, exit_code, terminated, termination_signal);
+}
+
+int dynlex_process_wait_timeout(
+	DynlexProcess *process, int32_t timeout_milliseconds, int32_t *finished, int64_t *exit_code, int32_t *terminated,
+	int32_t *termination_signal
+) {
+	dynlex_runtime_clear_error();
+	if (timeout_milliseconds < 0) {
+		dynlex_runtime_set_error("Process wait timeout must not be negative");
+		return -1;
+	}
+	return process_status(process, timeout_milliseconds, finished, exit_code, terminated, termination_signal);
+}
+
+int dynlex_process_wait_activity(DynlexProcess *process, int32_t timeout_milliseconds) {
+	dynlex_runtime_clear_error();
+	if (ensure_usable_process(process) != 0)
+		return -1;
+	if (timeout_milliseconds < 0) {
+		dynlex_runtime_set_error("Process activity timeout must not be negative");
+		return -1;
+	}
+	if (process->finished)
+		return 0;
+	return dynlex_platform_process_pump(process, timeout_milliseconds, DYNLEX_PROCESS_STREAM_ANY);
 }
 
 int dynlex_process_terminate(DynlexProcess *process) {
@@ -541,7 +567,7 @@ int dynlex_process_communicate(DynlexProcess *process, const char *input, size_t
 	}
 	if (dynlex_process_close_input(process) != 0 && first_error[0] == '\0')
 		capture_runtime_error(first_error, sizeof(first_error), "Could not close process standard input");
-	if (dynlex_platform_process_pump(process, true, 0) != 0 && first_error[0] == '\0')
+	if (dynlex_platform_process_pump(process, -1, 0) != 0 && first_error[0] == '\0')
 		capture_runtime_error(first_error, sizeof(first_error), "Could not wait for process");
 	if (first_error[0] == '\0')
 		return 0;

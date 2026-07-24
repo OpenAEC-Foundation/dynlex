@@ -41,6 +41,7 @@ typedef struct {
 typedef enum {
 	DYNLEX_PROCESS_STREAM_STDOUT = 1,
 	DYNLEX_PROCESS_STREAM_STDERR = 2,
+	DYNLEX_PROCESS_STREAM_ANY = 3,
 } DynlexProcessStream;
 
 typedef struct DynlexProcess {
@@ -65,7 +66,7 @@ void dynlex_process_mark_stream_closed(DynlexProcess *process, DynlexProcessStre
 void dynlex_process_mark_finished(DynlexProcess *process, int64_t exit_code, int32_t termination_signal);
 
 int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCommand *command);
-int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProcessStream requested_stream);
+int dynlex_platform_process_pump(DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream);
 int dynlex_platform_process_write(DynlexProcess *process, const char *data, size_t length, size_t *written);
 int dynlex_platform_process_close_input(DynlexProcess *process);
 int dynlex_platform_process_terminate(DynlexProcess *process);
