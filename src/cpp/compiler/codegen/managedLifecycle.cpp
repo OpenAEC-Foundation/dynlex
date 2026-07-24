@@ -24,53 +24,53 @@ Instantiation &lifecycleInstantiation(const DataType &type, Section *section) {
 	return instantiation->second;
 }
 
-void invokeCustomLifecycle(ParseContext &context, const DataType &type, llvm::Value *value, Section *section) {
+bool invokeCustomLifecycle(ParseContext &context, const DataType &type, llvm::Value *value, Section *section) {
 	requireCompilerInvariant(value != nullptr, "managed lifecycle received a null LLVM value");
 	Instantiation &instantiation = lifecycleInstantiation(type, section);
 	Expression placeholder;
 	placeholder.kind = Expression::Kind::TypedPlaceholder;
 	placeholder.type = type;
 	std::vector<std::pair<std::string, Expression *>> bindings = {{std::string(managedLifecycleParameterName), &placeholder}};
-	if (!instantiation.llvmFunction) {
-		generateSpecializedFunction(context, section, bindings, instantiation);
-	}
+	if (!instantiation.llvmFunction && !generateSpecializedFunction(context, section, bindings, instantiation))
+		return false;
 	requireCompilerInvariant(instantiation.llvmFunction != nullptr, "managed lifecycle function was not generated");
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::AllocaInst *valueAddress = createEntryAlloca(context, "managed_value", type);
 	builder.CreateAlignedStore(value, valueAddress, getLLVMABIAlignment(context, type));
 	builder.CreateCall(instantiation.llvmFunction, {valueAddress});
+	return true;
 }
 
-void applyManagedLifecycle(ParseContext &context, const DataType &type, llvm::Value *value, bool retain) {
+bool applyManagedLifecycle(ParseContext &context, const DataType &type, llvm::Value *value, bool retain) {
 	if (type.kind == DataType::Kind::Array) {
 		if (!type.arrayElementType || !typeHasManagedLifecycle(*type.arrayElementType))
-			return;
+			return true;
 		requireCompilerInvariant(type.arraySize >= 0, "managed array lifecycle requires a fixed element count");
 		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 		if (retain) {
 			for (int index = 0; index < type.arraySize; index++) {
 				llvm::Value *element = builder.CreateExtractValue(value, {static_cast<unsigned>(index)}, "managed_element");
-				applyManagedLifecycle(context, *type.arrayElementType, element, true);
+				if (!applyManagedLifecycle(context, *type.arrayElementType, element, true))
+					return false;
 			}
 		} else {
 			for (int index = type.arraySize; index-- > 0;) {
 				llvm::Value *element = builder.CreateExtractValue(value, {static_cast<unsigned>(index)}, "managed_element");
-				applyManagedLifecycle(context, *type.arrayElementType, element, false);
+				if (!applyManagedLifecycle(context, *type.arrayElementType, element, false))
+					return false;
 			}
 		}
-		return;
+		return true;
 	}
 	if (type.kind != DataType::Kind::Class || type.isPointer())
-		return;
+		return true;
 	requireCompilerInvariant(
 		type.classDefinition && type.classInstIndex >= 0, "managed lifecycle requires a concrete class type"
 	);
 	ClassDefinition &definition = *type.classDefinition;
 	Section *customSection = retain ? definition.retainSection : definition.releaseSection;
-	if (customSection) {
-		invokeCustomLifecycle(context, type, value, customSection);
-		return;
-	}
+	if (customSection)
+		return invokeCustomLifecycle(context, type, value, customSection);
 	const auto &fields = definition.instantiations[type.classInstIndex].fieldTypes;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	if (retain) {
@@ -80,7 +80,8 @@ void applyManagedLifecycle(ParseContext &context, const DataType &type, llvm::Va
 			llvm::Value *field = builder.CreateExtractValue(
 				value, {getClassFieldLLVMIndex(context, type, static_cast<int>(index))}, "managed_field"
 			);
-			applyManagedLifecycle(context, fields[index], field, true);
+			if (!applyManagedLifecycle(context, fields[index], field, true))
+				return false;
 		}
 	} else {
 		for (size_t index = fields.size(); index-- > 0;) {
@@ -89,9 +90,11 @@ void applyManagedLifecycle(ParseContext &context, const DataType &type, llvm::Va
 			llvm::Value *field = builder.CreateExtractValue(
 				value, {getClassFieldLLVMIndex(context, type, static_cast<int>(index))}, "managed_field"
 			);
-			applyManagedLifecycle(context, fields[index], field, false);
+			if (!applyManagedLifecycle(context, fields[index], field, false))
+				return false;
 		}
 	}
+	return true;
 }
 
 ParseContext::ManagedStorageState *findManagedStorage(ParseContext &context, llvm::Value *address) {
@@ -106,11 +109,11 @@ ParseContext::ManagedStorageState *findManagedStorage(ParseContext &context, llv
 	return nullptr;
 }
 
-void releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStorageState &storage) {
+bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStorageState &storage) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	requireCompilerInvariant(builder.GetInsertBlock() != nullptr, "managed cleanup requires an insertion block");
 	if (builder.GetInsertBlock()->getTerminator())
-		return;
+		return true;
 	llvm::Function *function = builder.GetInsertBlock()->getParent();
 	requireCompilerInvariant(function != nullptr, "managed cleanup requires an active function");
 	llvm::Value *initialized = builder.CreateLoad(builder.getInt1Ty(), storage.initializedAddress, "managed_initialized");
@@ -121,10 +124,12 @@ void releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 	llvm::Value *value = builder.CreateAlignedLoad(
 		getLLVMType(context, storage.type), storage.address, getLLVMABIAlignment(context, storage.type), "managed_stored_value"
 	);
-	releaseManagedValue(context, storage.type, value);
+	if (!releaseManagedValue(context, storage.type, value))
+		return false;
 	builder.CreateStore(builder.getFalse(), storage.initializedAddress);
 	builder.CreateBr(continueBlock);
 	builder.SetInsertPoint(continueBlock);
+	return true;
 }
 
 } // namespace
@@ -152,14 +157,14 @@ bool managedExpressionResultIsOwned(ParseContext &context, Expression *expressio
 	return true;
 }
 
-void retainManagedValue(ParseContext &context, const DataType &type, llvm::Value *value) {
+bool retainManagedValue(ParseContext &context, const DataType &type, llvm::Value *value) {
 	requireCompilerInvariant(typeHasManagedLifecycle(type), "retain requested for an unmanaged type");
-	applyManagedLifecycle(context, type, value, true);
+	return applyManagedLifecycle(context, type, value, true);
 }
 
-void releaseManagedValue(ParseContext &context, const DataType &type, llvm::Value *value) {
+bool releaseManagedValue(ParseContext &context, const DataType &type, llvm::Value *value) {
 	requireCompilerInvariant(typeHasManagedLifecycle(type), "release requested for an unmanaged type");
-	applyManagedLifecycle(context, type, value, false);
+	return applyManagedLifecycle(context, type, value, false);
 }
 
 static void
@@ -206,25 +211,28 @@ void initializeManagedStorage(ParseContext &context, llvm::Value *address, const
 	builder.CreateStore(builder.getTrue(), storage->initializedAddress);
 }
 
-void storeManagedValue(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue) {
+bool storeManagedValue(ParseContext &context, llvm::Value *address, const DataType &type, llvm::Value *ownedValue) {
 	requireCompilerInvariant(address != nullptr, "managed store requires a destination address");
 	requireCompilerInvariant(ownedValue != nullptr, "managed store requires an owned value");
 	requireCompilerInvariant(typeHasManagedLifecycle(type), "managed store received an unmanaged type");
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	ParseContext::ManagedStorageState *storage = findManagedStorage(context, address);
 	if (storage) {
-		releaseInitializedStorage(context, *storage);
+		if (!releaseInitializedStorage(context, *storage))
+			return false;
 	} else {
 		llvm::Value *oldValue =
 			builder.CreateAlignedLoad(getLLVMType(context, type), address, getLLVMABIAlignment(context, type), "managed_old");
-		releaseManagedValue(context, type, oldValue);
+		if (!releaseManagedValue(context, type, oldValue))
+			return false;
 	}
 	builder.CreateAlignedStore(ownedValue, address, getLLVMABIAlignment(context, type));
 	if (storage)
 		builder.CreateStore(builder.getTrue(), storage->initializedAddress);
+	return true;
 }
 
-void releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address) {
+bool releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address) {
 	auto storage = std::find_if(
 		context.managedLocalStorage.begin(), context.managedLocalStorage.end(),
 		[address](const ParseContext::ManagedStorageState &candidate) {
@@ -232,29 +240,38 @@ void releaseManagedTemporaryStorage(ParseContext &context, llvm::Value *address)
 	}
 	);
 	requireCompilerInvariant(storage != context.managedLocalStorage.end(), "managed temporary storage is not registered");
-	releaseInitializedStorage(context, *storage);
+	if (!releaseInitializedStorage(context, *storage))
+		return false;
 	context.managedLocalStorage.erase(storage);
+	return true;
 }
 
-void releaseManagedStorageForSection(ParseContext &context, Section *ownerSection) {
+bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSection) {
 	requireCompilerInvariant(ownerSection != nullptr, "managed storage cleanup requires an owning source section");
 	for (size_t index = context.managedLocalStorage.size(); index-- > 0;) {
-		if (context.managedLocalStorage[index].ownerSection == ownerSection)
-			releaseInitializedStorage(context, context.managedLocalStorage[index]);
+		if (context.managedLocalStorage[index].ownerSection == ownerSection &&
+			!releaseInitializedStorage(context, context.managedLocalStorage[index]))
+			return false;
 	}
 	std::erase_if(context.managedLocalStorage, [ownerSection](const ParseContext::ManagedStorageState &storage) {
 		return storage.ownerSection == ownerSection;
 	});
+	return true;
 }
 
-void releaseManagedStorageForReturn(ParseContext &context) {
+bool releaseManagedStorageForReturn(ParseContext &context) {
 	for (size_t index = context.managedLocalStorage.size(); index-- > 0;)
-		releaseInitializedStorage(context, context.managedLocalStorage[index]);
+		if (!releaseInitializedStorage(context, context.managedLocalStorage[index]))
+			return false;
+	return true;
 }
 
-void releaseAllManagedStorage(ParseContext &context) {
+bool releaseAllManagedStorage(ParseContext &context) {
 	for (size_t index = context.managedLocalStorage.size(); index-- > 0;)
-		releaseInitializedStorage(context, context.managedLocalStorage[index]);
+		if (!releaseInitializedStorage(context, context.managedLocalStorage[index]))
+			return false;
 	for (size_t index = context.managedGlobalStorage.size(); index-- > 0;)
-		releaseInitializedStorage(context, context.managedGlobalStorage[index]);
+		if (!releaseInitializedStorage(context, context.managedGlobalStorage[index]))
+			return false;
+	return true;
 }

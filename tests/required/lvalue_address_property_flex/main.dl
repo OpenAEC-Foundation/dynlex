@@ -1,0 +1,12 @@
+import lib/std.dl
+
+class:
+    patterns:
+        record
+    members:
+        value as integer
+
+set container to @intrinsic("construct", record, 1)
+set value_address to the address of the value of container
+@intrinsic("store at", value_address, 5)
+print the value of container as line

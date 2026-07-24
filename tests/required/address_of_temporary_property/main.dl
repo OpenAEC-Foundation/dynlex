@@ -1,0 +1,11 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        box
+    members:
+        value as integer
+
+@intrinsic("discard", @intrinsic("address of", @intrinsic("property", @intrinsic("construct", box, 1), "value")))

@@ -1,0 +1,1 @@
+@intrinsic("store", target, @intrinsic("address of", 1))

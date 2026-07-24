@@ -1,0 +1,61 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] pointer to pointed_type:
+    replacement:
+        @intrinsic("add pointer depth", pointed_type)
+
+class:
+    patterns:
+        cell
+    members:
+        number as integer
+
+class:
+    patterns:
+        holder
+    members:
+        child as cell
+        number_pointer as a pointer to integer
+
+class:
+    patterns:
+        managed holder
+    members:
+        references as a pointer to integer
+        child as cell
+    retain:
+        @intrinsic("store", count, @intrinsic("dereference", @intrinsic("property", @intrinsic("lifecycle value"), "references")))
+        @intrinsic("store at", @intrinsic("property", @intrinsic("lifecycle value"), "references"), @intrinsic("add", count, 1))
+    release:
+        @intrinsic("store", count, @intrinsic("subtract", @intrinsic("dereference", @intrinsic("property", @intrinsic("lifecycle value"), "references")), 1))
+        @intrinsic("store at", @intrinsic("property", @intrinsic("lifecycle value"), "references"), count)
+
+function pointer after incrementing counter:
+    execute:
+        @intrinsic("store", counter, @intrinsic("add", counter, 1))
+        @intrinsic("return", pointer)
+
+@intrinsic("store", number, 10)
+@intrinsic("store", number_pointer, @intrinsic("address of", number))
+@intrinsic("store", dereference_address, @intrinsic("address of", @intrinsic("dereference", number_pointer)))
+@intrinsic("store at", dereference_address, 11)
+
+@intrinsic("store", owner, @intrinsic("construct", holder, @intrinsic("construct", cell, 20), number_pointer))
+@intrinsic("store", owner_pointer, @intrinsic("address of", owner))
+@intrinsic("store", property_address, @intrinsic("address of", @intrinsic("property", owner, "child")))
+@intrinsic("store", nested_property_address, @intrinsic("address of", @intrinsic("property", @intrinsic("property", owner, "child"), "number")))
+@intrinsic("store at", nested_property_address, 21)
+@intrinsic("store", dereference_property_address, @intrinsic("address of", @intrinsic("property", @intrinsic("dereference", owner_pointer), "child")))
+@intrinsic("store", property_dereference_address, @intrinsic("address of", @intrinsic("dereference", @intrinsic("property", owner, "number_pointer"))))
+@intrinsic("store at", property_dereference_address, 12)
+@intrinsic("store", evaluation_count, 0)
+@intrinsic("store", evaluated_property_address, @intrinsic("address of", @intrinsic("property", owner_pointer after incrementing evaluation_count, "child")))
+@intrinsic("store", managed_count, 0)
+@intrinsic("store", managed_owner, @intrinsic("construct", managed holder, @intrinsic("address of", managed_count), @intrinsic("construct", cell, 30)))
+@intrinsic("store", managed_owner_address, @intrinsic("address of", managed_owner))
+@intrinsic("store", managed_child_address, @intrinsic("address of", @intrinsic("property", managed_owner, "child")))
+@intrinsic("store", managed_nested_address, @intrinsic("address of", @intrinsic("property", @intrinsic("property", managed_owner, "child"), "number")))
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %d %d %d %d\n", @intrinsic("dereference", dereference_address), @intrinsic("property", @intrinsic("dereference", property_address), "number"), @intrinsic("property", @intrinsic("dereference", dereference_property_address), "number"), evaluation_count, managed_count))

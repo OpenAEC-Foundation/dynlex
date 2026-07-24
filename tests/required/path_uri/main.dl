@@ -1,0 +1,118 @@
+import lib/path.dl
+import lib/host.dl
+
+function check {file URI result:result} against expected:
+    execute:
+        print (result's succeeded and (result's supported and (result's value = expected))) as line
+
+function check failure {file URI result:result}:
+    execute:
+        print (
+            (not result's succeeded) and
+            (result's supported and (not (result's error message = "")))
+        ) as line
+
+function check unsupported {file URI result:result}:
+    execute:
+        print (
+            (not result's succeeded) and
+            ((not result's supported) and (not (result's error message = "")))
+        ) as line
+
+function check path failure {path result:result}:
+    execute:
+        print ((not result's succeeded) and (not (result's error message = ""))) as line
+
+set posix to the POSIX path style
+set windows to the Windows path style
+
+check (a file URI for "/" using posix) against "file:///"
+check (a path from file URI "file:///" using posix) against "/"
+
+set posix_uri to a file URI for "/tmp/é space#%.txt" using posix
+check posix_uri against "file:///tmp/%C3%A9%20space%23%25.txt"
+check (a path from file URI posix_uri's value using posix) against "/tmp/é space#%.txt"
+check (a path from file URI "file:///tmp/%3F%23%5Cx" using posix) against "/tmp/?#\\x"
+check (a path from file URI "file:/tmp/single-sigil" using posix) against "/tmp/single-sigil"
+check (a path from file URI "file://localhost/tmp/local" using posix) against "/tmp/local"
+check unsupported (a path from file URI "file://server/share/file" using posix)
+check unsupported (a path from file URI "file://[::1]/share/file" using posix)
+
+set double_root_uri to a file URI for "//server/share/file" using posix
+check double_root_uri against "file:////server/share/file"
+check (a path from file URI double_root_uri's value using posix) against "//server/share/file"
+
+check (a file URI for "/tmp/a/../target" using posix) against "file:///tmp/a/../target"
+check (a path from file URI "file:///tmp/a/../target" using posix) against "/tmp/a/../target"
+check (a path from file URI "file:///tmp/a/%2E%2E/target" using posix) against "/tmp/a/../target"
+check (a path from file URI "file:///tmp/a/%2e/target" using posix) against "/tmp/a/./target"
+
+set drive_uri to a file URI for "C:\\Program Files\\é.txt" using windows
+check drive_uri against "file:///C:/Program%20Files/%C3%A9.txt"
+check (a path from file URI drive_uri's value using windows) against "C:/Program Files/é.txt"
+check (a path from file URI "file:/C:/single-sigil" using windows) against "C:/single-sigil"
+check (a path from file URI "file://localhost/C:/local" using windows) against "C:/local"
+
+set unc_uri to a file URI for "\\\\server\\share\\a b" using windows
+check unc_uri against "file://server/share/a%20b"
+check (a path from file URI unc_uri's value using windows) against "//server/share/a b"
+check (a path from file URI "file:////server/share/a%20b" using windows) against "//server/share/a b"
+check (a path from file URI "file://192.0.2.1/share/a" using windows) against "//192.0.2.1/share/a"
+check (a path from file URI "file://[2001:db8::1]/share/a" using windows) against "//[2001:db8::1]/share/a"
+check (a path from file URI "file://[v1.host]/share/a" using windows) against "//[v1.host]/share/a"
+check (a file URI for "\\\\[2001:db8::1]\\share\\a" using windows) against "file://[2001:db8::1]/share/a"
+check (a path from file URI "file:///C:/a/%2E%2E/target" using windows) against "C:/a/../target"
+
+set unicode_unc_uri to a file URI for "\\\\server\\共享\\é.txt" using windows
+check unicode_unc_uri against "file://server/%E5%85%B1%E4%BA%AB/%C3%A9.txt"
+check (a path from file URI unicode_unc_uri's value using windows) against "//server/共享/é.txt"
+
+set unicode_server_uri to a file URI for "\\\\sérver\\share\\文.txt" using windows
+check unicode_server_uri against "file://s%C3%A9rver/share/%E6%96%87.txt"
+check (a path from file URI unicode_server_uri's value using windows) against "//sérver/share/文.txt"
+
+check path failure (resolve path "child" against base "relative/base" using posix)
+check path failure (make path "relative/target" relative to base "/absolute/base" using posix)
+check path failure (make path "D:/target" relative to base "C:/base" using windows)
+check failure (a file URI for "relative/path" using posix)
+check failure (a file URI for "C:relative" using windows)
+check failure (a path from file URI "https://example.com/a" using posix)
+check failure (a path from file URI "file:///tmp/%G0" using posix)
+check failure (a path from file URI "file:///tmp/%" using posix)
+check failure (a path from file URI "file:///tmp/%00" using posix)
+check failure (a path from file URI "file:///tmp/é" using posix)
+check failure (a path from file URI "file:///tmp/a?query" using posix)
+check failure (a path from file URI "file:///tmp/a#fragment" using posix)
+check failure (a path from file URI "file:relative" using posix)
+check failure (a path from file URI "file://server/" using windows)
+check failure (a path from file URI "file:///tmp/a%2Fb" using posix)
+check failure (a path from file URI "file:///C:/a%2Fb" using windows)
+check failure (a path from file URI "file:///C:/a%5Cb" using windows)
+check failure (a path from file URI "file:///tmp/a\\b" using posix)
+check failure (a path from file URI "file:///tmp/a b" using posix)
+check failure (a path from file URI "file://bad%G0/share" using windows)
+check failure (a path from file URI "file://bad%2Fhost/share" using windows)
+check failure (a path from file URI "file://user@server/share" using windows)
+check failure (a path from file URI "file://server:80/share" using windows)
+check failure (a path from file URI "file://[:::1]/share" using windows)
+check failure (a path from file URI "file://[v1.]/share" using windows)
+check failure (a path from file URI "file://[::1/share" using windows)
+
+set platform to whether the host platform is Windows
+set native_path to the string form of "C:/tmp/native path" if platform's value, else the string form of "/tmp/native path"
+set native_uri_text to the string form of "file:///C:/tmp/native%20path" if platform's value, else the string form of "file:///tmp/native%20path"
+
+set native_resolution to resolve file URI native_uri_text
+print native_resolution's succeeded as line
+print native_resolution's supported as line
+print (native_resolution's value = native_path) as line
+print (native_resolution's error message = "") as line
+
+set rejected_native_resolution to resolve file URI the string form of "file:///tmp/a%2Fb"
+print (
+    (not rejected_native_resolution's succeeded) and
+    (rejected_native_resolution's supported and
+    ((rejected_native_resolution's value = "") and (not (rejected_native_resolution's error message = ""))))
+) as line
+
+check (a file URI from native path native_path) against native_uri_text

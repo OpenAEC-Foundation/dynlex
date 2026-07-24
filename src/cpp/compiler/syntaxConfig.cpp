@@ -524,6 +524,7 @@ SyntaxConfig::Messages::Messages() {
 	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");
 	set("multiple reachable return types", "message",
 		"Function has multiple reachable return types: {first_type} and {second_type}");
+	set("address of requires addressable value", "message", "address of requires an addressable value");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
 }
 
