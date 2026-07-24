@@ -131,6 +131,81 @@ static void markInstantiationForReinference(InferenceContext &context, Instantia
 	instantiation->needsReinfer = true;
 }
 
+class ScopedRecursiveInferenceObservation {
+  public:
+	ScopedRecursiveInferenceObservation(InferenceContext &context, Instantiation *owner)
+		: context(context), frame{owner, context.recursiveInferenceObservationFrame} {
+		context.recursiveInferenceObservationFrame = &frame;
+	}
+
+	ScopedRecursiveInferenceObservation(const ScopedRecursiveInferenceObservation &) = delete;
+	ScopedRecursiveInferenceObservation &operator=(const ScopedRecursiveInferenceObservation &) = delete;
+
+	~ScopedRecursiveInferenceObservation() {
+		requireCompilerInvariant(
+			context.recursiveInferenceObservationFrame == &frame,
+			"recursive inference observation frames were not unwound in stack order"
+		);
+		context.recursiveInferenceObservationFrame = frame.parent;
+		if (propagateToParent && frame.observed && frame.parent && frame.parent->owner == frame.owner)
+			frame.parent->observed = true;
+	}
+
+	bool observed() const { return frame.observed; }
+	bool ownerObserved() const {
+		for (const InferenceContext::RecursiveInferenceObservationFrame *current = &frame;
+			 current && current->owner == frame.owner; current = current->parent) {
+			if (current->observed)
+				return true;
+		}
+		return false;
+	}
+	void discard() { propagateToParent = false; }
+
+  private:
+	InferenceContext &context;
+	InferenceContext::RecursiveInferenceObservationFrame frame;
+	bool propagateToParent = true;
+};
+
+static void observeUnresolvedRecursiveDependency(InferenceContext &context) {
+	InferenceContext::RecursiveInferenceObservationFrame *frame = context.recursiveInferenceObservationFrame;
+	requireCompilerInvariant(frame, "recursive dependency was observed outside an inference observation frame");
+	requireCompilerInvariant(
+		frame->owner && frame->owner == context.currentInstantiation,
+		"recursive dependency observation is not owned by the active instantiation"
+	);
+	frame->observed = true;
+	markInstantiationForReinference(context, frame->owner);
+}
+
+static void
+propagateUnresolvedRecursiveDependencyToCaller(InferenceContext &callerContext, const Instantiation *callerInstantiation) {
+	requireCompilerInvariant(
+		callerInstantiation && callerInstantiation == callerContext.currentInstantiation,
+		"deferred inference has no owning caller instantiation"
+	);
+	observeUnresolvedRecursiveDependency(callerContext);
+}
+
+struct InstantiationInferencePassResult {
+	bool succeeded;
+	bool observedUnresolvedDependency;
+};
+
+template <typename InferPassFn>
+static InstantiationInferencePassResult
+runScopedInstantiationInferencePass(InferenceContext &context, Instantiation &instantiation, InferPassFn &&inferPass) {
+	ScopedRecursiveInferenceObservation passObservation(context, &instantiation);
+	bool succeeded = inferPass();
+	bool observedUnresolvedDependency = passObservation.observed();
+	requireCompilerInvariant(
+		!observedUnresolvedDependency || instantiation.needsReinfer,
+		"recursive dependency observation did not preserve its owning reinference request"
+	);
+	return {succeeded, observedUnresolvedDependency};
+}
+
 static Variable *findVariableForExpression(Expression *expression) {
 	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable || !expression->range.line)
 		return nullptr;
@@ -260,16 +335,16 @@ static bool runInstantiationReinferenceLoop(
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {
 		std::unique_ptr<InstantiationProgressSnapshot> beforePass = snapshotInstantiationProgress(instantiation);
-		bool inferenceSucceeded = inferPass();
+		InstantiationInferencePassResult pass = runScopedInstantiationInferencePass(context, instantiation, inferPass);
 		std::unique_ptr<InstantiationProgressSnapshot> afterPass = snapshotInstantiationProgress(instantiation);
-		if (!inferenceSucceeded || !context.typesValid) {
+		if (!pass.succeeded || !context.typesValid) {
 			if (!instantiation.needsReinfer)
 				return false;
 		} else if (!instantiation.needsReinfer) {
 			return true;
 		}
 		if (*afterPass == *beforePass) {
-			if (canDeferToCaller && context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced())
+			if (canDeferToCaller && pass.observedUnresolvedDependency && instantiation.returnType.isDeduced())
 				return true;
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
 			return false;
@@ -412,9 +487,10 @@ static ArgumentTypeInferenceResult ensureArgumentTypeForPatternCall(
 	Expression *argExpr, InferenceContext &context, const BindingFrameStack &callerBindingFrameStack
 ) {
 	ArgumentTypeInferenceResult result;
+	ScopedRecursiveInferenceObservation argumentObservation(context, context.currentInstantiation);
 	Expression *inferExpr = argExpr;
 	result.type = requestKnownOrInferExpressionType(inferExpr, context, callerBindingFrameStack, false);
-	result.deferred = !result.type.isDeduced() && context.observedInProgressUndeducedInstantiation;
+	result.deferred = !result.type.isDeduced() && argumentObservation.ownerObserved();
 	return result;
 }
 

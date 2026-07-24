@@ -889,7 +889,6 @@ bool ensureSectionInstantiationInferred(
 	if (inst.inferring)
 		return inst.returnType.isDeduced() && inst.valid;
 	ScopedSectionLocalVariableState calleeVariableState(section);
-
 	inst.writtenGlobalReferences.clear();
 	inst.finalGlobalConstantValues.clear();
 	inst.finalGlobalAddressProvenance.clear();
@@ -924,7 +923,11 @@ bool ensureSectionInstantiationInferred(
 	if (context.trial)
 		inst.body = parseContext.cloneSectionBody(section);
 	bool instantiationFallsThrough = true;
-	bool inferenceSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
+	inst.needsReinfer = false;
+	InstantiationInferencePassResult pass = runScopedInstantiationInferencePass(context, inst, [&]() {
+		return inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
+	});
+	bool inferenceSucceeded = pass.succeeded;
 	inst.fallsThrough = instantiationFallsThrough;
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		auto knownIt = context.currentVariableValues.find(reference);
@@ -949,13 +952,12 @@ bool ensureSectionInstantiationInferred(
 	inst.inferring = false;
 	inst.valid = inferenceSucceeded;
 	if (callerContext) {
-		callerContext->observedInProgressUndeducedInstantiation =
-			callerContext->observedInProgressUndeducedInstantiation || context.observedInProgressUndeducedInstantiation;
+		if (inferenceSucceeded && inst.needsReinfer)
+			propagateUnresolvedRecursiveDependencyToCaller(*callerContext, callerInstantiation);
 		callerContext->inheritTypeFailureFrom(context);
 	}
 	if (!inst.valid || !context.typesValid)
 		return false;
-
 	bool unresolvedLocalFound = false;
 	std::function<void(Section *)> validateInstantiatedVariables = [&](Section *currentSection) {
 		if (unresolvedLocalFound || !currentSection)
@@ -979,7 +981,6 @@ bool ensureSectionInstantiationInferred(
 		inst.valid = false;
 		return false;
 	}
-
 	InstantiationKey refinedKey =
 		buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 	if (refinedKey != instIt->first) {
@@ -992,8 +993,7 @@ bool ensureSectionInstantiationInferred(
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
 
-	if (!inst.needsReinfer && !context.observedInProgressUndeducedInstantiation && inst.returnType.kind == DataType::Kind::Any)
+	if (!inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any)
 		inst.returnType = {DataType::Kind::Void};
-
 	return inst.returnType.isDeduced();
 }

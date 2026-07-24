@@ -1,0 +1,22 @@
+import lib/std.dl
+
+function record:
+	execute:
+		@intrinsic("discard", 0)
+
+function first {integer:value}:
+	execute:
+		if value > 0:
+			set next_value to value - 1
+			set ignored to second next_value
+		record
+		return value
+
+function second {integer:value}:
+	execute:
+		if value > 0:
+			set next_value to value - 1
+			set ignored to first next_value
+		return value
+
+set result to first 1

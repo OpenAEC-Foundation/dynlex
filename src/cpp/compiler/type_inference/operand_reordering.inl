@@ -616,7 +616,8 @@ class GroupingInferenceTransaction {
 	explicit GroupingInferenceTransaction(
 		InferenceContext &context, Expression *expression, const std::unordered_set<Expression *> &fixedGroupingRoots
 	)
-		: context(context), originalGrouping(captureGroupingSnapshot(expression)), savedTrial(context.trial),
+		: context(context), recursiveInferenceObservation(context, context.currentInstantiation),
+		  originalGrouping(captureGroupingSnapshot(expression)), savedTrial(context.trial),
 		  savedCurrentInstantiation(context.currentInstantiation),
 		  savedCurrentInstantiatedSectionBody(context.currentInstantiatedSectionBody),
 		  savedSectionFlexBodyFrames(context.sectionFlexBodyFrames),
@@ -626,7 +627,6 @@ class GroupingInferenceTransaction {
 		  savedAddressState(context.currentAddressState), savedSubject(context.currentSubject),
 		  savedTypesValid(context.typesValid), savedSuppressDiagnostics(context.suppressDiagnostics),
 		  savedSuppressReinferPassDiagnostics(context.suppressReinferPassDiagnostics),
-		  savedObservedInProgressUndeducedInstantiation(context.observedInProgressUndeducedInstantiation),
 		  savedTypeFailureDetail(context.typeFailureDetail), savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo),
 		  savedTypeFailureSnapshot(context.typeFailureSnapshot), savedTypeFailureDiagnostic(context.typeFailureDiagnostic),
 		  savedTypeFailurePriority(context.typeFailurePriority),
@@ -660,9 +660,11 @@ class GroupingInferenceTransaction {
 	const std::unordered_set<Expression *> &resolvedGroupingRoots() const { return trialFixedGroupingRoots; }
 
 	std::vector<InferenceContext::OperandGroupingWarning> takeGroupingWarnings() { return std::move(groupingWarnings); }
+	bool dependsOnRecursiveDependency() const { return recursiveInferenceObservation.ownerObserved(); }
 
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
+		recursiveInferenceObservation.discard();
 		groupingJournal.rollback();
 		rollbackTrialJournal(journal);
 		restoreSavedState();
@@ -711,6 +713,7 @@ class GroupingInferenceTransaction {
 
   private:
 	InferenceContext &context;
+	ScopedRecursiveInferenceObservation recursiveInferenceObservation;
 	GroupingSnapshot originalGrouping;
 	InferenceContext::TrialJournal journal;
 	InferenceContext::GroupingTrialJournal groupingJournal;
@@ -727,7 +730,6 @@ class GroupingInferenceTransaction {
 	bool savedTypesValid;
 	bool savedSuppressDiagnostics;
 	bool savedSuppressReinferPassDiagnostics;
-	bool savedObservedInProgressUndeducedInstantiation;
 	std::string savedTypeFailureDetail;
 	std::vector<RelatedInfo> savedTypeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot savedTypeFailureSnapshot;
@@ -770,7 +772,6 @@ class GroupingInferenceTransaction {
 		context.typesValid = savedTypesValid;
 		context.suppressDiagnostics = savedSuppressDiagnostics;
 		context.suppressReinferPassDiagnostics = savedSuppressReinferPassDiagnostics;
-		context.observedInProgressUndeducedInstantiation = savedObservedInProgressUndeducedInstantiation;
 		context.typeFailureDetail = std::move(savedTypeFailureDetail);
 		context.typeFailureRelatedInfo = std::move(savedTypeFailureRelatedInfo);
 		context.typeFailureSnapshot = savedTypeFailureSnapshot;
@@ -782,15 +783,21 @@ class GroupingInferenceTransaction {
 	}
 };
 
-static bool standaloneExpressionHasNonVoidResult(Expression *expression, const InferenceContext &context) {
+static bool
+standaloneExpressionHasNonVoidResult(Expression *expression, InferenceContext &context, bool observedRecursiveDependency) {
 	DataType resultType = expression ? expression->type : DataType{};
 	if (resultType.isDeduced())
 		return resultType.kind != DataType::Kind::Void;
-	requireCompilerInvariant(
-		context.observedInProgressUndeducedInstantiation && context.currentInstantiation &&
-			context.currentInstantiation->needsReinfer,
-		"standalone expression remained undeduced without a pending recursive reinference"
-	);
+	if (observedRecursiveDependency && context.currentInstantiation && context.currentInstantiation->needsReinfer)
+		return false;
+	PatternDefinition *definition = nullptr;
+	if (context.currentInstantiation && context.currentInstantiation->body &&
+		context.currentInstantiation->body->sourceSection &&
+		!context.currentInstantiation->body->sourceSection->patternDefinitions.empty()) {
+		definition = context.currentInstantiation->body->sourceSection->patternDefinitions.front();
+	}
+	setRecursiveInferenceFailure(context, definition, expression ? expression->range : Range{}, "");
+	context.typesValid = false;
 	return false;
 }
 
@@ -820,7 +827,11 @@ static bool validateGroupingInTrial(
 	);
 	bool trialSucceeded = context.typesValid;
 	if (trialSucceeded && requireVoidResult) {
-		if (standaloneExpressionHasNonVoidResult(expr, context)) {
+		bool hasNonVoidResult =
+			standaloneExpressionHasNonVoidResult(expr, context, transaction->dependsOnRecursiveDependency());
+		if (!context.typesValid) {
+			trialSucceeded = false;
+		} else if (hasNonVoidResult) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
 								 "' must return nothing; use discard if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
