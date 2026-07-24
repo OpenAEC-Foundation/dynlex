@@ -3,3 +3,5 @@
 import lib/workspace_edit_parse.dl
 import lib/workspace_edit_uri.dl
 import lib/workspace_edit_text.dl
+import lib/workspace_edit_state.dl
+import lib/workspace_edit_apply.dl

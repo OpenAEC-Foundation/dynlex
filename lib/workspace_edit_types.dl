@@ -1,7 +1,5 @@
 # Workspace edit protocol model and explicit ownership helpers.
 
-import lib/list.dl
-
 class:
     patterns:
         [a|] workspace edit position

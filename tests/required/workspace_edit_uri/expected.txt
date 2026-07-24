@@ -1,0 +1,18 @@
+1
+1
+1
+0
+File URI is outside the workspace
+1
+1
+0
+0
+1
+C:/Folder/A.txt
+c:/folder/a.txt
+1
+//server/share/a b
+0
+0
+Workspace edit paths may not traverse symbolic links
+1
