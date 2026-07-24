@@ -95,6 +95,7 @@ static bool inferSectionLineRange(
 			return false;
 		}
 		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
+		lineExpression->executionFallsThrough = true;
 		return true;
 	};
 
@@ -206,8 +207,8 @@ static bool inferSectionLineRange(
 			.known = selectionKnown,
 			.selectedBranchIndex =
 				selectionKnown && selectedBranch ? static_cast<int>(branches[*selectedBranch].lineIndex) : -1,
-			.fallsThrough = sectionFallsThrough,
 		};
+		openingExpression->executionFallsThrough = sectionFallsThrough;
 		if (sectionFallsThrough)
 			mergeSectionExecutionStates(context, fallthroughConstantStates, fallthroughAddressStates, fallthroughSubjectStates);
 		if (fallsThrough)
@@ -226,6 +227,7 @@ static bool inferSectionLineRange(
 		if (!inferLineExpression(line, lineExpression))
 			return false;
 		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+			lineExpression->executionFallsThrough = false;
 			sectionFallsThrough = false;
 			break;
 		}
@@ -332,8 +334,8 @@ static bool inferSectionLineRange(
 			firstHeaderExpression->branchSelection = Expression::BranchSelection{
 				.known = branchKnown,
 				.selectedBranchIndex = branchKnown && selectedBranch.has_value() ? static_cast<int>(*selectedBranch) : -1,
-				.fallsThrough = chainFallsThrough,
 			};
+			firstHeaderExpression->executionFallsThrough = chainFallsThrough;
 			if (!chainFallsThrough) {
 				sectionFallsThrough = false;
 				i = chainEnd;
@@ -344,7 +346,6 @@ static bool inferSectionLineRange(
 			i = chainEnd;
 			continue;
 		}
-
 		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop) {
 			const bool *condition = std::get_if<bool>(&lineExpression->sectionOutcome.conditionValue);
 			if (!line->sectionOpening) {
@@ -355,6 +356,7 @@ static bool inferSectionLineRange(
 					)) {
 					return false;
 				}
+				lineExpression->executionFallsThrough = sectionFallsThrough;
 				break;
 			}
 			if (condition && !*condition) {
@@ -364,6 +366,7 @@ static bool inferSectionLineRange(
 			bool loopFallsThrough = true;
 			if (!inferOpenedSection(line, &loopFallsThrough))
 				return false;
+			lineExpression->executionFallsThrough = loopFallsThrough;
 			if (!loopFallsThrough) {
 				sectionFallsThrough = false;
 				break;
@@ -373,6 +376,8 @@ static bool inferSectionLineRange(
 		bool openedSectionFallsThrough = true;
 		if (!inferOpenedSection(line, &openedSectionFallsThrough))
 			return false;
+		if (lineExpression)
+			lineExpression->executionFallsThrough = openedSectionFallsThrough;
 		if ((!lineExpression || lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::None ||
 			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) &&
 			!openedSectionFallsThrough) {

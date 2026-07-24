@@ -873,6 +873,8 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 	for (size_t i = 0; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
 		Expression *lineExpression = body ? body->lineExpression(i) : line->expression;
+		if (lineExpression && !lineExpression->executionFallsThrough.has_value())
+			break;
 		if (lineExpression && line->sectionOpening &&
 			lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
 			requireCompilerInvariant(
@@ -897,7 +899,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 							return false;
 					}
 				}
-				if (!selection.fallsThrough)
+				if (!*lineExpression->executionFallsThrough)
 					break;
 				continue;
 			}
@@ -938,11 +940,11 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 					}
 				}
 				i = chainEnd;
-				if (!selection.fallsThrough)
+				if (!*lineExpression->executionFallsThrough)
 					break;
 				continue;
 			}
-			if (!selection.fallsThrough)
+			if (!*lineExpression->executionFallsThrough)
 				terminatingRuntimeChainEnd = chainEnd;
 		}
 		if (lineExpression && !lineExpression->sectionBodyReachable && !lineExpression->inferredFlexBody &&
@@ -977,7 +979,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			break;
 		}
 		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch &&
-			lineExpression->branchSelection && !lineExpression->branchSelection->fallsThrough)
+			lineExpression->branchSelection && !*lineExpression->executionFallsThrough)
 			break;
 		if (terminatingRuntimeChainEnd && i == *terminatingRuntimeChainEnd)
 			break;

@@ -1,0 +1,28 @@
+flex function loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section loop while condition:
+    replacement:
+        loop while condition
+
+flex function transfer body:
+    replacement:
+        @intrinsic("execute body")
+
+flex function relay body:
+    replacement:
+        transfer body
+
+flex section loop count times:
+    replacement:
+        @intrinsic("store", iteration, 0)
+        loop while @intrinsic("less than", iteration, count):
+            relay body
+            @intrinsic("store", iteration, @intrinsic("add", iteration, 1))
+
+@intrinsic("store", value, 0)
+loop 3 times:
+    @intrinsic("store", value, @intrinsic("add", value, 1))
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", value))

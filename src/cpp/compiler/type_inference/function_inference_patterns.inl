@@ -201,7 +201,11 @@ case Expression::Kind::PatternCall: {
 			outcomeExpression =
 				templateOutcomeExpression ? expr->inferredFlexBody->findCloneOf(templateOutcomeExpression) : nullptr;
 		}
-		expr->sectionOutcome = outcomeExpression ? outcomeExpression->sectionOutcome : Expression::SectionOutcome{};
+		// A nested flex may transfer control through this active call while
+		// its replacement is being inferred. That direct outcome takes
+		// precedence over the replacement expression's forwarded outcome.
+		if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None)
+			expr->sectionOutcome = outcomeExpression ? outcomeExpression->sectionOutcome : Expression::SectionOutcome{};
 		if (!flexFallsThrough && expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None)
 			expr->sectionOutcome.kind = Expression::SectionOutcome::Kind::FunctionReturn;
 		if (sectionBodyFrameIndex) {

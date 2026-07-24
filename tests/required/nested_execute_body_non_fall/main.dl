@@ -1,0 +1,63 @@
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section spin:
+    replacement:
+        @intrinsic("loop while", @intrinsic("equal", 0, 0))
+
+flex section forward body directly:
+    replacement:
+        @intrinsic("execute body")
+        @intrinsic("discard", missing_direct_tail)
+
+flex section forward reusable target:
+    replacement:
+        @intrinsic("execute body")
+        @intrinsic("store", target, @intrinsic("add", target, 1))
+
+flex function relay body:
+    replacement:
+        @intrinsic("execute body")
+
+flex function relay body again:
+    replacement:
+        relay body
+
+flex section forward body wrapped:
+    replacement:
+        relay body
+        @intrinsic("discard", missing_wrapped_tail)
+
+flex section forward body nested:
+    replacement:
+        relay body again
+        @intrinsic("discard", missing_nested_tail)
+
+@intrinsic("store", marker, 0)
+@intrinsic("store", condition, @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0), 1))
+
+if condition:
+    forward body directly:
+        spin:
+            @intrinsic("discard", 0)
+
+if condition:
+    forward reusable marker:
+        spin:
+            @intrinsic("discard", 0)
+
+if condition:
+    forward body wrapped:
+        spin:
+            @intrinsic("discard", 0)
+
+if condition:
+    forward body nested:
+        spin:
+            @intrinsic("discard", 0)
+
+forward reusable marker:
+    @intrinsic("discard", 0)
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", marker))

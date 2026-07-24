@@ -41,7 +41,6 @@ struct Expression {
 	struct BranchSelection {
 		bool known = false;
 		int selectedBranchIndex = -1;
-		bool fallsThrough = true;
 	};
 
 	enum class Kind {
@@ -86,6 +85,11 @@ struct Expression {
 	// Control-flow intrinsics produce section outcomes during ordinary inference.
 	// Flex calls forward the outcome of their inferred replacement expression.
 	SectionOutcome sectionOutcome;
+	// Set by the section walker only when execution reaches this top-level
+	// expression. The value records whether execution can continue beyond the
+	// complete construct, including its attached section. An empty value marks
+	// an unreachable expression whose inference metadata is intentionally absent.
+	std::optional<bool> executionFallsThrough;
 	// Branch headers are inferred even when compile-time control flow proves
 	// their bodies unreachable. Later stages skip those uninferred bodies.
 	bool sectionBodyReachable = true;

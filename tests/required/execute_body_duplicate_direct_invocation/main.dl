@@ -1,0 +1,11 @@
+flex section execute body directly twice:
+    replacement:
+        @intrinsic("execute body")
+        @intrinsic("execute body")
+
+function exercise direct duplicate:
+    execute:
+        execute body directly twice:
+            @intrinsic("discard", 0)
+
+exercise direct duplicate
