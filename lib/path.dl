@@ -26,12 +26,21 @@ class:
 
 class:
     patterns:
-        [a|] file URI resolution result
+        [a|] native path style result
     members:
         succeeded as boolean
         supported as boolean
-        path as string
-        error as string
+        value as path style
+        error message as string
+
+class:
+    patterns:
+        [a|] file URI result
+    members:
+        succeeded as boolean
+        supported as boolean
+        value as string
+        error message as string
 
 local class:
     patterns:
@@ -52,22 +61,43 @@ function [the|] Windows path style:
 
 function [the|] native path style:
     execute:
-        set style_value to @intrinsic(
+        set style_value to 0 as a 32 bit integer
+        set supported to 0 as a 32 bit integer
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_path_native_style",
-            a 32 bit integer
+            an integer,
+            the address of style_value,
+            the address of supported
         )
-        return @intrinsic("construct", a path style, style_value)
-
-function [the|] native path style is supported:
-    execute:
+        set native_style to @intrinsic("construct", a path style, style_value)
+        if outcome != 0:
+            return @intrinsic(
+                "construct",
+                a native path style result,
+                false,
+                supported != 0,
+                native_style,
+                the current path error message
+            )
+        if supported = 0:
+            return @intrinsic(
+                "construct",
+                a native path style result,
+                false,
+                false,
+                native_style,
+                the current path error message
+            )
         return @intrinsic(
-            "call",
-            "dynlex_runtime",
-            "dynlex_path_native_style_supported",
-            a 32 bit integer
-        ) != 0
+            "construct",
+            a native path style result,
+            true,
+            true,
+            native_style,
+            an empty path string
+        )
 
 local function an empty path string:
     execute:
@@ -157,6 +187,39 @@ local function finish path operation with {integer:status} and {a pointer to byt
             )
         @intrinsic("call", "libc", "free", void, native_data)
         return a successful path result containing output
+
+local function a failed file URI result with support {boolean:supported} reporting {string:message}:
+    replacement:
+        @intrinsic("construct", a file URI result, false, supported, an empty path string, message)
+
+local function finish file URI operation with {integer:status}, support {integer:supported}, and {a pointer to byte:native_data} of length {word sized integer:native_length}:
+    execute:
+        if status != 0:
+            @intrinsic("call", "libc", "free", void, native_data)
+            return a failed file URI result with support (supported != 0) reporting the current path error message
+        if supported = 0:
+            @intrinsic("call", "libc", "free", void, native_data)
+            return a failed file URI result with support false reporting the current path error message
+        set output to a new string buffer with length native_length as an integer
+        if native_length > 0 as a word sized integer:
+            discard @intrinsic(
+                "call",
+                "libc",
+                "memcpy",
+                a pointer to byte,
+                the data of output,
+                native_data,
+                native_length
+            )
+        @intrinsic("call", "libc", "free", void, native_data)
+        return @intrinsic(
+            "construct",
+            a file URI result,
+            true,
+            true,
+            output,
+            an empty path string
+        )
 
 function join left with right using {path style:style}:
     execute:
@@ -350,53 +413,44 @@ function [a|the|] file URI for input using {path style:style}:
     execute:
         set prepared to a path text for input
         if not prepared's valid:
-            return a failed path result reporting the string form of "Invalid path text"
+            return a failed file URI result with support true reporting the string form of "Invalid path text"
         set native_data to 0 as a pointer to byte
         set native_length to 0 as a word sized integer
+        set supported to 0 as a 32 bit integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_file_uri", an integer,
             1, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of native_data, the address of native_length,
+            the address of supported
         )
-        return finish path operation with status and native_data of length native_length
+        return finish file URI operation with status, support supported, and native_data of length native_length
 
 function [a|the|] path from file URI input using {path style:style}:
     execute:
         set prepared to a path text for input
         if not prepared's valid:
-            return a failed path result reporting the string form of "Invalid file URI text"
+            return a failed file URI result with support true reporting the string form of "Invalid file URI text"
         set native_data to 0 as a pointer to byte
         set native_length to 0 as a word sized integer
+        set supported to 0 as a 32 bit integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_file_uri", an integer,
             2, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of native_data, the address of native_length,
+            the address of supported
         )
-        return finish path operation with status and native_data of length native_length
+        return finish file URI operation with status, support supported, and native_data of length native_length
 
 function resolve file URI {string:input}:
     execute:
-        if not the native path style is supported:
-            return @intrinsic(
-                "construct",
-                a file URI resolution result,
-                false,
-                false,
-                an empty path string,
-                the string form of "Native path mapping is not available in this environment"
-            )
-        set result to a path from file URI input using the native path style
-        return @intrinsic(
-            "construct",
-            a file URI resolution result,
-            result's succeeded,
-            true,
-            result's value,
-            result's error message
-        )
+        set native_style_result to (the native path style)
+        if not native_style_result's succeeded:
+            return a failed file URI result with support native_style_result's supported reporting native_style_result's error message
+        return a path from file URI input using native_style_result's value
 
 function [a|the|] file URI from native path {string:input}:
     execute:
-        if not the native path style is supported:
-            return a failed path result reporting the string form of "Native path mapping is not available in this environment"
-        return a file URI for input using the native path style
+        set native_style_result to (the native path style)
+        if not native_style_result's succeeded:
+            return a failed file URI result with support native_style_result's supported reporting native_style_result's error message
+        return a file URI for input using native_style_result's value

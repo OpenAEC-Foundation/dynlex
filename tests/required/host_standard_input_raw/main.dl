@@ -1,0 +1,35 @@
+import lib/host.dl
+
+local function [the|] unsigned byte at {integer:offset} in {string:text}:
+    execute:
+        return (character offset of text as i32) bitwise and 255
+
+set first to read a chunk from standard input
+print first's succeeded as line
+print first's supported as line
+print (first's contents's length = 4096) as line
+print (the unsigned byte at 4094 in first's contents) as line
+print (the unsigned byte at 4095 in first's contents) as line
+print (not first's end of file) as line
+print (first's error message = "") as line
+
+set second to read a chunk from standard input
+print second's succeeded as line
+print second's supported as line
+print (second's contents's length = 4) as line
+print (the unsigned byte at 0 in second's contents) as line
+print (the unsigned byte at 1 in second's contents) as line
+print (the unsigned byte at 2 in second's contents) as line
+print (the unsigned byte at 3 in second's contents) as line
+print second's end of file as line
+print (second's error message = "") as line
+
+set after_end to read a chunk from standard input
+print after_end's succeeded as line
+print after_end's supported as line
+print (after_end's contents's length = 0) as line
+print after_end's end of file as line
+print (after_end's error message = "") as line
+
+print (the unsigned byte at 4094 in first's contents) as line
+print (the unsigned byte at 0 in second's contents) as line

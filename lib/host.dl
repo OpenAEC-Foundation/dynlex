@@ -7,14 +7,25 @@ class:
         [a|] host text result
     members:
         succeeded as boolean
+        supported as boolean
         value as string
         error message as string
 
 class:
     patterns:
-        [a|] standard input line result
+        [a|] host truth result
     members:
         succeeded as boolean
+        supported as boolean
+        value as boolean
+        error message as string
+
+class:
+    patterns:
+        [a|] standard input chunk result
+    members:
+        succeeded as boolean
+        supported as boolean
         contents as string
         end of file as boolean
         error message as string
@@ -45,18 +56,49 @@ local function [the|] current host error message:
             )
         return error_text
 
-function [the|] host platform is Windows:
+function whether [the|] host platform is Windows:
     execute:
-        return @intrinsic(
+        set is_windows to 0 as a 32 bit integer
+        set supported to 0 as a 32 bit integer
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_host_platform_is_windows",
-            a 32 bit integer
-        ) != 0
+            an integer,
+            the address of is_windows,
+            the address of supported
+        )
+        if outcome != 0:
+            return @intrinsic(
+                "construct",
+                a host truth result,
+                false,
+                supported != 0,
+                false,
+                the current host error message
+            )
+        if supported = 0:
+            return @intrinsic(
+                "construct",
+                a host truth result,
+                false,
+                false,
+                false,
+                the current host error message
+            )
+        return @intrinsic(
+            "construct",
+            a host truth result,
+            true,
+            true,
+            is_windows != 0,
+            an empty host string
+        )
 
 local function retrieve host executable value {integer:kind}:
     execute:
         set output_length to 0 as a word sized integer
+        set supported to 0 as a 32 bit integer
         set outcome to 0
         if kind = 1:
             set outcome to @intrinsic(
@@ -66,7 +108,8 @@ local function retrieve host executable value {integer:kind}:
                 an integer,
                 0 as a pointer to byte,
                 0 as a word sized integer,
-                the address of output_length
+                the address of output_length,
+                the address of supported
             )
         else:
             set outcome to @intrinsic(
@@ -76,12 +119,23 @@ local function retrieve host executable value {integer:kind}:
                 an integer,
                 0 as a pointer to byte,
                 0 as a word sized integer,
-                the address of output_length
+                the address of output_length,
+                the address of supported
             )
         if outcome != 0:
             return @intrinsic(
                 "construct",
                 a host text result,
+                false,
+                supported != 0,
+                an empty host string,
+                the current host error message
+            )
+        if supported = 0:
+            return @intrinsic(
+                "construct",
+                a host text result,
+                false,
                 false,
                 an empty host string,
                 the current host error message
@@ -96,7 +150,8 @@ local function retrieve host executable value {integer:kind}:
                 an integer,
                 the data of output,
                 output_length,
-                the address of output_length
+                the address of output_length,
+                the address of supported
             )
         else:
             set outcome to @intrinsic(
@@ -106,19 +161,22 @@ local function retrieve host executable value {integer:kind}:
                 an integer,
                 the data of output,
                 output_length,
-                the address of output_length
+                the address of output_length,
+                the address of supported
             )
         if outcome != 0:
             return @intrinsic(
                 "construct",
                 a host text result,
                 false,
+                true,
                 an empty host string,
                 the current host error message
             )
         return @intrinsic(
             "construct",
             a host text result,
+            true,
             true,
             output,
             an empty host string
@@ -132,25 +190,39 @@ function [the|] running executable directory:
     execute:
         return retrieve host executable value 2
 
-function read one line from [the|] standard input:
+function read a chunk from [the|] standard input:
     execute:
         set data to 0 as a pointer to byte
         set length to 0 as a word sized integer
         set end_of_file to 0 as a 32 bit integer
+        set supported to 0 as a 32 bit integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
-            "dynlex_host_read_standard_input_line",
+            "dynlex_host_read_standard_input",
             an integer,
             the address of data,
             the address of length,
-            the address of end_of_file
+            the address of end_of_file,
+            the address of supported
         )
         if outcome != 0:
             @intrinsic("call", "libc", "free", void, data)
             return @intrinsic(
                 "construct",
-                a standard input line result,
+                a standard input chunk result,
+                false,
+                supported != 0,
+                an empty host string,
+                false,
+                the current host error message
+            )
+        if supported = 0:
+            @intrinsic("call", "libc", "free", void, data)
+            return @intrinsic(
+                "construct",
+                a standard input chunk result,
+                false,
                 false,
                 an empty host string,
                 false,
@@ -171,7 +243,8 @@ function read one line from [the|] standard input:
         @intrinsic("call", "libc", "free", void, data)
         return @intrinsic(
             "construct",
-            a standard input line result,
+            a standard input chunk result,
+            true,
             true,
             contents,
             end_of_file != 0,

@@ -118,21 +118,23 @@ static int read_native_executable_path(char **output, size_t *output_length) {
 	size_t length = capacity != 0 && path[capacity - 1] == '\0' ? capacity - 1 : capacity;
 	return validate_executable_path(path, length, output, output_length);
 }
-#else
-static int read_native_executable_path(char **output, size_t *output_length) {
-	(void)output;
-	(void)output_length;
-	dynlex_runtime_set_error("Executable path retrieval is not supported on this POSIX platform");
-	return -1;
-}
 #endif
 
-int dynlex_platform_executable_path(char **path, size_t *length) {
-	if (path == NULL || length == NULL) {
+int dynlex_platform_executable_path(char **path, size_t *length, int32_t *supported) {
+	if (path == NULL || length == NULL || supported == NULL) {
 		dynlex_runtime_set_errno_error("Invalid executable path result arguments", EINVAL);
 		return -1;
 	}
 	*path = NULL;
 	*length = 0;
+	*supported = 0;
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+	*supported = 1;
 	return read_native_executable_path(path, length);
+#else
+	dynlex_runtime_set_error("Executable path retrieval is not supported on this POSIX platform");
+	return 0;
+#endif
 }
+
+int dynlex_platform_prepare_standard_input(void) { return 0; }

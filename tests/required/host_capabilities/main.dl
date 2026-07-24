@@ -3,12 +3,22 @@ import lib/path.dl
 
 set executable to the running executable path
 set directory to the running executable directory
-set native_style to the native path style
+set platform to whether the host platform is Windows
+set native_style_result to the native path style
+set native_style to native_style_result's value
 
 print executable's succeeded as line
+print executable's supported as line
 print directory's succeeded as line
+print directory's supported as line
+print platform's succeeded as line
+print platform's supported as line
+print native_style_result's succeeded as line
+print native_style_result's supported as line
 print ((executable's error message) = "") as line
 print ((directory's error message) = "") as line
+print ((platform's error message) = "") as line
+print ((native_style_result's error message) = "") as line
 
 set executable_filename to the filename of executable's value using native_style
 set directory_filename to the filename of directory's value using native_style
@@ -16,31 +26,9 @@ set resolved_executable to resolve path executable's value against base director
 set executable_absolute to whether path executable's value is absolute using native_style
 set directory_absolute to whether path directory's value is absolute using native_style
 
-set expected_filename to "main.exe" if the host platform is Windows, else "main.out"
+set expected_filename to "main.exe" if platform's value, else "main.out"
 print (executable_filename's succeeded and (executable_filename's value = expected_filename)) as line
 print (directory_filename's succeeded and (directory_filename's value = "host_capabilities")) as line
 print (resolved_executable's succeeded and (resolved_executable's value = executable's value)) as line
 print (executable_absolute's succeeded and executable_absolute's value) as line
 print (directory_absolute's succeeded and directory_absolute's value) as line
-
-set first_line to read one line from standard input
-print first_line's succeeded as line
-print (first_line's contents = "first line") as line
-print (first_line's contents's length = 10) as line
-print (not (first_line's end of file)) as line
-print ((first_line's error message) = "") as line
-
-set second_line to read one line from standard input
-print second_line's succeeded as line
-print (second_line's contents = "last line") as line
-print (second_line's contents's length = 9) as line
-print (not (second_line's end of file)) as line
-print ((second_line's error message) = "") as line
-
-set final_read to read one line from standard input
-print final_read's succeeded as line
-print (final_read's contents = "") as line
-print final_read's end of file as line
-print ((final_read's error message) = "") as line
-print (first_line's contents = "first line") as line
-print (second_line's contents = "last line") as line

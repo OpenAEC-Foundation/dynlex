@@ -304,6 +304,7 @@ if(NOT EMSCRIPTEN)
         src/runtime/filesystemRuntime.c
         src/runtime/hostRuntime.c
         src/runtime/pathRuntime.c
+        src/runtime/pathUriRuntime.c
         src/runtime/processRuntime.c
         src/runtime/runtimeError.c
         src/runtime/runtimeText.c
@@ -312,6 +313,7 @@ if(NOT EMSCRIPTEN)
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimeWindows.c
             src/runtime/hostRuntimeWindows.c
+            src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
         )
     else()

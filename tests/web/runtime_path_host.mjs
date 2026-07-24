@@ -11,13 +11,12 @@ const importNames = [
   "dynlex_host_executable_directory",
   "dynlex_host_executable_path",
   "dynlex_host_platform_is_windows",
-  "dynlex_host_read_standard_input_line",
+  "dynlex_host_read_standard_input",
   "dynlex_path_binary",
   "dynlex_path_error_message",
   "dynlex_path_file_uri",
   "dynlex_path_is_absolute",
   "dynlex_path_native_style",
-  "dynlex_path_native_style_supported",
   "dynlex_path_unary"
 ];
 for (const name of importNames) {
@@ -91,18 +90,21 @@ function binary(operation, style, leftText, rightText) {
   return readOwnedResult();
 }
 
-function fileUri(operation, style, text, expectedStatus = 0) {
+function fileUri(operation, style, text, expectedStatus = 0, expectedSupported = 1) {
   const input = writeInput(text);
+  new DataView(memory.buffer).setInt32(8014, 99, true);
   const status = env.dynlex_path_file_uri(
     operation,
     style,
     input.pointer,
     input.length,
     outputPointer,
-    outputLength
+    outputLength,
+    8014
   );
   assert.equal(status, expectedStatus);
-  return status === 0 ? readOwnedResult() : "";
+  assert.equal(new DataView(memory.buffer).getInt32(8014, true), expectedSupported);
+  return status === 0 && expectedSupported ? readOwnedResult() : "";
 }
 
 function errorMessage(name) {
@@ -112,10 +114,16 @@ function errorMessage(name) {
   return decoder.decode(new Uint8Array(memory.buffer).subarray(9000, 9000 + length));
 }
 
-assert.equal(env.dynlex_path_native_style(), 1);
-assert.equal(env.dynlex_path_native_style_supported(), 0);
+new DataView(memory.buffer).setInt32(8014, 99, true);
+new DataView(memory.buffer).setInt32(8018, 99, true);
+assert.equal(env.dynlex_path_native_style(8014, 8018), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8014, true), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8018, true), 0);
 assert.equal(unary(1, 1, "/alpha//beta/../é"), "/alpha/é");
 assert.equal(unary(2, 1, "/alpha/file.txt"), "/alpha");
+assert.equal(unary(2, 1, "/alpha/.."), "/alpha");
+assert.equal(unary(3, 1, "/alpha/.."), "..");
+assert.equal(unary(4, 2, "C:."), ".");
 assert.equal(unary(3, 2, "C:\\alpha\\file.txt"), "file.txt");
 assert.equal(unary(4, 1, "archive.tar.gz"), "archive.tar");
 assert.equal(unary(5, 1, ".."), "");
@@ -144,8 +152,12 @@ assert.equal(
 );
 assert.equal(fileUri(2, 1, "file:/tmp/single"), "/tmp/single");
 assert.equal(fileUri(2, 1, "file://localhost/tmp/local"), "/tmp/local");
-assert.equal(fileUri(2, 1, "file://server/share/file"), "//server/share/file");
+assert.equal(fileUri(2, 1, "file://server/share/file", 0, 0), "");
+assert.match(errorMessage("dynlex_path_error_message"), /non-local/i);
 assert.equal(fileUri(2, 2, "file:////server/share/file"), "//server/share/file");
+assert.equal(fileUri(2, 2, "file://[2001:db8::1]/share/file"), "//[2001:db8::1]/share/file");
+assert.equal(fileUri(1, 1, "/tmp/a/../target"), "file:///tmp/a/../target");
+assert.equal(fileUri(2, 1, "file:///tmp/a/%2E%2E/target"), "/tmp/a/../target");
 
 for (const invalid of [
   "file:///tmp/a%2Fb",
@@ -159,21 +171,29 @@ for (const invalid of [
   assert.equal(errorMessage("dynlex_path_error_message").length > 0, true);
 }
 
-assert.equal(env.dynlex_host_platform_is_windows(), 0);
+new DataView(memory.buffer).setInt32(8014, 99, true);
+new DataView(memory.buffer).setInt32(8018, 99, true);
+assert.equal(env.dynlex_host_platform_is_windows(8014, 8018), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8014, true), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8018, true), 0);
 new DataView(memory.buffer).setUint32(8020, 99, true);
-assert.equal(env.dynlex_host_executable_path(0, 0, 8020), -1);
+new DataView(memory.buffer).setInt32(8024, 99, true);
+assert.equal(env.dynlex_host_executable_path(0, 0, 8020, 8024), 0);
 assert.equal(new DataView(memory.buffer).getUint32(8020, true), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8024, true), 0);
 assert.match(errorMessage("dynlex_host_error_message"), /browser/i);
-assert.equal(env.dynlex_host_executable_directory(0, 0, 8020), -1);
+assert.equal(env.dynlex_host_executable_directory(0, 0, 8020, 8024), 0);
 
 const view = new DataView(memory.buffer);
 view.setUint32(8030, 99, true);
 view.setUint32(8034, 99, true);
 view.setInt32(8038, 99, true);
-assert.equal(env.dynlex_host_read_standard_input_line(8030, 8034, 8038), -1);
+view.setInt32(8042, 99, true);
+assert.equal(env.dynlex_host_read_standard_input(8030, 8034, 8038, 8042), 0);
 assert.equal(view.getUint32(8030, true), 0);
 assert.equal(view.getUint32(8034, true), 0);
 assert.equal(view.getInt32(8038, true), 0);
+assert.equal(view.getInt32(8042, true), 0);
 assert.match(errorMessage("dynlex_host_error_message"), /standard input/i);
 
 console.log("Browser path and host imports passed");

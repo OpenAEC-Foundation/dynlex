@@ -4,6 +4,7 @@ const encoder = new TextEncoder();
 const fatalDecoder = new TextDecoder("utf-8", { fatal: true });
 
 class PathError extends Error {}
+class UnsupportedPathError extends PathError {}
 
 function integer(value) {
   const result = Number(value);
@@ -163,7 +164,7 @@ function rootIsDirectory(rootKind) {
   ].includes(rootKind);
 }
 
-function normalizePath(style, text) {
+function parsePath(style, text, normalizeDotSegments) {
   const parsed = parseRoot(style, text);
   const components = [];
   let { cursor } = parsed;
@@ -176,10 +177,13 @@ function normalizePath(style, text) {
       cursor += 1;
     }
     const component = text.slice(start, cursor);
-    if (!component || component === ".") {
+    if (!component) {
       continue;
     }
-    if (component === "..") {
+    if (normalizeDotSegments && component === ".") {
+      continue;
+    }
+    if (normalizeDotSegments && component === "..") {
       if (components.length && components.at(-1) !== "..") {
         components.pop();
       } else if (!rootIsDirectory(parsed.rootKind)) {
@@ -195,6 +199,14 @@ function normalizePath(style, text) {
     rootKind: parsed.rootKind,
     text: formatPath(parsed.rootKind, parsed.root, components)
   };
+}
+
+function normalizePath(style, text) {
+  return parsePath(style, text, true);
+}
+
+function lexicalPath(style, text) {
+  return parsePath(style, text, false);
 }
 
 function fullyAbsolute(style, path) {
@@ -344,6 +356,100 @@ function subdelimiter(byte) {
   return [33, 36, 38, 39, 40, 41, 42, 43, 44, 59, 61].includes(byte);
 }
 
+function hexadecimalByte(byte) {
+  return (
+    (byte >= 48 && byte <= 57) ||
+    (byte >= 65 && byte <= 70) ||
+    (byte >= 97 && byte <= 102)
+  );
+}
+
+function validIpv4Address(text) {
+  const parts = text.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^[0-9]+$/.test(part) &&
+        part.length <= 3 &&
+        (part.length === 1 || part[0] !== "0") &&
+        Number(part) <= 255
+    )
+  );
+}
+
+function ipv6SideGroups(text, allowIpv4) {
+  if (!text) {
+    return 0;
+  }
+  const segments = text.split(":");
+  if (segments.some((segment) => !segment)) {
+    return null;
+  }
+  let groups = 0;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment.includes(".")) {
+      if (!allowIpv4 || index !== segments.length - 1 || !validIpv4Address(segment)) {
+        return null;
+      }
+      groups += 2;
+    } else {
+      if (
+        segment.length > 4 ||
+        [...segment].some((value) => !hexadecimalByte(value.charCodeAt(0)))
+      ) {
+        return null;
+      }
+      groups += 1;
+    }
+  }
+  return groups;
+}
+
+function validIpv6Address(text) {
+  const doubleColon = text.indexOf("::");
+  if (doubleColon < 0) {
+    return ipv6SideGroups(text, true) === 8;
+  }
+  if (doubleColon !== text.lastIndexOf("::")) {
+    return false;
+  }
+  const left = ipv6SideGroups(text.slice(0, doubleColon), false);
+  const right = ipv6SideGroups(text.slice(doubleColon + 2), true);
+  return left !== null && right !== null && left + right < 8;
+}
+
+function validIpvFuture(text) {
+  if (text.length < 4 || !["v", "V"].includes(text[0])) {
+    return false;
+  }
+  let cursor = 1;
+  while (cursor < text.length && hexadecimalByte(text.charCodeAt(cursor))) {
+    cursor += 1;
+  }
+  if (cursor === 1 || text[cursor] !== ".") {
+    return false;
+  }
+  cursor += 1;
+  const addressStart = cursor;
+  while (cursor < text.length) {
+    const byte = text.charCodeAt(cursor++);
+    if (!unreserved(byte) && !subdelimiter(byte) && byte !== 58) {
+      return false;
+    }
+  }
+  return cursor > addressStart;
+}
+
+function bracketedIpLiteral(text) {
+  if (text.length < 4 || text[0] !== "[" || text.at(-1) !== "]") {
+    return false;
+  }
+  const address = text.slice(1, -1);
+  return validIpv6Address(address) || validIpvFuture(address);
+}
+
 function percentEncode(text, authority) {
   const digits = "0123456789ABCDEF";
   let result = "";
@@ -365,7 +471,9 @@ function encodeFileUri(style, path) {
   }
   if (style === WINDOWS && path.rootKind === "windows-unc") {
     const serverEnd = path.root.indexOf("/", 2);
-    return `file://${percentEncode(path.text.slice(2, serverEnd), true)}${percentEncode(
+    const server = path.text.slice(2, serverEnd);
+    const encodedServer = bracketedIpLiteral(server) ? server : percentEncode(server, true);
+    return `file://${encodedServer}${percentEncode(
       path.text.slice(serverEnd),
       false
     )}`;
@@ -394,6 +502,12 @@ function decodePercent(text, index, context) {
 }
 
 function decodeAuthority(text) {
+  if (text.startsWith("[")) {
+    if (!bracketedIpLiteral(text)) {
+      throw new PathError("A file URI contains an invalid IP-literal authority");
+    }
+    return text;
+  }
   let result = "";
   for (let index = 0; index < text.length; index += 1) {
     let byte = text.charCodeAt(index);
@@ -465,6 +579,9 @@ function decodeFileUri(style, uri) {
   const decoded = decodeUriPath(style, uri.slice(pathStart));
   let pathText;
   if (!local) {
+    if (style === POSIX) {
+      throw new UnsupportedPathError("A non-local file URI cannot be mapped to a POSIX path");
+    }
     pathText = `//${authority}${decoded}`;
   } else if (style === WINDOWS) {
     const uncPath = decoded.length >= 3 && decoded.startsWith("//") && decoded[2] !== "/";
@@ -481,11 +598,11 @@ function decodeFileUri(style, uri) {
   } else {
     pathText = decoded;
   }
-  const normalized = normalizePath(style, pathText);
-  if (!fullyAbsolute(style, normalized)) {
+  const parsed = lexicalPath(style, pathText);
+  if (!fullyAbsolute(style, parsed)) {
     throw new PathError("A file URI did not contain an absolute path");
   }
-  return normalized.text;
+  return parsed.text;
 }
 
 function writeMessage(memory, pointerValue, capacityValue, message) {
@@ -549,6 +666,28 @@ export function createPathImports(memory, allocateBytes) {
     }
   }
 
+  function withFileUriOutput(outputPointer, lengthPointer, supportedPointer, operation) {
+    lastError = "";
+    const supportedRange = range(memory, supportedPointer, 4);
+    if (!supportedRange) {
+      return fail(new PathError("Invalid file URI support result argument"));
+    }
+    const view = new DataView(memory.buffer);
+    view.setInt32(supportedRange.start, 1, true);
+    try {
+      prepareOutput(outputPointer, lengthPointer);
+      writeOwned(operation(), outputPointer, lengthPointer);
+      return 0;
+    } catch (error) {
+      if (error instanceof UnsupportedPathError) {
+        lastError = error.message;
+        view.setInt32(supportedRange.start, 0, true);
+        return 0;
+      }
+      return fail(error);
+    }
+  }
+
   return {
     dynlex_path_binary(operation, style, left, leftLength, right, rightLength, output, outputLength) {
       return withOwnedOutput(output, outputLength, () => {
@@ -569,11 +708,11 @@ export function createPathImports(memory, allocateBytes) {
     dynlex_path_error_message(pointer, capacity) {
       return writeMessage(memory, pointer, capacity, lastError || "Path operation failed");
     },
-    dynlex_path_file_uri(operation, style, input, inputLength, output, outputLength) {
-      return withOwnedOutput(output, outputLength, () => {
+    dynlex_path_file_uri(operation, style, input, inputLength, output, outputLength, supported) {
+      return withFileUriOutput(output, outputLength, supported, () => {
         const text = readBinary(memory, input, inputLength);
         if (Number(operation) === 1) {
-          return encodeFileUri(Number(style), normalizePath(Number(style), text));
+          return encodeFileUri(Number(style), lexicalPath(Number(style), text));
         }
         if (Number(operation) === 2) {
           return decodeFileUri(Number(style), text);
@@ -597,17 +736,25 @@ export function createPathImports(memory, allocateBytes) {
         return fail(error);
       }
     },
-    dynlex_path_native_style() {
-      return POSIX;
-    },
-    dynlex_path_native_style_supported() {
+    dynlex_path_native_style(stylePointer, supportedPointer) {
+      lastError = "Native path mapping is not available in the browser";
+      const styleRange = range(memory, stylePointer, 4);
+      const supportedRange = range(memory, supportedPointer, 4);
+      if (!styleRange || !supportedRange) {
+        return fail(new PathError("Invalid native path style result arguments"));
+      }
+      const view = new DataView(memory.buffer);
+      view.setInt32(styleRange.start, 0, true);
+      view.setInt32(supportedRange.start, 0, true);
       return 0;
     },
     dynlex_path_unary(operation, style, input, inputLength, output, outputLength) {
       return withOwnedOutput(output, outputLength, () =>
         unaryPath(
           Number(operation),
-          normalizePath(Number(style), readBinary(memory, input, inputLength))
+          Number(operation) === 1
+            ? normalizePath(Number(style), readBinary(memory, input, inputLength))
+            : lexicalPath(Number(style), readBinary(memory, input, inputLength))
         )
       );
     }
@@ -617,46 +764,60 @@ export function createPathImports(memory, allocateBytes) {
 export function createHostImports(memory) {
   let lastError = "";
 
-  function unsupported(outputLengthPointer) {
+  function unsupportedText(outputLengthPointer, supportedPointer) {
     lastError = "This host operation is not available in the browser";
     const outputRange = range(memory, outputLengthPointer, 4);
-    if (!outputRange) {
-      throw new WebAssembly.RuntimeError("Host output length is outside program memory");
+    const supportedRange = range(memory, supportedPointer, 4);
+    if (!outputRange || !supportedRange) {
+      throw new WebAssembly.RuntimeError("Host result is outside program memory");
     }
-    new DataView(memory.buffer).setUint32(outputRange.start, 0, true);
-    return -1;
+    const view = new DataView(memory.buffer);
+    view.setUint32(outputRange.start, 0, true);
+    view.setInt32(supportedRange.start, 0, true);
+    return 0;
   }
 
   return {
     dynlex_host_error_message(pointer, capacity) {
       return writeMessage(memory, pointer, capacity, lastError || "Host operation failed");
     },
-    dynlex_host_executable_directory(output, capacity, outputLength) {
+    dynlex_host_executable_directory(output, capacity, outputLength, supported) {
       void output;
       void capacity;
-      return unsupported(outputLength);
+      return unsupportedText(outputLength, supported);
     },
-    dynlex_host_executable_path(output, capacity, outputLength) {
+    dynlex_host_executable_path(output, capacity, outputLength, supported) {
       void output;
       void capacity;
-      return unsupported(outputLength);
+      return unsupportedText(outputLength, supported);
     },
-    dynlex_host_platform_is_windows() {
+    dynlex_host_platform_is_windows(isWindows, supported) {
+      lastError = "Host platform information is not available in the browser";
+      const platformRange = range(memory, isWindows, 4);
+      const supportedRange = range(memory, supported, 4);
+      if (!platformRange || !supportedRange) {
+        throw new WebAssembly.RuntimeError("Host platform result is outside program memory");
+      }
+      const view = new DataView(memory.buffer);
+      view.setInt32(platformRange.start, 0, true);
+      view.setInt32(supportedRange.start, 0, true);
       return 0;
     },
-    dynlex_host_read_standard_input_line(contents, length, endOfFile) {
+    dynlex_host_read_standard_input(contents, length, endOfFile, supported) {
       lastError = "Standard input is not available in the browser";
       const contentsRange = range(memory, contents, 4);
       const lengthRange = range(memory, length, 4);
       const endRange = range(memory, endOfFile, 4);
-      if (!contentsRange || !lengthRange || !endRange) {
+      const supportedRange = range(memory, supported, 4);
+      if (!contentsRange || !lengthRange || !endRange || !supportedRange) {
         throw new WebAssembly.RuntimeError("Standard input result is outside program memory");
       }
       const view = new DataView(memory.buffer);
       view.setUint32(contentsRange.start, 0, true);
       view.setUint32(lengthRange.start, 0, true);
       view.setInt32(endRange.start, 0, true);
-      return -1;
+      view.setInt32(supportedRange.start, 0, true);
+      return 0;
     }
   };
 }

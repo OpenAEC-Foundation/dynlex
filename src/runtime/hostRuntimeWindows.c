@@ -1,34 +1,25 @@
 #include "hostRuntimeInternal.h"
 
+#include "hostRuntimeWindowsPath.h"
 #include "runtimeError.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <io.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <windows.h>
 
-static bool ascii_prefix_equal_case_insensitive(const char *text, const char *prefix, size_t length) {
-	for (size_t index = 0; index < length; ++index) {
-		char left = text[index];
-		char right = prefix[index];
-		if (left >= 'a' && left <= 'z')
-			left = (char)(left - ('a' - 'A'));
-		if (right >= 'a' && right <= 'z')
-			right = (char)(right - ('a' - 'A'));
-		if (left != right)
-			return false;
-	}
-	return true;
-}
-
-int dynlex_platform_executable_path(char **path, size_t *length) {
-	if (path == NULL || length == NULL) {
+int dynlex_platform_executable_path(char **path, size_t *length, int32_t *supported) {
+	if (path == NULL || length == NULL || supported == NULL) {
 		dynlex_runtime_set_windows_error("Invalid executable path result arguments", ERROR_INVALID_PARAMETER);
 		return -1;
 	}
 	*path = NULL;
 	*length = 0;
+	*supported = 1;
 
 	DWORD capacity = 256;
 	wchar_t *wide_path = NULL;
@@ -57,6 +48,15 @@ int dynlex_platform_executable_path(char **path, size_t *length) {
 		}
 		capacity *= 2;
 	}
+	DynlexWindowsPathNamespace path_namespace = dynlex_windows_path_namespace(wide_path, wide_length);
+	if (path_namespace != DYNLEX_WINDOWS_PATH_REGULAR) {
+		free(wide_path);
+		dynlex_runtime_set_error(
+			path_namespace == DYNLEX_WINDOWS_PATH_EXTENDED ? "The executable path uses unsupported extended Windows path syntax"
+														   : "The executable path uses an unsupported Windows device namespace"
+		);
+		return -1;
+	}
 
 	int utf8_length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_path, (int)wide_length, NULL, 0, NULL, NULL);
 	if (utf8_length <= 0) {
@@ -84,17 +84,6 @@ int dynlex_platform_executable_path(char **path, size_t *length) {
 		if (utf8_path[index] == '\\')
 			utf8_path[index] = '/';
 	}
-	if (utf8_length >= 8 && ascii_prefix_equal_case_insensitive(utf8_path, "//?/UNC/", 8)) {
-		memmove(utf8_path + 2, utf8_path + 8, (size_t)utf8_length - 8);
-		utf8_length -= 6;
-	} else if (utf8_length >= 4 && memcmp(utf8_path, "//?/", 4) == 0) {
-		memmove(utf8_path, utf8_path + 4, (size_t)utf8_length - 4);
-		utf8_length -= 4;
-	} else if (utf8_length >= 4 && memcmp(utf8_path, "//./", 4) == 0) {
-		free(utf8_path);
-		dynlex_runtime_set_error("The executable path uses an unsupported Windows device namespace");
-		return -1;
-	}
 	bool absolute_drive_path = utf8_length >= 3 &&
 							   ((utf8_path[0] >= 'A' && utf8_path[0] <= 'Z') || (utf8_path[0] >= 'a' && utf8_path[0] <= 'z')) &&
 							   utf8_path[1] == ':' && utf8_path[2] == '/';
@@ -106,5 +95,13 @@ int dynlex_platform_executable_path(char **path, size_t *length) {
 	}
 	*path = utf8_path;
 	*length = (size_t)utf8_length;
+	return 0;
+}
+
+int dynlex_platform_prepare_standard_input(void) {
+	if (_setmode(_fileno(stdin), _O_BINARY) == -1) {
+		dynlex_runtime_set_errno_error("Could not set standard input to binary mode", errno);
+		return -1;
+	}
 	return 0;
 }

@@ -91,6 +91,7 @@ run_with_timeout() {
     shift
     local arguments_file=""
     local standard_input_file=""
+    local standard_input_bytes_file=""
     local working_directory_file=""
     while [[ "${1:-}" == --* ]]; do
         if [[ $# -lt 2 ]]; then
@@ -99,6 +100,7 @@ run_with_timeout() {
         fi
         case "$1" in
         --arguments-file) arguments_file="$2" ;;
+        --standard-input-bytes-file) standard_input_bytes_file="$2" ;;
         --standard-input-file) standard_input_file="$2" ;;
         --working-directory-file) working_directory_file="$2" ;;
         *)
@@ -108,7 +110,7 @@ run_with_timeout() {
         esac
         shift 2
     done
-    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$working_directory_file" "$PROJECT_DIR" "$@" <<'PY'
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$PROJECT_DIR" "$@" <<'PY'
 import os
 from pathlib import Path
 import signal
@@ -118,9 +120,10 @@ import sys
 timeout_seconds = int(sys.argv[1])
 arguments_file = sys.argv[2]
 standard_input_file = sys.argv[3]
-working_directory_file = sys.argv[4]
-project_directory = Path(sys.argv[5])
-cmd = sys.argv[6:]
+standard_input_bytes_file = sys.argv[4]
+working_directory_file = sys.argv[5]
+project_directory = Path(sys.argv[6])
+cmd = sys.argv[7:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -140,6 +143,27 @@ if arguments_file:
 standard_input = None
 if standard_input_file:
     standard_input = Path(standard_input_file).read_bytes()
+if standard_input_bytes_file:
+    if standard_input is not None:
+        sys.stderr.write("Only one standard-input metadata file may be used\n")
+        sys.exit(125)
+    standard_input = bytearray()
+    for token in Path(standard_input_bytes_file).read_text(encoding="ascii").split():
+        fields = token.split("*")
+        if len(fields) > 2 or len(fields[0]) != 2:
+            sys.stderr.write(f"Invalid standard-input byte token: {token}\n")
+            sys.exit(125)
+        try:
+            value = int(fields[0], 16)
+            count = int(fields[1], 10) if len(fields) == 2 else 1
+        except ValueError:
+            sys.stderr.write(f"Invalid standard-input byte token: {token}\n")
+            sys.exit(125)
+        if count < 1:
+            sys.stderr.write(f"Invalid standard-input byte count: {token}\n")
+            sys.exit(125)
+        standard_input.extend(bytes([value]) * count)
+    standard_input = bytes(standard_input)
 
 working_directory = None
 if working_directory_file:
@@ -255,6 +279,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     stack_limit_file="$test_dir/stack_limit_kb.txt"
     arguments_file="$test_dir/arguments.txt"
     standard_input_file="$test_dir/standard_input.txt"
+    standard_input_bytes_file="$test_dir/standard_input.bytes"
     working_directory_file="$test_dir/working_directory.txt"
     expected_runtime_failure_file="$test_dir/expected_runtime_failure.txt"
     if [[ "$is_windows" == "true" ]]; then
@@ -390,6 +415,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ -f "$standard_input_file" ]]; then
         run_command+=(--standard-input-file "$standard_input_file")
     fi
+    if [[ -f "$standard_input_bytes_file" ]]; then
+        run_command+=(--standard-input-bytes-file "$standard_input_bytes_file")
+    fi
     if [[ -f "$working_directory_file" ]]; then
         run_command+=(--working-directory-file "$working_directory_file")
     fi
@@ -513,6 +541,7 @@ run_auxiliary_test \
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_path_host" 10 node "$PROJECT_DIR/tests/web/runtime_path_host.mjs"
+run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
