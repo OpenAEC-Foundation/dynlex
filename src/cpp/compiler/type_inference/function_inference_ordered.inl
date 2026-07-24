@@ -4,6 +4,10 @@ static bool inferSection(
 	const BindingFrameStack &bindingFrameStack = BindingFrameStack{}, bool *fallsThrough = nullptr
 );
 
+static Expression *bodyTransferIdentity(Expression *expression) {
+	return expression && expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
+}
+
 static bool inferSectionFlexCallerBodyFrame(
 	size_t targetFrameIndex, Section *executionSection, Expression *executeBodyCallSite, InferenceContext &context
 ) {
@@ -15,7 +19,8 @@ static bool inferSectionFlexCallerBodyFrame(
 		targetFrame.definitionSection && targetFrame.definitionBody && targetFrame.bodySection,
 		"section flex body inference frame is incomplete"
 	);
-	if (targetFrame.bodyInferred && targetFrame.executeBodyCallSite != executeBodyCallSite) {
+	if (targetFrame.bodyInferred &&
+		bodyTransferIdentity(targetFrame.executeBodyCallSite) != bodyTransferIdentity(executeBodyCallSite)) {
 		context.fail(Diagnostic(
 			context.parseContext, Diagnostic::Level::Error, "execute body can only run once per section flex call",
 			executeBodyCallSite ? executeBodyCallSite->range : Range()
@@ -73,10 +78,8 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 		));
 		return false;
 	}
-	Expression *executeBodyCallSite =
-		context.activeFlexCallStack.empty() ? executeBodyExpression : context.activeFlexCallStack.back();
 	size_t targetFrameIndex = static_cast<size_t>(targetFrame - context.sectionFlexBodyFrames.data());
-	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyCallSite, context);
+	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyExpression, context);
 }
 
 // Infer the type of an expression bottom-up.
