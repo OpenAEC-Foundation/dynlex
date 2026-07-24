@@ -209,6 +209,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->groupingPrecedence = expression->groupingPrecedence;
 	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
+	clone->selectedPatternPathIndex = preserveInferenceMetadata ? expression->selectedPatternPathIndex : std::nullopt;
 	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
@@ -296,12 +297,10 @@ ParseContext::~ParseContext() {
 		delete section;
 	mainSection = nullptr;
 
-	if (hasCompleted(CompilationStage::ResolvedPatterns)) {
-		std::unordered_set<PatternTreeNode *> visitedPatternNodes;
-		for (PatternTreeNode *&tree : patternTrees) {
-			deletePatternTree(tree, visitedPatternNodes);
-			tree = nullptr;
-		}
+	std::unordered_set<PatternTreeNode *> visitedPatternNodes;
+	for (PatternTreeNode *&tree : patternTrees) {
+		deletePatternTree(tree, visitedPatternNodes);
+		tree = nullptr;
 	}
 
 	delete diBuilder;

@@ -301,8 +301,15 @@ struct InferenceContext {
 		}
 	};
 
+	struct RecursiveInferenceObservationFrame {
+		Instantiation *owner{};
+		RecursiveInferenceObservationFrame *parent{};
+		bool observed = false;
+	};
+
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
+	RecursiveInferenceObservationFrame *recursiveInferenceObservationFrame{};
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
@@ -319,7 +326,6 @@ struct InferenceContext {
 	bool trial = false;
 	bool suppressDiagnostics = false;
 	bool suppressReinferPassDiagnostics = false;
-	bool observedInProgressUndeducedInstantiation = false;
 	std::string typeFailureDetail;
 	std::vector<RelatedInfo> typeFailureRelatedInfo;
 	DiagnosticExpressionSnapshot typeFailureSnapshot;

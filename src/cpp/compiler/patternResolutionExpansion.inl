@@ -71,7 +71,8 @@ materializeMatchedArgument(Expression *rootExpression, PatternMatch *match, cons
 static void expandMatch(Expression *rootExpression, Expression *expr, PatternMatch *match) {
 	expr->kind = Expression::Kind::PatternCall;
 	expr->patternMatch = match;
-	expr->selectedPatternDefinition = match->matchingDefinitions.size() == 1 ? match->matchingDefinitions.front() : nullptr;
+	expr->selectedPatternDefinition = nullptr;
+	expr->selectedPatternPathIndex = std::nullopt;
 	std::vector<MatchedArgument> orderedArguments = match->orderedArguments;
 	std::stable_sort(
 		orderedArguments.begin(), orderedArguments.end(),

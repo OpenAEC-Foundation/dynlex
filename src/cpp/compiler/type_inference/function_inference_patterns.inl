@@ -1,5 +1,6 @@
 case Expression::Kind::PatternCall: {
 	expr->selectedPatternDefinition = nullptr;
+	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	auto &defs = expr->patternMatch->matchingDefinitions;
 	if (definitionsHaveUnresolvedTypeConstraints(defs)) {
@@ -33,9 +34,9 @@ case Expression::Kind::PatternCall: {
 	};
 
 	// Select the best overload based on argument types
-	PatternDefinition *def =
+	PatternOverloadSelection overload =
 		selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown);
-	if (!def) {
+	if (!overload) {
 		std::string candidates;
 		std::unordered_set<std::string> uniqueCandidates;
 		for (PatternDefinition *candidate : defs) {
@@ -57,17 +58,20 @@ case Expression::Kind::PatternCall: {
 		context.setTypeFailure(detail);
 		std::vector<RelatedInfo> implicitPromotionRelatedInfo;
 		for (PatternDefinition *candidate : defs) {
-			std::vector<std::pair<std::string, Expression *>> candidateBindings;
-			collectPatternCallBindingPairs(expr, candidate, candidateBindings);
-			for (const auto &[parameterName, argumentExpression] : candidateBindings) {
-				if (!argumentExpression || argumentExpression->type.isDeduced() ||
-					argumentExpression->kind != Expression::Kind::Variable || !argumentExpression->variable ||
-					argumentExpression->variable->name != parameterName) {
-					continue;
+			for (size_t pathIndex : matchingPatternPathIndices(expr->patternMatch->nodesPassed, candidate)) {
+				std::vector<std::pair<std::string, Expression *>> candidateBindings;
+				collectPatternCallBindingPairsForPath(expr, candidate, pathIndex, candidateBindings);
+				for (const auto &[parameterName, argumentExpression] : candidateBindings) {
+					if (!argumentExpression || argumentExpression->type.isDeduced() ||
+						argumentExpression->kind != Expression::Kind::Variable || !argumentExpression->variable ||
+						argumentExpression->variable->name != parameterName) {
+						continue;
+					}
+					DefinitionPatternElement *parameterElement =
+						findParameterElement(candidate->patternElements, parameterName);
+					if (parameterElement && parameterElement->promotedFromVariableLike)
+						appendImplicitPromotionTrace(implicitPromotionRelatedInfo, candidate, parameterName);
 				}
-				DefinitionPatternElement *parameterElement = findParameterElement(candidate->patternElements, parameterName);
-				if (parameterElement && parameterElement->promotedFromVariableLike)
-					appendImplicitPromotionTrace(implicitPromotionRelatedInfo, candidate, parameterName);
 			}
 		}
 		for (Expression *argumentExpression : expr->arguments)
@@ -81,10 +85,11 @@ case Expression::Kind::PatternCall: {
 		);
 		break;
 	}
+	PatternDefinition *def = overload.definition;
 	for (size_t ai = 0; ai < argTypesForOverload.size(); ai++) {
 		if (argTypesForOverload[ai].kind != DataType::Kind::Void)
 			continue;
-		if (definitionParameterAcceptsVoid(def, expr->patternMatch->nodesPassed, ai))
+		if (definitionParameterAcceptsVoid(def, overload.pathIndex, ai))
 			continue;
 		std::string detail = renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, expr->arguments[ai]->range), "no overload matches call", "message",
@@ -98,6 +103,7 @@ case Expression::Kind::PatternCall: {
 	if (!context.typesValid)
 		break;
 	expr->selectedPatternDefinition = def;
+	expr->selectedPatternPathIndex = overload.pathIndex;
 
 	Section *matchedSection = def->section;
 
@@ -235,10 +241,8 @@ case Expression::Kind::PatternCall: {
 				ensureArgumentTypeForPatternCall(argumentExpression, context, flexBindingFrameStack);
 			DataType argType = argTypeResult.type;
 			if (!argType.isDeduced()) {
-				if (argTypeResult.deferred && context.currentInstantiation) {
-					markInstantiationForReinference(context, context.currentInstantiation);
+				if (argTypeResult.deferred && context.currentInstantiation)
 					return;
-				}
 				if (context.trial) {
 					setConfiguredTypeFailure(expr->range, "undeduced argument type in trial inference");
 					DefinitionPatternElement *parameterElement = findParameterElement(def->patternElements, parameterName);
@@ -256,7 +260,7 @@ case Expression::Kind::PatternCall: {
 			argTypes.push_back(argType);
 		}
 		std::unordered_set<std::string> explicitCompileTimeParameters =
-			collectExplicitCompileTimeParameters(def, paramBindings, expr->patternMatch->nodesPassed, argTypes);
+			collectExplicitCompileTimeParameters(def, paramBindings, overload.pathIndex, argTypes);
 		auto evaluateParameterValue = [&](Expression *argumentExpression) {
 			(void)flexBindingFrameStack;
 			if (!argumentExpression)
@@ -366,15 +370,14 @@ case Expression::Kind::PatternCall: {
 			context.currentSubject = callerSubject;
 			context.currentInstantiation = savedInst;
 			inst.valid = inferenceSucceeded;
-			if (inst.needsReinfer)
-				markInstantiationForReinference(context, savedInst);
+			if (inferenceSucceeded && inst.needsReinfer)
+				propagateUnresolvedRecursiveDependencyToCaller(context, savedInst);
 			refinedInstantiationKey =
 				buildInstantiationKey(inst.requiredCompileTimeParameters, paramBindings, argTypes, evaluateParameterValue);
 		} else if (inst.returnType.isDeduced()) {
 			expr->type = inst.returnType;
 		} else {
-			context.observedInProgressUndeducedInstantiation = true;
-			markInstantiationForReinference(context, context.currentInstantiation);
+			observeUnresolvedRecursiveDependency(context);
 		}
 		if (!inst.valid) {
 			context.typesValid = false;
@@ -402,8 +405,7 @@ case Expression::Kind::PatternCall: {
 		}
 
 		// If no return intrinsic was found, default to Void
-		if (!inst.inferring && !inst.needsReinfer && !context.observedInProgressUndeducedInstantiation &&
-			inst.returnType.kind == DataType::Kind::Any) {
+		if (!inst.inferring && !inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any) {
 			inst.returnType = {DataType::Kind::Void};
 		}
 		CompileTimeValue inferredReturnValue{};

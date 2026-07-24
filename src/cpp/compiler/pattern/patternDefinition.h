@@ -2,11 +2,14 @@
 #include "codeLine.h"
 #include "pattern_tree/patternElement.h"
 #include "range.h"
+#include "sectionType.h"
 #include <climits>
+#include <functional>
 #include <string_view>
 struct Section;
 struct Instantiation;
 struct PatternTreeNode;
+struct ParseContext;
 namespace lsp {
 struct SourceFile;
 }
@@ -25,6 +28,13 @@ struct PatternDefinition {
 	bool isGeneratedClassPropertyAccessor = false;
 	// when resolved, this pattern has been added to the pattern tree
 	bool resolved{};
+	// The tree and exact canonical element paths used for the current trie
+	// insertion. Pattern elements can be reclassified during resolution, so
+	// removal must never reconstruct old paths from their mutable state.
+	PatternTreeNode *indexedTree{};
+	SectionType indexedTreeType = SectionType::Count;
+	std::vector<std::vector<PatternElement>> indexedPaths;
+	std::vector<std::vector<PatternTreeNode *>> indexedNodePaths;
 	// the exact trie endpoint nodes this definition currently ends at
 	std::vector<PatternTreeNode *> endNodes;
 	// precedence level (higher = evaluated first). 0 = no precedence declared.
@@ -58,3 +68,8 @@ struct PatternDefinition {
 
 bool isPatternDefinitionVisibleFromSource(const PatternDefinition &definition, const lsp::SourceFile &sourceFile);
 bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const PatternDefinition &right);
+void mutatePatternDefinition(ParseContext &context, PatternDefinition &definition, const std::function<void()> &mutation);
+void promoteImplicitPatternParameter(
+	ParseContext &context, PatternDefinition &definition, DefinitionPatternElement &element, const Range &useRange
+);
+void revertImplicitPatternParameter(ParseContext &context, PatternDefinition &definition, DefinitionPatternElement &element);

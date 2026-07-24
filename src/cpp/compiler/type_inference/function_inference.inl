@@ -131,6 +131,81 @@ static void markInstantiationForReinference(InferenceContext &context, Instantia
 	instantiation->needsReinfer = true;
 }
 
+class ScopedRecursiveInferenceObservation {
+  public:
+	ScopedRecursiveInferenceObservation(InferenceContext &context, Instantiation *owner)
+		: context(context), frame{owner, context.recursiveInferenceObservationFrame} {
+		context.recursiveInferenceObservationFrame = &frame;
+	}
+
+	ScopedRecursiveInferenceObservation(const ScopedRecursiveInferenceObservation &) = delete;
+	ScopedRecursiveInferenceObservation &operator=(const ScopedRecursiveInferenceObservation &) = delete;
+
+	~ScopedRecursiveInferenceObservation() {
+		requireCompilerInvariant(
+			context.recursiveInferenceObservationFrame == &frame,
+			"recursive inference observation frames were not unwound in stack order"
+		);
+		context.recursiveInferenceObservationFrame = frame.parent;
+		if (propagateToParent && frame.observed && frame.parent && frame.parent->owner == frame.owner)
+			frame.parent->observed = true;
+	}
+
+	bool observed() const { return frame.observed; }
+	bool ownerObserved() const {
+		for (const InferenceContext::RecursiveInferenceObservationFrame *current = &frame;
+			 current && current->owner == frame.owner; current = current->parent) {
+			if (current->observed)
+				return true;
+		}
+		return false;
+	}
+	void discard() { propagateToParent = false; }
+
+  private:
+	InferenceContext &context;
+	InferenceContext::RecursiveInferenceObservationFrame frame;
+	bool propagateToParent = true;
+};
+
+static void observeUnresolvedRecursiveDependency(InferenceContext &context) {
+	InferenceContext::RecursiveInferenceObservationFrame *frame = context.recursiveInferenceObservationFrame;
+	requireCompilerInvariant(frame, "recursive dependency was observed outside an inference observation frame");
+	requireCompilerInvariant(
+		frame->owner && frame->owner == context.currentInstantiation,
+		"recursive dependency observation is not owned by the active instantiation"
+	);
+	frame->observed = true;
+	markInstantiationForReinference(context, frame->owner);
+}
+
+static void
+propagateUnresolvedRecursiveDependencyToCaller(InferenceContext &callerContext, const Instantiation *callerInstantiation) {
+	requireCompilerInvariant(
+		callerInstantiation && callerInstantiation == callerContext.currentInstantiation,
+		"deferred inference has no owning caller instantiation"
+	);
+	observeUnresolvedRecursiveDependency(callerContext);
+}
+
+struct InstantiationInferencePassResult {
+	bool succeeded;
+	bool observedUnresolvedDependency;
+};
+
+template <typename InferPassFn>
+static InstantiationInferencePassResult
+runScopedInstantiationInferencePass(InferenceContext &context, Instantiation &instantiation, InferPassFn &&inferPass) {
+	ScopedRecursiveInferenceObservation passObservation(context, &instantiation);
+	bool succeeded = inferPass();
+	bool observedUnresolvedDependency = passObservation.observed();
+	requireCompilerInvariant(
+		!observedUnresolvedDependency || instantiation.needsReinfer,
+		"recursive dependency observation did not preserve its owning reinference request"
+	);
+	return {succeeded, observedUnresolvedDependency};
+}
+
 static Variable *findVariableForExpression(Expression *expression) {
 	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable || !expression->range.line)
 		return nullptr;
@@ -241,10 +316,16 @@ static void setRecursiveInferenceFailure(
 	Range diagnosticRange = definition ? definition->range : fallbackRange;
 	if (functionName.empty())
 		functionName = definition ? (std::string)definition->range.subString : "<expression>";
-	context.setTypeFailure(renderConfiguredMessage(
+	std::string detail = renderConfiguredMessage(
 		syntaxConfigForRange(context.parseContext, diagnosticRange), "recursive type inference did not converge", "message",
 		{{"function", functionName}}
-	));
+	);
+	context.setTypeFailure(detail);
+	// Candidate failures from the final reinference pass are provisional: the
+	// fixed-point check owns the terminal cause once that pass makes no
+	// progress. Keep unrelated grouping priorities unchanged.
+	Range failureRange = context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot.range : diagnosticRange;
+	context.fail(buildFailureDetailDiagnostic(failureRange, std::move(detail)), 2);
 }
 
 template <typename InferPassFn>
@@ -260,16 +341,16 @@ static bool runInstantiationReinferenceLoop(
 	constexpr size_t maxReinferPasses = 32;
 	while (true) {
 		std::unique_ptr<InstantiationProgressSnapshot> beforePass = snapshotInstantiationProgress(instantiation);
-		bool inferenceSucceeded = inferPass();
+		InstantiationInferencePassResult pass = runScopedInstantiationInferencePass(context, instantiation, inferPass);
 		std::unique_ptr<InstantiationProgressSnapshot> afterPass = snapshotInstantiationProgress(instantiation);
-		if (!inferenceSucceeded || !context.typesValid) {
+		if (!pass.succeeded || !context.typesValid) {
 			if (!instantiation.needsReinfer)
 				return false;
 		} else if (!instantiation.needsReinfer) {
 			return true;
 		}
 		if (*afterPass == *beforePass) {
-			if (canDeferToCaller && context.observedInProgressUndeducedInstantiation && instantiation.returnType.isDeduced())
+			if (canDeferToCaller && pass.observedUnresolvedDependency && instantiation.returnType.isDeduced())
 				return true;
 			setRecursiveInferenceFailure(context, definition, fallbackRange, std::move(functionName));
 			return false;
@@ -387,24 +468,25 @@ struct ArgumentTypeInferenceResult {
 	bool deferred = false;
 };
 
-static bool definitionParameterAcceptsVoid(
-	PatternDefinition *definition, const std::vector<PatternTreeNode *> &nodesPassed, size_t argumentIndex
-) {
+static bool definitionParameterAcceptsVoid(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex) {
 	if (!definition)
 		return false;
 	size_t currentArgumentIndex = 0;
 	bool acceptsVoid = false;
-	forEachPatternParameterName(nodesPassed, definition, [&](const std::string &, PatternTreeNode *node) {
+	forEachPatternParameterName(
+		definition, pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		if (acceptsVoid || currentArgumentIndex != argumentIndex) {
 			currentArgumentIndex++;
 			return;
 		}
-		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, node);
+		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(element != nullptr, "matched pattern parameter has no definition element");
 		acceptsVoid = element->resolvedTypeConstraint.isResolved() &&
 					  element->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
 		currentArgumentIndex++;
-	});
+	}
+	);
 	return acceptsVoid;
 }
 
@@ -412,9 +494,10 @@ static ArgumentTypeInferenceResult ensureArgumentTypeForPatternCall(
 	Expression *argExpr, InferenceContext &context, const BindingFrameStack &callerBindingFrameStack
 ) {
 	ArgumentTypeInferenceResult result;
+	ScopedRecursiveInferenceObservation argumentObservation(context, context.currentInstantiation);
 	Expression *inferExpr = argExpr;
 	result.type = requestKnownOrInferExpressionType(inferExpr, context, callerBindingFrameStack, false);
-	result.deferred = !result.type.isDeduced() && context.observedInProgressUndeducedInstantiation;
+	result.deferred = !result.type.isDeduced() && argumentObservation.ownerObserved();
 	return result;
 }
 
@@ -592,7 +675,13 @@ static void collectPatternCallTraceTargets(
 		if (!definition)
 			continue;
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
-		collectPatternCallBindingPairs(patternCallExpr, definition, paramBindings);
+		if (patternCallExpr->selectedPatternDefinition == definition && patternCallExpr->selectedPatternPathIndex.has_value()) {
+			collectPatternCallBindingPairs(patternCallExpr, definition, paramBindings);
+		} else {
+			for (size_t pathIndex : matchingPatternPathIndices(patternCallExpr->patternMatch->nodesPassed, definition)) {
+				collectPatternCallBindingPairsForPath(patternCallExpr, definition, pathIndex, paramBindings);
+			}
+		}
 		for (const auto &[parameterName, argumentExpression] : paramBindings) {
 			if (!expressionContainsTargetExpression(argumentExpression, targetExpression))
 				continue;

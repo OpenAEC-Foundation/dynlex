@@ -114,12 +114,12 @@ case Expression::Kind::IntrinsicCall: {
 				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
 				Expression *sourceReturnValueExpression =
 					returnValueExpression ? resolveThroughBindings(returnValueExpression, flexBindingFrameStack) : nullptr;
+				ScopedRecursiveInferenceObservation returnValueObservation(context, context.currentInstantiation);
 				DataType retType = returnValueExpression
 									   ? ensureExpressionType(returnValueExpression, context, flexBindingFrameStack)
 									   : DataType{DataType::Kind::Void};
 				if (!retType.isDeduced()) {
-					if (context.observedInProgressUndeducedInstantiation && context.currentInstantiation) {
-						markInstantiationForReinference(context, context.currentInstantiation);
+					if (returnValueObservation.ownerObserved() && context.currentInstantiation) {
 						expr->type = {DataType::Kind::Void};
 						break;
 					}
