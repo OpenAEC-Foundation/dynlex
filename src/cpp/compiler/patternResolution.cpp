@@ -123,6 +123,8 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 			createClassPropertyPatternDefinition(
 				context, accessorSection, classDefinition, field, ClassPropertyAccessorSyntax::PluralPossessive
 			);
+			for (PatternDefinition *definition : accessorSection->patternDefinitions)
+				accessorSection->indexExplicitParameters(*definition);
 
 			auto *replacementSection = new ReplacementSection(accessorSection);
 			accessorSection->executionSection = replacementSection;
@@ -303,7 +305,7 @@ static void collectPromotablePatternNames(
 		return;
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-			if (element.type == PatternElement::Type::VariableLike && canPromoteVariableLikeElement(element))
+			if (section->canPromoteImplicitParameter(*definition, element))
 				names.insert(element.text);
 		});
 	}
@@ -314,48 +316,8 @@ static void collectPromotablePatternNames(
 static bool
 promotePatternNameInSectionChain(ParseContext &context, Section *section, const std::string &name, const Range &useRange) {
 	for (Section *current = section; current; current = current->parent) {
-		bool foundInCurrent = false;
-		for (PatternDefinition *definition : current->patternDefinitions) {
-			visitPatternNameWithFoundState(definition->patternElements, name, false, [&](DefinitionPatternElement &element) {
-				if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::VariableLike)
-					return false;
-				if (element.type != PatternElement::Type::VariableLike) {
-					foundInCurrent = true;
-					return true;
-				}
-				if (!canPromoteVariableLikeElement(element))
-					return false;
-				promoteImplicitPatternParameter(context, *definition, element, useRange);
-				foundInCurrent = true;
-				return true;
-			});
-		}
-		if (!foundInCurrent)
-			continue;
-		if (!current->variableDefinitions.contains(name)) {
-			for (PatternDefinition *definition : current->patternDefinitions) {
-				bool created = visitPatternNameWithFoundState(
-					definition->patternElements, name, false,
-					[&](DefinitionPatternElement &element) {
-					if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
-						return false;
-					VariableReference *varRef = context.createVariableReference(
-						Range(
-							definition->range.line, definition->range.start() + element.startPos,
-							definition->range.start() + element.startPos + element.text.length()
-						),
-						element.text
-					);
-					current->variableDefinitions[element.text] = varRef;
-					current->variableReferences[element.text].push_back(varRef);
-					return true;
-				}
-				);
-				if (created)
-					break;
-			}
-		}
-		return true;
+		if (current->resolvePatternParameterBinding(context, name, useRange))
+			return true;
 	}
 	return false;
 }
@@ -729,10 +691,6 @@ struct AlternativePatternSuggestion {
 	bool isMultiWord = false;
 };
 
-static bool isParameterLikeElement(const DefinitionPatternElement &element) {
-	return element.type == PatternElement::Type::Variable || canPromoteVariableLikeElement(element);
-}
-
 static bool forEachPatternSpelling(
 	const std::vector<DefinitionPatternElement> &elements, const std::function<bool(const std::string &)> &visitor
 ) {
@@ -758,27 +716,11 @@ static bool isSingleWordPatternSpelling(const std::string &spelling) {
 
 static bool findEnclosingParameterCandidate(PatternReference *reference, const std::string &token, Range *outRange = nullptr) {
 	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
-		for (PatternDefinition *def : sec->patternDefinitions) {
-			bool found = false;
-			Range candidateRange;
-			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
-				if (found || element.text != token)
-					return;
-				if (!isParameterLikeElement(element))
-					return;
-				found = true;
-				if (def->range.line) {
-					int start = def->range.start() + static_cast<int>(element.startPos);
-					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
-				} else {
-					candidateRange = def->range;
-				}
-			});
-			if (found) {
-				if (outRange)
-					*outRange = candidateRange;
-				return true;
-			}
+		std::vector<Range> candidateRanges = sec->patternParameterCandidateRanges(token);
+		if (!candidateRanges.empty()) {
+			if (outRange)
+				*outRange = candidateRanges.front();
+			return true;
 		}
 	}
 	return false;
@@ -787,25 +729,8 @@ static bool findEnclosingParameterCandidate(PatternReference *reference, const s
 static std::vector<Range> collectEnclosingParameterCandidateRanges(PatternReference *reference, const std::string &token) {
 	std::vector<Range> ranges;
 	for (Section *sec = reference->range().section(); sec; sec = sec->parent) {
-		for (PatternDefinition *def : sec->patternDefinitions) {
-			bool found = false;
-			Range candidateRange;
-			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &element) {
-				if (found || element.text != token)
-					return;
-				if (!isParameterLikeElement(element))
-					return;
-				found = true;
-				if (def->range.line) {
-					int start = def->range.start() + static_cast<int>(element.startPos);
-					candidateRange = Range(def->range.line, start, start + static_cast<int>(element.text.size()));
-				} else {
-					candidateRange = def->range;
-				}
-			});
-			if (found && candidateRange.line)
-				ranges.push_back(candidateRange);
-		}
+		std::vector<Range> sectionRanges = sec->patternParameterCandidateRanges(token);
+		ranges.insert(ranges.end(), sectionRanges.begin(), sectionRanges.end());
 	}
 	return ranges;
 }
