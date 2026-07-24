@@ -255,6 +255,10 @@ completeBoundClassFieldType(const DataType &fieldConstraintInput, const DataType
 		outFieldType = argumentType;
 		return true;
 	}
+	if (ClassDefinition::typeStructurallyRefines(argumentType, fieldConstraint)) {
+		outFieldType = argumentType;
+		return true;
+	}
 	if (fieldConstraint.kind == DataType::Kind::Array && !fieldConstraint.isConcrete()) {
 		if (argumentType.kind != DataType::Kind::Array || argumentType.arraySize != fieldConstraint.arraySize ||
 			!argumentType.arrayElementType)
