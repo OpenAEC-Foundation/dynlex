@@ -112,7 +112,7 @@ ParseContext::ManagedStorageState *findManagedStorage(ParseContext &context, llv
 bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStorageState &storage) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	requireCompilerInvariant(builder.GetInsertBlock() != nullptr, "managed cleanup requires an insertion block");
-	if (builder.GetInsertBlock()->getTerminator())
+	if (builder.GetInsertBlock()->hasTerminator())
 		return true;
 	llvm::Function *function = builder.GetInsertBlock()->getParent();
 	requireCompilerInvariant(function != nullptr, "managed cleanup requires an active function");

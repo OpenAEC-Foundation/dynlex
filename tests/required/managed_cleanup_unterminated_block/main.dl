@@ -1,0 +1,23 @@
+function i32:
+    replacement:
+        @intrinsic("type", "int", 32)
+
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+function discard val:
+    replacement:
+        @intrinsic("discard", val)
+
+class:
+    patterns:
+        [a|] managed token
+    members:
+        payload as i32
+    retain:
+        discard @intrinsic("lifecycle value")
+    release:
+        discard @intrinsic("lifecycle value")
+
+set token to @intrinsic("construct", a managed token, 7)

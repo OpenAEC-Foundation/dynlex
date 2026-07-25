@@ -1,1172 +1,313 @@
-<!DOCTYPE html>
-<html lang="en">
-
+<!doctype html>
+<html lang="en" class="no-js">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<link rel="icon" type="image/svg+xml" href="icons/dynlex-icon.svg">
-	<title>DynLex - Code That Speaks Human</title>
-	<link rel="stylesheet" href="style.css">
-
-	<!-- Vertex Shader (shared) -->
-	<script id="vertex-shader" type="x-shader/x-vertex">
-		attribute vec2 a_position;
-		varying vec2 v_texCoord;
-
-		void main() {
-			gl_Position = vec4(a_position, 0.0, 1.0);
-			v_texCoord = (a_position + 1.0) / 2.0;
-		}
-	</script>
-
-	<!-- Fish-eye Distortion Shader -->
-	<script id="distortion-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		varying vec2 v_texCoord;
-		uniform sampler2D u_texture;
-		uniform float u_distortion;
-		uniform float u_bounce;
-		uniform vec2 u_resolution;
-
-		void main() {
-			vec2 center = vec2(0.5, 0.5);
-			vec2 offset = v_texCoord - center;
-
-			float aspect = u_resolution.x / u_resolution.y;
-			offset.x *= aspect;
-
-			float maxDist = max(aspect, 1.0) * 0.5;
-			vec2 relOffset = offset / maxDist;
-			float rSquared = dot(relOffset, relOffset);
-
-			// Fish-eye distortion: gentle barrel, center stays clear, edges compress
-			float multiplier = 1.0 - 0.4 * rSquared;
-			float lerpedMult = u_distortion * multiplier + (1.0 - u_distortion);
-
-			// Bounce: inflate/deflate from center like a rubber membrane
-			// Positive = bulge toward viewer (barrel), negative = dip away (pincushion)
-			float bounceMult = 1.0 + u_bounce * 0.2 * (1.0 - rSquared);
-			lerpedMult *= bounceMult;
-
-			vec2 distorted = offset * lerpedMult;
-			distorted.x /= aspect;
-			vec2 sampleCoord = center + distorted;
-
-			gl_FragColor = texture2D(u_texture, clamp(sampleCoord, 0.0, 1.0));
-		}
-	</script>
-
-	<!-- 3D Tunnel Vertex Shader -->
-	<script id="tunnel-vertex-shader" type="x-shader/x-vertex">
-		attribute vec3 a_position;
-		attribute float a_alpha;
-		uniform mat4 u_viewProjection;
-		varying float v_alpha;
-
-		void main() {
-			gl_Position = u_viewProjection * vec4(a_position, 1.0);
-			v_alpha = a_alpha;
-		}
-	</script>
-
-	<!-- 3D Tunnel Fragment Shader -->
-	<script id="tunnel-fragment-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		uniform vec3 u_color;
-		varying float v_alpha;
-
-		void main() {
-			gl_FragColor = vec4(u_color, v_alpha);
-		}
-	</script>
-
-	<!-- Textured Plane Vertex Shader -->
-	<script id="plane-vertex-shader" type="x-shader/x-vertex">
-		attribute vec3 a_position;
-		attribute vec2 a_texCoord;
-		uniform mat4 u_viewProjection;
-		varying vec2 v_texCoord;
-
-		void main() {
-			gl_Position = u_viewProjection * vec4(a_position, 1.0);
-			v_texCoord = a_texCoord;
-		}
-	</script>
-
-	<!-- Textured Plane Fragment Shader -->
-	<script id="plane-fragment-shader" type="x-shader/x-fragment">
-		precision mediump float;
-		uniform sampler2D u_texture;
-		varying vec2 v_texCoord;
-
-		void main() {
-			vec4 texColor = texture2D(u_texture, v_texCoord);
-			if (texColor.a < 0.01) discard;
-			gl_FragColor = texColor;
-		}
-	</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080a09">
+    <meta name="description" content="DynLex is a programmable language for expressive, readable experiments.">
+    <meta property="og:title" content="DynLex — Make the language part of the work">
+    <meta property="og:description" content="Explore working sketches, invent project vocabulary, and run DynLex in the browser.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://dynlex.com/">
+    <link rel="canonical" href="https://dynlex.com/">
+    <link rel="icon" type="image/svg+xml" href="icons/dynlex-icon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="shader-banner.css">
+    <link rel="stylesheet" href="sections.css">
+    <link rel="stylesheet" href="responsive.css">
+    <title>DynLex — Make the language part of the work</title>
 </head>
-
 <body>
-	<!-- Intro Animation -->
-	<div class="intro-overlay" id="intro">
-		<canvas id="introCanvas"></canvas>
-	</div>
-	<div class="intro-flash" id="flash"></div>
-
-	<nav class="nav">
-		<a href="#comparison" class="nav-btn">Comparison</a>
-		<a href="#patterns" class="nav-btn">Patterns</a>
-		<a href="#performance" class="nav-btn">Performance</a>
-		<a href="ide/index.html" class="nav-btn">IDE</a>
-		<a href="download.html" class="nav-btn">Download</a>
-		<a href="wiki/index.html" class="nav-btn primary">Learn More</a>
-	</nav>
-
-	<div class="bg-orbs">
-		<div class="orb orb-1"></div>
-		<div class="orb orb-2"></div>
-		<div class="orb orb-3"></div>
-	</div>
-
-	<div class="content">
-		<header class="hero">
-			<h1 class="logo"><img src="icons/dynlex-icon.svg" alt=""><span>DynLex</span></h1>
-			<p class="tagline">
-				A programming language designed for <strong>humans</strong>.<br>
-				Write code that reads like natural language.
-			</p>
-			<div class="scroll-indicator"></div>
-		</header>
-
-		<section id="comparison" class="reveal">
-			<h2 class="section-title">Code That Speaks</h2>
-			<p class="section-subtitle">
-				No cryptic syntax. No memorizing symbols. Just describe what you want.
-			</p>
-
-			<div class="comparison">
-				<div>
-					<span class="comparison-label">OpenGL</span>
-					<div class="code-block glass-card">
-						<pre><code>glClearColor(<span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">0.0f</span>, <span class="tn">1.0f</span>);
-glClear(GL_COLOR_BUFFER_BIT);
-glBegin(GL_QUADS);
-<span class="tk">for</span> (<span class="tk">int</span> i = <span class="tn">0</span>; i &lt; <span class="tn">10</span>; i++) {
-    glVertex2f(i * <span class="tn">50</span>, <span class="tn">100</span>);
-    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">100</span>);
-    glVertex2f(i * <span class="tn">50</span> + <span class="tn">40</span>, <span class="tn">140</span>);
-    glVertex2f(i * <span class="tn">50</span>, <span class="tn">140</span>);
-}
-glEnd();</code></pre>
-					</div>
-				</div>
-				<div>
-					<span class="comparison-label">DynLex</span>
-					<div class="code-block glass-card">
-						<pre><code><span class="tp">set</span> <span class="tv">the background</span> <span class="tp">to</span> <span class="tv">black</span>
-
-<span class="tp">repeat</span> <span class="tn">10</span> <span class="tp">times with</span> <span class="tv">i</span> <span class="tp">as index:</span>
-    <span class="tp">draw</span> <span class="tv">a square</span> <span class="tp">at</span> <span class="tv">i</span> * <span class="tn">50</span>, <span class="tn">100</span> <span class="tp">with size</span> <span class="tn">40</span></code></pre>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<section id="patterns" class="reveal">
-			<h2 class="section-title">Define Your Own Language</h2>
-			<p class="section-subtitle">
-				Create patterns that match how you think. The syntax is yours to shape.<br>
-				<em>If you can define Python syntax in DynLex, why use Python?</em>
-			</p>
-
-			<div class="glass-card code-block">
-				<pre><code><span class="tp">when</span> <span class="tv">a customer</span> <span class="tp">sends</span> <span class="tv">an email</span><span class="tp">:</span>
-    <span class="tp">respond to</span> <span class="tv">the email</span> <span class="tp">with</span> <span class="ts">"We have received your message."</span>
-
-<span class="tp">when</span> <span class="tv">the order</span> <span class="tp">is ready:</span>
-    <span class="tp">notify</span> <span class="tv">the customer</span>
-    <span class="tp">update</span> <span class="tv">the status</span> <span class="tp">to</span> <span class="ts">"shipped"</span></code></pre>
-			</div>
-		</section>
-
-		<section id="performance" class="reveal">
-			<h2 class="section-title">Supreme Performance</h2>
-			<p class="section-subtitle">
-				Compiles to machine code via LLVM. No runtime overhead, no virtual machine.<br>
-				No language is faster.
-			</p>
-
-			<div class="benchmark">
-				<div class="benchmark-header">
-					<span class="benchmark-title">Sum 0 to 100 million</span>
-					<span class="benchmark-note">Lower is better</span>
-				</div>
-				<div class="benchmark-bars">
-					<div class="benchmark-row">
-						<span class="benchmark-label">Python</span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar python" style="--width: 100%"></div>
-						</div>
-						<span class="benchmark-time">6.556s</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">DynLex <small>-O0</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar tbx" style="--width: 3%"></div>
-						</div>
-						<span class="benchmark-time">0.196s</span>
-						<span class="benchmark-speedup">33x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">C++ <small>-O0</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar cpp" style="--width: 2.8%"></div>
-						</div>
-						<span class="benchmark-time">0.186s</span>
-						<span class="benchmark-speedup">35x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">DynLex <small>-O3</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar tbx optimized" style="--width: 0.5%"></div>
-						</div>
-						<span class="benchmark-time">0.001s</span>
-						<span class="benchmark-speedup highlight">6556x faster</span>
-					</div>
-					<div class="benchmark-row">
-						<span class="benchmark-label">C++ <small>-O3</small></span>
-						<div class="benchmark-bar-container">
-							<div class="benchmark-bar cpp optimized" style="--width: 0.5%"></div>
-						</div>
-						<span class="benchmark-time">0.001s</span>
-						<span class="benchmark-speedup">6556x faster</span>
-					</div>
-				</div>
-				<p class="benchmark-footnote">With -O3, both DynLex and C++ compute the result at compile time via LLVM constant folding.</p>
-			</div>
-		</section>
-
-		<section class="reveal">
-			<h2 class="section-title">Human and AI Native</h2>
-			<p class="section-subtitle">
-				Designed for both humans and AI agents.<br>
-				Natural language patterns are intuitive to read, write, and generate.<br>
-				AI output tokens are filtered by a pattern tree, ensuring valid syntax.
-			</p>
-
-			<div class="ai-demo">
-				<div class="ai-editor">
-					<div class="ai-editor-header">
-						<div class="ai-editor-dot"></div>
-						<span class="ai-editor-label">AI generating code</span>
-					</div>
-					<div class="ai-code-line">
-						<span id="ai-typed" class="ai-typed"></span><span class="ai-cursor"></span>
-					</div>
-					<div id="ai-dropdown" class="ai-dropdown"></div>
-				</div>
-			</div>
-		</section>
-
-		<section class="reveal">
-			<h2 class="section-title">Eye for Beauty</h2>
-			<p class="section-subtitle">
-				Other languages spend their time maintaining decades of legacy complexity.<br>
-				DynLex stays minimal, leaving room to focus on elegance and powerful features.
-			</p>
-
-			<details class="spoiler">
-				<summary>Speaking of beauty...</summary>
-				<div class="spoiler-content">
-					<p style="margin-bottom: 1rem; color: var(--text-secondary);">
-						When a language has been around for decades, even the official website starts to show its age.
-					</p>
-					<div class="screenshot-grid">
-						<div class="screenshot-card">
-							<img src="cpp_site.png" alt="C++ official website">
-							<p>C++ - Founded 1985</p>
-						</div>
-						<div class="screenshot-card">
-							<img src="python_site.png" alt="Python official website">
-							<p>Python - Founded 1991</p>
-						</div>
-					</div>
-				</div>
-			</details>
-		</section>
-
-		<section class="cta reveal">
-			<h2 class="section-title">Start Building</h2>
-			<p class="section-subtitle" style="margin: 1rem auto 2rem;">
-				Clone the repo and write your first DynLex program in seconds.
-			</p>
-			<a href="https://github.com/OpenAEC-Foundation/dynlex" class="cta-button">
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-					<path
-						d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
-				</svg>
-				View on GitHub
-			</a>
-		</section>
-
-		<footer>
-			<p>DynLex is open source. Built for humans, by humans.</p>
-		</footer>
-	</div>
-
-	<script>
-		// Unified WebGL intro: 3D tunnel + textured code plane + fish-eye post-process
-		const intro = document.getElementById('intro');
-		const flash = document.getElementById('flash');
-		const canvas = document.getElementById('introCanvas');
-		const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-
-		// Code lines with syntax highlighting
-		const codeLines = [
-			[
-				{ text: 'when', color: '#89ddff' },
-				{ text: ' a visitor ', color: '#82aaff' },
-				{ text: 'visits', color: '#89ddff' },
-				{ text: ' the website', color: '#82aaff' },
-				{ text: ':', color: '#89ddff' }
-			],
-			[
-				{ text: '    show', color: '#89ddff' },
-				{ text: ' "DynLex"', color: '#c3e88d' },
-				{ text: ' to', color: '#89ddff' },
-				{ text: ' the visitor', color: '#82aaff' }
-			],
-			[
-				{ text: '    reveal', color: '#89ddff' },
-				{ text: ' the main page', color: '#82aaff' }
-			],
-			[
-				{ text: 'executing...', color: '#c792ea' }
-			]
-		];
-
-		const fontSize = 32;
-		const lineHeight = fontSize * 1.4;
-		const padding = 40;
-		let sourceCanvas, sourceCtx, measureCanvas, measureCtx;
-		let animationId;
-		let bounceStartTime = -1, bounceCameraZ = 0;
-
-		// WebGL state
-		let tunnelProg, planeProg, postProg;
-		let tunnelVBO, tunnelMeshVBO, planeVBO, postQuadVBO;
-		let framebuffer, sceneTex, depthBuf;
-		let codeTexture;
-		let fbWidth = 0, fbHeight = 0;
-
-		// Plane positions in tunnel
-		const CODE_PLANE_Z = 15;
-		const CODE_PLANE_HALF_H = 6;
-		const PAGE_PLANE_Z = 700;
-		const PAGE_PLANE_HALF_H = 7;
-
-		// === 3D Tunnel System ===
-		const tunnel = {
-			radius: 16,
-			speed: 110,
-			numLines: 400,
-			viewDist: 100,
-			angularWidth: 0.1,
-			lengthMin: 2,
-			lengthMax: 8,
-			lines: null,
-			cameraZ: 0,
-			lastTime: -1
-		};
-
-		function sharpCurve(x, sharpness) {
-			// tanh squashes sine into flat plateaus with sharp transitions
-			return Math.tanh(sharpness * Math.sin(x));
-		}
-
-		function tunnelPath(z) {
-			// Straight at the start (code plane at z=15), curves in middle, straightens near page plane
-			const blendIn = smoothstep(80, 140, z);
-			const blendOut = 1 - smoothstep(PAGE_PLANE_Z - 50, PAGE_PLANE_Z - 8, z);
-			const blend = blendIn * blendOut;
-			return [
-				blend * 22.0 * sharpCurve(z * 0.012, 3),
-				blend * 16.0 * sharpCurve(z * 0.0085, 3)
-			];
-		}
-
-		function createTunnelLine(zAhead, intensity) {
-			return {
-				angle: Math.random() * Math.PI * 2,
-				zStart: tunnel.cameraZ + zAhead,
-				length: tunnel.lengthMin + Math.random() * (tunnel.lengthMax - tunnel.lengthMin),
-				opacity: intensity
-			};
-		}
-
-		function initTunnelLines() {
-			tunnel.lines = [];
-			tunnel.cameraZ = 0;
-			tunnel.lastTime = -1;
-			for (let i = 0; i < tunnel.numLines; i++) {
-				tunnel.lines.push(createTunnelLine(Math.random() * tunnel.viewDist, 0));
-			}
-		}
-
-		function smoothstep(edge0, edge1, x) {
-			const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-			return t * t * (3 - 2 * t);
-		}
-
-		// Matrix math (column-major for WebGL)
-		function mat4Perspective(fov, aspect, near, far) {
-			const f = 1.0 / Math.tan(fov * 0.5);
-			const nf = 1.0 / (near - far);
-			return new Float32Array([
-				f / aspect, 0, 0, 0,
-				0, f, 0, 0,
-				0, 0, (far + near) * nf, -1,
-				0, 0, 2 * far * near * nf, 0
-			]);
-		}
-
-		function mat4LookAt(eye, target, up) {
-			let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
-			const fLen = Math.sqrt(fx * fx + fy * fy + fz * fz);
-			fx /= fLen; fy /= fLen; fz /= fLen;
-			// right = cross(up, forward) for correct handedness
-			let rx = up[1] * fz - up[2] * fy;
-			let ry = up[2] * fx - up[0] * fz;
-			let rz = up[0] * fy - up[1] * fx;
-			const rLen = Math.sqrt(rx * rx + ry * ry + rz * rz);
-			rx /= rLen; ry /= rLen; rz /= rLen;
-			// up = cross(forward, right) to match swapped right vector
-			const ux = fy * rz - fz * ry;
-			const uy = fz * rx - fx * rz;
-			const uz = fx * ry - fy * rx;
-			return new Float32Array([
-				rx, ux, -fx, 0,
-				ry, uy, -fy, 0,
-				rz, uz, -fz, 0,
-				-(rx * eye[0] + ry * eye[1] + rz * eye[2]),
-				-(ux * eye[0] + uy * eye[1] + uz * eye[2]),
-				(fx * eye[0] + fy * eye[1] + fz * eye[2]),
-				1
-			]);
-		}
-
-		function mat4Multiply(a, b) {
-			const o = new Float32Array(16);
-			for (let i = 0; i < 4; i++) {
-				for (let j = 0; j < 4; j++) {
-					o[j * 4 + i] = a[i] * b[j * 4] + a[4 + i] * b[j * 4 + 1] + a[8 + i] * b[j * 4 + 2] + a[12 + i] * b[j * 4 + 3];
-				}
-			}
-			return o;
-		}
-
-		// Shader helpers
-		function getShaderSource(id) {
-			return document.getElementById(id).textContent;
-		}
-
-		function compileShader(type, source) {
-			const shader = gl.createShader(type);
-			gl.shaderSource(shader, source);
-			gl.compileShader(shader);
-			return shader;
-		}
-
-		function createProgram(vsSrc, fsSrc) {
-			const program = gl.createProgram();
-			gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vsSrc));
-			gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fsSrc));
-			gl.linkProgram(program);
-			return program;
-		}
-
-		function createTexture() {
-			const tex = gl.createTexture();
-			gl.bindTexture(gl.TEXTURE_2D, tex);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			return tex;
-		}
-
-		function ensureFramebuffer(w, h) {
-			if (fbWidth === w && fbHeight === h) return;
-			fbWidth = w; fbHeight = h;
-
-			if (!framebuffer) framebuffer = gl.createFramebuffer();
-			if (!sceneTex) sceneTex = createTexture();
-			if (!depthBuf) depthBuf = gl.createRenderbuffer();
-
-			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-
-			gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuf);
-			gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
-
-			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0);
-			gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuf);
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-		}
-
-		function initWebGL() {
-			if (!gl) return false;
-
-			// Tunnel program (3D lines)
-			tunnelProg = createProgram(
-				getShaderSource('tunnel-vertex-shader'),
-				getShaderSource('tunnel-fragment-shader'));
-			tunnelVBO = gl.createBuffer();
-			tunnelMeshVBO = gl.createBuffer();
-
-			// Plane program (textured 3D quads)
-			planeProg = createProgram(
-				getShaderSource('plane-vertex-shader'),
-				getShaderSource('plane-fragment-shader'));
-			planeVBO = gl.createBuffer();
-
-			// Post-process program (fish-eye distortion)
-			postProg = createProgram(
-				getShaderSource('vertex-shader'),
-				getShaderSource('distortion-shader'));
-			postQuadVBO = gl.createBuffer();
-			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
-			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-				-1, -1, 1, -1, -1, 1,
-				-1, 1, 1, -1, 1, 1
-			]), gl.STATIC_DRAW);
-
-			// Textures
-			codeTexture = createTexture();
-
-			gl.enable(gl.BLEND);
-			return true;
-		}
-
-		function measureText() {
-			if (!measureCtx) {
-				measureCanvas = document.createElement('canvas');
-				measureCtx = measureCanvas.getContext('2d');
-			}
-			measureCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
-			let maxWidth = 0;
-			codeLines.forEach(line => {
-				let lineWidth = 0;
-				line.forEach(part => lineWidth += measureCtx.measureText(part.text).width);
-				maxWidth = Math.max(maxWidth, lineWidth);
-			});
-			return { width: maxWidth + padding * 2, height: codeLines.length * lineHeight + padding * 2 };
-		}
-
-		function renderSourceText(revealProgress) {
-			const screenWidth = window.innerWidth;
-			const screenHeight = window.innerHeight;
-
-			if (!sourceCanvas) {
-				sourceCanvas = document.createElement('canvas');
-				sourceCanvas.width = screenWidth;
-				sourceCanvas.height = screenHeight;
-				sourceCtx = sourceCanvas.getContext('2d');
-			}
-
-			sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
-			sourceCtx.font = `${fontSize}px 'JetBrains Mono', 'Fira Code', monospace`;
-			sourceCtx.textBaseline = 'top';
-
-			const textSize = measureText();
-			const startX = (screenWidth - textSize.width) / 2 + padding;
-			const startY = (screenHeight - textSize.height) / 2 + padding;
-
-			let totalChars = 0;
-			codeLines.forEach(line => line.forEach(part => totalChars += part.text.length));
-			const charsToShow = Math.floor(revealProgress * totalChars);
-
-			let charCount = 0;
-			codeLines.forEach((line, lineIdx) => {
-				let x = startX;
-				const y = startY + lineIdx * lineHeight;
-				line.forEach(part => {
-					sourceCtx.fillStyle = part.color;
-					for (let i = 0; i < part.text.length; i++) {
-						if (charCount < charsToShow) {
-							sourceCtx.fillText(part.text[i], x, y);
-						}
-						x += sourceCtx.measureText(part.text[i]).width;
-						charCount++;
-					}
-				});
-			});
-
-			if (revealProgress >= 1) {
-				const flashOn = Math.floor(Date.now() / 150) % 2 === 0;
-				if (!flashOn) {
-					const lastLineY = startY + 3 * lineHeight;
-					sourceCtx.clearRect(0, lastLineY, sourceCanvas.width, lineHeight);
-				}
-			}
-
-			// Upload to WebGL texture
-			gl.bindTexture(gl.TEXTURE_2D, codeTexture);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
-		}
-
-		// Build plane vertices at z position on tunnel path
-		function buildPlaneVerts(z, halfW, halfH) {
-			const c = tunnelPath(z);
-			// 4 corners, each with position (3) + texcoord (2) = 5 floats
-			// Two triangles: 0-1-2, 1-3-2
-			const x = c[0], y = c[1];
-			return new Float32Array([
-				// tri 1
-				x - halfW, y - halfH, z, 0, 1,
-				x + halfW, y - halfH, z, 1, 1,
-				x - halfW, y + halfH, z, 0, 0,
-				// tri 2
-				x + halfW, y - halfH, z, 1, 1,
-				x + halfW, y + halfH, z, 1, 0,
-				x - halfW, y + halfH, z, 0, 0,
-			]);
-		}
-
-		function renderScene(elapsed, distortion, bounce, bgColor, lineColor, lineIntensity, revealProgress) {
-			const w = window.innerWidth;
-			const h = window.innerHeight;
-			canvas.width = w;
-			canvas.height = h;
-			ensureFramebuffer(w, h);
-
-			// === Pass 1: Render 3D scene to framebuffer ===
-			gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-			gl.viewport(0, 0, w, h);
-			gl.clearColor(bgColor[0], bgColor[1], bgColor[2], 1);
-			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			gl.enable(gl.DEPTH_TEST);
-
-			// Init tunnel lines on first call
-			if (!tunnel.lines) initTunnelLines();
-
-			// Recycle lines behind camera
-			for (let i = 0; i < tunnel.lines.length; i++) {
-				const line = tunnel.lines[i];
-				if (line.zStart + line.length < tunnel.cameraZ - 2) {
-					tunnel.lines[i] = createTunnelLine(
-						tunnel.viewDist * 0.4 + Math.random() * tunnel.viewDist * 0.6,
-						lineIntensity
-					);
-				}
-			}
-
-			// Camera follows tunnel path
-			const camP = tunnelPath(tunnel.cameraZ);
-			const lookAhead = 12;
-			const lookP = tunnelPath(tunnel.cameraZ + lookAhead);
-			const eye = [camP[0], camP[1], tunnel.cameraZ];
-			const target = [lookP[0], lookP[1], tunnel.cameraZ + lookAhead];
-
-			const aspect = w / h;
-			const proj = mat4Perspective(Math.PI * 0.45, aspect, 0.1, 600);
-			const view = mat4LookAt(eye, target, [0, 1, 0]);
-			const vp = mat4Multiply(proj, view);
-
-			// --- Draw solid tunnel mesh (opaque wall behind stripes) ---
-			{
-				gl.useProgram(tunnelProg);
-				gl.depthMask(true);
-				gl.disable(gl.BLEND);
-
-				const meshSegLen = 4;
-				const meshRingN = 16;
-				const meshR = tunnel.radius + 1.5;
-				const meshStartZ = Math.max(tunnel.cameraZ - 2, 0);
-				const meshEndZ = tunnel.cameraZ + tunnel.viewDist;
-				const numMeshSegs = Math.ceil((meshEndZ - meshStartZ) / meshSegLen);
-				const meshVerts = new Float32Array(numMeshSegs * meshRingN * 6 * 4);
-				let mi = 0;
-
-				for (let seg = 0; seg < numMeshSegs; seg++) {
-					const z0 = meshStartZ + seg * meshSegLen;
-					const z1 = z0 + meshSegLen;
-					const c0 = tunnelPath(z0);
-					const c1 = tunnelPath(z1);
-
-					for (let v = 0; v < meshRingN; v++) {
-						const a0 = (v / meshRingN) * Math.PI * 2;
-						const a1 = ((v + 1) / meshRingN) * Math.PI * 2;
-						const cos0 = Math.cos(a0), sin0 = Math.sin(a0);
-						const cos1 = Math.cos(a1), sin1 = Math.sin(a1);
-
-						const pts = [
-							c0[0] + meshR * cos0, c0[1] + meshR * sin0, z0,
-							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
-							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
-							c0[0] + meshR * cos1, c0[1] + meshR * sin1, z0,
-							c1[0] + meshR * cos1, c1[1] + meshR * sin1, z1,
-							c1[0] + meshR * cos0, c1[1] + meshR * sin0, z1,
-						];
-						for (let t = 0; t < 6; t++) {
-							meshVerts[mi++] = pts[t * 3];
-							meshVerts[mi++] = pts[t * 3 + 1];
-							meshVerts[mi++] = pts[t * 3 + 2];
-							meshVerts[mi++] = 1.0;
-						}
-					}
-				}
-
-				gl.bindBuffer(gl.ARRAY_BUFFER, tunnelMeshVBO);
-				gl.bufferData(gl.ARRAY_BUFFER, meshVerts, gl.DYNAMIC_DRAW);
-
-				const mPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
-				const mAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
-				gl.enableVertexAttribArray(mPosLoc);
-				gl.vertexAttribPointer(mPosLoc, 3, gl.FLOAT, false, 16, 0);
-				gl.enableVertexAttribArray(mAlphaLoc);
-				gl.vertexAttribPointer(mAlphaLoc, 1, gl.FLOAT, false, 16, 12);
-
-				gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
-				gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), bgColor[0], bgColor[1], bgColor[2]);
-
-				gl.drawArrays(gl.TRIANGLES, 0, numMeshSegs * meshRingN * 6);
-				gl.enable(gl.BLEND);
-			}
-
-			// --- Draw textured planes (opaque, write depth) ---
-			gl.useProgram(planeProg);
-			gl.depthMask(true);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			const pPosLoc = gl.getAttribLocation(planeProg, 'a_position');
-			const pTexLoc = gl.getAttribLocation(planeProg, 'a_texCoord');
-			gl.enableVertexAttribArray(pPosLoc);
-			gl.enableVertexAttribArray(pTexLoc);
-			gl.uniformMatrix4fv(gl.getUniformLocation(planeProg, 'u_viewProjection'), false, vp);
-			gl.uniform1i(gl.getUniformLocation(planeProg, 'u_texture'), 0);
-			gl.activeTexture(gl.TEXTURE0);
-
-			// Code text plane (fixed size inside tunnel)
-			if (CODE_PLANE_Z > tunnel.cameraZ - 5) {
-				renderSourceText(revealProgress);
-				const codeHalfW = CODE_PLANE_HALF_H * aspect;
-				const codeVerts = buildPlaneVerts(CODE_PLANE_Z, codeHalfW, CODE_PLANE_HALF_H);
-
-				gl.bindBuffer(gl.ARRAY_BUFFER, planeVBO);
-				gl.bufferData(gl.ARRAY_BUFFER, codeVerts, gl.DYNAMIC_DRAW);
-				gl.vertexAttribPointer(pPosLoc, 3, gl.FLOAT, false, 20, 0);
-				gl.vertexAttribPointer(pTexLoc, 2, gl.FLOAT, false, 20, 12);
-				gl.bindTexture(gl.TEXTURE_2D, codeTexture);
-				gl.drawArrays(gl.TRIANGLES, 0, 6);
-			}
-
-			// --- Draw tunnel lines (semi-transparent, no depth write) ---
-			gl.depthMask(false);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			const R = tunnel.radius;
-			const dA = tunnel.angularWidth;
-			const verts = new Float32Array(tunnel.lines.length * 6 * 4);
-			let vi = 0;
-
-			for (const line of tunnel.lines) {
-				const z0 = line.zStart;
-				const z1 = z0 + line.length;
-				const a0 = line.angle;
-				const a1 = a0 + dA;
-				const p0 = tunnelPath(z0);
-				const p1 = tunnelPath(z1);
-				const c0a0 = Math.cos(a0), s0a0 = Math.sin(a0);
-				const c0a1 = Math.cos(a1), s0a1 = Math.sin(a1);
-
-				const corners = [
-					p0[0] + R * c0a0, p0[1] + R * s0a0, z0,
-					p0[0] + R * c0a1, p0[1] + R * s0a1, z0,
-					p1[0] + R * c0a0, p1[1] + R * s0a0, z1,
-					p1[0] + R * c0a1, p1[1] + R * s0a1, z1
-				];
-
-				const midZ = (z0 + z1) * 0.5 - tunnel.cameraZ;
-				const distFade = smoothstep(0, 6, midZ);
-				const alpha = line.opacity * distFade;
-
-				const idx = [0, 1, 2, 1, 3, 2];
-				for (const ci of idx) {
-					verts[vi++] = corners[ci * 3];
-					verts[vi++] = corners[ci * 3 + 1];
-					verts[vi++] = corners[ci * 3 + 2];
-					verts[vi++] = alpha;
-				}
-			}
-
-			gl.useProgram(tunnelProg);
-			gl.bindBuffer(gl.ARRAY_BUFFER, tunnelVBO);
-			gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
-
-			const tPosLoc = gl.getAttribLocation(tunnelProg, 'a_position');
-			const tAlphaLoc = gl.getAttribLocation(tunnelProg, 'a_alpha');
-			gl.enableVertexAttribArray(tPosLoc);
-			gl.vertexAttribPointer(tPosLoc, 3, gl.FLOAT, false, 16, 0);
-			gl.enableVertexAttribArray(tAlphaLoc);
-			gl.vertexAttribPointer(tAlphaLoc, 1, gl.FLOAT, false, 16, 12);
-
-			gl.uniformMatrix4fv(gl.getUniformLocation(tunnelProg, 'u_viewProjection'), false, vp);
-			gl.uniform3f(gl.getUniformLocation(tunnelProg, 'u_color'), lineColor[0], lineColor[1], lineColor[2]);
-
-			gl.drawArrays(gl.TRIANGLES, 0, tunnel.lines.length * 6);
-			gl.depthMask(true);
-
-			// === Pass 2: Post-process (fish-eye) to screen ===
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-			gl.viewport(0, 0, w, h);
-			gl.disable(gl.DEPTH_TEST);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-			gl.useProgram(postProg);
-			gl.bindBuffer(gl.ARRAY_BUFFER, postQuadVBO);
-
-			// Disable attribs from previous draw calls, then enable only what we need
-			for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
-			const ppPosLoc = gl.getAttribLocation(postProg, 'a_position');
-			gl.enableVertexAttribArray(ppPosLoc);
-			gl.vertexAttribPointer(ppPosLoc, 2, gl.FLOAT, false, 0, 0);
-
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, sceneTex);
-			gl.uniform1i(gl.getUniformLocation(postProg, 'u_texture'), 0);
-			gl.uniform1f(gl.getUniformLocation(postProg, 'u_distortion'), distortion);
-			gl.uniform1f(gl.getUniformLocation(postProg, 'u_bounce'), bounce);
-			gl.uniform2f(gl.getUniformLocation(postProg, 'u_resolution'), w, h);
-
-			gl.drawArrays(gl.TRIANGLES, 0, 6);
-		}
-
-		function resetIntro() {
-			if (animationId) cancelAnimationFrame(animationId);
-			intro.classList.remove('hidden');
-			intro.style.opacity = 1;
-			sourceCanvas = null;
-			tunnel.lines = null;
-			tunnel.lastTime = -1;
-			tunnel.cameraZ = 0;
-			bounceStartTime = -1;
-			bounceCameraZ = 0;
-			// Pause all animations so background matches our static render at snap
-			document.body.style.animationPlayState = 'paused';
-			document.body.style.backgroundPosition = '0% 50%';
-			document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = 'paused');
-		}
-
-		function playIntro() {
-			resetIntro();
-			initWebGL();
-
-			const startTime = performance.now();
-
-			function animate(currentTime) {
-				const elapsed = (currentTime - startTime) / 1000;
-
-				// Timeline:
-				// 0-3: typewriter, camera stationary
-				// 3-3.5: pause
-				// 3.5-4: "executing..."
-				// 4-5.5: camera accelerates through code plane, fish-eye ramps up
-				// 5-5.5: bg black→white, lines white→black (flash)
-				// 5.5-7.5: bg white→dark, full speed tunnel
-				// 8.5-10: lines fade
-				// ~10.4: page plane fills viewport → snap to real page
-				const moveStart = 4;
-				const flashStart = 5;
-				const flashEnd = 5.5;
-				const tunnelEnd = 8.5;
-				const raysFadeEnd = 10;
-
-				// Typewriter progress — compute ratio from actual text data
-				let totalChars = 0, firstLinesChars = 0;
-				codeLines.forEach((line, i) => {
-					const lineLen = line.reduce((sum, part) => sum + part.text.length, 0);
-					totalChars += lineLen;
-					if (i < codeLines.length - 1) firstLinesChars += lineLen;
-				});
-				const firstLinesRatio = firstLinesChars / totalChars;
-				let revealProgress;
-				if (elapsed < 3) {
-					revealProgress = elapsed / 3 * firstLinesRatio;
-				} else if (elapsed < 3.5) {
-					revealProgress = firstLinesRatio;
-				} else {
-					revealProgress = 1;
-				}
-
-				// Camera: exponential acceleration after moveStart
-				// pos = A * (e^(k*t) - 1), starts slow, gets very fast
-				const expK = 0.7;
-				const expA = PAGE_PLANE_Z / (Math.exp(expK * 6.5) - 1); // reach page in ~6.5s of movement
-				const snapDist = PAGE_PLANE_HALF_H / Math.tan(Math.PI * 0.45 * 0.5);
-				const maxCameraZ = PAGE_PLANE_Z - snapDist; // page fills viewport here
-				let distortion = 0;
-				let bounce = 0;
-
-				if (elapsed < moveStart) {
-					tunnel.cameraZ = 0;
-				} else {
-					const t = elapsed - moveStart;
-					tunnel.cameraZ = Math.min(expA * (Math.exp(expK * t) - 1), maxCameraZ);
-					distortion = 1 - Math.exp(-1.5 * t);
-
-					// Trigger bounce when camera hits the page
-					if (bounceStartTime < 0 && tunnel.cameraZ >= maxCameraZ) {
-						bounceStartTime = elapsed;
-					}
-				}
-
-				// When camera hits the page, switch to real page with CSS bounce
-				if (bounceStartTime >= 0) {
-					// Hide intro, show real page
-					intro.classList.add('hidden');
-					document.body.style.animationPlayState = '';
-					document.body.style.backgroundPosition = '';
-					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
-					localStorage.setItem('intro_seen', 'true');
-
-					// CSS bounce animation on the real page — scale from viewport center
-					const html = document.documentElement;
-					html.style.transformOrigin = '50% 50vh';
-					html.style.overflow = 'hidden';
-
-					function animateBounce(time) {
-						const bt = (time - bounceStartTime * 1000 - startTime) / 1000;
-						const scale = 1 + 0.08 * Math.exp(-4.0 * bt) * Math.sin(18.0 * bt);
-						html.style.transform = `scale(${scale})`;
-
-						if (bt < 1.2) {
-							requestAnimationFrame(animateBounce);
-						} else {
-							html.style.transform = '';
-							html.style.transformOrigin = '';
-							html.style.overflow = '';
-						}
-					}
-					requestAnimationFrame(animateBounce);
-					return;
-				}
-
-				// Background color: dark throughout
-				const bgColor = [0.04, 0.04, 0.06];
-
-				// Line color: always white
-				const lineColor = [0.9, 0.95, 1.0];
-
-				// Line spawn intensity
-				let lineIntensity = 0;
-				if (elapsed >= moveStart && elapsed < flashStart) {
-					lineIntensity = ((elapsed - moveStart) / (flashStart - moveStart)) * 1.5;
-				} else if (elapsed >= flashStart) {
-					lineIntensity = 1.5;
-				}
-
-				renderScene(elapsed, distortion, 0, bgColor, lineColor, lineIntensity, revealProgress);
-
-				// Safety timeout
-				if (elapsed >= 20) {
-					intro.classList.add('hidden');
-					document.body.style.animationPlayState = '';
-					document.body.style.backgroundPosition = '';
-					document.querySelectorAll('.orb').forEach(o => o.style.animationPlayState = '');
-					localStorage.setItem('intro_seen', 'true');
-					return;
-				}
-
-				animationId = requestAnimationFrame(animate);
-			}
-
-			document.fonts.ready.then(() => {
-				animationId = requestAnimationFrame(animate);
-			});
-		}
-
-		// Check if already seen, otherwise play
-		if (localStorage.getItem('intro_seen')) {
-			intro.classList.add('hidden');
-		} else {
-			playIntro();
-		}
-
-		// Click logo to replay intro
-		document.querySelector('.logo').addEventListener('click', () => {
-			playIntro();
-		});
-		document.querySelector('.logo').style.cursor = 'pointer';
-
-		// Scroll reveal
-		const observer = new IntersectionObserver((entries) => {
-			entries.forEach(entry => {
-				if (entry.isIntersecting) entry.target.classList.add('visible');
-			});
-		}, { threshold: 0.1 });
-
-		document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-		// AI Autocomplete Animation
-		(function() {
-			const aiTyped = document.getElementById('ai-typed');
-			const aiDropdown = document.getElementById('ai-dropdown');
-
-			// Sequence of tokens with their completion options
-			// Each step: { typed: "text so far", options: [{text, prob, valid}], selected: index }
-			const sequence = [
-				{
-					typed: '',
-					options: [
-						{ text: 'send', prob: 42, valid: true },
-						{ text: 'create', prob: 28, valid: true },
-						{ text: 'delete', prob: 18, valid: true },
-						{ text: 'foreach', prob: 12, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send ',
-					options: [
-						{ text: 'an email', prob: 45, valid: true },
-						{ text: 'a message', prob: 35, valid: true },
-						{ text: 'notification', prob: 15, valid: true },
-						{ text: '()', prob: 5, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email ',
-					options: [
-						{ text: 'to', prob: 65, valid: true },
-						{ text: 'from', prob: 20, valid: true },
-						{ text: 'with', prob: 12, valid: true },
-						{ text: ';', prob: 3, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to ',
-					options: [
-						{ text: 'the user', prob: 38, valid: true },
-						{ text: 'the admin', prob: 32, valid: true },
-						{ text: 'support', prob: 22, valid: true },
-						{ text: 'null', prob: 8, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user ',
-					options: [
-						{ text: 'with subject', prob: 55, valid: true },
-						{ text: 'containing', prob: 30, valid: true },
-						{ text: 'about', prob: 12, valid: true },
-						{ text: '++', prob: 3, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user with subject ',
-					options: [
-						{ text: '"Welcome"', prob: 40, valid: true },
-						{ text: '"Update"', prob: 30, valid: true },
-						{ text: '"Alert"', prob: 25, valid: true },
-						{ text: '0x4F', prob: 5, valid: false }
-					],
-					selected: 0
-				},
-				{
-					typed: 'send an email to the user with subject "Welcome"',
-					options: null,
-					selected: -1
-				}
-			];
-
-			let currentStep = 0;
-			let charIndex = 0;
-			let phase = 'typing'; // 'typing', 'showing', 'selecting', 'pause'
-			let phaseTimer = 0;
-
-			function renderDropdown(step) {
-				if (!step.options) {
-					aiDropdown.classList.remove('visible');
-					return;
-				}
-
-				aiDropdown.innerHTML = step.options.map((opt, i) => `
-					<div class="ai-option ${i === step.selected ? 'selected' : ''} ${!opt.valid ? 'disabled' : ''}">
-						<span class="ai-option-text">${opt.text}</span>
-						<span class="ai-option-prob">${opt.prob}%</span>
-						<div class="ai-option-bar">
-							<div class="ai-option-bar-fill" style="width: ${opt.prob}%"></div>
-						</div>
-					</div>
-				`).join('');
-
-				// Position dropdown at cursor
-				const typedRect = aiTyped.getBoundingClientRect();
-				const editorRect = aiTyped.closest('.ai-editor').getBoundingClientRect();
-				aiDropdown.style.left = (typedRect.right - editorRect.left) + 'px';
-				aiDropdown.style.top = (typedRect.bottom - editorRect.top + 5) + 'px';
-
-				aiDropdown.classList.add('visible');
-			}
-
-			function tick() {
-				const step = sequence[currentStep];
-				const targetText = step.typed;
-
-				if (phase === 'typing') {
-					if (charIndex < targetText.length) {
-						charIndex++;
-						aiTyped.textContent = targetText.slice(0, charIndex);
-					} else {
-						phase = 'showing';
-						phaseTimer = 0;
-					}
-				} else if (phase === 'showing') {
-					renderDropdown(step);
-					phaseTimer++;
-					if (phaseTimer > 15) {
-						phase = 'selecting';
-						phaseTimer = 0;
-					}
-				} else if (phase === 'selecting') {
-					phaseTimer++;
-					if (phaseTimer > 10) {
-						phase = 'pause';
-						phaseTimer = 0;
-						aiDropdown.classList.remove('visible');
-					}
-				} else if (phase === 'pause') {
-					phaseTimer++;
-					if (phaseTimer > 5) {
-						currentStep++;
-						if (currentStep >= sequence.length) {
-							// Reset and loop
-							currentStep = 0;
-							charIndex = 0;
-							aiTyped.textContent = '';
-							phase = 'typing';
-							phaseTimer = 0;
-							setTimeout(tick, 1500); // Pause before restart
-							return;
-						}
-						phase = 'typing';
-						phaseTimer = 0;
-					}
-				}
-
-				setTimeout(tick, phase === 'typing' ? 60 : 50);
-			}
-
-			// Start animation
-			setTimeout(tick, 1000);
-		})();
-	</script>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <canvas class="lexicon-field" data-lexicon-field aria-hidden="true"></canvas>
+
+    <header class="site-header" data-site-header>
+        <a class="brand" href="#motion" aria-label="DynLex home">
+            <img class="brand-logo" src="icons/dynlex-icon.svg" alt="">
+            <span class="brand-name">DynLex</span>
+            <span class="brand-mode">LAB</span>
+        </a>
+
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">
+            <span class="menu-toggle-label">Menu</span>
+            <span class="menu-toggle-lines" aria-hidden="true"><span></span><span></span></span>
+        </button>
+
+        <nav class="primary-nav" id="primary-nav" aria-label="Primary navigation" data-primary-nav>
+            <a href="#sketches">Sketches</a>
+            <a href="#language">Language</a>
+            <a href="#studio">Studio</a>
+            <a href="wiki/index.html">Docs</a>
+            <a class="nav-launch" href="ide/index.html"><span>Open IDE</span><i aria-hidden="true">↗</i></a>
+        </nav>
+        <span class="scroll-progress" data-scroll-progress aria-hidden="true"></span>
+    </header>
+
+    <main id="main-content">
+        <section class="live-shader-section" id="motion" data-live-shader-banner aria-labelledby="shader-title">
+            <svg class="shader-clip-definitions" width="0" height="0" aria-hidden="true">
+                <defs>
+                    <path id="thought-cloud-geometry" d="M .16 .78 C .05 .75 .01 .62 .08 .52 C .02 .39 .10 .25 .23 .25 C .28 .09 .45 .04 .56 .15 C .68 .05 .85 .12 .86 .28 C 1 .31 1 .49 .94 .58 C 1 .72 .88 .86 .75 .82 C .66 .94 .48 .94 .4 .84 C .31 .91 .2 .88 .16 .78 Z"/>
+                    <clipPath id="thought-cloud-mask-0" clipPathUnits="objectBoundingBox">
+                        <use href="#thought-cloud-geometry" data-thought-cloud-path="0"></use>
+                    </clipPath>
+                    <clipPath id="thought-cloud-mask-1" clipPathUnits="objectBoundingBox">
+                        <use href="#thought-cloud-geometry" data-thought-cloud-path="1"></use>
+                    </clipPath>
+                </defs>
+            </svg>
+            <div class="shader-immersion" data-shader-layer="0" data-layer-state="dormant" aria-hidden="true">
+                <canvas data-shader-canvas="immersive"></canvas>
+            </div>
+            <div class="shader-immersion" data-shader-layer="1" data-layer-state="dormant" aria-hidden="true">
+                <canvas data-shader-canvas="immersive"></canvas>
+            </div>
+            <div class="shader-origin" aria-hidden="true">
+                <div class="shader-laptop">
+                    <div class="shader-laptop-lid">
+                        <div class="shader-laptop-bar"><i></i><span data-shader-file>shader.dl</span><strong>DYNLEX</strong></div>
+                        <pre data-shader-code></pre>
+                    </div>
+                    <div class="shader-laptop-base"><span></span></div>
+                </div>
+                <div class="thought-tail">
+                    <i class="thought-tail-dot" data-thought-cloud-dot></i>
+                    <i class="thought-tail-dot"></i>
+                    <i class="thought-tail-dot" data-thought-origin-dot></i>
+                </div>
+                <div class="thought-assembly"></div>
+            </div>
+            <div class="shader-atmosphere" aria-hidden="true"></div>
+            <div class="page-shell shader-copy">
+                <p><span aria-hidden="true"></span> <strong data-shader-name>LOADING SHADER</strong> / LIVE WEBGL</p>
+                <h1 id="shader-title">Code becomes<br><em>light.</em></h1>
+            </div>
+            <div class="page-shell shader-readout">
+                <span>Small sketches compile in milliseconds.<br>The measurement is live, from this browser.</span>
+                <div class="shader-actions">
+                    <button type="button" data-shader-next aria-label="Show next shader"><span data-shader-index aria-live="polite">— / —</span> NEXT</button>
+                    <a data-shader-editor-link href="ide/index.html">Open this shader <span aria-hidden="true">↗</span></a>
+                    <strong data-compile-metric aria-live="polite">LAST COMPILE / —</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="hero-workbench" id="playground" aria-labelledby="hero-title">
+            <div class="hero-grid" aria-hidden="true"></div>
+            <div class="page-shell hero-shell">
+                <div class="hero-heading">
+                    <div>
+                        <p class="signal-label"><span></span> DYNLEX / OPEN SKETCH</p>
+                        <h2 id="hero-title">Make the language<br><em>part of the work.</em></h2>
+                    </div>
+                    <div class="hero-intro">
+                        <p>Code can sound like the thing it describes. In DynLex, a useful phrase becomes part of the language of the project.</p>
+                        <div class="hero-tools">
+                            <a href="ide/index.html">Open the playground <span aria-hidden="true">↗</span></a>
+                            <a href="#sketches">Browse working sketches <span aria-hidden="true">↓</span></a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workbench-window" data-runnable-sketch data-output-mode="number" aria-label="An editable DynLex sketch and its result">
+                    <div class="workbench-bar">
+                        <div class="workbench-identity">
+                            <span>SKETCH_00</span>
+                            <strong>square-field.dl</strong>
+                        </div>
+                        <div class="workbench-state"><i aria-hidden="true"></i> <span data-snippet-status>READY</span></div>
+                        <button class="snippet-run" type="button" data-snippet-run>RUN ▶</button>
+                    </div>
+                    <div class="workbench-body">
+                        <div class="workbench-code">
+                            <div class="pane-label"><span>SOURCE</span><small>main.dl</small></div>
+                            <textarea class="snippet-editor hero-snippet-editor" data-snippet-source aria-label="Square field DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function square value:
+    replacement:
+        value * value
+
+print square 8 as line</textarea>
+                            <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
+                        </div>
+                        <div class="workbench-result">
+                            <div class="pane-label"><span>RESULT</span><small>LIVE</small></div>
+                            <div class="dot-field" aria-hidden="true"></div>
+                            <strong class="result-value" data-snippet-output aria-live="polite">64</strong>
+                            <span class="result-caption">program output</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sketch-section" id="sketches" aria-labelledby="sketches-title">
+            <div class="page-shell">
+                <div class="section-title reveal">
+                    <p>SKETCHBOOK / 03 FILES</p>
+                    <h2 id="sketches-title">Code worth<br><span>playing with.</span></h2>
+                    <small>Small programs. Real output. Plenty of room to change the premise.</small>
+                </div>
+
+                <div class="sketch-grid">
+                    <article class="sketch-card sketch-card-wide reveal" data-runnable-sketch data-output-mode="rhythm">
+                        <header><span>01 / RHYTHM</span><strong>hello-loop.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
+                        <div class="sketch-card-body">
+                            <div class="sketch-source-pane">
+                                <textarea class="snippet-editor" data-snippet-source aria-label="Hello loop DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+loop 3 times:
+    print "Hello" as line</textarea>
+                                <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
+                            </div>
+                            <div class="type-rhythm" data-snippet-output aria-live="polite" aria-label="Output: Hello three times"><span>Hello</span><span>Hello</span><span>Hello</span></div>
+                        </div>
+                    </article>
+
+                    <article class="sketch-card reveal" data-runnable-sketch data-output-mode="color">
+                        <header><span>02 / PHRASE</span><strong>glow.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
+                        <div class="sketch-source-pane">
+                            <textarea class="snippet-editor" data-snippet-source aria-label="Glow phrase DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function glow color:
+    execute:
+        print color as line
+
+glow "electric blue"</textarea>
+                            <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
+                        </div>
+                        <div class="color-output" data-snippet-output aria-live="polite"><span>electric</span><strong>blue</strong></div>
+                    </article>
+
+                    <article class="sketch-card sketch-card-signal reveal" data-runnable-sketch data-output-mode="signal">
+                        <header><span>03 / SIGNAL</span><strong>answer.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
+                        <div class="sketch-source-pane">
+                            <textarea class="snippet-editor" data-snippet-source aria-label="Answer signal DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+set answer to 42
+if answer is 42:
+    print "Exactly." as line</textarea>
+                            <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
+                        </div>
+                        <div class="signal-output" data-snippet-output aria-live="polite"><i aria-hidden="true"></i><span>Exactly.</span></div>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="language-section" id="language" aria-labelledby="language-title">
+            <div class="page-shell language-shell">
+                <div class="language-copy reveal">
+                    <p>PROJECT VOCABULARY</p>
+                    <h2 id="language-title">The vocabulary<br>is in the program.</h2>
+                    <span>Useful words do not stay trapped in comments or conventions. They can become callable phrases.</span>
+                </div>
+
+                <div class="language-board reveal" data-runnable-sketch data-output-mode="language">
+                    <div class="lab-tabs" role="tablist" aria-label="Phrase variations">
+                        <button id="tab-define" type="button" role="tab" aria-selected="true" aria-controls="panel-define" data-lab-tab="define">DEFINE</button>
+                        <button id="tab-use" type="button" role="tab" aria-selected="false" aria-controls="panel-use" data-lab-tab="use" tabindex="-1">CALL</button>
+                        <button id="tab-reuse" type="button" role="tab" aria-selected="false" aria-controls="panel-reuse" data-lab-tab="reuse" tabindex="-1">REMIX</button>
+                    </div>
+                    <div class="language-execute"><span data-snippet-status>READY</span><button type="button" data-snippet-run>RUN CURRENT ▶</button></div>
+
+                    <div class="lab-panel" id="panel-define" role="tabpanel" aria-labelledby="tab-define" data-lab-panel="define">
+                        <span class="panel-tag">A PHRASE ENTERS THE PROJECT</span>
+                        <textarea class="snippet-editor language-snippet-editor" data-snippet-source aria-label="Define phrase DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function say message:
+    execute:
+        print message as line
+
+say "The sketch is alive."</textarea>
+                    </div>
+                    <div class="lab-panel" id="panel-use" role="tabpanel" aria-labelledby="tab-use" data-lab-panel="use" hidden>
+                        <span class="panel-tag">THE CALL READS LIKE THE IDEA</span>
+                        <textarea class="snippet-editor language-snippet-editor" data-snippet-source aria-label="Call phrase DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function say message:
+    execute:
+        print message as line
+
+say "The sketch is alive."</textarea>
+                    </div>
+                    <div class="lab-panel" id="panel-reuse" role="tabpanel" aria-labelledby="tab-reuse" data-lab-panel="reuse" hidden>
+                        <span class="panel-tag">ANOTHER PHRASE, SAME BUILDING BLOCK</span>
+                        <textarea class="snippet-editor language-snippet-editor" data-snippet-source aria-label="Remix phrase DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function say message:
+    execute:
+        print message as line
+
+function announce message:
+    execute:
+        say message
+
+announce "The sketch is alive."</textarea>
+                    </div>
+
+                    <div class="snippet-diagnostics language-diagnostics" data-snippet-diagnostics hidden></div>
+
+                    <div class="lexicon-strip">
+                        <span aria-hidden="true">say → message → announce →</span><pre data-snippet-output aria-live="polite">The sketch is alive.</pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="studio-section" id="studio" aria-labelledby="studio-title">
+            <div class="page-shell studio-shell">
+                <div class="studio-window reveal" aria-hidden="true">
+                    <div class="studio-bar">
+                        <span><img src="icons/dynlex-icon.svg" alt=""> DYNLEX IDE</span>
+                        <i>main.dl</i>
+                        <b>RUN ▶</b>
+                    </div>
+                    <div class="studio-body">
+                        <div class="studio-files"><span>FILES</span><strong>● main.dl</strong></div>
+                        <div class="studio-code">
+                            <span><i>1</i><b>import</b> lib/std.dl</span>
+                            <span><i>2</i></span>
+                            <span><i>3</i><em>function</em> double value:</span>
+                            <span><i>4</i>&nbsp;&nbsp;&nbsp;&nbsp;<em>replacement</em>:</span>
+                            <span><i>5</i>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value * 2</span>
+                            <span><i>6</i></span>
+                            <span><i>7</i><b>print</b> double 21 <b>as line</b></span>
+                        </div>
+                        <div class="studio-output"><span>OUTPUT</span><strong>42</strong><small>Finished</small></div>
+                    </div>
+                </div>
+
+                <div class="studio-copy reveal">
+                    <p>DYNLEX STUDIO</p>
+                    <h2 id="studio-title">Code and result.<br>One surface.</h2>
+                    <span>A focused browser workspace for quick experiments, unfamiliar phrases, and working output.</span>
+                    <div class="studio-signals"><i>LIVE PROBLEMS</i><i>HOVER MEANINGS</i><i>INSTANT OUTPUT</i></div>
+                    <a href="ide/index.html">Launch the IDE <span aria-hidden="true">↗</span></a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="page-shell footer-inner">
+            <a class="brand footer-brand" href="#playground" aria-label="Back to top">
+                <img class="brand-logo" src="icons/dynlex-icon.svg" alt="">
+                <span class="brand-name">DynLex</span>
+            </a>
+            <p>Programmable vocabulary for readable experiments.</p>
+            <nav aria-label="Footer navigation">
+                <a href="wiki/index.html">Docs</a>
+                <a href="download.html">Download</a>
+                <a href="https://github.com/OpenAEC-Foundation/dynlex">GitHub ↗</a>
+            </nav>
+            <span class="footer-state"><i aria-hidden="true"></i> OPEN SOURCE</span>
+        </div>
+    </footer>
+
+    <script type="module" src="homepage.js"></script>
 </body>
-
 </html>

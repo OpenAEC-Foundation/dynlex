@@ -1,3 +1,5 @@
+#ifdef DYNLEX_WEB
+
 #include "codegen/codegen.h"
 #include "compiler/compiler.h"
 #include "lsp/dynlexServer.h"
@@ -6,12 +8,16 @@
 #include "pathUtils.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <spirv_glsl.hpp>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #if __has_include(<emscripten/emscripten.h>)
@@ -24,6 +30,7 @@ namespace {
 
 constexpr const char *kMainSourcePath = "/workspace/main.dl";
 constexpr const char *kOutputWasmPath = "/tmp/main.wasm";
+constexpr const char *kOutputSpirvPath = "/tmp/main.spv";
 
 enum WebCompileStatus {
 	WebCompileStatusOk = 0,
@@ -31,6 +38,11 @@ enum WebCompileStatus {
 	WebCompileStatusCodegenFailed = 2,
 	WebCompileStatusInternalError = 3,
 	WebCompileStatusNotInitialized = 4,
+};
+
+enum class WebOutputKind {
+	ProgramWasm,
+	ShaderGlsl,
 };
 
 struct CompilerLogEntry {
@@ -123,6 +135,8 @@ struct WebCompilerState {
 	std::string mainSource;
 	std::vector<uint8_t> outputWasm;
 	std::string outputWasmBase64;
+	std::string outputShaderGlsl;
+	std::string shaderUniformsJson = R"({"uniforms":[]})";
 	std::vector<CompilerLogEntry> compilerLog;
 	std::string diagnosticsJson = R"({"diagnostics":[]})";
 	std::string compilerLogJson = R"({"messages":[]})";
@@ -321,7 +335,76 @@ std::string encodeBase64(const std::vector<uint8_t> &bytes) {
 	return encoded;
 }
 
-int compileAndEmitWasm() {
+bool translateSpirvToWebGlsl(
+	const std::string &spirvPath, ParseContext::ShaderStage shaderStage, std::string &glslSource, std::string &uniformsJson,
+	std::string &errorMessage
+) {
+	std::vector<uint8_t> spirvBytes;
+	if (!readBinaryFile(spirvPath, spirvBytes, errorMessage))
+		return false;
+	if (spirvBytes.size() < 20 || spirvBytes.size() % sizeof(uint32_t) != 0) {
+		errorMessage = "emitted SPIR-V is not a complete word stream";
+		return false;
+	}
+
+	std::vector<uint32_t> spirvWords(spirvBytes.size() / sizeof(uint32_t));
+	std::memcpy(spirvWords.data(), spirvBytes.data(), spirvBytes.size());
+
+	try {
+		spirv_cross::CompilerGLSL compiler(std::move(spirvWords));
+		spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+
+		if (shaderStage == ParseContext::ShaderStage::Fragment) {
+			for (const spirv_cross::Resource &output : resources.stage_outputs)
+				compiler.set_name(output.id, "dynlexColor");
+		}
+
+		nlohmann::json uniforms = nlohmann::json::array();
+		for (const spirv_cross::Resource &uniform : resources.uniform_buffers) {
+			std::string spirvName = compiler.get_name(uniform.id);
+			constexpr std::string_view prefix = "ubo_";
+			if (!spirvName.starts_with(prefix)) {
+				errorMessage = "shader uniform has an unexpected SPIR-V resource name";
+				return false;
+			}
+			uint32_t binding = compiler.get_decoration(uniform.id, spv::DecorationBinding);
+			std::string blockName = "DynlexUniformBlock" + std::to_string(binding);
+			compiler.set_name(uniform.base_type_id, blockName);
+			compiler.set_name(uniform.id, "dynlexUniform" + std::to_string(binding));
+			compiler.set_member_name(uniform.base_type_id, 0, "value");
+
+			nlohmann::json reflectedUniform;
+			reflectedUniform["name"] = spirvName.substr(prefix.size());
+			reflectedUniform["block"] = blockName;
+			reflectedUniform["binding"] = binding;
+			uniforms.push_back(std::move(reflectedUniform));
+		}
+		std::sort(uniforms.begin(), uniforms.end(), [](const nlohmann::json &left, const nlohmann::json &right) {
+			return left.at("binding").get<uint32_t>() < right.at("binding").get<uint32_t>();
+		});
+
+		spirv_cross::CompilerGLSL::Options options;
+		options.version = 300;
+		options.es = true;
+		options.vulkan_semantics = false;
+		options.separate_shader_objects = false;
+		options.enable_420pack_extension = false;
+		options.force_zero_initialized_variables = true;
+		options.fragment.default_float_precision = spirv_cross::CompilerGLSL::Options::Highp;
+		compiler.set_common_options(options);
+
+		glslSource = compiler.compile();
+		nlohmann::json reflection;
+		reflection["uniforms"] = std::move(uniforms);
+		uniformsJson = reflection.dump();
+		return true;
+	} catch (const std::exception &error) {
+		errorMessage = error.what();
+		return false;
+	}
+}
+
+int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderStage) {
 	WebCompilerState &state = webState();
 	if (!state.initialized) {
 		appendCompilerLog("error", "compiler state is not initialized");
@@ -331,15 +414,18 @@ int compileAndEmitWasm() {
 
 	state.outputWasm.clear();
 	state.outputWasmBase64.clear();
+	state.outputShaderGlsl.clear();
+	state.shaderUniformsJson = R"({"uniforms":[]})";
 	state.compilerLog.clear();
 	appendCompilerLog("info", "compile request started");
 
 	ParseContext context;
 	context.options.inputPath = kMainSourcePath;
-	context.options.outputPath = kOutputWasmPath;
-	context.options.emitWASM = true;
+	context.options.outputPath = outputKind == WebOutputKind::ShaderGlsl ? kOutputSpirvPath : kOutputWasmPath;
+	context.options.emitWASM = outputKind == WebOutputKind::ProgramWasm;
 	context.options.emitLLVM = false;
-	context.options.emitSPIRV = false;
+	context.options.emitSPIRV = outputKind == WebOutputKind::ShaderGlsl;
+	context.options.shaderStage = shaderStage;
 	auto memoryFileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
 	memoryFileSystem->setFile(kMainSourcePath, state.mainSource);
 	context.fileSystem = std::move(memoryFileSystem);
@@ -376,16 +462,29 @@ int compileAndEmitWasm() {
 		return WebCompileStatusCompileFailed;
 	}
 
-	std::string readError;
-	if (!readBinaryFile(kOutputWasmPath, state.outputWasm, readError)) {
-		appendCompilerLog("error", "failed to read emitted wasm: " + readError);
-		flushCompilerLogJson();
-		return WebCompileStatusInternalError;
+	if (outputKind == WebOutputKind::ProgramWasm) {
+		std::string readError;
+		if (!readBinaryFile(kOutputWasmPath, state.outputWasm, readError)) {
+			appendCompilerLog("error", "failed to read emitted wasm: " + readError);
+			flushCompilerLogJson();
+			return WebCompileStatusInternalError;
+		}
+		state.outputWasmBase64 = encodeBase64(state.outputWasm);
+		appendCompilerLog("info", "emitted wasm bytes: " + std::to_string(state.outputWasm.size()));
+	} else {
+		std::string translationError;
+		if (!translateSpirvToWebGlsl(
+				kOutputSpirvPath, shaderStage, state.outputShaderGlsl, state.shaderUniformsJson, translationError
+			)) {
+			std::cerr << "Shader translation failed: " << translationError << '\n';
+			appendCompilerLog("error", "An error occurred. Check the browser log.");
+			flushCompilerLogJson();
+			return WebCompileStatusInternalError;
+		}
+		appendCompilerLog("info", "emitted WebGL shader source");
 	}
-	state.outputWasmBase64 = encodeBase64(state.outputWasm);
 
 	appendCompilerLog("info", "compile request succeeded");
-	appendCompilerLog("info", "emitted wasm bytes: " + std::to_string(state.outputWasm.size()));
 	flushCompilerLogJson();
 	return WebCompileStatusOk;
 }
@@ -470,7 +569,23 @@ EMSCRIPTEN_KEEPALIVE void dynlex_web_set_main_source(const char *utf8Source) {
 	state.mainSource = utf8Source ? std::string(utf8Source) : std::string{};
 }
 
-EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() { return compileAndEmitWasm(); }
+EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() {
+	return compileAndEmit(WebOutputKind::ProgramWasm, ParseContext::ShaderStage::Fragment);
+}
+
+EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_shader_glsl(const char *shaderStage) {
+	if (!shaderStage) {
+		std::cerr << "Shader compilation requested without a stage\n";
+		return WebCompileStatusInternalError;
+	}
+	const std::string_view stage(shaderStage);
+	if (stage == "fragment")
+		return compileAndEmit(WebOutputKind::ShaderGlsl, ParseContext::ShaderStage::Fragment);
+	if (stage == "vertex")
+		return compileAndEmit(WebOutputKind::ShaderGlsl, ParseContext::ShaderStage::Vertex);
+	std::cerr << "Shader compilation requested with invalid stage: " << stage << '\n';
+	return WebCompileStatusInternalError;
+}
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_diagnostics_json() { return webState().diagnosticsJson.c_str(); }
 
@@ -489,6 +604,10 @@ EMSCRIPTEN_KEEPALIVE int dynlex_web_get_output_wasm_len() {
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_output_wasm_base64() { return webState().outputWasmBase64.c_str(); }
 
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_output_shader_glsl() { return webState().outputShaderGlsl.c_str(); }
+
+EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_shader_uniforms_json() { return webState().shaderUniformsJson.c_str(); }
+
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_compiler_log_json() { return webState().compilerLogJson.c_str(); }
 
 EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_lsp_hover_json(int zeroBasedLine, int zeroBasedColumn) {
@@ -503,3 +622,5 @@ EMSCRIPTEN_KEEPALIVE const char *dynlex_web_get_lsp_semantic_tokens_json() { ret
 // NOLINTEND(readability-identifier-naming)
 
 } // extern "C"
+
+#endif

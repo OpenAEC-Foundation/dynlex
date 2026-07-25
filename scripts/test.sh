@@ -530,6 +530,7 @@ run_auxiliary_test() {
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
+run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \
@@ -548,6 +549,7 @@ run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
+run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 

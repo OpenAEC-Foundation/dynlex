@@ -4,7 +4,7 @@ import {
   buildRuntimeImports,
   createRuntimeFilesystem,
   isSupportedRuntimeImport
-} from "../../src/web/ide/src/worker/runtimeImports.js";
+} from "../../src/web/ide/public/compiler/runtimeImports.js";
 
 const importNames = [
   "dynlex_host_error_message",
