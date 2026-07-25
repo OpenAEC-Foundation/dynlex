@@ -53,6 +53,15 @@ struct InstantiationKey {
 	auto operator<=>(const InstantiationKey &) const = default;
 };
 
+struct FlexExpansionKey {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+	std::vector<DataType> argumentTypes;
+	std::vector<CompileTimeValue> compileTimeArguments;
+
+	bool operator==(const FlexExpansionKey &) const = default;
+};
+
 inline bool parameterRequiresCompileTimeInstantiationValue(
 	const std::unordered_set<std::string> &requiredCompileTimeParameters, const std::string &parameterName,
 	const DataType &argType
@@ -145,8 +154,6 @@ struct Section {
 	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a flex (inlined at call site instead of function call)
 	bool isFlex = false;
-	// recursion guard for type inference of effects/flexes
-	bool inferring = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
 	// whether this function must be emitted through a stable callable wrapper

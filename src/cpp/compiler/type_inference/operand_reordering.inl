@@ -624,7 +624,7 @@ class GroupingInferenceTransaction {
 		  savedCurrentInstantiatedSectionBody(context.currentInstantiatedSectionBody),
 		  savedSectionFlexBodyFrames(context.sectionFlexBodyFrames),
 		  savedActiveFlexDefinitionStack(context.activeFlexDefinitionStack),
-		  savedActiveFlexCallStack(context.activeFlexCallStack),
+		  savedActiveFlexExpansionKeys(context.activeFlexExpansionKeys), savedActiveFlexCallStack(context.activeFlexCallStack),
 		  savedFlexCallSiteSectionStack(context.flexCallSiteSectionStack), savedKnownConstants(context.currentVariableValues),
 		  savedAddressState(context.currentAddressState), savedSubject(context.currentSubject),
 		  savedTypesValid(context.typesValid), savedSuppressDiagnostics(context.suppressDiagnostics),
@@ -724,6 +724,7 @@ class GroupingInferenceTransaction {
 	InstantiatedSectionBody *savedCurrentInstantiatedSectionBody;
 	std::vector<InferenceContext::SectionFlexBodyInferenceFrame> savedSectionFlexBodyFrames;
 	std::vector<Section *> savedActiveFlexDefinitionStack;
+	std::vector<std::optional<FlexExpansionKey>> savedActiveFlexExpansionKeys;
 	std::vector<Expression *> savedActiveFlexCallStack;
 	std::vector<Section *> savedFlexCallSiteSectionStack;
 	std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
@@ -766,6 +767,7 @@ class GroupingInferenceTransaction {
 		context.currentInstantiatedSectionBody = savedCurrentInstantiatedSectionBody;
 		context.sectionFlexBodyFrames = std::move(savedSectionFlexBodyFrames);
 		context.activeFlexDefinitionStack = std::move(savedActiveFlexDefinitionStack);
+		context.activeFlexExpansionKeys = std::move(savedActiveFlexExpansionKeys);
 		context.activeFlexCallStack = std::move(savedActiveFlexCallStack);
 		context.flexCallSiteSectionStack = std::move(savedFlexCallSiteSectionStack);
 		context.currentVariableValues = std::move(savedKnownConstants);

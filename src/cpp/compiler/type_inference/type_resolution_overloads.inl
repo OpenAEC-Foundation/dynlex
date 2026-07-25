@@ -313,6 +313,7 @@ struct InferenceContext {
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
+	std::vector<std::optional<FlexExpansionKey>> activeFlexExpansionKeys;
 	std::vector<Expression *> activeFlexCallStack;
 	std::vector<Section *> flexCallSiteSectionStack;
 	// Flow-sensitive variable values. A monostate entry explicitly records that
@@ -355,6 +356,7 @@ struct InferenceContext {
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;
 		sectionFlexBodyFrames = other.sectionFlexBodyFrames;
 		activeFlexDefinitionStack = other.activeFlexDefinitionStack;
+		activeFlexExpansionKeys = other.activeFlexExpansionKeys;
 		activeFlexCallStack = other.activeFlexCallStack;
 		flexCallSiteSectionStack = other.flexCallSiteSectionStack;
 	}

@@ -131,20 +131,44 @@ case Expression::Kind::PatternCall: {
 		struct FlexInferenceScope {
 			InferenceContext &context;
 			size_t activeDefinitionCount;
+			size_t activeExpansionKeyCount;
 			size_t activeCallCount;
 			size_t callSiteCount;
 			size_t bodyFrameCount;
 			~FlexInferenceScope() {
 				context.activeFlexDefinitionStack.resize(activeDefinitionCount);
+				context.activeFlexExpansionKeys.resize(activeExpansionKeyCount);
 				context.activeFlexCallStack.resize(activeCallCount);
 				context.flexCallSiteSectionStack.resize(callSiteCount);
 				context.sectionFlexBodyFrames.resize(bodyFrameCount);
 			}
 		} flexInferenceScope{
-			context, context.activeFlexDefinitionStack.size(), context.activeFlexCallStack.size(),
-			context.flexCallSiteSectionStack.size(), context.sectionFlexBodyFrames.size()
+			context,
+			context.activeFlexDefinitionStack.size(),
+			context.activeFlexExpansionKeys.size(),
+			context.activeFlexCallStack.size(),
+			context.flexCallSiteSectionStack.size(),
+			context.sectionFlexBodyFrames.size()
 		};
+		FlexExpansionKey expansionKey;
+		expansionKey.definition = def;
+		expansionKey.pathIndex = overload.pathIndex;
+		expansionKey.argumentTypes = argTypesForOverload;
+		expansionKey.compileTimeArguments.reserve(expr->arguments.size());
+		for (size_t argumentIndex = 0; argumentIndex < expr->arguments.size(); argumentIndex++) {
+			CompileTimeValue value = context.lookupExpressionValue(expr->arguments[argumentIndex]);
+			if (!isCompileTimeKnown(value) && argTypesForOverload[argumentIndex].kind == DataType::Kind::Type)
+				value = TypeReferenceValue::exact(argTypesForOverload[argumentIndex]);
+			expansionKey.compileTimeArguments.push_back(std::move(value));
+		}
+		if (std::ranges::any_of(context.activeFlexExpansionKeys, [&](const std::optional<FlexExpansionKey> &activeKey) {
+			return activeKey && *activeKey == expansionKey;
+		})) {
+			context.setTypeFailure("recursive flex expansion");
+			break;
+		}
 		context.activeFlexDefinitionStack.push_back(matchedSection);
+		context.activeFlexExpansionKeys.push_back(std::move(expansionKey));
 		context.activeFlexCallStack.push_back(expr);
 		Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 		if (callSiteSection)
@@ -169,14 +193,9 @@ case Expression::Kind::PatternCall: {
 		collectPatternCallBindings(expr, def, callBindings);
 		materializeFlexBindingsInCallerScope(callBindings, flexBindingFrameStack);
 		pushBindingScope(callBindingFrameStack, std::move(callBindings));
-		if (matchedSection->inferring) {
-			context.setTypeFailure("recursive flex expansion");
-			break;
-		}
 		std::shared_ptr<InstantiatedSectionBody> flexBody = context.parseContext.cloneSectionBody(matchedSection);
 		if (sectionBodyFrameIndex)
 			context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();
-		matchedSection->inferring = true;
 		bool flexFallsThrough = true;
 		bool bodyInferred = matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
 			InstantiatedSectionBody *activeBody =
@@ -189,7 +208,6 @@ case Expression::Kind::PatternCall: {
 			flexFallsThrough = flexFallsThrough && definitionBodyFallsThrough;
 			return inferred;
 		});
-		matchedSection->inferring = false;
 		if (!bodyInferred || !context.typesValid)
 			break;
 		Expression *templateBodyExpression = flexPatternBodyExpression(def);

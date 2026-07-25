@@ -16,8 +16,7 @@ struct TypeReferenceValue {
 		std::optional<DataType> typeReference = makeBuiltinTypeReference(kindName, emitSPIRV, numericByteSize);
 		requireCompilerInvariant(typeReference.has_value(), "Unknown built-in type-reference kind");
 		TypeConstraint constraint = TypeConstraint::fromTypeReference(*typeReference);
-		if (!numericByteSize &&
-			(typeReference->referencedKind == DataType::Kind::Int || typeReference->referencedKind == DataType::Kind::Float)) {
+		if (!numericByteSize && (kindName == "int" || kindName == "float")) {
 			constraint.numericSize.reset();
 		}
 		return {*typeReference, std::move(constraint)};
