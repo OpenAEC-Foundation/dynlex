@@ -1,0 +1,141 @@
+import lib/filesystem.dl
+import lib/process.dl
+
+set root to "tests/required/filesystem_transaction_primitives/tree.tmp"
+set original_path to "tests/required/filesystem_transaction_primitives/tree.tmp/original.bin"
+set missing_path to "tests/required/filesystem_transaction_primitives/tree.tmp/missing.bin"
+set copied_path to "tests/required/filesystem_transaction_primitives/tree.tmp/copied.bin"
+set durable_path to "tests/required/filesystem_transaction_primitives/tree.tmp/durable.bin"
+set windows to the process platform is windows
+
+discard remove filesystem tree at root
+set created to create directory tree at root
+print created's succeeded as line
+
+set missing to the file system entry at missing_path
+print missing's supported as line
+print missing's succeeded as line
+print (not missing's found) as line
+print ((the length of missing's error message) = 0) as line
+
+write the string form of "old" to original_path
+set original to the file system entry at original_path
+print original's succeeded as line
+print original's found as line
+print original's regular file as line
+print (not original's directory) as line
+print (not original's symbolic link) as line
+print (not original's other) as line
+print original's modification time supported as line
+print ((original's modification time)'s nanoseconds >= 0) as line
+print ((original's modification time)'s nanoseconds < 1000000000) as line
+print original's identity's supported as line
+print original's identity's available as line
+
+if windows:
+    print (not original's mode supported) as line
+    print original's Windows attributes supported as line
+else:
+    print original's mode supported as line
+    print (not original's Windows attributes supported) as line
+    print (original's mode >= 0) as line
+    print (original's mode <= 4095) as line
+
+set same_original to the file system entry at original_path
+print original's identity identifies the same file as same_original's identity as line
+
+set exact_bytes to a new string buffer with length 2
+store 0 as a byte into the data of exact_bytes at 0
+store 255 as a byte into the data of exact_bytes at 1
+set exact_identity to @intrinsic("construct", a file identity, true, true, exact_bytes)
+set same_exact_identity to @intrinsic("construct", a file identity, true, true, exact_bytes)
+print exact_identity identifies the same file as same_exact_identity as line
+
+set invalid_stage to create a staging file beside exact_bytes
+set invalid_stage_message to invalid_stage's error message
+print invalid_stage's supported as line
+print (not invalid_stage's succeeded) as line
+print ((the length of invalid_stage_message) > 0) as line
+
+set staging to create a staging file beside original_path
+print staging's supported as line
+print staging's succeeded as line
+discard write the string form of "refused" to staging
+
+set refused to commit staging allowing overwrite false and requiring durability false
+print refused's supported as line
+print refused's commit outcome known as line
+print (not refused's committed) as line
+print (not refused's succeeded) as line
+print refused's cleanup succeeded as line
+read original_path
+print ((it succeeded) and ((the contents of it) = "old")) as line
+
+set replacement_stage to create a staging file beside original_path
+set first_write to write the string form of "first" to replacement_stage
+set second_write to write the string form of "second" to replacement_stage
+print first_write's succeeded as line
+print second_write's succeeded as line
+set restored to restore metadata from original to replacement_stage
+print restored's supported as line
+print restored's succeeded as line
+set committed to commit replacement_stage allowing overwrite true and requiring durability false
+print committed's supported as line
+print committed's succeeded as line
+print committed's commit outcome known as line
+print committed's committed as line
+print (not committed's durable) as line
+print committed's cleanup succeeded as line
+
+set replaced to the file system entry at original_path
+if windows:
+    print (replaced's restorable Windows attributes = original's restorable Windows attributes) as line
+else:
+    print (replaced's mode = original's mode) as line
+print ((replaced's access time)'s seconds = (original's access time)'s seconds) as line
+print ((replaced's access time)'s nanoseconds = (original's access time)'s nanoseconds) as line
+print ((replaced's modification time)'s seconds = (original's modification time)'s seconds) as line
+print ((replaced's modification time)'s nanoseconds = (original's modification time)'s nanoseconds) as line
+read original_path
+print it succeeded as line
+print ((the contents of it) = "firstsecond") as line
+
+set cancelled_stage to create a staging file beside copied_path
+set cancelled_path to cancelled_stage's path
+set cancelled to cancel cancelled_stage
+print cancelled's supported as line
+print cancelled's succeeded as line
+print cancelled's cleanup succeeded as line
+set cancelled_entry to the file system entry at cancelled_path
+print cancelled_entry's supported as line
+print cancelled_entry's succeeded as line
+print (not cancelled_entry's found) as line
+print ((the length of cancelled_entry's error message) = 0) as line
+
+set new_stage to create a staging file beside copied_path
+discard write the string form of "new" to new_stage
+set new_commit to commit new_stage allowing overwrite false and requiring durability false
+print new_commit's succeeded as line
+print new_commit's committed as line
+print new_commit's cleanup succeeded as line
+read copied_path
+print ((it succeeded) and ((the contents of it) = "new")) as line
+
+set durable_stage to create a staging file beside durable_path
+discard write the string form of "durable" to durable_stage
+set durable_commit to commit durable_stage allowing overwrite false and requiring durability true
+if windows:
+    print (not durable_commit's supported) as line
+    print durable_commit's commit outcome known as line
+    print (not durable_commit's committed) as line
+    print durable_commit's cleanup succeeded as line
+    set durable_entry to the file system entry at durable_stage's path
+    print (durable_entry's succeeded and (not durable_entry's found)) as line
+else:
+    print durable_commit's supported as line
+    print durable_commit's succeeded as line
+    print durable_commit's durable as line
+    print durable_commit's cleanup succeeded as line
+
+set cleaned to remove filesystem tree at root
+print cleaned's succeeded as line

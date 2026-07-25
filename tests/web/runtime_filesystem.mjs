@@ -15,6 +15,7 @@ const filesystemImportNames = [
   "dynlex_filesystem_directory_open",
   "dynlex_filesystem_directory_release",
   "dynlex_filesystem_directory_retain",
+  "dynlex_filesystem_entry",
   "dynlex_filesystem_error_message",
   "dynlex_filesystem_file_finish",
   "dynlex_filesystem_file_open",
@@ -26,12 +27,23 @@ const filesystemImportNames = [
   "dynlex_filesystem_remove_tree",
   "dynlex_filesystem_rename",
   "dynlex_filesystem_status",
+  "dynlex_filesystem_staging_cancel",
+  "dynlex_filesystem_staging_commit",
+  "dynlex_filesystem_staging_copy_path",
+  "dynlex_filesystem_staging_create",
+  "dynlex_filesystem_staging_path_length",
+  "dynlex_filesystem_staging_release",
+  "dynlex_filesystem_staging_restore_metadata",
+  "dynlex_filesystem_staging_retain",
+  "dynlex_filesystem_staging_state",
+  "dynlex_filesystem_staging_write",
   "dynlex_filesystem_temporary_directory_copy_path",
   "dynlex_filesystem_temporary_directory_create",
   "dynlex_filesystem_temporary_directory_path_length",
   "dynlex_filesystem_temporary_directory_release",
   "dynlex_filesystem_temporary_directory_retain",
   "dynlex_filesystem_temporary_file_open",
+  "dynlex_filesystem_transactions_supported",
   "fclose",
   "ferror",
   "fflush",
@@ -145,6 +157,55 @@ assert.equal(env.dynlex_filesystem_status(1200, 27, 6000, 6008), 1);
 view = new DataView(memory.buffer);
 assert.equal(view.getInt32(6000, true), 1);
 assert.equal(view.getBigInt64(6008, true) > 0n, true);
+assert.equal(
+  env.dynlex_filesystem_entry(
+    1200,
+    27,
+    6200,
+    6204,
+    6208,
+    6216,
+    6224,
+    6232,
+    6240,
+    6248,
+    6256,
+    6260,
+    6264,
+    6272,
+    6276,
+    6280,
+    6288,
+    6292,
+    6300,
+    26,
+    6330
+  ),
+  1
+);
+view = new DataView(memory.buffer);
+assert.equal(view.getInt32(6200, true), 1);
+assert.equal(view.getInt32(6204, true), 0, "web entries do not expose POSIX mode");
+assert.equal(view.getInt32(6216, true), 0, "web entries do not expose Windows attributes");
+assert.equal(view.getInt32(6240, true), 0, "web entries do not expose access time");
+assert.equal(view.getInt32(6260, true), 1, "web entries expose modification time");
+assert.equal(view.getBigInt64(6264, true) > 0n, true);
+assert.equal(view.getInt32(6272, true) >= 0, true);
+assert.equal(view.getInt32(6272, true) < 1000000000, true);
+assert.equal(view.getInt32(6276, true), 0, "web entries do not expose creation time");
+assert.equal(view.getInt32(6292, true), 0, "web entries do not expose native identity");
+assert.equal(view.getUint32(6330, true), 0);
+assert.equal(env.dynlex_filesystem_transactions_supported(), 0);
+assert.equal(env.dynlex_filesystem_staging_create(1200, 27), 0);
+assert.equal(env.dynlex_filesystem_staging_write(0, 0, 0), -2);
+assert.equal(env.dynlex_filesystem_staging_restore_metadata(0), -2);
+assert.equal(env.dynlex_filesystem_staging_cancel(0, 6340), -2);
+assert.equal(view.getInt32(6340, true), 1);
+assert.equal(env.dynlex_filesystem_staging_commit(0, 0, 0, 6344, 6348, 6352, 6356), -2);
+assert.equal(view.getInt32(6344, true), 1);
+assert.equal(view.getInt32(6348, true), 0);
+assert.equal(view.getInt32(6352, true), 0);
+assert.equal(view.getInt32(6356, true), 1);
 assert.equal(env.rename(1200, 1270), -1, "rename requires an existing destination parent");
 assert.equal(env.dynlex_filesystem_status(1200, 27, 6000, 6008), 1, "failed rename must preserve the source");
 assert.equal(env.rename(1160, 1300), -1, "a directory cannot be renamed into its own subtree");

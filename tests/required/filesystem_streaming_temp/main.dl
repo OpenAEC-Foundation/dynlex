@@ -6,8 +6,8 @@ print first_temporary's succeeded as line
 print second_temporary's succeeded as line
 print (not ((first_temporary's directory_path) = (second_temporary's directory_path))) as line
 
-set first_status to inspect filesystem entry at first_temporary's directory_path
-set second_status to inspect filesystem entry at second_temporary's directory_path
+set first_status to the file system entry at first_temporary's directory_path
+set second_status to the file system entry at second_temporary's directory_path
 print (((first_status's succeeded) and (first_status's found)) and (first_status's directory)) as line
 print (((second_status's succeeded) and (second_status's found)) and (second_status's directory)) as line
 

@@ -312,6 +312,7 @@ if(NOT EMSCRIPTEN)
     if(WIN32)
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimeWindows.c
+            src/runtime/filesystemTransactionWindows.c
             src/runtime/hostRuntimeWindows.c
             src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
@@ -319,6 +320,7 @@ if(NOT EMSCRIPTEN)
     else()
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimePosix.c
+            src/runtime/filesystemTransactionPosix.c
             src/runtime/hostRuntimePosix.c
             src/runtime/processRuntimePosix.c
         )

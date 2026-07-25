@@ -183,7 +183,8 @@ print "metadata" is readable as line
 write the string form of "contents" to "metadata/file.txt" and print if it succeeded
 print "" as line
 print "metadata/file.txt" is a regular file as line
-print (the modification time of "metadata/file.txt") > 0 as line
+set metadata_entry to the file system entry at "metadata/file.txt"
+print (metadata_entry's modification time)'s seconds > 0 as line
 read "missing.txt" and print if it succeeded
 print "" as line
 print (the length of the error message of it) > 0 as line
@@ -192,6 +193,27 @@ delete "metadata"
 `);
 if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
   throw new Error(`Unexpected filesystem metadata output: ${JSON.stringify(metadataOutput)}`);
+}
+
+const transactionOutput = await compileAndRun(`import lib/filesystem.dl
+
+write the string form of "web" to "transaction-source.txt"
+set entry to the file system entry at "transaction-source.txt"
+print entry's supported as line
+print entry's succeeded as line
+print entry's found as line
+print entry's regular file as line
+print (not entry's mode supported) as line
+print entry's modification time supported as line
+print (not entry's identity's supported) as line
+set staging to create a staging file beside "transaction-source.txt"
+print (not staging's supported) as line
+print (not staging's succeeded) as line
+print ((the length of staging's error message) > 0) as line
+delete "transaction-source.txt"
+`);
+if (transactionOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+  throw new Error(`Unexpected filesystem transaction-capability output: ${JSON.stringify(transactionOutput)}`);
 }
 
 const pathOutput = await compileAndRun(`import lib/path.dl

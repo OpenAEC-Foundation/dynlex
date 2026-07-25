@@ -447,6 +447,80 @@ export function createFileImports(memory, filesystem) {
     return 1;
   }
 
+  function entryForPath(
+    path,
+    kindPointer,
+    modeSupportedPointer,
+    modePointer,
+    windowsAttributesSupportedPointer,
+    windowsAttributesPointer,
+    restorableWindowsAttributesPointer,
+    accessTimeSupportedPointer,
+    accessSecondsPointer,
+    accessNanosecondsPointer,
+    modificationTimeSupportedPointer,
+    modificationSecondsPointer,
+    modificationNanosecondsPointer,
+    creationTimeSupportedPointer,
+    creationSecondsPointer,
+    creationNanosecondsPointer,
+    identitySupportedPointer,
+    identityLengthPointer
+  ) {
+    const outputs = [
+      [kindPointer, 4],
+      [modeSupportedPointer, 4],
+      [modePointer, 8],
+      [windowsAttributesSupportedPointer, 4],
+      [windowsAttributesPointer, 8],
+      [restorableWindowsAttributesPointer, 8],
+      [accessTimeSupportedPointer, 4],
+      [accessSecondsPointer, 8],
+      [accessNanosecondsPointer, 4],
+      [modificationTimeSupportedPointer, 4],
+      [modificationSecondsPointer, 8],
+      [modificationNanosecondsPointer, 4],
+      [creationTimeSupportedPointer, 4],
+      [creationSecondsPointer, 8],
+      [creationNanosecondsPointer, 4],
+      [identitySupportedPointer, 4],
+      [identityLengthPointer, 4]
+    ];
+    const ranges = outputs.map(([pointer, length]) => byteRange(pointer, length));
+    if (ranges.some((range) => range === null)) {
+      return fail("Filesystem entry output is outside program memory");
+    }
+    const view = new DataView(memory.buffer);
+    for (const [index, [, length]] of outputs.entries()) {
+      if (length === 8) {
+        view.setBigInt64(ranges[index].start, 0n, true);
+      } else {
+        view.setInt32(ranges[index].start, 0, true);
+      }
+    }
+
+    const node = filesystem.files.get(path);
+    const directoryTime = filesystem.directories.get(path);
+    const link = filesystem.symlinks.get(path);
+    const other = filesystem.others.get(path);
+    if (!node && directoryTime === undefined && !link && !other) {
+      return 0;
+    }
+    const modificationTime =
+      node?.modificationTime ?? directoryTime ?? link?.modificationTime ?? other.modificationTime;
+    const seconds = Math.floor(modificationTime / 1000);
+    const nanoseconds = (modificationTime - seconds * 1000) * 1000000;
+    view.setInt32(
+      ranges[0].start,
+      node ? 1 : directoryTime !== undefined ? 2 : link ? 3 : 4,
+      true
+    );
+    view.setInt32(ranges[9].start, 1, true);
+    view.setBigInt64(ranges[10].start, BigInt(seconds), true);
+    view.setInt32(ranges[11].start, nanoseconds, true);
+    return 1;
+  }
+
   function publicPath(pointer, length) {
     let path = readPublicPath(memory, pointer, length);
     if (path === null) {
@@ -545,6 +619,121 @@ export function createFileImports(memory, filesystem) {
       clearError();
       const path = publicPath(pathPointer, pathLength);
       return path === null ? -1 : statusForPath(path, kindPointer, modificationTimePointer);
+    },
+    dynlex_filesystem_entry(
+      pathPointer,
+      pathLength,
+      kindPointer,
+      modeSupportedPointer,
+      modePointer,
+      windowsAttributesSupportedPointer,
+      windowsAttributesPointer,
+      restorableWindowsAttributesPointer,
+      accessTimeSupportedPointer,
+      accessSecondsPointer,
+      accessNanosecondsPointer,
+      modificationTimeSupportedPointer,
+      modificationSecondsPointer,
+      modificationNanosecondsPointer,
+      creationTimeSupportedPointer,
+      creationSecondsPointer,
+      creationNanosecondsPointer,
+      identitySupportedPointer,
+      _identityPointer,
+      _identityCapacity,
+      identityLengthPointer
+    ) {
+      clearError();
+      const path = publicPath(pathPointer, pathLength);
+      if (path === null) {
+        return -1;
+      }
+      return entryForPath(
+        path,
+        kindPointer,
+        modeSupportedPointer,
+        modePointer,
+        windowsAttributesSupportedPointer,
+        windowsAttributesPointer,
+        restorableWindowsAttributesPointer,
+        accessTimeSupportedPointer,
+        accessSecondsPointer,
+        accessNanosecondsPointer,
+        modificationTimeSupportedPointer,
+        modificationSecondsPointer,
+        modificationNanosecondsPointer,
+        creationTimeSupportedPointer,
+        creationSecondsPointer,
+        creationNanosecondsPointer,
+        identitySupportedPointer,
+        identityLengthPointer
+      );
+    },
+    dynlex_filesystem_transactions_supported() {
+      return 0;
+    },
+    dynlex_filesystem_staging_create() {
+      clearError();
+      return fail("Native filesystem transactions are unsupported on this target", 0);
+    },
+    dynlex_filesystem_staging_retain() {
+      throw new WebAssembly.RuntimeError("Staging retain received an unsupported handle");
+    },
+    dynlex_filesystem_staging_release() {
+      throw new WebAssembly.RuntimeError("Staging release received an unsupported handle");
+    },
+    dynlex_filesystem_staging_path_length() {
+      return 0;
+    },
+    dynlex_filesystem_staging_copy_path() {
+      clearError();
+      return fail("Native filesystem transactions are unsupported on this target", -2);
+    },
+    dynlex_filesystem_staging_state() {
+      return 0;
+    },
+    dynlex_filesystem_staging_write() {
+      clearError();
+      return fail("Native filesystem transactions are unsupported on this target", -2);
+    },
+    dynlex_filesystem_staging_restore_metadata() {
+      clearError();
+      return fail("Native filesystem transactions are unsupported on this target", -2);
+    },
+    dynlex_filesystem_staging_cancel(_handle, cleanupSucceededPointer) {
+      clearError();
+      const cleanupRange = byteRange(cleanupSucceededPointer, 4);
+      if (!cleanupRange) {
+        return fail("Filesystem cleanup output is outside program memory");
+      }
+      new DataView(memory.buffer).setInt32(cleanupRange.start, 1, true);
+      return fail("Native filesystem transactions are unsupported on this target", -2);
+    },
+    dynlex_filesystem_staging_commit(
+      _handle,
+      _overwrite,
+      _requireDurability,
+      outcomeKnownPointer,
+      committedPointer,
+      durablePointer,
+      cleanupSucceededPointer
+    ) {
+      clearError();
+      const ranges = [
+        byteRange(outcomeKnownPointer, 4),
+        byteRange(committedPointer, 4),
+        byteRange(durablePointer, 4),
+        byteRange(cleanupSucceededPointer, 4)
+      ];
+      if (ranges.some((range) => range === null)) {
+        return fail("Filesystem commit output is outside program memory");
+      }
+      const view = new DataView(memory.buffer);
+      view.setInt32(ranges[0].start, 1, true);
+      view.setInt32(ranges[1].start, 0, true);
+      view.setInt32(ranges[2].start, 0, true);
+      view.setInt32(ranges[3].start, 1, true);
+      return fail("Native filesystem transactions are unsupported on this target", -2);
     },
     dynlex_filesystem_create_directories(pathPointer, pathLength) {
       clearError();
