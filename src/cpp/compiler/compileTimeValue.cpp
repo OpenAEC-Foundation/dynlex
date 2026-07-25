@@ -145,13 +145,22 @@ Expression *resolveCompileTimeBinding(
 			elements = getPatternElements(expr->patternReference->pattern.text);
 		if (elements.size() == 1 &&
 			(elements[0].type == PatternElement::Type::Variable || elements[0].type == PatternElement::Type::VariableLike)) {
-			if (Expression *boundExpression = bindingFrameStack.lookup(elements[0].text))
+			BindingFrameStack callerScope;
+			if (Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(elements[0].text, expr, callerScope)) {
+				if (outBindingFrameStack)
+					*outBindingFrameStack = std::move(callerScope);
 				return boundExpression;
+			}
 		}
 	}
-	Expression *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
-	if (resolvedExpression && resolvedExpression != expr)
-		return resolvedExpression;
+	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		BindingFrameStack callerScope;
+		if (Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerScope)) {
+			if (outBindingFrameStack)
+				*outBindingFrameStack = std::move(callerScope);
+			return boundExpression;
+		}
+	}
 	if (expr && expr->inferredFlexExpansion) {
 		PatternDefinition *definition = expr->selectedPatternDefinition;
 		requireCompilerInvariant(definition, "inferred flex expansion is missing its selected definition");
@@ -165,7 +174,7 @@ Expression *resolveCompileTimeBinding(
 		}
 		return expr->inferredFlexExpansion;
 	}
-	return resolvedExpression;
+	return expr;
 }
 
 CompileTimeValue resolveStoredCompileTimeValue(Expression *expr, const BindingFrameStack &bindingFrameStack) {

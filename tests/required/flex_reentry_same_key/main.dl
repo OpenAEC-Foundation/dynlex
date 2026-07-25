@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function repeat {integer:value}:
+    replacement:
+        repeat value
+
+discard repeat 1

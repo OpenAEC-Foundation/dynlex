@@ -900,9 +900,10 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 	if (!expr || !expr->variable)
 		return {};
 	CompileTimeValue computedValue{};
-	Expression *boundExpression = flexBindingFrameStack.lookup(expr->variable);
+	BindingFrameStack callerBindingFrameStack;
+	Expression *boundExpression = flexBindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerBindingFrameStack);
 	if (boundExpression && boundExpression != expr) {
-		computedValue = resolveStoredCompileTimeValue(boundExpression, flexBindingFrameStack, &context);
+		computedValue = resolveStoredCompileTimeValue(boundExpression, callerBindingFrameStack, &context);
 		if (isCompileTimeKnown(computedValue)) {
 			context.setExpressionValue(boundExpression, computedValue);
 		}

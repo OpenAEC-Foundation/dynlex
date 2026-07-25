@@ -416,8 +416,8 @@ function left is right:
 
 function left [!=|is not] right:
     before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
-    execute:
-        return @intrinsic("not equal", left, right)
+    replacement:
+        not left = right
 
 function left [is less than or equal to|<=] right:
     before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
@@ -433,8 +433,8 @@ function left [is greater than or equal to|>=] right:
 
 function not value:
     before: $ or $, $ and $
-    execute:
-        return @intrinsic("not", value)
+    replacement:
+        @intrinsic("not", value)
 
 function {boolean:left} and {boolean:right}:
     before: $ or $
