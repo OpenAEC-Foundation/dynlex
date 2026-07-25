@@ -17,7 +17,8 @@ write the string form of "metadata" to file_path and print if it succeeded
 print "" as line
 print (the length of (the error message of it)) as line
 print file_path is a regular file as line
-print (the modification time of file_path) > 0 as line
+set file_entry to the file system entry at file_path
+print (file_entry's modification time)'s seconds > 0 as line
 
 read missing_path and print if it succeeded
 print "" as line

@@ -119,6 +119,35 @@ struct BindingFrameStack {
 		return nullptr;
 	}
 
+	Expression *lookupWithCallerScope(
+		VariableReference *bindingReference, const Expression *ignoredExpression, BindingFrameStack &callerScope
+	) const {
+		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
+		if (!bindingKey)
+			return nullptr;
+		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
+			auto binding = frames[frameIndex - 1].parameterBindings.find(bindingKey);
+			if (binding == frames[frameIndex - 1].parameterBindings.end() || binding->second == ignoredExpression)
+				continue;
+			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
+			return binding->second;
+		}
+		return nullptr;
+	}
+
+	Expression *lookupWithCallerScope(
+		const std::string &bindingName, const Expression *ignoredExpression, BindingFrameStack &callerScope
+	) const {
+		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
+			auto binding = frames[frameIndex - 1].bindings.find(bindingName);
+			if (binding == frames[frameIndex - 1].bindings.end() || binding->second == ignoredExpression)
+				continue;
+			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
+			return binding->second;
+		}
+		return nullptr;
+	}
+
 	template <typename Visitor> void forEachFrame(Visitor &&visitor) const {
 		for (const BindingFrame &frame : frames)
 			visitor(frame);

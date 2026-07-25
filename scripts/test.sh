@@ -538,10 +538,15 @@ run_auxiliary_test \
 run_auxiliary_test \
     "callable_lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_callable_lifecycle_codegen.py" "$COMPILER" \
     "$TESTS_DIR/callable_managed_argument/main.dl"
+run_auxiliary_test \
+    "inequality_codegen" 15 python3 -B "$SCRIPT_DIR/test_inequality_codegen.py" "$COMPILER" \
+    "$TESTS_DIR/inequality_uses_overloaded_equality/main.dl"
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_path_host" 10 node "$PROJECT_DIR/tests/web/runtime_path_host.mjs"
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
+run_auxiliary_test \
+    "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"

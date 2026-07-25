@@ -1,0 +1,4 @@
+tests/required/flex_reentry_same_key/main.dl:9-21: Error: recursive flex expansion
+  note: while inferring call 'repeat value' with arguments [a 32 bit integer] -> undeduced tests/required/flex_reentry_same_key/main.dl:9-21
+  note: while inferring call 'discard repeat 1' with arguments [a 32 bit integer] -> undeduced tests/required/flex_reentry_same_key/main.dl:9-17
+  note: while inferring call 'discard repeat 1' with arguments [unresolved(?)] -> undeduced tests/required/flex_reentry_same_key/main.dl:1-17

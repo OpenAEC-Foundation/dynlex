@@ -17,31 +17,31 @@ print created_again's succeeded as line
 write the string form of "root" to file_path
 write the string form of "nested" to nested_file_path
 
-set file_status to inspect filesystem entry at file_path
+set file_status to the file system entry at file_path
 print file_status's succeeded as line
 print file_status's found as line
-print file_status's regular_file as line
+print file_status's regular file as line
 print file_status's directory as line
-print file_status's symbolic_link as line
+print file_status's symbolic link as line
 print file_status's other as line
-print file_status's modification_time > 0 as line
+print (file_status's modification time)'s seconds > 0 as line
 
-set directory_status to inspect filesystem entry at nested
+set directory_status to the file system entry at nested
 print directory_status's succeeded as line
 print directory_status's found as line
-print directory_status's regular_file as line
+print directory_status's regular file as line
 print directory_status's directory as line
 
-set missing_status to inspect filesystem entry at missing_path
+set missing_status to the file system entry at missing_path
 print missing_status's succeeded as line
 print missing_status's found as line
-print (the length of missing_status's error_message) as line
+print (the length of missing_status's error message) as line
 
 set invalid_path to new string from data "A" with length 2
-set invalid_status to inspect filesystem entry at invalid_path
+set invalid_status to the file system entry at invalid_path
 print invalid_status's succeeded as line
 print invalid_status's found as line
-print (the length of invalid_status's error_message) > 0 as line
+print (the length of invalid_status's error message) > 0 as line
 set invalid_cleanup to remove filesystem tree at invalid_path
 print invalid_cleanup's succeeded as line
 print (the length of invalid_cleanup's error_message) > 0 as line
@@ -74,6 +74,6 @@ print directory_count as line
 
 set removed to remove filesystem tree at root
 print removed's succeeded as line
-set removed_status to inspect filesystem entry at root
+set removed_status to the file system entry at root
 print removed_status's succeeded as line
 print removed_status's found as line

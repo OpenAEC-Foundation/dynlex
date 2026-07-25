@@ -2,6 +2,7 @@
 #include "addressProvenance.h"
 #include "codeLine.h"
 #include "compileTimeInfo.h"
+#include "explicitParameterIndex.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "range.h"
@@ -50,6 +51,15 @@ struct InstantiationKey {
 	std::vector<std::pair<std::string, CompileTimeValue>> compileTimeParameters;
 
 	auto operator<=>(const InstantiationKey &) const = default;
+};
+
+struct FlexExpansionKey {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+	std::vector<DataType> argumentTypes;
+	std::vector<CompileTimeValue> compileTimeArguments;
+
+	bool operator==(const FlexExpansionKey &) const = default;
 };
 
 inline bool parameterRequiresCompileTimeInstantiationValue(
@@ -124,6 +134,7 @@ struct Section {
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;
 	std::unordered_map<std::string, VariableReference *> variableDefinitions;
+	ExplicitParameterIndex explicitParameterIndex;
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
 	std::unordered_map<std::string, Variable *> variables;
@@ -143,8 +154,6 @@ struct Section {
 	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a flex (inlined at call site instead of function call)
 	bool isFlex = false;
-	// recursion guard for type inference of effects/flexes
-	bool inferring = false;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
 	// whether this function must be emitted through a stable callable wrapper
@@ -168,6 +177,10 @@ struct Section {
 	);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
+	void indexExplicitParameters(PatternDefinition &definition);
+	bool canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const;
+	std::vector<Range> patternParameterCandidateRanges(const std::string &name) const;
+	VariableReference *resolvePatternParameterBinding(ParseContext &context, const std::string &name, const Range &useRange);
 	void addPatternReference(PatternReference *reference);
 	void incrementUnresolved();
 	void decrementUnresolved();

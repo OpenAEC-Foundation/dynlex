@@ -1,0 +1,29 @@
+import lib/std.dl
+
+set first_owned to the string form of "alpha"
+set same_owned to the string form of "alpha"
+set other_owned to the string form of "beta"
+set same_cstring to "alpha"
+set other_cstring to "beta"
+
+set owned_same to first_owned != same_owned
+set owned_other to first_owned is not other_owned
+set owned_cstring_same to first_owned != same_cstring
+set owned_cstring_other to first_owned is not other_cstring
+set cstring_owned_same to same_cstring != first_owned
+set cstring_owned_other to other_cstring is not first_owned
+set cstring_same to same_cstring != "alpha"
+set cstring_other to same_cstring is not "beta"
+set integer_same to 7 != 7
+set integer_other to 7 is not 8
+
+print owned_same as line
+print owned_other as line
+print owned_cstring_same as line
+print owned_cstring_other as line
+print cstring_owned_same as line
+print cstring_owned_other as line
+print cstring_same as line
+print cstring_other as line
+print integer_same as line
+print integer_other as line

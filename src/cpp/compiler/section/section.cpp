@@ -652,72 +652,131 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 	searchParentPatterns(context, reference);
 }
 
-void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
-	bool found = false;
-	// check if this variable name exists in our patterns
+void Section::indexExplicitParameters(PatternDefinition &definition) {
+	requireCompilerInvariant(definition.section == this, "explicit parameter candidate belongs to another section");
+	explicitParameterIndex.addDefinition(definition);
+}
+
+bool Section::canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const {
+	requireCompilerInvariant(definition.section == this, "implicit parameter candidate belongs to another section");
+	return canPromoteVariableLikeElement(element) && !explicitParameterIndex.contains(definition, element.text);
+}
+
+std::vector<Range> Section::patternParameterCandidateRanges(const std::string &name) const {
+	std::vector<Range> ranges;
+	std::unordered_set<std::string> seenRanges;
+	auto appendRange = [&](const Range &range) {
+		if (range.line && seenRanges.insert(range.toString()).second)
+			ranges.push_back(range);
+	};
+
+	if (const auto *explicitCandidates = explicitParameterIndex.find(name)) {
+		for (const ExplicitParameterCandidate &candidate : *explicitCandidates)
+			appendRange(candidate.sourceRange);
+	}
 	for (PatternDefinition *definition : patternDefinitions) {
-		visitPatternNameWithFoundState(
-			definition->patternElements, reference->name, false,
-			[&](DefinitionPatternElement &element) {
-			auto markFound = [&] {
-				VariableReference *definitionReference = nullptr;
-				if (!found) {
-					auto existing = variableDefinitions.find(element.text);
-					if (existing != variableDefinitions.end()) {
-						definitionReference = existing->second;
-						reference->definition = definitionReference;
-					} else {
-						VariableReference *varRef = context.createVariableReference(
-							Range(
-								definition->range.line, definition->range.start() + element.startPos,
-								definition->range.start() + element.startPos + element.text.length()
-							),
-							element.text
-						);
-						variableDefinitions[element.text] = varRef;
-						variableReferences[element.text].push_back(varRef);
-						definitionReference = varRef;
-						reference->definition = varRef;
-					}
-					if (definitionReference) {
-						auto variableIt = variables.find(element.text);
-						if (variableIt == variables.end()) {
-							variables[element.text] = new Variable(element.text, definitionReference, false);
-						} else {
-							variableIt->second->definition = definitionReference;
-							variableIt->second->name = element.text;
-						}
-					}
-				}
-				found = true;
-			};
-			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::VariableLike) {
-				if (element.type != PatternElement::Type::Variable) {
-					if (!canPromoteVariableLikeElement(element))
-						return false;
-					promoteImplicitPatternParameter(context, *definition, element, reference->range);
-				}
-				markFound();
-				return true;
-			} else if (element.type == PatternElement::Type::Word) {
-				// Word captures match by name but stay as Word — the parameter
-				// is bound to a string literal at call time through its indexed path.
-				markFound();
-				return true;
+		if (explicitParameterIndex.contains(*definition, name))
+			continue;
+		bool found = false;
+		forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
+			if (found || element.text != name)
+				return;
+			if (element.type == PatternElement::Type::Variable) {
+				if (!element.promotedFromVariableLike)
+					return;
+			} else if (!canPromoteImplicitParameter(*definition, element)) {
+				return;
 			}
-			return false;
-		}
-		);
+			int sourceStart = definition->range.start() + static_cast<int>(element.startPos);
+			appendRange(Range(definition->range.line, sourceStart, sourceStart + static_cast<int>(element.text.length())));
+			found = true;
+		});
 	}
-	if (!found) {
-		// propagate to parent
-		if (parent) {
-			parent->searchParentPatterns(context, reference);
+	return ranges;
+}
+
+VariableReference *
+Section::resolvePatternParameterBinding(ParseContext &context, const std::string &name, const Range &useRange) {
+	auto materializeBinding = [&](const Range &definitionRange) {
+		VariableReference *definitionReference = nullptr;
+		auto existing = variableDefinitions.find(name);
+		if (existing != variableDefinitions.end()) {
+			definitionReference = existing->second;
 		} else {
-			// no pattern element found, add to unresolved
-			context.unresolvedVariableReferences[reference->name].push_back(reference);
+			definitionReference = context.createVariableReference(definitionRange, name);
+			variableDefinitions[name] = definitionReference;
+			variableReferences[name].push_back(definitionReference);
+		}
+		auto variableIt = variables.find(name);
+		if (variableIt == variables.end()) {
+			variables[name] = new Variable(name, definitionReference, false);
+		} else {
+			variableIt->second->definition = definitionReference;
+			variableIt->second->name = name;
+		}
+		return definitionReference;
+	};
+
+	const auto *explicitCandidates = explicitParameterIndex.find(name);
+	std::unordered_set<PatternDefinition *> definitionsWithExplicitParameter;
+	if (explicitCandidates) {
+		requireCompilerInvariant(!explicitCandidates->empty(), "explicit parameter index contains an empty candidate list");
+		for (const ExplicitParameterCandidate &candidate : *explicitCandidates) {
+			requireCompilerInvariant(
+				candidate.definition && candidate.definition->section == this,
+				"explicit parameter index contains a candidate for another section"
+			);
+			requireCompilerInvariant(
+				candidate.captureType == PatternElement::Type::Variable || candidate.captureType == PatternElement::Type::Word,
+				"explicit parameter index contains a non-capture element"
+			);
+			definitionsWithExplicitParameter.insert(candidate.definition);
 		}
 	}
+
+	PatternDefinition *bindingDefinition = nullptr;
+	DefinitionPatternElement *bindingElement = nullptr;
+	for (PatternDefinition *definition : patternDefinitions) {
+		if (definitionsWithExplicitParameter.contains(definition))
+			continue;
+		visitPatternNameWithFoundState(definition->patternElements, name, false, [&](DefinitionPatternElement &element) {
+			if (element.type == PatternElement::Type::Variable) {
+				requireCompilerInvariant(
+					element.promotedFromVariableLike, "explicit pattern parameter is missing from its candidate index"
+				);
+			} else {
+				if (!canPromoteImplicitParameter(*definition, element))
+					return false;
+				promoteImplicitPatternParameter(context, *definition, element, useRange);
+			}
+			if (!bindingElement) {
+				bindingDefinition = definition;
+				bindingElement = &element;
+			}
+			return true;
+		});
+	}
+	if (explicitCandidates)
+		return materializeBinding(explicitCandidates->front().sourceRange);
+	if (!bindingElement)
+		return nullptr;
+
+	int sourceStart = bindingDefinition->range.start() + static_cast<int>(bindingElement->startPos);
+	return materializeBinding(
+		Range(bindingDefinition->range.line, sourceStart, sourceStart + static_cast<int>(bindingElement->text.length()))
+	);
+}
+
+void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
+	if (VariableReference *definitionReference = resolvePatternParameterBinding(context, reference->name, reference->range)) {
+		reference->definition = definitionReference;
+		return;
+	}
+	if (parent) {
+		parent->searchParentPatterns(context, reference);
+		return;
+	}
+	context.unresolvedVariableReferences[reference->name].push_back(reference);
 }
 
 void Section::addPatternReference(PatternReference *reference) {

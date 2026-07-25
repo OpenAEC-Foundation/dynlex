@@ -137,8 +137,8 @@ static void computeVariableLikeCounts(std::list<Section *> &sections) {
 		// Collect all VL texts from all definitions in this section
 		std::unordered_set<std::string> vlTexts;
 		for (PatternDefinition *def : section->patternDefinitions) {
-			forEachLeafElement(def->patternElements, [&](PatternElement &elem) {
-				if (elem.type == PatternElement::Type::VariableLike)
+			forEachLeafElement(def->patternElements, [&](DefinitionPatternElement &elem) {
+				if (section->canPromoteImplicitParameter(*def, elem))
 					vlTexts.insert(elem.text);
 			});
 		}
@@ -287,6 +287,8 @@ static void emitDuplicatePatternWordWarnings(ParseContext &context) {
 			continue;
 
 		for (PatternDefinition *definition : section->patternDefinitions) {
+			if (definition->isGeneratedClassPropertyAccessor)
+				continue;
 			using FoundRanges = std::unordered_map<std::string, Range>;
 			std::function<FoundRanges(std::vector<DefinitionPatternElement> &, const FoundRanges &)> visit =
 				[&](std::vector<DefinitionPatternElement> &elements, const FoundRanges &incomingFound) {
