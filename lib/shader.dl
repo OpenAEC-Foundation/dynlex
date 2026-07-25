@@ -49,3 +49,7 @@ function set [the|] output position to x y z w:
 function [the|] shader time:
     replacement:
         @intrinsic("shader uniform", "time")
+
+function [the|] shader render pass:
+    replacement:
+        @intrinsic("shader uniform", "render_pass")

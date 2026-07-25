@@ -212,7 +212,9 @@ bool generateSpecializedFunction(
 		CodeLine *firstLine = section->codeLines[0];
 		llvm::DIFile *diFile = getOrCreateDIFile(context, firstLine->sourceFile);
 		unsigned line = firstLine->sourceFileLineIndex + 1;
-		auto *funcDIType = context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(std::nullopt));
+		auto *funcDIType =
+			context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(llvm::ArrayRef<llvm::Metadata *>{})
+			);
 		auto *sp = context.diBuilder->createFunction(
 			diFile, funcName, funcName, diFile, line, funcDIType, line, llvm::DINode::FlagPrototyped,
 			llvm::DISubprogram::SPFlagDefinition
@@ -274,7 +276,7 @@ bool generateSpecializedFunction(
 	});
 
 	// Add implicit void return if the function returns void
-	if (bodySucceeded && activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->getTerminator()) {
+	if (bodySucceeded && activeInst.returnType.kind == DataType::Kind::Void && !builder.GetInsertBlock()->hasTerminator()) {
 		bodySucceeded = releaseManagedStorageForReturn(context);
 		if (bodySucceeded)
 			builder.CreateRetVoid();
@@ -462,12 +464,12 @@ static void finalizeFlexBodySectionControlFlow(ParseContext &context, ParseConte
 		);
 		llvm::BasicBlock *continuationBlock = frame.continuationBlock;
 		frame.continuationBlock = nullptr;
-		if (!builder.GetInsertBlock()->getTerminator() && builder.GetInsertBlock() != continuationBlock)
+		if (!builder.GetInsertBlock()->hasTerminator() && builder.GetInsertBlock() != continuationBlock)
 			builder.CreateBr(continuationBlock);
 		return;
 	}
 	if (frame.exitBlock) {
-		if (!builder.GetInsertBlock()->getTerminator() && builder.GetInsertBlock() != frame.exitBlock) {
+		if (!builder.GetInsertBlock()->hasTerminator() && builder.GetInsertBlock() != frame.exitBlock) {
 			llvm::BasicBlock *target = frame.branchBackBlock ? frame.branchBackBlock : frame.exitBlock;
 			builder.CreateBr(target);
 		}

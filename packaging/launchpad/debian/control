@@ -4,13 +4,13 @@ Priority: optional
 Maintainer: DynLex maintainers <maintainers@dynlex.org>
 Build-Depends:
  debhelper-compat (= 13),
+ binutils,
  clang-20,
  cmake,
- llvm-20-dev,
+ git,
  ninja-build,
  nlohmann-json3-dev,
- zlib1g-dev,
- libzstd-dev
+ python3
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 Homepage: https://github.com/johnheikens/DynLex

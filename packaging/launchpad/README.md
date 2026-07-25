@@ -45,6 +45,12 @@ The `launchpad-ppa.yml` workflow can:
 - upload them to a PPA with `dput`
 - publish the generated `.changes`, `.dsc`, and tarballs as workflow artifacts
 
+The source package embeds a clean snapshot of the exact sparse LLVM checkout
+recorded in `metadata/LLVM_TOOLCHAIN`; Git internals are excluded and provenance
+is recorded beside the snapshot. Launchpad builds that source locally, so
+package builds neither depend on an Ubuntu LLVM version nor fetch code from the
+network.
+
 Repository configuration:
 
 - Variable `LAUNCHPAD_PPA`: `owner/ppa-name`

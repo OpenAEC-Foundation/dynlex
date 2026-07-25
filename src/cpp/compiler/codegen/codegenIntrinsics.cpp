@@ -5,10 +5,12 @@
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
 #include "sectionFlexBody.h"
+#include "spirv.h"
 #include "type.h"
 #include "variable.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include <cstdint>
@@ -89,7 +91,7 @@ static CodegenResult buildRuntimeSelect(ParseContext &context, const std::vector
 		return generatedTrue;
 	llvm::Value *trueValue = generatedTrue.value;
 	llvm::BasicBlock *trueEndBlock = builder.GetInsertBlock();
-	if (!trueEndBlock->getTerminator()) {
+	if (!trueEndBlock->hasTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
 			DataType trueType = finalizedExpressionType(context, args[2]);
 			trueValue = ensureType(context, trueValue, trueType, resultType);
@@ -107,7 +109,7 @@ static CodegenResult buildRuntimeSelect(ParseContext &context, const std::vector
 		return generatedFalse;
 	llvm::Value *falseValue = generatedFalse.value;
 	llvm::BasicBlock *falseEndBlock = builder.GetInsertBlock();
-	if (!falseEndBlock->getTerminator()) {
+	if (!falseEndBlock->hasTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
 			DataType falseType = finalizedExpressionType(context, args[3]);
 			falseValue = ensureType(context, falseValue, falseType, resultType);
