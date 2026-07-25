@@ -39,6 +39,8 @@ assert.match(html, /<aside class="project-panel" aria-label="Project files">/);
 assert.match(javascript, /new Worker\("\/compiler\/compiler-worker\.js"/);
 assert.match(javascript, /URLSearchParams/);
 assert.match(javascript, /mode.*shader/);
+assert.match(javascript, /shaders\/manifest\.json/);
+assert.doesNotMatch(javascript, /renderer64/);
 assert.match(javascript, /from "\.\.\/\.\.\/\.\.\/\.\.\/web\/shader-renderer\.js"/);
 assert.match(compilerWorker, /compile\.shader/);
 assert.match(compilerWorker, /dynlex_web_compile_and_emit_shader_glsl/);

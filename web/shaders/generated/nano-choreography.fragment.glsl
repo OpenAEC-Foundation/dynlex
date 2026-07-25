@@ -337,11 +337,6 @@ bool left_0_right_i32_i32(uint left, uint right)
     return int(left) < int(right);
 }
 
-bool not_value_bool(bool value)
-{
-    return value != true;
-}
-
 float nano_drone_field_at_x_y_z_phase_f32_f32_f32_f32(float x, float y, float z, float phase)
 {
     float tmp = 43.130001068115234375;
@@ -909,11 +904,11 @@ void main()
         float tmp50 = 0.3400000035762786865234375;
         float tmp51 = 0.20000000298023223876953125;
         float tmp52 = left1_4321_43right_f32_f32(point_wave, tmp51);
-        vec4 _961 = vec4(0.0, 0.0, 0.0, 1.0);
-        _961.z = left1_4331_43right_f32_f32(tmp50, tmp52);
-        _961.y = left1_4331_43right_f32_f32(tmp47, tmp49);
-        _961.x = left1_4331_43right_f32_f32(tmp44, tmp46);
-        dynlexColor = _961;
+        vec4 _962 = vec4(0.0, 0.0, 0.0, 1.0);
+        _962.z = left1_4331_43right_f32_f32(tmp50, tmp52);
+        _962.y = left1_4331_43right_f32_f32(tmp47, tmp49);
+        _962.x = left1_4331_43right_f32_f32(tmp44, tmp46);
+        dynlexColor = _962;
     }
     else
     {
@@ -1098,17 +1093,17 @@ void main()
         float ray_end = 0.07999999821186065673828125;
         uint ray_step = 0u;
         uint tmp184 = 0u;
-        bool ray_finished = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp184);
         float tmp187 = 7.400000095367431640625;
         bool tmp188 = left_1is_greater_than_or_equal_to4213_right_f32_f32(moment, tmp187);
         float tmp189 = 0.0;
         bool tmp190 = left_1is_less_than_or_equal_to4013_right_f32_f32(center_depth, tmp189);
         bool tmp191 = left_or_right_bool_bool(tmp188, tmp190);
         bool tmp192 = left_1is_greater_than_or_equal_to4213_right_f32_f32(miss_squared, bound_squared);
+        bool _809 = false;
         if (left_or_right_bool_bool(tmp191, tmp192))
         {
             uint tmp193 = 1u;
-            ray_finished = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp193);
+            _809 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp193);
         }
         else
         {
@@ -1118,24 +1113,28 @@ void main()
             float tmp197 = 0.07999999821186065673828125;
             ray_depth = _the43_maximum_of_a_and_b_f32_f32(tmp196, tmp197);
             ray_end = left1_4331_43right_f32_f32(center_depth, bound_half_span);
+            _809 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp184);
         }
         uint tmp198 = 0u;
         float surface_x = camera_x;
         float surface_y = camera_y;
         float surface_z = camera_z;
         float hologram_glow = 0.0;
+        bool _814 = false;
         bool _816 = false;
+        _814 = _809;
         _816 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp198);
         uint tmp238 = 0u;
         bool tmp201 = false;
         bool tmp200 = false;
         uint tmp199 = 0u;
+        bool _815 = false;
         bool _817 = false;
         for (;;)
         {
             tmp199 = 44u;
             tmp200 = left_0_right_i32_i32(ray_step, tmp199);
-            tmp201 = not_value_bool(ray_finished);
+            tmp201 = _814 != true;
             if (_boolean8left5_and_3boolean8right5_bool_bool(tmp200, tmp201))
             {
                 float tmp202 = left1_4321_43right_f32_f32(camera_ray_x, ray_depth);
@@ -1184,7 +1183,7 @@ void main()
                     surface_y = sample_y;
                     surface_z = sample_z;
                     uint tmp229 = 1u;
-                    ray_finished = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp229);
+                    _815 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp229);
                     _817 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp228);
                 }
                 else
@@ -1194,15 +1193,22 @@ void main()
                     float tmp233 = 0.01400000043213367462158203125;
                     float tmp234 = _the43_maximum_of_a_and_b_f32_f32(tmp232, tmp233);
                     ray_depth = left1_4331_43right_f32_f32(ray_depth, tmp234);
+                    bool _935 = false;
                     if (left_2_right_f32_f32(ray_depth, ray_end))
                     {
                         uint tmp237 = 1u;
-                        ray_finished = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp237);
+                        _935 = value_as_destinationtype_i32_type_ct_destinationtype_type(tmp237);
                     }
+                    else
+                    {
+                        _935 = _814;
+                    }
+                    _815 = _935;
                     _817 = _816;
                 }
                 tmp238 = 1u;
                 ray_step = left1_4331_43right_i32_i32(ray_step, tmp238);
+                _814 = _815;
                 _816 = _817;
                 continue;
             }
