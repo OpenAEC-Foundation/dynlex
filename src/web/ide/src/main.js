@@ -134,7 +134,33 @@ print square 8 as line
 const queryParams = new URLSearchParams(window.location.search);
 const shaderMode = queryParams.get("mode") === "shader";
 
+async function loadRequestedShaderScene() {
+  const requestedScene = queryParams.get("scene");
+  if (requestedScene === null) {
+    return null;
+  }
+  if (!shaderMode || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedScene)) {
+    throw new Error("Invalid shader scene");
+  }
+
+  const response = await fetch("/shaders/manifest.json");
+  if (!response.ok) {
+    throw new Error("Shader manifest could not be loaded");
+  }
+  const manifest = await response.json();
+  const scene = manifest.scenes.find((candidate) => candidate.id === requestedScene);
+  if (!scene) {
+    throw new Error("Shader scene does not exist");
+  }
+  return scene;
+}
+
+const startupScene = await loadRequestedShaderScene();
+
 function startupFileName() {
+  if (startupScene !== null) {
+    return `${startupScene.id}.dl`;
+  }
   const requestedName = queryParams.get("name");
   if (requestedName && /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.dl$/.test(requestedName)) {
     return requestedName;
@@ -157,6 +183,9 @@ function decodeBase64Url(value) {
 }
 
 function getStartupSource() {
+  if (startupScene !== null) {
+    return startupScene.source;
+  }
   const encoded = queryParams.get("code64");
   if (typeof encoded === "string" && encoded.length > 0) {
     const decoded = decodeBase64Url(encoded);
@@ -176,33 +205,6 @@ function getStartupSource() {
 function shouldAutoRunOnStartup() {
   const value = queryParams.get("autorun");
   return value === "1" || value === "true";
-}
-
-function getShaderRendererConfig() {
-  const encoded = queryParams.get("renderer64");
-  if (encoded === null) {
-    return null;
-  }
-  const decoded = decodeBase64Url(encoded);
-  if (decoded === null) {
-    throw new Error("Invalid shader renderer encoding");
-  }
-  const renderer = JSON.parse(decoded);
-  const geometry = renderer?.geometry;
-  if (
-    !geometry
-    || geometry.format !== "float32x4"
-    || geometry.primitive !== "triangles"
-    || !Number.isInteger(geometry.pointCount)
-    || geometry.pointCount <= 0
-    || geometry.vertexCount !== geometry.pointCount * 3
-    || typeof geometry.path !== "string"
-    || !/^shaders\/[a-zA-Z0-9./-]+$/.test(geometry.path)
-    || geometry.path.split("/").includes("..")
-  ) {
-    throw new Error("Invalid shader renderer configuration");
-  }
-  return Object.freeze({ geometry: Object.freeze(geometry) });
 }
 
 async function loadShaderRenderer(config) {
@@ -225,7 +227,9 @@ async function loadShaderRenderer(config) {
 
 const startupSource = getStartupSource();
 const autoRunOnStartup = shouldAutoRunOnStartup();
-const shaderRendererConfig = shaderMode ? getShaderRendererConfig() : null;
+const shaderRendererConfig = startupScene?.geometry
+  ? Object.freeze({ geometry: Object.freeze({ ...startupScene.geometry }) })
+  : null;
 const fileName = startupFileName();
 document.documentElement.dataset.workspaceMode = shaderMode ? "shader" : "program";
 for (const fileLabel of document.querySelectorAll("[data-current-file]")) {
