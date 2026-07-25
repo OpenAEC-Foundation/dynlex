@@ -6,12 +6,15 @@ set file_path to "tests/required/filesystem_directory_tree/tree.tmp/file.bin"
 set nested_file_path to "tests/required/filesystem_directory_tree/tree.tmp/one/two/nested.bin"
 set missing_path to "tests/required/filesystem_directory_tree/missing.tmp"
 
-set initial_cleanup to remove filesystem tree at root
+remove filesystem tree at root
+set initial_cleanup to it
 print initial_cleanup's succeeded as line
 
-set created to create directory tree at nested
+create directory tree at nested
+set created to it
 print created's succeeded as line
-set created_again to create directory tree at nested
+create directory tree at nested
+set created_again to it
 print created_again's succeeded as line
 
 write the string form of "root" to file_path
@@ -42,11 +45,13 @@ set invalid_status to the file system entry at invalid_path
 print invalid_status's succeeded as line
 print invalid_status's found as line
 print (the length of invalid_status's error message) > 0 as line
-set invalid_cleanup to remove filesystem tree at invalid_path
+remove filesystem tree at invalid_path
+set invalid_cleanup to it
 print invalid_cleanup's succeeded as line
 print (the length of invalid_cleanup's error_message) > 0 as line
 
-set enumeration to open directory at root
+open directory at root
+set enumeration to it
 print enumeration's succeeded as line
 set entry_count to 0
 set regular_file_count to 0
@@ -54,7 +59,8 @@ set directory_count to 0
 set enumeration_succeeded to true
 set reading_entries to true
 loop while reading_entries:
-    set next_entry to read next directory entry from enumeration
+    read the next directory entry from enumeration
+    set next_entry to it
     if not next_entry's succeeded:
         set enumeration_succeeded to false
         set reading_entries to false
@@ -72,7 +78,8 @@ print entry_count as line
 print regular_file_count as line
 print directory_count as line
 
-set removed to remove filesystem tree at root
+remove filesystem tree at root
+set removed to it
 print removed's succeeded as line
 set removed_status to the file system entry at root
 print removed_status's succeeded as line
