@@ -172,7 +172,7 @@ function parse json text using {a pointer to json parser:parser}:
     execute:
         set opening_position to the position of parser
         set maximum_length to (the length of the source of parser) - opening_position
-        set output to allocate maximum_length + 1 bytes
+        set output to a new string buffer with length maximum_length
         set write_position to 0
         set the position of parser to opening_position + 1
         set reading to true
@@ -184,74 +184,66 @@ function parse json text using {a pointer to json parser:parser}:
                 set reading to false
             else if character_value < 32:
                 record json error at character_position for parser
-                @intrinsic("call", "libc", "free", void, output)
                 return an empty json string
             else if character_value = 92:
                 if the position of parser >= the length of the source of parser:
                     record json error at character_position for parser
-                    @intrinsic("call", "libc", "free", void, output)
                     return an empty json string
                 set escape_position to the position of parser
                 set escaped to character escape_position of the source of parser
                 set the position of parser to escape_position + 1
                 if (escaped = 34) or ((escaped = 47) or (escaped = 92)):
-                    store escaped into output at write_position
+                    store escaped into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 98:
-                    store 8 as a byte into output at write_position
+                    store 8 as a byte into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 102:
-                    store 12 as a byte into output at write_position
+                    store 12 as a byte into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 110:
-                    store 10 as a byte into output at write_position
+                    store 10 as a byte into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 114:
-                    store 13 as a byte into output at write_position
+                    store 13 as a byte into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 116:
-                    store 9 as a byte into output at write_position
+                    store 9 as a byte into the data of output at write_position
                     set write_position to write_position + 1
                 else if escaped = 117:
                     set codepoint to parse json unicode digits using parser
                     if the error_position of parser >= 0:
-                        @intrinsic("call", "libc", "free", void, output)
                         return an empty json string
                     if codepoint >= 55296 and codepoint <= 56319:
                         set continuation_position to the position of parser
                         if continuation_position + 1 >= the length of the source of parser:
                             record json error at continuation_position for parser
-                            @intrinsic("call", "libc", "free", void, output)
                             return an empty json string
                         if character continuation_position of the source of parser != 92 or character continuation_position + 1 of the source of parser != 117:
                             record json error at continuation_position for parser
-                            @intrinsic("call", "libc", "free", void, output)
                             return an empty json string
                         set the position of parser to continuation_position + 2
                         set low_surrogate to parse json unicode digits using parser
                         if low_surrogate < 56320 or low_surrogate > 57343:
                             if the error_position of parser < 0:
                                 record json error at continuation_position + 2 for parser
-                            @intrinsic("call", "libc", "free", void, output)
                             return an empty json string
                         set codepoint to (65536 + ((codepoint - 55296) * 1024)) + (low_surrogate - 56320)
                     else if codepoint >= 56320 and codepoint <= 57343:
                         record json error at escape_position for parser
-                        @intrinsic("call", "libc", "free", void, output)
                         return an empty json string
-                    set write_position to write json utf8 codepoint to output at write_position
+                    set write_position to write json utf8 codepoint to the data of output at write_position
                 else:
                     record json error at escape_position for parser
-                    @intrinsic("call", "libc", "free", void, output)
                     return an empty json string
             else:
-                store character_value into output at write_position
+                store character_value into the data of output at write_position
                 set write_position to write_position + 1
         if reading:
             record json error at the position of parser for parser
-            @intrinsic("call", "libc", "free", void, output)
             return an empty json string
-        return new string from data output with length write_position
+        set output's length to write_position
+        return output
 
 function json character_value is a decimal digit:
     execute:

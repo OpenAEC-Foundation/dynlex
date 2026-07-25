@@ -1,0 +1,66 @@
+import lib/lsp.dl
+
+function [the|] lsp lifecycle test interpreter:
+    execute:
+        return "python" if the process platform is windows, else "python3"
+
+set script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':'),ensure_ascii=False).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['method']=='initialize' and init['params']['rootUri']=='file:///workspace';assert init['params']['clientInfo']=={'name':'DynLex'};assert init['params']['capabilities']['general']['positionEncodings']==['utf-16']\nsend({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'positionEncoding':'utf-16','textDocumentSync':{'openClose':True,'change':2,'save':{'includeText':True}},'workspace':{'workspaceFolders':{'supported':True}}},'serverInfo':{'name':'fake'}}})\nassert read()['method']=='initialized'\nopened=read();td=opened['params']['textDocument'];assert opened['method']=='textDocument/didOpen' and td['version']==1 and td['text']=='a😀b\\nline😀'\nchanged=read();assert changed['method']=='textDocument/didChange';assert changed['params']['textDocument']['version']==2;change=changed['params']['contentChanges'][0];assert change['range']=={'start':{'line':0,'character':1},'end':{'line':0,'character':3}} and change['text']=='X'\nreplaced=read();assert replaced['method']=='textDocument/didChange';assert replaced['params']['textDocument']['version']==3;change=replaced['params']['contentChanges'][0];assert change['range']=={'start':{'line':0,'character':0},'end':{'line':1,'character':6}} and change['text']=='final'\nsaved=read();assert saved['method']=='textDocument/didSave' and saved['params']=={'textDocument':{'uri':'file:///workspace/main.dl'},'text':'final'}\nrelated={'location':{'uri':'file:///workspace/other.dl','range':{'start':{'line':1,'character':2},'end':{'line':1,'character':3}}},'message':'related'}\ndiagnostic={'range':{'start':{'line':0,'character':0},'end':{'line':0,'character':1}},'severity':2,'code':7,'codeDescription':{'href':'https://example.invalid/7'},'source':'fake','message':'sample','tags':[1,2],'relatedInformation':[related],'data':{'value':True}}\nsend({'jsonrpc':'2.0','method':'textDocument/publishDiagnostics','params':{'uri':'file:///workspace/main.dl','version':3,'diagnostics':[diagnostic]}})\nsend({'jsonrpc':'2.0','id':9007199254740993,'method':'workspace/applyEdit','params':{'edit':{'changes':{'file:///workspace/main.dl':[]}}}})\nreply=read();assert reply['id']==9007199254740993 and reply['error']['code']==-32601\nclosed=read();assert closed['method']=='textDocument/didClose' and closed['params']['textDocument']['uri']=='file:///workspace/main.dl'\nshutdown=read();assert shutdown['method']=='shutdown' and 'params' not in shutdown\nsend({'jsonrpc':'2.0','id':shutdown['id'],'result':None})\nassert read()['method']=='exit'\nsys.stderr.write('fake-server-stderr\\n');sys.stderr.flush()"
+set command to a process command for the lsp lifecycle test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add script as an argument to command
+
+set capabilities to the default lsp client capabilities
+set started to start lsp client using command at root uri "file:///workspace" with capabilities capabilities waiting up to 2000 milliseconds
+print started's succeeded as line
+set client to started's client
+print (client's synchronization kind = the lsp incremental synchronization kind) as line
+print client's synchronization open and close as line
+print client's synchronization save as line
+print client's synchronization save includes text as line
+set server_capabilities to client server capabilities
+print (server_capabilities has json member named "workspace") as line
+
+set opened to open lsp document uri "file:///workspace/main.dl" with language "dynlex" and text "a😀b\nline😀" using client
+print opened's succeeded as line
+set changed to edit lsp document uri "file:///workspace/main.dl" from line 0 character 1 to line 0 character 3 with text "X" using client
+print changed's succeeded as line
+set replaced to replace lsp document uri "file:///workspace/main.dl" with text "final" using client
+print replaced's succeeded as line
+set saved to save lsp document uri "file:///workspace/main.dl" using client
+print saved's succeeded as line
+set document to lsp document uri "file:///workspace/main.dl" in client
+print document's found as line
+print (document's version = 3) as line
+print (document's text = "final") as line
+
+set diagnostic_pump to pump one lsp message using client waiting up to 2000 milliseconds
+print diagnostic_pump's succeeded as line
+set report to lsp diagnostics for uri "file:///workspace/main.dl" in client
+print report's found as line
+print report's has version as line
+print (report's version = 3) as line
+print (the number of json items in report's diagnostics = 1) as line
+set first_diagnostic to json value at index 0 in report's diagnostics
+print (json text named "message" in first_diagnostic = "sample") as line
+
+set request_pump to pump one lsp message using client waiting up to 2000 milliseconds
+print request_pump's succeeded as line
+set server_request to take next lsp server request from client
+print server_request's succeeded as line
+print (json text named "method" in server_request's message = "workspace/applyEdit") as line
+set request_parameters to json member named "params" in server_request's message
+print (request_parameters has json member named "edit") as line
+set rejected to reject lsp server request server_request's message as method not found using client
+print rejected's succeeded as line
+free json rpc queued message server_request
+
+set closed to close lsp document uri "file:///workspace/main.dl" using client
+print closed's succeeded as line
+set stopped to shutdown lsp client client waiting up to 2000 milliseconds
+print stopped's succeeded as line
+print (client's lifecycle = the lsp stopped lifecycle) as line
+print (lsp standard error from client = "fake-server-stderr\n") as line
+
+free json value capabilities
+free lsp client client

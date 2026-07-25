@@ -667,7 +667,7 @@ function run {process command:command} using {string:standard_input}:
         set operation_error to an empty process error
         if communication_outcome != 0:
             set operation_error to the current process error
-        set status to status of child waiting true
+        set status to status of child waiting (0 - 1)
         if (communication_outcome = 0) and (not status's succeeded):
             set operation_error to status's error message
         set standard_output to remaining output 1 of child
