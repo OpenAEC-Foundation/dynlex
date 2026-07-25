@@ -1,1 +1,2 @@
 tests/required/shader_uniform_requires_string_literal/main.dl:38-39: Error: shader uniform requires a string literal name
+  note: while inferring call 'discard @intrinsic("shader uniform", 1)' with arguments [unresolved(?)] -> undeduced tests/required/shader_uniform_requires_string_literal/main.dl:1-40

@@ -32,6 +32,12 @@ jobs:
         with:
           submodules: true
 
+      - name: Restore pinned LLVM toolchain
+        uses: actions/cache@v4
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+
       - name: Install dependencies (Unix)
         if: runner.os != 'Windows'
         run: ./scripts/install.sh

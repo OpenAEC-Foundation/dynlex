@@ -1,5 +1,8 @@
 #include "spirv.h"
+#include "compilerUtils.h"
 #include "parseContext.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -8,6 +11,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/TargetParser/Triple.h"
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <unordered_set>
@@ -20,9 +25,13 @@ static constexpr uint32_t spvOpMemoryModel = 14;
 static constexpr uint32_t spvOpDecorate = 71;
 static constexpr uint32_t spvOpName = 5;
 static constexpr uint32_t spvOpVariable = 59;
+static constexpr uint32_t spvOpTypeInt = 21;
 static constexpr uint32_t spvOpTypePointer = 32;
+static constexpr uint32_t spvOpTypeStruct = 30;
+static constexpr uint32_t spvOpConstant = 43;
 static constexpr uint32_t spvOpLoad = 61;
 static constexpr uint32_t spvOpStore = 62;
+static constexpr uint32_t spvOpAccessChain = 65;
 
 // SPIR-V constants
 static constexpr uint32_t spvCapabilityLinkage = 5;
@@ -38,12 +47,124 @@ static constexpr uint32_t spvStorageClassInput = 1;
 static constexpr uint32_t spvStorageClassUniform = 2;
 static constexpr uint32_t spvStorageClassOutput = 3;
 
+static llvm::Constant *defineVectorConstant(llvm::Constant *constant) {
+	auto *vectorType = llvm::dyn_cast<llvm::FixedVectorType>(constant->getType());
+	requireCompilerInvariant(vectorType != nullptr, "shader output vector seed must have a fixed vector type");
+
+	std::vector<llvm::Constant *> elements;
+	elements.reserve(vectorType->getNumElements());
+	for (unsigned index = 0; index < vectorType->getNumElements(); index++) {
+		llvm::Constant *element = constant->getAggregateElement(index);
+		requireCompilerInvariant(element != nullptr, "shader output vector seed must expose every element");
+		if (llvm::isa<llvm::PoisonValue>(element) || llvm::isa<llvm::UndefValue>(element))
+			element = llvm::Constant::getNullValue(vectorType->getElementType());
+		elements.push_back(element);
+	}
+	return llvm::ConstantVector::get(elements);
+}
+
+static size_t defineShaderOutputVectorSeeds(llvm::Use &use, llvm::Type *vectorType) {
+	llvm::Value *value = use.get();
+	if (auto *constant = llvm::dyn_cast<llvm::Constant>(value)) {
+		if (constant->getType() != vectorType)
+			return 0;
+		use.set(defineVectorConstant(constant));
+		return 1;
+	}
+
+	auto *instruction = llvm::dyn_cast<llvm::Instruction>(value);
+	if (!instruction || instruction->getType() != vectorType)
+		return 0;
+
+	size_t seedCount = 0;
+	for (llvm::Use &operand : instruction->operands())
+		seedCount += defineShaderOutputVectorSeeds(operand, vectorType);
+	return seedCount;
+}
+
+static void defineShaderOutputVectorSeeds(llvm::Module &module) {
+	for (llvm::Function &function : module) {
+		for (llvm::BasicBlock &block : function) {
+			for (llvm::Instruction &instruction : block) {
+				auto *store = llvm::dyn_cast<llvm::StoreInst>(&instruction);
+				if (!store || !store->getMetadata(shaderOutputMetadataName))
+					continue;
+
+				llvm::Type *vectorType = store->getValueOperand()->getType();
+				size_t seedCount = defineShaderOutputVectorSeeds(store->getOperandUse(0), vectorType);
+				requireCompilerInvariant(seedCount > 0, "shader output vector has no constant seed");
+			}
+		}
+	}
+}
+
 // ExecutionModel: Vertex=0, Fragment=4
 // BuiltIn: Position=0, FragCoord=15
 
 static uint32_t spvOpcode(uint32_t word) { return word & 0xFFFF; }
 static uint32_t spvWordCount(uint32_t word) { return word >> 16; }
 static uint32_t spvInstWord(uint32_t wordCount, uint32_t opcode) { return (wordCount << 16) | opcode; }
+
+static size_t nextSpvInstruction(const std::vector<uint32_t> &binary, size_t position) {
+	requireCompilerInvariant(position < binary.size(), "SPIR-V instruction starts outside the module");
+	uint32_t wordCount = spvWordCount(binary[position]);
+	requireCompilerInvariant(wordCount > 0, "SPIR-V instruction has no words");
+	requireCompilerInvariant(position + wordCount <= binary.size(), "SPIR-V instruction extends beyond the module");
+	return position + wordCount;
+}
+
+static uint32_t allocateSpvId(std::vector<uint32_t> &binary) {
+	requireCompilerInvariant(binary.size() >= 5, "SPIR-V module has no complete header");
+	uint32_t id = binary[3];
+	requireCompilerInvariant(id > 0 && id < UINT32_MAX, "SPIR-V ID bound cannot allocate another result");
+	binary[3] = id + 1;
+	return id;
+}
+
+static size_t findFirstSpvVariable(const std::vector<uint32_t> &binary) {
+	for (size_t position = 5; position < binary.size(); position = nextSpvInstruction(binary, position)) {
+		if (spvOpcode(binary[position]) == spvOpVariable)
+			return position;
+	}
+	crashCompilerBug("SPIR-V shader has no interface variables");
+}
+
+static uint32_t getOrCreateSpvUnsignedZero(std::vector<uint32_t> &binary) {
+	uint32_t unsignedTypeId = 0;
+	for (size_t position = 5; position < binary.size(); position = nextSpvInstruction(binary, position)) {
+		uint32_t wordCount = spvWordCount(binary[position]);
+		if (spvOpcode(binary[position]) == spvOpTypeInt && wordCount == 4 && binary[position + 2] == 32 &&
+			binary[position + 3] == 0) {
+			unsignedTypeId = binary[position + 1];
+			break;
+		}
+	}
+
+	uint32_t zeroId = 0;
+	if (unsignedTypeId) {
+		for (size_t position = 5; position < binary.size(); position = nextSpvInstruction(binary, position)) {
+			uint32_t wordCount = spvWordCount(binary[position]);
+			if (spvOpcode(binary[position]) == spvOpConstant && wordCount == 4 && binary[position + 1] == unsignedTypeId &&
+				binary[position + 3] == 0) {
+				zeroId = binary[position + 2];
+				break;
+			}
+		}
+	}
+
+	if (zeroId)
+		return zeroId;
+
+	std::vector<uint32_t> declarations;
+	if (!unsignedTypeId) {
+		unsignedTypeId = allocateSpvId(binary);
+		declarations.insert(declarations.end(), {spvInstWord(4, spvOpTypeInt), unsignedTypeId, 32, 0});
+	}
+	zeroId = allocateSpvId(binary);
+	declarations.insert(declarations.end(), {spvInstWord(4, spvOpConstant), unsignedTypeId, zeroId, 0});
+	binary.insert(binary.begin() + findFirstSpvVariable(binary), declarations.begin(), declarations.end());
+	return zeroId;
+}
 
 static std::string readSpvString(const uint32_t *words, size_t startWord, size_t maxWords) {
 	std::string result;
@@ -71,7 +192,6 @@ static std::vector<uint32_t> encodeSpvString(const std::string &str) {
 struct ShaderIoVar {
 	std::string name;		   // LLVM global name (e.g. "gl_FragCoord", "in_Position", "ubo_time")
 	uint32_t id = 0;		   // SPIR-V result ID (found by scanning OpName)
-	uint32_t typeId = 0;	   // pointer type ID used by OpVariable
 	uint32_t structTypeId = 0; // struct type ID (for UBO vars, found via OpTypePointer → OpTypeStruct)
 	uint32_t storageClass;	   // target storage class (Input, Output, or Uniform)
 	bool isBuiltIn;			   // true = BuiltIn decoration, false = Location decoration
@@ -81,7 +201,7 @@ struct ShaderIoVar {
 };
 
 // Post-process SPIR-V binary to convert exported functions to shader entry points.
-// The LLVM 20 SPIR-V backend emits functions with Export linkage instead of entry points.
+// The LLVM SPIR-V backend emits functions with Export linkage instead of entry points.
 static bool patchShaderBinary(
 	const std::string &path, uint32_t executionModel, const std::vector<ShaderIoVar> &ioVars, std::string &errorMsg
 ) {
@@ -259,6 +379,10 @@ static bool patchShaderBinary(
 	//   ...
 	//   %ptr = OpAccessChain %PtrUniformFloat %var %uint_0
 	//   %val = OpLoad %float %ptr
+	const bool hasUniform = std::any_of(vars.begin(), vars.end(), [](const ShaderIoVar &variable) {
+		return variable.isUBO;
+	});
+	const uint32_t uniformIndexId = hasUniform ? getOrCreateSpvUnsignedZero(output) : 0;
 	for (auto &v : vars) {
 		if (!v.isUBO)
 			continue;
@@ -286,28 +410,10 @@ static bool patchShaderBinary(
 			pos += wc2;
 		}
 
-		// Find uint type and uint_0 constant (needed for AccessChain index)
-		uint32_t uintTypeId = 0;
-		uint32_t uint0Id = 0;
-		static constexpr uint32_t spvOpTypeInt = 21;
-		static constexpr uint32_t spvOpConstant = 43;
-		for (pos = 5; pos < output.size();) {
-			uint32_t wc2 = spvWordCount(output[pos]);
-			uint32_t op2 = spvOpcode(output[pos]);
-			if (wc2 == 0)
-				break;
-			if (op2 == spvOpTypeInt && wc2 >= 4 && output[pos + 2] == 32 && output[pos + 3] == 0)
-				uintTypeId = output[pos + 1]; // unsigned 32-bit int
-			if (op2 == spvOpConstant && wc2 >= 4 && uintTypeId && output[pos + 1] == uintTypeId && output[pos + 3] == 0)
-				uint0Id = output[pos + 2]; // constant 0
-			pos += wc2;
-		}
-
 		// Allocate new IDs
-		uint32_t structTypeId = output[3]++;
-		uint32_t ptrUniformStructId = output[3]++;
-		uint32_t ptrUniformFloatId = output[3]++;
-		uint32_t accessChainId = output[3]++;
+		uint32_t structTypeId = allocateSpvId(output);
+		uint32_t ptrUniformStructId = allocateSpvId(output);
+		uint32_t ptrUniformFloatId = allocateSpvId(output);
 		v.structTypeId = structTypeId;
 
 		// Find where to insert new types (before first OpVariable)
@@ -327,7 +433,7 @@ static bool patchShaderBinary(
 		// Insert new type declarations
 		std::vector<uint32_t> newTypes;
 		// OpTypeStruct structTypeId floatTypeId
-		newTypes.push_back(spvInstWord(3, 30)); // OpTypeStruct
+		newTypes.push_back(spvInstWord(3, spvOpTypeStruct));
 		newTypes.push_back(structTypeId);
 		newTypes.push_back(floatTypeId);
 		// OpTypePointer ptrUniformStructId Uniform structTypeId
@@ -354,7 +460,6 @@ static bool patchShaderBinary(
 		}
 
 		// Replace every OpLoad from this variable with OpAccessChain + OpLoad
-		static constexpr uint32_t spvOpAccessChain = 65;
 		for (pos = 5; pos < output.size();) {
 			uint32_t wc2 = spvWordCount(output[pos]);
 			uint32_t op2 = spvOpcode(output[pos]);
@@ -366,13 +471,14 @@ static bool patchShaderBinary(
 				//               OpLoad %float %result %acId
 				uint32_t loadResultType = output[pos + 1];
 				uint32_t loadResultId = output[pos + 2];
+				uint32_t accessChainId = allocateSpvId(output);
 				std::vector<uint32_t> replacement;
 				// OpAccessChain
 				replacement.push_back(spvInstWord(5, spvOpAccessChain));
 				replacement.push_back(ptrUniformFloatId);
 				replacement.push_back(accessChainId);
 				replacement.push_back(v.id);
-				replacement.push_back(uint0Id);
+				replacement.push_back(uniformIndexId);
 				// OpLoad (without Aligned)
 				replacement.push_back(spvInstWord(4, spvOpLoad));
 				replacement.push_back(loadResultType);
@@ -427,93 +533,6 @@ static bool patchShaderBinary(
 	if (!newDecors.empty())
 		output.insert(output.begin() + decorInsertPos, newDecors.begin(), newDecors.end());
 
-	// Fix OpTypePointer storage classes for I/O globals
-	// First, find which type IDs the globals use
-	for (auto &v : vars) {
-		for (pos = 5; pos < output.size();) {
-			uint32_t wc2 = spvWordCount(output[pos]);
-			uint32_t op2 = spvOpcode(output[pos]);
-			if (wc2 == 0)
-				break;
-			if (op2 == spvOpVariable && wc2 >= 4 && output[pos + 2] == v.id)
-				v.typeId = output[pos + 1];
-			pos += wc2;
-		}
-	}
-
-	// Check if any two I/O vars share a pointer type with different storage classes
-	// Group vars by typeId
-	std::unordered_map<uint32_t, std::vector<ShaderIoVar *>> typeGroups;
-	for (auto &v : vars)
-		typeGroups[v.typeId].push_back(&v);
-
-	for (auto &[typeId, group] : typeGroups) {
-		if (group.size() == 1) {
-			// Only one var uses this type — just fix the storage class in-place
-			for (pos = 5; pos < output.size();) {
-				uint32_t wc2 = spvWordCount(output[pos]);
-				uint32_t op2 = spvOpcode(output[pos]);
-				if (wc2 == 0)
-					break;
-				if (op2 == spvOpTypePointer && wc2 >= 4 && output[pos + 1] == typeId)
-					output[pos + 2] = group[0]->storageClass;
-				pos += wc2;
-			}
-		} else {
-			// Multiple vars share a pointer type — fix the first, create new types for the rest
-			// Find the pointee type
-			uint32_t pointeeTypeId = 0;
-			for (pos = 5; pos < output.size();) {
-				uint32_t wc2 = spvWordCount(output[pos]);
-				uint32_t op2 = spvOpcode(output[pos]);
-				if (wc2 == 0)
-					break;
-				if (op2 == spvOpTypePointer && wc2 >= 4 && output[pos + 1] == typeId) {
-					pointeeTypeId = output[pos + 3];
-					output[pos + 2] = group[0]->storageClass; // fix first var's storage class
-					break;
-				}
-				pos += wc2;
-			}
-
-			// Create new pointer types for remaining vars
-			size_t varInsertPos = output.size();
-			for (pos = 5; pos < output.size();) {
-				uint32_t wc2 = spvWordCount(output[pos]);
-				uint32_t op2 = spvOpcode(output[pos]);
-				if (wc2 == 0)
-					break;
-				if (op2 == spvOpVariable) {
-					varInsertPos = pos;
-					break;
-				}
-				pos += wc2;
-			}
-
-			for (size_t i = 1; i < group.size(); i++) {
-				uint32_t newTypeId = output[3]; // current bound
-				output[3] = newTypeId + 1;
-
-				std::vector<uint32_t> newPtrType = {
-					spvInstWord(4, spvOpTypePointer), newTypeId, group[i]->storageClass, pointeeTypeId
-				};
-				output.insert(output.begin() + varInsertPos, newPtrType.begin(), newPtrType.end());
-				varInsertPos += newPtrType.size();
-
-				// Fix the OpVariable to use the new type
-				for (pos = 5; pos < output.size();) {
-					uint32_t wc2 = spvWordCount(output[pos]);
-					uint32_t op2 = spvOpcode(output[pos]);
-					if (wc2 == 0)
-						break;
-					if (op2 == spvOpVariable && wc2 >= 4 && output[pos + 2] == group[i]->id)
-						output[pos + 1] = newTypeId;
-					pos += wc2;
-				}
-			}
-		}
-	}
-
 	// Write patched binary
 	std::ofstream out(path, std::ios::binary | std::ios::trunc);
 	if (!out) {
@@ -530,7 +549,7 @@ std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &cont
 	LLVMInitializeSPIRVTargetMC();
 	LLVMInitializeSPIRVAsmPrinter();
 
-	std::string targetTriple = "spirv-unknown-vulkan1.3";
+	llvm::Triple targetTriple("spirv-unknown-vulkan1.3");
 	context.llvmModule->setTargetTriple(targetTriple);
 
 	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);
@@ -539,7 +558,9 @@ std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &cont
 	}
 
 	llvm::TargetOptions options;
-	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(targetTriple, "", "", options, std::nullopt));
+	return std::unique_ptr<llvm::TargetMachine>(
+		target->createTargetMachine(targetTriple, "", "", options, std::nullopt, std::nullopt, llvm::CodeGenOptLevel::None)
+	);
 }
 
 bool emitSPIRVModule(ParseContext &context) {
@@ -556,6 +577,7 @@ bool emitSPIRVModule(ParseContext &context) {
 		return false;
 	}
 	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	defineShaderOutputVectorSeeds(*context.llvmModule);
 
 	std::error_code ec;
 	llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);

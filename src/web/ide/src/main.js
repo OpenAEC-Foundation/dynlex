@@ -1,4 +1,5 @@
-import * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import { createShaderPreview } from "../../../../web/shader-renderer.js";
 import "./styles.css";
 
 self.MonacoEnvironment = {
@@ -57,29 +58,38 @@ monaco.languages.setMonarchTokensProvider("dynlex", {
   }
 });
 
+const scrollbarThemeColors = Object.freeze({
+  "scrollbarSlider.background": "#3F474199",
+  "scrollbarSlider.hoverBackground": "#59625BCC",
+  "scrollbarSlider.activeBackground": "#707A72E6"
+});
+
 monaco.editor.defineTheme("dynlex-light", {
   base: "vs",
   inherit: true,
   semanticHighlighting: true,
   rules: [
-    { token: "keyword", foreground: "0f6cb2", fontStyle: "bold" },
-    { token: "string", foreground: "9a5a08" },
-    { token: "comment", foreground: "697b8c", fontStyle: "italic" },
-    { token: "function", foreground: "156ec2" },
-    { token: "section", foreground: "9a5f00", fontStyle: "bold" },
-    { token: "variable", foreground: "273344" },
-    { token: "number", foreground: "8f3e90" },
-    { token: "type", foreground: "9d3d17" },
-    { token: "intrinsic", foreground: "8a2da8", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "136f9f", fontStyle: "bold" }
+    { token: "keyword", foreground: "C53A30", fontStyle: "bold" },
+    { token: "string", foreground: "8A5A00" },
+    { token: "comment", foreground: "74766F", fontStyle: "italic" },
+    { token: "function", foreground: "304FC3" },
+    { token: "section", foreground: "8A5A00", fontStyle: "bold" },
+    { token: "variable", foreground: "1C211E" },
+    { token: "number", foreground: "5C49B5" },
+    { token: "type", foreground: "A33A27" },
+    { token: "intrinsic", foreground: "6543B6", fontStyle: "bold" },
+    { token: "patternDefinition", foreground: "2E5797", fontStyle: "bold" }
   ],
   colors: {
-    "editor.background": "#f8fbff",
-    "editor.foreground": "#1a2533",
-    "editorLineNumber.foreground": "#8a97a6",
-    "editorLineNumber.activeForeground": "#253549",
-    "editorCursor.foreground": "#0f6cb2",
-    "editor.selectionBackground": "#cfe7ff"
+    ...scrollbarThemeColors,
+    "editor.background": "#F8F6EF",
+    "editor.foreground": "#1C211E",
+    "editorLineNumber.foreground": "#A19F96",
+    "editorLineNumber.activeForeground": "#30352F",
+    "editorCursor.foreground": "#304FC3",
+    "editor.selectionBackground": "#D9DDFF",
+    "editor.lineHighlightBackground": "#F0EDE4",
+    "editorIndentGuide.background1": "#DDD9CF"
   }
 });
 
@@ -88,33 +98,49 @@ monaco.editor.defineTheme("dynlex-dark", {
   inherit: true,
   semanticHighlighting: true,
   rules: [
-    { token: "keyword", foreground: "62b0ff", fontStyle: "bold" },
-    { token: "string", foreground: "f5ba5d" },
-    { token: "comment", foreground: "7d90a3", fontStyle: "italic" },
-    { token: "function", foreground: "72b8ff" },
-    { token: "section", foreground: "f0b25a", fontStyle: "bold" },
-    { token: "variable", foreground: "d7e3f2" },
-    { token: "number", foreground: "f49cff" },
-    { token: "type", foreground: "ff9a70" },
-    { token: "intrinsic", foreground: "d29cff", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "64d6ff", fontStyle: "bold" }
+    { token: "keyword", foreground: "FF8B73", fontStyle: "bold" },
+    { token: "string", foreground: "FFD787" },
+    { token: "comment", foreground: "7F8B80", fontStyle: "italic" },
+    { token: "function", foreground: "B8E5FF" },
+    { token: "section", foreground: "FFD787", fontStyle: "bold" },
+    { token: "variable", foreground: "E2E6DF" },
+    { token: "number", foreground: "9AA5FF" },
+    { token: "type", foreground: "FFAD9C" },
+    { token: "intrinsic", foreground: "BFB1FF", fontStyle: "bold" },
+    { token: "patternDefinition", foreground: "C9FF38", fontStyle: "bold" }
   ],
   colors: {
-    "editor.background": "#101a2a",
-    "editor.foreground": "#dce8f5",
-    "editorLineNumber.foreground": "#607289",
-    "editorLineNumber.activeForeground": "#9db8d5",
-    "editorCursor.foreground": "#7dc1ff",
-    "editor.selectionBackground": "#1f4264"
+    ...scrollbarThemeColors,
+    "editor.background": "#151816",
+    "editor.foreground": "#E2E6DF",
+    "editorLineNumber.foreground": "#555C56",
+    "editorLineNumber.activeForeground": "#A9B0AA",
+    "editorCursor.foreground": "#C9FF38",
+    "editor.selectionBackground": "#38453A",
+    "editor.lineHighlightBackground": "#1A1E1B",
+    "editorIndentGuide.background1": "#2B302C"
   }
 });
 
 const defaultSource = `import lib/std.dl
 
-print "Hello from DynLex Web"
+function square value:
+    replacement:
+        value * value
+
+print square 8 as line
 `;
 
 const queryParams = new URLSearchParams(window.location.search);
+const shaderMode = queryParams.get("mode") === "shader";
+
+function startupFileName() {
+  const requestedName = queryParams.get("name");
+  if (requestedName && /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.dl$/.test(requestedName)) {
+    return requestedName;
+  }
+  return shaderMode ? "shader.dl" : "main.dl";
+}
 
 function decodeBase64Url(value) {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -152,10 +178,64 @@ function shouldAutoRunOnStartup() {
   return value === "1" || value === "true";
 }
 
+function getShaderRendererConfig() {
+  const encoded = queryParams.get("renderer64");
+  if (encoded === null) {
+    return null;
+  }
+  const decoded = decodeBase64Url(encoded);
+  if (decoded === null) {
+    throw new Error("Invalid shader renderer encoding");
+  }
+  const renderer = JSON.parse(decoded);
+  const geometry = renderer?.geometry;
+  if (
+    !geometry
+    || geometry.format !== "float32x4"
+    || geometry.primitive !== "triangles"
+    || !Number.isInteger(geometry.pointCount)
+    || geometry.pointCount <= 0
+    || geometry.vertexCount !== geometry.pointCount * 3
+    || typeof geometry.path !== "string"
+    || !/^shaders\/[a-zA-Z0-9./-]+$/.test(geometry.path)
+    || geometry.path.split("/").includes("..")
+  ) {
+    throw new Error("Invalid shader renderer configuration");
+  }
+  return Object.freeze({ geometry: Object.freeze(geometry) });
+}
+
+async function loadShaderRenderer(config) {
+  if (config === null) {
+    return null;
+  }
+  const response = await fetch(`/${config.geometry.path}`);
+  if (!response.ok) {
+    throw new Error("Shader geometry could not be loaded");
+  }
+  const data = await response.arrayBuffer();
+  const expectedBytes = config.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT;
+  if (data.byteLength !== expectedBytes) {
+    throw new Error("Shader geometry size does not match its renderer configuration");
+  }
+  return Object.freeze({
+    geometry: Object.freeze({ ...config.geometry, data })
+  });
+}
+
 const startupSource = getStartupSource();
 const autoRunOnStartup = shouldAutoRunOnStartup();
+const shaderRendererConfig = shaderMode ? getShaderRendererConfig() : null;
+const fileName = startupFileName();
+document.documentElement.dataset.workspaceMode = shaderMode ? "shader" : "program";
+for (const fileLabel of document.querySelectorAll("[data-current-file]")) {
+  fileLabel.textContent = fileName;
+}
+for (const workspaceKind of document.querySelectorAll("[data-workspace-kind]")) {
+  workspaceKind.textContent = shaderMode ? "SHADER" : workspaceKind.textContent;
+}
 
-const worker = new Worker(new URL("./worker/compilerWorker.js", import.meta.url), { type: "module" });
+const worker = new Worker("/compiler/compiler-worker.js", { type: "module" });
 let nextRequestId = 1;
 const pendingRequests = new Map();
 
@@ -215,26 +295,93 @@ function getInitialTheme() {
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
 }
 
-const statusPill = document.getElementById("status-pill");
-const compileButton = document.getElementById("compile-button");
-const runButton = document.getElementById("run-button");
-const themeButton = document.getElementById("theme-button");
-const diagnosticsEmpty = document.getElementById("diagnostics-empty");
-const diagnosticsList = document.getElementById("diagnostics-list");
-const compilerLog = document.getElementById("compiler-log");
-const runtimeOutput = document.getElementById("runtime-output");
+function requiredElement(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    throw new Error(`Missing required IDE element: #${id}`);
+  }
+  return element;
+}
 
-const model = monaco.editor.createModel(startupSource, "dynlex", monaco.Uri.parse("file:///workspace/main.dl"));
-const editor = monaco.editor.create(document.getElementById("editor"), {
+const statusPill = requiredElement("status-pill");
+const statusText = requiredElement("status-text");
+const runButton = requiredElement("run-button");
+const themeButton = requiredElement("theme-button");
+const diagnosticsEmpty = requiredElement("diagnostics-empty");
+const diagnosticsList = requiredElement("diagnostics-list");
+const diagnosticsCount = requiredElement("diagnostics-count");
+const compilerLog = requiredElement("compiler-log");
+const runtimeOutput = requiredElement("runtime-output");
+const shaderPreviewShell = requiredElement("shader-preview-shell");
+const shaderPreviewCanvas = requiredElement("shader-preview");
+const editorElement = requiredElement("editor");
+const toolTabs = [...document.querySelectorAll("[data-tool-tab]")];
+const toolPanels = [...document.querySelectorAll("[data-tool-panel]")];
+
+if (toolTabs.length !== 3 || toolPanels.length !== 3) {
+  throw new Error("The IDE tool switcher must contain exactly three tabs and panels");
+}
+
+function selectToolTab(name, focus = false) {
+  const selectedTab = toolTabs.find((tab) => tab.dataset.toolTab === name);
+  const selectedPanel = toolPanels.find((panel) => panel.dataset.toolPanel === name);
+  if (!selectedTab || !selectedPanel) {
+    throw new Error(`Unknown IDE tool tab: ${name}`);
+  }
+
+  for (const tab of toolTabs) {
+    const selected = tab === selectedTab;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  for (const panel of toolPanels) {
+    panel.hidden = panel !== selectedPanel;
+  }
+
+  if (focus) {
+    selectedTab.focus();
+  }
+}
+
+for (const [index, tab] of toolTabs.entries()) {
+  tab.addEventListener("click", () => selectToolTab(tab.dataset.toolTab));
+  tab.addEventListener("keydown", (event) => {
+    let nextIndex = null;
+    if (event.key === "ArrowRight") {
+      nextIndex = (index + 1) % toolTabs.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (index - 1 + toolTabs.length) % toolTabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = toolTabs.length - 1;
+    }
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      selectToolTab(toolTabs[nextIndex].dataset.toolTab, true);
+    }
+  });
+}
+
+const model = monaco.editor.createModel(
+  startupSource,
+  "dynlex",
+  monaco.Uri.parse(`file:///workspace/${fileName}`)
+);
+const editor = monaco.editor.create(editorElement, {
   model,
   minimap: { enabled: false },
   automaticLayout: true,
-  fontFamily: "'IBM Plex Mono', Consolas, Menlo, monospace",
+  fontFamily: "'DM Mono', Consolas, Menlo, monospace",
   fontSize: 14,
-  lineHeight: 22,
+  lineHeight: 23,
   tabSize: 4,
   insertSpaces: true,
   scrollBeyondLastLine: false,
+  padding: { top: 18, bottom: 18 },
+  renderLineHighlight: "line",
+  smoothScrolling: true,
   "semanticHighlighting.enabled": true
 });
 
@@ -242,28 +389,21 @@ function applyTheme(nextTheme) {
   const theme = normalizeTheme(nextTheme);
   document.documentElement.dataset.theme = theme;
   monaco.editor.setTheme(theme === "dark" ? "dynlex-dark" : "dynlex-light");
-  if (themeButton) {
-    themeButton.textContent = theme === "dark" ? "Light mode" : "Dark mode";
-  }
+  themeButton.textContent = theme === "dark" ? "Light" : "Dark";
+  themeButton.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
   localStorage.setItem(THEME_STORAGE_KEY, theme);
 }
 
 applyTheme(getInitialTheme());
 
-if (themeButton) {
-  themeButton.addEventListener("click", () => {
-    const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-    applyTheme(current === "dark" ? "light" : "dark");
-  });
-}
+themeButton.addEventListener("click", () => {
+  const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  applyTheme(current === "dark" ? "light" : "dark");
+});
 
-function setStatus(text) {
-  statusPill.textContent = text;
-}
-
-function setCompileBusy(isBusy) {
-  compileButton.disabled = isBusy;
-  compileButton.textContent = isBusy ? "Compiling..." : "Compile";
+function setStatus(text, tone = "ready") {
+  statusText.textContent = text;
+  statusPill.dataset.tone = tone;
 }
 
 function diagnosticsToMarkers(diagnostics) {
@@ -302,7 +442,8 @@ function diagnosticsToMarkers(diagnostics) {
 function renderDiagnostics(diagnostics) {
   diagnosticsList.innerHTML = "";
   const hasDiagnostics = diagnostics.length > 0;
-  diagnosticsEmpty.style.display = hasDiagnostics ? "none" : "block";
+  diagnosticsEmpty.hidden = hasDiagnostics;
+  diagnosticsCount.textContent = String(diagnostics.length);
 
   for (const diagnostic of diagnostics) {
     const item = document.createElement("li");
@@ -338,7 +479,8 @@ function renderCompilerLogMessages(messages) {
 
 function renderRuntime(result) {
   if (result.error) {
-    runtimeOutput.textContent = `Runtime error:\n${result.error}`;
+    console.error("DynLex program reported a runtime error", result.error);
+    runtimeOutput.textContent = "An error occurred. Check the browser log.";
     return;
   }
   runtimeOutput.textContent = result.stdout || "(no stdout)";
@@ -346,6 +488,8 @@ function renderRuntime(result) {
 
 let compileTimer = null;
 let workerReady = false;
+let shaderPreview = null;
+let shaderRenderer = null;
 
 monaco.languages.registerDefinitionProvider("dynlex", {
   async provideDefinition(currentModel, position, cancellationToken) {
@@ -441,31 +585,61 @@ monaco.languages.registerDocumentSemanticTokensProvider("dynlex", {
   releaseDocumentSemanticTokens() {}
 });
 
-async function runCompile(trigger) {
+async function runCompile() {
   if (!workerReady) {
     return;
   }
 
-  setCompileBusy(true);
-  setStatus(trigger === "live" ? "Compiling live..." : "Compiling...");
+  const sourceVersion = model.getVersionId();
+  runButton.disabled = true;
+  setStatus("Analyzing…", "busy");
   try {
-    const result = await callWorker("compile", {
+    const result = await callWorker(shaderMode ? "compile.shader" : "compile", {
       source: model.getValue(),
-      version: model.getVersionId()
+      version: sourceVersion,
+      renderer: shaderRenderer !== null
     });
+    if (sourceVersion !== model.getVersionId()) {
+      return;
+    }
     renderDiagnostics(result.diagnostics);
     renderCompilerLogMessages(result.compilerLog);
-    runButton.disabled = !result.hasArtifact;
+    runButton.disabled = shaderMode ? false : !result.hasArtifact;
     if (result.status === 0) {
-      setStatus(`Compiled #${result.artifactVersion}`);
+      if (shaderMode) {
+        try {
+          shaderPreview.replaceProgram({
+            fragmentSource: result.fragmentSource,
+            ...(shaderRenderer
+              ? {
+                  vertexSource: result.vertexSource,
+                  geometry: shaderRenderer.geometry
+                }
+              : {})
+          }, result.uniforms);
+          selectToolTab("output");
+        } catch (error) {
+          console.error("Live shader preview update failed", error);
+          renderCompilerLogMessages([{ level: "error", message: "An error occurred. Check the browser log." }]);
+          selectToolTab("activity");
+          setStatus("Preview failed", "error");
+          return;
+        }
+      }
+      setStatus("Ready");
     } else {
-      setStatus("Compile reported diagnostics");
+      selectToolTab("feedback");
+      const problemCount = result.diagnostics.length;
+      setStatus(`${problemCount} ${problemCount === 1 ? "problem" : "problems"}`, "error");
     }
   } catch (error) {
-    renderCompilerLogMessages([{ level: "error", message: error.message }]);
-    setStatus("Compile failed");
-  } finally {
-    setCompileBusy(false);
+    if (sourceVersion !== model.getVersionId()) {
+      return;
+    }
+    console.error("Code analysis failed", error);
+    renderCompilerLogMessages([{ level: "error", message: "An error occurred. Check the browser log." }]);
+    selectToolTab("activity");
+    setStatus("Analysis failed", "error");
   }
 }
 
@@ -473,43 +647,65 @@ async function runProgram() {
   if (runButton.disabled) {
     return;
   }
-  setStatus("Running...");
+  selectToolTab("output");
+  setStatus("Running…", "busy");
   try {
     const result = await callWorker("run");
     renderRuntime(result);
-    setStatus(result.error ? "Run failed" : "Run complete");
+    setStatus(result.error ? "Run failed" : "Finished", result.error ? "error" : "ready");
   } catch (error) {
-    renderRuntime({ error: error.message, stdout: "" });
-    setStatus("Run failed");
+    console.error("Program run failed", error);
+    renderRuntime({ error: "An error occurred. Check the browser log.", stdout: "" });
+    setStatus("Run failed", "error");
   }
 }
 
-compileButton.addEventListener("click", () => {
-  runCompile("manual");
+runButton.addEventListener("click", () => {
+  if (shaderMode) {
+    runCompile();
+  } else {
+    runProgram();
+  }
 });
 
-runButton.addEventListener("click", () => {
-  runProgram();
+editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+  if (runButton.disabled) return;
+  if (shaderMode) runCompile();
+  else runProgram();
 });
 
 model.onDidChangeContent(() => {
+  runButton.disabled = true;
   if (compileTimer) {
     clearTimeout(compileTimer);
   }
-  compileTimer = setTimeout(() => runCompile("live"), 450);
+  compileTimer = setTimeout(() => runCompile(), 300);
 });
 
 (async () => {
   try {
+    if (shaderMode) {
+      shaderPreviewShell.hidden = false;
+      runtimeOutput.hidden = true;
+      requiredElement("tool-tab-output").textContent = "Preview";
+      document.querySelector("[data-output-kicker]").textContent = "SUCCESSFUL BUILD";
+      document.querySelector("[data-output-title]").textContent = "Live preview";
+      requiredElement("run-button").querySelector("[data-run-label]").textContent = "Recompile";
+      requiredElement("run-button").querySelector("[data-run-icon]").textContent = "↻";
+      shaderRenderer = await loadShaderRenderer(shaderRendererConfig);
+      shaderPreview = createShaderPreview(shaderPreviewCanvas);
+    }
     await callWorker("init");
     workerReady = true;
     setStatus("Ready");
-    await runCompile("manual");
-    if (autoRunOnStartup) {
+    await runCompile();
+    if (autoRunOnStartup && !shaderMode) {
       await runProgram();
     }
   } catch (error) {
-    setStatus("Init failed");
-    renderCompilerLogMessages([{ level: "error", message: error.message }]);
+    console.error("IDE initialization failed", error);
+    selectToolTab("activity");
+    setStatus("Could not start", "error");
+    renderCompilerLogMessages([{ level: "error", message: "An error occurred. Check the browser log." }]);
   }
 })();

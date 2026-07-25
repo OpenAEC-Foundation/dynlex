@@ -1,0 +1,5 @@
+repository https://github.com/OpenAEC-Foundation/llvm-project.git
+revision e5be62d86c56bdd295ad5993b1cb54f0aa4ae9ef
+major 23
+bootstrap 20
+schema 2

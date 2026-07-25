@@ -1,0 +1,262 @@
+import lib/shader_art.dl
+
+# NANO CHOREOGRAPHY
+# A raymarched crystal and motorcycle give way to a model-derived volumetric
+# Vitruvian point cloud. Both passes are compiled from this DynLex source.
+
+function scene window from opening to closing at moment:
+    execute:
+        set arrival to smooth transition from opening to (opening + 0.55) at moment
+        set departure to 1.0 - smooth transition from (closing - 0.55) to closing at moment
+        return arrival * departure
+
+function crystal distance at x y z with yaw pitch:
+    execute:
+        set yaw_sine to the sine of yaw
+        set yaw_cosine to the cosine of yaw
+        set turned_x to x * yaw_cosine + z * yaw_sine
+        set turned_z to z * yaw_cosine - x * yaw_sine
+        set pitch_sine to the sine of pitch
+        set pitch_cosine to the cosine of pitch
+        set turned_y to y * pitch_cosine - turned_z * pitch_sine
+        set turned_z to turned_z * pitch_cosine + y * pitch_sine
+        set octahedron to ((((the absolute value of turned_x) + (the absolute value of turned_y)) + (the absolute value of turned_z)) - 1.08) * 0.577
+        set cut_core to ellipsoid distance at turned_x turned_y turned_z with radii 0.82 1.14 0.82
+        return the maximum of octahedron and cut_core
+
+function motorcycle distance at x y z with progress wheel_spin motorcycle_yaw:
+    execute:
+        # Translation through depth makes the motorcycle race toward the lens.
+        set center_x to (0.0 - 1.26) + (progress * 1.18)
+        set center_y to (0.0 - 0.19) + (progress * 0.12)
+        set center_z to 2.80 - progress * 4.90
+        set translated_x to x - center_x
+        set translated_y to y - center_y
+        set translated_z to z - center_z
+        set yaw_sine to the sine of motorcycle_yaw
+        set yaw_cosine to the cosine of motorcycle_yaw
+        set local_x to translated_x * yaw_cosine + translated_z * yaw_sine
+        set local_y to translated_y
+        set local_z to translated_z * yaw_cosine - translated_x * yaw_sine
+
+        # Deep tires, hubs, and rotating crossed spokes establish real volume.
+        set wheel_depth to 0.13
+        set rear_x to local_x + 0.72
+        set front_x to local_x - 0.72
+        set wheel_y to local_y + 0.42
+        set rear_wheel to torus distance at rear_x wheel_y local_z with major radius 0.30 and tube radius 0.055
+        set front_wheel to torus distance at front_x wheel_y local_z with major radius 0.30 and tube radius 0.055
+        set model_distance to the minimum of rear_wheel and front_wheel
+        set model_distance to the minimum of model_distance and (ellipsoid distance at rear_x wheel_y local_z with radii 0.095 0.095 wheel_depth)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at front_x wheel_y local_z with radii 0.095 0.095 wheel_depth)
+
+        set spoke_cosine to the cosine of wheel_spin
+        set spoke_sine to the sine of wheel_spin
+        set rear_spoke_x to spoke_cosine * 0.265
+        set rear_spoke_y to spoke_sine * 0.265
+        set front_spoke_x to spoke_sine * 0.265
+        set front_spoke_y to spoke_cosine * 0.265
+        set model_distance to the minimum of model_distance and (distance from three dimensional point rear_x wheel_y local_z to capsule (0.0 - rear_spoke_x) (0.0 - rear_spoke_y) 0.0 rear_spoke_x rear_spoke_y 0.0 with 0.018)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point rear_x wheel_y local_z to capsule (0.0 - rear_spoke_y) rear_spoke_x 0.0 rear_spoke_y (0.0 - rear_spoke_x) 0.0 with 0.018)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point front_x wheel_y local_z to capsule (0.0 - front_spoke_x) (0.0 - front_spoke_y) 0.0 front_spoke_x front_spoke_y 0.0 with 0.018)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point front_x wheel_y local_z to capsule (0.0 - front_spoke_y) front_spoke_x 0.0 front_spoke_y (0.0 - front_spoke_x) 0.0 with 0.018)
+
+        # Twin-cradle frame, fork, tank, engine, saddle, and handlebars.
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.72 -0.42 0.0 -0.18 0.08 0.0 with 0.045)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.18 0.08 0.0 0.72 -0.42 0.0 with 0.045)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.72 -0.42 0.0 -0.34 -0.42 0.0 with 0.045)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.34 -0.42 0.0 -0.18 0.08 0.0 with 0.045)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.55 -0.28 -0.07 0.77 0.28 -0.07 with 0.032)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.55 -0.28 0.07 0.77 0.28 0.07 with 0.032)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.75 0.28 -0.28 0.75 0.28 0.28 with 0.028)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x + 0.08) (local_y - 0.03) local_z with radii 0.34 0.22 0.25)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x - 0.02) (local_y + 0.22) local_z with radii 0.34 0.18 0.22)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x + 0.40) (local_y - 0.24) local_z with radii 0.31 0.075 0.22)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x - 0.78) (local_y - 0.08) local_z with radii 0.085 0.085 0.105)
+
+        # A sculpted rider leans into the acceleration instead of floating above it.
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x + 0.10) (local_y - 0.78) local_z with radii 0.15 0.17 0.15)
+        set model_distance to the minimum of model_distance and (ellipsoid distance at (local_x + 0.18) (local_y - 0.48) local_z with radii 0.24 0.35 0.18)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.02 0.59 -0.11 0.37 0.30 -0.15 with 0.075)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.02 0.59 0.11 0.37 0.30 0.15 with 0.075)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.37 0.30 -0.15 0.73 0.27 -0.22 with 0.055)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule 0.37 0.30 0.15 0.73 0.27 0.22 with 0.055)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.14 0.24 -0.10 -0.40 -0.18 -0.13 with 0.095)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.14 0.24 0.10 -0.40 -0.18 0.13 with 0.095)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.40 -0.18 -0.13 -0.62 -0.34 -0.10 with 0.075)
+        set model_distance to the minimum of model_distance and (distance from three dimensional point local_x local_y local_z to capsule -0.40 -0.18 0.13 -0.62 -0.34 0.10 with 0.075)
+        return model_distance
+
+if this is a vertex shader:
+    # Each volumetric point is expanded to one tiny triangle in the source data.
+    set point_x to the vertex x
+    set point_y to the vertex y
+    set point_z to the vertex z
+    set encoded_point to the vertex w
+    set point_group to the floor of (encoded_point / 3.0)
+    set triangle_corner to encoded_point - point_group * 3.0
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set render_pass to the shader render pass
+    set aspect to width / height
+    set moment to (fractional part of (time / 11.0)) * 11.0
+    set visibility to scene window from 7.18 to 11.0 at moment
+    set build_wave to smooth transition from -1.12 to 1.08 at (point_y + ((the sine of (point_x * 11.0 + time * 1.7)) * 0.08))
+    set visibility to visibility * build_wave
+    set yaw to (the sine of (time * 0.31)) * 0.34
+    set yaw_sine to the sine of yaw
+    set yaw_cosine to the cosine of yaw
+    set turned_x to point_x * yaw_cosine + point_z * yaw_sine
+    set turned_z to point_z * yaw_cosine - point_x * yaw_sine
+    set depth to 3.25 + turned_z * 0.52
+    set point_size to ((1.04 + point_group * 0.018) / width) * (0.96 + render_pass * 0.04)
+    set horizontal_scale to 1.66 / (the maximum of aspect and 1.0)
+    set figure_offset_x to (smooth transition from 1.0 to 1.52 at aspect) * 0.40
+    set corner_x to 0.0 - point_size
+    set corner_y to 0.0 - point_size
+    if triangle_corner >= 1.0:
+        set corner_x to point_size
+    if triangle_corner >= 2.0:
+        set corner_x to 0.0
+        set corner_y to point_size * 1.45
+    set clip_x to turned_x * horizontal_scale + figure_offset_x * depth + corner_x * depth
+    set clip_y to (point_y * 1.86 - 0.04) + corner_y * depth
+    if visibility < 0.001:
+        set clip_x to depth * 3.0
+    set the output position to clip_x clip_y (depth * 0.42) depth
+else:
+    set pixel_x to the fragment x coordinate
+    set pixel_y to the fragment y coordinate
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set render_pass to the shader render pass
+    set aspect to width / height
+    set screen_x to (((pixel_x / width) * 2.0) - 1.0) * aspect
+    set screen_y to ((pixel_y / height) * 2.0) - 1.0
+    set radial to the square root of (screen_x * screen_x + screen_y * screen_y)
+    set moment to (fractional part of (time / 11.0)) * 11.0
+
+    if render_pass > 0.5:
+        set point_wave to (the sine of (screen_x * 19.0 - screen_y * 13.0 + time * 4.2)) * 0.5 + 0.5
+        set scan_wave to (the sine of (screen_y * 47.0 - time * 6.8)) * 0.5 + 0.5
+        set point_red to 0.035 + point_wave * 0.14
+        set point_green to 0.14 + scan_wave * 0.12
+        set point_blue to 0.34 + point_wave * 0.20
+        set the fragment color to point_red point_green point_blue 1.0
+    else:
+        set camera_x to 0.0
+        set camera_y to 0.02
+        set camera_z to -4.2
+        set camera_ray_x to screen_x
+        set camera_ray_y to screen_y
+        set camera_ray_z to 1.72
+        set ray_length to the square root of (((camera_ray_x * camera_ray_x) + (camera_ray_y * camera_ray_y)) + (camera_ray_z * camera_ray_z))
+        set camera_ray_x to camera_ray_x / ray_length
+        set camera_ray_y to camera_ray_y / ray_length
+        set camera_ray_z to camera_ray_z / ray_length
+
+        set crystal_visibility to scene window from 0.0 to 3.65 at moment
+        set motorcycle_visibility to scene window from 3.35 to 7.55 at moment
+        set vitruvian_visibility to scene window from 7.18 to 11.0 at moment
+        set motorcycle_progress to smooth transition from 3.25 to 7.35 at moment
+        set motorcycle_yaw to (0.0 - 1.18) + (motorcycle_progress * 0.08)
+        set wheel_spin to time * 9.4
+
+        # Continuous fields become a deep chamber and high-speed particle wake.
+        set chamber_one to flowing field at (screen_x * 2.2 + time * 0.021) (screen_y * 2.2 - time * 0.014) 1.9
+        set chamber_two to ridged field at (screen_x * 4.1 - time * 0.017) (screen_y * 4.1 + time * 0.011) 5.4
+        set free_drones to spark field at (screen_x * 27.0 + time * 0.24) (screen_y * 27.0 - time * 0.13) 9.7
+        set speed_particles to spark field at (screen_x * 7.0 + time * 8.4) (screen_y * 46.0) 14.2
+        set speed_core to glow from 0.0 to 0.66 at (the absolute value of screen_y)
+        set speed_trails to (speed_particles * speed_core) * motorcycle_visibility
+        set red to (((0.003 + (chamber_one * 0.012)) + (chamber_two * 0.018)) + (free_drones * 0.18)) + speed_trails * 0.32
+        set green to (((0.006 + (chamber_one * 0.024)) + (chamber_two * 0.015)) + (free_drones * 0.46)) + speed_trails * 0.78
+        set blue to (((0.024 + (chamber_one * 0.082)) + (chamber_two * 0.071)) + (free_drones * 1.02)) + speed_trails * 1.46
+
+        set bound_center_x to 0.0
+        set bound_center_y to 0.0
+        set bound_center_z to 0.82
+        set bound_radius to 1.24
+        if moment >= 3.5 and moment < 7.4:
+            set bound_center_x to (0.0 - 1.26) + (motorcycle_progress * 1.18)
+            set bound_center_y to (0.0 - 0.19) + (motorcycle_progress * 0.12)
+            set bound_center_z to 2.80 - motorcycle_progress * 4.90
+            set bound_radius to 1.36
+        set center_vector_x to bound_center_x - camera_x
+        set center_vector_y to bound_center_y - camera_y
+        set center_vector_z to bound_center_z - camera_z
+        set center_depth to ((center_vector_x * camera_ray_x) + (center_vector_y * camera_ray_y)) + (center_vector_z * camera_ray_z)
+        set nearest_x to camera_x + camera_ray_x * center_depth
+        set nearest_y to camera_y + camera_ray_y * center_depth
+        set nearest_z to camera_z + camera_ray_z * center_depth
+        set miss_x to nearest_x - bound_center_x
+        set miss_y to nearest_y - bound_center_y
+        set miss_z to nearest_z - bound_center_z
+        set miss_squared to ((miss_x * miss_x) + (miss_y * miss_y)) + (miss_z * miss_z)
+        set bound_squared to bound_radius * bound_radius
+        set ray_depth to 0.08
+        set ray_end to 0.08
+        set ray_step to 0
+        set ray_finished to false
+        if (moment >= 7.4 or center_depth <= 0.0) or miss_squared >= bound_squared:
+            set ray_finished to true
+        else:
+            set bound_half_span to the square root of (bound_squared - miss_squared)
+            set ray_depth to the maximum of (center_depth - bound_half_span) and 0.08
+            set ray_end to center_depth + bound_half_span
+        set surface_hit to false
+        set surface_x to camera_x
+        set surface_y to camera_y
+        set surface_z to camera_z
+        set hologram_glow to 0.0
+        while ray_step < 44 and not ray_finished:
+            set sample_x to camera_x + camera_ray_x * ray_depth
+            set sample_y to camera_y + camera_ray_y * ray_depth
+            set sample_z to camera_z + camera_ray_z * ray_depth
+            set scene_distance to 12.0
+            if moment < 3.5:
+                set crystal_yaw to time * 0.72
+                set crystal_pitch to (the sine of (time * 0.47)) * 0.52
+                set scene_distance to crystal distance at sample_x sample_y (sample_z - 0.82) with crystal_yaw crystal_pitch
+            else:
+                set scene_distance to motorcycle distance at sample_x sample_y sample_z with motorcycle_progress wheel_spin motorcycle_yaw
+            set absolute_distance to the absolute value of scene_distance
+            set proximity to glow from 0.012 to 0.115 at absolute_distance
+            set depth_fade to 1.0 - smooth transition from (ray_end - 0.35) to ray_end at ray_depth
+            set hologram_glow to hologram_glow + ((proximity * depth_fade) * 0.0035)
+            if absolute_distance < 0.009:
+                set surface_hit to true
+                set surface_x to sample_x
+                set surface_y to sample_y
+                set surface_z to sample_z
+                set ray_finished to true
+            else:
+                set ray_depth to ray_depth + the maximum of (absolute_distance * 0.64) and 0.014
+                if ray_depth > ray_end:
+                    set ray_finished to true
+            set ray_step to ray_step + 1
+
+        set surface_light to 0.0
+        if surface_hit:
+            set surface_drones to nano drone field at surface_x surface_y surface_z (time * 1.7)
+            set depth_pulse to (the sine of (surface_z * 13.0 - time * 4.2)) * 0.5 + 0.5
+            set scan_plane to glow from 0.0 to 0.045 at (the absolute value of ((fractional part of (surface_y * 2.7 - time * 0.31)) - 0.5))
+            set surface_light to (surface_drones * (1.82 + (depth_pulse * 1.06))) + (scan_plane * 0.02)
+
+        set crystal_light to (surface_light + hologram_glow * 1.8) * crystal_visibility
+        set motorcycle_light to (surface_light + hologram_glow * 2.1) * motorcycle_visibility
+        set drone_hue to (the sine of (surface_x * 5.3 + surface_y * 3.7 + surface_z * 4.1 - time * 0.7)) * 0.5 + 0.5
+        set red to (red + (crystal_light * 0.36)) + (motorcycle_light * (0.72 + drone_hue * 0.96))
+        set green to (green + (crystal_light * 0.78)) + (motorcycle_light * (0.92 - drone_hue * 0.58))
+        set blue to (blue + (crystal_light * 1.46)) + (motorcycle_light * (1.18 - drone_hue * 0.28))
+        set figure_aura to glow from 0.28 to 1.26 at radial
+        set red to red + ((figure_aura * vitruvian_visibility) * 0.018)
+        set green to green + ((figure_aura * vitruvian_visibility) * 0.052)
+        set blue to blue + ((figure_aura * vitruvian_visibility) * 0.12)
+        set vignette to 0.18 + (1.0 - smooth transition from 0.52 to 1.62 at radial) * 0.82
+        set red to the square root of ((red * vignette) / (1.0 + red))
+        set green to the square root of ((green * vignette) / (1.0 + green))
+        set blue to the square root of ((blue * vignette) / (1.0 + blue))
+        set the fragment color to red green blue 1.0

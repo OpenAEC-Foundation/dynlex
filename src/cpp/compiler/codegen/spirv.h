@@ -12,5 +12,7 @@ class TargetMachine;
 
 struct ParseContext;
 
+inline constexpr char shaderOutputMetadataName[] = "dynlex.shader.output";
+
 std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &context, std::string &errorMessage);
 bool emitSPIRVModule(ParseContext &context);

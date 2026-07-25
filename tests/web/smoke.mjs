@@ -1,14 +1,19 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
   buildRuntimeImports,
   createRuntimeFilesystem,
   inspectRuntimeWasmLayout,
   isSupportedRuntimeImport
-} from "../../src/web/ide/src/worker/runtimeImports.js";
+} from "../../src/web/ide/public/compiler/runtimeImports.js";
 
 const buildDir = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve("build-web");
 const modulePath = path.join(buildDir, "dynlex_web.js");
+const moduleGlue = await readFile(modulePath, "utf8");
+if (!moduleGlue.includes("__cxa_begin_catch")) {
+  throw new Error("Browser compiler was built without C++ exception catching");
+}
 
 const imported = await import(pathToFileURL(modulePath).href);
 const createModule = imported.default ?? imported;
@@ -84,6 +89,81 @@ if (semanticTokensPayload.data.length % 5 !== 0) {
 }
 if (!semanticTokensPayload.legend || !Array.isArray(semanticTokensPayload.legend.tokenTypes)) {
   throw new Error(`Missing semantic token legend in payload: ${semanticTokensJson}`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader_art.dl
+
+set pulse to the shader time
+set pulse to the sine of pulse
+set pulse to saturate pulse
+set the fragment color to pulse 0.2 0.8 1.0
+`
+]);
+const shaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["fragment"]
+);
+const shaderDiagnosticsJson = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
+const shaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+const shaderUniformsJson = moduleInstance.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []);
+if (shaderStatus !== 0) {
+  throw new Error(`Shader compile status ${shaderStatus}. Diagnostics: ${shaderDiagnosticsJson}`);
+}
+if (!shaderGlsl.startsWith("#version 300 es") || !shaderGlsl.includes("void main")) {
+  throw new Error(`Expected WebGL2 fragment source, got: ${shaderGlsl}`);
+}
+const shaderUniforms = JSON.parse(shaderUniformsJson);
+if (!Array.isArray(shaderUniforms.uniforms) || shaderUniforms.uniforms.length !== 1) {
+  throw new Error(`Expected one reflected shader uniform, got: ${shaderUniformsJson}`);
+}
+if (shaderUniforms.uniforms[0].name !== "time" || shaderUniforms.uniforms[0].binding !== 0) {
+  throw new Error(`Unexpected reflected shader uniform: ${shaderUniformsJson}`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader.dl
+
+set the output position to the vertex x the vertex y the vertex z the vertex w
+`
+]);
+const vertexShaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["vertex"]
+);
+const vertexShaderDiagnosticsJson = moduleInstance.ccall(
+  "dynlex_web_get_diagnostics_json",
+  "string",
+  [],
+  []
+);
+const vertexShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+if (vertexShaderStatus !== 0) {
+  throw new Error(
+    `Vertex shader compile status ${vertexShaderStatus}. Diagnostics: ${vertexShaderDiagnosticsJson}`
+  );
+}
+if (!vertexShaderGlsl.startsWith("#version 300 es") || !vertexShaderGlsl.includes("gl_Position")) {
+  throw new Error(`Expected WebGL2 vertex source, got: ${vertexShaderGlsl}`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], ["this shader does not compile"]);
+const invalidShaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["fragment"]
+);
+const invalidShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+if (invalidShaderStatus === 0) {
+  throw new Error("Invalid shader source compiled successfully");
+}
+if (invalidShaderGlsl !== "") {
+  throw new Error("A failed shader compilation retained a stale GLSL artifact");
 }
 
 const wasmBytes = Uint8Array.from(Buffer.from(wasmBase64, "base64"));

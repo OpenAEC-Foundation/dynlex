@@ -509,7 +509,7 @@ To avoid requiring users to install GDB/LLDB:
 
 **Option B: Bundle GDB.** Ship a statically-linked `gdb` binary in the extension's `bin/` directory (~15MB compressed). Platform-specific: `bin/linux-x64/gdb`, `bin/darwin-arm64/lldb-mi`. The extension's `package.json` already has the pattern for resolving binaries (`bin/dynlex`).
 
-**Option C: Use LLVM's liblldb.** Link liblldb into the `dynlex` binary itself, bypassing the need for an external debugger. This eliminates the MI protocol layer entirely but adds ~50MB to the binary and couples to a specific LLVM version (already pinned to LLVM 20).
+**Option C: Use LLVM's liblldb.** Link liblldb into the `dynlex` binary itself, bypassing the need for an external debugger. This eliminates the MI protocol layer entirely but adds ~50MB to the binary and couples to a specific LLVM version (already pinned to the DynLex LLVM 23 fork).
 
 Recommendation: Start with **Option A** (detect + prompt), implement **Option B** once the debugger works.
 

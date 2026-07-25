@@ -1,0 +1,17 @@
+function set var to val:
+    replacement:
+        @intrinsic("store", var, val)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section else:
+    replacement:
+        @intrinsic("else")
+
+if @intrinsic("shader stage is", "vertex"):
+    @intrinsic("shader output", 0.0, 0.0, 0.0, 1.0)
+else:
+    set pulse to @intrinsic("shader uniform", "time")
+    @intrinsic("shader output", pulse, 0.2, 0.8, 1.0)

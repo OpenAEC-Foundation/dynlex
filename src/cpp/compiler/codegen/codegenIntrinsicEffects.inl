@@ -121,8 +121,7 @@ if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 	// Conditional false-path branches come from if/elif conditions (they should fall through here).
 	llvm::SmallVector<llvm::BasicBlock *, 4> uncondPreds;
 	for (llvm::BasicBlock *pred : llvm::predecessors(currentBlock)) {
-		llvm::BranchInst *br = llvm::dyn_cast<llvm::BranchInst>(pred->getTerminator());
-		if (br && br->isUnconditional()) {
+		if (llvm::isa<llvm::UncondBrInst>(pred->getTerminator())) {
 			uncondPreds.push_back(pred);
 		}
 	}
@@ -668,33 +667,21 @@ if (kind == IntrinsicKind::ShaderInput) {
 		globalName = "gl_FragCoord";
 	else if (inputName == "Position")
 		globalName = "in_Position";
-	else {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "unknown shader input", Range(), "name", inputName)
-		);
-		return CodegenResult::failure();
-	}
+	else
+		crashCompilerBug("unknown shader input reached codegen after type inference");
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-	if (!global) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "shader input unavailable", args[1]->range, "name", inputName)
-		);
-		return CodegenResult::failure();
-	}
+	requireCompilerInvariant(global != nullptr, "validated shader input is missing its codegen global");
 	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	return builder.CreateLoad(vec4Ty, global, inputName);
+	llvm::LoadInst *input = builder.CreateLoad(vec4Ty, global, inputName);
+	input->setVolatile(true);
+	return input;
 }
 
 if (kind == IntrinsicKind::ShaderUniform) {
 	// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
 	// The SPIR-V patcher wraps this in a UBO struct with proper decorations
 	std::string uniformName = getStringLiteral(args[1]);
-	if (uniformName.empty()) {
-		context.addDiagnostic(Diagnostic(
-			context, Diagnostic::Level::Error, "shader uniform requires string literal", args[1] ? args[1]->range : Range()
-		));
-		return CodegenResult::failure();
-	}
+	requireCompilerInvariant(!uniformName.empty(), "shader uniform reached codegen without a validated name");
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 	if (!global) {
@@ -730,23 +717,18 @@ if (kind == IntrinsicKind::ShaderOutput) {
 	a = ensureType(context, a, aType, f32);
 
 	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::Value *color = llvm::UndefValue::get(vec4Ty);
-	color = builder.CreateInsertElement(color, r, getVectorLaneIndexValue(context, 0), "color_r");
-	color = builder.CreateInsertElement(color, g, getVectorLaneIndexValue(context, 1), "color_g");
-	color = builder.CreateInsertElement(color, b, getVectorLaneIndexValue(context, 2), "color_b");
+	llvm::Value *color = llvm::Constant::getNullValue(vec4Ty);
 	color = builder.CreateInsertElement(color, a, getVectorLaneIndexValue(context, 3), "color_a");
+	color = builder.CreateInsertElement(color, b, getVectorLaneIndexValue(context, 2), "color_b");
+	color = builder.CreateInsertElement(color, g, getVectorLaneIndexValue(context, 1), "color_g");
+	color = builder.CreateInsertElement(color, r, getVectorLaneIndexValue(context, 0), "color_r");
 
 	// Find the output global: gl_FragColor (fragment) or gl_Position (vertex)
 	std::string outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
 	llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
-	if (!outGlobal) {
-		context.diagnostics.push_back(Diagnostic(
-			context, Diagnostic::Level::Error, "shader output unavailable",
-			Range(args[1]->range.line, args[1]->range.start(), args[4]->range.end())
-		));
-		return CodegenResult::failure();
-	}
-	builder.CreateStore(color, outGlobal);
+	requireCompilerInvariant(outGlobal != nullptr, "validated shader output is missing its codegen global");
+	llvm::StoreInst *store = builder.CreateStore(color, outGlobal);
+	store->setMetadata(shaderOutputMetadataName, llvm::MDNode::get(*context.llvmContext, {}));
 	return nullptr;
 }
 

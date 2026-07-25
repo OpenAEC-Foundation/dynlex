@@ -429,11 +429,12 @@ struct InferenceContext {
 		}
 	}
 
-	void fail(Diagnostic diagnostic, int priority = 1) {
+	void fail(Diagnostic diagnostic, int priority = 1, bool includeInferenceTrace = true) {
 		typesValid = false;
 		if (hasTypeFailureDiagnostic && typeFailurePriority >= priority)
 			return;
-		appendCurrentInferenceTrace(diagnostic);
+		if (includeInferenceTrace)
+			appendCurrentInferenceTrace(diagnostic);
 		typeFailureDiagnostic = std::move(diagnostic);
 		typeFailurePriority = priority;
 		hasTypeFailureDiagnostic = true;

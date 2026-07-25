@@ -247,6 +247,10 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 
 constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }
 
+constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform || kind == IntrinsicKind::ShaderOutput;
+}
+
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Return));
 static_assert(intrinsicPurityKind(IntrinsicKind::Store) == IntrinsicPurityKind::Custom);

@@ -6,6 +6,7 @@ PACKAGING_DIR="$ROOT_DIR/packaging/launchpad"
 TEMPLATE_DIR="$PACKAGING_DIR/debian"
 EXCLUDES_FILE="$PACKAGING_DIR/source-excludes.txt"
 DEFAULT_OUTPUT_DIR="$PACKAGING_DIR/out"
+. "$ROOT_DIR/scripts/llvm_toolchain.sh"
 
 SERIES=""
 VERSION=""
@@ -167,6 +168,7 @@ fi
 require_command debuild
 require_command rsync
 require_command tar
+dynlex_prepare_llvm_source
 
 if [ -n "$UPLOAD_TARGET" ]; then
     require_command dput
@@ -187,6 +189,11 @@ SOURCE_DIR="$WORK_DIR/dynlex-$VERSION"
 ORIG_TARBALL="$WORK_DIR/dynlex_${VERSION}.orig.tar.gz"
 
 rsync -a --delete --exclude-from="$EXCLUDES_FILE" "$ROOT_DIR"/ "$SOURCE_DIR"/
+mkdir -p "$SOURCE_DIR/.cache/llvm-toolchain"
+rsync -a --delete --exclude=.git \
+    "$DYNLEX_LLVM_SOURCE_DIR"/ "$SOURCE_DIR/.cache/llvm-toolchain/source"/
+printf '%s:%s\n' "$DYNLEX_LLVM_REPOSITORY" "$DYNLEX_LLVM_REVISION" \
+    > "$SOURCE_DIR/.cache/llvm-toolchain/source/.dynlex-llvm-source"
 tar -C "$WORK_DIR" -czf "$ORIG_TARBALL" "dynlex-$VERSION"
 
 cp -R "$TEMPLATE_DIR" "$SOURCE_DIR/debian"

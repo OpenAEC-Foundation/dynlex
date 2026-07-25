@@ -1,0 +1,25 @@
+{
+  "alternateArmPointCount": 5000,
+  "alternateLegPointCount": 4000,
+  "format": "float32x4",
+  "framePointCount": 3600,
+  "generatorSeed": 3609075750,
+  "headPointCount": 8392,
+  "interiorPointCount": 7000,
+  "license": "CC0-1.0",
+  "pointCount": 55085,
+  "primitive": "triangles",
+  "schemaVersion": 1,
+  "source": {
+    "eyeObjects": [
+      "GEO-body_male_realistic.eye.L",
+      "GEO-body_male_realistic.eye.R"
+    ],
+    "object": "GEO-body_male_realistic",
+    "page": "https://commons.wikimedia.org/wiki/File:Body_male_realistic_by_Dan_Ulrich_(CC0).stl",
+    "sha256": "660e245812ef56768bc71293bd4c8bc1fd19a63710e16aafc8258a7351cbc35e",
+    "url": "https://download.blender.org/demo/bundles/bundles-3.6/human_base_meshes_bundle.blend"
+  },
+  "surfacePointCount": 35485,
+  "vertexCount": 165255
+}

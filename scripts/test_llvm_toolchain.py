@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = PROJECT_DIR / "scripts"
+PINNED_REPOSITORY = "https://github.com/OpenAEC-Foundation/llvm-project.git"
+PINNED_REVISION = "e5be62d86c56bdd295ad5993b1cb54f0aa4ae9ef"
+
+
+class LlvmToolchainTests(unittest.TestCase):
+    def test_toolchain_pin_and_cache_layout_have_one_source_of_truth(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-contract-") as temporary_directory:
+            environment = os.environ.copy()
+            environment["DYNLEX_LLVM_CACHE_DIR"] = temporary_directory
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    """
+set -euo pipefail
+. "$1"
+printf '%s\\n' \
+    "$DYNLEX_LLVM_REPOSITORY" \
+    "$DYNLEX_LLVM_REVISION" \
+    "$DYNLEX_LLVM_MAJOR_VERSION" \
+    "$DYNLEX_LLVM_SOURCE_DIR" \
+    "$DYNLEX_LLVM_NATIVE_INSTALL_DIR" \
+    "$DYNLEX_LLVM_WEB_INSTALL_DIR"
+""",
+                    "bash",
+                    str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+                ],
+                capture_output=True,
+                env=environment,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            cache_directory = Path(temporary_directory)
+            self.assertEqual(
+                completed.stdout.splitlines(),
+                [
+                    PINNED_REPOSITORY,
+                    PINNED_REVISION,
+                    "23",
+                    str(cache_directory / "source"),
+                    str(cache_directory / "native" / "install"),
+                    str(cache_directory / "web" / "install"),
+                ],
+            )
+
+    def test_build_entrypoints_always_use_the_pinned_toolchain(self) -> None:
+        native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
+        web_build = (SCRIPTS_DIR / "build_web.sh").read_text(encoding="utf-8")
+
+        self.assertIn('. "$SCRIPT_DIR/llvm_toolchain.sh"', native_build)
+        self.assertIn("dynlex_ensure_llvm_toolchain native", native_build)
+        self.assertIn('. "$SCRIPT_DIR/llvm_toolchain.sh"', web_build)
+        self.assertIn("dynlex_ensure_llvm_toolchain web", web_build)
+
+        for contents in (native_build, web_build):
+            self.assertNotIn("llvm_version.sh", contents)
+            self.assertNotIn("${LLVM_DIR", contents)
+            self.assertNotIn("${DYNLEX_LLVM_VERSION", contents)
+
+        toolchain = (SCRIPTS_DIR / "llvm_toolchain.sh").read_text(encoding="utf-8")
+        self.assertIn("llvm-tblgen;llvm-dwarfdump", toolchain)
+        self.assertIn("sparse-checkout set llvm cmake libc third-party", toolchain)
+        self.assertIn("for source_component in llvm cmake libc third-party", toolchain)
+        self.assertNotIn("mapfile", toolchain)
+        debug_test = (SCRIPTS_DIR / "test_debug_info.py").read_text(encoding="utf-8")
+        self.assertIn('os.environ.get("DYNLEX_LLVM_CACHE_DIR"', debug_test)
+        self.assertNotIn("shutil.which", debug_test)
+
+    def test_codegen_uses_the_llvm_23_apis(self) -> None:
+        codegen_directory = PROJECT_DIR / "src" / "cpp" / "compiler" / "codegen"
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted(codegen_directory.glob("*"))
+            if path.suffix in {".cpp", ".h", ".inl"}
+        )
+
+        self.assertIn("->hasTerminator()", source)
+        self.assertNotIn("basicBlockHasTerminator", source)
+        self.assertNotRegex(source, r"!\s*[^;\n]*->getTerminator\(\)")
+        self.assertIn("llvm::UncondBrInst", source)
+        self.assertNotIn("llvm::BranchInst", source)
+        self.assertIn("llvm::Triple targetTriple", source)
+        self.assertIn("llvm::ArrayRef<llvm::Metadata *>{}", source)
+
+    def test_cmake_requires_the_pinned_llvm_major(self) -> None:
+        cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn('set(DYNLEX_LLVM_METADATA_FILE "${CMAKE_SOURCE_DIR}/metadata/LLVM_TOOLCHAIN")', cmake)
+        self.assertIn('set(DYNLEX_REQUIRED_LLVM_VERSION "${DYNLEX_LLVM_MAJOR}")', cmake)
+        self.assertIn(
+            'if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "${DYNLEX_REQUIRED_LLVM_VERSION}.0.0git")',
+            cmake,
+        )
+        self.assertIn("include/llvm/Support/VCSRevision.h", cmake)
+        self.assertIn("${DYNLEX_LLVM_REPOSITORY}", cmake)
+        self.assertIn("${DYNLEX_LLVM_REQUIRED_PROFILE}", cmake)
+        self.assertNotIn("CPACK_DEBIAN_PACKAGE_DEPENDS", cmake)
+        self.assertNotIn("zlib1.dll", cmake)
+
+    def test_launchpad_package_bundles_and_builds_the_pinned_source(self) -> None:
+        control = (PROJECT_DIR / "packaging/launchpad/debian/control").read_text(encoding="utf-8")
+        rules = (PROJECT_DIR / "packaging/launchpad/debian/rules").read_text(encoding="utf-8")
+        source_builder = (
+            PROJECT_DIR / "packaging/launchpad/scripts/build-source-package.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("llvm-20-dev", control)
+        self.assertNotIn("DYNLEX_LLVM_VERSION", rules)
+        self.assertIn("./scripts/build_llvm.sh native", rules)
+        self.assertIn('"$DYNLEX_LLVM_SOURCE_DIR"', source_builder)
+        self.assertIn(".cache/llvm-toolchain/source", source_builder)
+        self.assertIn(".dynlex-llvm-source", source_builder)
+        self.assertIn("--exclude=.git", source_builder)
+        self.assertNotIn("--exclude=/libc", source_builder)
+        self.assertNotIn("--exclude=/third-party", source_builder)
+
+
+if __name__ == "__main__":
+    unittest.main()

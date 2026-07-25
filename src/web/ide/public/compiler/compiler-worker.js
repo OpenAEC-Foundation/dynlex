@@ -22,14 +22,14 @@ function postResponse(id, ok, payload, error) {
   self.postMessage({ id, ok, payload, error });
 }
 
-function parseJsonOr(text, fallback) {
-  if (!text) {
-    return fallback;
+function parseCompilerJson(text, label) {
+  if (typeof text !== "string" || text.length === 0) {
+    throw new Error(`Compiler returned no ${label} JSON`);
   }
   try {
     return JSON.parse(text);
-  } catch {
-    return fallback;
+  } catch (error) {
+    throw new Error(`Compiler returned invalid ${label} JSON`, { cause: error });
   }
 }
 
@@ -104,19 +104,32 @@ function syncCompilerSource(source, version) {
   state.syncedVersion = nextVersion;
 }
 
+function compilerFeedback(module) {
+  const diagnosticsPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_diagnostics_json", "string", [], []),
+    "diagnostics"
+  );
+  const compilerLogPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_compiler_log_json", "string", [], []),
+    "log"
+  );
+  if (!Array.isArray(diagnosticsPayload.diagnostics) || !Array.isArray(compilerLogPayload.messages)) {
+    throw new Error("Compiler returned malformed feedback");
+  }
+  return {
+    diagnostics: diagnosticsPayload.diagnostics,
+    compilerLog: compilerLogPayload.messages
+  };
+}
+
 function compileSource(source, version) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
+  const compilationStartedAt = performance.now();
   const status = module.ccall("dynlex_web_compile_and_emit_wasm", "number", [], []);
+  const compilationMilliseconds = performance.now() - compilationStartedAt;
 
-  const diagnosticsPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_diagnostics_json", "string", [], []),
-    { diagnostics: [] }
-  );
-  const compilerLogPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_compiler_log_json", "string", [], []),
-    { messages: [] }
-  );
+  const feedback = compilerFeedback(module);
 
   if (status === 0) {
     const wasmLength = module.ccall("dynlex_web_get_output_wasm_len", "number", [], []);
@@ -129,10 +142,67 @@ function compileSource(source, version) {
 
   return {
     status,
-    diagnostics: diagnosticsPayload.diagnostics ?? [],
-    compilerLog: compilerLogPayload.messages ?? [],
+    ...feedback,
+    compilationMilliseconds,
     hasArtifact: !!state.lastSuccessfulWasm,
     artifactVersion: state.artifactVersion
+  };
+}
+
+function compileShaderStage(source, version, stage) {
+  const module = state.compilerModule;
+  syncCompilerSource(source, version);
+  const compilationStartedAt = performance.now();
+  const status = module.ccall(
+    "dynlex_web_compile_and_emit_shader_glsl",
+    "number",
+    ["string"],
+    [stage]
+  );
+  const compilationMilliseconds = performance.now() - compilationStartedAt;
+  const feedback = compilerFeedback(module);
+  const glslSource = module.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+  const uniformPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
+    "shader uniform"
+  );
+
+  if (status === 0 && (typeof glslSource !== "string" || glslSource.length === 0)) {
+    throw new Error("Successful shader compilation returned no WebGL source");
+  }
+  if (!Array.isArray(uniformPayload.uniforms)) {
+    throw new Error("Successful shader compilation returned invalid uniform reflection");
+  }
+
+  return {
+    status,
+    ...feedback,
+    compilationMilliseconds,
+    glslSource: status === 0 ? glslSource : "",
+    uniforms: status === 0 ? uniformPayload.uniforms : []
+  };
+}
+
+function compileShaderSource(source, version, compileVertexStage) {
+  const fragment = compileShaderStage(source, version, "fragment");
+  if (fragment.status !== 0 || !compileVertexStage) {
+    return {
+      ...fragment,
+      fragmentSource: fragment.glslSource,
+      vertexSource: ""
+    };
+  }
+
+  const vertex = compileShaderStage(source, version, "vertex");
+  return {
+    status: vertex.status,
+    diagnostics: vertex.diagnostics,
+    compilerLog: [...fragment.compilerLog, ...vertex.compilerLog],
+    compilationMilliseconds: fragment.compilationMilliseconds + vertex.compilationMilliseconds,
+    glslSource: fragment.glslSource,
+    fragmentSource: fragment.glslSource,
+    vertexSource: vertex.status === 0 ? vertex.glslSource : "",
+    uniforms: fragment.uniforms
   };
 }
 
@@ -146,9 +216,9 @@ function extractLspError(payload) {
 function getLspHover(source, version, line, column) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
-  const hoverPayload = parseJsonOr(
+  const hoverPayload = parseCompilerJson(
     module.ccall("dynlex_web_get_lsp_hover_json", "string", ["number", "number"], [line, column]),
-    null
+    "hover"
   );
   const error = extractLspError(hoverPayload);
   if (error) {
@@ -160,9 +230,9 @@ function getLspHover(source, version, line, column) {
 function getLspDefinition(source, version, line, column) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
-  const definitionPayload = parseJsonOr(
+  const definitionPayload = parseCompilerJson(
     module.ccall("dynlex_web_get_lsp_definition_json", "string", ["number", "number"], [line, column]),
-    null
+    "definition"
   );
   const error = extractLspError(definitionPayload);
   if (error) {
@@ -174,25 +244,21 @@ function getLspDefinition(source, version, line, column) {
 function getLspSemanticTokens(source, version) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
-  const semanticPayload = parseJsonOr(
+  const semanticPayload = parseCompilerJson(
     module.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []),
-    { data: [], legend: { tokenTypes: [], tokenModifiers: [] } }
+    "semantic token"
   );
   const error = extractLspError(semanticPayload);
   if (error) {
     throw new Error(error);
   }
-  if (!Array.isArray(semanticPayload.data)) {
-    semanticPayload.data = [];
-  }
-  if (!semanticPayload.legend || typeof semanticPayload.legend !== "object") {
-    semanticPayload.legend = { tokenTypes: [], tokenModifiers: [] };
-  }
-  if (!Array.isArray(semanticPayload.legend.tokenTypes)) {
-    semanticPayload.legend.tokenTypes = [];
-  }
-  if (!Array.isArray(semanticPayload.legend.tokenModifiers)) {
-    semanticPayload.legend.tokenModifiers = [];
+  if (
+    !Array.isArray(semanticPayload.data)
+    || !semanticPayload.legend
+    || !Array.isArray(semanticPayload.legend.tokenTypes)
+    || !Array.isArray(semanticPayload.legend.tokenModifiers)
+  ) {
+    throw new Error("Compiler returned malformed semantic tokens");
   }
   return semanticPayload;
 }
@@ -268,6 +334,7 @@ async function runLastSuccessfulProgram() {
 // Worker protocol.
 // - init -> initResult
 // - compile { source, version } -> compileResult
+// - compile.shader { source, version } -> shaderCompileResult
 // - run -> runResult
 // - lsp.hover { source, version, line, column } -> hover|null
 // - lsp.definition { source, version, line, column } -> location|null
@@ -290,6 +357,16 @@ self.onmessage = async (event) => {
       const source = typeof payload?.source === "string" ? payload.source : "";
       const version = Number.isInteger(payload?.version) ? payload.version : -1;
       const result = compileSource(source, version);
+      postResponse(id, true, result);
+      return;
+    }
+
+    if (type === "compile.shader") {
+      await ensureCompilerInitialized();
+      const source = typeof payload?.source === "string" ? payload.source : "";
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const compileVertexStage = payload?.renderer === true;
+      const result = compileShaderSource(source, version, compileVertexStage);
       postResponse(id, true, result);
       return;
     }
@@ -334,10 +411,7 @@ self.onmessage = async (event) => {
 
     postResponse(id, false, null, `Unknown worker message type '${type}'.`);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? [error.message, error.stack].filter((part) => typeof part === "string" && part.length > 0).join("\n")
-        : String(error);
-    postResponse(id, false, null, message);
+    console.error("Compiler worker request failed", error);
+    postResponse(id, false, null, "An error occurred. Check the browser log.");
   }
 };

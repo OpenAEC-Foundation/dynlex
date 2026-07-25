@@ -34,6 +34,12 @@ jobs:
         with:
           submodules: true
 
+      - name: Restore pinned LLVM toolchain
+        uses: actions/cache@v4
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+
       - name: Install dependencies
         run: ./scripts/install.sh
 
@@ -61,6 +67,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Restore pinned LLVM toolchain
+        uses: actions/cache@v4
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         shell: pwsh
@@ -100,6 +112,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+
+      - name: Restore pinned LLVM toolchain
+        uses: actions/cache@v4
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         run: ./scripts/install.sh

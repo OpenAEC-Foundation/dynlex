@@ -1,21 +1,8 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/llvm_version.sh"
-
-LLVM_VERSION="$(dynlex_detect_installed_llvm_version || true)"
-
-if [ -z "$LLVM_VERSION" ]; then
-    echo "Error: DynLex requires LLVM/Clang 20 or newer."
-    echo "Set DYNLEX_LLVM_VERSION to an installed toolchain version or run: ./scripts/install.sh"
-    exit 1
-fi
-
-CLANG="$(dynlex_resolve_tool clang "$LLVM_VERSION")"
-CLANGXX="$(dynlex_resolve_tool clang++ "$LLVM_VERSION")"
-CLANG_FORMAT="$(dynlex_resolve_tool clang-format "$LLVM_VERSION")"
-CLANG_TIDY="$(dynlex_resolve_tool clang-tidy "$LLVM_VERSION")"
+. "$SCRIPT_DIR/llvm_toolchain.sh"
 
 # Parse arguments
 LINT=true
@@ -28,13 +15,21 @@ for arg in "$@"; do
     esac
 done
 
+dynlex_resolve_bootstrap_compilers
+CLANG="$DYNLEX_LLVM_BOOTSTRAP_CC"
+CLANGXX="$DYNLEX_LLVM_BOOTSTRAP_CXX"
+
 # Check for required dependencies
 MISSING_DEPS=()
 
 command -v "$CLANG" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG")
+command -v "$CLANGXX" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANGXX")
 command -v cmake >/dev/null 2>&1 || MISSING_DEPS+=("cmake")
 command -v ninja >/dev/null 2>&1 || MISSING_DEPS+=("ninja")
+command -v git >/dev/null 2>&1 || MISSING_DEPS+=("git")
 if [ "$LINT" = "true" ]; then
+    CLANG_FORMAT="$(dynlex_resolve_bootstrap_tool clang-format)"
+    CLANG_TIDY="$(dynlex_resolve_bootstrap_tool clang-tidy)"
     command -v "$CLANG_FORMAT" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_FORMAT")
     command -v "$CLANG_TIDY" >/dev/null 2>&1 || MISSING_DEPS+=("$CLANG_TIDY")
 fi
@@ -45,9 +40,9 @@ if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
     exit 1
 fi
 
-# Use the newest supported clang toolchain that is installed.
 export CC="$CLANG"
 export CXX="$CLANGXX"
+dynlex_ensure_llvm_toolchain native
 
 if [ "$LINT" = "true" ]; then
     # Format source files
@@ -92,16 +87,13 @@ CMAKE_ARGS=(
     -B build
     -G Ninja
     -U CMAKE_TOOLCHAIN_FILE
+    -U DYNLEX_LLVM_VERSION
     -U nlohmann_json_DIR
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     -DCMAKE_C_COMPILER="$CLANG"
     -DCMAKE_CXX_COMPILER="$CLANGXX"
-    -DDYNLEX_LLVM_VERSION="$LLVM_VERSION"
+    -DLLVM_DIR="$DYNLEX_LLVM_NATIVE_INSTALL_DIR/lib/cmake/llvm"
 )
-
-if [ -n "${LLVM_DIR:-}" ]; then
-    CMAKE_ARGS+=("-DLLVM_DIR=$LLVM_DIR")
-fi
 
 if [ -n "${NLOHMANN_JSON_DIR:-}" ]; then
     CMAKE_ARGS+=("-Dnlohmann_json_DIR=$NLOHMANN_JSON_DIR")
