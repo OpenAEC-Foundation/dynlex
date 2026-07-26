@@ -199,6 +199,7 @@ struct InferenceContext {
 		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeValue>;
 		using CodeLineGroupingMap = std::unordered_map<CodeLine *, TrialCodeLineGrouping>;
 		using CallableInstantiationMap = std::unordered_map<PatternDefinition *, Instantiation *>;
+		template <typename Map, typename Key> using SeenWrites = std::unordered_map<Map *, std::unordered_set<Key *>>;
 
 		struct ExpressionValueUndo {
 			ExpressionValueMap *map;
@@ -222,13 +223,19 @@ struct InferenceContext {
 		};
 
 		std::vector<ExpressionValueUndo> expressionValueUndo;
+		SeenWrites<ExpressionValueMap, Expression> seenExpressionValueWrites;
 		std::vector<CodeLineGroupingUndo> codeLineGroupingUndo;
+		SeenWrites<CodeLineGroupingMap, CodeLine> seenCodeLineGroupingWrites;
 		std::vector<CallableInstantiationUndo> callableInstantiationUndo;
+		SeenWrites<CallableInstantiationMap, PatternDefinition> seenCallableInstantiationWrites;
+
+		template <typename Map, typename Key>
+		static bool recordFirstWrite(SeenWrites<Map, Key> &seenWrites, Map *map, Key *key) {
+			return seenWrites[map].insert(key).second;
+		}
 
 		void recordExpressionValueWrite(ExpressionValueMap &map, Expression *expression) {
-			if (std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &undo) {
-				return undo.map == &map && undo.expression == expression;
-			}))
+			if (!recordFirstWrite(seenExpressionValueWrites, &map, expression))
 				return;
 			auto existing = map.find(expression);
 			expressionValueUndo.push_back(
@@ -237,9 +244,7 @@ struct InferenceContext {
 		}
 
 		void recordCodeLineGroupingWrite(CodeLineGroupingMap &map, CodeLine *line) {
-			if (std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &undo) {
-				return undo.map == &map && undo.line == line;
-			}))
+			if (!recordFirstWrite(seenCodeLineGroupingWrites, &map, line))
 				return;
 			auto existing = map.find(line);
 			codeLineGroupingUndo.push_back(
@@ -248,9 +253,7 @@ struct InferenceContext {
 		}
 
 		void recordCallableInstantiationWrite(CallableInstantiationMap &map, PatternDefinition *definition) {
-			if (std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &undo) {
-				return undo.map == &map && undo.definition == definition;
-			}))
+			if (!recordFirstWrite(seenCallableInstantiationWrites, &map, definition))
 				return;
 			auto existing = map.find(definition);
 			callableInstantiationUndo.push_back(
@@ -260,21 +263,15 @@ struct InferenceContext {
 
 		void absorb(GroupingTrialJournal &&nested) {
 			for (ExpressionValueUndo &undo : nested.expressionValueUndo) {
-				if (!std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &existing) {
-					return existing.map == undo.map && existing.expression == undo.expression;
-				}))
+				if (recordFirstWrite(seenExpressionValueWrites, undo.map, undo.expression))
 					expressionValueUndo.push_back(std::move(undo));
 			}
 			for (CodeLineGroupingUndo &undo : nested.codeLineGroupingUndo) {
-				if (!std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &existing) {
-					return existing.map == undo.map && existing.line == undo.line;
-				}))
+				if (recordFirstWrite(seenCodeLineGroupingWrites, undo.map, undo.line))
 					codeLineGroupingUndo.push_back(std::move(undo));
 			}
 			for (CallableInstantiationUndo &undo : nested.callableInstantiationUndo) {
-				if (!std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &existing) {
-					return existing.map == undo.map && existing.definition == undo.definition;
-				}))
+				if (recordFirstWrite(seenCallableInstantiationWrites, undo.map, undo.definition))
 					callableInstantiationUndo.push_back(std::move(undo));
 			}
 		}
