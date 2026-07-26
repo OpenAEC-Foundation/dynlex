@@ -55,6 +55,7 @@ const supportedEnvImports = new Set([
   "dynlex_host_executable_path",
   "dynlex_host_platform_is_windows",
   "dynlex_host_read_standard_input",
+  "dynlex_host_user_cache_directory",
   "dynlex_path_binary",
   "dynlex_path_error_message",
   "dynlex_path_file_uri",

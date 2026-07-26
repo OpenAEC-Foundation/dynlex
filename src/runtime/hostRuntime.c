@@ -27,6 +27,28 @@ static int write_host_output(const char *value, size_t length, char *output, siz
 
 size_t dynlex_host_error_message(char *buffer, size_t capacity) { return dynlex_runtime_error_message(buffer, capacity); }
 
+typedef int (*DynlexHostPathProvider)(char **path, size_t *length, int32_t *supported);
+
+static int retrieve_host_path(
+	char *output, size_t capacity, size_t *output_length, int32_t *supported, DynlexHostPathProvider provider,
+	const char *invalid_support_message
+) {
+	if (supported == NULL) {
+		dynlex_runtime_set_errno_error(invalid_support_message, EINVAL);
+		return -1;
+	}
+	*supported = 1;
+	char *path = NULL;
+	size_t length = 0;
+	if (provider(&path, &length, supported) != 0)
+		return -1;
+	if (*supported == 0)
+		return write_host_output(NULL, 0, output, capacity, output_length);
+	int result = write_host_output(path, length, output, capacity, output_length);
+	free(path);
+	return result;
+}
+
 int dynlex_host_platform_is_windows(int32_t *is_windows, int32_t *supported) {
 	dynlex_runtime_clear_error();
 	if (is_windows == NULL || supported == NULL) {
@@ -44,20 +66,18 @@ int dynlex_host_platform_is_windows(int32_t *is_windows, int32_t *supported) {
 
 int dynlex_host_executable_path(char *output, size_t capacity, size_t *output_length, int32_t *supported) {
 	dynlex_runtime_clear_error();
-	if (supported == NULL) {
-		dynlex_runtime_set_errno_error("Invalid executable path support result argument", EINVAL);
-		return -1;
-	}
-	*supported = 1;
-	char *path = NULL;
-	size_t length = 0;
-	if (dynlex_platform_executable_path(&path, &length, supported) != 0)
-		return -1;
-	if (*supported == 0)
-		return write_host_output(NULL, 0, output, capacity, output_length);
-	int result = write_host_output(path, length, output, capacity, output_length);
-	free(path);
-	return result;
+	return retrieve_host_path(
+		output, capacity, output_length, supported, dynlex_platform_executable_path,
+		"Invalid executable path support result argument"
+	);
+}
+
+int dynlex_host_user_cache_directory(char *output, size_t capacity, size_t *output_length, int32_t *supported) {
+	dynlex_runtime_clear_error();
+	return retrieve_host_path(
+		output, capacity, output_length, supported, dynlex_platform_user_cache_directory,
+		"Invalid user cache directory support result argument"
+	);
 }
 
 int dynlex_host_executable_directory(char *output, size_t capacity, size_t *output_length, int32_t *supported) {
