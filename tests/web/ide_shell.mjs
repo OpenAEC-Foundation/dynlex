@@ -10,6 +10,9 @@ const files = {
   html: path.join(ideDir, "index.html"),
   css: path.join(ideDir, "src/styles.css"),
   javascript: path.join(ideDir, "src/main.js"),
+  lspClient: path.join(projectDir, "web/lsp-client.js"),
+  lspIntegration: path.join(ideDir, "src/lspIntegration.js"),
+  lspProtocol: path.join(ideDir, "src/lspProtocol.js"),
   compilerWorker: path.join(ideDir, "public/compiler/compiler-worker.js")
 };
 
@@ -21,13 +24,61 @@ for (const filePath of Object.values(files)) {
 
 const html = fs.readFileSync(files.html, "utf8");
 const javascript = fs.readFileSync(files.javascript, "utf8");
+const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
+const languageJavascript = `${javascript}\n${lspIntegration}`;
 const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
 assert.match(html, /<a[^>]+class="ide-brand"[^>]+href="\/"/);
 assert.match(html, /<img[^>]+class="ide-logo"[^>]+src="\/icons\/dynlex-icon\.svg"/);
 assert.doesNotMatch(html, /LLVM|WebAssembly|WASM|compiler runs/i);
 assert.doesNotMatch(html, /\sstyle="/i, "IDE presentation belongs in styles.css");
 assert.match(javascript, /monaco-editor\/esm\/vs\/editor\/editor\.api\.js/);
+for (const contribution of [
+  "codeAction/browser/codeActionContributions.js",
+  "documentSymbols/browser/documentSymbols.js",
+  "gotoSymbol/browser/goToCommands.js",
+  "gotoSymbol/browser/link/goToDefinitionAtPosition.js",
+  "hover/browser/hoverContribution.js",
+  "semanticTokens/browser/documentSemanticTokens.js",
+  "semanticTokens/browser/viewportSemanticTokens.js",
+  "suggest/browser/suggestController.js"
+]) {
+  assert.match(javascript, new RegExp(contribution.replaceAll(".", "\\.")));
+}
+assert.doesNotMatch(javascript, /editor\.all\.js|wordHighlighter/);
 assert.doesNotMatch(javascript, /from "monaco-editor"/, "IDE must not bundle Monaco's unused language catalog");
+assert.doesNotMatch(
+  languageJavascript,
+  /setMonarchTokensProvider/,
+  "DynLex token classification must come from the DynLex language server"
+);
+assert.match(languageJavascript, /new LspClient/);
+for (const provider of [
+  "registerCompletionItemProvider",
+  "registerDefinitionProvider",
+  "registerHoverProvider",
+  "registerDocumentSemanticTokensProvider",
+  "registerDocumentSymbolProvider",
+  "registerCodeActionProvider"
+]) {
+  assert.match(languageJavascript, new RegExp(provider), `IDE must register ${provider}`);
+}
+for (const method of [
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/hover",
+  "textDocument/semanticTokens/full",
+  "textDocument/documentSymbol",
+  "textDocument/codeAction",
+  "dynlex/activeCursorChanged",
+  "dynlex/instantiationsInDocument",
+  "dynlex/selectInstantiation",
+  "dynlex/readDocument"
+]) {
+  assert.match(languageJavascript, new RegExp(method.replace("/", "\\/")), `IDE must use ${method}`);
+}
+assert.match(compilerWorker, /"lsp\.exchange"/);
+assert.match(compilerWorker, /dynlex_web_lsp_exchange_json/);
+assert.doesNotMatch(compilerWorker, /dynlex_web_get_lsp_(?:hover|definition|semantic_tokens)_json/);
 assert.doesNotMatch(
   html,
   /Start with a thought|Put the idea into words|Follow any useful feedback|See what your idea does|WHAT TO LOOK AT|Check code/i,

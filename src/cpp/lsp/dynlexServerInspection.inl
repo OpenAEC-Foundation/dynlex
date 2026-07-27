@@ -379,7 +379,14 @@ resolveCursorData(ParseContext &context, const std::string &uri, int line, int c
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
-	ParseContext *context = findContextFor(params.textDocument.uri);
+	for (ParseContext *context : findContextsFor(params.textDocument.uri)) {
+		if (std::optional<Location> location = definitionInContext(context, params))
+			return location;
+	}
+	return std::nullopt;
+}
+
+std::optional<Location> DynLexServer::definitionInContext(ParseContext *context, const TextDocumentPositionParams &params) {
 	if (!hasCompilationStage(context, ParseContext::CompilationStage::ResolvedPatterns)) {
 		return std::nullopt;
 	}
@@ -420,8 +427,14 @@ std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionPar
 std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
+	for (ParseContext *context : findContextsFor(params.textDocument.uri)) {
+		if (std::optional<Hover> hover = hoverInContext(context, params))
+			return hover;
+	}
+	return std::nullopt;
+}
 
-	ParseContext *context = findContextFor(params.textDocument.uri);
+std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const TextDocumentPositionParams &params) {
 	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
 		return std::nullopt;
 
@@ -661,12 +674,20 @@ Json DynLexServer::onInstantiationsInDocument(const TextDocumentIdentifier &para
 	if (isConfigDocumentUri(params.uri))
 		return Json::array();
 
-	ParseContext *context = findContextFor(params.uri);
-	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
-		return Json::array();
-
 	Json entries = Json::array();
 	std::unordered_set<std::string> seenSelectionKeys;
+	for (ParseContext *context : findContextsFor(params.uri))
+		appendInstantiationsInContext(context, params, entries, seenSelectionKeys);
+	return entries;
+}
+
+void DynLexServer::appendInstantiationsInContext(
+	ParseContext *context, const TextDocumentIdentifier &params, Json &entries,
+	std::unordered_set<std::string> &seenSelectionKeys
+) {
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::InferredTypes))
+		return;
+
 	std::vector<Section *> stack{context->mainSection};
 	while (!stack.empty()) {
 		Section *section = stack.back();
@@ -746,7 +767,6 @@ Json DynLexServer::onInstantiationsInDocument(const TextDocumentIdentifier &para
 			}
 		}
 	}
-	return entries;
 }
 
 void DynLexServer::onSelectInstantiation(const Json &params) {
@@ -892,6 +912,21 @@ std::string DynLexServer::onRenderSemanticTokens(const TextDocumentIdentifier &p
 	return renderTaggedSemanticTokensFromData(docIt->second->content, generateSemanticTokens(params.uri));
 }
 
+std::optional<std::string> DynLexServer::onReadDocument(const TextDocumentIdentifier &params) {
+	auto document = documents.find(params.uri);
+	if (document != documents.end())
+		return document->second->content;
+
+	ParseContext *context = findContextFor(params.uri);
+	if (!hasCompilationStage(context, ParseContext::CompilationStage::ImportedFiles))
+		return std::nullopt;
+	for (const auto &[_, sourceFile] : context->importedFiles) {
+		if (sourceFile && pathutil::toAbsoluteUri(sourceFile->uri) == params.uri)
+			return sourceFile->content;
+	}
+	return std::nullopt;
+}
+
 std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	if (isConfigDocumentUri(uri)) {
 		auto docIt = documents.find(uri);
@@ -899,18 +934,23 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 			return {};
 		return encodeConfigSemanticTokens(*docIt->second);
 	}
-	ParseContext *context = findContextFor(uri);
 	auto docIt = documents.find(uri);
-	if (docIt == documents.end()) {
+	if (docIt == documents.end())
 		return {};
-	}
 
-	std::vector<std::vector<SemanticToken>> tokensByLine(docIt->second->lineCount());
-	if (hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
-		tokensByLine = collectSemanticTokens(*context, uri, docIt->second->lineCount(), true);
-		if (tokensByLine.size() < static_cast<size_t>(docIt->second->lineCount()))
-			tokensByLine.resize(docIt->second->lineCount());
+	std::vector<ParseContext *> contexts = findContextsFor(uri);
+	SemanticTokenBuilder mergedTokens(docIt->second->lineCount());
+	for (ParseContext *context : contexts) {
+		if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections))
+			continue;
+		const auto contextTokens = collectSemanticTokens(*context, uri, docIt->second->lineCount(), true);
+		for (size_t lineIndex = 0; lineIndex < contextTokens.size(); ++lineIndex) {
+			for (const SemanticToken &token : contextTokens[lineIndex])
+				mergedTokens.add(static_cast<int>(lineIndex), token);
+		}
 	}
+	std::vector<std::vector<SemanticToken>> tokensByLine = mergedTokens.tokenLines();
+	ParseContext *liveLexingContext = contexts.empty() ? nullptr : contexts.front();
 
 	auto lockedIt = lockedLinesByUri.find(uri);
 	if (lockedIt != lockedLinesByUri.end()) {
@@ -922,7 +962,7 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 			// actively edited (diverged) lines.
 			if (std::string(docIt->second->getLine(lineIndex)) == state.committedText)
 				continue;
-			tokensByLine[lineIndex] = collectLiveLineSemanticTokens(context, *docIt->second, uri, lineIndex);
+			tokensByLine[lineIndex] = collectLiveLineSemanticTokens(liveLexingContext, *docIt->second, uri, lineIndex);
 		}
 	}
 

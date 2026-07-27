@@ -77,10 +77,11 @@ Web layout:
 - `web/`: deployable web root (site/wiki source + built IDE assets)
 
 The web app uses:
-- single editable source file at `/workspace/main.dl`
+- one editable `/workspace/*.dl` entry file plus read-only imported definitions
 - bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
-- live debounced compile with diagnostics markers
-- LSP-powered Monaco interactions (hover, go-to-definition, semantic tokens)
+- live debounced compile with diagnostics published by the DynLex language server
+- one persistent DynLex LSP session for completion, hover, go-to-definition,
+  semantic tokens, document symbols, quick fixes, and DynLex instantiation selection
 - live WebGL2 previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
 - built-in light and dark themes
 - `Run` executing the latest successful emitted program WASM
@@ -96,9 +97,7 @@ Compiler WASM C ABI exports:
 - `dynlex_web_get_output_shader_glsl`
 - `dynlex_web_get_shader_uniforms_json`
 - `dynlex_web_get_compiler_log_json`
-- `dynlex_web_get_lsp_hover_json`
-- `dynlex_web_get_lsp_definition_json`
-- `dynlex_web_get_lsp_semantic_tokens_json`
+- `dynlex_web_lsp_exchange_json`
 
 ## Install Dependencies
 

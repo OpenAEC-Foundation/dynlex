@@ -394,7 +394,7 @@ if(DYNLEX_WEB)
     dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS} SPIRV)
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS
-        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_glsl','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_glsl','_dynlex_web_get_shader_uniforms_json','_dynlex_web_get_compiler_log_json','_dynlex_web_get_lsp_hover_json','_dynlex_web_get_lsp_definition_json','_dynlex_web_get_lsp_semantic_tokens_json']"
+        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_glsl','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_glsl','_dynlex_web_get_shader_uniforms_json','_dynlex_web_get_compiler_log_json','_dynlex_web_lsp_exchange_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
     file(GLOB_RECURSE DYNLEX_WEB_EMBEDDED_LIBRARY_FILES

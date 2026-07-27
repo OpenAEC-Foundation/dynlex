@@ -64,7 +64,8 @@ assert.match(homepageJavascript, /new Worker\("\/compiler\/compiler-worker\.js"/
 assert.match(homepageJavascript, /from "\.\/snippet-highlights\.js"/);
 assert.match(homepageJavascript, /from "\.\/snippet-highlight-key\.js"/);
 assert.match(homepageJavascript, /from "\.\/semantic-highlighting\.js"/);
-assert.match(homepageJavascript, /lsp\.semanticTokens/);
+assert.match(homepageJavascript, /textDocument\/semanticTokens\/full/);
+assert.match(homepageJavascript, /new LspClient/);
 assert.doesNotMatch(homepageJavascript, /function decodeSemanticTokenRanges/);
 assert.doesNotMatch(homepageJavascript, /function semanticLegendsMatch/);
 

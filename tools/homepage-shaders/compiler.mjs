@@ -1,5 +1,11 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  initializeLsp,
+  LspClient,
+  LspTextDocument,
+  shutdownLsp
+} from "../../web/lsp-client.js";
 
 function parseCompilerJson(text, label) {
   if (typeof text !== "string" || text.length === 0) {
@@ -12,15 +18,15 @@ function parseCompilerJson(text, label) {
   }
 }
 
-function validateSemanticTokens(payload) {
+function validateSemanticTokens(payload, legend) {
   if (
     !payload
     || !Array.isArray(payload.data)
     || payload.data.length === 0
     || payload.data.length % 5 !== 0
-    || !payload.legend
-    || !Array.isArray(payload.legend.tokenTypes)
-    || !Array.isArray(payload.legend.tokenModifiers)
+    || !legend
+    || !Array.isArray(legend.tokenTypes)
+    || !Array.isArray(legend.tokenModifiers)
   ) {
     throw new Error("Compiler returned invalid semantic-token data");
   }
@@ -41,9 +47,34 @@ export async function createHomepageShaderCompiler(projectDirectory) {
     }
   });
   compiler.ccall("dynlex_web_init", null, [], []);
+  const lsp = new LspClient((message) => {
+    const response = compiler.ccall(
+      "dynlex_web_lsp_exchange_json",
+      "string",
+      ["string"],
+      [JSON.stringify(message)]
+    );
+    return JSON.parse(response);
+  });
+  lsp.onRequest("workspace/semanticTokens/refresh", () => null);
+  const initializeResult = await initializeLsp(lsp, {
+    initializationOptions: {
+      dynlex: {
+        analysisProfiles: [
+          { target: "spirv", shaderStage: "fragment" },
+          { target: "spirv", shaderStage: "vertex" }
+        ]
+      }
+    }
+  });
+  const semanticLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
+  const document = new LspTextDocument(lsp, {
+    uri: "file:///workspace/homepage-shader.dl",
+    languageId: "dynlex"
+  });
 
   return Object.freeze({
-    compile(source, sourceName, stage) {
+    async compile(source, sourceName, stage) {
       if (stage !== "fragment" && stage !== "vertex") {
         throw new Error(`Unsupported shader stage: ${stage}`);
       }
@@ -67,24 +98,29 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         compiler.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
         "shader-uniform"
       );
-      const semanticPayload = parseCompilerJson(
-        compiler.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []),
-        "semantic-token"
-      );
+      await document.replaceText(source);
+      const semanticPayload = await lsp.request("textDocument/semanticTokens/full", {
+        textDocument: document.identifier
+      });
       if (!glsl.startsWith("#version 300 es") || !glsl.includes("void main")) {
         throw new Error(`${sourceName} produced invalid WebGL2 ${stage} source`);
       }
       if (!Array.isArray(uniformPayload.uniforms)) {
         throw new Error(`${sourceName} produced invalid shader-uniform reflection`);
       }
-      validateSemanticTokens(semanticPayload);
+      validateSemanticTokens(semanticPayload, semanticLegend);
 
       return Object.freeze({
         glsl,
         uniforms: uniformPayload.uniforms,
         semanticTokens: semanticPayload.data,
-        semanticLegend: semanticPayload.legend
+        semanticLegend
       });
+    },
+
+    async close() {
+      await document.close();
+      await shutdownLsp(lsp);
     }
   });
 }
