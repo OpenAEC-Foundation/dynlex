@@ -1,2 +1,2 @@
 tests/required/group_precedence/main.dl:1-57: Warning: Expression 'print the square root of (2.0 + 3.0 + 4.0 * 4.0) as line' has multiple valid operand groupings. Using 'print ((the square root of ((2.0 + 3.0) + (4.0 * 4.0))) as line)' instead of 'print ((the square root of (2.0 + (3.0 + (4.0 * 4.0)))) as line)'.
-  note: while inferring call 'print the square root of (2.0 + 3.0 + 4.0 * 4.0) as line' with arguments [class] -> nothing tests/required/group_precedence/main.dl:1-57
+  note: while inferring call 'print the square root of (2.0 + 3.0 + 4.0 * 4.0) as line' with arguments [string] -> nothing tests/required/group_precedence/main.dl:1-57

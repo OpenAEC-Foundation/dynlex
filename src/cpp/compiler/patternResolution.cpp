@@ -163,6 +163,28 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 	}
 }
 
+static void populateClassPatternNames(Section *section) {
+	requireCompilerInvariant(section && section->type == SectionType::Class, "class pattern names require a class section");
+	auto *classSection = static_cast<ClassSection *>(section);
+	requireCompilerInvariant(classSection->classDefinition, "class section is missing its definition");
+
+	std::vector<std::string> names;
+	for (PatternDefinition *definition : classSection->patternDefinitions) {
+		requireCompilerInvariant(definition, "class section contains a null pattern definition");
+		for (std::string spelling : canonicalPatternSpellings(definition->patternElements)) {
+			if (std::find(names.begin(), names.end(), spelling) == names.end())
+				names.push_back(std::move(spelling));
+		}
+	}
+	requireCompilerInvariant(!names.empty(), "resolved class has no pattern names");
+	std::ranges::sort(names, [](const std::string &left, const std::string &right) {
+		if (left.size() != right.size())
+			return left.size() < right.size();
+		return left < right;
+	});
+	classSection->classDefinition->patternNames = std::move(names);
+}
+
 static bool sectionComesBefore(const Section *left, const Section *right) {
 	auto locationKey = [](const Section *section) {
 		if (!section)
@@ -687,19 +709,6 @@ struct AlternativePatternSuggestion {
 	bool isMultiWord = false;
 };
 
-static bool forEachPatternSpelling(
-	const std::vector<DefinitionPatternElement> &elements, const std::function<bool(const std::string &)> &visitor
-) {
-	for (const auto &path : canonicalPatternPaths(elements)) {
-		std::string spelling;
-		for (const DefinitionPatternElement &element : path)
-			spelling += element.text;
-		if (visitor(spelling))
-			return true;
-	}
-	return false;
-}
-
 static bool isSingleWordPatternSpelling(const std::string &spelling) {
 	std::vector<PatternElement> elements = getPatternElements(spelling);
 	int wordCount = 0;
@@ -766,25 +775,17 @@ static std::vector<PatternDefinition *> collectAlternativeSearchOrder(PatternMat
 static AlternativePatternSuggestion
 findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *match, const std::string &originalToken) {
 	for (PatternDefinition *definition : collectAlternativeSearchOrder(match)) {
-		AlternativePatternSuggestion suggestion;
-		bool found = forEachPatternSpelling(definition->patternElements, [&](const std::string &candidateSpelling) {
+		for (const std::string &candidateSpelling : canonicalPatternSpellings(definition->patternElements)) {
 			if (candidateSpelling.empty() || candidateSpelling == originalToken)
-				return false;
+				continue;
 
 			bool isMultiWord = !isSingleWordPatternSpelling(candidateSpelling);
-			if (isMultiWord) {
-				suggestion = {definition, candidateSpelling, true};
-				return true;
-			}
+			if (isMultiWord)
+				return {definition, candidateSpelling, true};
 
-			if (!findEnclosingParameterCandidate(reference, candidateSpelling)) {
-				suggestion = {definition, candidateSpelling, false};
-				return true;
-			}
-			return false;
-		});
-		if (found)
-			return suggestion;
+			if (!findEnclosingParameterCandidate(reference, candidateSpelling))
+				return {definition, candidateSpelling, false};
+		}
 	}
 	return {};
 }

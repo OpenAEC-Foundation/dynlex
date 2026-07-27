@@ -92,8 +92,8 @@ const mainUri = "file:///workspace/main.dl";
 const mainSource = `import lib/std.dl
 
 function square value:
-    replacement:
-        value * value
+    execute:
+        return value * value
 
 print square 8 as line
 `;
@@ -205,6 +205,12 @@ assert.ok(renderedSemanticTokens.length > mainSource.length);
 
 const instantiations = requestLsp("dynlex/instantiationsInDocument", textDocument);
 assert.ok(Array.isArray(instantiations));
+assert.ok(
+  instantiations.some((entry) => (
+    entry.options.some((option) => option.label === "square {a 32 bit integer:value}")
+  )),
+  `Expected typed square instantiation label, got: ${JSON.stringify(instantiations)}`
+);
 notifyLsp("dynlex/activeCursorChanged", {
   clientId: "web-smoke",
   uri: mainUri,

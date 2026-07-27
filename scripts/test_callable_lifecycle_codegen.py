@@ -29,7 +29,8 @@ def main() -> int:
         llvm = llvm_path.read_text(encoding="utf-8")
 
     wrapper_match = re.search(
-        r'^define [^{@]*@(?P<name>[^\s(]*replace[^\s(]*_callable[^\s(]*)\([^\n]*\) \{\n(?P<body>.*?)^\}',
+        r'^define [^{@]*@(?P<name>"[^"\n]*replace[^"\n]*_callable_[^"\n]*"|'
+        r'[^\s(]*replace[^\s(]*_callable_[^\s(]*)\([^\n]*\) \{\n(?P<body>.*?)^\}',
         llvm,
         flags=re.MULTILINE | re.DOTALL,
     )
@@ -37,9 +38,13 @@ def main() -> int:
         print("managed callable wrapper was not emitted", file=sys.stderr)
         return 1
     body = wrapper_match.group("body")
-    retain_calls = [match.start() for match in re.finditer(r'call void @[^\s(]*retain', body)]
-    release_calls = [match.start() for match in re.finditer(r'call void @[^\s(]*release', body)]
-    wrapped_calls = [match.start() for match in re.finditer(r'call void @[^\s(]*replace(?![^\s(]*_callable)', body)]
+    calls = [
+        (match.start(), match.group("quoted") or match.group("plain"))
+        for match in re.finditer(r'call void @(?:"(?P<quoted>[^"\n]+)"|(?P<plain>[^\s(]+))', body)
+    ]
+    retain_calls = [position for position, name in calls if "retain" in name]
+    release_calls = [position for position, name in calls if "release" in name]
+    wrapped_calls = [position for position, name in calls if "replace" in name and "_callable_" not in name]
     if len(retain_calls) != 1 or len(release_calls) != 1 or len(wrapped_calls) != 1:
         print(
             "managed callable wrapper must retain its borrowed input, call the implementation, and release its final value "

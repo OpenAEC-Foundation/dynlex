@@ -858,7 +858,7 @@ static std::string formatInstancePattern(
 					typeName = typeToUserPatternName(parseContext, signatureTypes[index]);
 			}
 
-			if (!elem.typeConstraintName.empty()) {
+			if (!typeName.empty()) {
 				if (constantValue.has_value())
 					result += "{" + typeName + ":" + formatValue(*constantValue) + "}";
 				else

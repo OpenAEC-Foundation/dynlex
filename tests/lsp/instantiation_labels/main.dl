@@ -1,0 +1,10 @@
+import lib/std.dl
+import tests/lsp/instantiation_labels/user.dl
+
+function send message to user:
+    execute:
+        print message as line
+        @intrinsic("discard", user)
+
+set recipient to build account named "DynLex"
+send (the string form of "hello") to recipient

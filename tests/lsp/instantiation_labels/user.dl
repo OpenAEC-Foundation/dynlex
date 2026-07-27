@@ -1,0 +1,9 @@
+local class:
+    patterns:
+        user
+    members:
+        name
+
+function build account named name:
+    execute:
+        return @intrinsic("construct", user, name)
