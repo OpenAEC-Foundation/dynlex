@@ -2,15 +2,13 @@ import { semanticHighlightCache, semanticTokenLegend } from "./snippet-highlight
 import { semanticHighlightKey } from "./snippet-highlight-key.js";
 import { renderSemanticTokens, semanticLegendsMatch } from "./semantic-highlighting.js";
 import { createShaderBanner } from "./shader-banner.js";
+import { initializeSiteNavigation } from "./site-navigation.js";
 import {
   initializeLsp,
   LspClient,
   LspTextDocument,
   shutdownLsp
 } from "./lsp-client.js";
-
-const root = document.documentElement;
-root.classList.replace("no-js", "js");
 
 function required(selector, scope = document) {
   const element = scope.querySelector(selector);
@@ -20,45 +18,8 @@ function required(selector, scope = document) {
   return element;
 }
 
-const header = required("[data-site-header]");
-const progress = required("[data-scroll-progress]");
-const menuButton = required(".menu-toggle");
-const primaryNav = required("[data-primary-nav]");
+initializeSiteNavigation();
 const compileMetric = required("[data-compile-metric]");
-
-function setMenu(open) {
-  menuButton.setAttribute("aria-expanded", String(open));
-  primaryNav.classList.toggle("is-open", open);
-  document.body.classList.toggle("menu-open", open);
-  required(".menu-toggle-label", menuButton).textContent = open ? "Close" : "Menu";
-}
-
-menuButton.addEventListener("click", () => {
-  setMenu(menuButton.getAttribute("aria-expanded") !== "true");
-});
-
-primaryNav.addEventListener("click", (event) => {
-  if (event.target.closest("a")) {
-    setMenu(false);
-  }
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    setMenu(false);
-  }
-});
-
-function updateScrollChrome() {
-  const scrollRange = document.documentElement.scrollHeight - window.innerHeight;
-  const scrollFraction = scrollRange > 0 ? window.scrollY / scrollRange : 0;
-  header.classList.toggle("is-scrolled", window.scrollY > 24);
-  progress.style.transform = "scaleX(" + Math.min(1, scrollFraction) + ")";
-}
-
-window.addEventListener("scroll", updateScrollChrome, { passive: true });
-window.addEventListener("resize", updateScrollChrome);
-updateScrollChrome();
 
 const tabList = required(".lab-tabs");
 const tabs = [...tabList.querySelectorAll("[data-lab-tab]")];

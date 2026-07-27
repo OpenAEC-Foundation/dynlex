@@ -16,7 +16,7 @@ template <typename Storage> class CopyOnWrite {
 
 	Storage &write() {
 		requireCompilerInvariant(storage != nullptr, "write to moved-from copy-on-write state");
-		if (!storage.unique())
+		if (storage.use_count() != 1)
 			storage = std::make_shared<Storage>(*storage);
 		return *storage;
 	}

@@ -40,6 +40,18 @@
         padding: 0 20px;
     }
 
+    body.menu-open .site-header {
+        height: 100svh;
+        align-items: flex-start;
+        background: var(--ink);
+        backdrop-filter: none;
+    }
+
+    .site-header .brand,
+    .menu-toggle {
+        height: var(--header-height);
+    }
+
     .menu-toggle {
         position: relative;
         z-index: 2;
@@ -51,10 +63,6 @@
         cursor: pointer;
         font: 500 0.61rem/1 var(--mono);
         text-transform: uppercase;
-    }
-
-    .no-js .menu-toggle {
-        display: none;
     }
 
     .menu-toggle-lines {
@@ -78,15 +86,18 @@
     }
 
     .primary-nav {
-        position: fixed;
-        inset: 0;
+        position: absolute;
+        z-index: 1;
+        inset: var(--header-height) 0 0;
         display: flex;
         visibility: hidden;
         flex-direction: column;
         align-items: stretch;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 0;
-        padding: 85px 24px 30px;
+        overflow-y: auto;
+        padding: clamp(24px, 6svh, 58px) 24px 30px;
+        border-top: 1px solid var(--line);
         background: var(--ink);
         opacity: 0;
         pointer-events: none;
@@ -94,20 +105,6 @@
 
     .primary-nav.is-open {
         visibility: visible;
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    .no-js .primary-nav {
-        position: absolute;
-        inset: var(--header-height) 0 auto;
-        visibility: visible;
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: flex-start;
-        gap: 8px 18px;
-        padding: 14px 24px;
-        border-bottom: 1px solid var(--line);
         opacity: 1;
         pointer-events: auto;
     }
@@ -121,23 +118,10 @@
         letter-spacing: -0.06em;
     }
 
-    .no-js .primary-nav > a:not(.nav-launch) {
-        padding: 7px 0;
-        border: 0;
-        font-size: 0.7rem;
-        letter-spacing: 0;
-    }
-
     .nav-launch {
         justify-content: space-between;
         margin-top: 20px;
         font-size: 0.8rem;
-    }
-
-    .no-js .nav-launch {
-        min-height: 34px;
-        margin-top: 0;
-        font-size: 0.65rem;
     }
 
     .hero-heading {

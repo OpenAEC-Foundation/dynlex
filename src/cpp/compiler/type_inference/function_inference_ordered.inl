@@ -111,6 +111,7 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 }
 
 #include "function_inference_pattern_calls.inl"
+#include "intrinsics/shader_runtime_inference.inl"
 
 // Infer the type of an expression bottom-up.
 // Sets context.typesValid = false if types are invalid for this grouping.

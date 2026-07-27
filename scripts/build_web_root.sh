@@ -13,10 +13,7 @@ for dependency in node npm; do
     fi
 done
 
-if [ ! -d "$IDE_DIR/node_modules" ]; then
-    echo "Installing IDE dependencies..."
-    (cd "$IDE_DIR" && npm ci)
-fi
+(cd "$IDE_DIR" && npm ci)
 
 node "$PROJECT_DIR/scripts/generate_homepage_highlights.mjs"
 node "$PROJECT_DIR/tools/homepage-shaders/generate.mjs"

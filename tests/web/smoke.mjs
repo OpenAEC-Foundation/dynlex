@@ -332,6 +332,47 @@ if (!vertexShaderGlsl.startsWith("#version 300 es") || !vertexShaderGlsl.include
   throw new Error(`Expected WebGL2 vertex source, got: ${vertexShaderGlsl}`);
 }
 
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader.dl
+
+if this is a vertex shader:
+    set the shader interpolant named "surface" to (the vertex x) (the vertex y) (the vertex z) 1.0
+    set the output position to (the vertex x) (the vertex y) (the vertex z) (the vertex w)
+
+if this is a fragment shader:
+    set shade to the shader interpolant x named "surface"
+    set the fragment color to shade shade shade 1.0
+`
+]);
+const interpolantGlsl = {};
+for (const stage of ["fragment", "vertex"]) {
+  const status = moduleInstance.ccall(
+    "dynlex_web_compile_and_emit_shader_glsl",
+    "number",
+    ["string"],
+    [stage]
+  );
+  const diagnostics = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
+  if (status !== 0) {
+    throw new Error(`Shader interpolant ${stage} compile failed: ${diagnostics}`);
+  }
+  interpolantGlsl[stage] = moduleInstance.ccall(
+    "dynlex_web_get_output_shader_glsl",
+    "string",
+    [],
+    []
+  );
+}
+const surfaceInterpolantName = "dynlex_interpolant_73757266616365";
+if (
+  !interpolantGlsl.vertex.includes(surfaceInterpolantName)
+  || !interpolantGlsl.fragment.includes(surfaceInterpolantName)
+) {
+  throw new Error(`Named shader interpolant did not survive WebGL translation: ${
+    JSON.stringify(interpolantGlsl)
+  }`);
+}
+
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], ["this shader does not compile"]);
 const invalidShaderStatus = moduleInstance.ccall(
   "dynlex_web_compile_and_emit_shader_glsl",

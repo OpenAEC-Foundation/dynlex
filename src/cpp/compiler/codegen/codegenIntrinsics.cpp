@@ -17,13 +17,12 @@
 #include <cstdio>
 #include <cstdlib>
 
-// Helper to extract string literal from an expression
-std::string getStringLiteral(Expression *expr) {
-	if (expr && expr->kind == Expression::Kind::Literal) {
-		if (auto *str = std::get_if<std::string>(&expr->literalValue))
-			return *str;
-	}
-	return "";
+std::string getCompileTimeString(ParseContext &context, Expression *expr) {
+	requireCompilerInvariant(expr != nullptr, "compile-time string codegen received a null expression");
+	CompileTimeValue value = resolveStoredCompileTimeValue(expr, context.flexBindingFrames);
+	const auto *text = std::get_if<std::string>(&value);
+	requireCompilerInvariant(text != nullptr, "compile-time string argument reached codegen without its inferred value");
+	return *text;
 }
 
 // Diagnostics for intrinsics inside flex replacement bodies should point at

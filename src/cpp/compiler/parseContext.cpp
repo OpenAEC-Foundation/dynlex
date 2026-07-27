@@ -158,6 +158,14 @@ void ParseContext::registerShaderUniformName(const std::string &uniformName, Cod
 		shaderUniformNames.push_back(uniformName);
 }
 
+void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
+	if (interpolantName.empty())
+		return;
+	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
+		shaderInterpolantNames.end())
+		shaderInterpolantNames.push_back(interpolantName);
+}
+
 void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (!intrinsicExpr)
 		return;

@@ -112,4 +112,4 @@ CodegenResult generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &args,
 	DataType resultType
 );
-std::string getStringLiteral(Expression *expr);
+std::string getCompileTimeString(ParseContext &context, Expression *expr);

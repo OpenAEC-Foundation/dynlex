@@ -6,27 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="../icons/dynlex-icon.svg">
     <title>DynLex Wiki</title>
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="stylesheet" href="wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../index.html" class="nav-btn">Home</a>
-        <a href="../ide/index.html" class="nav-btn">IDE</a>
-        <a href="index.html" class="nav-btn primary">Wiki Home</a>
-        <a href="core-rules.html" class="nav-btn">Core Rules</a>
-        <a href="getting-started.html" class="nav-btn">Getting Started</a>
-        <a href="sections/index.html" class="nav-btn">Sections</a>
-        <a href="terms.html" class="nav-btn">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
-        <section class="glass-card hero-card">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
+        <section class="hero-card">
             <div class="hero-eyebrow">DynLex Wiki</div>
             <h1>Learn DynLex</h1>
             <p>
@@ -38,7 +25,7 @@
             </p>
         </section>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>Start with <a class="inline-link" href="core-rules.html">Core Rules</a> for fast troubleshooting.</li>
@@ -48,27 +35,32 @@
         </section>
 
         <section class="section-links">
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="core-rules.html">Core Rules</a></h2>
                 <p>Read the short, practical rules first. Great for quick troubleshooting.</p>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="getting-started.html">Getting Started</a></h2>
                 <p>Write your first file, run it, and learn the smallest useful steps first.</p>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="sections/index.html">Sections</a></h2>
                 <p>Learn the main DynLex section forms such as <code>function</code>, <code>while</code>, and <code>if</code>.</p>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="terms.html">Terms</a></h2>
                 <p>Look up words such as <code>pattern</code>, <code>parameter</code>, <code>argument</code>, and <code>section</code>.</p>
             </article>
+
+            <article class="section-link-card">
+                <h2><a href="attributions.html">Attributions</a></h2>
+                <p>Review the creators and licenses of third-party visual assets used by the site.</p>
+            </article>
         </section>
     </main>
-    <script src="wiki-actions.js"></script>
+    <script type="module" src="wiki-actions.js"></script>
 </body>
 </html>

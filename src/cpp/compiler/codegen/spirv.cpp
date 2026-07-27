@@ -47,6 +47,17 @@ static constexpr uint32_t spvStorageClassInput = 1;
 static constexpr uint32_t spvStorageClassUniform = 2;
 static constexpr uint32_t spvStorageClassOutput = 3;
 
+std::string shaderInterpolantGlobalName(std::string_view interpolantName) {
+	static constexpr char hexadecimalDigits[] = "0123456789abcdef";
+	std::string globalName = "dynlex_interpolant_";
+	globalName.reserve(globalName.size() + interpolantName.size() * 2);
+	for (unsigned char byte : interpolantName) {
+		globalName.push_back(hexadecimalDigits[byte >> 4]);
+		globalName.push_back(hexadecimalDigits[byte & 0x0f]);
+	}
+	return globalName;
+}
+
 static llvm::Constant *defineVectorConstant(llvm::Constant *constant) {
 	auto *vectorType = llvm::dyn_cast<llvm::FixedVectorType>(constant->getType());
 	requireCompilerInvariant(vectorType != nullptr, "shader output vector seed must have a fixed vector type");
@@ -620,6 +631,15 @@ bool emitSPIRVModule(ParseContext &context) {
 	} else {
 		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));
 		ioVars.push_back(makeIoVar("gl_FragColor", spvStorageClassOutput, false, 0));
+	}
+
+	std::vector<std::string> orderedInterpolantNames = context.shaderInterpolantNames;
+	std::sort(orderedInterpolantNames.begin(), orderedInterpolantNames.end());
+	for (size_t location = 0; location < orderedInterpolantNames.size(); location++) {
+		ioVars.push_back(makeIoVar(
+			shaderInterpolantGlobalName(orderedInterpolantNames[location]),
+			isVertex ? spvStorageClassOutput : spvStorageClassInput, false, static_cast<uint32_t>(location)
+		));
 	}
 
 	// Add uniform variables as UBOs (Uniform storage class with Block decoration)
