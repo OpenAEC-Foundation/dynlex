@@ -727,7 +727,7 @@ class GroupingInferenceTransaction {
 	std::vector<std::optional<FlexExpansionKey>> savedActiveFlexExpansionKeys;
 	std::vector<Expression *> savedActiveFlexCallStack;
 	std::vector<Section *> savedFlexCallSiteSectionStack;
-	std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+	KnownConstantState savedKnownConstants;
 	AddressInferenceState savedAddressState;
 	InferenceContext::SubjectState savedSubject;
 	bool savedTypesValid;

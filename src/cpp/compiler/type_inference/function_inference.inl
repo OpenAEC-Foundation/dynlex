@@ -87,7 +87,7 @@ static void joinAddressProvenance(AddressProvenance &destination, const AddressP
 // direct store to each written global: the caller's own effect summary and the
 // value produced by the callee in the current execution state.
 static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
-	context.currentAddressState->addressTakenVariables.insert(
+	context.currentAddressState.write().addressTakenVariables.insert(
 		inst.addressTakenGlobalReferences.begin(), inst.addressTakenGlobalReferences.end()
 	);
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
@@ -99,11 +99,11 @@ static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const I
 												? provenance->second
 												: AddressProvenance{.mayTargets = {}, .unknown = true};
 		context.setAddressProvenance(reference, finalProvenance);
-		context.currentAddressState->addressTakenVariables.insert(
+		context.currentAddressState.write().addressTakenVariables.insert(
 			finalProvenance.mayTargets.begin(), finalProvenance.mayTargets.end()
 		);
 	}
-	joinAddressProvenance(context.currentAddressState->externallyEscaped, inst.externallyEscapedGlobalProvenance);
+	joinAddressProvenance(context.currentAddressState.write().externallyEscaped, inst.externallyEscapedGlobalProvenance);
 }
 
 static void markCurrentInstantiationImpure(InferenceContext &context) {

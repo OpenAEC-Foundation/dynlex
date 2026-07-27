@@ -8,25 +8,28 @@ static void joinAddressProvenance(AddressProvenance &destination, const AddressP
 static AddressInferenceState mergeAddressInferenceStates(const std::vector<AddressInferenceState> &states) {
 	requireCompilerInvariant(!states.empty(), "address inference state merge requires a reachable path");
 	AddressInferenceState merged;
+	AddressInferenceStorage &mergedStorage = merged.write();
 	std::unordered_set<VariableReference *> references;
 	for (const AddressInferenceState &state : states) {
-		for (const auto &[reference, provenance] : state->variables) {
+		const AddressInferenceStorage &storage = state.read();
+		for (const auto &[reference, provenance] : storage.variables) {
 			(void)provenance;
 			references.insert(reference);
 		}
-		merged->addressTakenVariables.insert(state->addressTakenVariables.begin(), state->addressTakenVariables.end());
-		joinAddressProvenance(merged->externallyEscaped, state->externallyEscaped);
+		mergedStorage.addressTakenVariables.insert(storage.addressTakenVariables.begin(), storage.addressTakenVariables.end());
+		joinAddressProvenance(mergedStorage.externallyEscaped, storage.externallyEscaped);
 	}
 	for (VariableReference *reference : references) {
 		AddressProvenance provenance;
 		for (const AddressInferenceState &state : states) {
-			auto value = state->variables.find(reference);
-			if (value == state->variables.end())
+			const VariableAddressProvenance &variables = state.read().variables;
+			auto value = variables.find(reference);
+			if (value == variables.end())
 				provenance.unknown = true;
 			else
 				joinAddressProvenance(provenance, value->second);
 		}
-		merged->variables.emplace(reference, std::move(provenance));
+		mergedStorage.variables.emplace(reference, std::move(provenance));
 	}
 	return merged;
 }
@@ -46,7 +49,7 @@ inferLValueAddressProvenance(Expression *expression, InferenceContext &context, 
 		VariableReference *target = context.normalizeReference(resolvedExpression->variable);
 		if (!target)
 			return std::nullopt;
-		context.currentAddressState->addressTakenVariables.insert(target);
+		context.currentAddressState.write().addressTakenVariables.insert(target);
 		return AddressProvenance{.mayTargets = {target}};
 	}
 
@@ -247,9 +250,9 @@ static void noteAddressTargetWrite(InferenceContext &context, VariableReference 
 }
 
 static void addUnknownAddressUniverse(InferenceContext &context, std::unordered_set<VariableReference *> &targets) {
-	targets.insert(
-		context.currentAddressState->addressTakenVariables.begin(), context.currentAddressState->addressTakenVariables.end()
-	);
+	const std::unordered_set<VariableReference *> &addressTakenVariables =
+		context.currentAddressState.read().addressTakenVariables;
+	targets.insert(addressTakenVariables.begin(), addressTakenVariables.end());
 }
 
 static std::unordered_set<VariableReference *>
@@ -269,8 +272,9 @@ static void collectTransitiveAddressTargets(
 		if (!targets.insert(target).second)
 			continue;
 		Variable *variable = variableForAddressTarget(target);
-		auto stored = context.currentAddressState->variables.find(context.normalizeReference(target));
-		if (stored == context.currentAddressState->variables.end()) {
+		const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
+		auto stored = variables.find(context.normalizeReference(target));
+		if (stored == variables.end()) {
 			if (variable && typeMayContainAddresses(variable->type))
 				unknown = true;
 			continue;
@@ -293,8 +297,9 @@ static void invalidateAddressTargets(InferenceContext &context, const AddressPro
 		if (transitive) {
 			std::vector<VariableReference *> addressTaken(targets.begin(), targets.end());
 			for (VariableReference *target : addressTaken) {
-				auto stored = context.currentAddressState->variables.find(context.normalizeReference(target));
-				if (stored == context.currentAddressState->variables.end())
+				const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
+				auto stored = variables.find(context.normalizeReference(target));
+				if (stored == variables.end())
 					continue;
 				bool nestedUnknown = false;
 				collectTransitiveAddressTargets(context, stored->second, targets, nestedUnknown);
@@ -305,7 +310,7 @@ static void invalidateAddressTargets(InferenceContext &context, const AddressPro
 		noteAddressTargetWrite(context, target);
 		context.setKnownConstant(target, {});
 		Variable *variable = variableForAddressTarget(target);
-		if (context.currentAddressState->variables.contains(context.normalizeReference(target)) ||
+		if (context.currentAddressState.read().variables.contains(context.normalizeReference(target)) ||
 			(variable && typeMayContainAddresses(variable->type)))
 			context.setAddressProvenance(target, {.mayTargets = {}, .unknown = true});
 	}
@@ -341,11 +346,12 @@ static void applyStoreThroughAddress(
 }
 
 static void retainExternalAddress(InferenceContext &context, const AddressProvenance &provenance) {
-	joinAddressProvenance(context.currentAddressState->externallyEscaped, provenance);
+	joinAddressProvenance(context.currentAddressState.write().externallyEscaped, provenance);
 	if (provenance.unknown)
 		noteUnknownExternalEscape(context);
 }
 
 static void invalidateExternalCallWrites(InferenceContext &context) {
-	invalidateAddressTargets(context, context.currentAddressState->externallyEscaped, true);
+	AddressProvenance externallyEscaped = context.currentAddressState.read().externallyEscaped;
+	invalidateAddressTargets(context, externallyEscaped, true);
 }

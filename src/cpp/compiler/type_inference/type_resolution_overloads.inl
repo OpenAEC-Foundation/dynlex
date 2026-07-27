@@ -1,4 +1,5 @@
 #include "expression_invocation_identity.h"
+#include "knownConstantState.h"
 
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged) {
 	if (!current.isDeduced() || !next.isDeduced())
@@ -315,7 +316,7 @@ struct InferenceContext {
 	std::vector<Section *> flexCallSiteSectionStack;
 	// Flow-sensitive variable values. A monostate entry explicitly records that
 	// a previously evaluated variable is unknown in the current execution state.
-	std::unordered_map<VariableReference *, CompileTimeValue> currentVariableValues;
+	KnownConstantState currentVariableValues;
 	// Flow-sensitive provenance for pointer variables whose runtime value may
 	// address local or global variables tracked by constant inference.
 	AddressInferenceState currentAddressState;
@@ -472,8 +473,9 @@ struct InferenceContext {
 			return {};
 		if (expression->kind == Expression::Kind::Variable && expression->variable) {
 			VariableReference *key = normalizeReference(expression->variable);
-			auto currentValue = currentVariableValues.find(key);
-			if (currentValue != currentVariableValues.end())
+			const KnownConstantStorage &knownConstants = currentVariableValues.read();
+			auto currentValue = knownConstants.find(key);
+			if (currentValue != knownConstants.end())
 				return currentValue->second;
 		}
 		if (trial) {
@@ -512,30 +514,32 @@ struct InferenceContext {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return {};
-		auto it = currentVariableValues.find(key);
-		return it != currentVariableValues.end() ? it->second : CompileTimeValue{};
+		const KnownConstantStorage &knownConstants = currentVariableValues.read();
+		auto it = knownConstants.find(key);
+		return it != knownConstants.end() ? it->second : CompileTimeValue{};
 	}
 
 	void setKnownConstant(VariableReference *reference, const CompileTimeValue &value) {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return;
-		currentVariableValues[key] = value;
+		currentVariableValues.write()[key] = value;
 	}
 
 	AddressProvenance lookupAddressProvenance(VariableReference *reference) const {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return {.mayTargets = {}, .unknown = true};
-		auto it = currentAddressState->variables.find(key);
-		return it != currentAddressState->variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
+		const VariableAddressProvenance &variables = currentAddressState.read().variables;
+		auto it = variables.find(key);
+		return it != variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 	}
 
 	void setAddressProvenance(VariableReference *reference, AddressProvenance provenance) {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return;
-		currentAddressState->variables[key] = std::move(provenance);
+		currentAddressState.write().variables[key] = std::move(provenance);
 	}
 
 	void noteWrittenGlobalReference(VariableReference *reference) {

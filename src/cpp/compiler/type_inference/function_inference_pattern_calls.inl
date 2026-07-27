@@ -389,20 +389,21 @@ static bool inferNonFlexPatternCall(
 			inst.fallsThrough = instantiationFallsThrough;
 			inst.finalGlobalConstantValues.clear();
 			for (VariableReference *reference : inst.writtenGlobalReferences) {
-				auto knownIt = context.currentVariableValues.find(reference);
-				if (knownIt != context.currentVariableValues.end() && isCompileTimeKnown(knownIt->second))
+				const KnownConstantStorage &knownConstants = context.currentVariableValues.read();
+				auto knownIt = knownConstants.find(reference);
+				if (knownIt != knownConstants.end() && isCompileTimeKnown(knownIt->second))
 					inst.finalGlobalConstantValues[reference] = knownIt->second;
-				auto provenance = context.currentAddressState->variables.find(reference);
-				inst.finalGlobalAddressProvenance[reference] = provenance != context.currentAddressState->variables.end()
-																   ? provenance->second
-																   : AddressProvenance{.mayTargets = {}, .unknown = true};
+				const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
+				auto provenance = variables.find(reference);
+				inst.finalGlobalAddressProvenance[reference] =
+					provenance != variables.end() ? provenance->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 			}
-			for (VariableReference *reference : context.currentAddressState->addressTakenVariables) {
+			for (VariableReference *reference : context.currentAddressState.read().addressTakenVariables) {
 				Variable *variable = variableForAddressTarget(reference);
 				if (variable && variable->isGlobal)
 					inst.addressTakenGlobalReferences.insert(reference);
 			}
-			for (VariableReference *reference : context.currentAddressState->externallyEscaped.mayTargets) {
+			for (VariableReference *reference : context.currentAddressState.read().externallyEscaped.mayTargets) {
 				Variable *variable = variableForAddressTarget(reference);
 				if (variable && variable->isGlobal)
 					inst.externallyEscapedGlobalProvenance.mayTargets.insert(reference);
