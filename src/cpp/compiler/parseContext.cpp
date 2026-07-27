@@ -69,15 +69,33 @@ void ParseContext::printDiagnostics() {
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options) {
+PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+	requireCompilerInvariant(
+		!dependencies || !options.acceptLiterals,
+		"failed match dependency tracking does not support literal-acceptance ordering"
+	);
 	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
 	std::unordered_map<MatchControlState, MatchParentAlternatives *, MatchControlStateHash> memoizedStates;
+	auto recordDependencies = [&]() {
+		if (!dependencies)
+			return;
+		dependencies->clear();
+		for (const auto &entry : memoizedStates) {
+			const MatchControlState &state = entry.first;
+			collectMatchDependencies(state, *dependencies);
+		}
+		if (!queue.empty())
+			collectMatchDependencies(queue.back().controlState(), *dependencies);
+		normalizeMatchDependencies(*dependencies);
+	};
 	size_t steps = 0;
 	while (queue.size()) {
-		if (options.maxSteps > 0 && steps >= options.maxSteps)
+		if (options.maxSteps > 0 && steps >= options.maxSteps) {
+			recordDependencies();
 			return nullptr;
+		}
 		MatchProgress &currentProgress = queue.back();
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
 		if (!inserted) {
@@ -106,15 +124,17 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			continue;
 		}
 		steps++;
-		std::vector<MatchProgress> nextSteps = currentProgress.step(storage);
-		if (currentProgress.isSubmatchComplete())
-			currentProgress.parents->addCompletion(currentProgress.completedSubmatch());
+		std::vector<PatternDefinition *> visibleDefinitions = currentProgress.visibleDefinitions();
+		std::vector<MatchProgress> nextSteps = currentProgress.step(storage, visibleDefinitions);
+		if (currentProgress.isSubmatchComplete(visibleDefinitions))
+			currentProgress.parents->addCompletion(currentProgress.completedSubmatch(visibleDefinitions));
 		if (currentProgress.isComplete()) {
 			return new PatternMatch(currentProgress.match);
 		}
 		queue.pop_back();
 		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
 	}
+	recordDependencies();
 	return nullptr;
 }
 

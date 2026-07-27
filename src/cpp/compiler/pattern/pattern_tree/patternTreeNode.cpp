@@ -280,6 +280,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 		if (std::find(endpoint->matchingDefinitions.begin(), endpoint->matchingDefinitions.end(), definition) ==
 			endpoint->matchingDefinitions.end()) {
 			endpoint->matchingDefinitions.push_back(definition);
+			endpoint->endpointRevision++;
 		}
 	}
 	requirePatternDefinitionIndexed(definition);
@@ -309,7 +310,10 @@ removeDefinitionPath(PatternTreeNode *current, const std::vector<PatternElement>
 	}
 	// Endpoint: remove this definition from matchingDefinitions
 	auto &defs = current->matchingDefinitions;
+	size_t definitionCount = defs.size();
 	defs.erase(std::remove(defs.begin(), defs.end(), definition), defs.end());
+	if (defs.size() != definitionCount)
+		current->endpointRevision++;
 	current->definitionOccurrences.erase(definition);
 }
 

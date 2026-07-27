@@ -231,7 +231,7 @@ struct ParseContext {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
 	void printDiagnostics();
-	PatternMatch *match(PatternReference *reference, MatchOptions options = {});
+	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
 	VariableReference *createVariableReference(Range range, const std::string &name);

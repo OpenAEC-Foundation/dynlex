@@ -38,7 +38,78 @@ static std::string consumedSourcePrefix(const PatternReference *reference, size_
 	return result;
 }
 
+struct RemainingPatternElement {
+	bool exists = false;
+	PatternElement::Type type = PatternElement::Type::Count;
+	std::string_view text;
+};
+
+static RemainingPatternElement
+remainingPatternElement(const PatternReference *reference, size_t elementIndex, size_t charIndex) {
+	if (!reference || elementIndex >= reference->patternElements.size())
+		return {};
+	const PatternElement &element = reference->patternElements[elementIndex];
+	std::string_view text = element.text;
+	if (charIndex > 0 && charIndex < text.size())
+		text.remove_prefix(charIndex);
+	return {true, element.type, text};
+}
+
 } // namespace
+
+void collectMatchDependencies(const MatchControlState &state, MatchDependencies &dependencies) {
+	dependencies.push_back({MatchDependency::Kind::Endpoint, state.currentNode, state.currentNode->endpointRevision, {}});
+	if (!state.rootNode->argumentChild)
+		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.rootNode, 0, {}});
+
+	RemainingPatternElement element =
+		remainingPatternElement(state.patternReference, state.sourceElementIndex, state.sourceCharIndex);
+	if (!element.exists)
+		return;
+
+	if (!state.currentNode->argumentChild)
+		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.currentNode, 0, {}});
+	if (element.type == PatternElement::Type::VariableLike && !state.currentNode->wordChild)
+		dependencies.push_back({MatchDependency::Kind::WordChild, state.currentNode, 0, {}});
+	if (element.type == PatternElement::Type::Variable)
+		return;
+
+	auto fullLiteral = state.currentNode->literalChildren.find(element.text);
+	if (fullLiteral == state.currentNode->literalChildren.end())
+		dependencies.push_back({MatchDependency::Kind::LiteralChild, state.currentNode, 0, std::string(element.text)});
+	if (element.type != PatternElement::Type::Other || element.text.size() <= 1 ||
+		fullLiteral != state.currentNode->literalChildren.end())
+		return;
+
+	for (size_t prefixLength = 1; prefixLength < element.text.size(); prefixLength++) {
+		std::string_view prefix = element.text.substr(0, prefixLength);
+		if (!state.currentNode->literalChildren.contains(prefix))
+			dependencies.push_back({MatchDependency::Kind::LiteralChild, state.currentNode, 0, std::string(prefix)});
+	}
+}
+
+void normalizeMatchDependencies(MatchDependencies &dependencies) {
+	auto comesBefore = [](const MatchDependency &left, const MatchDependency &right) {
+		if (left.node != right.node)
+			return std::less<const PatternTreeNode *>{}(left.node, right.node);
+		if (left.kind != right.kind)
+			return left.kind < right.kind;
+		if (left.literal != right.literal)
+			return left.literal < right.literal;
+		return left.endpointRevision < right.endpointRevision;
+	};
+	std::sort(dependencies.begin(), dependencies.end(), comesBefore);
+	dependencies.erase(
+		std::unique(
+			dependencies.begin(), dependencies.end(),
+			[](const MatchDependency &left, const MatchDependency &right) {
+		return left.node == right.node && left.kind == right.kind && left.literal == right.literal &&
+			   left.endpointRevision == right.endpointRevision;
+	}
+		),
+		dependencies.end()
+	);
+}
 
 size_t MatchControlStateHash::operator()(const MatchControlState &state) const {
 	size_t hash = 0;
@@ -103,8 +174,8 @@ MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternRef
 
 bool MatchProgress::isComplete() const { return match.matchedEndNode != nullptr; }
 
-bool MatchProgress::isSubmatchComplete() const {
-	return parents && canBeSubmatch() && currentNode && !visibleDefinitions().empty();
+bool MatchProgress::isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const {
+	return parents && canBeSubmatch() && currentNode && !visibleDefinitions.empty();
 }
 
 std::vector<PatternDefinition *> MatchProgress::visibleDefinitions() const {
@@ -141,30 +212,28 @@ MatchControlState MatchProgress::controlState() const {
 
 MatchContinuationState MatchProgress::continuationState() const { return {controlState(), parents}; }
 
-std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
+std::vector<MatchProgress>
+MatchProgress::step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) {
 	std::vector<MatchProgress> nextMatches = std::vector<MatchProgress>();
 
-	bool hasSourceElement = sourceElementIndex < patternReference->patternElements.size();
-	PatternElement::Type elementType = PatternElement::Type::Count;
-	std::string elementText;
-	if (hasSourceElement) {
-		const PatternElement &sourceElement = patternReference->patternElements[sourceElementIndex];
-		elementType = sourceElement.type;
-		elementText = sourceElement.text;
-		if (sourceCharIndex > 0 && sourceCharIndex < elementText.size())
-			elementText = elementText.substr(sourceCharIndex);
-	}
+	RemainingPatternElement element = remainingPatternElement(patternReference, sourceElementIndex, sourceCharIndex);
+	bool hasSourceElement = element.exists;
+	PatternElement::Type elementType = element.type;
+	std::string_view elementText = element.text;
+	auto fullLiteralMatch = hasSourceElement && elementType != PatternElement::Type::Variable
+								? currentNode->literalChildren.find(elementText)
+								: currentNode->literalChildren.end();
 
 	// Lowest priority first. ParseContext::match() explores queue.back(), so later pushes run earlier.
 	if (hasSourceElement && elementType == PatternElement::Type::Other && elementText.size() > 1) {
-		bool hasFullLiteralMatch = currentNode->literalChildren.contains(elementText);
-		if (!hasFullLiteralMatch) {
+		if (fullLiteralMatch == currentNode->literalChildren.end()) {
 			for (size_t prefixLength = 1; prefixLength < elementText.size(); prefixLength++) {
-				std::string prefix = elementText.substr(0, prefixLength);
-				if (!currentNode->literalChildren.contains(prefix))
+				std::string_view prefix = elementText.substr(0, prefixLength);
+				auto prefixMatch = currentNode->literalChildren.find(prefix);
+				if (prefixMatch == currentNode->literalChildren.end())
 					continue;
 				MatchProgress splitStep = *this;
-				splitStep.currentNode = currentNode->literalChildren[prefix];
+				splitStep.currentNode = prefixMatch->second;
 				splitStep.match.nodesPassed.push_back(splitStep.currentNode);
 				splitStep.sourceCharIndex += prefixLength;
 				splitStep.patternPos += prefixLength;
@@ -213,10 +282,10 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 		}
 	}
 
-	if (!visibleDefinitions().empty()) {
+	if (!visibleDefinitions.empty()) {
 		// end node found — precedence and ordering are handled later during type inference
 		if (!parents && sourceElementIndex == patternReference->patternElements.size()) {
-			addMatchData(match);
+			addMatchData(match, visibleDefinitions);
 		}
 
 		if (canBeSubmatch()) {
@@ -232,13 +301,13 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 				clone.matchedArgumentIndex = 0;
 
 				clone.type = SectionType::Function;
-				nextMatches.push_back(resumeParent(clone));
+				nextMatches.push_back(resumeParent(clone, visibleDefinitions));
 			}
 			// Step up to parent match (higher LIFO priority — prefer returning to the
 			// parent over speculatively extending into a new expression).
 			if (parents) {
 				for (auto parent = parents->values.rbegin(); parent != parents->values.rend(); parent++)
-					nextMatches.push_back(resumeParent(**parent));
+					nextMatches.push_back(resumeParent(**parent, visibleDefinitions));
 			}
 		}
 	}
@@ -258,7 +327,7 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementText.size());
 					size_t variableIndex = substituteStep.match.discoveredVariables.size();
-					substituteStep.match.discoveredVariables.push_back({elementText, lineStart, lineEnd});
+					substituteStep.match.discoveredVariables.push_back({std::string(elementText), lineStart, lineEnd});
 					substituteStep.match.orderedArguments.push_back(
 						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
@@ -304,7 +373,7 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 			size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 			size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementText.size());
 			size_t wordIndex = wordStep.match.discoveredWords.size();
-			wordStep.match.discoveredWords.push_back({elementText, lineStart, lineEnd});
+			wordStep.match.discoveredWords.push_back({std::string(elementText), lineStart, lineEnd});
 			wordStep.match.orderedArguments.push_back(
 				{wordStep.matchedArgumentIndex, MatchedArgument::Kind::Word, nullptr, wordIndex}
 			);
@@ -313,11 +382,9 @@ std::vector<MatchProgress> MatchProgress::step(MatchStorage &storage) {
 			nextMatches.push_back(std::move(wordStep));
 		}
 		// most priority: text match
-		bool hasFullLiteralMatch =
-			elementType != PatternElement::Type::Variable && currentNode->literalChildren.contains(elementText);
-		if (hasFullLiteralMatch) {
+		if (fullLiteralMatch != currentNode->literalChildren.end()) {
 			MatchProgress elemStep = *this;
-			elemStep.currentNode = currentNode->literalChildren[elementText];
+			elemStep.currentNode = fullLiteralMatch->second;
 			elemStep.match.nodesPassed.push_back(elemStep.currentNode);
 			elemStep.sourceElementIndex++;
 			elemStep.sourceCharIndex = 0;
@@ -335,15 +402,17 @@ bool MatchProgress::canStartSubmatch() const {
 
 bool MatchProgress::canBeSubmatch() const { return type == SectionType::Function; }
 
-MatchProgress MatchProgress::resumeParent(const MatchProgress &parentProgress) const {
-	return resumeParent(parentProgress, completedSubmatch());
+MatchProgress MatchProgress::resumeParent(
+	const MatchProgress &parentProgress, const std::vector<PatternDefinition *> &visibleDefinitions
+) const {
+	return resumeParent(parentProgress, completedSubmatch(visibleDefinitions));
 }
 
-CompletedMatchProgress MatchProgress::completedSubmatch() const {
+CompletedMatchProgress MatchProgress::completedSubmatch(const std::vector<PatternDefinition *> &visibleDefinitions) const {
 	CompletedMatchProgress completed;
 	completed.currentNode = currentNode;
 	completed.match = match;
-	addMatchData(completed.match);
+	addMatchData(completed.match, visibleDefinitions);
 	completed.sourceElementIndex = sourceElementIndex;
 	completed.sourceArgumentIndex = sourceArgumentIndex;
 	completed.patternStartPos = patternStartPos;
@@ -366,9 +435,9 @@ MatchProgress MatchProgress::resumeParent(const MatchProgress &parentProgress, c
 	return resumed;
 }
 
-void MatchProgress::addMatchData(PatternMatch &match) const {
+void MatchProgress::addMatchData(PatternMatch &match, const std::vector<PatternDefinition *> &visibleDefinitions) const {
 	match.matchedEndNode = currentNode;
-	match.matchingDefinitions = visibleDefinitions();
+	match.matchingDefinitions = visibleDefinitions;
 	match.lineStartPos = patternReference->pattern.getLinePos(patternStartPos);
 	match.lineEndPos = patternReference->pattern.getLinePos(patternPos);
 }

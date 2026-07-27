@@ -29,6 +29,9 @@ struct MatchControlState {
 	bool operator==(const MatchControlState &other) const = default;
 };
 
+void collectMatchDependencies(const MatchControlState &state, MatchDependencies &dependencies);
+void normalizeMatchDependencies(MatchDependencies &dependencies);
+
 struct MatchControlStateHash {
 	size_t operator()(const MatchControlState &state) const;
 };
@@ -104,17 +107,18 @@ struct MatchProgress {
 	size_t matchedArgumentIndex{};
 
 	bool isComplete() const;
-	bool isSubmatchComplete() const;
-	std::vector<MatchProgress> step(MatchStorage &storage);
+	bool isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
+	std::vector<MatchProgress> step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions);
 	MatchControlState controlState() const;
 	MatchContinuationState continuationState() const;
 	bool canStartSubmatch() const;
 	bool canBeSubmatch() const;
 	std::vector<PatternDefinition *> visibleDefinitions() const;
-	CompletedMatchProgress completedSubmatch() const;
-	MatchProgress resumeParent(const MatchProgress &parentProgress) const;
+	CompletedMatchProgress completedSubmatch(const std::vector<PatternDefinition *> &visibleDefinitions) const;
+	MatchProgress
+	resumeParent(const MatchProgress &parentProgress, const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	static MatchProgress resumeParent(const MatchProgress &parentProgress, const CompletedMatchProgress &submatch);
-	void addMatchData(PatternMatch &match) const;
+	void addMatchData(PatternMatch &match, const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	std::string toString() const;
 };
 
