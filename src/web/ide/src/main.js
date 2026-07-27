@@ -3,6 +3,7 @@ import {
   createShaderPreview,
   validateShaderGeometryDescriptor
 } from "../../../../web/shader-renderer.js";
+import { isGeneratedTerrainGeometryDescriptor } from "../../../../web/terrain-geometry.js";
 import "./styles.css";
 
 self.MonacoEnvironment = {
@@ -213,6 +214,10 @@ function shouldAutoRunOnStartup() {
 async function loadShaderRenderer(config) {
   if (config === null) {
     return null;
+  }
+  if (isGeneratedTerrainGeometryDescriptor(config.geometry)) {
+    validateShaderGeometryDescriptor(config.geometry);
+    return Object.freeze({ geometry: config.geometry });
   }
   const [geometryResponse, indexResponse] = await Promise.all([
     fetch(`/${config.geometry.path}`),

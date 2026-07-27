@@ -18,25 +18,32 @@ revisions.
 ## Terrain geometry
 
 `endless-terrain.dl` displaces camera-centered terrain and water surfaces in its
-vertex stage. `generate-terrain-grid.mjs` creates their deterministic
-`float32x4` vertex buffer and fixed `uint16` triangle indices from the sampling
-rules in `config.mjs`. A single exponential function derives every row's column
-count from the near and far resolutions, producing a constant proportional
-density decay toward the horizon. A generic index zipper triangulates adjacent
-rows with different column counts, keeping every transition watertight without
-runtime topology changes.
+vertex stage. `web/terrain-geometry.js` creates their deterministic `float32x4`
+vertex buffer and fixed `uint32` triangle indices from the sampling rules in
+`config.mjs`. The configured row and column counts describe a reference
+horizontal framebuffer width; the same generator scales both dimensions to the
+viewer's actual horizontal pixel count and caches the current result on its
+complete immutable configuration descriptor. Exponential distance and column
+decay preserve proportional density toward the horizon. A generic index zipper
+triangulates adjacent rows with different column counts, keeping every
+transition watertight.
 
 Indexing lets the GPU evaluate each displaced sample once instead of once per
 triangle corner. The first geometry coordinate selects a fixed camera ray; the
-second stores an exponentially spaced camera-plane distance. Every column
-therefore remains straight through perspective projection while the increasingly
-distant rows avoid spending equal work on sub-pixel geometry. The coarser water
-grid receives analytic waves and normals; depth testing against the terrain
-creates the shoreline without ray marching. The buffer also embeds one
-full-screen sky triangle, allowing both compiled stages and all three surfaces
-to share named interpolants in one draw. Changing the shader, camera-distance
-range, either sampling rule, or the generator updates the geometry and manifest
-hashes automatically.
+second stores an exponentially spaced radial world distance. The vertex shader
+derives each ray's forward distance from its angle, so outer ultrawide rays and
+the center ray advance equally through the height field. Every column therefore
+remains straight through perspective projection without under-sampling the
+terrain at the sides. Increasingly distant rows still avoid spending equal work
+on sub-pixel geometry. The coarser water grid receives analytic waves and
+normals; depth testing against the terrain creates the shoreline without ray
+marching. The buffer also embeds one full-screen sky triangle, allowing both
+compiled stages and all three surfaces to share named interpolants in one draw.
+The banner resolves density against the full hero width, so animating the
+thought-cloud mask does not rebuild topology. The IDE uses the same generator
+against its preview width. Changing the camera-distance range, either sampling
+rule, or generator configuration creates
+a distinct cache entry automatically.
 
 ## Volumetric geometry
 

@@ -193,12 +193,17 @@ await waitFor(
   "the second shader to preload while the first shader renders"
 );
 const firstPreloadedShaderState = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
   const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
   return {
     layer: canvas.parentElement.dataset.shaderLayer,
-    revision: Number(canvas.dataset.previewRevision)
+    revision: Number(canvas.dataset.previewRevision),
+    vertexCount: Number(canvas.dataset.previewGeometryVertices),
+    horizontalPixels: Number(canvas.dataset.previewGeometryHorizontalPixels),
+    sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1))
   };
 })()`);
+assert.equal(firstPreloadedShaderState.horizontalPixels, firstPreloadedShaderState.sectionPixels);
 const shaderState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
   const immersiveCanvas = section.querySelector('[data-shader-layer]:not([data-layer-state="dormant"]) canvas');
@@ -508,14 +513,6 @@ assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.vertex.path}`)),
   "The terrain scene must load its DynLex-compiled displacement vertex shader"
 );
-assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.path}`)),
-  "The terrain scene must load its fixed camera LOD grid"
-);
-assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.indices.path}`)),
-  "The terrain scene must load its indexed triangle topology"
-);
 const thirdShaderPlaybackState = await evaluate(`(async () => {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const section = document.querySelector('[data-live-shader-banner]');
@@ -559,10 +556,7 @@ assert.equal(
   true,
   "The volumetric editor link must stay below ordinary HTTP request-line limits"
 );
-const volumetricShaderEditorPath = await evaluate(`(() => {
-  const url = new URL(document.querySelector('[data-shader-editor-link]').href);
-  return url.pathname + url.search;
-})()`);
+const terrainShaderEditorPath = `/ide/index.html?mode=shader&scene=${shaderManifest.scenes[1].id}`;
 if (screenshotDirectory) {
   const installFixedNanoFrame = async (elapsedSeconds) => {
     await evaluate(`(async () => {
@@ -814,7 +808,7 @@ for (const section of ["sketches", "language"]) {
   await captureScreenshot(`homepage-${section}`);
 }
 
-await navigate(volumetricShaderEditorPath);
+await navigate(terrainShaderEditorPath);
 await waitFor(
   "document.querySelector('#shader-preview')?.dataset.previewState === 'ready'",
   "the editable shader's first successful preview"
@@ -834,6 +828,8 @@ const initialShaderState = await evaluate(`(() => {
     mode: document.documentElement.dataset.workspaceMode,
     revision: Number(canvas.dataset.previewRevision),
     vertexCount: Number(canvas.dataset.previewGeometryVertices),
+    horizontalPixels: Number(canvas.dataset.previewGeometryHorizontalPixels),
+    canvasPixels: Math.ceil(canvas.clientWidth * (window.devicePixelRatio || 1)),
     canvasHeight: canvas.getBoundingClientRect().height,
     shellHeight: shell.getBoundingClientRect().height,
     toolPanelHeight: toolPanel.getBoundingClientRect().height,
@@ -843,7 +839,8 @@ const initialShaderState = await evaluate(`(() => {
 })()`);
 assert.equal(initialShaderState.mode, "shader");
 assert.ok(initialShaderState.revision >= 1);
-assert.equal(initialShaderState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
+assert.ok(initialShaderState.vertexCount > 0);
+assert.equal(initialShaderState.horizontalPixels, initialShaderState.canvasPixels);
 assert.ok(
   initialShaderState.canvasHeight >= initialShaderState.toolPanelHeight * 0.75
     && Math.abs(initialShaderState.canvasHeight - initialShaderState.shellHeight) <= 1,
@@ -898,7 +895,6 @@ await waitFor(
 );
 assert.equal(await evaluate("document.querySelector('#runtime-output').textContent.trim()"), "64");
 await captureScreenshot("ide-finished");
-
 await command("Emulation.setDeviceMetricsOverride", {
   width: 2560,
   height: 900,
@@ -906,17 +902,20 @@ await command("Emulation.setDeviceMetricsOverride", {
   mobile: false
 });
 await navigate("/");
-await waitFor(
-  "document.querySelector('[data-live-shader-banner]')?.dataset.shaderPlaylistReady === 'true'",
-  "the ultrawide shader banner"
-);
+await waitFor("document.querySelector('[data-live-shader-banner]')?.dataset.shaderPlaylistReady === 'true'", "the ultrawide shader banner");
+await waitFor("document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '1'", "the ultrawide terrain topology");
 const ultrawideThoughtLayout = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
   const codeRect = document.querySelector('[data-shader-code]').getBoundingClientRect();
   const cloudGuide = document.querySelector('.thought-assembly');
   const cloudRect = cloudGuide.getBoundingClientRect();
+  const terrainCanvas = section.querySelector('[data-layer-state="dormant"] canvas');
   return {
     cloudWidthInScreens: cloudRect.width / codeRect.width,
     gapInScreens: (cloudRect.left - codeRect.right) / codeRect.width,
+    terrainVertices: Number(terrainCanvas.dataset.previewGeometryVertices),
+    terrainPixels: Number(terrainCanvas.dataset.previewGeometryHorizontalPixels),
+    sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1)),
     guideIsTransparent: (
       getComputedStyle(cloudGuide).backgroundImage === 'none'
       && getComputedStyle(cloudGuide).backgroundColor === 'rgba(0, 0, 0, 0)'
@@ -924,6 +923,8 @@ const ultrawideThoughtLayout = await evaluate(`(() => {
     )
   };
 })()`);
+assert.equal(ultrawideThoughtLayout.terrainPixels, ultrawideThoughtLayout.sectionPixels);
+assert.ok(ultrawideThoughtLayout.terrainVertices > firstPreloadedShaderState.vertexCount);
 assert.ok(
   ultrawideThoughtLayout.cloudWidthInScreens >= 0.74
     && ultrawideThoughtLayout.cloudWidthInScreens <= 0.82,

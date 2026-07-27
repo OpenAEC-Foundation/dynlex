@@ -1,3 +1,9 @@
+import {
+  isGeneratedTerrainGeometryDescriptor,
+  resolveTerrainGeometryDescriptor,
+  validateTerrainGeometryDescriptor
+} from "./terrain-geometry.js";
+
 const vertexSource = `#version 300 es
 precision highp float;
 
@@ -79,9 +85,7 @@ function deleteProgramState(gl, state) {
     for (const uniform of pass.uniforms) {
       gl.deleteBuffer(uniform.buffer);
     }
-    if (pass.indexBuffer) gl.deleteBuffer(pass.indexBuffer);
-    if (pass.vertexBuffer) gl.deleteBuffer(pass.vertexBuffer);
-    gl.deleteVertexArray(pass.vertexArray);
+    deleteGeometryBinding(gl, pass);
     gl.deleteProgram(pass.program);
   }
 }
@@ -111,24 +115,44 @@ function createUniformBindings(gl, program, reflectedUniforms) {
 }
 
 export function validateShaderGeometryDescriptor(geometry, requireData = false) {
+  const validInterface = (
+    geometry
+    && geometry.format === "float32x4"
+    && typeof geometry.attributeEncoding === "string"
+    && geometry.attributeEncoding.length > 0
+    && geometry.primitive === "triangles"
+    && typeof geometry.render?.backgroundPass === "boolean"
+    && ["opaque", "additive"].includes(geometry.render.blendMode)
+    && typeof geometry.render.depthTest === "boolean"
+  );
+  if (isGeneratedTerrainGeometryDescriptor(geometry)) {
+    if (
+      !validInterface
+      || requireData
+      || geometry.vertexCount !== undefined
+      || geometry.data !== undefined
+      || geometry.indices !== undefined
+    ) {
+      throw new Error("Invalid shader geometry");
+    }
+    validateTerrainGeometryDescriptor(geometry);
+    return geometry;
+  }
+
   const indices = geometry?.indices;
   const validIndices = indices === undefined || (
     indices
-    && indices.format === "uint16"
+    && indices.format === "uint32"
     && Number.isInteger(indices.count)
     && indices.count > 0
     && (!requireData || indices.data instanceof ArrayBuffer)
     && (
       !(indices.data instanceof ArrayBuffer)
-      || indices.data.byteLength === indices.count * Uint16Array.BYTES_PER_ELEMENT
+      || indices.data.byteLength === indices.count * Uint32Array.BYTES_PER_ELEMENT
     )
   );
   if (
-    !geometry
-    || geometry.format !== "float32x4"
-    || typeof geometry.attributeEncoding !== "string"
-    || geometry.attributeEncoding.length === 0
-    || geometry.primitive !== "triangles"
+    !validInterface
     || !Number.isInteger(geometry.vertexCount)
     || geometry.vertexCount <= 0
     || typeof geometry.render?.backgroundPass !== "boolean"
@@ -146,26 +170,11 @@ export function validateShaderGeometryDescriptor(geometry, requireData = false) 
   return geometry;
 }
 
-function createProgramPass(
-  gl,
-  vertexSourceText,
-  fragmentSourceText,
-  reflectedUniforms,
-  geometry,
-  render,
-  renderPass
-) {
-  let vertexShader = null;
-  let fragmentShader = null;
-  let program = null;
+function createGeometryBinding(gl, geometry) {
   let vertexArray = null;
   let vertexBuffer = null;
   let indexBuffer = null;
-  let uniforms = [];
   try {
-    vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSourceText);
-    fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSourceText);
-    program = linkProgram(gl, vertexShader, fragmentShader);
     vertexArray = gl.createVertexArray();
     if (!vertexArray) {
       throw new Error("WebGL could not allocate a vertex array");
@@ -190,25 +199,65 @@ function createProgramPass(
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices.data, gl.STATIC_DRAW);
       }
     }
-    uniforms = createUniformBindings(gl, program, reflectedUniforms);
     return {
-      program,
-      uniforms,
       vertexArray,
       vertexBuffer,
       indexBuffer,
       vertexCount: geometry ? geometry.vertexCount : 3,
       indexCount: geometry?.indices?.count ?? 0,
-      indexType: geometry?.indices ? gl.UNSIGNED_SHORT : null,
+      indexType: geometry?.indices ? gl.UNSIGNED_INT : null
+    };
+  } catch (error) {
+    if (indexBuffer) gl.deleteBuffer(indexBuffer);
+    if (vertexBuffer) gl.deleteBuffer(vertexBuffer);
+    if (vertexArray) gl.deleteVertexArray(vertexArray);
+    throw error;
+  }
+}
+
+function deleteGeometryBinding(gl, binding) {
+  if (binding.indexBuffer) gl.deleteBuffer(binding.indexBuffer);
+  if (binding.vertexBuffer) gl.deleteBuffer(binding.vertexBuffer);
+  gl.deleteVertexArray(binding.vertexArray);
+}
+
+function replacePassGeometry(gl, pass, geometry) {
+  const nextBinding = createGeometryBinding(gl, geometry);
+  deleteGeometryBinding(gl, pass);
+  Object.assign(pass, nextBinding);
+}
+
+function createProgramPass(
+  gl,
+  vertexSourceText,
+  fragmentSourceText,
+  reflectedUniforms,
+  geometry,
+  render,
+  renderPass
+) {
+  let vertexShader = null;
+  let fragmentShader = null;
+  let program = null;
+  let geometryBinding = null;
+  let uniforms = [];
+  try {
+    vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSourceText);
+    fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSourceText);
+    program = linkProgram(gl, vertexShader, fragmentShader);
+    geometryBinding = createGeometryBinding(gl, geometry);
+    uniforms = createUniformBindings(gl, program, reflectedUniforms);
+    return {
+      program,
+      uniforms,
+      ...geometryBinding,
       render,
       renderPass,
       depthTest: render.depthTest
     };
   } catch (error) {
     for (const uniform of uniforms) gl.deleteBuffer(uniform.buffer);
-    if (indexBuffer) gl.deleteBuffer(indexBuffer);
-    if (vertexBuffer) gl.deleteBuffer(vertexBuffer);
-    if (vertexArray) gl.deleteVertexArray(vertexArray);
+    if (geometryBinding) deleteGeometryBinding(gl, geometryBinding);
     if (program) gl.deleteProgram(program);
     throw error;
   } finally {
@@ -235,10 +284,35 @@ export function createShaderPreview(canvas, options = {}) {
   const elapsedSeconds = typeof options.elapsedSeconds === "function"
     ? options.elapsedSeconds
     : (timestamp) => (timestamp - createdAt) / 1000;
+  if (
+    options.geometryHorizontalPixels !== undefined
+    && typeof options.geometryHorizontalPixels !== "function"
+  ) {
+    throw new Error("Shader preview geometry width provider must be a function");
+  }
   let activeState = null;
   let revision = 0;
   let running = options.running !== false;
   let frameRequest = 0;
+
+  function currentGeometryHorizontalPixels() {
+    const horizontalPixels = options.geometryHorizontalPixels
+      ? options.geometryHorizontalPixels()
+      : gl.drawingBufferWidth;
+    if (!Number.isSafeInteger(horizontalPixels) || horizontalPixels <= 0) {
+      throw new Error("Shader preview geometry width must be a positive integer");
+    }
+    return horizontalPixels;
+  }
+
+  function updateGeometryDataset(geometry, horizontalPixels = null) {
+    canvas.dataset.previewGeometryVertices = String(geometry?.vertexCount ?? 0);
+    if (horizontalPixels === null) {
+      delete canvas.dataset.previewGeometryHorizontalPixels;
+    } else {
+      canvas.dataset.previewGeometryHorizontalPixels = String(horizontalPixels);
+    }
+  }
 
   function replaceProgram(programDescriptor, reflectedUniforms) {
     if (
@@ -255,13 +329,24 @@ export function createShaderPreview(canvas, options = {}) {
       throw new Error("Compiler returned invalid shader uniforms");
     }
     reflectedUniforms.forEach(validateUniform);
-    if (programDescriptor.geometry) {
-      validateShaderGeometryDescriptor(programDescriptor.geometry, true);
+    const geometrySource = programDescriptor.geometry ?? null;
+    if (geometrySource) {
+      validateShaderGeometryDescriptor(
+        geometrySource,
+        !isGeneratedTerrainGeometryDescriptor(geometrySource)
+      );
     }
+    resizeDrawingBuffer();
+    const geometryHorizontalPixels = isGeneratedTerrainGeometryDescriptor(geometrySource)
+      ? currentGeometryHorizontalPixels()
+      : null;
+    const geometry = geometryHorizontalPixels === null
+      ? geometrySource
+      : resolveTerrainGeometryDescriptor(geometrySource, geometryHorizontalPixels);
 
     const passes = [];
+    let geometryPass = null;
     try {
-      const geometry = programDescriptor.geometry;
       if (!geometry || geometry.render.backgroundPass) {
         passes.push(createProgramPass(
           gl,
@@ -274,7 +359,7 @@ export function createShaderPreview(canvas, options = {}) {
         ));
       }
       if (geometry) {
-        passes.push(createProgramPass(
+        geometryPass = createProgramPass(
           gl,
           programDescriptor.vertexSource,
           programDescriptor.fragmentSource,
@@ -282,7 +367,8 @@ export function createShaderPreview(canvas, options = {}) {
           geometry,
           geometry.render,
           geometry.render.backgroundPass ? 1 : 0
-        ));
+        );
+        passes.push(geometryPass);
       }
     } catch (error) {
       deleteProgramState(gl, { passes });
@@ -290,16 +376,37 @@ export function createShaderPreview(canvas, options = {}) {
     }
 
     const previousState = activeState;
-    activeState = { passes };
-    resizeDrawingBuffer();
+    activeState = {
+      passes,
+      geometrySource,
+      geometryPass,
+      geometryHorizontalPixels
+    };
     revision += 1;
     canvas.dataset.previewRevision = String(revision);
-    canvas.dataset.previewGeometryVertices = String(programDescriptor.geometry?.vertexCount ?? 0);
+    updateGeometryDataset(geometry, geometryHorizontalPixels);
     canvas.dataset.previewState = "ready";
     deleteProgramState(gl, previousState);
     if (!frameRequest) {
       frameRequest = requestAnimationFrame(drawFrame);
     }
+  }
+
+  function resizeGeneratedGeometry() {
+    if (!isGeneratedTerrainGeometryDescriptor(activeState?.geometrySource)) {
+      return;
+    }
+    const horizontalPixels = currentGeometryHorizontalPixels();
+    if (horizontalPixels === activeState.geometryHorizontalPixels) {
+      return;
+    }
+    const geometry = resolveTerrainGeometryDescriptor(
+      activeState.geometrySource,
+      horizontalPixels
+    );
+    replacePassGeometry(gl, activeState.geometryPass, geometry);
+    activeState.geometryHorizontalPixels = horizontalPixels;
+    updateGeometryDataset(geometry, horizontalPixels);
   }
 
   function drawPass(pass, frame) {
@@ -332,6 +439,7 @@ export function createShaderPreview(canvas, options = {}) {
     frameRequest = 0;
     resizeDrawingBuffer();
     if (activeState) {
+      resizeGeneratedGeometry();
       const frame = {
         elapsedSeconds: elapsedSeconds(timestamp),
         width: gl.drawingBufferWidth,

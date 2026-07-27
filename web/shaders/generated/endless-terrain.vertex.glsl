@@ -55,9 +55,47 @@ float left1_4331_43right_f32_f32(float left, float right)
     return left + right;
 }
 
+float terrain_camera_x_at_moment_f32(float moment)
+{
+    float tmp = 201.6999969482421875;
+    float tmp1 = 0.090999998152256011962890625;
+    float tmp2 = left1_4321_43right_f32_f32(moment, tmp1);
+    float tmp3 = _the43_sine_of_value_f32(tmp2);
+    float tmp4 = 4.19999980926513671875;
+    float tmp5 = left1_4321_43right_f32_f32(tmp3, tmp4);
+    float tmp6 = 0.037000000476837158203125;
+    float tmp7 = left1_4321_43right_f32_f32(moment, tmp6);
+    float tmp8 = _the43_cosine_of_value_f32(tmp7);
+    float tmp9 = 1.60000002384185791015625;
+    float tmp10 = left1_4321_43right_f32_f32(tmp8, tmp9);
+    float tmp11 = left1_4331_43right_f32_f32(tmp5, tmp10);
+    return left1_4331_43right_f32_f32(tmp, tmp11);
+}
+
 float _the_431negative_1of_34opposite_1of_3453value_f32(float value)
 {
     return -value;
+}
+
+float terrain_camera_z_at_moment_f32(float moment)
+{
+    float tmp = 92.09999847412109375;
+    float tmp1 = _the_431negative_1of_34opposite_1of_3453value_f32(tmp);
+    float tmp2 = 3.25;
+    float tmp3 = left1_4321_43right_f32_f32(moment, tmp2);
+    return left1_4331_43right_f32_f32(tmp1, tmp3);
+}
+
+float terrain_maximum_possible_height()
+{
+    return 12.1000003814697265625;
+}
+
+float terrain_camera_altitude()
+{
+    float tmp = terrain_maximum_possible_height();
+    float tmp1 = 0.699999988079071044921875;
+    return left1_4331_43right_f32_f32(tmp, tmp1);
 }
 
 float left1_4351_43right_f32_f32(float left, float right)
@@ -65,14 +103,19 @@ float left1_4351_43right_f32_f32(float left, float right)
     return left - right;
 }
 
-float _the43_floor_of_value_f32(float value)
+float _the43_square_root_of_value_f32(float value)
 {
-    return floor(value);
+    return sqrt(value);
 }
 
 bool left_2_right_f32_f32(float left, float right)
 {
     return left > right;
+}
+
+float _the43_floor_of_value_f32(float value)
+{
+    return floor(value);
 }
 
 float simplex_permutation_of_value_f32(float value)
@@ -389,9 +432,13 @@ float terrain_height_at_x_z_f32_f32(float x, float z)
     return left1_4351_43right_f32_f32(tmp115, tmp116);
 }
 
-float _the43_square_root_of_value_f32(float value)
+float water_detail_visibility_at_distance_f32(float _distance)
 {
-    return sqrt(value);
+    float tmp = 1.0;
+    float tmp1 = 48.0;
+    float tmp2 = 96.0;
+    float tmp3 = smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp1, tmp2, _distance);
+    return left1_4351_43right_f32_f32(tmp, tmp3);
 }
 
 void main()
@@ -408,237 +455,236 @@ void main()
     float tmp4 = 0.5;
     if (left_0_right_f32_f32(surface_vertex, tmp4))
     {
-        vec4 _515 = vec4(0.0);
-        _515.y = in_Position.y;
-        _515.x = in_Position.x;
-        dynlex_interpolant_7465727261696e5f706f736974696f6e = _515;
+        vec4 _523 = vec4(0.0);
+        _523.y = in_Position.y;
+        _523.x = in_Position.x;
+        dynlex_interpolant_7465727261696e5f706f736974696f6e = _523;
         dynlex_interpolant_7465727261696e5f6e6f726d616c = vec4(0.0, 1.0, 0.0, 0.0);
         dynlex_interpolant_7465727261696e5f6d6174657269616c = vec4(0.5, 0.0, 0.0, 0.0);
-        vec4 _521 = vec4(0.0, 0.0, 0.99989998340606689453125, 1.0);
-        _521.y = in_Position.y;
-        _521.x = in_Position.x;
-        gl_Position = _521;
+        vec4 _529 = vec4(0.0, 0.0, 0.99989998340606689453125, 1.0);
+        _529.y = in_Position.y;
+        _529.x = in_Position.x;
+        gl_Position = _529;
     }
     else
     {
-        float view_distance = in_Position.y;
-        float tmp17 = 201.6999969482421875;
-        float tmp18 = 0.090999998152256011962890625;
-        float tmp19 = left1_4321_43right_f32_f32(time, tmp18);
-        float tmp20 = _the43_sine_of_value_f32(tmp19);
-        float tmp21 = 4.19999980926513671875;
-        float tmp22 = left1_4321_43right_f32_f32(tmp20, tmp21);
-        float tmp23 = 0.037000000476837158203125;
-        float tmp24 = left1_4321_43right_f32_f32(time, tmp23);
-        float tmp25 = _the43_cosine_of_value_f32(tmp24);
-        float tmp26 = 1.60000002384185791015625;
-        float tmp27 = left1_4321_43right_f32_f32(tmp25, tmp26);
-        float tmp28 = left1_4331_43right_f32_f32(tmp22, tmp27);
-        float camera_x = left1_4331_43right_f32_f32(tmp17, tmp28);
-        float tmp29 = 92.09999847412109375;
-        float tmp30 = _the_431negative_1of_34opposite_1of_3453value_f32(tmp29);
-        float tmp31 = 3.25;
-        float tmp32 = left1_4321_43right_f32_f32(time, tmp31);
-        float camera_z = left1_4331_43right_f32_f32(tmp30, tmp32);
-        float camera_ground = terrain_height_at_x_z_f32_f32(camera_x, camera_z);
-        float tmp33 = 3.150000095367431640625;
-        float tmp34 = left1_4331_43right_f32_f32(camera_ground, tmp33);
-        float tmp35 = 0.17000000178813934326171875;
-        float tmp36 = left1_4321_43right_f32_f32(time, tmp35);
-        float tmp37 = _the43_sine_of_value_f32(tmp36);
-        float tmp38 = 0.14000000059604644775390625;
-        float tmp39 = left1_4321_43right_f32_f32(tmp37, tmp38);
-        float camera_y = left1_4331_43right_f32_f32(tmp34, tmp39);
-        float tmp40 = 0.1550000011920928955078125;
-        float tmp41 = 0.10999999940395355224609375;
-        float tmp42 = left1_4321_43right_f32_f32(time, tmp41);
-        float tmp43 = _the43_sine_of_value_f32(tmp42);
-        float tmp44 = 0.01200000010430812835693359375;
-        float tmp45 = left1_4321_43right_f32_f32(tmp43, tmp44);
-        float camera_pitch = left1_4331_43right_f32_f32(tmp40, tmp45);
+        float ray_distance = in_Position.y;
+        float camera_x = terrain_camera_x_at_moment_f32(time);
+        float camera_z = terrain_camera_z_at_moment_f32(time);
+        float camera_y = terrain_camera_altitude();
+        float camera_pitch = 0.1550000011920928955078125;
         float pitch_sine = _the43_sine_of_value_f32(camera_pitch);
         float pitch_cosine = _the43_cosine_of_value_f32(camera_pitch);
-        float tmp46 = 0.07299999892711639404296875;
-        float tmp47 = left1_4321_43right_f32_f32(time, tmp46);
-        float tmp48 = _the43_sine_of_value_f32(tmp47);
-        float tmp49 = 0.12999999523162841796875;
-        float tmp50 = left1_4321_43right_f32_f32(tmp48, tmp49);
-        float tmp51 = 0.041000001132488250732421875;
-        float tmp52 = left1_4321_43right_f32_f32(time, tmp51);
-        float tmp53 = _the43_cosine_of_value_f32(tmp52);
-        float tmp54 = 0.04500000178813934326171875;
-        float tmp55 = left1_4321_43right_f32_f32(tmp53, tmp54);
-        float yaw = left1_4331_43right_f32_f32(tmp50, tmp55);
+        float tmp17 = 0.07299999892711639404296875;
+        float tmp18 = left1_4321_43right_f32_f32(time, tmp17);
+        float tmp19 = _the43_sine_of_value_f32(tmp18);
+        float tmp20 = 0.12999999523162841796875;
+        float tmp21 = left1_4321_43right_f32_f32(tmp19, tmp20);
+        float tmp22 = 0.041000001132488250732421875;
+        float tmp23 = left1_4321_43right_f32_f32(time, tmp22);
+        float tmp24 = _the43_cosine_of_value_f32(tmp23);
+        float tmp25 = 0.04500000178813934326171875;
+        float tmp26 = left1_4321_43right_f32_f32(tmp24, tmp25);
+        float yaw = left1_4331_43right_f32_f32(tmp21, tmp26);
         float yaw_sine = _the43_sine_of_value_f32(yaw);
         float yaw_cosine = _the43_cosine_of_value_f32(yaw);
-        float base_vertical_distance = left1_4351_43right_f32_f32(camera_ground, camera_y);
-        float tmp56 = left1_4321_43right_f32_f32(view_distance, pitch_cosine);
-        float tmp57 = left1_4321_43right_f32_f32(base_vertical_distance, pitch_sine);
-        float base_view_depth = left1_4351_43right_f32_f32(tmp56, tmp57);
-        float tmp60 = in_Position.x;
-        float tmp61 = left1_4321_43right_f32_f32(tmp60, aspect);
-        float tmp62 = 0.800000011920928955078125;
-        float ray_slope = left1_4321_43right_f32_f32(tmp61, tmp62);
+        float tmp27 = 0.0;
+        float base_vertical_distance = left1_4351_43right_f32_f32(tmp27, camera_y);
+        float tmp30 = in_Position.x;
+        float tmp31 = left1_4321_43right_f32_f32(tmp30, aspect);
+        float tmp32 = 0.800000011920928955078125;
+        float ray_slope = left1_4321_43right_f32_f32(tmp31, tmp32);
+        float tmp33 = 1.0;
+        float tmp34 = left1_4321_43right_f32_f32(ray_slope, pitch_cosine);
+        float tmp35 = left1_4321_43right_f32_f32(ray_slope, pitch_cosine);
+        float tmp36 = left1_4321_43right_f32_f32(tmp34, tmp35);
+        float tmp37 = left1_4331_43right_f32_f32(tmp33, tmp36);
+        float ray_forward_scale = _the43_square_root_of_value_f32(tmp37);
+        float forward_distance = left1_4371_43right_f32_f32(ray_distance, ray_forward_scale);
+        float tmp38 = left1_4321_43right_f32_f32(forward_distance, pitch_cosine);
+        float tmp39 = left1_4321_43right_f32_f32(base_vertical_distance, pitch_sine);
+        float base_view_depth = left1_4351_43right_f32_f32(tmp38, tmp39);
         float lateral_distance = left1_4321_43right_f32_f32(ray_slope, base_view_depth);
-        float tmp63 = left1_4321_43right_f32_f32(lateral_distance, yaw_cosine);
-        float tmp64 = left1_4331_43right_f32_f32(camera_x, tmp63);
-        float tmp65 = left1_4321_43right_f32_f32(view_distance, yaw_sine);
-        float world_x = left1_4331_43right_f32_f32(tmp64, tmp65);
-        float tmp66 = left1_4321_43right_f32_f32(view_distance, yaw_cosine);
-        float tmp67 = left1_4331_43right_f32_f32(camera_z, tmp66);
-        float tmp68 = left1_4321_43right_f32_f32(lateral_distance, yaw_sine);
-        float world_z = left1_4351_43right_f32_f32(tmp67, tmp68);
-        float tmp69 = 0.0900000035762786865234375;
-        float tmp70 = 0.014999999664723873138427734375;
-        float tmp71 = left1_4321_43right_f32_f32(view_distance, tmp70);
-        float normal_step = left1_4331_43right_f32_f32(tmp69, tmp71);
+        float tmp40 = left1_4321_43right_f32_f32(lateral_distance, yaw_cosine);
+        float tmp41 = left1_4331_43right_f32_f32(camera_x, tmp40);
+        float tmp42 = left1_4321_43right_f32_f32(forward_distance, yaw_sine);
+        float world_x = left1_4331_43right_f32_f32(tmp41, tmp42);
+        float tmp43 = left1_4321_43right_f32_f32(forward_distance, yaw_cosine);
+        float tmp44 = left1_4331_43right_f32_f32(camera_z, tmp43);
+        float tmp45 = left1_4321_43right_f32_f32(lateral_distance, yaw_sine);
+        float world_z = left1_4351_43right_f32_f32(tmp44, tmp45);
         float displaced_height = 0.0;
         float normal_x = 0.0;
         float normal_y = 1.0;
         float normal_z = 0.0;
-        float tmp74 = 1.5;
-        float _465 = 0.0;
-        float _466 = 0.0;
-        if (left_2_right_f32_f32(surface_vertex, tmp74))
+        float water_depth = 0.0;
+        float tmp48 = 1.5;
+        float _471 = 0.0;
+        float _472 = 0.0;
+        if (left_2_right_f32_f32(surface_vertex, tmp48))
         {
-            float tmp75 = 0.62000000476837158203125;
-            float water_level = _the_431negative_1of_34opposite_1of_3453value_f32(tmp75);
-            float tmp76 = 0.17000000178813934326171875;
-            float tmp77 = left1_4321_43right_f32_f32(world_x, tmp76);
-            float tmp78 = 0.070000000298023223876953125;
-            float tmp79 = left1_4321_43right_f32_f32(world_z, tmp78);
-            float tmp80 = left1_4331_43right_f32_f32(tmp77, tmp79);
-            float tmp81 = 0.4099999964237213134765625;
-            float tmp82 = left1_4321_43right_f32_f32(time, tmp81);
-            float water_angle_x = left1_4331_43right_f32_f32(tmp80, tmp82);
-            float tmp83 = 0.20999999344348907470703125;
-            float tmp84 = left1_4321_43right_f32_f32(world_z, tmp83);
-            float tmp85 = 0.0500000007450580596923828125;
-            float tmp86 = left1_4321_43right_f32_f32(world_x, tmp85);
-            float tmp87 = left1_4351_43right_f32_f32(tmp84, tmp86);
-            float tmp88 = 0.319999992847442626953125;
-            float tmp89 = left1_4321_43right_f32_f32(time, tmp88);
-            float water_angle_z = left1_4351_43right_f32_f32(tmp87, tmp89);
-            float tmp90 = 0.0900000035762786865234375;
-            float tmp91 = left1_4321_43right_f32_f32(world_x, tmp90);
-            float tmp92 = 0.12999999523162841796875;
-            float tmp93 = left1_4321_43right_f32_f32(world_z, tmp92);
-            float tmp94 = left1_4331_43right_f32_f32(tmp91, tmp93);
-            float tmp95 = 0.23000000417232513427734375;
-            float tmp96 = left1_4321_43right_f32_f32(time, tmp95);
-            float water_angle_cross = left1_4331_43right_f32_f32(tmp94, tmp96);
+            float tmp49 = 0.62000000476837158203125;
+            float water_level = _the_431negative_1of_34opposite_1of_3453value_f32(tmp49);
+            float tmp50 = terrain_height_at_x_z_f32_f32(world_x, world_z);
+            water_depth = left1_4351_43right_f32_f32(water_level, tmp50);
+            float tmp51 = 0.0;
+            water_depth = _the43_maximum_of_a_and_b_f32_f32(water_depth, tmp51);
+            float tmp52 = 0.17000000178813934326171875;
+            float tmp53 = left1_4321_43right_f32_f32(world_x, tmp52);
+            float tmp54 = 0.070000000298023223876953125;
+            float tmp55 = left1_4321_43right_f32_f32(world_z, tmp54);
+            float tmp56 = left1_4331_43right_f32_f32(tmp53, tmp55);
+            float tmp57 = 0.4099999964237213134765625;
+            float tmp58 = left1_4321_43right_f32_f32(time, tmp57);
+            float water_angle_x = left1_4331_43right_f32_f32(tmp56, tmp58);
+            float tmp59 = 0.20999999344348907470703125;
+            float tmp60 = left1_4321_43right_f32_f32(world_z, tmp59);
+            float tmp61 = 0.0500000007450580596923828125;
+            float tmp62 = left1_4321_43right_f32_f32(world_x, tmp61);
+            float tmp63 = left1_4351_43right_f32_f32(tmp60, tmp62);
+            float tmp64 = 0.319999992847442626953125;
+            float tmp65 = left1_4321_43right_f32_f32(time, tmp64);
+            float water_angle_z = left1_4351_43right_f32_f32(tmp63, tmp65);
+            float tmp66 = 0.0900000035762786865234375;
+            float tmp67 = left1_4321_43right_f32_f32(world_x, tmp66);
+            float tmp68 = 0.12999999523162841796875;
+            float tmp69 = left1_4321_43right_f32_f32(world_z, tmp68);
+            float tmp70 = left1_4331_43right_f32_f32(tmp67, tmp69);
+            float tmp71 = 0.23000000417232513427734375;
+            float tmp72 = left1_4321_43right_f32_f32(time, tmp71);
+            float water_angle_cross = left1_4331_43right_f32_f32(tmp70, tmp72);
             float water_wave_x = _the43_sine_of_value_f32(water_angle_x);
             float water_wave_z = _the43_sine_of_value_f32(water_angle_z);
             float water_wave_cross = _the43_sine_of_value_f32(water_angle_cross);
-            float tmp97 = 0.04500000178813934326171875;
-            float tmp98 = left1_4321_43right_f32_f32(water_wave_x, tmp97);
-            float tmp99 = 0.0280000008642673492431640625;
-            float tmp100 = left1_4321_43right_f32_f32(water_wave_z, tmp99);
-            float tmp101 = left1_4331_43right_f32_f32(tmp98, tmp100);
-            float tmp102 = left1_4331_43right_f32_f32(water_level, tmp101);
-            float tmp103 = 0.017999999225139617919921875;
-            float tmp104 = left1_4321_43right_f32_f32(water_wave_cross, tmp103);
-            displaced_height = left1_4331_43right_f32_f32(tmp102, tmp104);
-            float tmp105 = _the43_cosine_of_value_f32(water_angle_x);
-            float tmp106 = 0.007650000043213367462158203125;
-            float tmp107 = left1_4321_43right_f32_f32(tmp105, tmp106);
-            float tmp108 = _the43_cosine_of_value_f32(water_angle_cross);
-            float tmp109 = 0.00161999999545514583587646484375;
-            float tmp110 = left1_4321_43right_f32_f32(tmp108, tmp109);
-            float tmp111 = left1_4331_43right_f32_f32(tmp107, tmp110);
-            normal_x = _the_431negative_1of_34opposite_1of_3453value_f32(tmp111);
-            float tmp112 = _the43_cosine_of_value_f32(water_angle_z);
-            float tmp113 = 0.00588000006973743438720703125;
-            float tmp114 = left1_4321_43right_f32_f32(tmp112, tmp113);
-            float tmp115 = _the43_cosine_of_value_f32(water_angle_cross);
-            float tmp116 = 0.00233999988995492458343505859375;
-            float tmp117 = left1_4321_43right_f32_f32(tmp115, tmp116);
-            float tmp118 = left1_4331_43right_f32_f32(tmp114, tmp117);
-            normal_z = _the_431negative_1of_34opposite_1of_3453value_f32(tmp118);
-            float tmp119 = left1_4331_43right_f32_f32(water_wave_x, water_wave_z);
-            float tmp120 = 0.25;
-            float tmp121 = left1_4321_43right_f32_f32(tmp119, tmp120);
-            float tmp122 = 0.5;
-            float tmp123 = 0.5;
-            float tmp124 = left1_4321_43right_f32_f32(water_wave_cross, tmp123);
-            float tmp125 = 0.5;
-            _465 = left1_4331_43right_f32_f32(tmp124, tmp125);
-            _466 = left1_4331_43right_f32_f32(tmp121, tmp122);
+            float water_cosine_x = _the43_cosine_of_value_f32(water_angle_x);
+            float water_cosine_z = _the43_cosine_of_value_f32(water_angle_z);
+            float water_cosine_cross = _the43_cosine_of_value_f32(water_angle_cross);
+            float water_geometry_visibility = water_detail_visibility_at_distance_f32(ray_distance);
+            float tmp73 = 0.04500000178813934326171875;
+            float tmp74 = left1_4321_43right_f32_f32(water_wave_x, tmp73);
+            float tmp75 = 0.0280000008642673492431640625;
+            float tmp76 = left1_4321_43right_f32_f32(water_wave_z, tmp75);
+            float tmp77 = left1_4331_43right_f32_f32(tmp74, tmp76);
+            float tmp78 = 0.017999999225139617919921875;
+            float tmp79 = left1_4321_43right_f32_f32(water_wave_cross, tmp78);
+            float tmp80 = left1_4331_43right_f32_f32(tmp77, tmp79);
+            float water_displacement = left1_4321_43right_f32_f32(tmp80, water_geometry_visibility);
+            displaced_height = left1_4331_43right_f32_f32(water_level, water_displacement);
+            float tmp81 = 0.0;
+            float tmp82 = 0.007650000043213367462158203125;
+            float tmp83 = left1_4321_43right_f32_f32(water_cosine_x, tmp82);
+            float tmp84 = 0.0013999999500811100006103515625;
+            float tmp85 = left1_4321_43right_f32_f32(water_cosine_z, tmp84);
+            float tmp86 = left1_4351_43right_f32_f32(tmp83, tmp85);
+            float tmp87 = 0.00161999999545514583587646484375;
+            float tmp88 = left1_4321_43right_f32_f32(water_cosine_cross, tmp87);
+            float tmp89 = left1_4331_43right_f32_f32(tmp86, tmp88);
+            float tmp90 = left1_4351_43right_f32_f32(tmp81, tmp89);
+            normal_x = left1_4321_43right_f32_f32(tmp90, water_geometry_visibility);
+            float tmp91 = 0.0;
+            float tmp92 = 0.00315000000409781932830810546875;
+            float tmp93 = left1_4321_43right_f32_f32(water_cosine_x, tmp92);
+            float tmp94 = 0.00588000006973743438720703125;
+            float tmp95 = left1_4321_43right_f32_f32(water_cosine_z, tmp94);
+            float tmp96 = left1_4331_43right_f32_f32(tmp93, tmp95);
+            float tmp97 = 0.00233999988995492458343505859375;
+            float tmp98 = left1_4321_43right_f32_f32(water_cosine_cross, tmp97);
+            float tmp99 = left1_4331_43right_f32_f32(tmp96, tmp98);
+            float tmp100 = left1_4351_43right_f32_f32(tmp91, tmp99);
+            normal_z = left1_4321_43right_f32_f32(tmp100, water_geometry_visibility);
+            float tmp101 = 0.5;
+            float tmp102 = left1_4331_43right_f32_f32(water_wave_x, water_wave_z);
+            float tmp103 = 0.25;
+            float tmp104 = left1_4321_43right_f32_f32(tmp102, tmp103);
+            float tmp105 = left1_4321_43right_f32_f32(tmp104, water_geometry_visibility);
+            float tmp106 = 0.5;
+            float tmp107 = 0.5;
+            float tmp108 = left1_4321_43right_f32_f32(water_wave_cross, tmp107);
+            float tmp109 = left1_4321_43right_f32_f32(tmp108, water_geometry_visibility);
+            _471 = left1_4331_43right_f32_f32(tmp106, tmp109);
+            _472 = left1_4331_43right_f32_f32(tmp101, tmp105);
         }
         else
         {
+            float normal_step = 0.3400000035762786865234375;
             displaced_height = terrain_height_at_x_z_f32_f32(world_x, world_z);
-            float tmp127 = left1_4331_43right_f32_f32(world_x, normal_step);
-            float height_right = terrain_height_at_x_z_f32_f32(tmp127, world_z);
-            float tmp128 = left1_4331_43right_f32_f32(world_z, normal_step);
-            float height_front = terrain_height_at_x_z_f32_f32(world_x, tmp128);
-            normal_x = left1_4351_43right_f32_f32(displaced_height, height_right);
-            normal_y = normal_step;
-            normal_z = left1_4351_43right_f32_f32(displaced_height, height_front);
-            float tmp129 = 0.064999997615814208984375;
-            float tmp130 = left1_4321_43right_f32_f32(world_x, tmp129);
-            float tmp131 = 0.064999997615814208984375;
-            float tmp132 = left1_4321_43right_f32_f32(world_z, tmp131);
-            float tmp133 = 13.69999980926513671875;
-            float tmp134 = simplex_field_at_x_y_phase_f32_f32_f32(tmp130, tmp132, tmp133);
-            float tmp135 = 0.5;
-            float tmp136 = left1_4321_43right_f32_f32(tmp134, tmp135);
-            float tmp137 = 0.5;
-            float tmp138 = 0.14000000059604644775390625;
-            float tmp139 = left1_4321_43right_f32_f32(world_x, tmp138);
-            float tmp140 = 0.14000000059604644775390625;
-            float tmp141 = left1_4321_43right_f32_f32(world_z, tmp140);
-            float tmp142 = 16.200000762939453125;
-            float tmp143 = simplex_field_at_x_y_phase_f32_f32_f32(tmp139, tmp141, tmp142);
-            float tmp144 = 0.5;
-            float tmp145 = left1_4321_43right_f32_f32(tmp143, tmp144);
-            float tmp146 = 0.5;
-            _465 = left1_4331_43right_f32_f32(tmp145, tmp146);
-            _466 = left1_4331_43right_f32_f32(tmp136, tmp137);
+            float tmp111 = left1_4351_43right_f32_f32(world_x, normal_step);
+            float height_left = terrain_height_at_x_z_f32_f32(tmp111, world_z);
+            float tmp112 = left1_4331_43right_f32_f32(world_x, normal_step);
+            float height_right = terrain_height_at_x_z_f32_f32(tmp112, world_z);
+            float tmp113 = left1_4351_43right_f32_f32(world_z, normal_step);
+            float height_back = terrain_height_at_x_z_f32_f32(world_x, tmp113);
+            float tmp114 = left1_4331_43right_f32_f32(world_z, normal_step);
+            float height_front = terrain_height_at_x_z_f32_f32(world_x, tmp114);
+            normal_x = left1_4351_43right_f32_f32(height_left, height_right);
+            float tmp115 = 2.0;
+            normal_y = left1_4321_43right_f32_f32(normal_step, tmp115);
+            normal_z = left1_4351_43right_f32_f32(height_back, height_front);
+            float tmp116 = 0.064999997615814208984375;
+            float tmp117 = left1_4321_43right_f32_f32(world_x, tmp116);
+            float tmp118 = 0.064999997615814208984375;
+            float tmp119 = left1_4321_43right_f32_f32(world_z, tmp118);
+            float tmp120 = 13.69999980926513671875;
+            float tmp121 = simplex_field_at_x_y_phase_f32_f32_f32(tmp117, tmp119, tmp120);
+            float tmp122 = 0.5;
+            float tmp123 = left1_4321_43right_f32_f32(tmp121, tmp122);
+            float tmp124 = 0.5;
+            float tmp125 = 0.14000000059604644775390625;
+            float tmp126 = left1_4321_43right_f32_f32(world_x, tmp125);
+            float tmp127 = 0.14000000059604644775390625;
+            float tmp128 = left1_4321_43right_f32_f32(world_z, tmp127);
+            float tmp129 = 16.200000762939453125;
+            float tmp130 = simplex_field_at_x_y_phase_f32_f32_f32(tmp126, tmp128, tmp129);
+            float tmp131 = 0.5;
+            float tmp132 = left1_4321_43right_f32_f32(tmp130, tmp131);
+            float tmp133 = 0.5;
+            _471 = left1_4331_43right_f32_f32(tmp132, tmp133);
+            _472 = left1_4331_43right_f32_f32(tmp123, tmp124);
         }
-        float tmp147 = left1_4321_43right_f32_f32(normal_x, normal_x);
-        float tmp148 = left1_4321_43right_f32_f32(normal_y, normal_y);
-        float tmp149 = left1_4331_43right_f32_f32(tmp147, tmp148);
-        float tmp150 = left1_4321_43right_f32_f32(normal_z, normal_z);
-        float tmp151 = left1_4331_43right_f32_f32(tmp149, tmp150);
-        float normal_length = _the43_square_root_of_value_f32(tmp151);
+        float tmp134 = left1_4321_43right_f32_f32(normal_x, normal_x);
+        float tmp135 = left1_4321_43right_f32_f32(normal_y, normal_y);
+        float tmp136 = left1_4331_43right_f32_f32(tmp134, tmp135);
+        float tmp137 = left1_4321_43right_f32_f32(normal_z, normal_z);
+        float tmp138 = left1_4331_43right_f32_f32(tmp136, tmp137);
+        float normal_length = _the43_square_root_of_value_f32(tmp138);
         normal_x = left1_4371_43right_f32_f32(normal_x, normal_length);
         normal_y = left1_4371_43right_f32_f32(normal_y, normal_length);
         normal_z = left1_4371_43right_f32_f32(normal_z, normal_length);
         float vertical_distance = left1_4351_43right_f32_f32(displaced_height, camera_y);
-        float tmp152 = left1_4321_43right_f32_f32(vertical_distance, pitch_cosine);
-        float tmp153 = left1_4321_43right_f32_f32(view_distance, pitch_sine);
-        float view_y = left1_4331_43right_f32_f32(tmp152, tmp153);
-        float tmp154 = left1_4321_43right_f32_f32(view_distance, pitch_cosine);
-        float tmp155 = left1_4321_43right_f32_f32(vertical_distance, pitch_sine);
-        float view_z = left1_4351_43right_f32_f32(tmp154, tmp155);
-        float tmp156 = 0.7200000286102294921875;
-        float tmp157 = left1_4321_43right_f32_f32(aspect, tmp156);
-        float tmp158 = 0.7200000286102294921875;
-        float tmp159 = 1.0033400058746337890625;
-        float tmp160 = left1_4321_43right_f32_f32(view_z, tmp159);
-        float tmp161 = 0.400669991970062255859375;
-        vec4 _492 = vec4(0.0);
-        _492.w = surface_vertex;
-        _492.z = world_z;
-        _492.y = displaced_height;
-        _492.x = world_x;
-        dynlex_interpolant_7465727261696e5f706f736974696f6e = _492;
-        vec4 _500 = vec4(0.0);
-        _500.w = view_distance;
-        _500.z = normal_z;
-        _500.y = normal_y;
-        _500.x = normal_x;
-        dynlex_interpolant_7465727261696e5f6e6f726d616c = _500;
-        vec4 _504 = vec4(0.0);
-        _504.y = _465;
-        _504.x = _466;
-        dynlex_interpolant_7465727261696e5f6d6174657269616c = _504;
-        vec4 _507 = vec4(0.0);
-        _507.w = view_z;
-        _507.z = left1_4351_43right_f32_f32(tmp160, tmp161);
-        _507.y = left1_4371_43right_f32_f32(view_y, tmp158);
-        _507.x = left1_4371_43right_f32_f32(lateral_distance, tmp157);
-        gl_Position = _507;
+        float tmp139 = left1_4321_43right_f32_f32(vertical_distance, pitch_cosine);
+        float tmp140 = left1_4321_43right_f32_f32(forward_distance, pitch_sine);
+        float view_y = left1_4331_43right_f32_f32(tmp139, tmp140);
+        float tmp141 = left1_4321_43right_f32_f32(forward_distance, pitch_cosine);
+        float tmp142 = left1_4321_43right_f32_f32(vertical_distance, pitch_sine);
+        float view_z = left1_4351_43right_f32_f32(tmp141, tmp142);
+        float tmp143 = 0.7200000286102294921875;
+        float tmp144 = left1_4321_43right_f32_f32(aspect, tmp143);
+        float tmp145 = 0.7200000286102294921875;
+        float tmp146 = 1.00077998638153076171875;
+        float tmp147 = left1_4321_43right_f32_f32(view_z, tmp146);
+        float tmp148 = 0.400160014629364013671875;
+        vec4 _498 = vec4(0.0);
+        _498.w = surface_vertex;
+        _498.z = world_z;
+        _498.y = displaced_height;
+        _498.x = world_x;
+        dynlex_interpolant_7465727261696e5f706f736974696f6e = _498;
+        vec4 _506 = vec4(0.0);
+        _506.w = ray_distance;
+        _506.z = normal_z;
+        _506.y = normal_y;
+        _506.x = normal_x;
+        dynlex_interpolant_7465727261696e5f6e6f726d616c = _506;
+        vec4 _511 = vec4(0.0);
+        _511.z = water_depth;
+        _511.y = _471;
+        _511.x = _472;
+        dynlex_interpolant_7465727261696e5f6d6174657269616c = _511;
+        vec4 _515 = vec4(0.0);
+        _515.w = view_z;
+        _515.z = left1_4351_43right_f32_f32(tmp147, tmp148);
+        _515.y = left1_4371_43right_f32_f32(view_y, tmp145);
+        _515.x = left1_4371_43right_f32_f32(lateral_distance, tmp144);
+        gl_Position = _515;
     }
 }

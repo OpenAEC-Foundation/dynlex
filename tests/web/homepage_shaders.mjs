@@ -12,8 +12,7 @@ const expectedToolFiles = [
   "compiler.mjs",
   "config.mjs",
   "generate.mjs",
-  "generate-point-cloud.py",
-  "generate-terrain-grid.mjs"
+  "generate-point-cloud.py"
 ];
 
 for (const relativePath of expectedToolFiles) {
@@ -24,6 +23,9 @@ for (const relativePath of expectedToolFiles) {
 }
 
 const { shaderConfig } = await import(pathToFileURL(path.join(toolDir, "config.mjs")).href);
+const { resolveTerrainGeometryDescriptor } = await import(pathToFileURL(
+  path.join(projectDir, "web/terrain-geometry.js")
+).href);
 assert.ok(shaderConfig.durationSeconds >= 8);
 assert.equal(shaderConfig.manifest, "web/shaders/manifest.json");
 assert.ok(Array.isArray(shaderConfig.scenes) && shaderConfig.scenes.length >= 3);
@@ -72,25 +74,103 @@ assert.match(terrainSource, /the shader interpolant [xyz] named "terrain_normal"
 assert.match(terrainSource, /the shader interpolant x named "terrain_material"/);
 assert.match(terrainSource, /the shader interpolant y named "terrain_material"/);
 assert.match(terrainSource, /set displaced_height to terrain height at world_x world_z/);
-assert.match(terrainSource, /set view_distance to the vertex y/);
-assert.match(terrainSource, /set ray_slope to \(\(the vertex x\) \* aspect\) \* 0\.80/);
-assert.match(
-  terrainSource,
-  /set base_view_depth to \(view_distance \* pitch_cosine\) - \(base_vertical_distance \* pitch_sine\)/
+assert.match(terrainSource, /set ray_distance to the vertex y/);
+assert.match(terrainSource, /function terrain maximum possible height:\s+execute:\s+return 12\.10/);
+assert.match(terrainSource, /function terrain camera altitude:\s+execute:\s+return \(terrain maximum possible height\) \+ 0\.70/);
+assert.equal(
+  (terrainSource.match(/set camera_y to terrain camera altitude/g) ?? []).length,
+  2,
+  "Vertex and fragment water stages must share one fixed camera altitude"
 );
+assert.match(terrainSource, /set camera_pitch to 0\.155/);
+assert.match(terrainSource, /set base_vertical_distance to 0\.0 - camera_y/);
+assert.doesNotMatch(
+  terrainSource,
+  /\bcamera_ground\b/,
+  "The camera and its sampling plane must not follow terrain elevation"
+);
+assert.match(terrainSource, /set ray_slope to \(\(the vertex x\) \* aspect\) \* 0\.80/);
+assert.match(terrainSource, /set ray_forward_scale to the square root of \(1\.0 \+ \(\(ray_slope \* pitch_cosine\) \* \(ray_slope \* pitch_cosine\)\)\)/);
+assert.match(terrainSource, /set forward_distance to ray_distance \/ ray_forward_scale/);
+assert.match(terrainSource, /set base_view_depth to \(forward_distance \* pitch_cosine\) - \(base_vertical_distance \* pitch_sine\)/);
 assert.match(terrainSource, /set lateral_distance to ray_slope \* base_view_depth/);
+assert.match(terrainSource, /set the shader interpolant named "terrain_normal" to normal_x normal_y normal_z ray_distance/);
+assert.match(terrainSource, /set clip_z to view_z \* 1\.00078 - 0\.40016/);
+assert.match(terrainSource, /set water_fog to smooth transition from 232\.0 to 376\.0 at ray_distance/);
+assert.match(terrainSource, /set fog to smooth transition from 188\.0 to 376\.0 at ray_distance/);
+assert.doesNotMatch(
+  terrainSource,
+  /\bview_distance\b/,
+  "Terrain distance semantics must not mix radial and forward distances"
+);
 assert.doesNotMatch(
   terrainSource,
   /\b(?:depth_fraction|near_spread)\b/,
-  "Terrain rows must represent camera-plane distances and columns must remain fixed camera rays"
+  "Terrain rows must represent radial distances and columns must remain fixed camera rays"
 );
 assert.match(terrainSource, /set mountain_ridge /);
 assert.match(terrainSource, /set erosion_channels /);
+assert.match(terrainSource, /function water detail visibility at distance:\s+execute:\s+return 1\.0 - \(smooth transition from 48\.0 to 96\.0 at distance\)/);
+assert.match(terrainSource, /set normal_step to 0\.34/);
+assert.match(terrainSource, /set height_left to terrain height at \(world_x - normal_step\) world_z/);
+assert.match(terrainSource, /set height_right to terrain height at \(world_x \+ normal_step\) world_z/);
+assert.match(terrainSource, /set height_back to terrain height at world_x \(world_z - normal_step\)/);
+assert.match(terrainSource, /set height_front to terrain height at world_x \(world_z \+ normal_step\)/);
+assert.match(terrainSource, /set normal_x to height_left - height_right/);
+assert.match(terrainSource, /set normal_y to normal_step \* 2\.0/);
+assert.match(terrainSource, /set normal_z to height_back - height_front/);
+assert.doesNotMatch(
+  terrainSource,
+  /set normal_step to .*\bray_distance\b/,
+  "Terrain normals must use one centered world-space gradient at every LOD"
+);
+assert.doesNotMatch(
+  terrainSource,
+  /\bstrata\b/,
+  "Mountain materials must not paint contour bands over the smooth terrain normals"
+);
 assert.match(terrainSource, /set exposed_rock /);
 assert.match(terrainSource, /set snow /);
 assert.match(terrainSource, /surface_vertex > 1\.5/);
 assert.match(terrainSource, /set water_level /);
-assert.match(terrainSource, /set water_fresnel /);
+assert.match(terrainSource, /set water_geometry_visibility to water detail visibility at ray_distance/);
+assert.match(terrainSource, /set surface_variation to 0\.5 \+ \(\(\(water_wave_x \+ water_wave_z\) \* 0\.25\) \* water_geometry_visibility\)/);
+assert.match(terrainSource, /set surface_detail to 0\.5 \+ \(\(water_wave_cross \* 0\.5\) \* water_geometry_visibility\)/);
+assert.match(terrainSource, /set water_depth to water_level - \(terrain height at world_x world_z\)/);
+assert.match(terrainSource, /the shader interpolant z named "terrain_material"/);
+assert.match(
+  terrainSource,
+  /set shallow_water to \(1\.0 - \(smooth transition from 0\.18 to 3\.8 at water_depth\)\) \* water_ripple_visibility/
+);
+assert.match(
+  terrainSource,
+  /set water_caustic_depth to \(1\.0 - \(smooth transition from 0\.05 to 0\.65 at water_depth\)\) \* water_ripple_visibility/
+);
+assert.match(terrainSource, /set water_caustic /);
+assert.match(
+  terrainSource,
+  /set water_ripple_visibility to water detail visibility at ray_distance/
+);
+assert.match(terrainSource, /set water_view_facing /);
+assert.match(terrainSource, /set fresnel_grazing to 1\.0 - water_view_facing/);
+assert.match(terrainSource, /set water_fresnel to 0\.020 \+/);
+assert.match(terrainSource, /set reflected_sky_height /);
+assert.match(
+  terrainSource,
+  /set reflected_sun_alignment to saturate \(\(\(reflected_x \* 0\.39\) \+ \(reflected_y \* 0\.32\)\) \+ \(reflected_z \* 0\.86\)\)/
+);
+assert.match(terrainSource, /set water_sun_glow /);
+assert.match(terrainSource, /set water_sun_glint /);
+assert.doesNotMatch(
+  terrainSource,
+  /\bwater_half_[xyz]\b/,
+  "Water must evaluate the sun against the reflected view ray directly"
+);
+assert.doesNotMatch(
+  terrainSource,
+  /\bwater_shimmer\b/,
+  "Water highlights must come from reflected light rather than a broad white threshold"
+);
 assert.match(terrainSource, /simplex field at/);
 assert.doesNotMatch(
   terrainSource,
@@ -311,7 +391,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 8);
+assert.equal(manifest.schemaVersion, 9);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -343,28 +423,40 @@ const terrainRecord = manifest.scenes[1];
 assert.equal(terrainConfig.geometry.generator, "camera-lod-grid");
 assert.equal(terrainRecord.shaders.vertex.path, terrainConfig.vertex.replace(/^web\//, ""));
 assert.match(terrainRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
-assert.equal(terrainRecord.geometry.path, terrainConfig.geometry.path.replace(/^web\//, ""));
+assert.equal(terrainRecord.geometry.generator, terrainConfig.geometry.generator);
+assert.equal(terrainRecord.geometry.path, undefined);
 assert.equal(terrainRecord.geometry.format, "float32x4");
-assert.equal(terrainRecord.geometry.attributeEncoding, "perspective-ray-distance-grid");
+assert.equal(terrainRecord.geometry.attributeEncoding, "perspective-radial-ray-grid");
 assert.equal(terrainRecord.geometry.primitive, "triangles");
-assert.equal(terrainRecord.geometry.indices.path, terrainConfig.geometry.indexPath.replace(/^web\//, ""));
-assert.equal(terrainRecord.geometry.indices.format, "uint16");
-assert.match(terrainRecord.geometry.indices.hash, /^[a-f0-9]{64}$/);
+assert.equal(terrainRecord.geometry.referenceWidthPixels, 1440);
 assert.deepEqual(terrainRecord.geometry.render, {
   backgroundPass: false,
   blendMode: "opaque",
   depthTest: true
 });
-assert.match(terrainRecord.geometry.hash, /^[a-f0-9]{64}$/);
-const terrainGeometryBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.path));
+const terrainGeometry = resolveTerrainGeometryDescriptor(
+  terrainRecord.geometry,
+  terrainRecord.geometry.referenceWidthPixels
+);
+assert.strictEqual(
+  resolveTerrainGeometryDescriptor(
+    terrainRecord.geometry,
+    terrainRecord.geometry.referenceWidthPixels
+  ),
+  terrainGeometry,
+  "Identical generated geometry must be reused from the configuration-derived cache"
+);
+assert.equal(terrainGeometry.indices.format, "uint32");
 assert.equal(
-  terrainGeometryBytes.byteLength,
-  terrainRecord.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
+  terrainGeometry.indices.data.byteLength,
+  terrainGeometry.indices.count * Uint32Array.BYTES_PER_ELEMENT
+);
+assert.equal(
+  terrainGeometry.data.byteLength,
+  terrainGeometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
 );
 const terrainGeometryValues = new Float32Array(
-  terrainGeometryBytes.buffer,
-  terrainGeometryBytes.byteOffset,
-  terrainGeometryBytes.byteLength / Float32Array.BYTES_PER_ELEMENT
+  terrainGeometry.data
 );
 assert.deepEqual(
   [...terrainGeometryValues.slice(0, 12)],
@@ -372,12 +464,12 @@ assert.deepEqual(
   "The terrain geometry must begin with its sky triangle"
 );
 
-function validateSampling(sampling, expectedNearColumns) {
+function validateSampling(sampling, expectedRows, expectedNearColumns) {
   assert.deepEqual(
     Object.keys(sampling).sort(),
     ["farColumns", "nearColumns", "rows"]
   );
-  assert.ok(Number.isInteger(sampling.rows) && sampling.rows > 0);
+  assert.equal(sampling.rows, expectedRows);
   assert.equal(sampling.nearColumns, expectedNearColumns);
   assert.ok(Number.isInteger(sampling.farColumns) && sampling.farColumns > 0);
   assert.ok(sampling.nearColumns > sampling.farColumns);
@@ -396,40 +488,111 @@ function configuredSurfaceVertexCount(sampling) {
   return sampledColumns(sampling).reduce((count, columns) => count + columns + 1, 0);
 }
 
-validateSampling(terrainConfig.geometry.terrainSampling, 448);
-validateSampling(terrainConfig.geometry.waterSampling, 224);
+validateSampling(terrainConfig.geometry.terrainSampling, 200, 896);
+validateSampling(terrainConfig.geometry.waterSampling, 104, 448);
 assert.deepEqual(terrainConfig.geometry.cameraDistance, {
   near: 0.45,
-  far: 94.45
+  far: 377.8
 });
 assert.deepEqual(
   terrainRecord.geometry.cameraDistance,
   terrainConfig.geometry.cameraDistance
 );
 assert.deepEqual(
-  terrainRecord.geometry.surfaces.terrain.sampling,
+  terrainGeometry.surfaces.terrain.sampling,
   terrainConfig.geometry.terrainSampling
 );
 assert.deepEqual(
-  terrainRecord.geometry.surfaces.water.sampling,
+  terrainGeometry.surfaces.water.sampling,
   terrainConfig.geometry.waterSampling
 );
-assert.equal(terrainRecord.geometry.surfaces.sky.value, 0);
-assert.equal(terrainRecord.geometry.surfaces.sky.vertexCount, 3);
-assert.equal(terrainRecord.geometry.surfaces.terrain.value, 1);
-assert.equal(terrainRecord.geometry.surfaces.water.value, 2);
+assert.equal(terrainGeometry.surfaces.sky.value, 0);
+assert.equal(terrainGeometry.surfaces.sky.vertexCount, 3);
+assert.equal(terrainGeometry.surfaces.terrain.value, 1);
+assert.equal(terrainGeometry.surfaces.water.value, 2);
 assert.equal(
-  terrainRecord.geometry.surfaces.terrain.vertexCount,
+  terrainGeometry.surfaces.terrain.vertexCount,
   configuredSurfaceVertexCount(terrainConfig.geometry.terrainSampling)
 );
 assert.equal(
-  terrainRecord.geometry.surfaces.water.vertexCount,
+  terrainGeometry.surfaces.water.vertexCount,
   configuredSurfaceVertexCount(terrainConfig.geometry.waterSampling)
 );
 assert.equal(
-  terrainRecord.geometry.vertexCount,
-  Object.values(terrainRecord.geometry.surfaces)
+  terrainGeometry.vertexCount,
+  Object.values(terrainGeometry.surfaces)
     .reduce((count, surface) => count + surface.vertexCount, 0)
+);
+const wideTerrainGeometry = resolveTerrainGeometryDescriptor(
+  terrainRecord.geometry,
+  terrainRecord.geometry.referenceWidthPixels * 2
+);
+assert.deepEqual(wideTerrainGeometry.surfaces.terrain.sampling, {
+  rows: terrainConfig.geometry.terrainSampling.rows * 2,
+  nearColumns: terrainConfig.geometry.terrainSampling.nearColumns * 2,
+  farColumns: terrainConfig.geometry.terrainSampling.farColumns * 2
+});
+assert.deepEqual(wideTerrainGeometry.surfaces.water.sampling, {
+  rows: terrainConfig.geometry.waterSampling.rows * 2,
+  nearColumns: terrainConfig.geometry.waterSampling.nearColumns * 2,
+  farColumns: terrainConfig.geometry.waterSampling.farColumns * 2
+});
+assert.ok(
+  wideTerrainGeometry.vertexCount > 65536,
+  "Horizontal framebuffer scaling must support meshes beyond the 16-bit index range"
+);
+assert.notStrictEqual(
+  resolveTerrainGeometryDescriptor({
+    ...terrainRecord.geometry,
+    terrainSampling: {
+      ...terrainRecord.geometry.terrainSampling,
+      nearColumns: terrainRecord.geometry.terrainSampling.nearColumns + 1
+    }
+  }, terrainRecord.geometry.referenceWidthPixels),
+  terrainGeometry,
+  "Changing any sampling input must invalidate the generated geometry cache"
+);
+const superwideWidth = 2560;
+const superwideHeight = 900;
+const superwideTerrainGeometry = resolveTerrainGeometryDescriptor(
+  terrainRecord.geometry,
+  superwideWidth
+);
+const mountainDistance = 50;
+const superwideSampling = superwideTerrainGeometry.surfaces.terrain.sampling;
+const mountainProgress = Math.log(
+  mountainDistance / terrainRecord.geometry.cameraDistance.near
+) / Math.log(
+  terrainRecord.geometry.cameraDistance.far
+    / terrainRecord.geometry.cameraDistance.near
+);
+const mountainColumns = Math.round(
+  superwideSampling.nearColumns
+    * (superwideSampling.farColumns / superwideSampling.nearColumns) ** mountainProgress
+);
+const longitudinalSpacing = mountainDistance * (
+  (
+    terrainRecord.geometry.cameraDistance.far
+      / terrainRecord.geometry.cameraDistance.near
+  ) ** (1 / superwideSampling.rows) - 1
+);
+const lateralSpacing = (
+  2 * (superwideWidth / superwideHeight) * 0.8 * mountainDistance
+) / mountainColumns;
+assert.ok(
+  longitudinalSpacing / lateralSpacing >= 0.75
+    && longitudinalSpacing / lateralSpacing <= 1.5,
+  "Superwide mountain triangles must have comparable longitudinal and lateral spacing"
+);
+const edgeRaySlope = (superwideWidth / superwideHeight) * 0.80;
+const pitchedEdgeSlope = edgeRaySlope * Math.cos(0.155);
+const edgeForwardSpacing = longitudinalSpacing / Math.hypot(1, pitchedEdgeSlope);
+const edgeLateralAdvance = edgeForwardSpacing * pitchedEdgeSlope;
+assert.ok(
+  Math.abs(
+    Math.hypot(edgeForwardSpacing, edgeLateralAdvance) - longitudinalSpacing
+  ) < Number.EPSILON * longitudinalSpacing * 4,
+  "Every perspective ray must advance the same world-space distance per row"
 );
 
 const uniformSurfaceVertexCount = (sampling) => (
@@ -439,12 +602,12 @@ const uniformVertexCount = 3
   + uniformSurfaceVertexCount(terrainConfig.geometry.terrainSampling)
   + uniformSurfaceVertexCount(terrainConfig.geometry.waterSampling);
 assert.ok(
-  terrainRecord.geometry.vertexCount < uniformVertexCount * 0.65,
+  terrainGeometry.vertexCount < uniformVertexCount * 0.65,
   "Distance sampling must eliminate at least 35% of uniform-grid vertices"
 );
 
 const surfaceRows = new Map();
-for (let vertex = 3; vertex < terrainRecord.geometry.vertexCount; vertex += 1) {
+for (let vertex = 3; vertex < terrainGeometry.vertexCount; vertex += 1) {
   const x = terrainGeometryValues[vertex * 4];
   const cameraDistance = terrainGeometryValues[vertex * 4 + 1];
   const surface = terrainGeometryValues[vertex * 4 + 3];
@@ -489,15 +652,9 @@ for (const [surface, sampling] of [
   }
 }
 
-const terrainIndexBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.indexPath));
-assert.equal(terrainIndexBytes.byteLength, terrainRecord.geometry.indices.count * Uint16Array.BYTES_PER_ELEMENT);
-const terrainIndices = new Uint16Array(
-  terrainIndexBytes.buffer,
-  terrainIndexBytes.byteOffset,
-  terrainIndexBytes.byteLength / Uint16Array.BYTES_PER_ELEMENT
-);
+const terrainIndices = new Uint32Array(terrainGeometry.indices.data);
 assert.deepEqual([...terrainIndices.slice(0, 3)], [0, 1, 2]);
-assert.ok([...terrainIndices].every((index) => index < terrainRecord.geometry.vertexCount));
+assert.ok([...terrainIndices].every((index) => index < terrainGeometry.vertexCount));
 
 const surfaceByVertex = (vertex) => terrainGeometryValues[vertex * 4 + 3];
 const edgeUseCounts = new Map();

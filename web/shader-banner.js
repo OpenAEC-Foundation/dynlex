@@ -2,6 +2,7 @@ import {
   createShaderPreview,
   validateShaderGeometryDescriptor
 } from "./shader-renderer.js";
+import { isGeneratedTerrainGeometryDescriptor } from "./terrain-geometry.js";
 import { renderSemanticTokens } from "./semantic-highlighting.js";
 
 function required(selector, scope) {
@@ -14,7 +15,7 @@ function required(selector, scope) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 8
+    manifest?.schemaVersion !== 9
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3
@@ -41,7 +42,11 @@ function validateManifest(manifest) {
       throw new Error("Homepage shader geometry and vertex source must be configured together");
     }
     if (hasGeometry) {
-      if (
+      if (isGeneratedTerrainGeometryDescriptor(scene.geometry)) {
+        if (scene.geometry.path !== undefined || scene.geometry.indices !== undefined) {
+          throw new Error("Generated homepage geometry must not include fixed assets");
+        }
+      } else if (
         typeof scene.geometry.path !== "string"
         || (
           scene.geometry.indices !== undefined
@@ -85,8 +90,15 @@ async function loadSceneProgram(scene) {
   if (!scene.geometry) {
     return Object.freeze({ fragmentSource });
   }
-  const [vertexSource, data, indexData] = await Promise.all([
-    loadText(scene.shaders.vertex.path),
+  const vertexSource = await loadText(scene.shaders.vertex.path);
+  if (isGeneratedTerrainGeometryDescriptor(scene.geometry)) {
+    return Object.freeze({
+      fragmentSource,
+      vertexSource,
+      geometry: scene.geometry
+    });
+  }
+  const [data, indexData] = await Promise.all([
     loadBinary(scene.geometry.path),
     scene.geometry.indices ? loadBinary(scene.geometry.indices.path) : null
   ]);
@@ -252,6 +264,12 @@ export async function createShaderBanner(section) {
     };
     layer.preview = createShaderPreview(canvas, {
       running: false,
+      geometryHorizontalPixels() {
+        return Math.max(
+          1,
+          Math.ceil(section.clientWidth * (window.devicePixelRatio || 1))
+        );
+      },
       elapsedSeconds(timestamp) {
         return Math.max(0, (timestamp - layer.startedAt) / 1000);
       }

@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHomepageShaderCompiler } from "./compiler.mjs";
 import { shaderConfig } from "./config.mjs";
-import { generateTerrainLodGrid } from "./generate-terrain-grid.mjs";
+import { resolveTerrainGeometryDescriptor } from "../../web/terrain-geometry.js";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(toolDirectory, "../..");
@@ -79,20 +79,6 @@ function writeOrCheck(relativePath, content) {
   fs.renameSync(pendingPath, outputPath);
 }
 
-function writeBufferOrCheck(relativePath, content) {
-  const outputPath = absolute(relativePath);
-  if (checkOnly) {
-    if (!fs.existsSync(outputPath) || !fs.readFileSync(outputPath).equals(content)) {
-      throw new Error(`Generated geometry output is stale: ${relativePath}`);
-    }
-    return;
-  }
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  const pendingPath = `${outputPath}.pending`;
-  fs.writeFileSync(pendingPath, content);
-  fs.renameSync(pendingPath, outputPath);
-}
-
 function geometryRecord(geometry, data, vertexCount, additions = {}) {
   if (
     geometry.attributeEncoding.length === 0
@@ -114,24 +100,6 @@ function geometryRecord(geometry, data, vertexCount, additions = {}) {
     vertexCount,
     render: geometry.render,
     ...additions
-  };
-}
-
-function uint16IndexRecord(relativePath, data, count) {
-  if (
-    typeof relativePath !== "string"
-    || relativePath.length === 0
-    || !Number.isInteger(count)
-    || count <= 0
-    || data.byteLength !== count * Uint16Array.BYTES_PER_ELEMENT
-  ) {
-    throw new Error(`${relativePath} has an invalid index configuration`);
-  }
-  return {
-    path: relativePath.replace(/^web\//, ""),
-    hash: sha256(data),
-    format: "uint16",
-    count
   };
 }
 
@@ -203,23 +171,25 @@ function pairedPointCloudRecord(geometry) {
 
 function configuredGeometryRecord(geometry) {
   if (geometry.generator === "camera-lod-grid") {
-    const generated = generateTerrainLodGrid(
-      geometry.cameraDistance,
-      geometry.terrainSampling,
-      geometry.waterSampling
-    );
-    writeBufferOrCheck(geometry.path, generated.data);
-    writeBufferOrCheck(geometry.indexPath, generated.indices);
-    return geometryRecord(
-      geometry,
-      generated.data,
-      generated.vertexCount,
+    resolveTerrainGeometryDescriptor(
       {
-        indices: uint16IndexRecord(geometry.indexPath, generated.indices, generated.indexCount),
-        cameraDistance: geometry.cameraDistance,
-        surfaces: generated.surfaces
-      }
+        ...geometry,
+        format: "float32x4",
+        primitive: "triangles"
+      },
+      geometry.referenceWidthPixels
     );
+    return {
+      generator: geometry.generator,
+      referenceWidthPixels: geometry.referenceWidthPixels,
+      cameraDistance: geometry.cameraDistance,
+      terrainSampling: geometry.terrainSampling,
+      waterSampling: geometry.waterSampling,
+      format: "float32x4",
+      attributeEncoding: geometry.attributeEncoding,
+      primitive: "triangles",
+      render: geometry.render
+    };
   }
   if (geometry.generator === "paired-point-cloud") {
     return pairedPointCloudRecord(geometry);
@@ -286,7 +256,7 @@ for (const scene of shaderConfig.scenes) {
 }
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 8,
+  schemaVersion: 9,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;

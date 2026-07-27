@@ -32,12 +32,11 @@ export const shaderConfig = Object.freeze({
     scene("event-horizon", "Into the Event Horizon"),
     scene("endless-terrain", "Endless Terrain", {
       generator: "camera-lod-grid",
-      path: "web/shaders/geometry/terrain-grid.f32",
-      indexPath: "web/shaders/geometry/terrain-grid.u16",
-      cameraDistance: cameraDistance(0.45, 94.45),
-      terrainSampling: lodSampling(100, 448, 34),
-      waterSampling: lodSampling(52, 224, 28),
-      attributeEncoding: "perspective-ray-distance-grid",
+      referenceWidthPixels: 1440,
+      cameraDistance: cameraDistance(0.45, 377.8),
+      terrainSampling: lodSampling(200, 896, 68),
+      waterSampling: lodSampling(104, 448, 56),
+      attributeEncoding: "perspective-radial-ray-grid",
       render: render(false, "opaque", true)
     }),
     scene("nano-choreography", "Nano Choreography", {
