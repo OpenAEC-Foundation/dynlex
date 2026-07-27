@@ -210,36 +210,6 @@ function shouldAutoRunOnStartup() {
   return value === "1" || value === "true";
 }
 
-function isShaderAssetPath(value) {
-  return (
-    typeof value === "string"
-    && /^shaders\/[a-zA-Z0-9./-]+$/.test(value)
-    && !value.split("/").includes("..")
-  );
-}
-
-function getShaderRendererConfig() {
-  const encoded = queryParams.get("renderer64");
-  if (encoded === null) {
-    return null;
-  }
-  const decoded = decodeBase64Url(encoded);
-  if (decoded === null) {
-    throw new Error("Invalid shader renderer encoding");
-  }
-  const renderer = JSON.parse(decoded);
-  const geometry = renderer?.geometry;
-  if (
-    !geometry
-    || !isShaderAssetPath(geometry.path)
-    || (geometry.indices !== undefined && !isShaderAssetPath(geometry.indices.path))
-  ) {
-    throw new Error("Invalid shader renderer configuration");
-  }
-  validateShaderGeometryDescriptor(geometry);
-  return Object.freeze({ geometry: Object.freeze(geometry) });
-}
-
 async function loadShaderRenderer(config) {
   if (config === null) {
     return null;

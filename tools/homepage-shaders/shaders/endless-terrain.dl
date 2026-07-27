@@ -19,10 +19,14 @@ function terrain height at x z:
         set folded_mass to ((mountain_wave * 0.60) + (crossing_wave * 0.27)) + (broken_wave * 0.13)
         set mountain_ridge to the maximum of folded_mass and 0.0
         set mountain_ridge to mountain_ridge * mountain_ridge
+        set ridge_fold to 1.0 - (the absolute value of ((mountain_wave * 0.78) + (crossing_wave * 0.34)))
+        set ridge_crest to the maximum of (ridge_fold - 0.42) and 0.0
+        set ridge_crest to ridge_crest * ridge_crest
         set uplift to smooth transition from -0.48 to 0.45 at continental_fold
         set erosion_channels to 1.0 - smooth transition from 0.035 to 0.31 at (the absolute value of (crossing_wave + broken_wave * 0.24))
-        set alpine_mass to folded_mass * 1.55
+        set alpine_mass to folded_mass * 1.38
         set alpine_mass to alpine_mass + mountain_ridge * (2.00 + uplift * 6.00)
+        set alpine_mass to alpine_mass + (ridge_crest * uplift) * (3.1 + mountain_ridge * 2.4)
         set alpine_mass to alpine_mass + (broken_wave * uplift) * 0.34
         set alpine_mass to alpine_mass - ((erosion_channels * uplift) * (0.16 + mountain_ridge * 0.38))
         set basin to continental_fold * 1.20
@@ -142,18 +146,21 @@ if this is a fragment shader:
         set sky_fill to saturate (normal_y * 0.56 + 0.44)
 
         set material_variation to (surface_variation * 0.68) + (surface_detail * 0.32)
-        set exposed_rock to smooth transition from 0.10 to 0.42 at (slope + ((surface_detail - 0.5) * 0.075))
-        set snow to smooth transition from 2.55 to 4.35 at (world_y + ((material_variation - 0.5) * 0.42))
-        set snow to snow * smooth transition from 0.18 to 0.58 at normal_y
+        set strata to (the sine of (((world_y * 8.7) + (world_x * 0.055)) - (world_z * 0.031) + surface_variation * 2.4)) * 0.5 + 0.5
+        set fracture to saturate ((surface_detail - 0.32) * 1.35 + slope * 1.7)
+        set exposed_rock to smooth transition from 0.055 to 0.30 at (slope + ((fracture - 0.5) * 0.095))
+        set snow to smooth transition from 2.75 to 4.45 at (world_y + ((material_variation - 0.5) * 0.48))
+        set snow to snow * smooth transition from 0.25 to 0.66 at normal_y
+        set snow to snow * (0.88 + surface_detail * 0.12)
         set alpine_zone to smooth transition from 0.35 to 2.65 at world_y
         set rock_warmth to saturate (((normal_x * 0.38) - (normal_z * 0.26)) + 0.48)
 
-        set meadow_red to (0.034 + material_variation * 0.054) + alpine_zone * 0.041
-        set meadow_green to (0.102 + material_variation * 0.094) - alpine_zone * 0.052
-        set meadow_blue to (0.049 + material_variation * 0.039) + alpine_zone * 0.018
-        set rock_red to (0.132 + material_variation * 0.074) + rock_warmth * 0.082
-        set rock_green to (0.122 + material_variation * 0.066) + rock_warmth * 0.054
-        set rock_blue to (0.128 + material_variation * 0.059) + rock_warmth * 0.045
+        set meadow_red to (0.028 + material_variation * 0.050) + alpine_zone * 0.034
+        set meadow_green to (0.094 + material_variation * 0.086) - alpine_zone * 0.050
+        set meadow_blue to (0.043 + material_variation * 0.036) + alpine_zone * 0.020
+        set rock_red to ((0.105 + material_variation * 0.066) + rock_warmth * 0.074) + strata * 0.028
+        set rock_green to ((0.101 + material_variation * 0.058) + rock_warmth * 0.047) + strata * 0.022
+        set rock_blue to ((0.109 + material_variation * 0.054) + rock_warmth * 0.037) + strata * 0.019
         set ground_red to meadow_red * (1.0 - exposed_rock) + rock_red * exposed_rock
         set ground_green to meadow_green * (1.0 - exposed_rock) + rock_green * exposed_rock
         set ground_blue to meadow_blue * (1.0 - exposed_rock) + rock_blue * exposed_rock
@@ -161,16 +168,16 @@ if this is a fragment shader:
         set ground_green to ground_green * (1.0 - snow) + 0.83 * snow
         set ground_blue to ground_blue * (1.0 - snow) + 0.87 * snow
 
-        set material_light to 0.88 + surface_detail * 0.24
-        set lighting to ((0.24 + (sunlight * 1.04)) + (sky_fill * 0.15)) * material_light
-        set ground_red to ground_red * lighting + sunlight * 0.19
-        set ground_green to ground_green * lighting + sunlight * 0.14
-        set ground_blue to ground_blue * lighting + sunlight * 0.085
+        set material_light to 0.80 + surface_detail * 0.26
+        set lighting to ((0.17 + (sunlight * 1.16)) + (sky_fill * 0.17)) * material_light
+        set ground_red to ground_red * lighting + sunlight * 0.13
+        set ground_green to ground_green * lighting + sunlight * 0.10
+        set ground_blue to ground_blue * lighting + sunlight * 0.070
 
-        set fog to smooth transition from 36.0 to 94.0 at view_distance
-        set fog_red to 0.19 + sun_halo * 0.17
-        set fog_green to 0.25 + sun_halo * 0.105
-        set fog_blue to 0.32 + sun_halo * 0.052
+        set fog to smooth transition from 47.0 to 94.0 at view_distance
+        set fog_red to 0.17 + sun_halo * 0.17
+        set fog_green to 0.23 + sun_halo * 0.105
+        set fog_blue to 0.31 + sun_halo * 0.052
         set red to ground_red * (1.0 - fog) + fog_red * fog
         set green to ground_green * (1.0 - fog) + fog_green * fog
         set blue to ground_blue * (1.0 - fog) + fog_blue * fog

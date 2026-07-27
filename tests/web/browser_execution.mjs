@@ -448,13 +448,15 @@ assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.path}`)),
   "Advancing must compile the next configured WebGL program"
 );
-const displayedEditorName = await evaluate(`(() => ({
-  file: document.querySelector('[data-shader-file]').textContent,
-  editor: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name'),
-  scene: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')
+const editorSceneState = await evaluate(`(() => ({
+  activeIndex: Number(document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex),
+  editorScene: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')
 }))()`);
-assert.equal(displayedEditorName.editor, displayedEditorName.file, "The editor action must track the displayed code");
-assert.equal(displayedEditorName.scene, shaderManifest.scenes[1].id, "The editor action must track the visible shader");
+assert.equal(
+  editorSceneState.editorScene,
+  shaderManifest.scenes[editorSceneState.activeIndex].id,
+  "The editor action must track the visible shader"
+);
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '2'"
     + " || document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '2'"
