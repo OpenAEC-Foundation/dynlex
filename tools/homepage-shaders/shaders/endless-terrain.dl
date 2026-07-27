@@ -1,9 +1,9 @@
 import lib/shader_art.dl
 
 # ENDLESS TERRAIN
-# Crack-free camera-centered LOD bands are displaced into a procedural alpine
-# height field and a coarser water surface. Density tapers gradually toward the
-# horizon, keeping both surfaces inexpensive without a fragment-stage ray march.
+# Crack-free camera-centered sampling grids are displaced into a procedural
+# alpine height field and a coarser water surface. Density decays uniformly
+# toward the horizon without a fragment-stage ray march.
 
 function terrain height at x z:
     execute:

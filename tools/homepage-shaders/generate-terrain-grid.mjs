@@ -1,27 +1,15 @@
-function validateBands(bands, name) {
-  if (!Array.isArray(bands) || bands.length < 2) {
-    throw new Error(`${name} LOD must contain at least two bands`);
-  }
-  let previousDepthEnd = 0;
-  let previousColumns = null;
-  for (const band of bands) {
-    if (
-      typeof band?.depthEnd !== "number"
-      || band.depthEnd <= previousDepthEnd
-      || band.depthEnd > 1
-      || !Number.isInteger(band.rows)
-      || band.rows <= 0
-      || !Number.isInteger(band.columns)
-      || band.columns <= 0
-      || (previousColumns !== null && band.columns >= previousColumns)
-    ) {
-      throw new Error(`${name} LOD bands must increase in depth and decrease their column count`);
-    }
-    previousDepthEnd = band.depthEnd;
-    previousColumns = band.columns;
-  }
-  if (previousDepthEnd !== 1) {
-    throw new Error(`${name} LOD bands must cover the complete depth range`);
+function validateSampling(sampling, name) {
+  if (
+    typeof sampling !== "object"
+    || sampling === null
+    || !Number.isInteger(sampling.rows)
+    || sampling.rows <= 0
+    || !Number.isInteger(sampling.nearColumns)
+    || !Number.isInteger(sampling.farColumns)
+    || sampling.farColumns <= 0
+    || sampling.nearColumns <= sampling.farColumns
+  ) {
+    throw new Error(`${name} sampling requires positive rows and decreasing near-to-far columns`);
   }
 }
 
@@ -33,19 +21,20 @@ function setVertex(values, vertex, x, depth, surface) {
   values[offset + 3] = surface;
 }
 
-function buildRows(bands, vertexOffset) {
-  const rows = [{ depth: 0, columns: bands[0].columns, vertexOffset }];
-  let depthStart = 0;
-  let nextVertex = vertexOffset + bands[0].columns + 1;
-  for (const band of bands) {
-    for (let row = 1; row <= band.rows; row += 1) {
-      const depth = row === band.rows
-        ? band.depthEnd
-        : depthStart + ((band.depthEnd - depthStart) * row) / band.rows;
-      rows.push({ depth, columns: band.columns, vertexOffset: nextVertex });
-      nextVertex += band.columns + 1;
-    }
-    depthStart = band.depthEnd;
+function buildRows(sampling, vertexOffset) {
+  const rows = [];
+  let nextVertex = vertexOffset;
+  const totalDecay = sampling.farColumns / sampling.nearColumns;
+  for (let row = 0; row <= sampling.rows; row += 1) {
+    const columns = row === sampling.rows
+      ? sampling.farColumns
+      : Math.round(sampling.nearColumns * totalDecay ** (row / sampling.rows));
+    rows.push({
+      depth: row / sampling.rows,
+      columns,
+      vertexOffset: nextVertex
+    });
+    nextVertex += columns + 1;
   }
   return Object.freeze({ rows, vertexCount: nextVertex - vertexOffset });
 }
@@ -105,12 +94,12 @@ function appendSurfaceIndices(indices, layout) {
   return Object.freeze({ indexOffset, indexCount: indices.length - indexOffset });
 }
 
-export function generateTerrainLodGrid(terrainBands, waterBands) {
-  validateBands(terrainBands, "Terrain");
-  validateBands(waterBands, "Water");
+export function generateTerrainLodGrid(terrainSampling, waterSampling) {
+  validateSampling(terrainSampling, "Terrain");
+  validateSampling(waterSampling, "Water");
 
-  const terrain = buildRows(terrainBands, 3);
-  const water = buildRows(waterBands, 3 + terrain.vertexCount);
+  const terrain = buildRows(terrainSampling, 3);
+  const water = buildRows(waterSampling, 3 + terrain.vertexCount);
   const vertexCount = 3 + terrain.vertexCount + water.vertexCount;
   if (vertexCount > 65536) {
     throw new Error("Terrain grid exceeds the uint16 index range");
@@ -144,14 +133,14 @@ export function generateTerrainLodGrid(terrainBands, waterBands) {
         vertexOffset: 3,
         vertexCount: terrain.vertexCount,
         ...terrainIndices,
-        bands: terrainBands
+        sampling: terrainSampling
       }),
       water: Object.freeze({
         value: 2,
         vertexOffset: 3 + terrain.vertexCount,
         vertexCount: water.vertexCount,
         ...waterIndices,
-        bands: waterBands
+        sampling: waterSampling
       })
     })
   });

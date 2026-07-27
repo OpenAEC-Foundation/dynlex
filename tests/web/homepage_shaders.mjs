@@ -284,7 +284,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 6);
+assert.equal(manifest.schemaVersion, 7);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -345,47 +345,51 @@ assert.deepEqual(
   "The terrain geometry must begin with its sky triangle"
 );
 
-function validateLodBands(bands) {
-  assert.ok(Array.isArray(bands) && bands.length >= 2);
-  let previousDepthEnd = 0;
-  let previousColumns = null;
-  for (const band of bands) {
-    assert.ok(Number.isInteger(band.rows) && band.rows > 0);
-    assert.ok(Number.isInteger(band.columns) && band.columns > 0);
-    assert.ok(band.depthEnd > previousDepthEnd && band.depthEnd <= 1);
-    if (previousColumns !== null) {
-      assert.ok(band.columns < previousColumns);
-      assert.ok(
-        band.columns * 4 >= previousColumns * 3,
-        "Adjacent LOD bands must retain at least 75% of the previous row density"
-      );
-    }
-    previousDepthEnd = band.depthEnd;
-    previousColumns = band.columns;
-  }
-  assert.equal(previousDepthEnd, 1);
+function validateSampling(sampling, expectedNearColumns) {
+  assert.deepEqual(
+    Object.keys(sampling).sort(),
+    ["farColumns", "nearColumns", "rows"]
+  );
+  assert.ok(Number.isInteger(sampling.rows) && sampling.rows > 0);
+  assert.equal(sampling.nearColumns, expectedNearColumns);
+  assert.ok(Number.isInteger(sampling.farColumns) && sampling.farColumns > 0);
+  assert.ok(sampling.nearColumns > sampling.farColumns);
 }
 
-function configuredSurfaceVertexCount(bands) {
-  return bands[0].columns + 1
-    + bands.reduce((count, band) => count + band.rows * (band.columns + 1), 0);
+function sampledColumns(sampling) {
+  const decay = sampling.farColumns / sampling.nearColumns;
+  return Array.from({ length: sampling.rows + 1 }, (_, row) => (
+    row === sampling.rows
+      ? sampling.farColumns
+      : Math.round(sampling.nearColumns * decay ** (row / sampling.rows))
+  ));
 }
 
-validateLodBands(terrainConfig.geometry.terrainBands);
-validateLodBands(terrainConfig.geometry.waterBands);
-assert.deepEqual(terrainRecord.geometry.surfaces.terrain.bands, terrainConfig.geometry.terrainBands);
-assert.deepEqual(terrainRecord.geometry.surfaces.water.bands, terrainConfig.geometry.waterBands);
+function configuredSurfaceVertexCount(sampling) {
+  return sampledColumns(sampling).reduce((count, columns) => count + columns + 1, 0);
+}
+
+validateSampling(terrainConfig.geometry.terrainSampling, 448);
+validateSampling(terrainConfig.geometry.waterSampling, 224);
+assert.deepEqual(
+  terrainRecord.geometry.surfaces.terrain.sampling,
+  terrainConfig.geometry.terrainSampling
+);
+assert.deepEqual(
+  terrainRecord.geometry.surfaces.water.sampling,
+  terrainConfig.geometry.waterSampling
+);
 assert.equal(terrainRecord.geometry.surfaces.sky.value, 0);
 assert.equal(terrainRecord.geometry.surfaces.sky.vertexCount, 3);
 assert.equal(terrainRecord.geometry.surfaces.terrain.value, 1);
 assert.equal(terrainRecord.geometry.surfaces.water.value, 2);
 assert.equal(
   terrainRecord.geometry.surfaces.terrain.vertexCount,
-  configuredSurfaceVertexCount(terrainConfig.geometry.terrainBands)
+  configuredSurfaceVertexCount(terrainConfig.geometry.terrainSampling)
 );
 assert.equal(
   terrainRecord.geometry.surfaces.water.vertexCount,
-  configuredSurfaceVertexCount(terrainConfig.geometry.waterBands)
+  configuredSurfaceVertexCount(terrainConfig.geometry.waterSampling)
 );
 assert.equal(
   terrainRecord.geometry.vertexCount,
@@ -393,15 +397,15 @@ assert.equal(
     .reduce((count, surface) => count + surface.vertexCount, 0)
 );
 
-const uniformSurfaceVertexCount = (bands) => (
-  (bands.reduce((rows, band) => rows + band.rows, 0) + 1) * (bands[0].columns + 1)
+const uniformSurfaceVertexCount = (sampling) => (
+  (sampling.rows + 1) * (sampling.nearColumns + 1)
 );
 const uniformVertexCount = 3
-  + uniformSurfaceVertexCount(terrainConfig.geometry.terrainBands)
-  + uniformSurfaceVertexCount(terrainConfig.geometry.waterBands);
+  + uniformSurfaceVertexCount(terrainConfig.geometry.terrainSampling)
+  + uniformSurfaceVertexCount(terrainConfig.geometry.waterSampling);
 assert.ok(
   terrainRecord.geometry.vertexCount < uniformVertexCount * 0.65,
-  "Distance bands must eliminate at least 35% of uniform-grid vertices"
+  "Distance sampling must eliminate at least 35% of uniform-grid vertices"
 );
 
 const surfaceRows = new Map();
@@ -416,14 +420,24 @@ for (let vertex = 3; vertex < terrainRecord.geometry.vertexCount; vertex += 1) {
   const rowKey = `${surface}:${depth}`;
   surfaceRows.set(rowKey, (surfaceRows.get(rowKey) ?? 0) + 1);
 }
-for (const surface of [1, 2]) {
+for (const [surface, sampling] of [
+  [1, terrainConfig.geometry.terrainSampling],
+  [2, terrainConfig.geometry.waterSampling]
+]) {
   const rowDensities = [...surfaceRows]
     .filter(([key]) => key.startsWith(`${surface}:`))
     .map(([key, count]) => ({ depth: Number(key.slice(2)), count }))
     .sort((left, right) => left.depth - right.depth);
-  assert.ok(rowDensities.length > 1);
-  assert.ok(rowDensities[0].count > rowDensities.at(-1).count);
-  assert.ok(rowDensities.every((row, index) => index === 0 || row.count <= rowDensities[index - 1].count));
+  const expectedColumns = sampledColumns(sampling);
+  assert.equal(rowDensities.length, sampling.rows + 1);
+  assert.deepEqual(
+    rowDensities.map((row) => row.count - 1),
+    expectedColumns,
+    "Every fixed row must follow the configured exponential density"
+  );
+  for (let row = 0; row < rowDensities.length; row += 1) {
+    assert.ok(Math.abs(rowDensities[row].depth - row / sampling.rows) < 1e-6);
+  }
 }
 
 const terrainIndexBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.indexPath));

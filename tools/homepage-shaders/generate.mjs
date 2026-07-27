@@ -195,7 +195,10 @@ function pairedPointCloudRecord(geometry) {
 
 function configuredGeometryRecord(geometry) {
   if (geometry.generator === "camera-lod-grid") {
-    const generated = generateTerrainLodGrid(geometry.terrainBands, geometry.waterBands);
+    const generated = generateTerrainLodGrid(
+      geometry.terrainSampling,
+      geometry.waterSampling
+    );
     writeBufferOrCheck(geometry.path, generated.data);
     writeBufferOrCheck(geometry.indexPath, generated.indices);
     return geometryRecord(
@@ -273,7 +276,7 @@ for (const scene of shaderConfig.scenes) {
 }
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 6,
+  schemaVersion: 7,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;
