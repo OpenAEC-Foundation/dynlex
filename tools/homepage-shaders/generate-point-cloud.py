@@ -47,6 +47,7 @@ QUANTIZATION_LEVELS = 4095
 PACKING_RADIX = QUANTIZATION_LEVELS + 1
 SPATIAL_PAIRING_LEAF_POINT_COUNT = 64
 SPATIAL_PAIRING_AXIS_ORDER = ("x", "y", "z")
+WHEEL_CORNER_OFFSET = 4
 
 
 def arguments() -> argparse.Namespace:
@@ -268,36 +269,43 @@ def sample_segment_tube(
 def motorcycle_points(
     count: int,
     rng: random.Random,
-) -> list[tuple[float, float, float]]:
-    points: list[tuple[float, float, float]] = []
+) -> list[tuple[float, float, float, bool]]:
+    points: list[tuple[float, float, float, bool]] = []
 
     tire_count = round(count * 0.35)
     for index in range(tire_count):
         center_x = -0.72 if index < tire_count // 2 else 0.72
-        points.append(
-            sample_torus((center_x, -0.42, 0.0), 0.30, 0.055, 0.072, rng)
+        point = sample_torus(
+            (center_x, -0.42, 0.0),
+            0.30,
+            0.055,
+            0.072,
+            rng,
         )
+        points.append((*point, True))
 
     hub_count = round(count * 0.05)
     for index in range(hub_count):
         center_x = -0.72 if index < hub_count // 2 else 0.72
-        points.append(
-            sample_ellipsoid((center_x, -0.42, 0.0), (0.095, 0.095, 0.13), rng)
+        point = sample_ellipsoid(
+            (center_x, -0.42, 0.0),
+            (0.095, 0.095, 0.13),
+            rng,
         )
+        points.append((*point, True))
 
     spoke_count = round(count * 0.07)
     for index in range(spoke_count):
         center_x = -0.72 if index % 2 == 0 else 0.72
         angle = rng.randrange(8) * (math.tau / 8.0)
         reach = (math.cos(angle) * 0.275, math.sin(angle) * 0.275)
-        points.append(
-            sample_segment_tube(
-                (center_x, -0.42, 0.0),
-                (center_x + reach[0], -0.42 + reach[1], 0.0),
-                0.018,
-                rng,
-            )
+        point = sample_segment_tube(
+            (center_x, -0.42, 0.0),
+            (center_x + reach[0], -0.42 + reach[1], 0.0),
+            0.018,
+            rng,
         )
+        points.append((*point, True))
 
     shell_count = round(count * 0.18)
     shells = (
@@ -315,7 +323,7 @@ def motorcycle_points(
         selection = rng.random()
         shell_index = bisect.bisect_left(shell_boundaries, selection)
         center, radii, _ = shells[shell_index]
-        points.append(sample_ellipsoid(center, radii, rng))
+        points.append((*sample_ellipsoid(center, radii, rng), False))
 
     frame_count = round(count * 0.15)
     frame_segments = (
@@ -330,16 +338,26 @@ def motorcycle_points(
     )
     for index in range(frame_count):
         start, end, radius = frame_segments[index % len(frame_segments)]
-        points.append(sample_segment_tube(start, end, radius, rng))
+        points.append((*sample_segment_tube(start, end, radius, rng), False))
 
     rider_count = count - len(points)
     rider_head_count = round(rider_count * 0.17)
     rider_torso_count = round(rider_count * 0.33)
     rider_limb_count = rider_count - rider_head_count - rider_torso_count
     for _ in range(rider_head_count):
-        points.append(sample_ellipsoid((-0.10, 0.78, 0.0), (0.15, 0.17, 0.15), rng))
+        point = sample_ellipsoid(
+            (-0.10, 0.78, 0.0),
+            (0.15, 0.17, 0.15),
+            rng,
+        )
+        points.append((*point, False))
     for _ in range(rider_torso_count):
-        points.append(sample_ellipsoid((-0.18, 0.48, 0.0), (0.24, 0.35, 0.18), rng))
+        point = sample_ellipsoid(
+            (-0.18, 0.48, 0.0),
+            (0.24, 0.35, 0.18),
+            rng,
+        )
+        points.append((*point, False))
     rider_segments = (
         ((-0.02, 0.59, -0.11), (0.37, 0.30, -0.15), 0.075),
         ((-0.02, 0.59, 0.11), (0.37, 0.30, 0.15), 0.075),
@@ -352,7 +370,7 @@ def motorcycle_points(
     )
     for index in range(rider_limb_count):
         start, end, radius = rider_segments[index % len(rider_segments)]
-        points.append(sample_segment_tube(start, end, radius, rng))
+        points.append((*sample_segment_tube(start, end, radius, rng), False))
 
     if len(points) != count:
         raise RuntimeError(f"Generated {len(points)} motorcycle points; expected {count}")
@@ -362,20 +380,20 @@ def motorcycle_points(
 
 def spatially_pair_points(
     targets: list[tuple[float, float, float]],
-    motorcycle: list[tuple[float, float, float]],
+    motorcycle: list[tuple[float, float, float, bool]],
 ) -> tuple[
     list[tuple[float, float, float]],
-    list[tuple[float, float, float]],
+    list[tuple[float, float, float, bool]],
 ]:
     if len(targets) != len(motorcycle):
         raise RuntimeError("Motorcycle and Vitruvian point populations must be identical")
 
     paired_targets: list[tuple[float, float, float]] = []
-    paired_motorcycle: list[tuple[float, float, float]] = []
+    paired_motorcycle: list[tuple[float, float, float, bool]] = []
 
     def pair_region(
         target_region: list[tuple[float, float, float]],
-        motorcycle_region: list[tuple[float, float, float]],
+        motorcycle_region: list[tuple[float, float, float, bool]],
         depth: int,
     ) -> None:
         axis_order = tuple((depth + offset) % 3 for offset in range(3))
@@ -424,7 +442,7 @@ def pack_coordinate_pair(target: float, motorcycle: float) -> float:
 def write_geometry(
     path: Path,
     targets: list[tuple[float, float, float]],
-    motorcycle: list[tuple[float, float, float]],
+    motorcycle: list[tuple[float, float, float, bool]],
 ) -> None:
     if len(targets) != len(motorcycle):
         raise RuntimeError("Motorcycle and Vitruvian point populations must be identical")
@@ -436,8 +454,10 @@ def write_geometry(
                 pack_coordinate_pair(target[axis], motorcycle_point[axis])
                 for axis in range(3)
             )
+            wheel_offset = WHEEL_CORNER_OFFSET if motorcycle_point[3] else 0
             for corner in range(3):
-                output.write(struct.pack("<ffff", *packed, float(corner)))
+                encoded_corner = wheel_offset + corner
+                output.write(struct.pack("<ffff", *packed, float(encoded_corner)))
     pending.replace(path)
 
 
@@ -482,13 +502,19 @@ def main() -> None:
     write_geometry(options.output, points, motorcycle)
 
     metadata = {
-        "schemaVersion": 4,
+        "schemaVersion": 5,
         "generatorSeed": SEED,
+        "attributeEncoding": "paired-unorm12-wheel-corner",
         "coordinateEncoding": {
             "name": "paired-unorm12",
             "quantizationLevels": QUANTIZATION_LEVELS,
             "coordinateMinimum": COORDINATE_MINIMUM,
             "coordinateMaximum": COORDINATE_MAXIMUM,
+        },
+        "triangleCornerEncoding": {
+            "name": "wheel-part-plus-corner",
+            "wheelOffset": WHEEL_CORNER_OFFSET,
+            "cornerCount": 3,
         },
         "pointPairing": {
             "name": "recursive-spatial-bisection",
@@ -517,12 +543,16 @@ def main() -> None:
             "Centered and uniformly scaled from the pinned STL.",
             "Converted to deterministic surface and inward-density points.",
             "Paired spatially neighboring target and motorcycle regions recursively.",
+            "Tagged motorcycle wheel points for vertex-stage rotation.",
             "Expanded into micro-triangles for the DynLex WebGL renderer.",
         ],
         "format": "float32x4",
         "primitive": "triangles",
         "pointCount": len(points),
         "motorcyclePointCount": len(motorcycle),
+        "motorcycleWheelPointCount": sum(
+            1 for motorcycle_point in motorcycle if motorcycle_point[3]
+        ),
         "vertexCount": len(points) * 3,
         "surfacePointCount": len(vertex_points) + len(surface_samples),
         "densityPointCount": len(density_points),

@@ -139,19 +139,26 @@ function pairedPointCloudRecord(geometry) {
   const geometryData = requireBuffer(geometry.path);
   const geometryMetadata = JSON.parse(requireFile(geometry.metadata));
   if (
-    geometryMetadata.schemaVersion !== 4
+    geometryMetadata.schemaVersion !== 5
     || !Number.isInteger(geometryMetadata.pointCount)
     || geometryMetadata.pointCount <= 0
     || geometryMetadata.motorcyclePointCount !== geometryMetadata.pointCount
+    || !Number.isInteger(geometryMetadata.motorcycleWheelPointCount)
+    || geometryMetadata.motorcycleWheelPointCount <= 0
+    || geometryMetadata.motorcycleWheelPointCount >= geometryMetadata.pointCount
     || !Number.isInteger(geometryMetadata.surfacePointCount)
     || !Number.isInteger(geometryMetadata.densityPointCount)
     || geometryMetadata.surfacePointCount
       + geometryMetadata.densityPointCount !== geometryMetadata.pointCount
     || geometryData.byteLength !== geometryMetadata.pointCount * 3 * 4 * Float32Array.BYTES_PER_ELEMENT
-    || geometryMetadata.coordinateEncoding?.name !== geometry.attributeEncoding
+    || geometryMetadata.attributeEncoding !== geometry.attributeEncoding
+    || geometryMetadata.coordinateEncoding?.name !== "paired-unorm12"
     || geometryMetadata.coordinateEncoding?.quantizationLevels !== 4095
     || geometryMetadata.coordinateEncoding?.coordinateMinimum !== -2
     || geometryMetadata.coordinateEncoding?.coordinateMaximum !== 2
+    || geometryMetadata.triangleCornerEncoding?.name !== "wheel-part-plus-corner"
+    || geometryMetadata.triangleCornerEncoding?.wheelOffset !== 4
+    || geometryMetadata.triangleCornerEncoding?.cornerCount !== 3
     || geometryMetadata.pointPairing?.name !== "recursive-spatial-bisection"
     || geometryMetadata.pointPairing?.leafPointCount !== 64
     || !Array.isArray(geometryMetadata.pointPairing?.axisOrder)
@@ -180,6 +187,7 @@ function pairedPointCloudRecord(geometry) {
     geometryMetadata.pointCount * 3,
     {
       pointCount: geometryMetadata.pointCount,
+      motorcycleWheelPointCount: geometryMetadata.motorcycleWheelPointCount,
       attribution: {
         title: geometryMetadata.source.title,
         author: geometryMetadata.source.author,
@@ -196,6 +204,7 @@ function pairedPointCloudRecord(geometry) {
 function configuredGeometryRecord(geometry) {
   if (geometry.generator === "camera-lod-grid") {
     const generated = generateTerrainLodGrid(
+      geometry.cameraDistance,
       geometry.terrainSampling,
       geometry.waterSampling
     );
@@ -207,6 +216,7 @@ function configuredGeometryRecord(geometry) {
       generated.vertexCount,
       {
         indices: uint16IndexRecord(geometry.indexPath, generated.indices, generated.indexCount),
+        cameraDistance: geometry.cameraDistance,
         surfaces: generated.surfaces
       }
     );
@@ -276,7 +286,7 @@ for (const scene of shaderConfig.scenes) {
 }
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 7,
+  schemaVersion: 8,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;

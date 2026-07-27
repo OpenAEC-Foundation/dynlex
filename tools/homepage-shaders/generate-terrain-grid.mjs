@@ -13,24 +13,41 @@ function validateSampling(sampling, name) {
   }
 }
 
-function setVertex(values, vertex, x, depth, surface) {
+function validateCameraDistance(cameraDistance) {
+  if (
+    typeof cameraDistance !== "object"
+    || cameraDistance === null
+    || typeof cameraDistance.near !== "number"
+    || typeof cameraDistance.far !== "number"
+    || cameraDistance.near <= 0
+    || cameraDistance.far <= cameraDistance.near
+  ) {
+    throw new Error("Camera distance requires positive increasing near and far values");
+  }
+}
+
+function setVertex(values, vertex, ray, cameraDistance, surface) {
   const offset = vertex * 4;
-  values[offset] = x;
-  values[offset + 1] = depth;
+  values[offset] = ray;
+  values[offset + 1] = cameraDistance;
   values[offset + 2] = 0;
   values[offset + 3] = surface;
 }
 
-function buildRows(sampling, vertexOffset) {
+function buildRows(sampling, cameraDistance, vertexOffset) {
   const rows = [];
   let nextVertex = vertexOffset;
-  const totalDecay = sampling.farColumns / sampling.nearColumns;
+  const columnDecay = sampling.farColumns / sampling.nearColumns;
+  const distanceGrowth = cameraDistance.far / cameraDistance.near;
   for (let row = 0; row <= sampling.rows; row += 1) {
     const columns = row === sampling.rows
       ? sampling.farColumns
-      : Math.round(sampling.nearColumns * totalDecay ** (row / sampling.rows));
+      : Math.round(sampling.nearColumns * columnDecay ** (row / sampling.rows));
+    const distance = row === sampling.rows
+      ? cameraDistance.far
+      : cameraDistance.near * distanceGrowth ** (row / sampling.rows);
     rows.push({
-      depth: row / sampling.rows,
+      cameraDistance: distance,
       columns,
       vertexOffset: nextVertex
     });
@@ -80,8 +97,14 @@ function connectRows(indices, near, far, stripIndex) {
 function writeSurface(values, layout, surface) {
   for (const row of layout.rows) {
     for (let column = 0; column <= row.columns; column += 1) {
-      const x = (column / row.columns) * 2 - 1;
-      setVertex(values, row.vertexOffset + column, x, row.depth, surface);
+      const ray = (column / row.columns) * 2 - 1;
+      setVertex(
+        values,
+        row.vertexOffset + column,
+        ray,
+        row.cameraDistance,
+        surface
+      );
     }
   }
 }
@@ -94,12 +117,21 @@ function appendSurfaceIndices(indices, layout) {
   return Object.freeze({ indexOffset, indexCount: indices.length - indexOffset });
 }
 
-export function generateTerrainLodGrid(terrainSampling, waterSampling) {
+export function generateTerrainLodGrid(
+  cameraDistance,
+  terrainSampling,
+  waterSampling
+) {
+  validateCameraDistance(cameraDistance);
   validateSampling(terrainSampling, "Terrain");
   validateSampling(waterSampling, "Water");
 
-  const terrain = buildRows(terrainSampling, 3);
-  const water = buildRows(waterSampling, 3 + terrain.vertexCount);
+  const terrain = buildRows(terrainSampling, cameraDistance, 3);
+  const water = buildRows(
+    waterSampling,
+    cameraDistance,
+    3 + terrain.vertexCount
+  );
   const vertexCount = 3 + terrain.vertexCount + water.vertexCount;
   if (vertexCount > 65536) {
     throw new Error("Terrain grid exceeds the uint16 index range");

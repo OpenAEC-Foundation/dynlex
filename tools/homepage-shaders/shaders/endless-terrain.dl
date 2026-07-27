@@ -1,9 +1,9 @@
 import lib/shader_art.dl
 
 # ENDLESS TERRAIN
-# Crack-free camera-centered sampling grids are displaced into a procedural
-# alpine height field and a coarser water surface. Density decays uniformly
-# toward the horizon without a fragment-stage ray march.
+# Fixed camera rays and exponentially spaced distance rows form a perspective
+# terrain plane. Its crack-free topology is displaced into an alpine height
+# field and a coarser water surface without a fragment-stage ray march.
 
 function terrain height at x z:
     execute:
@@ -45,18 +45,22 @@ if this is a vertex shader:
         set the shader interpolant named "terrain_material" to 0.5 0.0 0.0 0.0
         set the output position to (the vertex x) (the vertex y) 0.9999 1.0
     else:
-        set depth_fraction to the vertex y
-        set view_distance to 0.45 + (depth_fraction * depth_fraction) * 94.0
+        set view_distance to the vertex y
         set camera_x to 201.7 + ((the sine of (time * 0.091)) * 4.2 + (the cosine of (time * 0.037)) * 1.6)
         set camera_z to (-92.1) + (time * 3.25)
         set camera_ground to terrain height at camera_x camera_z
         set camera_y to (camera_ground + 3.15) + ((the sine of (time * 0.17)) * 0.14)
+        set camera_pitch to 0.155 + (the sine of (time * 0.11)) * 0.012
+        set pitch_sine to the sine of camera_pitch
+        set pitch_cosine to the cosine of camera_pitch
         set yaw to (the sine of (time * 0.073)) * 0.13 + (the cosine of (time * 0.041)) * 0.045
         set yaw_sine to the sine of yaw
         set yaw_cosine to the cosine of yaw
 
-        set near_spread to ((1.0 - depth_fraction) * (1.0 - depth_fraction)) * 4.8
-        set lateral_distance to (((the vertex x) * (view_distance + near_spread)) * aspect) * 0.80
+        set base_vertical_distance to camera_ground - camera_y
+        set base_view_depth to (view_distance * pitch_cosine) - (base_vertical_distance * pitch_sine)
+        set ray_slope to ((the vertex x) * aspect) * 0.80
+        set lateral_distance to ray_slope * base_view_depth
         set world_x to (camera_x + (lateral_distance * yaw_cosine)) + (view_distance * yaw_sine)
         set world_z to (camera_z + (view_distance * yaw_cosine)) - (lateral_distance * yaw_sine)
 
@@ -95,9 +99,6 @@ if this is a vertex shader:
         set normal_y to normal_y / normal_length
         set normal_z to normal_z / normal_length
 
-        set camera_pitch to 0.155 + (the sine of (time * 0.11)) * 0.012
-        set pitch_sine to the sine of camera_pitch
-        set pitch_cosine to the cosine of camera_pitch
         set vertical_distance to displaced_height - camera_y
         set view_y to vertical_distance * pitch_cosine + view_distance * pitch_sine
         set view_z to view_distance * pitch_cosine - vertical_distance * pitch_sine

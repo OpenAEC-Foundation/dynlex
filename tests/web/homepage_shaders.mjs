@@ -72,8 +72,18 @@ assert.match(terrainSource, /the shader interpolant [xyz] named "terrain_normal"
 assert.match(terrainSource, /the shader interpolant x named "terrain_material"/);
 assert.match(terrainSource, /the shader interpolant y named "terrain_material"/);
 assert.match(terrainSource, /set displaced_height to terrain height at world_x world_z/);
-assert.match(terrainSource, /set depth_fraction to the vertex y/);
-assert.match(terrainSource, /set view_distance to 0\.45 \+ \(depth_fraction \* depth_fraction\)/);
+assert.match(terrainSource, /set view_distance to the vertex y/);
+assert.match(terrainSource, /set ray_slope to \(\(the vertex x\) \* aspect\) \* 0\.80/);
+assert.match(
+  terrainSource,
+  /set base_view_depth to \(view_distance \* pitch_cosine\) - \(base_vertical_distance \* pitch_sine\)/
+);
+assert.match(terrainSource, /set lateral_distance to ray_slope \* base_view_depth/);
+assert.doesNotMatch(
+  terrainSource,
+  /\b(?:depth_fraction|near_spread)\b/,
+  "Terrain rows must represent camera-plane distances and columns must remain fixed camera rays"
+);
 assert.match(terrainSource, /set mountain_ridge /);
 assert.match(terrainSource, /set erosion_channels /);
 assert.match(terrainSource, /set exposed_rock /);
@@ -108,6 +118,8 @@ assert.doesNotMatch(
 );
 for (const threeDimensionalDetail of [
   "motorcycle_yaw",
+  "motorcycle_wheel_spin",
+  "wheel_point",
   "packed_x",
   "target_quantized_x",
   "motorcycle_quantized_x",
@@ -126,7 +138,7 @@ for (const threeDimensionalDetail of [
 }
 assert.doesNotMatch(
   nanoSource,
-  /motorcycle distance at x y z|while ray_step|surface_drones|surface_hit|hologram_glow|motorcycle_part|wheel_center_x|shell_center_x|frame_start_x|rider_center_x/,
+  /motorcycle distance at x y z|while ray_step|surface_drones|surface_hit|hologram_glow|motorcycle_part|shell_center_x|frame_start_x|rider_center_x/,
   "The motorcycle must come from paired geometry points, not a raymarch or runtime geometry generator"
 );
 const pointLight = Object.fromEntries(
@@ -163,8 +175,8 @@ assert.doesNotMatch(
 );
 assert.match(
   nanoSource,
-  /set triangle_corner to the vertex w/,
-  "Geometry must encode only the triangle corner, without point-weight groups"
+  /set triangle_corner to encoded_triangle_corner - \(wheel_point \* 4\.0\)/,
+  "Geometry must decode the wheel flag without changing the triangle corner"
 );
 assert.doesNotMatch(
   nanoSource,
@@ -218,6 +230,21 @@ assert.match(
   nanoSource,
   /set target_ndc_x to \(target_turned_x \* horizontal_scale\) \/ target_depth/,
   "The Vitruvian target must remain centered in its perspective projection"
+);
+assert.match(
+  nanoSource,
+  /set motorcycle_yaw to 1\.30 \+ \(motorcycle_progress \* 0\.04\)/,
+  "The motorcycle front must lead its movement toward the camera"
+);
+assert.match(
+  nanoSource,
+  /set motorcycle_ndc_x to \(motorcycle_world_x \* 1\.72\) \/ \(motorcycle_depth \* \(the maximum of aspect and 1\.0\)\)/,
+  "The motorcycle must use a perspective divide after its world transform"
+);
+assert.match(
+  nanoSource,
+  /set clip_x to \(assembled_ndc_x \+ corner_x\) \* depth/,
+  "Projected motorcycle points must return to homogeneous clip space"
 );
 for (const radiusMeasurement of [
   "measurement_angle",
@@ -284,7 +311,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 7);
+assert.equal(manifest.schemaVersion, 8);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -318,7 +345,7 @@ assert.equal(terrainRecord.shaders.vertex.path, terrainConfig.vertex.replace(/^w
 assert.match(terrainRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
 assert.equal(terrainRecord.geometry.path, terrainConfig.geometry.path.replace(/^web\//, ""));
 assert.equal(terrainRecord.geometry.format, "float32x4");
-assert.equal(terrainRecord.geometry.attributeEncoding, "terrain-lod-grid");
+assert.equal(terrainRecord.geometry.attributeEncoding, "perspective-ray-distance-grid");
 assert.equal(terrainRecord.geometry.primitive, "triangles");
 assert.equal(terrainRecord.geometry.indices.path, terrainConfig.geometry.indexPath.replace(/^web\//, ""));
 assert.equal(terrainRecord.geometry.indices.format, "uint16");
@@ -371,6 +398,14 @@ function configuredSurfaceVertexCount(sampling) {
 
 validateSampling(terrainConfig.geometry.terrainSampling, 448);
 validateSampling(terrainConfig.geometry.waterSampling, 224);
+assert.deepEqual(terrainConfig.geometry.cameraDistance, {
+  near: 0.45,
+  far: 94.45
+});
+assert.deepEqual(
+  terrainRecord.geometry.cameraDistance,
+  terrainConfig.geometry.cameraDistance
+);
 assert.deepEqual(
   terrainRecord.geometry.surfaces.terrain.sampling,
   terrainConfig.geometry.terrainSampling
@@ -411,13 +446,16 @@ assert.ok(
 const surfaceRows = new Map();
 for (let vertex = 3; vertex < terrainRecord.geometry.vertexCount; vertex += 1) {
   const x = terrainGeometryValues[vertex * 4];
-  const depth = terrainGeometryValues[vertex * 4 + 1];
+  const cameraDistance = terrainGeometryValues[vertex * 4 + 1];
   const surface = terrainGeometryValues[vertex * 4 + 3];
   assert.ok(x >= -1 && x <= 1);
-  assert.ok(depth >= 0 && depth <= 1);
+  assert.ok(
+    cameraDistance >= Math.fround(terrainConfig.geometry.cameraDistance.near)
+      && cameraDistance <= Math.fround(terrainConfig.geometry.cameraDistance.far)
+  );
   assert.equal(terrainGeometryValues[vertex * 4 + 2], 0);
   assert.ok(surface === 1 || surface === 2);
-  const rowKey = `${surface}:${depth}`;
+  const rowKey = `${surface}:${cameraDistance}`;
   surfaceRows.set(rowKey, (surfaceRows.get(rowKey) ?? 0) + 1);
 }
 for (const [surface, sampling] of [
@@ -426,9 +464,13 @@ for (const [surface, sampling] of [
 ]) {
   const rowDensities = [...surfaceRows]
     .filter(([key]) => key.startsWith(`${surface}:`))
-    .map(([key, count]) => ({ depth: Number(key.slice(2)), count }))
-    .sort((left, right) => left.depth - right.depth);
+    .map(([key, count]) => ({ cameraDistance: Number(key.slice(2)), count }))
+    .sort((left, right) => left.cameraDistance - right.cameraDistance);
   const expectedColumns = sampledColumns(sampling);
+  const distanceRatio = (
+    terrainConfig.geometry.cameraDistance.far
+    / terrainConfig.geometry.cameraDistance.near
+  );
   assert.equal(rowDensities.length, sampling.rows + 1);
   assert.deepEqual(
     rowDensities.map((row) => row.count - 1),
@@ -436,7 +478,14 @@ for (const [surface, sampling] of [
     "Every fixed row must follow the configured exponential density"
   );
   for (let row = 0; row < rowDensities.length; row += 1) {
-    assert.ok(Math.abs(rowDensities[row].depth - row / sampling.rows) < 1e-6);
+    const expectedDistance = row === sampling.rows
+      ? terrainConfig.geometry.cameraDistance.far
+      : terrainConfig.geometry.cameraDistance.near
+        * distanceRatio ** (row / sampling.rows);
+    assert.ok(
+      Math.abs(rowDensities[row].cameraDistance - expectedDistance)
+        < expectedDistance * 1e-6
+    );
   }
 }
 
@@ -468,12 +517,14 @@ for (const [edge, useCount] of edgeUseCounts) {
   const [left, right] = edge.split(":").map(Number);
   const leftX = terrainGeometryValues[left * 4];
   const rightX = terrainGeometryValues[right * 4];
-  const leftDepth = terrainGeometryValues[left * 4 + 1];
-  const rightDepth = terrainGeometryValues[right * 4 + 1];
+  const leftDistance = terrainGeometryValues[left * 4 + 1];
+  const rightDistance = terrainGeometryValues[right * 4 + 1];
+  const nearDistance = Math.fround(terrainConfig.geometry.cameraDistance.near);
+  const farDistance = Math.fround(terrainConfig.geometry.cameraDistance.far);
   const boundaryEdge = (leftX === -1 && rightX === -1)
     || (leftX === 1 && rightX === 1)
-    || (leftDepth === 0 && rightDepth === 0)
-    || (leftDepth === 1 && rightDepth === 1);
+    || (leftDistance === nearDistance && rightDistance === nearDistance)
+    || (leftDistance === farDistance && rightDistance === farDistance);
   assert.equal(boundaryEdge, true, "LOD transitions must not leave interior cracks");
 }
 
@@ -484,7 +535,7 @@ assert.equal(nanoRecord.shaders.vertex.path, nanoConfig.vertex.replace(/^web\//,
 assert.match(nanoRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
 assert.equal(nanoRecord.geometry.path, nanoConfig.geometry.path.replace(/^web\//, ""));
 assert.equal(nanoRecord.geometry.format, "float32x4");
-assert.equal(nanoRecord.geometry.attributeEncoding, "paired-unorm12");
+assert.equal(nanoRecord.geometry.attributeEncoding, "paired-unorm12-wheel-corner");
 assert.equal(nanoRecord.geometry.primitive, "triangles");
 assert.ok(nanoRecord.geometry.pointCount >= 30000);
 assert.equal(nanoRecord.geometry.vertexCount, nanoRecord.geometry.pointCount * 3);
@@ -503,6 +554,7 @@ const geometryValues = new Float32Array(
 );
 const targetPoints = [];
 const motorcyclePoints = [];
+const motorcycleWheelPoints = [];
 for (let vertex = 0; vertex < nanoRecord.geometry.vertexCount; vertex += 1) {
   for (let axis = 0; axis < 3; axis += 1) {
     const packedCoordinate = geometryValues[vertex * 4 + axis];
@@ -526,11 +578,24 @@ for (let vertex = 0; vertex < nanoRecord.geometry.vertexCount; vertex += 1) {
     targetPoints.push(target);
     motorcyclePoints.push(motorcycle);
   }
+  const encodedCorner = geometryValues[vertex * 4 + 3];
+  const wheelPoint = Math.floor(encodedCorner / 4);
   assert.equal(
-    geometryValues[vertex * 4 + 3],
+    encodedCorner - wheelPoint * 4,
     vertex % 3,
-    "Geometry must encode only the micro-triangle corner for uniformly weighted points"
+    "Geometry must preserve the micro-triangle corner"
   );
+  assert.ok(wheelPoint === 0 || wheelPoint === 1);
+  if (vertex % 3 === 0) motorcycleWheelPoints.push(wheelPoint);
+}
+assert.ok(motorcycleWheelPoints.some((wheelPoint) => wheelPoint === 0));
+assert.ok(motorcycleWheelPoints.filter((wheelPoint) => wheelPoint === 1).length > 30000);
+for (let point = 0; point < motorcyclePoints.length; point += 1) {
+  if (motorcycleWheelPoints[point] === 0) continue;
+  const [x, y, z] = motorcyclePoints[point];
+  const centerX = x < 0 ? -0.72 : 0.72;
+  assert.ok(Math.hypot(x - centerX, y + 0.42) < 0.38);
+  assert.ok(Math.abs(z) < 0.15);
 }
 
 function coordinateCorrelation(firstPoints, secondPoints, axis) {
@@ -570,12 +635,18 @@ assert.ok(
 const geometryMetadata = JSON.parse(
   fs.readFileSync(path.join(projectDir, nanoConfig.geometry.metadata), "utf8")
 );
-assert.equal(geometryMetadata.schemaVersion, 4);
+assert.equal(geometryMetadata.schemaVersion, 5);
+assert.equal(geometryMetadata.attributeEncoding, "paired-unorm12-wheel-corner");
 assert.deepEqual(geometryMetadata.coordinateEncoding, {
   name: "paired-unorm12",
   quantizationLevels: 4095,
   coordinateMinimum: -2,
   coordinateMaximum: 2
+});
+assert.deepEqual(geometryMetadata.triangleCornerEncoding, {
+  name: "wheel-part-plus-corner",
+  wheelOffset: 4,
+  cornerCount: 3
 });
 assert.deepEqual(geometryMetadata.pointPairing, {
   name: "recursive-spatial-bisection",
@@ -597,6 +668,10 @@ assert.equal(geometryMetadata.source.modelTriangleCount, 483637);
 assert.ok(Array.isArray(geometryMetadata.modifications));
 assert.equal(geometryMetadata.pointCount, nanoRecord.geometry.pointCount);
 assert.equal(geometryMetadata.motorcyclePointCount, geometryMetadata.pointCount);
+assert.equal(
+  geometryMetadata.motorcycleWheelPointCount,
+  motorcycleWheelPoints.filter((wheelPoint) => wheelPoint === 1).length
+);
 assert.ok(geometryMetadata.surfacePointCount >= 60000);
 assert.ok(geometryMetadata.densityPointCount >= 5000);
 assert.equal("detailPointCount" in geometryMetadata, false);

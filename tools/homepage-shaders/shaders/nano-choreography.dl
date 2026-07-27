@@ -15,7 +15,9 @@ if this is a vertex shader:
     set packed_x to the vertex x
     set packed_y to the vertex y
     set packed_z to the vertex z
-    set triangle_corner to the vertex w
+    set encoded_triangle_corner to the vertex w
+    set wheel_point to the floor of (encoded_triangle_corner / 4.0)
+    set triangle_corner to encoded_triangle_corner - (wheel_point * 4.0)
     set target_quantized_x to the floor of (packed_x / 4096.0)
     set target_quantized_y to the floor of (packed_y / 4096.0)
     set target_quantized_z to the floor of (packed_z / 4096.0)
@@ -37,9 +39,24 @@ if this is a vertex shader:
     set moment to the minimum of time and 10.40
     set visibility to scene window from 0.0 to 11.0 at moment
 
-    # The point-built motorcycle races toward the camera before its drones depart.
+    # Wheel-tagged points rotate around their generated local hubs.
+    set motorcycle_wheel_spin to (0.0 - time) * 9.4
+    set wheel_spin_sine to the sine of motorcycle_wheel_spin
+    set wheel_spin_cosine to the cosine of motorcycle_wheel_spin
+    set wheel_center_x to -0.72
+    if motorcycle_local_x > 0.0:
+        set wheel_center_x to 0.72
+    set wheel_offset_x to motorcycle_local_x - wheel_center_x
+    set wheel_offset_y to motorcycle_local_y + 0.42
+    set wheel_rotated_x to (wheel_offset_x * wheel_spin_cosine) - (wheel_offset_y * wheel_spin_sine)
+    set wheel_rotated_y to (wheel_offset_x * wheel_spin_sine) + (wheel_offset_y * wheel_spin_cosine)
+    if wheel_point > 0.5:
+        set motorcycle_local_x to wheel_center_x + wheel_rotated_x
+        set motorcycle_local_y to -0.42 + wheel_rotated_y
+
+    # The point-built motorcycle races front-first toward the perspective camera.
     set motorcycle_progress to smooth transition from 0.0 to 4.25 at moment
-    set motorcycle_yaw to (0.0 - 1.18) + (motorcycle_progress * 0.08)
+    set motorcycle_yaw to 1.30 + (motorcycle_progress * 0.04)
     set motorcycle_yaw_sine to the sine of motorcycle_yaw
     set motorcycle_yaw_cosine to the cosine of motorcycle_yaw
     set motorcycle_turned_x to (motorcycle_local_x * motorcycle_yaw_cosine) + (motorcycle_local_z * motorcycle_yaw_sine)
