@@ -616,8 +616,11 @@ collectMatcherFrontierNodes(const CompletionContext &context, SectionType sectio
 			frontier.push_back(current.currentNode);
 		}
 		std::vector<PatternDefinition *> visibleDefinitions = current.visibleDefinitions();
-		std::vector<MatchProgress> nextSteps = current.step(storage, visibleDefinitions);
-		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
+		MatchStep matchStep = current.step(storage, visibleDefinitions);
+		queue.insert(
+			queue.end(), std::make_move_iterator(matchStep.nextMatches.begin()),
+			std::make_move_iterator(matchStep.nextMatches.end())
+		);
 	}
 
 	return frontier;

@@ -380,7 +380,7 @@ bool resolvePatterns(ParseContext &context) {
 					lessSpecific.push_back(candidate);
 			}
 		}
-		std::sort(lessSpecific.begin(), lessSpecific.end(), definitionComesBefore);
+		std::sort(lessSpecific.begin(), lessSpecific.end(), patternDefinitionComesBefore);
 		traceResolution(
 			"invalidate base=" + definitionTraceId(definition) + " candidates=" + std::to_string(lessSpecific.size())
 		);
@@ -765,7 +765,7 @@ bool resolvePatterns(ParseContext &context) {
 					zeroInDegree.push_back(def);
 				}
 			}
-			std::sort(zeroInDegree.begin(), zeroInDegree.end(), definitionComesBefore);
+			std::sort(zeroInDegree.begin(), zeroInDegree.end(), patternDefinitionComesBefore);
 
 			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
 			// This ensures operators like * and / (no edge between them) share the same level,
@@ -783,7 +783,7 @@ bool resolvePatterns(ParseContext &context) {
 							nextWave.push_back(lower);
 					}
 				}
-				std::sort(nextWave.begin(), nextWave.end(), definitionComesBefore);
+				std::sort(nextWave.begin(), nextWave.end(), patternDefinitionComesBefore);
 				nextWave.erase(std::unique(nextWave.begin(), nextWave.end()), nextWave.end());
 				currentWave = std::move(nextWave);
 				currentLevel--;

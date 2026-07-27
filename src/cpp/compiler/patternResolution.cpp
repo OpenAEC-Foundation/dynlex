@@ -163,47 +163,43 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 	}
 }
 
-static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
-	if (!def)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-	if (!def->range.line)
-		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
-	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
+static bool sectionComesBefore(const Section *left, const Section *right) {
+	auto locationKey = [](const Section *section) {
+		if (!section)
+			return std::tuple{INT_MAX, INT_MAX, INT_MAX};
+		int mergedLineIndex = section->openingLine ? section->openingLine->mergedLineIndex : INT_MAX - 1;
+		int sourceLineIndex = section->openingLine ? section->openingLine->sourceFileLineIndex : INT_MAX - 1;
+		return std::tuple{mergedLineIndex, sourceLineIndex, static_cast<int>(section->type)};
+	};
+	auto leftLocation = locationKey(left);
+	auto rightLocation = locationKey(right);
+	if (leftLocation != rightLocation)
+		return leftLocation < rightLocation;
+	auto text = [](const Section *section) {
+		if (!section)
+			return std::string{};
+		if (section->openingLine)
+			return std::string(section->openingLine->patternText);
+		return section->toString();
+	};
+	return text(left) < text(right);
 }
 
-static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
-	return definitionSortKey(a) < definitionSortKey(b);
-}
-
-static std::tuple<int, int, int, std::string> sectionSortKey(const Section *section) {
-	if (!section)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-
-	int mergedLineIndex = INT_MAX - 1;
-	int sourceLineIndex = INT_MAX - 1;
-	std::string sectionText = section->toString();
-	if (section->openingLine) {
-		mergedLineIndex = section->openingLine->mergedLineIndex;
-		sourceLineIndex = section->openingLine->sourceFileLineIndex;
-		sectionText = std::string(section->openingLine->patternText);
-	}
-
-	return {mergedLineIndex, sourceLineIndex, static_cast<int>(section->type), sectionText};
-}
-
-static bool sectionComesBefore(const Section *a, const Section *b) { return sectionSortKey(a) < sectionSortKey(b); }
-
-static std::tuple<int, int, int, std::string> referenceSortKey(const PatternReference *reference) {
-	if (!reference)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-	const Range &r = reference->range();
-	if (!r.line)
-		return {INT_MAX - 1, r.start(), r.end(), reference->pattern.text};
-	return {r.line->mergedLineIndex, r.start(), r.end(), reference->pattern.text};
-}
-
-static bool referenceComesBefore(const PatternReference *a, const PatternReference *b) {
-	return referenceSortKey(a) < referenceSortKey(b);
+static bool referenceComesBefore(const PatternReference *left, const PatternReference *right) {
+	auto locationKey = [](const PatternReference *reference) {
+		if (!reference)
+			return std::tuple{INT_MAX, INT_MAX, INT_MAX};
+		const Range &range = reference->range();
+		int lineIndex = range.line ? range.line->mergedLineIndex : INT_MAX - 1;
+		return std::tuple{lineIndex, range.start(), range.end()};
+	};
+	auto leftLocation = locationKey(left);
+	auto rightLocation = locationKey(right);
+	if (leftLocation != rightLocation)
+		return leftLocation < rightLocation;
+	std::string leftText = left ? left->pattern.text : "";
+	std::string rightText = right ? right->pattern.text : "";
+	return leftText < rightText;
 }
 
 static bool resolutionTraceEnabled() {
@@ -447,13 +443,13 @@ struct DefinitionConflict {
 };
 
 static bool definitionConflictComesBefore(const DefinitionConflict &left, const DefinitionConflict &right) {
-	if (definitionComesBefore(left.primary, right.primary))
+	if (patternDefinitionComesBefore(left.primary, right.primary))
 		return true;
-	if (definitionComesBefore(right.primary, left.primary))
+	if (patternDefinitionComesBefore(right.primary, left.primary))
 		return false;
-	if (definitionComesBefore(left.related, right.related))
+	if (patternDefinitionComesBefore(left.related, right.related))
 		return true;
-	if (definitionComesBefore(right.related, left.related))
+	if (patternDefinitionComesBefore(right.related, left.related))
 		return false;
 	return false;
 }
@@ -479,7 +475,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 			collectDefinitions(child);
 	};
 	collectDefinitions(context.mainSection);
-	std::sort(definitions.begin(), definitions.end(), definitionComesBefore);
+	std::sort(definitions.begin(), definitions.end(), patternDefinitionComesBefore);
 
 	std::vector<DefinitionConflict> conflicts;
 	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
@@ -495,7 +491,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				if (!patternDefinitionsShareVisibilityScope(*definition, *other))
 					continue;
 
-				PatternDefinition *earlierDefinition = definitionComesBefore(definition, other) ? definition : other;
+				PatternDefinition *earlierDefinition = patternDefinitionComesBefore(definition, other) ? definition : other;
 				PatternDefinition *laterDefinition = earlierDefinition == definition ? other : definition;
 				if (!seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
 					continue;
@@ -755,7 +751,7 @@ static std::vector<PatternDefinition *> collectAlternativeSearchOrder(PatternMat
 		orderedDefinitions.push_back(matchedDefinition);
 	for (Section *section : orderedSections) {
 		std::vector<PatternDefinition *> sectionDefinitions = section->patternDefinitions;
-		std::sort(sectionDefinitions.begin(), sectionDefinitions.end(), definitionComesBefore);
+		std::sort(sectionDefinitions.begin(), sectionDefinitions.end(), patternDefinitionComesBefore);
 		for (PatternDefinition *definition : sectionDefinitions) {
 			if (!definition)
 				continue;

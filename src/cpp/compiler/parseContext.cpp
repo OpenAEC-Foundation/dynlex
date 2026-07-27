@@ -112,7 +112,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
 					for (auto completion = canonicalParents->completedSubmatches.rbegin();
 						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
-						resumedProgresses.push_back(MatchProgress::resumeParent(**addedParent, *completion));
+						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **addedParent, *completion));
 					}
 				}
 			}
@@ -125,14 +125,18 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 		}
 		steps++;
 		std::vector<PatternDefinition *> visibleDefinitions = currentProgress.visibleDefinitions();
-		std::vector<MatchProgress> nextSteps = currentProgress.step(storage, visibleDefinitions);
-		if (currentProgress.isSubmatchComplete(visibleDefinitions))
-			currentProgress.parents->addCompletion(currentProgress.completedSubmatch(visibleDefinitions));
-		if (currentProgress.isComplete()) {
-			return new PatternMatch(currentProgress.match);
+		MatchStep matchStep = currentProgress.step(storage, visibleDefinitions);
+		if (currentProgress.isSubmatchComplete(visibleDefinitions)) {
+			requireCompilerInvariant(matchStep.hasCompletedSubmatch, "completed matcher state did not produce submatch data");
+			currentProgress.parents->addCompletion(std::move(matchStep.completedSubmatch));
 		}
+		if (currentProgress.isComplete(visibleDefinitions))
+			return new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions));
 		queue.pop_back();
-		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
+		queue.insert(
+			queue.end(), std::make_move_iterator(matchStep.nextMatches.begin()),
+			std::make_move_iterator(matchStep.nextMatches.end())
+		);
 	}
 	recordDependencies();
 	return nullptr;

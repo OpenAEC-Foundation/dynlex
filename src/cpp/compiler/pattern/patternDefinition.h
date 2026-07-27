@@ -68,6 +68,7 @@ struct PatternDefinition {
 
 bool isPatternDefinitionVisibleFromSource(const PatternDefinition &definition, const lsp::SourceFile &sourceFile);
 bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const PatternDefinition &right);
+bool patternDefinitionComesBefore(const PatternDefinition *left, const PatternDefinition *right);
 void mutatePatternDefinition(ParseContext &context, PatternDefinition &definition, const std::function<void()> &mutation);
 void promoteImplicitPatternParameter(
 	ParseContext &context, PatternDefinition &definition, DefinitionPatternElement &element, const Range &useRange
