@@ -6,7 +6,11 @@
 struct Expression;
 
 struct GroupingSnapshot {
+	struct NodeState {
+		std::vector<Expression *> arguments;
+		bool explicitGroup;
+	};
+
 	Expression *root{};
-	std::unordered_map<Expression *, std::vector<Expression *>> argumentsByExpression;
-	std::unordered_map<Expression *, bool> explicitGroupByExpression;
+	std::unordered_map<Expression *, NodeState> nodes;
 };

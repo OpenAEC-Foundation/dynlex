@@ -286,8 +286,7 @@ static void considerGroupingFailure(GroupingFailure *currentBest, Diagnostic dia
 static void captureGroupingSnapshot(Expression *expr, GroupingSnapshot &snapshot, ExpressionNodeSet &visited) {
 	if (!expr || !visited.insert(expr).second)
 		return;
-	snapshot.argumentsByExpression[expr] = expr->arguments;
-	snapshot.explicitGroupByExpression[expr] = expr->isExplicitGroup;
+	snapshot.nodes.emplace(expr, GroupingSnapshot::NodeState{expr->arguments, expr->isExplicitGroup});
 	for (Expression *arg : expr->arguments)
 		captureGroupingSnapshot(arg, snapshot, visited);
 }
@@ -307,10 +306,10 @@ static bool expressionNodeSetsEqual(const ExpressionNodeSet &left, const Express
 }
 
 static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
-	for (const auto &[expression, arguments] : snapshot.argumentsByExpression)
-		expression->arguments = arguments;
-	for (const auto &[expression, explicitGroup] : snapshot.explicitGroupByExpression)
-		expression->isExplicitGroup = explicitGroup;
+	for (const auto &[expression, state] : snapshot.nodes) {
+		expression->arguments = state.arguments;
+		expression->isExplicitGroup = state.explicitGroup;
+	}
 }
 
 static bool expressionHasGroupingShape(Expression *expression) {
@@ -341,8 +340,8 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 
 static const std::vector<Expression *> &snapshotArguments(const GroupingSnapshot &snapshot, Expression *expression) {
 	static const std::vector<Expression *> emptyArguments;
-	auto it = snapshot.argumentsByExpression.find(expression);
-	return it != snapshot.argumentsByExpression.end() ? it->second : emptyArguments;
+	auto it = snapshot.nodes.find(expression);
+	return it != snapshot.nodes.end() ? it->second.arguments : emptyArguments;
 }
 
 static bool snapshotsHaveSameLocalOrdering(
@@ -426,14 +425,16 @@ static GroupingSnapshot groupingForReusableInstance(const GroupingSnapshot &temp
 		return instance->second;
 	};
 	instanceGrouping.root = findInstance(templateGrouping.root);
-	for (const auto &[templateExpression, templateArguments] : templateGrouping.argumentsByExpression) {
-		auto &instanceArguments = instanceGrouping.argumentsByExpression[findInstance(templateExpression)];
-		instanceArguments.reserve(templateArguments.size());
-		for (Expression *templateArgument : templateArguments)
+	for (const auto &[templateExpression, templateState] : templateGrouping.nodes) {
+		std::vector<Expression *> instanceArguments;
+		instanceArguments.reserve(templateState.arguments.size());
+		for (Expression *templateArgument : templateState.arguments)
 			instanceArguments.push_back(findInstance(templateArgument));
+		instanceGrouping.nodes.emplace(
+			findInstance(templateExpression),
+			GroupingSnapshot::NodeState{std::move(instanceArguments), templateState.explicitGroup}
+		);
 	}
-	for (const auto &[templateExpression, explicitGroup] : templateGrouping.explicitGroupByExpression)
-		instanceGrouping.explicitGroupByExpression[findInstance(templateExpression)] = explicitGroup;
 	return instanceGrouping;
 }
 
@@ -480,14 +481,15 @@ static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanc
 		return expression && expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
 	};
 	templateGrouping.root = templateExpression(instanceGrouping.root);
-	for (const auto &[expression, arguments] : instanceGrouping.argumentsByExpression) {
-		auto &templateArguments = templateGrouping.argumentsByExpression[templateExpression(expression)];
-		templateArguments.reserve(arguments.size());
-		for (Expression *argument : arguments)
+	for (const auto &[expression, state] : instanceGrouping.nodes) {
+		std::vector<Expression *> templateArguments;
+		templateArguments.reserve(state.arguments.size());
+		for (Expression *argument : state.arguments)
 			templateArguments.push_back(templateExpression(argument));
+		templateGrouping.nodes.emplace(
+			templateExpression(expression), GroupingSnapshot::NodeState{std::move(templateArguments), state.explicitGroup}
+		);
 	}
-	for (const auto &[expression, isExplicitGroup] : instanceGrouping.explicitGroupByExpression)
-		templateGrouping.explicitGroupByExpression[templateExpression(expression)] = isExplicitGroup;
 	return templateGrouping;
 }
 
