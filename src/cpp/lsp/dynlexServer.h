@@ -1,5 +1,6 @@
 #pragma once
 #include "languageServer.h"
+#include "lspAnalysis.h"
 #include "parseContext.h"
 #include "semanticTokens.h"
 #include <memory>
@@ -28,6 +29,7 @@ class DynLexServer : public LanguageServer {
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
 	std::string onRenderSemanticTokens(const TextDocumentIdentifier &params) override;
 	Json onInstantiationsInDocument(const TextDocumentIdentifier &params) override;
+	std::optional<std::string> onReadDocument(const TextDocumentIdentifier &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
 	std::vector<CodeAction> onCodeAction(const CodeActionParams &params) override;
 	void onSelectInstantiation(const Json &params) override;
@@ -43,9 +45,10 @@ class DynLexServer : public LanguageServer {
 		std::string committedText;
 	};
 
-	// ParseContext per main document URI
-	std::unordered_map<std::string, std::shared_ptr<ParseContext>> parseContexts;
-	std::unordered_map<std::string, std::shared_ptr<ParseContext>> completionParseContexts;
+	// Target-specific ParseContexts per main document URI.
+	ParseContextMap parseContexts;
+	ParseContextMap completionParseContexts;
+	std::vector<ParseContext::Options> analysisProfiles{ParseContext::Options{}};
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> compiledDocuments;
 	std::string workspaceRootPath;
 	std::unordered_map<std::string, CursorState> activeCursors;
@@ -83,6 +86,13 @@ class DynLexServer : public LanguageServer {
 	// Find the ParseContext for a URI (either as a main document or via importedBy)
 	ParseContext *findContextFor(const std::string &uri);
 	ParseContext *findCompletionContextFor(const std::string &uri);
+	std::vector<ParseContext *> findContextsFor(const std::string &uri);
+	std::optional<Location> definitionInContext(ParseContext *context, const TextDocumentPositionParams &params);
+	std::optional<Hover> hoverInContext(ParseContext *context, const TextDocumentPositionParams &params);
+	void appendInstantiationsInContext(
+		ParseContext *context, const TextDocumentIdentifier &params, Json &entries,
+		std::unordered_set<std::string> &seenSelectionKeys
+	);
 
 	// Generate semantic tokens for a document
 	std::vector<int> generateSemanticTokens(const std::string &uri);

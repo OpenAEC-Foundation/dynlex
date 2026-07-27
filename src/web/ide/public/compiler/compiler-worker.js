@@ -206,61 +206,24 @@ function compileShaderSource(source, version, compileVertexStage) {
   };
 }
 
-function extractLspError(payload) {
-  if (payload && typeof payload === "object" && typeof payload.error === "string" && payload.error.length > 0) {
-    return payload.error;
+function exchangeLsp(message) {
+  if (!message || typeof message !== "object" || message.jsonrpc !== "2.0") {
+    throw new Error("Worker received an invalid LSP JSON-RPC message");
   }
-  return "";
-}
-
-function getLspHover(source, version, line, column) {
   const module = state.compilerModule;
-  syncCompilerSource(source, version);
-  const hoverPayload = parseCompilerJson(
-    module.ccall("dynlex_web_get_lsp_hover_json", "string", ["number", "number"], [line, column]),
-    "hover"
+  const messages = parseCompilerJson(
+    module.ccall(
+      "dynlex_web_lsp_exchange_json",
+      "string",
+      ["string"],
+      [JSON.stringify(message)]
+    ),
+    "LSP exchange"
   );
-  const error = extractLspError(hoverPayload);
-  if (error) {
-    throw new Error(error);
+  if (!Array.isArray(messages)) {
+    throw new Error("Compiler returned malformed LSP exchange JSON");
   }
-  return hoverPayload;
-}
-
-function getLspDefinition(source, version, line, column) {
-  const module = state.compilerModule;
-  syncCompilerSource(source, version);
-  const definitionPayload = parseCompilerJson(
-    module.ccall("dynlex_web_get_lsp_definition_json", "string", ["number", "number"], [line, column]),
-    "definition"
-  );
-  const error = extractLspError(definitionPayload);
-  if (error) {
-    throw new Error(error);
-  }
-  return definitionPayload;
-}
-
-function getLspSemanticTokens(source, version) {
-  const module = state.compilerModule;
-  syncCompilerSource(source, version);
-  const semanticPayload = parseCompilerJson(
-    module.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []),
-    "semantic token"
-  );
-  const error = extractLspError(semanticPayload);
-  if (error) {
-    throw new Error(error);
-  }
-  if (
-    !Array.isArray(semanticPayload.data)
-    || !semanticPayload.legend
-    || !Array.isArray(semanticPayload.legend.tokenTypes)
-    || !Array.isArray(semanticPayload.legend.tokenModifiers)
-  ) {
-    throw new Error("Compiler returned malformed semantic tokens");
-  }
-  return semanticPayload;
+  return messages;
 }
 
 async function runLastSuccessfulProgram() {
@@ -336,9 +299,7 @@ async function runLastSuccessfulProgram() {
 // - compile { source, version } -> compileResult
 // - compile.shader { source, version } -> shaderCompileResult
 // - run -> runResult
-// - lsp.hover { source, version, line, column } -> hover|null
-// - lsp.definition { source, version, line, column } -> location|null
-// - lsp.semanticTokens { source, version } -> { data, legend }
+// - lsp.exchange { message } -> JSON-RPC messages emitted by the DynLex language server
 self.onmessage = async (event) => {
   const { id, type, payload } = event.data ?? {};
   if (typeof id !== "number" || typeof type !== "string") {
@@ -378,34 +339,9 @@ self.onmessage = async (event) => {
       return;
     }
 
-    if (type === "lsp.hover") {
+    if (type === "lsp.exchange") {
       await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const line = toNonNegativeInteger(payload?.line);
-      const column = toNonNegativeInteger(payload?.column);
-      const hover = getLspHover(source, version, line, column);
-      postResponse(id, true, hover);
-      return;
-    }
-
-    if (type === "lsp.definition") {
-      await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const line = toNonNegativeInteger(payload?.line);
-      const column = toNonNegativeInteger(payload?.column);
-      const definition = getLspDefinition(source, version, line, column);
-      postResponse(id, true, definition);
-      return;
-    }
-
-    if (type === "lsp.semanticTokens") {
-      await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const tokens = getLspSemanticTokens(source, version);
-      postResponse(id, true, tokens);
+      postResponse(id, true, exchangeLsp(payload?.message));
       return;
     }
 

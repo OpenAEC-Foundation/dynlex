@@ -1,5 +1,19 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
+import "monaco-editor/esm/vs/base/browser/ui/codicons/codiconStyles.js";
+import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js";
+import "monaco-editor/esm/vs/editor/contrib/codeAction/browser/codeActionContributions.js";
+import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu.js";
+import "monaco-editor/esm/vs/editor/contrib/documentSymbols/browser/documentSymbols.js";
+import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
+import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands.js";
+import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition.js";
+import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution.js";
+import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/documentSemanticTokens.js";
+import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/viewportSemanticTokens.js";
+import "monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController.js";
 import { createShaderPreview } from "../../../../web/shader-renderer.js";
+import { DynLexLanguageFeatures } from "./lspIntegration.js";
 import "./styles.css";
 
 self.MonacoEnvironment = {
@@ -11,52 +25,8 @@ self.MonacoEnvironment = {
 };
 
 const THEME_STORAGE_KEY = "dynlex-web-theme";
-const LSP_SEMANTIC_LEGEND = {
-  tokenTypes: [
-    "function",
-    "section",
-    "variable",
-    "comment",
-    "patternDefinition",
-    "number",
-    "string",
-    "intrinsic",
-    "type",
-    "keyword"
-  ],
-  tokenModifiers: ["definition", "constant"]
-};
 
 monaco.languages.register({ id: "dynlex" });
-monaco.languages.setMonarchTokensProvider("dynlex", {
-  defaultToken: "text",
-  keywords: [
-    "import",
-    "function",
-    "section",
-    "replacement",
-    "execute",
-    "if",
-    "else",
-    "loop",
-    "match",
-    "case",
-    "class",
-    "members",
-    "globals",
-    "flex",
-    "local",
-    "open"
-  ],
-  tokenizer: {
-    root: [
-      [/#.*$/, "comment"],
-      [/\"(?:[^\"\\\\]|\\\\.)*\"/, "string"],
-      [/\b\d+(?:\.\d+)?\b/, "number"],
-      [/[A-Za-z_][\w-]*/, { cases: { "@keywords": "keyword", "@default": "function" } }]
-    ]
-  }
-});
 
 const scrollbarThemeColors = Object.freeze({
   "scrollbarSlider.background": "#3F474199",
@@ -268,25 +238,6 @@ function callWorker(type, payload = {}) {
   });
 }
 
-function toMonacoRange(range) {
-  if (!range || !range.start || !range.end) {
-    return null;
-  }
-  return {
-    startLineNumber: (range.start.line ?? 0) + 1,
-    startColumn: (range.start.character ?? 0) + 1,
-    endLineNumber: (range.end.line ?? 0) + 1,
-    endColumn: (range.end.character ?? 0) + 1
-  };
-}
-
-function positionPayload(position) {
-  return {
-    line: Math.max(0, position.lineNumber - 1),
-    column: Math.max(0, position.column - 1)
-  };
-}
-
 function normalizeTheme(themeName) {
   return themeName === "dark" ? "dark" : "light";
 }
@@ -319,6 +270,7 @@ const runtimeOutput = requiredElement("runtime-output");
 const shaderPreviewShell = requiredElement("shader-preview-shell");
 const shaderPreviewCanvas = requiredElement("shader-preview");
 const editorElement = requiredElement("editor");
+const projectFiles = requiredElement("project-files");
 const toolTabs = [...document.querySelectorAll("[data-tool-tab]")];
 const toolPanels = [...document.querySelectorAll("[data-tool-panel]")];
 
@@ -410,37 +362,15 @@ function setStatus(text, tone = "ready") {
   statusPill.dataset.tone = tone;
 }
 
-function diagnosticsToMarkers(diagnostics) {
-  return diagnostics
-    .filter((diagnostic) => Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column))
-    .map((diagnostic) => {
-      const startLine = diagnostic.range?.start?.line ?? diagnostic.line;
-      const startColumn = diagnostic.range?.start?.column ?? diagnostic.column;
-      let endLine = diagnostic.range?.end?.line ?? startLine;
-      let endColumn = diagnostic.range?.end?.column ?? (startColumn + 1);
-      if (endLine < startLine) {
-        endLine = startLine;
-      }
-      if (endLine === startLine && endColumn <= startColumn) {
-        endColumn = startColumn + 1;
-      }
+const diagnosticLevels = new Map([
+  [1, "error"],
+  [2, "warning"],
+  [3, "info"],
+  [4, "hint"]
+]);
 
-      let severity = monaco.MarkerSeverity.Info;
-      if (diagnostic.severity === "error") {
-        severity = monaco.MarkerSeverity.Error;
-      } else if (diagnostic.severity === "warning") {
-        severity = monaco.MarkerSeverity.Warning;
-      }
-
-      return {
-        severity,
-        message: diagnostic.message,
-        startLineNumber: startLine,
-        startColumn,
-        endLineNumber: endLine,
-        endColumn
-      };
-    });
+function diagnosticLevel(severity) {
+  return diagnosticLevels.get(severity) ?? "info";
 }
 
 function renderDiagnostics(diagnostics) {
@@ -450,18 +380,20 @@ function renderDiagnostics(diagnostics) {
   diagnosticsCount.textContent = String(diagnostics.length);
 
   for (const diagnostic of diagnostics) {
+    const severity = diagnosticLevel(diagnostic.severity);
     const item = document.createElement("li");
-    item.className = `severity-${diagnostic.severity || "info"}`;
+    item.className = `severity-${severity}`;
     item.textContent = diagnostic.message;
 
-    const line = Number.isInteger(diagnostic.line) ? diagnostic.line : 1;
-    const column = Number.isInteger(diagnostic.column) ? diagnostic.column : 1;
+    const line = diagnostic.range.start.line + 1;
+    const column = diagnostic.range.start.character + 1;
     const meta = document.createElement("span");
     meta.className = "diag-meta";
-    meta.textContent = `${diagnostic.severity ?? "info"} at ${line}:${column}`;
+    meta.textContent = `${severity} at ${line}:${column}`;
     item.appendChild(meta);
 
-    item.addEventListener("click", () => {
+    item.addEventListener("click", async () => {
+      await languageFeatures.showDocument(model.uri.toString());
       editor.revealPositionInCenter({ lineNumber: line, column });
       editor.setPosition({ lineNumber: line, column });
       editor.focus();
@@ -469,8 +401,6 @@ function renderDiagnostics(diagnostics) {
 
     diagnosticsList.appendChild(item);
   }
-
-  monaco.editor.setModelMarkers(model, "dynlex", diagnosticsToMarkers(diagnostics));
 }
 
 function renderCompilerLogMessages(messages) {
@@ -494,100 +424,63 @@ let compileTimer = null;
 let workerReady = false;
 let shaderPreview = null;
 let shaderRenderer = null;
+let latestMainDiagnostics = [];
+let languageFeatures = null;
+let showingDiagnosticStatus = false;
+let openSourceModels = [];
 
-monaco.languages.registerDefinitionProvider("dynlex", {
-  async provideDefinition(currentModel, position, cancellationToken) {
-    if (!workerReady) {
-      return null;
-    }
-    try {
-      const response = await callWorker("lsp.definition", {
-        source: currentModel.getValue(),
-        version: currentModel.getVersionId(),
-        ...positionPayload(position)
+function documentName(documentModel) {
+  return documentModel.uri.path.split("/").pop();
+}
+
+function renderOpenFiles(openModels) {
+  projectFiles.innerHTML = "";
+  const currentModel = editor.getModel();
+  for (const openModel of openModels) {
+    const listItem = document.createElement("div");
+    listItem.setAttribute("role", "listitem");
+    const item = document.createElement("button");
+    item.className = `file-item${openModel === currentModel ? " active" : ""}`;
+    item.type = "button";
+    item.setAttribute("aria-current", openModel === currentModel ? "page" : "false");
+
+    const icon = document.createElement("i");
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "D";
+    const label = document.createElement("span");
+    label.dataset.fileUri = openModel.uri.toString();
+    label.textContent = documentName(openModel);
+    const state = document.createElement("b");
+    state.setAttribute("aria-hidden", "true");
+    state.textContent = openModel === model ? "●" : "◇";
+
+    item.append(icon, label, state);
+    item.addEventListener("click", () => {
+      void languageFeatures.showDocument(openModel.uri.toString()).catch((error) => {
+        console.error("Could not activate DynLex document", error);
       });
-      if (cancellationToken?.isCancellationRequested || !response || !response.range || !response.uri) {
-        return null;
-      }
-      return {
-        uri: monaco.Uri.parse(response.uri),
-        range: toMonacoRange(response.range)
-      };
-    } catch {
-      return null;
-    }
+    });
+    listItem.appendChild(item);
+    projectFiles.appendChild(listItem);
   }
-});
+}
 
-monaco.languages.registerHoverProvider("dynlex", {
-  async provideHover(currentModel, position, cancellationToken) {
-    if (!workerReady) {
-      return null;
-    }
-    try {
-      const response = await callWorker("lsp.hover", {
-        source: currentModel.getValue(),
-        version: currentModel.getVersionId(),
-        ...positionPayload(position)
-      });
-      if (cancellationToken?.isCancellationRequested || !response) {
-        return null;
-      }
-
-      const contents = [];
-      if (typeof response.contents === "string") {
-        contents.push({ value: response.contents });
-      } else if (response.contents && typeof response.contents.value === "string") {
-        contents.push({ value: response.contents.value });
-      } else if (response.contents && typeof response.contents === "object") {
-        contents.push({ value: JSON.stringify(response.contents, null, 2) });
-      }
-
-      if (contents.length === 0) {
-        return null;
-      }
-
-      return {
-        range: toMonacoRange(response.range),
-        contents
-      };
-    } catch {
-      return null;
-    }
+function showDiagnosticStatus() {
+  if (latestMainDiagnostics.length === 0) {
+    setStatus("Ready");
+    showingDiagnosticStatus = false;
+    return;
   }
-});
-
-monaco.languages.registerDocumentSemanticTokensProvider("dynlex", {
-  getLegend() {
-    return LSP_SEMANTIC_LEGEND;
-  },
-
-  async provideDocumentSemanticTokens(currentModel, _lastResultId, cancellationToken) {
-    if (!workerReady) {
-      return { data: new Uint32Array(0), resultId: String(currentModel.getVersionId()) };
-    }
-
-    try {
-      const response = await callWorker("lsp.semanticTokens", {
-        source: currentModel.getValue(),
-        version: currentModel.getVersionId()
-      });
-      if (cancellationToken?.isCancellationRequested) {
-        return { data: new Uint32Array(0), resultId: String(currentModel.getVersionId()) };
-      }
-
-      const tokenData = Array.isArray(response?.data) ? response.data : [];
-      return {
-        data: Uint32Array.from(tokenData.map((value) => (Number.isFinite(value) ? value : 0))),
-        resultId: String(currentModel.getVersionId())
-      };
-    } catch {
-      return { data: new Uint32Array(0), resultId: String(currentModel.getVersionId()) };
-    }
-  },
-
-  releaseDocumentSemanticTokens() {}
-});
+  const hasErrors = latestMainDiagnostics.some((diagnostic) => diagnostic.severity === 1);
+  if (hasErrors) {
+    selectToolTab("feedback");
+  }
+  setStatus(
+    `${latestMainDiagnostics.length} ${latestMainDiagnostics.length === 1 ? "problem" : "problems"}`,
+    hasErrors ? "error" : "ready"
+  );
+  showingDiagnosticStatus = true;
+}
 
 async function runCompile() {
   if (!workerReady) {
@@ -606,7 +499,6 @@ async function runCompile() {
     if (sourceVersion !== model.getVersionId()) {
       return;
     }
-    renderDiagnostics(result.diagnostics);
     renderCompilerLogMessages(result.compilerLog);
     runButton.disabled = shaderMode ? false : !result.hasArtifact;
     if (result.status === 0) {
@@ -630,11 +522,13 @@ async function runCompile() {
           return;
         }
       }
-      setStatus("Ready");
+      showDiagnosticStatus();
     } else {
-      selectToolTab("feedback");
-      const problemCount = result.diagnostics.length;
-      setStatus(`${problemCount} ${problemCount === 1 ? "problem" : "problems"}`, "error");
+      if (latestMainDiagnostics.length === 0) {
+        setStatus("Build failed", "error");
+      } else {
+        showDiagnosticStatus();
+      }
     }
   } catch (error) {
     if (sourceVersion !== model.getVersionId()) {
@@ -701,7 +595,47 @@ model.onDidChangeContent(() => {
     }
     await callWorker("init");
     workerReady = true;
-    setStatus("Ready");
+    languageFeatures = new DynLexLanguageFeatures({
+      monaco,
+      editor,
+      mainModel: model,
+      exchange: (message) => callWorker("lsp.exchange", { message }),
+      analysisProfiles: shaderMode
+        ? [
+            { target: "spirv", shaderStage: "fragment" },
+            ...(shaderRendererConfig === null
+              ? []
+              : [{ target: "spirv", shaderStage: "vertex" }])
+          ]
+        : [{ target: "cpu" }],
+      onDiagnostics(uri, diagnostics) {
+        if (uri !== model.uri.toString()) {
+          return;
+        }
+        latestMainDiagnostics = diagnostics;
+        renderDiagnostics(diagnostics);
+        if (statusPill.dataset.tone === "busy") {
+          return;
+        }
+        if (diagnostics.length > 0) {
+          showDiagnosticStatus();
+        } else if (showingDiagnosticStatus) {
+          showDiagnosticStatus();
+        }
+      },
+      onModelChanged(currentModel) {
+        const currentName = currentModel?.uri.path.split("/").pop() ?? fileName;
+        for (const fileLabel of document.querySelectorAll("[data-current-file]")) {
+          fileLabel.textContent = currentName;
+        }
+        renderOpenFiles(openSourceModels);
+      },
+      onDocumentsChanged(openModels) {
+        openSourceModels = openModels;
+        renderOpenFiles(openSourceModels);
+      }
+    });
+    await languageFeatures.start();
     await runCompile();
     if (autoRunOnStartup && !shaderMode) {
       await runProgram();
@@ -713,3 +647,11 @@ model.onDidChangeContent(() => {
     renderCompilerLogMessages([{ level: "error", message: "An error occurred. Check the browser log." }]);
   }
 })();
+
+window.addEventListener("pagehide", () => {
+  if (languageFeatures) {
+    void languageFeatures.stop().catch((error) => {
+      console.error("DynLex language server shutdown failed", error);
+    });
+  }
+}, { once: true });

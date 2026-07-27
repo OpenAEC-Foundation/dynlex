@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  initializeLsp,
+  LspClient,
+  LspTextDocument,
+  shutdownLsp
+} from "../web/lsp-client.js";
 import { semanticHighlightKey } from "../web/snippet-highlight-key.js";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
@@ -50,11 +56,11 @@ function extractSnippetSources(html) {
   return [...new Set(sources)];
 }
 
-function validateSemanticTokens(payload) {
+function validateSemanticTokens(payload, legend) {
   if (!payload || !Array.isArray(payload.data) || payload.data.length % 5 !== 0) {
     throw new Error("Compiler returned an invalid semantic-token data array");
   }
-  if (!payload.legend || !Array.isArray(payload.legend.tokenTypes) || !Array.isArray(payload.legend.tokenModifiers)) {
+  if (!legend || !Array.isArray(legend.tokenTypes) || !Array.isArray(legend.tokenModifiers)) {
     throw new Error("Compiler returned an invalid semantic-token legend");
   }
 }
@@ -92,10 +98,26 @@ const compiler = await createModule({
   }
 });
 compiler.ccall("dynlex_web_init", null, [], []);
+const lsp = new LspClient((message) => {
+  const response = compiler.ccall(
+    "dynlex_web_lsp_exchange_json",
+    "string",
+    ["string"],
+    [JSON.stringify(message)]
+  );
+  return JSON.parse(response);
+});
+lsp.onRequest("workspace/semanticTokens/refresh", () => null);
+const initializeResult = await initializeLsp(lsp);
+const semanticTokenLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
+validateSemanticTokens({ data: [] }, semanticTokenLegend);
 
 const sources = extractSnippetSources(fs.readFileSync(homepagePath, "utf8"));
 const cacheEntries = [];
-let semanticTokenLegend = null;
+const document = new LspTextDocument(lsp, {
+  uri: "file:///workspace/homepage-snippet.dl",
+  languageId: "dynlex"
+});
 
 for (const source of sources) {
   compiler.ccall("dynlex_web_set_main_source", null, ["string"], [source]);
@@ -104,16 +126,16 @@ for (const source of sources) {
     const diagnostics = compiler.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
     throw new Error(`Homepage example does not compile: ${diagnostics}`);
   }
-  const payload = JSON.parse(compiler.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []));
-  validateSemanticTokens(payload);
-
-  if (semanticTokenLegend === null) {
-    semanticTokenLegend = payload.legend;
-  } else if (JSON.stringify(semanticTokenLegend) !== JSON.stringify(payload.legend)) {
-    throw new Error("Compiler returned inconsistent semantic-token legends");
-  }
+  await document.replaceText(source);
+  const payload = await lsp.request("textDocument/semanticTokens/full", {
+    textDocument: document.identifier
+  });
+  validateSemanticTokens(payload, semanticTokenLegend);
   cacheEntries.push([await semanticHighlightKey(source), payload.data]);
 }
+
+await document.close();
+await shutdownLsp(lsp);
 
 const generatedLegendModule = renderLegendModule(semanticTokenLegend);
 const generatedCacheModule = renderCacheModule(cacheEntries);

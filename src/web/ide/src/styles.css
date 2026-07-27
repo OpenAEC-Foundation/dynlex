@@ -353,7 +353,13 @@ a:focus-visible {
   margin-top: 0;
 }
 
+.project-files {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .file-item {
+  width: 100%;
   display: grid;
   grid-template-columns: 24px 1fr auto;
   align-items: center;
@@ -362,8 +368,19 @@ a:focus-visible {
   padding: 0 0.55rem;
   border: 1px solid var(--line);
   background: var(--panel);
+  color: var(--ink);
   box-shadow: 2px 2px 0 rgba(16, 19, 16, 0.08);
+  text-align: left;
+  cursor: pointer;
   font: 500 0.72rem/1 "DM Mono", monospace;
+}
+
+.file-item:hover {
+  border-color: var(--line-strong);
+}
+
+.file-item.active {
+  border-color: var(--blue);
 }
 
 .file-item i {

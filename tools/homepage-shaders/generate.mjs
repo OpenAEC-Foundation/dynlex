@@ -85,7 +85,7 @@ const generatedShaderPaths = new Set();
 
 for (const scene of shaderConfig.scenes) {
   const source = requireFile(scene.source);
-  const fragment = compiler.compile(source, scene.source, "fragment");
+  const fragment = await compiler.compile(source, scene.source, "fragment");
   assertUniforms(fragment.uniforms, scene.source);
   if (semanticLegend === null) {
     semanticLegend = fragment.semanticLegend;
@@ -104,7 +104,7 @@ for (const scene of shaderConfig.scenes) {
   };
 
   if (scene.vertex) {
-    const vertex = compiler.compile(source, scene.source, "vertex");
+    const vertex = await compiler.compile(source, scene.source, "vertex");
     assertUniforms(vertex.uniforms, scene.source);
     if (JSON.stringify(fragment.uniforms) !== JSON.stringify(vertex.uniforms)) {
       throw new Error(`${scene.source} must expose identical uniforms in both shader stages`);
@@ -152,6 +152,8 @@ for (const scene of shaderConfig.scenes) {
   }
   records.push(record);
 }
+
+await compiler.close();
 
 const manifest = `${JSON.stringify({
   schemaVersion: 2,

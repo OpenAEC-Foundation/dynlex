@@ -108,6 +108,19 @@ async function captureScreenshot(name) {
   fs.writeFileSync(path.join(screenshotDirectory, `${name}.png`), response.data, "base64");
 }
 
+async function dispatchKey(key, code, virtualKeyCode, modifiers = 0) {
+  for (const type of ["keyDown", "keyUp"]) {
+    await command("Input.dispatchKeyEvent", {
+      type,
+      key,
+      code,
+      windowsVirtualKeyCode: virtualKeyCode,
+      nativeVirtualKeyCode: virtualKeyCode,
+      modifiers
+    });
+  }
+}
+
 function sourceEditExpression(sketchIndex, sourceText) {
   return `(() => {
     const sketch = document.querySelectorAll('[data-runnable-sketch]')[${sketchIndex}];
@@ -127,37 +140,52 @@ async function replaceMonacoSource(sourceText) {
     input.focus();
   })()`);
   await evaluate(`navigator.clipboard.writeText(${JSON.stringify(sourceText)})`);
-  await command("Input.dispatchKeyEvent", {
-    type: "keyDown",
-    key: "a",
-    code: "KeyA",
-    windowsVirtualKeyCode: 65,
-    nativeVirtualKeyCode: 65,
-    modifiers: 2
-  });
-  await command("Input.dispatchKeyEvent", {
-    type: "keyUp",
-    key: "a",
-    code: "KeyA",
-    windowsVirtualKeyCode: 65,
-    nativeVirtualKeyCode: 65,
-    modifiers: 2
-  });
-  await command("Input.dispatchKeyEvent", {
-    type: "keyDown",
-    key: "v",
-    code: "KeyV",
-    windowsVirtualKeyCode: 86,
-    nativeVirtualKeyCode: 86,
-    modifiers: 2
-  });
-  await command("Input.dispatchKeyEvent", {
-    type: "keyUp",
-    key: "v",
-    code: "KeyV",
-    windowsVirtualKeyCode: 86,
-    nativeVirtualKeyCode: 86,
-    modifiers: 2
+  await dispatchKey("a", "KeyA", 65, 2);
+  await dispatchKey("v", "KeyV", 86, 2);
+}
+
+async function findMonacoText(text) {
+  await evaluate(`(() => {
+    const input = document.querySelector('.monaco-editor textarea.inputarea');
+    if (!input) throw new Error('Monaco input is missing');
+    input.focus();
+  })()`);
+  await dispatchKey("f", "KeyF", 70, 2);
+  await dispatchKey("a", "KeyA", 65, 2);
+  await command("Input.insertText", { text });
+  await dispatchKey("Enter", "Enter", 13);
+  await dispatchKey("Escape", "Escape", 27);
+  await dispatchKey("ArrowLeft", "ArrowLeft", 37);
+}
+
+async function hoverMonacoText(text, occurrence = 0) {
+  await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const point = await evaluate(`(() => {
+    const walker = document.createTreeWalker(
+      document.querySelector('.view-lines'),
+      NodeFilter.SHOW_TEXT
+    );
+    let remaining = ${occurrence};
+    while (walker.nextNode()) {
+      const index = walker.currentNode.data.indexOf(${JSON.stringify(text)});
+      if (index === -1) continue;
+      if (remaining > 0) {
+        remaining -= 1;
+        continue;
+      }
+      const range = document.createRange();
+      range.setStart(walker.currentNode, index);
+      range.setEnd(walker.currentNode, index + ${JSON.stringify(text)}.length);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+    throw new Error(${JSON.stringify(`Monaco text is not visible: ${text}`)});
+  })()`);
+  await command("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: point.x,
+    y: point.y
   });
 }
 
@@ -693,6 +721,20 @@ await waitFor(
   "document.querySelector('#shader-preview')?.dataset.previewState === 'ready'",
   "the editable shader's first successful preview"
 );
+await waitFor(
+  `(() => {
+    const lines = document.querySelector('.view-lines');
+    if (!lines) return false;
+    const defaultColor = getComputedStyle(lines).color;
+    return new Set(
+      [...lines.querySelectorAll('span')]
+        .map((node) => getComputedStyle(node).color)
+        .filter((color) => color !== defaultColor)
+    ).size >= 3;
+  })()`,
+  "the shader LSP semantic tokens to render",
+  10000
+);
 const initialShaderState = await evaluate(`(() => {
   const canvas = document.querySelector('#shader-preview');
   const shell = document.querySelector('#shader-preview-shell');
@@ -721,10 +763,16 @@ assert.equal(initialShaderState.pointCount, shaderManifest.scenes[2].geometry.po
 assert.ok(
   initialShaderState.canvasHeight >= initialShaderState.toolPanelHeight * 0.75
     && Math.abs(initialShaderState.canvasHeight - initialShaderState.shellHeight) <= 1,
-  "The live shader must fill the available preview frame"
+  `The live shader must fill the available preview frame: ${JSON.stringify(initialShaderState)}`
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
+await hoverMonacoText("scene");
+await waitFor(
+  "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
+  "the shader IDE to display DynLex hover information",
+  10000
+);
 await captureScreenshot("ide-shader-initial");
 
 await replaceMonacoSource(`import lib/shader.dl
@@ -771,6 +819,82 @@ await waitFor(
   "the IDE to compile and run its starting sketch"
 );
 assert.equal(await evaluate("document.querySelector('#runtime-output').textContent.trim()"), "64");
+await hoverMonacoText("square", 1);
+await waitFor(
+  `[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => {
+    const rect = hover.getBoundingClientRect();
+    const style = getComputedStyle(hover);
+    const topmost = document.elementFromPoint(
+      Math.max(0, Math.min(innerWidth - 1, rect.left + rect.width / 2)),
+      Math.max(0, Math.min(innerHeight - 1, rect.top + rect.height / 2))
+    );
+    return (
+      hover.textContent.trim().length > 0
+      && rect.width > 0
+      && rect.height > 0
+      && rect.right > 0
+      && rect.bottom > 0
+      && rect.left < innerWidth
+      && rect.top < innerHeight
+      && style.visibility === 'visible'
+      && style.opacity !== '0'
+      && topmost
+      && hover.contains(topmost)
+    );
+  })`,
+  "hovering a DynLex token to display language-server information",
+  10000
+);
+await captureScreenshot("ide-hover");
+await findMonacoText("square 8");
+await waitFor(
+  "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",
+  "the square invocation to be selected"
+);
+await dispatchKey("F12", "F12", 123);
+await waitFor(
+  "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '3'",
+  "F12 to navigate from the square invocation to its definition"
+);
+await findMonacoText("print square 8");
+await dispatchKey("F12", "F12", 123);
+await waitFor(
+  "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'string.dl')",
+  "F12 to open the imported print definition"
+);
+await waitFor(
+  `(() => {
+    const defaultColor = getComputedStyle(document.querySelector('.view-lines')).color;
+    return new Set(
+      [...document.querySelectorAll('.view-lines span')]
+        .map((node) => getComputedStyle(node).color)
+        .filter((color) => color !== defaultColor)
+    ).size >= 3;
+  })()`,
+  "the imported definition to receive DynLex semantic highlighting",
+  10000
+);
+assert.deepEqual(
+  await evaluate("[...document.querySelectorAll('[data-file-uri]')].map((file) => file.textContent.trim())"),
+  ["main.dl", "string.dl"],
+  "Definition navigation must retain both the editable file and the opened library file"
+);
+await command("Input.insertText", { text: "SHOULD_NOT_EDIT" });
+await new Promise((resolve) => setTimeout(resolve, 250));
+assert.equal(
+  await evaluate("document.querySelector('.view-lines').textContent.includes('SHOULD_NOT_EDIT')"),
+  false,
+  "Imported library definitions must reject edits"
+);
+await evaluate("document.querySelector('[data-file-uri=\"file:///workspace/main.dl\"]').click()");
+await waitFor(
+  "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'main.dl')",
+  "the editable file to reopen from the project list"
+);
+await waitFor(
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as line')",
+  "returning from a definition to render the preserved editable source model"
+);
 await captureScreenshot("ide-finished");
 
 await command("Emulation.setDeviceMetricsOverride", {

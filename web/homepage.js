@@ -2,6 +2,12 @@ import { semanticHighlightCache, semanticTokenLegend } from "./snippet-highlight
 import { semanticHighlightKey } from "./snippet-highlight-key.js";
 import { renderSemanticTokens, semanticLegendsMatch } from "./semantic-highlighting.js";
 import { createShaderBanner } from "./shader-banner.js";
+import {
+  initializeLsp,
+  LspClient,
+  LspTextDocument,
+  shutdownLsp
+} from "./lsp-client.js";
 
 const root = document.documentElement;
 root.classList.replace("no-js", "js");
@@ -117,6 +123,8 @@ const runnableSketches = [...document.querySelectorAll("[data-runnable-sketch]")
 let snippetWorker = null;
 let snippetWorkerReady = null;
 let snippetWorkerInitialized = false;
+let snippetLsp = null;
+let snippetLspDocument = null;
 let nextSnippetRequestId = 1;
 let nextSnippetVersion = 1;
 let snippetCompilerQueue = Promise.resolve();
@@ -179,12 +187,45 @@ function callSnippetWorker(type, payload = {}) {
 function ensureSnippetWorker() {
   if (!snippetWorkerReady) {
     createSnippetWorker();
-    snippetWorkerReady = callSnippetWorker("init").then((result) => {
+    snippetWorkerReady = callSnippetWorker("init").then(async (result) => {
+      snippetLsp = new LspClient((message) => callSnippetWorker("lsp.exchange", { message }));
+      snippetLsp.onRequest("workspace/semanticTokens/refresh", () => null);
+      const initializeResult = await initializeLsp(snippetLsp, {
+        capabilities: {
+          textDocument: {
+            semanticTokens: {
+              requests: { full: true }
+            }
+          },
+          workspace: {
+            semanticTokens: { refreshSupport: true }
+          }
+        }
+      });
+      const serverLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
+      if (!semanticLegendsMatch(serverLegend, semanticTokenLegend)) {
+        throw new Error("DynLex language server legend differs from the generated highlight cache");
+      }
+      snippetLspDocument = new LspTextDocument(snippetLsp, {
+        uri: "file:///workspace/homepage-snippet.dl",
+        languageId: "dynlex"
+      });
       snippetWorkerInitialized = true;
       return result;
     });
   }
   return snippetWorkerReady;
+}
+
+async function syncSnippetLspDocument(sourceText) {
+  if (!snippetLsp) {
+    throw new Error("Homepage DynLex language client is not initialized");
+  }
+  if (!snippetLspDocument) {
+    throw new Error("Homepage DynLex document is not initialized");
+  }
+  await snippetLspDocument.replaceText(sourceText);
+  return snippetLspDocument.identifier;
 }
 
 function queueCompilerTask(task) {
@@ -282,14 +323,11 @@ function scheduleSemanticHighlight(source) {
     void queueCompilerTask(async () => {
       if (generation !== highlightState.generation || sourceText !== source.value) return;
       await ensureSnippetWorker();
-      const response = await callSnippetWorker("lsp.semanticTokens", {
-        source: sourceText,
-        version: nextSnippetVersion++
+      const textDocument = await syncSnippetLspDocument(sourceText);
+      const response = await snippetLsp.request("textDocument/semanticTokens/full", {
+        textDocument
       });
       if (generation !== highlightState.generation || sourceText !== source.value) return;
-      if (!semanticLegendsMatch(response.legend, semanticTokenLegend)) {
-        throw new Error("Compiler semantic-token legend differs from the generated highlight cache");
-      }
       const tokenData = Object.freeze([...response.data]);
       runtimeSemanticHighlightCache.set(sourceText, tokenData);
       renderSemanticHighlight(source, tokenData, semanticTokenLegend, "semantic");
@@ -580,4 +618,14 @@ reducedMotion.addEventListener("change", syncFieldMotion);
 resizeCanvas();
 syncFieldMotion();
 
-window.addEventListener("pagehide", () => cancelAnimationFrame(frameHandle), { once: true });
+window.addEventListener("pagehide", () => {
+  cancelAnimationFrame(frameHandle);
+  if (snippetLsp) {
+    void queueCompilerTask(async () => {
+      await shutdownLsp(snippetLsp);
+      snippetWorker.terminate();
+    }).catch((error) => {
+      console.error("Homepage DynLex language server shutdown failed", error);
+    });
+  }
+}, { once: true });
