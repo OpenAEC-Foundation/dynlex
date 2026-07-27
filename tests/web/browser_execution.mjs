@@ -450,13 +450,19 @@ assert.ok(
 );
 const editorSceneState = await evaluate(`(() => ({
   activeIndex: Number(document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex),
+  incomingIndex: document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex,
+  shaderFile: document.querySelector('[data-shader-file]').textContent,
   editorScene: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')
 }))()`);
+const editorSceneIndex = editorSceneState.incomingIndex === undefined
+  ? editorSceneState.activeIndex
+  : Number(editorSceneState.incomingIndex);
 assert.equal(
   editorSceneState.editorScene,
-  shaderManifest.scenes[editorSceneState.activeIndex].id,
-  "The editor action must track the visible shader"
+  shaderManifest.scenes[editorSceneIndex].id,
+  "The editor action must track the shader displayed in the laptop"
 );
+assert.equal(editorSceneState.shaderFile, `${editorSceneState.editorScene}.dl`);
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '2'"
     + " || document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '2'"
@@ -504,7 +510,7 @@ assert.ok(
 );
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.path}`)),
-  "The terrain scene must load its fixed camera grid"
+  "The terrain scene must load its fixed camera LOD grid"
 );
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.indices.path}`)),

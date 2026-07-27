@@ -14,7 +14,7 @@ function required(selector, scope) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 5
+    manifest?.schemaVersion !== 6
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3

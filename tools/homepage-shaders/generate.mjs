@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHomepageShaderCompiler } from "./compiler.mjs";
 import { shaderConfig } from "./config.mjs";
-import { generateTerrainGrid } from "./generate-terrain-grid.mjs";
+import { generateTerrainLodGrid } from "./generate-terrain-grid.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(toolDirectory, "../..");
@@ -194,15 +194,18 @@ function pairedPointCloudRecord(geometry) {
 }
 
 function configuredGeometryRecord(geometry) {
-  if (geometry.generator === "camera-grid") {
-    const generated = generateTerrainGrid(geometry.columns, geometry.rows);
+  if (geometry.generator === "camera-lod-grid") {
+    const generated = generateTerrainLodGrid(geometry.terrainBands, geometry.waterBands);
     writeBufferOrCheck(geometry.path, generated.data);
     writeBufferOrCheck(geometry.indexPath, generated.indices);
     return geometryRecord(
       geometry,
       generated.data,
       generated.vertexCount,
-      { indices: uint16IndexRecord(geometry.indexPath, generated.indices, generated.indexCount) }
+      {
+        indices: uint16IndexRecord(geometry.indexPath, generated.indices, generated.indexCount),
+        surfaces: generated.surfaces
+      }
     );
   }
   if (geometry.generator === "paired-point-cloud") {
@@ -270,7 +273,7 @@ for (const scene of shaderConfig.scenes) {
 }
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 5,
+  schemaVersion: 6,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;

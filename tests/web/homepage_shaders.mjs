@@ -78,6 +78,9 @@ assert.match(terrainSource, /set mountain_ridge /);
 assert.match(terrainSource, /set erosion_channels /);
 assert.match(terrainSource, /set exposed_rock /);
 assert.match(terrainSource, /set snow /);
+assert.match(terrainSource, /surface_vertex > 1\.5/);
+assert.match(terrainSource, /set water_level /);
+assert.match(terrainSource, /set water_fresnel /);
 assert.match(terrainSource, /simplex field at/);
 assert.doesNotMatch(
   terrainSource,
@@ -281,7 +284,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 5);
+assert.equal(manifest.schemaVersion, 6);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -310,20 +313,15 @@ for (let index = 0; index < manifest.scenes.length; index += 1) {
 
 const terrainConfig = shaderConfig.scenes[1];
 const terrainRecord = manifest.scenes[1];
-assert.equal(terrainConfig.geometry.generator, "camera-grid");
+assert.equal(terrainConfig.geometry.generator, "camera-lod-grid");
 assert.equal(terrainRecord.shaders.vertex.path, terrainConfig.vertex.replace(/^web\//, ""));
 assert.match(terrainRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
 assert.equal(terrainRecord.geometry.path, terrainConfig.geometry.path.replace(/^web\//, ""));
 assert.equal(terrainRecord.geometry.format, "float32x4");
-assert.equal(terrainRecord.geometry.attributeEncoding, "terrain-grid");
+assert.equal(terrainRecord.geometry.attributeEncoding, "terrain-lod-grid");
 assert.equal(terrainRecord.geometry.primitive, "triangles");
-assert.equal(
-  terrainRecord.geometry.vertexCount,
-  3 + (terrainConfig.geometry.columns + 1) * (terrainConfig.geometry.rows + 1)
-);
 assert.equal(terrainRecord.geometry.indices.path, terrainConfig.geometry.indexPath.replace(/^web\//, ""));
 assert.equal(terrainRecord.geometry.indices.format, "uint16");
-assert.equal(terrainRecord.geometry.indices.count, 3 + terrainConfig.geometry.columns * terrainConfig.geometry.rows * 6);
 assert.match(terrainRecord.geometry.indices.hash, /^[a-f0-9]{64}$/);
 assert.deepEqual(terrainRecord.geometry.render, {
   backgroundPass: false,
@@ -346,14 +344,88 @@ assert.deepEqual(
   [-1, -1, 0, 0, 3, -1, 0, 0, -1, 3, 0, 0],
   "The terrain geometry must begin with its sky triangle"
 );
+
+function validateLodBands(bands) {
+  assert.ok(Array.isArray(bands) && bands.length >= 2);
+  let previousDepthEnd = 0;
+  let previousColumns = null;
+  for (const band of bands) {
+    assert.ok(Number.isInteger(band.rows) && band.rows > 0);
+    assert.ok(Number.isInteger(band.columns) && band.columns > 0);
+    assert.ok(band.depthEnd > previousDepthEnd && band.depthEnd <= 1);
+    if (previousColumns !== null) {
+      assert.ok(band.columns < previousColumns);
+      assert.ok(
+        band.columns * 4 >= previousColumns * 3,
+        "Adjacent LOD bands must retain at least 75% of the previous row density"
+      );
+    }
+    previousDepthEnd = band.depthEnd;
+    previousColumns = band.columns;
+  }
+  assert.equal(previousDepthEnd, 1);
+}
+
+function configuredSurfaceVertexCount(bands) {
+  return bands[0].columns + 1
+    + bands.reduce((count, band) => count + band.rows * (band.columns + 1), 0);
+}
+
+validateLodBands(terrainConfig.geometry.terrainBands);
+validateLodBands(terrainConfig.geometry.waterBands);
+assert.deepEqual(terrainRecord.geometry.surfaces.terrain.bands, terrainConfig.geometry.terrainBands);
+assert.deepEqual(terrainRecord.geometry.surfaces.water.bands, terrainConfig.geometry.waterBands);
+assert.equal(terrainRecord.geometry.surfaces.sky.value, 0);
+assert.equal(terrainRecord.geometry.surfaces.sky.vertexCount, 3);
+assert.equal(terrainRecord.geometry.surfaces.terrain.value, 1);
+assert.equal(terrainRecord.geometry.surfaces.water.value, 2);
+assert.equal(
+  terrainRecord.geometry.surfaces.terrain.vertexCount,
+  configuredSurfaceVertexCount(terrainConfig.geometry.terrainBands)
+);
+assert.equal(
+  terrainRecord.geometry.surfaces.water.vertexCount,
+  configuredSurfaceVertexCount(terrainConfig.geometry.waterBands)
+);
+assert.equal(
+  terrainRecord.geometry.vertexCount,
+  Object.values(terrainRecord.geometry.surfaces)
+    .reduce((count, surface) => count + surface.vertexCount, 0)
+);
+
+const uniformSurfaceVertexCount = (bands) => (
+  (bands.reduce((rows, band) => rows + band.rows, 0) + 1) * (bands[0].columns + 1)
+);
+const uniformVertexCount = 3
+  + uniformSurfaceVertexCount(terrainConfig.geometry.terrainBands)
+  + uniformSurfaceVertexCount(terrainConfig.geometry.waterBands);
+assert.ok(
+  terrainRecord.geometry.vertexCount < uniformVertexCount * 0.65,
+  "Distance bands must eliminate at least 35% of uniform-grid vertices"
+);
+
+const surfaceRows = new Map();
 for (let vertex = 3; vertex < terrainRecord.geometry.vertexCount; vertex += 1) {
   const x = terrainGeometryValues[vertex * 4];
   const depth = terrainGeometryValues[vertex * 4 + 1];
+  const surface = terrainGeometryValues[vertex * 4 + 3];
   assert.ok(x >= -1 && x <= 1);
   assert.ok(depth >= 0 && depth <= 1);
   assert.equal(terrainGeometryValues[vertex * 4 + 2], 0);
-  assert.equal(terrainGeometryValues[vertex * 4 + 3], 1);
+  assert.ok(surface === 1 || surface === 2);
+  const rowKey = `${surface}:${depth}`;
+  surfaceRows.set(rowKey, (surfaceRows.get(rowKey) ?? 0) + 1);
 }
+for (const surface of [1, 2]) {
+  const rowDensities = [...surfaceRows]
+    .filter(([key]) => key.startsWith(`${surface}:`))
+    .map(([key, count]) => ({ depth: Number(key.slice(2)), count }))
+    .sort((left, right) => left.depth - right.depth);
+  assert.ok(rowDensities.length > 1);
+  assert.ok(rowDensities[0].count > rowDensities.at(-1).count);
+  assert.ok(rowDensities.every((row, index) => index === 0 || row.count <= rowDensities[index - 1].count));
+}
+
 const terrainIndexBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.indexPath));
 assert.equal(terrainIndexBytes.byteLength, terrainRecord.geometry.indices.count * Uint16Array.BYTES_PER_ELEMENT);
 const terrainIndices = new Uint16Array(
@@ -363,6 +435,33 @@ const terrainIndices = new Uint16Array(
 );
 assert.deepEqual([...terrainIndices.slice(0, 3)], [0, 1, 2]);
 assert.ok([...terrainIndices].every((index) => index < terrainRecord.geometry.vertexCount));
+
+const surfaceByVertex = (vertex) => terrainGeometryValues[vertex * 4 + 3];
+const edgeUseCounts = new Map();
+for (let index = 0; index < terrainIndices.length; index += 3) {
+  const triangle = [...terrainIndices.slice(index, index + 3)];
+  const surface = surfaceByVertex(triangle[0]);
+  assert.ok(triangle.every((vertex) => surfaceByVertex(vertex) === surface));
+  if (surface === 0) continue;
+  for (const [left, right] of [[triangle[0], triangle[1]], [triangle[1], triangle[2]], [triangle[2], triangle[0]]]) {
+    const edge = left < right ? `${left}:${right}` : `${right}:${left}`;
+    edgeUseCounts.set(edge, (edgeUseCounts.get(edge) ?? 0) + 1);
+  }
+}
+for (const [edge, useCount] of edgeUseCounts) {
+  assert.ok(useCount === 1 || useCount === 2);
+  if (useCount === 2) continue;
+  const [left, right] = edge.split(":").map(Number);
+  const leftX = terrainGeometryValues[left * 4];
+  const rightX = terrainGeometryValues[right * 4];
+  const leftDepth = terrainGeometryValues[left * 4 + 1];
+  const rightDepth = terrainGeometryValues[right * 4 + 1];
+  const boundaryEdge = (leftX === -1 && rightX === -1)
+    || (leftX === 1 && rightX === 1)
+    || (leftDepth === 0 && rightDepth === 0)
+    || (leftDepth === 1 && rightDepth === 1);
+  assert.equal(boundaryEdge, true, "LOD transitions must not leave interior cracks");
+}
 
 const nanoConfig = shaderConfig.scenes[2];
 const nanoRecord = manifest.scenes[2];

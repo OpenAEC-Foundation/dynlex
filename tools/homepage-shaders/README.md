@@ -17,15 +17,23 @@ revisions.
 
 ## Terrain geometry
 
-`endless-terrain.dl` displaces a fixed camera-centered grid in its vertex
-stage. `generate-terrain-grid.mjs` creates the deterministic `float32x4`
-vertex buffer and `uint16` triangle indices from the configured row and column
-counts; changing either count regenerates both geometry hashes automatically.
-Indexing lets the GPU evaluate each displaced grid point once instead of six
-times per cell. The grid uses quadratic depth spacing to spend most vertices
-near the camera and embeds one full-screen sky triangle, allowing the compiled
-vertex and fragment stages to share named interpolants in a single depth-tested
-draw.
+`endless-terrain.dl` displaces camera-centered terrain and water surfaces in its
+vertex stage. `generate-terrain-grid.mjs` creates their deterministic
+`float32x4` vertex buffer and fixed `uint16` triangle indices from the LOD bands
+in `config.mjs`. Each successive band reduces row density gradually toward the
+horizon. A generic index zipper triangulates adjacent rows with different
+column counts, keeping every transition watertight without runtime topology
+changes.
+
+Indexing lets the GPU evaluate each displaced sample once instead of once per
+triangle corner. Quadratic depth projection concentrates samples near the
+camera, while the lower-density distant bands avoid spending equal work on
+sub-pixel geometry. The coarser water grid receives analytic waves and normals;
+depth testing against the terrain creates the shoreline without ray marching.
+The buffer also embeds one full-screen sky triangle, allowing both compiled
+stages and all three surfaces to share named interpolants in one draw. Changing
+the shader, either set of LOD bands, or the generator updates the geometry and
+manifest hashes automatically.
 
 ## Volumetric geometry
 
