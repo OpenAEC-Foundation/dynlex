@@ -1,6 +1,7 @@
 #include "patternElement.h"
 #include "parseContext.h"
 #include "transformedPattern.h"
+#include <algorithm>
 #include <cctype>
 #include <unordered_map>
 #include <unordered_set>
@@ -234,6 +235,18 @@ canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
 	for (auto &path : paths)
 		path = normalizePatternSeparators(path);
 	return paths;
+}
+
+std::vector<std::string> canonicalPatternSpellings(const std::vector<DefinitionPatternElement> &elements) {
+	std::vector<std::string> spellings;
+	for (const auto &path : canonicalPatternPaths(elements)) {
+		std::string spelling;
+		for (const DefinitionPatternElement &element : path)
+			spelling += element.text;
+		if (std::find(spellings.begin(), spellings.end(), spelling) == spellings.end())
+			spellings.push_back(std::move(spelling));
+	}
+	return spellings;
 }
 
 bool hasSingleWordPatternSpelling(const std::vector<DefinitionPatternElement> &elements) {

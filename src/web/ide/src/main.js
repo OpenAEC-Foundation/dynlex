@@ -95,8 +95,8 @@ monaco.editor.defineTheme("dynlex-dark", {
 const defaultSource = `import lib/std.dl
 
 function square value:
-    replacement:
-        value * value
+    execute:
+        return value * value
 
 print square 8 as line
 `;

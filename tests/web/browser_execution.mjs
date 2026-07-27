@@ -846,6 +846,8 @@ await waitFor(
   10000
 );
 await captureScreenshot("ide-hover");
+await hoverMonacoText("square");
+await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('square {a 32 bit integer:value}'))`, "the inferred-instance hover to display its parameter type");
 await findMonacoText("square 8");
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",

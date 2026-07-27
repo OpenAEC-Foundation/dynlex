@@ -317,6 +317,10 @@ bool resolvePatterns(ParseContext &context) {
 	}
 	if (hadPatternParseError)
 		return false;
+	for (Section *section : unResolvedSections) {
+		if (section->type == SectionType::Class)
+			populateClassPatternNames(section);
+	}
 	for (PatternReference *ref : bodyReferences)
 		ref->patternElements = getPatternElements(ref->pattern.text);
 	for (PatternReference *ref : globalReferences)
