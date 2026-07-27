@@ -2,23 +2,7 @@
 #include "compilerUtils.h"
 #include "patternDefinition.h"
 #include <algorithm>
-#include <climits>
-#include <tuple>
 #include <unordered_set>
-
-namespace {
-static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
-	if (!def)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-	if (!def->range.line)
-		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
-	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
-}
-
-static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
-	return definitionSortKey(a) < definitionSortKey(b);
-}
-} // namespace
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {
 	PatternTreeNode *child = nullptr;
@@ -255,7 +239,7 @@ std::vector<PatternDefinition *> PatternTreeNode::findLessSpecificDefinitions(st
 		),
 		result.end()
 	);
-	std::sort(result.begin(), result.end(), definitionComesBefore);
+	std::sort(result.begin(), result.end(), patternDefinitionComesBefore);
 	return result;
 }
 
@@ -280,6 +264,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 		if (std::find(endpoint->matchingDefinitions.begin(), endpoint->matchingDefinitions.end(), definition) ==
 			endpoint->matchingDefinitions.end()) {
 			endpoint->matchingDefinitions.push_back(definition);
+			endpoint->endpointRevision++;
 		}
 	}
 	requirePatternDefinitionIndexed(definition);
@@ -309,7 +294,10 @@ removeDefinitionPath(PatternTreeNode *current, const std::vector<PatternElement>
 	}
 	// Endpoint: remove this definition from matchingDefinitions
 	auto &defs = current->matchingDefinitions;
+	size_t definitionCount = defs.size();
 	defs.erase(std::remove(defs.begin(), defs.end(), definition), defs.end());
+	if (defs.size() != definitionCount)
+		current->endpointRevision++;
 	current->definitionOccurrences.erase(definition);
 }
 

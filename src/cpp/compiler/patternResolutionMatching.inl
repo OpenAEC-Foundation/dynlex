@@ -148,16 +148,43 @@ static bool patternMatchUsesDefinition(const PatternMatch &match, const PatternD
 	});
 }
 
+using FailedMatchDependencies = std::unordered_map<PatternReference *, MatchDependencies>;
+
+static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
+	return std::ranges::any_of(dependencies, [](const MatchDependency &dependency) {
+		switch (dependency.kind) {
+		case MatchDependency::Kind::Endpoint:
+			return dependency.node->endpointRevision != dependency.endpointRevision;
+		case MatchDependency::Kind::ArgumentChild:
+			return dependency.node->argumentChild != nullptr;
+		case MatchDependency::Kind::WordChild:
+			return dependency.node->wordChild != nullptr;
+		case MatchDependency::Kind::LiteralChild:
+			return dependency.node->literalChildren.contains(dependency.literal);
+		}
+		crashCompilerBug("unknown failed match dependency kind");
+	});
+}
+
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts, bool allowUnmatchedVariables,
+	FailedMatchDependencies &failedMatchDependencies,
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr, const char *phase = "body",
 	PatternReference **activeReference = nullptr, PatternMatch **activeMatch = nullptr,
 	bool *activeReferenceNeedsRematch = nullptr, bool *deferredActiveRematch = nullptr,
 	std::vector<Section *> *pendingPromotionCleanupSections = nullptr
 ) {
 	return std::erase_if(references, [&](PatternReference *reference) {
-		PatternMatch *match = context.match(reference);
+		PatternMatch *match = nullptr;
+		MatchDependencies dependencies;
+		auto failedMatch = failedMatchDependencies.find(reference);
+		bool shouldRetry = failedMatch == failedMatchDependencies.end() || matchDependenciesChanged(failedMatch->second);
+		if (shouldRetry) {
+			if (failedMatch != failedMatchDependencies.end())
+				failedMatchDependencies.erase(failedMatch);
+			match = context.match(reference, {}, &dependencies);
+		}
 		if (match) {
 			if (activeReference)
 				*activeReference = reference;
@@ -242,6 +269,7 @@ static bool resolveReferences(
 			const std::string &varName = reference->patternElements[0].text;
 			if (!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName))
 				return false;
+			failedMatchDependencies.erase(reference);
 			// Single-word reference that didn't match any pattern — must be a variable.
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
@@ -251,6 +279,8 @@ static bool resolveReferences(
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
 			traceResolution(std::string(phase) + " resolved-as-variable " + referenceTraceId(reference));
+		} else if (shouldRetry) {
+			failedMatchDependencies.emplace(reference, std::move(dependencies));
 		}
 		return reference->resolved;
 	}) > 0;
@@ -302,6 +332,7 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 1: resolve body references and definitions
 	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
+	FailedMatchDependencies failedBodyMatchDependencies;
 	bool staleInvalidationOccurred = false;
 	std::vector<Section *> pendingPromotionCleanupSections;
 	std::vector<PatternReference *> referencesToRequeue;
@@ -349,7 +380,7 @@ bool resolvePatterns(ParseContext &context) {
 					lessSpecific.push_back(candidate);
 			}
 		}
-		std::sort(lessSpecific.begin(), lessSpecific.end(), definitionComesBefore);
+		std::sort(lessSpecific.begin(), lessSpecific.end(), patternDefinitionComesBefore);
 		traceResolution(
 			"invalidate base=" + definitionTraceId(definition) + " candidates=" + std::to_string(lessSpecific.size())
 		);
@@ -487,8 +518,8 @@ bool resolvePatterns(ParseContext &context) {
 		activeReferenceNeedsRematch = false;
 		bool deferredActiveRematch = false;
 		bool resolvedReference = resolveReferences(
-			context, bodyReferences, true, unResolvedSections.empty(), &definitionToReferences, "body",
-			&activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
+			context, bodyReferences, true, unResolvedSections.empty(), failedBodyMatchDependencies, &definitionToReferences,
+			"body", &activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
 			&pendingPromotionCleanupSections
 		);
 		activeResolvingReference = nullptr;
@@ -613,8 +644,9 @@ bool resolvePatterns(ParseContext &context) {
 	// constraint has a concrete type.
 	emitDuplicatePatternWordWarnings(context);
 
+	FailedMatchDependencies failedGlobalMatchDependencies;
 	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
-		resolveReferences(context, globalReferences, false, true, nullptr, "global");
+		resolveReferences(context, globalReferences, false, true, failedGlobalMatchDependencies, nullptr, "global");
 		if (globalReferences.empty())
 			break;
 	}
@@ -733,7 +765,7 @@ bool resolvePatterns(ParseContext &context) {
 					zeroInDegree.push_back(def);
 				}
 			}
-			std::sort(zeroInDegree.begin(), zeroInDegree.end(), definitionComesBefore);
+			std::sort(zeroInDegree.begin(), zeroInDegree.end(), patternDefinitionComesBefore);
 
 			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
 			// This ensures operators like * and / (no edge between them) share the same level,
@@ -751,7 +783,7 @@ bool resolvePatterns(ParseContext &context) {
 							nextWave.push_back(lower);
 					}
 				}
-				std::sort(nextWave.begin(), nextWave.end(), definitionComesBefore);
+				std::sort(nextWave.begin(), nextWave.end(), patternDefinitionComesBefore);
 				nextWave.erase(std::unique(nextWave.begin(), nextWave.end()), nextWave.end());
 				currentWave = std::move(nextWave);
 				currentLevel--;

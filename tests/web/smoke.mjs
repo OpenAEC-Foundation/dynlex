@@ -327,7 +327,8 @@ print entry's regular file as line
 print (not entry's mode supported) as line
 print entry's modification time supported as line
 print (not entry's identity's supported) as line
-set staging to create a staging file beside "transaction-source.txt"
+create a staging file beside "transaction-source.txt"
+set staging to it
 print (not staging's supported) as line
 print (not staging's succeeded) as line
 print ((the length of staging's error message) > 0) as line

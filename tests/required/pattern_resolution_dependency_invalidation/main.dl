@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function stage one value:
+    execute:
+        return stage two value
+
+function stage two value:
+    execute:
+        return stage three value
+
+function stage three value:
+    execute:
+        return value + 1
+
+print stage one 1 as line

@@ -95,7 +95,7 @@ function whether [the|] host platform is Windows:
             an empty host string
         )
 
-local function retrieve host executable value {integer:kind}:
+local function retrieve host path value {integer:kind}:
     execute:
         set output_length to 0 as a word sized integer
         set supported to 0 as a 32 bit integer
@@ -112,16 +112,28 @@ local function retrieve host executable value {integer:kind}:
                 the address of supported
             )
         else:
-            set outcome to @intrinsic(
-                "call",
-                "dynlex_runtime",
-                "dynlex_host_executable_directory",
-                an integer,
-                0 as a pointer to byte,
-                0 as a word sized integer,
-                the address of output_length,
-                the address of supported
-            )
+            if kind = 2:
+                set outcome to @intrinsic(
+                    "call",
+                    "dynlex_runtime",
+                    "dynlex_host_executable_directory",
+                    an integer,
+                    0 as a pointer to byte,
+                    0 as a word sized integer,
+                    the address of output_length,
+                    the address of supported
+                )
+            else:
+                set outcome to @intrinsic(
+                    "call",
+                    "dynlex_runtime",
+                    "dynlex_host_user_cache_directory",
+                    an integer,
+                    0 as a pointer to byte,
+                    0 as a word sized integer,
+                    the address of output_length,
+                    the address of supported
+                )
         if outcome != 0:
             return @intrinsic(
                 "construct",
@@ -154,16 +166,28 @@ local function retrieve host executable value {integer:kind}:
                 the address of supported
             )
         else:
-            set outcome to @intrinsic(
-                "call",
-                "dynlex_runtime",
-                "dynlex_host_executable_directory",
-                an integer,
-                the data of output,
-                output_length,
-                the address of output_length,
-                the address of supported
-            )
+            if kind = 2:
+                set outcome to @intrinsic(
+                    "call",
+                    "dynlex_runtime",
+                    "dynlex_host_executable_directory",
+                    an integer,
+                    the data of output,
+                    output_length,
+                    the address of output_length,
+                    the address of supported
+                )
+            else:
+                set outcome to @intrinsic(
+                    "call",
+                    "dynlex_runtime",
+                    "dynlex_host_user_cache_directory",
+                    an integer,
+                    the data of output,
+                    output_length,
+                    the address of output_length,
+                    the address of supported
+                )
         if outcome != 0:
             return @intrinsic(
                 "construct",
@@ -184,11 +208,15 @@ local function retrieve host executable value {integer:kind}:
 
 function [the|] running executable path:
     execute:
-        return retrieve host executable value 1
+        return retrieve host path value 1
 
 function [the|] running executable directory:
     execute:
-        return retrieve host executable value 2
+        return retrieve host path value 2
+
+function [the|] user cache directory:
+    execute:
+        return retrieve host path value 3
 
 function read a chunk from [the|] standard input:
     execute:

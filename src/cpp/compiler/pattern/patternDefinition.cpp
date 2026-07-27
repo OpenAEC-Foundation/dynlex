@@ -2,6 +2,8 @@
 #include "compilerUtils.h"
 #include "parseContext.h"
 #include "section.h"
+#include <climits>
+#include <tuple>
 
 PatternDefinition::PatternDefinition(Range range, Section *section) : range(range), section(section) {}
 
@@ -27,6 +29,22 @@ bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const
 	if (!left.section->isLocal || !right.section->isLocal)
 		return true;
 	return left.range.line->sourceFile == right.range.line->sourceFile;
+}
+
+bool patternDefinitionComesBefore(const PatternDefinition *left, const PatternDefinition *right) {
+	auto locationKey = [](const PatternDefinition *definition) {
+		if (!definition)
+			return std::tuple{INT_MAX, INT_MAX, INT_MAX};
+		int lineIndex = definition->range.line ? definition->range.line->mergedLineIndex : INT_MAX - 1;
+		return std::tuple{lineIndex, definition->range.start(), definition->range.end()};
+	};
+	auto leftLocation = locationKey(left);
+	auto rightLocation = locationKey(right);
+	if (leftLocation != rightLocation)
+		return leftLocation < rightLocation;
+	std::string leftText = left ? left->toString() : "";
+	std::string rightText = right ? right->toString() : "";
+	return leftText < rightText;
 }
 
 void mutatePatternDefinition(ParseContext &context, PatternDefinition &definition, const std::function<void()> &mutation) {

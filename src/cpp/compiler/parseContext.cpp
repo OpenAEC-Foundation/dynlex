@@ -69,15 +69,33 @@ void ParseContext::printDiagnostics() {
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options) {
+PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+	requireCompilerInvariant(
+		!dependencies || !options.acceptLiterals,
+		"failed match dependency tracking does not support literal-acceptance ordering"
+	);
 	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
 	std::unordered_map<MatchControlState, MatchParentAlternatives *, MatchControlStateHash> memoizedStates;
+	auto recordDependencies = [&]() {
+		if (!dependencies)
+			return;
+		dependencies->clear();
+		for (const auto &entry : memoizedStates) {
+			const MatchControlState &state = entry.first;
+			collectMatchDependencies(state, *dependencies);
+		}
+		if (!queue.empty())
+			collectMatchDependencies(queue.back().controlState(), *dependencies);
+		normalizeMatchDependencies(*dependencies);
+	};
 	size_t steps = 0;
 	while (queue.size()) {
-		if (options.maxSteps > 0 && steps >= options.maxSteps)
+		if (options.maxSteps > 0 && steps >= options.maxSteps) {
+			recordDependencies();
 			return nullptr;
+		}
 		MatchProgress &currentProgress = queue.back();
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
 		if (!inserted) {
@@ -94,7 +112,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
 					for (auto completion = canonicalParents->completedSubmatches.rbegin();
 						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
-						resumedProgresses.push_back(MatchProgress::resumeParent(**addedParent, *completion));
+						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **addedParent, *completion));
 					}
 				}
 			}
@@ -106,15 +124,21 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			continue;
 		}
 		steps++;
-		std::vector<MatchProgress> nextSteps = currentProgress.step(storage);
-		if (currentProgress.isSubmatchComplete())
-			currentProgress.parents->addCompletion(currentProgress.completedSubmatch());
-		if (currentProgress.isComplete()) {
-			return new PatternMatch(currentProgress.match);
+		std::vector<PatternDefinition *> visibleDefinitions = currentProgress.visibleDefinitions();
+		MatchStep matchStep = currentProgress.step(storage, visibleDefinitions);
+		if (currentProgress.isSubmatchComplete(visibleDefinitions)) {
+			requireCompilerInvariant(matchStep.hasCompletedSubmatch, "completed matcher state did not produce submatch data");
+			currentProgress.parents->addCompletion(std::move(matchStep.completedSubmatch));
 		}
+		if (currentProgress.isComplete(visibleDefinitions))
+			return new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions));
 		queue.pop_back();
-		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
+		queue.insert(
+			queue.end(), std::make_move_iterator(matchStep.nextMatches.begin()),
+			std::make_move_iterator(matchStep.nextMatches.end())
+		);
 	}
+	recordDependencies();
 	return nullptr;
 }
 

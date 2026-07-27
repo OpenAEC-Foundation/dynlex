@@ -3,6 +3,17 @@
 #include "variableMatch.h"
 #include <cstddef>
 
+struct MatchDependency {
+	enum class Kind { Endpoint, ArgumentChild, WordChild, LiteralChild };
+
+	Kind kind;
+	const PatternTreeNode *node;
+	size_t endpointRevision = 0;
+	std::string literal;
+};
+
+using MatchDependencies = std::vector<MatchDependency>;
+
 struct MatchOptions {
 	bool acceptLiterals = false;
 	size_t maxSteps = 0; // 0 means unbounded

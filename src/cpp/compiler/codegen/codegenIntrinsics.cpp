@@ -447,7 +447,8 @@ CodegenResult generateIntrinsicCode(
 			registerManagedStorage(context, storage, valueType, ownerSection);
 			if (!managedExpressionResultIsOwned(context, args[1]) && !retainManagedValue(context, valueType, value))
 				return CodegenResult::failure();
-			initializeManagedStorage(context, storage, valueType, value);
+			if (!storeManagedValue(context, storage, valueType, value))
+				return CodegenResult::failure();
 		} else {
 			builder.CreateStore(value, storage);
 		}

@@ -229,7 +229,8 @@ const shaderState = await evaluate(`(() => {
     shaderName: section.querySelector('[data-shader-name]').textContent,
     highlightedTokens: section.querySelectorAll('[data-shader-code] span').length,
     editorMode: editorLink.searchParams.get('mode'),
-    editorCode: editorLink.searchParams.get('code64')
+    editorScene: editorLink.searchParams.get('scene'),
+    editorUrlLength: editorLink.href.length
   };
 })()`);
 assert.equal(shaderState.immersiveState, "ready");
@@ -250,7 +251,8 @@ assert.equal(shaderState.activeShaderIndex, "0");
 assert.equal(shaderState.shaderName, shaderManifest.scenes[0].title.toUpperCase());
 assert.ok(shaderState.highlightedTokens > 10, "The laptop source must use cached semantic highlighting");
 assert.equal(shaderState.editorMode, "shader");
-assert.ok(shaderState.editorCode?.length > 0, "The active shader must carry its editable source");
+assert.equal(shaderState.editorScene, shaderManifest.scenes[0].id);
+assert.ok(shaderState.editorUrlLength < 256, "The editor link must not embed shader source in the request URL");
 assert.ok(shaderState.sectionHeight >= shaderState.viewportHeight * 0.9, "The shader must occupy the viewport");
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[0].shaders.fragment.path}`)),
@@ -448,9 +450,11 @@ assert.ok(
 );
 const displayedEditorName = await evaluate(`(() => ({
   file: document.querySelector('[data-shader-file]').textContent,
-  editor: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name')
+  editor: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name'),
+  scene: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')
 }))()`);
 assert.equal(displayedEditorName.editor, displayedEditorName.file, "The editor action must track the displayed code");
+assert.equal(displayedEditorName.scene, shaderManifest.scenes[1].id, "The editor action must track the visible shader");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '2'"
     + " || document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '2'"
@@ -538,13 +542,14 @@ assert.ok(
   "The volumetric scene must load its model-derived point cloud"
 );
 assert.equal(
-  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name')`),
-  `${shaderManifest.scenes[2].id}.dl`,
-  "The editor action must expose the three-dimensional shader source"
+  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')`),
+  shaderManifest.scenes[2].id,
+  "The editor action must identify the three-dimensional shader scene"
 );
-assert.ok(
-  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.has('renderer64')`),
-  "The editor action must carry the scene's generic volumetric renderer configuration"
+assert.equal(
+  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).search.length < 256`),
+  true,
+  "The volumetric editor link must stay below ordinary HTTP request-line limits"
 );
 const volumetricShaderEditorPath = await evaluate(`(() => {
   const url = new URL(document.querySelector('[data-shader-editor-link]').href);

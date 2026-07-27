@@ -12,15 +12,6 @@ function required(selector, scope) {
   return element;
 }
 
-function code64(source) {
-  const bytes = new TextEncoder().encode(source);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
 function validateManifest(manifest) {
   if (
     manifest?.schemaVersion !== 5
@@ -304,12 +295,8 @@ export async function createShaderBanner(section) {
     );
     const params = new URLSearchParams({
       mode: "shader",
-      name: `${scene.id}.dl`,
-      code64: code64(scene.source)
+      scene: scene.id
     });
-    if (scene.geometry) {
-      params.set("renderer64", code64(JSON.stringify({ geometry: scene.geometry })));
-    }
     editorLink.href = `ide/index.html?${params}`;
   }
 

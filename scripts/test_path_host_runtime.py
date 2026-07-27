@@ -58,6 +58,24 @@ def verify_windows_binary_stdin(project: Path) -> None:
         raise RuntimeError(f"Windows standard input is not forced to binary mode: {missing}")
 
 
+def verify_windows_cache_directory(project: Path) -> None:
+    source = (project / "src/runtime/hostRuntimeWindows.c").read_text(encoding="utf-8")
+    cmake = (project / "CMakeLists.txt").read_text(encoding="utf-8")
+    required_source = (
+        "#include <shlobj.h>",
+        "SHGetKnownFolderPath",
+        "FOLDERID_LocalAppData",
+        "CoTaskMemFree",
+    )
+    missing_source = [text for text in required_source if text not in source]
+    if missing_source:
+        raise RuntimeError(f"Windows user cache directory API is incomplete: {missing_source}")
+    required_libraries = ("shell32", "ole32")
+    missing_libraries = [library for library in required_libraries if library not in cmake]
+    if missing_libraries:
+        raise RuntimeError(f"Windows user cache directory libraries are not linked: {missing_libraries}")
+
+
 def main() -> int:
     project = Path(__file__).resolve().parent.parent
     compile_and_run(
@@ -69,8 +87,19 @@ def main() -> int:
         include_runtime=False,
     )
     verify_windows_binary_stdin(project)
+    verify_windows_cache_directory(project)
     if os.name != "nt":
         compile_and_run(project, [project / "tests/runtime/path_uri_symlink_identity.c"])
+        compile_and_run(
+            project,
+            [
+                project / "tests/runtime/host_runtime_posix_cache.c",
+                project / "src/runtime/hostRuntimePosix.c",
+                project / "src/runtime/runtimeError.c",
+                project / "src/runtime/runtimeText.c",
+            ],
+            include_runtime=False,
+        )
     return 0
 
 

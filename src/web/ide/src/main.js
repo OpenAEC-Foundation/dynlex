@@ -137,7 +137,33 @@ print square 8 as line
 const queryParams = new URLSearchParams(window.location.search);
 const shaderMode = queryParams.get("mode") === "shader";
 
+async function loadRequestedShaderScene() {
+  const requestedScene = queryParams.get("scene");
+  if (requestedScene === null) {
+    return null;
+  }
+  if (!shaderMode || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedScene)) {
+    throw new Error("Invalid shader scene");
+  }
+
+  const response = await fetch("/shaders/manifest.json");
+  if (!response.ok) {
+    throw new Error("Shader manifest could not be loaded");
+  }
+  const manifest = await response.json();
+  const scene = manifest.scenes.find((candidate) => candidate.id === requestedScene);
+  if (!scene) {
+    throw new Error("Shader scene does not exist");
+  }
+  return scene;
+}
+
+const startupScene = await loadRequestedShaderScene();
+
 function startupFileName() {
+  if (startupScene !== null) {
+    return `${startupScene.id}.dl`;
+  }
   const requestedName = queryParams.get("name");
   if (requestedName && /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.dl$/.test(requestedName)) {
     return requestedName;
@@ -160,6 +186,9 @@ function decodeBase64Url(value) {
 }
 
 function getStartupSource() {
+  if (startupScene !== null) {
+    return startupScene.source;
+  }
   const encoded = queryParams.get("code64");
   if (typeof encoded === "string" && encoded.length > 0) {
     const decoded = decodeBase64Url(encoded);
@@ -242,7 +271,9 @@ async function loadShaderRenderer(config) {
 
 const startupSource = getStartupSource();
 const autoRunOnStartup = shouldAutoRunOnStartup();
-const shaderRendererConfig = shaderMode ? getShaderRendererConfig() : null;
+const shaderRendererConfig = startupScene?.geometry
+  ? Object.freeze({ geometry: Object.freeze({ ...startupScene.geometry }) })
+  : null;
 const fileName = startupFileName();
 document.documentElement.dataset.workspaceMode = shaderMode ? "shader" : "program";
 for (const fileLabel of document.querySelectorAll("[data-current-file]")) {

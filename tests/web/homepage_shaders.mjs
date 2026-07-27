@@ -569,7 +569,8 @@ assert.match(shaderBannerJavascript, /shaders\/manifest\.json/);
 assert.match(shaderBannerJavascript, /renderSemanticTokens/);
 assert.match(shaderBannerJavascript, /prefers-reduced-motion/);
 assert.match(shaderBannerJavascript, /data-shader-editor-link/);
-assert.match(shaderBannerJavascript, /code64/);
+assert.match(shaderBannerJavascript, /scene:\s*scene\.id/);
+assert.doesNotMatch(shaderBannerJavascript, /code64|renderer64/);
 assert.match(shaderBannerJavascript, /mode:\s*"shader"/);
 assert.match(shaderBannerJavascript, /prepareIncomingScene/);
 assert.match(shaderBannerJavascript, /promoteIncomingScene/);
@@ -603,6 +604,8 @@ assert.match(sharedRenderer, /gl\.DEPTH_BUFFER_BIT/);
 assert.match(sharedRenderer, /pass\.depthTest/);
 assert.doesNotMatch(sharedRenderer, /paired-unorm12/);
 assert.match(ideMain, /from "\.\.\/\.\.\/\.\.\/\.\.\/web\/shader-renderer\.js"/);
+assert.match(ideMain, /shaders\/manifest\.json/);
+assert.doesNotMatch(ideMain, /renderer64/);
 
 const styles = [
   fs.readFileSync(path.join(projectDir, "web/style.css"), "utf8"),
