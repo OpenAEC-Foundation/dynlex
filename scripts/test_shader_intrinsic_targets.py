@@ -13,11 +13,30 @@ TARGETS_WITHOUT_SHADERS = (
     ("wasm", ("--emit-wasm",)),
 )
 SHADER_INTRINSICS = {
-    "shader input": "import lib/shader.dl\nset x to the fragment x coordinate\n",
-    "shader uniform": '@intrinsic("discard", @intrinsic("shader uniform", "time"))\n',
-    "shader output": '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+    "shader input": (
+        "import lib/shader.dl\nset x to the fragment x coordinate\n",
+        "fragment",
+    ),
+    "shader uniform": (
+        '@intrinsic("discard", @intrinsic("shader uniform", "time"))\n',
+        "fragment",
+    ),
+    "shader output": (
+        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        "fragment",
+    ),
+    "shader interpolant input": (
+        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface"))\n'
+        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        "fragment",
+    ),
+    "shader interpolant output": (
+        '@intrinsic("shader interpolant output", "surface", 0.1, 0.2, 0.3, 1.0)\n'
+        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        "vertex",
+    ),
 }
-INVALID_SPIRV_INPUTS = (
+INVALID_SPIRV_SHADER_IO = (
     (
         "non-literal-input",
         '@intrinsic("discard", @intrinsic("shader input", 1))\n',
@@ -41,6 +60,30 @@ INVALID_SPIRV_INPUTS = (
         '@intrinsic("discard", @intrinsic("shader input", "FragCoord"))\n',
         ("--emit-spirv", "--shader-stage=vertex"),
         "Shader input 'FragCoord' is unavailable for this shader stage",
+    ),
+    (
+        "non-literal-interpolant",
+        '@intrinsic("discard", @intrinsic("shader interpolant input", 1))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "shader interpolant requires a non-empty string literal name",
+    ),
+    (
+        "empty-interpolant-name",
+        '@intrinsic("discard", @intrinsic("shader interpolant input", ""))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "shader interpolant requires a non-empty string literal name",
+    ),
+    (
+        "interpolant-input-in-vertex",
+        '@intrinsic("discard", @intrinsic("shader interpolant input", "surface"))\n',
+        ("--emit-spirv", "--shader-stage=vertex"),
+        "Shader interpolant input 'surface' is only available in fragment shaders",
+    ),
+    (
+        "interpolant-output-in-fragment",
+        '@intrinsic("shader interpolant output", "surface", 0.1, 0.2, 0.3, 1.0)\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "Shader interpolant output 'surface' is only available in vertex shaders",
     ),
 )
 FLEX_BRANCH_SHADER = """\
@@ -121,12 +164,28 @@ set first to the shader time
 set second to the shader time
 @intrinsic("shader output", first, second, 0.0, 1.0)
 """
+WRAPPED_INTERPOLANT_SHADERS = {
+    "vertex": """\
+import lib/shader.dl
+
+set the shader interpolant named "surface" to 0.1 0.2 0.3 1.0
+set the output position to 0.0 0.0 0.0 1.0
+""",
+    "fragment": """\
+import lib/shader.dl
+
+set shade to the shader interpolant x named "surface"
+set the fragment color to shade shade shade 1.0
+""",
+}
 SPIRV_MAGIC = 0x07230203
+OP_NAME = 5
 OP_TYPE_INT = 21
 OP_TYPE_POINTER = 32
 OP_CONSTANT = 43
 OP_SPEC_CONSTANT_OP = 52
 OP_ACCESS_CHAIN = 65
+OP_DECORATE = 71
 OP_BITCAST = 124
 OP_LOOP_MERGE = 246
 OP_SELECTION_MERGE = 247
@@ -135,6 +194,7 @@ OP_BRANCH_CONDITIONAL = 250
 STORAGE_CLASS_INPUT = 1
 STORAGE_CLASS_OUTPUT = 3
 STORAGE_CLASS_CROSS_WORKGROUP = 5
+DECORATION_LOCATION = 30
 
 
 def compile_source(
@@ -181,6 +241,25 @@ def spirv_operands(path: Path, opcode: int) -> list[tuple[int, ...]]:
     return [operands for instruction_opcode, operands in spirv_instructions(path) if instruction_opcode == opcode]
 
 
+def decode_spirv_string(words: tuple[int, ...]) -> str:
+    encoded = struct.pack(f"<{len(words)}I", *words)
+    return encoded.split(b"\0", 1)[0].decode("utf-8")
+
+
+def named_spirv_locations(path: Path) -> dict[str, int]:
+    names = {
+        operands[0]: decode_spirv_string(operands[1:])
+        for operands in spirv_operands(path, OP_NAME)
+    }
+    return {
+        names[operands[0]]: operands[2]
+        for operands in spirv_operands(path, OP_DECORATE)
+        if len(operands) >= 3
+        and operands[0] in names
+        and operands[1] == DECORATION_LOCATION
+    }
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: test_shader_intrinsic_targets.py <compiler>", file=sys.stderr)
@@ -196,7 +275,7 @@ def main() -> int:
         temporary_path = Path(temporary_directory)
 
         for target_name, target_arguments in TARGETS_WITHOUT_SHADERS:
-            for intrinsic_name, source in SHADER_INTRINSICS.items():
+            for intrinsic_name, (source, _shader_stage) in SHADER_INTRINSICS.items():
                 result = compile_source(
                     compiler,
                     temporary_path,
@@ -217,28 +296,105 @@ def main() -> int:
                         f"{target_name} intrinsic '{intrinsic_name}' produced the wrong diagnostic: {diagnostics.strip()}"
                     )
 
-        for intrinsic_name, source in SHADER_INTRINSICS.items():
+        for intrinsic_name, (source, shader_stage) in SHADER_INTRINSICS.items():
             result = compile_source(
                 compiler,
                 temporary_path,
                 f"spirv-{intrinsic_name.replace(' ', '-')}",
                 source,
-                ("--emit-spirv", "--shader-stage=fragment"),
+                ("--emit-spirv", f"--shader-stage={shader_stage}"),
             )
             if result.returncode != 0:
                 diagnostics = (result.stdout + result.stderr).strip()
                 failures.append(f"SPIR-V rejected intrinsic '{intrinsic_name}': {diagnostics}")
 
-        for case_name, source, arguments, expected in INVALID_SPIRV_INPUTS:
+        interpolant_sources = {
+            "vertex": (
+                '@intrinsic("shader interpolant output", "terrain_position", 0.1, 0.2, 0.3, 1.0)\n'
+                '@intrinsic("shader interpolant output", "terrain_normal", 0.4, 0.5, 0.6, 0.0)\n'
+                '@intrinsic("shader output", 0.0, 0.0, 0.0, 1.0)\n'
+            ),
+            "fragment": (
+                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_normal"))\n'
+                '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_position"))\n'
+                '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n'
+            ),
+        }
+        interpolant_locations: dict[str, dict[str, int]] = {}
+        for shader_stage, source in interpolant_sources.items():
+            case_name = f"named-interpolants-{shader_stage}"
+            result = compile_source(
+                compiler,
+                temporary_path,
+                case_name,
+                source,
+                ("--emit-spirv", f"--shader-stage={shader_stage}"),
+            )
+            if result.returncode != 0:
+                diagnostics = (result.stdout + result.stderr).strip()
+                failures.append(f"SPIR-V rejected named {shader_stage} interpolants: {diagnostics}")
+                continue
+            try:
+                interpolant_locations[shader_stage] = {
+                    name: location
+                    for name, location in named_spirv_locations(temporary_path / f"{case_name}.out").items()
+                    if name.startswith("dynlex_interpolant_")
+                }
+            except ValueError as error:
+                failures.append(str(error))
+
+        expected_interpolants = {
+            "dynlex_interpolant_7465727261696e5f6e6f726d616c": 0,
+            "dynlex_interpolant_7465727261696e5f706f736974696f6e": 1,
+        }
+        for shader_stage in interpolant_sources:
+            if shader_stage in interpolant_locations and interpolant_locations[shader_stage] != expected_interpolants:
+                failures.append(
+                    f"SPIR-V {shader_stage} interpolants have unstable locations: "
+                    f"{interpolant_locations[shader_stage]}"
+                )
+
+        expected_wrapped_interpolant = {
+            "dynlex_interpolant_73757266616365": 0,
+        }
+        for shader_stage, source in WRAPPED_INTERPOLANT_SHADERS.items():
+            case_name = f"wrapped-interpolant-{shader_stage}"
+            result = compile_source(
+                compiler,
+                temporary_path,
+                case_name,
+                source,
+                ("--emit-spirv", f"--shader-stage={shader_stage}"),
+            )
+            if result.returncode != 0:
+                diagnostics = (result.stdout + result.stderr).strip()
+                failures.append(f"SPIR-V rejected wrapped {shader_stage} interpolant: {diagnostics}")
+                continue
+            try:
+                wrapped_locations = {
+                    name: location
+                    for name, location in named_spirv_locations(temporary_path / f"{case_name}.out").items()
+                    if name.startswith("dynlex_interpolant_")
+                }
+            except ValueError as error:
+                failures.append(str(error))
+                continue
+            if wrapped_locations != expected_wrapped_interpolant:
+                failures.append(
+                    f"SPIR-V wrapped {shader_stage} interpolant lost its compile-time name: "
+                    f"{wrapped_locations}"
+                )
+
+        for case_name, source, arguments, expected in INVALID_SPIRV_SHADER_IO:
             result = compile_source(compiler, temporary_path, case_name, source, arguments)
             diagnostics = result.stdout + result.stderr
             if result.returncode == 0:
-                failures.append(f"SPIR-V accepted invalid shader input case '{case_name}'")
+                failures.append(f"SPIR-V accepted invalid shader I/O case '{case_name}'")
             elif result.returncode < 0:
-                failures.append(f"SPIR-V shader input case '{case_name}' crashed with signal {-result.returncode}")
+                failures.append(f"SPIR-V shader I/O case '{case_name}' crashed with signal {-result.returncode}")
             elif expected not in diagnostics:
                 failures.append(
-                    f"SPIR-V shader input case '{case_name}' produced the wrong diagnostic: {diagnostics.strip()}"
+                    f"SPIR-V shader I/O case '{case_name}' produced the wrong diagnostic: {diagnostics.strip()}"
                 )
 
         result = compile_source(

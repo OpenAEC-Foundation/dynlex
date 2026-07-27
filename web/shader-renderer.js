@@ -79,6 +79,7 @@ function deleteProgramState(gl, state) {
     for (const uniform of pass.uniforms) {
       gl.deleteBuffer(uniform.buffer);
     }
+    if (pass.indexBuffer) gl.deleteBuffer(pass.indexBuffer);
     if (pass.vertexBuffer) gl.deleteBuffer(pass.vertexBuffer);
     gl.deleteVertexArray(pass.vertexArray);
     gl.deleteProgram(pass.program);
@@ -109,27 +110,57 @@ function createUniformBindings(gl, program, reflectedUniforms) {
   }
 }
 
-function validateGeometry(geometry) {
+export function validateShaderGeometryDescriptor(geometry, requireData = false) {
+  const indices = geometry?.indices;
+  const validIndices = indices === undefined || (
+    indices
+    && indices.format === "uint16"
+    && Number.isInteger(indices.count)
+    && indices.count > 0
+    && (!requireData || indices.data instanceof ArrayBuffer)
+    && (
+      !(indices.data instanceof ArrayBuffer)
+      || indices.data.byteLength === indices.count * Uint16Array.BYTES_PER_ELEMENT
+    )
+  );
   if (
     !geometry
     || geometry.format !== "float32x4"
+    || typeof geometry.attributeEncoding !== "string"
+    || geometry.attributeEncoding.length === 0
     || geometry.primitive !== "triangles"
-    || !Number.isInteger(geometry.pointCount)
-    || geometry.pointCount <= 0
-    || geometry.vertexCount !== geometry.pointCount * 3
-    || !(geometry.data instanceof ArrayBuffer)
-    || geometry.data.byteLength !== geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
+    || !Number.isInteger(geometry.vertexCount)
+    || geometry.vertexCount <= 0
+    || typeof geometry.render?.backgroundPass !== "boolean"
+    || !["opaque", "additive"].includes(geometry.render.blendMode)
+    || typeof geometry.render.depthTest !== "boolean"
+    || (requireData && !(geometry.data instanceof ArrayBuffer))
+    || (
+      geometry.data instanceof ArrayBuffer
+      && geometry.data.byteLength !== geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
+    )
+    || !validIndices
   ) {
     throw new Error("Invalid shader geometry");
   }
+  return geometry;
 }
 
-function createProgramPass(gl, vertexSourceText, fragmentSourceText, reflectedUniforms, geometry = null) {
+function createProgramPass(
+  gl,
+  vertexSourceText,
+  fragmentSourceText,
+  reflectedUniforms,
+  geometry,
+  render,
+  renderPass
+) {
   let vertexShader = null;
   let fragmentShader = null;
   let program = null;
   let vertexArray = null;
   let vertexBuffer = null;
+  let indexBuffer = null;
   let uniforms = [];
   try {
     vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertexSourceText);
@@ -141,7 +172,7 @@ function createProgramPass(gl, vertexSourceText, fragmentSourceText, reflectedUn
     }
     gl.bindVertexArray(vertexArray);
     if (geometry) {
-      validateGeometry(geometry);
+      validateShaderGeometryDescriptor(geometry, true);
       vertexBuffer = gl.createBuffer();
       if (!vertexBuffer) {
         throw new Error("WebGL could not allocate a geometry buffer");
@@ -150,6 +181,14 @@ function createProgramPass(gl, vertexSourceText, fragmentSourceText, reflectedUn
       gl.bufferData(gl.ARRAY_BUFFER, geometry.data, gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0);
+      if (geometry.indices) {
+        indexBuffer = gl.createBuffer();
+        if (!indexBuffer) {
+          throw new Error("WebGL could not allocate an index buffer");
+        }
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices.data, gl.STATIC_DRAW);
+      }
     }
     uniforms = createUniformBindings(gl, program, reflectedUniforms);
     return {
@@ -157,10 +196,17 @@ function createProgramPass(gl, vertexSourceText, fragmentSourceText, reflectedUn
       uniforms,
       vertexArray,
       vertexBuffer,
-      vertexCount: geometry ? geometry.vertexCount : 3
+      indexBuffer,
+      vertexCount: geometry ? geometry.vertexCount : 3,
+      indexCount: geometry?.indices?.count ?? 0,
+      indexType: geometry?.indices ? gl.UNSIGNED_SHORT : null,
+      render,
+      renderPass,
+      depthTest: render.depthTest
     };
   } catch (error) {
     for (const uniform of uniforms) gl.deleteBuffer(uniform.buffer);
+    if (indexBuffer) gl.deleteBuffer(indexBuffer);
     if (vertexBuffer) gl.deleteBuffer(vertexBuffer);
     if (vertexArray) gl.deleteVertexArray(vertexArray);
     if (program) gl.deleteProgram(program);
@@ -178,7 +224,7 @@ export function createShaderPreview(canvas, options = {}) {
   const gl = canvas.getContext("webgl2", {
     alpha: false,
     antialias: true,
-    depth: false,
+    depth: true,
     powerPreference: "high-performance"
   });
   if (!gl) {
@@ -209,17 +255,33 @@ export function createShaderPreview(canvas, options = {}) {
       throw new Error("Compiler returned invalid shader uniforms");
     }
     reflectedUniforms.forEach(validateUniform);
+    if (programDescriptor.geometry) {
+      validateShaderGeometryDescriptor(programDescriptor.geometry, true);
+    }
 
     const passes = [];
     try {
-      passes.push(createProgramPass(gl, vertexSource, programDescriptor.fragmentSource, reflectedUniforms));
-      if (programDescriptor.geometry) {
+      const geometry = programDescriptor.geometry;
+      if (!geometry || geometry.render.backgroundPass) {
+        passes.push(createProgramPass(
+          gl,
+          vertexSource,
+          programDescriptor.fragmentSource,
+          reflectedUniforms,
+          null,
+          { blendMode: "opaque", depthTest: false },
+          0
+        ));
+      }
+      if (geometry) {
         passes.push(createProgramPass(
           gl,
           programDescriptor.vertexSource,
           programDescriptor.fragmentSource,
           reflectedUniforms,
-          programDescriptor.geometry
+          geometry,
+          geometry.render,
+          geometry.render.backgroundPass ? 1 : 0
         ));
       }
     } catch (error) {
@@ -232,7 +294,7 @@ export function createShaderPreview(canvas, options = {}) {
     resizeDrawingBuffer();
     revision += 1;
     canvas.dataset.previewRevision = String(revision);
-    canvas.dataset.previewGeometryPoints = String(programDescriptor.geometry?.pointCount ?? 0);
+    canvas.dataset.previewGeometryVertices = String(programDescriptor.geometry?.vertexCount ?? 0);
     canvas.dataset.previewState = "ready";
     deleteProgramState(gl, previousState);
     if (!frameRequest) {
@@ -240,16 +302,20 @@ export function createShaderPreview(canvas, options = {}) {
     }
   }
 
-  function drawPass(pass, frame, renderPass) {
+  function drawPass(pass, frame) {
     gl.useProgram(pass.program);
     gl.bindVertexArray(pass.vertexArray);
     for (const uniform of pass.uniforms) {
-      const value = uniformValueProviders[uniform.name](frame, renderPass);
+      const value = uniformValueProviders[uniform.name](frame, pass.renderPass);
       gl.bindBuffer(gl.UNIFORM_BUFFER, uniform.buffer);
       gl.bufferSubData(gl.UNIFORM_BUFFER, 0, new Float32Array([value, 0, 0, 0]));
       gl.bindBufferBase(gl.UNIFORM_BUFFER, uniform.binding, uniform.buffer);
     }
-    gl.drawArrays(gl.TRIANGLES, 0, pass.vertexCount);
+    if (pass.indexCount > 0) {
+      gl.drawElements(gl.TRIANGLES, pass.indexCount, pass.indexType, 0);
+    } else {
+      gl.drawArrays(gl.TRIANGLES, 0, pass.vertexCount);
+    }
   }
 
   function resizeDrawingBuffer() {
@@ -272,14 +338,26 @@ export function createShaderPreview(canvas, options = {}) {
         height: gl.drawingBufferHeight
       };
       gl.viewport(0, 0, frame.width, frame.height);
-      gl.disable(gl.BLEND);
-      drawPass(activeState.passes[0], frame, 0);
-      if (activeState.passes.length === 2) {
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE);
-        drawPass(activeState.passes[1], frame, 1);
-        gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      for (const pass of activeState.passes) {
+        if (pass.depthTest) {
+          gl.enable(gl.DEPTH_TEST);
+        } else {
+          gl.disable(gl.DEPTH_TEST);
+        }
+        gl.depthMask(pass.depthTest);
+        if (pass.render.blendMode === "additive") {
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.ONE, gl.ONE);
+        } else {
+          gl.disable(gl.BLEND);
+        }
+        drawPass(pass, frame);
       }
+      gl.depthMask(true);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.BLEND);
     }
     if (running) {
       frameRequest = requestAnimationFrame(drawFrame);

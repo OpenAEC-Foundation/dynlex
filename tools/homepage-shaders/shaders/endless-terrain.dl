@@ -1,179 +1,183 @@
 import lib/shader_art.dl
 
 # ENDLESS TERRAIN
-# The surface is a procedural height field intersected by every camera ray.
-# Elevation therefore changes silhouette, perspective, normals, and light.
+# A fixed camera-centered grid is displaced into a procedural alpine height
+# field. Most vertices are concentrated near the camera, so distant terrain
+# stays inexpensive without a fragment-stage ray march.
 
 function terrain height at x z:
     execute:
-        set warp_x to (the sine of (x * 0.083 + z * 0.047)) + (the cosine of (x * -0.031 + z * 0.071)) * 0.53
-        set warp_z to (the cosine of (x * -0.057 + z * 0.061)) + (the sine of (x * 0.069 + z * 0.029)) * 0.47
-        set bent_x to x + warp_x * 3.4
-        set bent_z to z + warp_z * 3.4
-        set continental to (the sine of (bent_x * 0.073 + bent_z * 0.051)) * 0.62
-        set crossing to (the cosine of (bent_x * -0.049 + bent_z * 0.091)) * 0.34
-        set ridge_one to (the cosine of ((bent_x * 0.17 - bent_z * 0.11) + warp_z * 0.31)) * 0.5 + 0.5
-        set ridge_two to (the cosine of ((bent_x * -0.13 - bent_z * 0.23) - warp_x * 0.27)) * 0.5 + 0.5
-        set ridge_three to (the cosine of ((bent_x * 0.29 + bent_z * 0.07) + warp_z * 0.19)) * 0.5 + 0.5
-        set ridge_one to (ridge_one * ridge_one) * (ridge_one * ridge_one)
-        set ridge_two to (ridge_two * ridge_two) * (ridge_two * ridge_two)
-        set ridge_three to (ridge_three * ridge_three) * (ridge_three * ridge_three)
-        set alpine_peaks to ((ridge_one * 2.08) + (ridge_two * 1.46)) + (ridge_three * 0.92)
-        set mountain_mask to smooth transition from -0.46 to 0.54 at (continental + crossing)
-        set peak_height to alpine_peaks * (0.31 + mountain_mask * 0.78)
-        set detail_one to (the sine of (bent_x * 0.51 + bent_z * 0.37)) * 0.10
-        set detail_two to (the cosine of (bent_x * -0.83 + bent_z * 0.61)) * 0.045
-        return (((((-0.31 + continental) + (crossing * 0.54)) + peak_height) + detail_one) + detail_two)
+        set continental_fold to simplex field at (x * 0.011) (z * 0.011) 1.7
+        set warp_x to simplex field at (x * 0.021 + 9.0) (z * 0.021 - 4.0) 4.1
+        set warp_z to simplex field at ((x * -0.006) + (z * 0.019)) ((z * 0.007) + (x * 0.020)) 8.3
+        set bent_x to x + warp_x * 9.5
+        set bent_z to z + warp_z * 9.5
 
-set pixel_x to the fragment x coordinate
-set pixel_y to the fragment y coordinate
-set time to the shader time
-set width to the maximum of the shader width and 1.0
-set height to the maximum of the shader height and 1.0
-set aspect to width / height
-set screen_x to (((pixel_x / width) * 2.0) - 1.0) * aspect
-set screen_y to ((pixel_y / height) * 2.0) - 1.0
+        set mountain_wave to simplex field at ((bent_x * 0.027) + (bent_z * 0.006)) ((bent_z * 0.027) - (bent_x * 0.006)) 2.3
+        set crossing_wave to simplex field at ((bent_x * -0.018) + (bent_z * 0.057)) ((bent_z * 0.019) + (bent_x * 0.054)) 6.9
+        set broken_wave to simplex field at ((bent_x * 0.119) + (bent_z * 0.041)) ((bent_z * 0.113) - (bent_x * 0.037)) 9.7
+        set folded_mass to ((mountain_wave * 0.60) + (crossing_wave * 0.27)) + (broken_wave * 0.13)
+        set mountain_ridge to the maximum of folded_mass and 0.0
+        set mountain_ridge to mountain_ridge * mountain_ridge
+        set uplift to smooth transition from -0.48 to 0.45 at continental_fold
+        set erosion_channels to 1.0 - smooth transition from 0.035 to 0.31 at (the absolute value of (crossing_wave + broken_wave * 0.24))
+        set alpine_mass to folded_mass * 1.55
+        set alpine_mass to alpine_mass + mountain_ridge * (2.00 + uplift * 6.00)
+        set alpine_mass to alpine_mass + (broken_wave * uplift) * 0.34
+        set alpine_mass to alpine_mass - ((erosion_channels * uplift) * (0.16 + mountain_ridge * 0.38))
+        set basin to continental_fold * 1.20
+        return (basin + alpine_mass) - 0.75
 
-# The camera glides above intersecting ranges instead of following a valley.
-set camera_x to ((the sine of (time * 0.13)) * 3.1) + (the cosine of (time * 0.071)) * 1.4
-set camera_y to 3.26 + (the sine of (time * 0.19)) * 0.13
-set camera_z to 76.0 + time * 3.05
-set yaw to ((the sine of (time * 0.097)) * 0.16) + (the cosine of (time * 0.061)) * 0.07
-set yaw_sine to the sine of yaw
-set yaw_cosine to the cosine of yaw
-set bank to (the sine of (time * 0.19)) * 0.025
-set bank_sine to the sine of bank
-set bank_cosine to the cosine of bank
-set view_x to screen_x * bank_cosine - screen_y * bank_sine
-set view_y to screen_x * bank_sine + screen_y * bank_cosine
-set raw_direction_x to view_x * 0.68
-set raw_direction_y to view_y * 0.68 - 0.19
-set raw_direction_z to 1.24
-set direction_x to raw_direction_x * yaw_cosine + raw_direction_z * yaw_sine
-set direction_z to raw_direction_z * yaw_cosine - raw_direction_x * yaw_sine
-set direction_length to the square root of (((direction_x * direction_x) + (raw_direction_y * raw_direction_y)) + (direction_z * direction_z))
-set direction_x to direction_x / direction_length
-set direction_y to raw_direction_y / direction_length
-set direction_z to direction_z / direction_length
+if this is a vertex shader:
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set aspect to width / height
+    set surface_vertex to the vertex w
 
-# Dawn sky and curved clouds are evaluated independently from the terrain.
-set sky_height to saturate (screen_y * 0.54 + 0.45)
-set red to 0.018 + sky_height * 0.075
-set green to 0.052 + sky_height * 0.16
-set blue to 0.12 + sky_height * 0.34
-set cloud_broad to flowing field at (screen_x * 1.25 + time * 0.018) (screen_y * 2.4 + 3.0) 2.1
-set cloud_ridges to ridged field at (screen_x * 2.1 - 8.0) (screen_y * 3.7 + time * 0.012) 5.7
-set cloud_shape to smooth transition from 0.54 to 0.82 at (cloud_broad * 0.76 + cloud_ridges * 0.24)
-set cloud_altitude to smooth transition from -0.05 to 0.31 at screen_y
-set cloud_light to cloud_shape * cloud_altitude
-set red to red + cloud_light * 0.34
-set green to green + cloud_light * 0.31
-set blue to blue + cloud_light * 0.27
-set sun_x to screen_x - 0.56
-set sun_y to screen_y - 0.39
-set sun_distance to the square root of (sun_x * sun_x + sun_y * sun_y)
-set sun_core to glow from 0.018 to 0.075 at sun_distance
-set sun_halo to glow from 0.06 to 0.42 at sun_distance
-set red to (red + (sun_halo * 0.27)) + (sun_core * 1.3)
-set green to (green + (sun_halo * 0.16)) + (sun_core * 0.92)
-set blue to (blue + (sun_halo * 0.08)) + (sun_core * 0.52)
-
-# Uniform height-field traversal covers the complete view depth for every ray.
-# The previous and current samples bracket the first surface crossing, then six
-# refinements recover a stable sharp surface.
-set terrain_hit to false
-set travel to 0.12
-set previous_travel to travel
-set hit_distance to travel
-set sample_x to camera_x
-set sample_y to camera_y
-set sample_z to camera_z
-set surface_height to terrain height at sample_x sample_z
-set march_step to 0
-while march_step < 96 and not terrain_hit:
-    set sample_x to camera_x + direction_x * travel
-    set sample_y to camera_y + direction_y * travel
-    set sample_z to camera_z + direction_z * travel
-    set surface_height to terrain height at sample_x sample_z
-    if sample_y < surface_height:
-        set terrain_hit to true
-        set hit_distance to travel
+    if surface_vertex < 0.5:
+        set the shader interpolant named "terrain_position" to (the vertex x) (the vertex y) 0.0 0.0
+        set the shader interpolant named "terrain_normal" to 0.0 1.0 0.0 0.0
+        set the shader interpolant named "terrain_material" to 0.5 0.0 0.0 0.0
+        set the output position to (the vertex x) (the vertex y) 0.9999 1.0
     else:
-        set previous_travel to travel
-        set travel to travel + 0.46
-        if travel > 44.0:
-            set march_step to 96
-    set march_step to march_step + 1
+        set depth_fraction to the vertex y
+        set view_distance to 0.45 + (depth_fraction * depth_fraction) * 94.0
+        set camera_x to 201.7 + ((the sine of (time * 0.091)) * 4.2 + (the cosine of (time * 0.037)) * 1.6)
+        set camera_z to (-92.1) + (time * 3.25)
+        set camera_ground to terrain height at camera_x camera_z
+        set camera_y to (camera_ground + 3.15) + ((the sine of (time * 0.17)) * 0.14)
+        set yaw to (the sine of (time * 0.073)) * 0.13 + (the cosine of (time * 0.041)) * 0.045
+        set yaw_sine to the sine of yaw
+        set yaw_cosine to the cosine of yaw
 
-set refinement to 0
-while refinement < 6 and terrain_hit:
-    set middle_travel to (previous_travel + hit_distance) * 0.5
-    set middle_x to camera_x + direction_x * middle_travel
-    set middle_y to camera_y + direction_y * middle_travel
-    set middle_z to camera_z + direction_z * middle_travel
-    set middle_height to terrain height at middle_x middle_z
-    if middle_y < middle_height:
-        set hit_distance to middle_travel
+        set near_spread to ((1.0 - depth_fraction) * (1.0 - depth_fraction)) * 4.8
+        set lateral_distance to (((the vertex x) * (view_distance + near_spread)) * aspect) * 0.80
+        set world_x to (camera_x + (lateral_distance * yaw_cosine)) + (view_distance * yaw_sine)
+        set world_z to (camera_z + (view_distance * yaw_cosine)) - (lateral_distance * yaw_sine)
+        set displaced_height to terrain height at world_x world_z
+
+        set normal_step to 0.09 + view_distance * 0.015
+        set height_right to terrain height at (world_x + normal_step) world_z
+        set height_front to terrain height at world_x (world_z + normal_step)
+        set normal_x to displaced_height - height_right
+        set normal_y to normal_step
+        set normal_z to displaced_height - height_front
+        set normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
+        set normal_x to normal_x / normal_length
+        set normal_y to normal_y / normal_length
+        set normal_z to normal_z / normal_length
+
+        set camera_pitch to 0.155 + (the sine of (time * 0.11)) * 0.012
+        set pitch_sine to the sine of camera_pitch
+        set pitch_cosine to the cosine of camera_pitch
+        set vertical_distance to displaced_height - camera_y
+        set view_y to vertical_distance * pitch_cosine + view_distance * pitch_sine
+        set view_z to view_distance * pitch_cosine - vertical_distance * pitch_sine
+        set clip_x to lateral_distance / (aspect * 0.72)
+        set clip_y to view_y / 0.72
+        set clip_z to view_z * 1.00334 - 0.40067
+
+        set surface_variation to (simplex field at (world_x * 0.065) (world_z * 0.065) 13.7) * 0.5 + 0.5
+        set surface_detail to (simplex field at (world_x * 0.14) (world_z * 0.14) 16.2) * 0.5 + 0.5
+        set the shader interpolant named "terrain_position" to world_x displaced_height world_z 1.0
+        set the shader interpolant named "terrain_normal" to normal_x normal_y normal_z view_distance
+        set the shader interpolant named "terrain_material" to surface_variation surface_detail 0.0 0.0
+        set the output position to clip_x clip_y clip_z view_z
+
+if this is a fragment shader:
+    set pixel_x to the fragment x coordinate
+    set pixel_y to the fragment y coordinate
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set aspect to width / height
+    set screen_x to (((pixel_x / width) * 2.0) - 1.0) * aspect
+    set screen_y to ((pixel_y / height) * 2.0) - 1.0
+
+    set world_x to the shader interpolant x named "terrain_position"
+    set world_y to the shader interpolant y named "terrain_position"
+    set world_z to the shader interpolant z named "terrain_position"
+    set surface_kind to the shader interpolant w named "terrain_position"
+    set normal_x to the shader interpolant x named "terrain_normal"
+    set normal_y to the shader interpolant y named "terrain_normal"
+    set normal_z to the shader interpolant z named "terrain_normal"
+    set view_distance to the shader interpolant w named "terrain_normal"
+    set surface_variation to the shader interpolant x named "terrain_material"
+    set surface_detail to the shader interpolant y named "terrain_material"
+
+    set sun_x to screen_x - 0.52
+    set sun_y to screen_y - 0.36
+    set sun_distance to the square root of (sun_x * sun_x + sun_y * sun_y)
+    set sun_core to glow from 0.014 to 0.065 at sun_distance
+    set sun_halo to glow from 0.04 to 0.44 at sun_distance
+    set red to 0.025
+    set green to 0.064
+    set blue to 0.13
+
+    if surface_kind < 0.5:
+        set sky_height to saturate (screen_y * 0.48 + 0.43)
+        set red to 0.022 + sky_height * 0.105
+        set green to 0.061 + sky_height * 0.18
+        set blue to 0.14 + sky_height * 0.33
+        set cloud_fold to (the sine of (screen_x * 1.21 + screen_y * 1.77 + time * 0.021)) * 0.5 + 0.5
+        set cloud_crossing to (the cosine of (screen_x * -0.67 + screen_y * 2.93 - time * 0.016)) * 0.5 + 0.5
+        set cloud_detail to (the sine of (screen_x * 2.47 - screen_y * 4.11 + cloud_fold * 1.8)) * 0.5 + 0.5
+        set cloud_shape to smooth transition from 1.42 to 2.18 at ((cloud_fold + cloud_crossing) + (cloud_detail * 0.46))
+        set cloud_altitude to smooth transition from -0.08 to 0.38 at screen_y
+        set cloud_light to cloud_shape * cloud_altitude
+        set red to red + cloud_light * 0.33
+        set green to green + cloud_light * 0.31
+        set blue to blue + cloud_light * 0.29
+        set red to (red + (sun_halo * 0.31)) + (sun_core * 1.36)
+        set green to (green + (sun_halo * 0.19)) + (sun_core * 0.96)
+        set blue to (blue + (sun_halo * 0.09)) + (sun_core * 0.55)
     else:
-        set previous_travel to middle_travel
-    set refinement to refinement + 1
+        set normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
+        set normal_x to normal_x / normal_length
+        set normal_y to normal_y / normal_length
+        set normal_z to normal_z / normal_length
+        set slope to 1.0 - normal_y
+        set sunlight to saturate (((normal_x * -0.43) + (normal_y * 0.79)) + (normal_z * -0.44))
+        set sky_fill to saturate (normal_y * 0.56 + 0.44)
 
-if terrain_hit:
-    set world_x to camera_x + direction_x * hit_distance
-    set world_y to camera_y + direction_y * hit_distance
-    set world_z to camera_z + direction_z * hit_distance
-    set surface_height to terrain height at world_x world_z
+        set material_variation to (surface_variation * 0.68) + (surface_detail * 0.32)
+        set exposed_rock to smooth transition from 0.10 to 0.42 at (slope + ((surface_detail - 0.5) * 0.075))
+        set snow to smooth transition from 2.55 to 4.35 at (world_y + ((material_variation - 0.5) * 0.42))
+        set snow to snow * smooth transition from 0.18 to 0.58 at normal_y
+        set alpine_zone to smooth transition from 0.35 to 2.65 at world_y
+        set rock_warmth to saturate (((normal_x * 0.38) - (normal_z * 0.26)) + 0.48)
 
-    # Finite differences turn real elevation into real surface light.
-    set normal_step to 0.055 + hit_distance * 0.0018
-    set height_left to terrain height at (world_x - normal_step) world_z
-    set height_right to terrain height at (world_x + normal_step) world_z
-    set height_back to terrain height at world_x (world_z - normal_step)
-    set height_front to terrain height at world_x (world_z + normal_step)
-    set normal_x to height_left - height_right
-    set normal_y to normal_step * 2.0
-    set normal_z to height_back - height_front
-    set normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
-    set normal_x to normal_x / normal_length
-    set normal_y to normal_y / normal_length
-    set normal_z to normal_z / normal_length
+        set meadow_red to (0.034 + material_variation * 0.054) + alpine_zone * 0.041
+        set meadow_green to (0.102 + material_variation * 0.094) - alpine_zone * 0.052
+        set meadow_blue to (0.049 + material_variation * 0.039) + alpine_zone * 0.018
+        set rock_red to (0.132 + material_variation * 0.074) + rock_warmth * 0.082
+        set rock_green to (0.122 + material_variation * 0.066) + rock_warmth * 0.054
+        set rock_blue to (0.128 + material_variation * 0.059) + rock_warmth * 0.045
+        set ground_red to meadow_red * (1.0 - exposed_rock) + rock_red * exposed_rock
+        set ground_green to meadow_green * (1.0 - exposed_rock) + rock_green * exposed_rock
+        set ground_blue to meadow_blue * (1.0 - exposed_rock) + rock_blue * exposed_rock
+        set ground_red to ground_red * (1.0 - snow) + 0.78 * snow
+        set ground_green to ground_green * (1.0 - snow) + 0.83 * snow
+        set ground_blue to ground_blue * (1.0 - snow) + 0.87 * snow
 
-    set sunlight to saturate (((normal_x * 0.48) + (normal_y * 0.76)) - (normal_z * 0.44))
-    set sky_fill to saturate (normal_y * 0.5 + 0.5)
-    set material to flowing field at (world_x * 0.72) (world_z * 0.72) 9.4
-    set ground_detail to ridged field at (world_x * 1.91 + 4.0) (world_z * 1.91 - 7.0) 3.8
-    set mineral_detail to flowing field at (world_x * 3.4 - 9.0) (world_z * 3.4 + 2.0) 6.1
-    set exposed_rock to smooth transition from 0.16 to 0.61 at (1.0 - normal_y)
-    set snow to smooth transition from 1.48 to 2.28 at surface_height
-    set ground_red to (0.018 + material * 0.047) + ground_detail * 0.021
-    set ground_green to (0.075 + material * 0.15) + ground_detail * 0.052
-    set ground_blue to (0.052 + material * 0.083) + ground_detail * 0.039
-    set rock_red to (0.115 + material * 0.11) + mineral_detail * 0.087
-    set rock_green to (0.098 + material * 0.075) + mineral_detail * 0.061
-    set rock_blue to (0.105 + material * 0.095) + mineral_detail * 0.073
-    set ground_red to ground_red * (1.0 - exposed_rock) + rock_red * exposed_rock
-    set ground_green to ground_green * (1.0 - exposed_rock) + rock_green * exposed_rock
-    set ground_blue to ground_blue * (1.0 - exposed_rock) + rock_blue * exposed_rock
-    set ground_red to ground_red * (1.0 - snow) + 0.78 * snow
-    set ground_green to ground_green * (1.0 - snow) + 0.84 * snow
-    set ground_blue to ground_blue * (1.0 - snow) + 0.89 * snow
-    set lighting to (0.11 + (sunlight * 1.13)) + (sky_fill * 0.16)
-    set ground_red to ground_red * lighting + sunlight * 0.24
-    set ground_green to ground_green * lighting + sunlight * 0.17
-    set ground_blue to ground_blue * lighting + sunlight * 0.09
+        set material_light to 0.88 + surface_detail * 0.24
+        set lighting to ((0.24 + (sunlight * 1.04)) + (sky_fill * 0.15)) * material_light
+        set ground_red to ground_red * lighting + sunlight * 0.19
+        set ground_green to ground_green * lighting + sunlight * 0.14
+        set ground_blue to ground_blue * lighting + sunlight * 0.085
 
-    # Atmospheric perspective reveals depth without drawing a path or band.
-    set fog to smooth transition from 11.0 to 41.0 at hit_distance
-    set fog_red to 0.19 + sun_halo * 0.16
-    set fog_green to 0.25 + sun_halo * 0.10
-    set fog_blue to 0.31 + sun_halo * 0.05
-    set red to ground_red * (1.0 - fog) + fog_red * fog
-    set green to ground_green * (1.0 - fog) + fog_green * fog
-    set blue to ground_blue * (1.0 - fog) + fog_blue * fog
+        set fog to smooth transition from 36.0 to 94.0 at view_distance
+        set fog_red to 0.19 + sun_halo * 0.17
+        set fog_green to 0.25 + sun_halo * 0.105
+        set fog_blue to 0.32 + sun_halo * 0.052
+        set red to ground_red * (1.0 - fog) + fog_red * fog
+        set green to ground_green * (1.0 - fog) + fog_green * fog
+        set blue to ground_blue * (1.0 - fog) + fog_blue * fog
 
-set vignette_radius to the square root of ((screen_x / aspect) * (screen_x / aspect) + screen_y * screen_y)
-set vignette to 0.34 + (1.0 - smooth transition from 0.57 to 1.33 at vignette_radius) * 0.66
-set red to the square root of ((red * vignette) / (1.0 + red * 0.42))
-set green to the square root of ((green * vignette) / (1.0 + green * 0.42))
-set blue to the square root of ((blue * vignette) / (1.0 + blue * 0.42))
-set the fragment color to red green blue 1.0
+    set vignette_radius to the square root of ((screen_x / aspect) * (screen_x / aspect) + screen_y * screen_y)
+    set vignette to 0.38 + (1.0 - smooth transition from 0.58 to 1.34 at vignette_radius) * 0.62
+    set red to the square root of ((red * vignette) / (1.0 + red * 0.38))
+    set green to the square root of ((green * vignette) / (1.0 + green * 0.38))
+    set blue to the square root of ((blue * vignette) / (1.0 + blue * 0.38))
+    set the fragment color to red green blue 1.0

@@ -12,7 +12,8 @@ const expectedToolFiles = [
   "compiler.mjs",
   "config.mjs",
   "generate.mjs",
-  "generate-point-cloud.py"
+  "generate-point-cloud.py",
+  "generate-terrain-grid.mjs"
 ];
 
 for (const relativePath of expectedToolFiles) {
@@ -54,28 +55,65 @@ for (const [index, source] of shaderSources.entries()) {
 }
 assert.doesNotMatch(sharedSource, /function (?:value|fractal) noise\b/i);
 assert.doesNotMatch(sharedSource, /\bcell_[xy]\b/i);
+assert.match(
+  sharedSource,
+  /function simplex field at x y phase/,
+  "Shared shader art must provide a non-square procedural field"
+);
 
 const terrainSource = shaderSources[1];
 assert.match(terrainSource, /function terrain height at x z/);
-assert.match(terrainSource, /while march_step < \d+ and not terrain_hit/);
-assert.match(terrainSource, /set surface_height to terrain height at sample_x sample_z/);
-assert.match(terrainSource, /set ridge_three /);
-assert.match(terrainSource, /set alpine_peaks /);
-assert.match(terrainSource, /set ground_detail /);
+assert.match(terrainSource, /if this is a vertex shader/);
+assert.match(terrainSource, /set the shader interpolant named "terrain_position"/);
+assert.match(terrainSource, /set the shader interpolant named "terrain_normal"/);
+assert.match(terrainSource, /set the shader interpolant named "terrain_material"/);
+assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain_position"/);
+assert.match(terrainSource, /the shader interpolant [xyz] named "terrain_normal"/);
+assert.match(terrainSource, /the shader interpolant x named "terrain_material"/);
+assert.match(terrainSource, /the shader interpolant y named "terrain_material"/);
+assert.match(terrainSource, /set displaced_height to terrain height at world_x world_z/);
+assert.match(terrainSource, /set depth_fraction to the vertex y/);
+assert.match(terrainSource, /set view_distance to 0\.45 \+ \(depth_fraction \* depth_fraction\)/);
+assert.match(terrainSource, /set mountain_ridge /);
+assert.match(terrainSource, /set erosion_channels /);
+assert.match(terrainSource, /set exposed_rock /);
+assert.match(terrainSource, /set snow /);
+assert.match(terrainSource, /simplex field at/);
+assert.doesNotMatch(
+  terrainSource,
+  /\b(?:signed flow|ridged field) at\b/,
+  "Terrain must not be assembled from periodic wave ridges"
+);
+assert.doesNotMatch(terrainSource, /\b(?:march_step|terrain_hit|hit_distance|refinement|ray_step)\b/);
 assert.doesNotMatch(terrainSource, /\briver\b/i);
 
 const nanoSource = shaderSources[2];
+assert.equal(
+  (nanoSource.match(/set moment to the minimum of time and 10\.40/g) ?? []).length,
+  2,
+  "The one-shot nano choreography must hold its completed Vitruvian frame"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /set moment to \(fractional part of \(time \/ 11\.0\)\) \* 11\.0/,
+  "The nano choreography must not loop back to the motorcycle before the next scene covers it"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /\bcrystal(?: distance|_visibility|_light)\b/i,
+  "The nano sequence must move directly between the motorcycle and Vitruvian figure"
+);
 for (const threeDimensionalDetail of [
-  "motorcycle distance at x y z",
-  "camera_ray_x",
-  "camera_ray_y",
-  "camera_ray_z",
-  "sample_z",
   "motorcycle_yaw",
-  "wheel_depth",
+  "packed_x",
+  "target_quantized_x",
+  "motorcycle_quantized_x",
+  "motorcycle_local_x",
+  "motorcycle_ndc_x",
+  "target_ndc_x",
   "this is a vertex shader",
   "shader render pass",
-  "volumetric point"
+  "persistent point"
 ]) {
   assert.match(
     nanoSource,
@@ -83,16 +121,140 @@ for (const threeDimensionalDetail of [
     `Nano choreography must define ${threeDimensionalDetail.replaceAll("_", " ")}`
   );
 }
-assert.match(nanoSource, /while ray_step < \d+ and not ray_finished/);
+assert.doesNotMatch(
+  nanoSource,
+  /motorcycle distance at x y z|while ray_step|surface_drones|surface_hit|hologram_glow|motorcycle_part|wheel_center_x|shell_center_x|frame_start_x|rider_center_x/,
+  "The motorcycle must come from paired geometry points, not a raymarch or runtime geometry generator"
+);
+const pointLight = Object.fromEntries(
+  ["red", "green", "blue"].map((channel) => {
+    const match = nanoSource.match(
+      new RegExp(`set point_${channel} to ([\\d.]+) \\+ [^\\n]+ \\* ([\\d.]+)`)
+    );
+    assert.ok(match, `Vitruvian ${channel} point-light channel must be explicit`);
+    return [channel, Number(match[1]) + Number(match[2])];
+  })
+);
+assert.ok(pointLight.red >= 0.25, "Vitruvian red points must remain visible");
+assert.ok(pointLight.green >= 0.4, "Vitruvian green points must remain visible");
+assert.ok(pointLight.blue >= 0.75, "Vitruvian blue points must remain visible");
 assert.match(
   nanoSource,
-  /set point_size to .* \/ width/,
-  "Volumetric points must keep a resolution-independent physical footprint"
+  /set relative_point_size to 0\.00104 \* \(0\.96 \+ render_pass \* 0\.04\)/,
+  "Every volumetric point must use the same viewport-relative footprint"
 );
 assert.match(
   nanoSource,
-  /set figure_offset_x to .*smooth transition/,
-  "The Vitruvian composition must move clear of the headline on wide viewports"
+  /set point_size_x to relative_point_size \/ aspect/,
+  "Point width must compensate for viewport aspect ratio"
+);
+assert.match(
+  nanoSource,
+  /set point_size_y to relative_point_size/,
+  "Point height must remain a fixed fraction of viewport height"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /point_size to [^\n]*\/ width/,
+  "Point size must not remain fixed in physical framebuffer pixels"
+);
+assert.match(
+  nanoSource,
+  /set triangle_corner to the vertex w/,
+  "Geometry must encode only the triangle corner, without point-weight groups"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /\b(?:point_group|build_wave)\b/,
+  "The figure must not use region-specific weights or a build-wave visibility mask"
+);
+for (const swarmMotion of [
+  "drone_delay",
+  "assembly_progress",
+  "flight_arc",
+  "assembled_ndc_x",
+  "assembled_ndc_y"
+]) {
+  assert.match(
+    nanoSource,
+    new RegExp(`\\b${swarmMotion}\\b`),
+    `The motorcycle drones must define ${swarmMotion.replaceAll("_", " ")}`
+  );
+}
+assert.match(
+  nanoSource,
+  /set assembly_progress to smooth transition from \(4\.45 \+ drone_delay\) to \(6\.65 \+ drone_delay\) at moment/,
+  "Each drone must receive a long, stable, staggered flight window"
+);
+assert.match(
+  nanoSource,
+  /set assembled_ndc_x to motorcycle_ndc_x \+ \(target_ndc_x - motorcycle_ndc_x\) \* assembly_progress \+ flight_x/,
+  "The same points must fly directly from motorcycle positions into their final model positions"
+);
+assert.match(
+  nanoSource,
+  /set flight_arc to \(the sine of \(assembly_progress \* 3\.14159265\)\)/,
+  "Curved flight must converge exactly at both endpoint shapes"
+);
+assert.match(
+  nanoSource,
+  /set drone_seed_a to \(\(the sine of \(\(\(point_x \* 3\.13\) \+ \(point_y \* 2\.71\)\) \+ \(point_z \* 4\.19\)\)\) \* 0\.5\) \+ 0\.5/,
+  "Neighboring drones must follow a continuous flock field instead of random-looking paths"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /\b(?:swarm_x|swarm_y|swarm_z)\b/,
+  "The transition must not pass through an unrelated synthetic cloud"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /\bfigure_offset_x\b/,
+  "The Vitruvian figure must not receive a horizontal viewport offset"
+);
+assert.match(
+  nanoSource,
+  /set target_ndc_x to \(target_turned_x \* horizontal_scale\) \/ target_depth/,
+  "The Vitruvian target must remain centered in its perspective projection"
+);
+for (const radiusMeasurement of [
+  "measurement_angle",
+  "radius_center_y",
+  "radius_end_x",
+  "radius_end_y",
+  "radius_line",
+  "radius_tick",
+  "circle_highlight"
+]) {
+  assert.match(
+    nanoSource,
+    new RegExp(`\\b${radiusMeasurement}\\b`),
+    `The Vitruvian measurement must define ${radiusMeasurement.replaceAll("_", " ")}`
+  );
+}
+assert.match(
+  nanoSource,
+  /distance from point screen_x screen_y to segment 0\.0 radius_center_y radius_end_x radius_end_y/,
+  "The measurement line must extend from the model center to the circle"
+);
+assert.match(
+  nanoSource,
+  /set radius_end_x to circle_turned_x \* 1\.66 \/ circle_depth/,
+  "The radius endpoint must use the same perspective projection as the circle"
+);
+assert.match(
+  nanoSource,
+  /set measurement_visibility to smooth transition from 7\.55 to 8\.10 at moment/,
+  "The measurement must remain visible for the completed one-shot composition"
+);
+assert.match(
+  nanoSource,
+  /set measurement_angle to \(time - 7\.55\) \* 1\.32/,
+  "The measurement must keep rotating after the one-shot choreography clock stops"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /set measurement_angle to \(moment -/,
+  "The measurement angle must not use the clamped choreography clock"
 );
 assert.doesNotMatch(
   nanoSource,
@@ -119,7 +281,7 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 2);
+assert.equal(manifest.schemaVersion, 5);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -134,14 +296,73 @@ for (let index = 0; index < manifest.scenes.length; index += 1) {
   assert.match(record.shaders.fragment.hash, /^[a-f0-9]{64}$/);
   assert.ok(Array.isArray(record.semanticTokens) && record.semanticTokens.length > 0);
   assert.ok(Array.isArray(record.uniforms) && record.uniforms.length >= 3);
+  const expectedUniformNames = configured.id === "nano-choreography"
+    ? ["time", "width", "height", "render_pass"]
+    : ["time", "width", "height"];
   assert.deepEqual(
     new Set(record.uniforms.map((uniform) => uniform.name)),
-    new Set(["time", "width", "height", ...(configured.geometry ? ["render_pass"] : [])])
+    new Set(expectedUniformNames)
   );
   const glsl = fs.readFileSync(path.join(projectDir, configured.fragment), "utf8");
   assert.match(glsl, /^#version 300 es/);
   assert.match(glsl, /void main/);
 }
+
+const terrainConfig = shaderConfig.scenes[1];
+const terrainRecord = manifest.scenes[1];
+assert.equal(terrainConfig.geometry.generator, "camera-grid");
+assert.equal(terrainRecord.shaders.vertex.path, terrainConfig.vertex.replace(/^web\//, ""));
+assert.match(terrainRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
+assert.equal(terrainRecord.geometry.path, terrainConfig.geometry.path.replace(/^web\//, ""));
+assert.equal(terrainRecord.geometry.format, "float32x4");
+assert.equal(terrainRecord.geometry.attributeEncoding, "terrain-grid");
+assert.equal(terrainRecord.geometry.primitive, "triangles");
+assert.equal(
+  terrainRecord.geometry.vertexCount,
+  3 + (terrainConfig.geometry.columns + 1) * (terrainConfig.geometry.rows + 1)
+);
+assert.equal(terrainRecord.geometry.indices.path, terrainConfig.geometry.indexPath.replace(/^web\//, ""));
+assert.equal(terrainRecord.geometry.indices.format, "uint16");
+assert.equal(terrainRecord.geometry.indices.count, 3 + terrainConfig.geometry.columns * terrainConfig.geometry.rows * 6);
+assert.match(terrainRecord.geometry.indices.hash, /^[a-f0-9]{64}$/);
+assert.deepEqual(terrainRecord.geometry.render, {
+  backgroundPass: false,
+  blendMode: "opaque",
+  depthTest: true
+});
+assert.match(terrainRecord.geometry.hash, /^[a-f0-9]{64}$/);
+const terrainGeometryBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.path));
+assert.equal(
+  terrainGeometryBytes.byteLength,
+  terrainRecord.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
+);
+const terrainGeometryValues = new Float32Array(
+  terrainGeometryBytes.buffer,
+  terrainGeometryBytes.byteOffset,
+  terrainGeometryBytes.byteLength / Float32Array.BYTES_PER_ELEMENT
+);
+assert.deepEqual(
+  [...terrainGeometryValues.slice(0, 12)],
+  [-1, -1, 0, 0, 3, -1, 0, 0, -1, 3, 0, 0],
+  "The terrain geometry must begin with its sky triangle"
+);
+for (let vertex = 3; vertex < terrainRecord.geometry.vertexCount; vertex += 1) {
+  const x = terrainGeometryValues[vertex * 4];
+  const depth = terrainGeometryValues[vertex * 4 + 1];
+  assert.ok(x >= -1 && x <= 1);
+  assert.ok(depth >= 0 && depth <= 1);
+  assert.equal(terrainGeometryValues[vertex * 4 + 2], 0);
+  assert.equal(terrainGeometryValues[vertex * 4 + 3], 1);
+}
+const terrainIndexBytes = fs.readFileSync(path.join(projectDir, terrainConfig.geometry.indexPath));
+assert.equal(terrainIndexBytes.byteLength, terrainRecord.geometry.indices.count * Uint16Array.BYTES_PER_ELEMENT);
+const terrainIndices = new Uint16Array(
+  terrainIndexBytes.buffer,
+  terrainIndexBytes.byteOffset,
+  terrainIndexBytes.byteLength / Uint16Array.BYTES_PER_ELEMENT
+);
+assert.deepEqual([...terrainIndices.slice(0, 3)], [0, 1, 2]);
+assert.ok([...terrainIndices].every((index) => index < terrainRecord.geometry.vertexCount));
 
 const nanoConfig = shaderConfig.scenes[2];
 const nanoRecord = manifest.scenes[2];
@@ -150,22 +371,169 @@ assert.equal(nanoRecord.shaders.vertex.path, nanoConfig.vertex.replace(/^web\//,
 assert.match(nanoRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
 assert.equal(nanoRecord.geometry.path, nanoConfig.geometry.path.replace(/^web\//, ""));
 assert.equal(nanoRecord.geometry.format, "float32x4");
+assert.equal(nanoRecord.geometry.attributeEncoding, "paired-unorm12");
 assert.equal(nanoRecord.geometry.primitive, "triangles");
 assert.ok(nanoRecord.geometry.pointCount >= 30000);
 assert.equal(nanoRecord.geometry.vertexCount, nanoRecord.geometry.pointCount * 3);
+assert.deepEqual(nanoRecord.geometry.render, {
+  backgroundPass: true,
+  blendMode: "additive",
+  depthTest: false
+});
 assert.match(nanoRecord.geometry.hash, /^[a-f0-9]{64}$/);
 const geometryBytes = fs.readFileSync(path.join(projectDir, nanoConfig.geometry.path));
 assert.equal(geometryBytes.byteLength, nanoRecord.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT);
+const geometryValues = new Float32Array(
+  geometryBytes.buffer,
+  geometryBytes.byteOffset,
+  geometryBytes.byteLength / Float32Array.BYTES_PER_ELEMENT
+);
+const targetPoints = [];
+const motorcyclePoints = [];
+for (let vertex = 0; vertex < nanoRecord.geometry.vertexCount; vertex += 1) {
+  for (let axis = 0; axis < 3; axis += 1) {
+    const packedCoordinate = geometryValues[vertex * 4 + axis];
+    assert.ok(
+      Number.isInteger(packedCoordinate)
+        && packedCoordinate >= 0
+        && packedCoordinate <= 16777215,
+      "Each geometry axis must exactly pack one motorcycle and one Vitruvian coordinate"
+    );
+  }
+  if (vertex % 3 === 0) {
+    const target = [];
+    const motorcycle = [];
+    for (let axis = 0; axis < 3; axis += 1) {
+      const packedCoordinate = geometryValues[vertex * 4 + axis];
+      const targetQuantized = Math.floor(packedCoordinate / 4096);
+      const motorcycleQuantized = packedCoordinate - targetQuantized * 4096;
+      target.push((targetQuantized / 4095) * 4 - 2);
+      motorcycle.push((motorcycleQuantized / 4095) * 4 - 2);
+    }
+    targetPoints.push(target);
+    motorcyclePoints.push(motorcycle);
+  }
+  assert.equal(
+    geometryValues[vertex * 4 + 3],
+    vertex % 3,
+    "Geometry must encode only the micro-triangle corner for uniformly weighted points"
+  );
+}
+
+function coordinateCorrelation(firstPoints, secondPoints, axis) {
+  const count = firstPoints.length;
+  const firstMean = firstPoints.reduce((sum, point) => sum + point[axis], 0) / count;
+  const secondMean = secondPoints.reduce((sum, point) => sum + point[axis], 0) / count;
+  let covariance = 0;
+  let firstVariance = 0;
+  let secondVariance = 0;
+  for (let index = 0; index < count; index += 1) {
+    const firstDelta = firstPoints[index][axis] - firstMean;
+    const secondDelta = secondPoints[index][axis] - secondMean;
+    covariance += firstDelta * secondDelta;
+    firstVariance += firstDelta * firstDelta;
+    secondVariance += secondDelta * secondDelta;
+  }
+  return covariance / Math.sqrt(firstVariance * secondVariance);
+}
+
+const horizontalCorrelation = coordinateCorrelation(targetPoints, motorcyclePoints, 0);
+const verticalCorrelation = coordinateCorrelation(targetPoints, motorcyclePoints, 1);
+const planarRootMeanSquareTravel = Math.sqrt(
+  targetPoints.reduce((sum, target, index) => (
+    sum
+      + (target[0] - motorcyclePoints[index][0]) ** 2
+      + (target[1] - motorcyclePoints[index][1]) ** 2
+  ), 0) / targetPoints.length
+);
+assert.ok(
+  horizontalCorrelation > 0.7 && verticalCorrelation > 0.7,
+  "Point correspondence must preserve neighboring horizontal and vertical regions"
+);
+assert.ok(
+  planarRootMeanSquareTravel < 0.6,
+  "Point correspondence must form coherent flights instead of a random dissolving cloud"
+);
 const geometryMetadata = JSON.parse(
   fs.readFileSync(path.join(projectDir, nanoConfig.geometry.metadata), "utf8")
 );
-assert.equal(geometryMetadata.schemaVersion, 1);
-assert.equal(geometryMetadata.license, "CC0-1.0");
-assert.match(geometryMetadata.source.sha256, /^[a-f0-9]{64}$/);
+assert.equal(geometryMetadata.schemaVersion, 4);
+assert.deepEqual(geometryMetadata.coordinateEncoding, {
+  name: "paired-unorm12",
+  quantizationLevels: 4095,
+  coordinateMinimum: -2,
+  coordinateMaximum: 2
+});
+assert.deepEqual(geometryMetadata.pointPairing, {
+  name: "recursive-spatial-bisection",
+  leafPointCount: 64,
+  axisOrder: ["x", "y", "z"]
+});
+assert.equal(geometryMetadata.source.uid, "6c0b99ce8463468fbd00f304dbe7e105");
+assert.equal(geometryMetadata.source.title, "The Vitruvian Man");
+assert.equal(geometryMetadata.source.author, "Fri");
+assert.equal(geometryMetadata.source.license, "CC-BY-4.0");
+assert.equal(
+  geometryMetadata.source.url,
+  "https://sketchfab.com/3d-models/the-vitruvian-man-6c0b99ce8463468fbd00f304dbe7e105"
+);
+assert.match(geometryMetadata.source.archiveSha256, /^[a-f0-9]{64}$/);
+assert.match(geometryMetadata.source.meshSha256, /^[a-f0-9]{64}$/);
+assert.equal(geometryMetadata.source.modelVertexCount, 241794);
+assert.equal(geometryMetadata.source.modelTriangleCount, 483637);
+assert.ok(Array.isArray(geometryMetadata.modifications));
 assert.equal(geometryMetadata.pointCount, nanoRecord.geometry.pointCount);
-assert.ok(geometryMetadata.surfacePointCount >= 20000);
-assert.ok(geometryMetadata.interiorPointCount >= 5000);
-assert.ok(geometryMetadata.headPointCount >= 5000);
+assert.equal(geometryMetadata.motorcyclePointCount, geometryMetadata.pointCount);
+assert.ok(geometryMetadata.surfacePointCount >= 60000);
+assert.ok(geometryMetadata.densityPointCount >= 5000);
+assert.equal("detailPointCount" in geometryMetadata, false);
+assert.equal("alternateArmPointCount" in geometryMetadata, false);
+assert.equal("alternateLegPointCount" in geometryMetadata, false);
+assert.equal(nanoRecord.geometry.attribution.title, geometryMetadata.source.title);
+assert.equal(nanoRecord.geometry.attribution.author, geometryMetadata.source.author);
+assert.equal(nanoRecord.geometry.attribution.license, geometryMetadata.source.license);
+
+const pointCloudGenerator = fs.readFileSync(
+  path.join(projectDir, "tools/homepage-shaders/generate-point-cloud.py"),
+  "utf8"
+);
+assert.match(pointCloudGenerator, /6c0b99ce8463468fbd00f304dbe7e105/);
+assert.match(pointCloudGenerator, /bpy\.ops\.wm\.stl_import/);
+for (const pairedGeometryOperation of [
+  "motorcycle_points",
+  "sample_torus",
+  "sample_ellipsoid",
+  "sample_segment_tube",
+  "spatially_pair_points",
+  "pack_coordinate_pair"
+]) {
+  assert.match(
+    pointCloudGenerator,
+    new RegExp(`def ${pairedGeometryOperation}\\(`),
+    `The geometry generator must define ${pairedGeometryOperation.replaceAll("_", " ")}`
+  );
+}
+assert.doesNotMatch(
+  pointCloudGenerator,
+  /limb_weights|alternate_arms|alternate_legs|append_frame|BODY_OBJECT|EYE_OBJECTS|DETAIL_POINT_COUNT|detail_sampler|detail_points|predicate/,
+  "The selected Vitruvian model must provide its own anatomy with uniform sampling"
+);
+
+const shaderReadme = fs.readFileSync(
+  path.join(projectDir, "tools/homepage-shaders/README.md"),
+  "utf8"
+);
+assert.match(shaderReadme, /--stl/);
+assert.doesNotMatch(shaderReadme, /--blend/);
+
+const attributionPage = fs.readFileSync(
+  path.join(projectDir, "web/wiki/attributions.html"),
+  "utf8"
+);
+assert.match(attributionPage, /The Vitruvian Man/);
+assert.match(attributionPage, />Fri</);
+assert.match(attributionPage, /CC BY 4\.0/);
+assert.match(attributionPage, /6c0b99ce8463468fbd00f304dbe7e105/);
 
 const html = fs.readFileSync(path.join(projectDir, "web/index.html"), "utf8");
 assert.match(html, /<section[^>]+data-live-shader-banner/);
@@ -205,6 +573,8 @@ assert.match(shaderBannerJavascript, /code64/);
 assert.match(shaderBannerJavascript, /mode:\s*"shader"/);
 assert.match(shaderBannerJavascript, /prepareIncomingScene/);
 assert.match(shaderBannerJavascript, /promoteIncomingScene/);
+assert.match(shaderBannerJavascript, /preloadNextScene/);
+assert.match(shaderBannerJavascript, /preloadedShaderIndex/);
 assert.match(shaderBannerJavascript, /updateThoughtAssembly/);
 assert.match(shaderBannerJavascript, /updateThoughtTail/);
 assert.match(shaderBannerJavascript, /visibleCloudGeometry/);
@@ -214,6 +584,11 @@ assert.match(shaderBannerJavascript, /translate\(-1 -1\) scale\(3 3\)/);
 assert.doesNotMatch(shaderBannerJavascript, /initialEntrance/);
 assert.doesNotMatch(shaderBannerJavascript, /transitionEndsAt/);
 assert.doesNotMatch(shaderBannerJavascript, /incomingLayer\.startedAt\s*=\s*timestamp/);
+assert.match(
+  shaderBannerJavascript,
+  /sceneStartedAt\s*=\s*timestamp;\s*updateActiveReadout/,
+  "The promoted shader must receive its complete full-screen banner interval"
+);
 assert.doesNotMatch(shaderBannerJavascript, /thoughtPreview/);
 assert.doesNotMatch(shaderBannerJavascript, /HTMLMediaElement|\.play\(|\.pause\(|webm|mp4|poster/);
 assert.match(sharedRenderer, /getContext\("webgl2"/);
@@ -221,7 +596,12 @@ assert.match(sharedRenderer, /window\.devicePixelRatio \|\| 1/);
 assert.doesNotMatch(sharedRenderer, /Math\.min\(window\.devicePixelRatio/);
 assert.match(sharedRenderer, /gl\.vertexAttribPointer/);
 assert.match(sharedRenderer, /gl\.drawArrays\(gl\.TRIANGLES/);
+assert.match(sharedRenderer, /gl\.drawElements\(gl\.TRIANGLES/);
 assert.match(sharedRenderer, /geometry\.vertexCount/);
+assert.match(sharedRenderer, /depth:\s*true/);
+assert.match(sharedRenderer, /gl\.DEPTH_BUFFER_BIT/);
+assert.match(sharedRenderer, /pass\.depthTest/);
+assert.doesNotMatch(sharedRenderer, /paired-unorm12/);
 assert.match(ideMain, /from "\.\.\/\.\.\/\.\.\/\.\.\/web\/shader-renderer\.js"/);
 
 const styles = [

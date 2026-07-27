@@ -324,8 +324,8 @@ if (kind == IntrinsicKind::Return) {
 if (isExternalCallIntrinsicKind(kind)) {
 	// call: args[1]="library", args[2]="function", args[3]="return type", args[4+]=actual args
 	// variadic call: the fixed argument count is args[4], and actual args begin at args[5].
-	std::string library = getStringLiteral(args[1]);
-	std::string funcName = getStringLiteral(args[2]);
+	std::string library = getCompileTimeString(context, args[1]);
+	std::string funcName = getCompileTimeString(context, args[2]);
 	if (!library.empty() && library != "libc")
 		context.requiredLibraries.insert(library);
 
@@ -590,15 +590,7 @@ if (kind == IntrinsicKind::Property) {
 	DataType instType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
 	ClassDefinition *classDef = instType.isPointer() ? nullptr : instType.classDefinition;
 
-	// Get field name from string literal
-	std::string fieldName;
-	CompileTimeValue propertyValue = resolveStoredCompileTimeValue(args[2], context.flexBindingFrames);
-	if (const auto *propertyName = std::get_if<std::string>(&propertyValue))
-		fieldName = *propertyName;
-	if (fieldName.empty()) {
-		Expression *propExpr = resolveVariableBinding(context, args[2]);
-		fieldName = getStringLiteral(propExpr);
-	}
+	std::string fieldName = getCompileTimeString(context, args[2]);
 
 	// C strings expose a synthetic "data" property so string-library flexes can
 	// operate on both heap strings and string literals without duplicating logic.
@@ -659,17 +651,29 @@ if (kind == IntrinsicKind::Property) {
 }
 
 // Shader I/O intrinsics (only available in --emit-spirv mode)
-if (kind == IntrinsicKind::ShaderInput) {
-	// @intrinsic("shader input", globalName) → load vec4 from named shader input global
-	std::string inputName = getStringLiteral(args[1]);
+if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput) {
+	std::string inputName = getCompileTimeString(context, args[1]);
 	std::string globalName;
-	if (inputName == "FragCoord")
+	if (kind == IntrinsicKind::ShaderInterpolantInput) {
+		globalName = shaderInterpolantGlobalName(inputName);
+		context.registerShaderInterpolantName(inputName);
+	} else if (inputName == "FragCoord") {
 		globalName = "gl_FragCoord";
-	else if (inputName == "Position")
+	} else if (inputName == "Position") {
 		globalName = "in_Position";
-	else
+	} else {
 		crashCompilerBug("unknown shader input reached codegen after type inference");
+	}
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
+	if (!global && kind == IntrinsicKind::ShaderInterpolantInput) {
+		constexpr unsigned spirvInputAddressSpace = 7;
+		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
+		global = new llvm::GlobalVariable(
+			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, globalName, nullptr,
+			llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
+		);
+		global->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+	}
 	requireCompilerInvariant(global != nullptr, "validated shader input is missing its codegen global");
 	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 	llvm::LoadInst *input = builder.CreateLoad(vec4Ty, global, inputName);
@@ -680,7 +684,7 @@ if (kind == IntrinsicKind::ShaderInput) {
 if (kind == IntrinsicKind::ShaderUniform) {
 	// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
 	// The SPIR-V patcher wraps this in a UBO struct with proper decorations
-	std::string uniformName = getStringLiteral(args[1]);
+	std::string uniformName = getCompileTimeString(context, args[1]);
 	requireCompilerInvariant(!uniformName.empty(), "shader uniform reached codegen without a validated name");
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
@@ -696,20 +700,20 @@ if (kind == IntrinsicKind::ShaderUniform) {
 	return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
 }
 
-if (kind == IntrinsicKind::ShaderOutput) {
-	// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
+if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpolantOutput) {
+	const size_t firstValueIndex = kind == IntrinsicKind::ShaderInterpolantOutput ? 2 : 1;
 	llvm::Value *r = nullptr;
 	llvm::Value *g = nullptr;
 	llvm::Value *b = nullptr;
 	llvm::Value *a = nullptr;
-	if (!generateRuntimeValue(args[1], r) || !generateRuntimeValue(args[2], g) || !generateRuntimeValue(args[3], b) ||
-		!generateRuntimeValue(args[4], a))
+	if (!generateRuntimeValue(args[firstValueIndex], r) || !generateRuntimeValue(args[firstValueIndex + 1], g) ||
+		!generateRuntimeValue(args[firstValueIndex + 2], b) || !generateRuntimeValue(args[firstValueIndex + 3], a))
 		return CodegenResult::failure();
 
-	DataType rType = finalizedExpressionType(context, args[1]);
-	DataType gType = finalizedExpressionType(context, args[2]);
-	DataType bType = finalizedExpressionType(context, args[3]);
-	DataType aType = finalizedExpressionType(context, args[4]);
+	DataType rType = finalizedExpressionType(context, args[firstValueIndex]);
+	DataType gType = finalizedExpressionType(context, args[firstValueIndex + 1]);
+	DataType bType = finalizedExpressionType(context, args[firstValueIndex + 2]);
+	DataType aType = finalizedExpressionType(context, args[firstValueIndex + 3]);
 	DataType f32 = {DataType::Kind::Float, 4};
 	r = ensureType(context, r, rType, f32);
 	g = ensureType(context, g, gType, f32);
@@ -723,9 +727,23 @@ if (kind == IntrinsicKind::ShaderOutput) {
 	color = builder.CreateInsertElement(color, g, getVectorLaneIndexValue(context, 1), "color_g");
 	color = builder.CreateInsertElement(color, r, getVectorLaneIndexValue(context, 0), "color_r");
 
-	// Find the output global: gl_FragColor (fragment) or gl_Position (vertex)
-	std::string outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
+	std::string outName;
+	if (kind == IntrinsicKind::ShaderInterpolantOutput) {
+		std::string interpolantName = getCompileTimeString(context, args[1]);
+		outName = shaderInterpolantGlobalName(interpolantName);
+		context.registerShaderInterpolantName(interpolantName);
+	} else {
+		outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
+	}
 	llvm::GlobalVariable *outGlobal = context.llvmModule->getGlobalVariable(outName);
+	if (!outGlobal && kind == IntrinsicKind::ShaderInterpolantOutput) {
+		constexpr unsigned spirvOutputAddressSpace = 8;
+		outGlobal = new llvm::GlobalVariable(
+			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, outName, nullptr,
+			llvm::GlobalValue::NotThreadLocal, spirvOutputAddressSpace
+		);
+		outGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
+	}
 	requireCompilerInvariant(outGlobal != nullptr, "validated shader output is missing its codegen global");
 	llvm::StoreInst *store = builder.CreateStore(color, outGlobal);
 	store->setMetadata(shaderOutputMetadataName, llvm::MDNode::get(*context.llvmContext, {}));

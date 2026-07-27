@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHomepageShaderCompiler } from "./compiler.mjs";
 import { shaderConfig } from "./config.mjs";
+import { generateTerrainGrid } from "./generate-terrain-grid.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(toolDirectory, "../..");
@@ -78,6 +79,138 @@ function writeOrCheck(relativePath, content) {
   fs.renameSync(pendingPath, outputPath);
 }
 
+function writeBufferOrCheck(relativePath, content) {
+  const outputPath = absolute(relativePath);
+  if (checkOnly) {
+    if (!fs.existsSync(outputPath) || !fs.readFileSync(outputPath).equals(content)) {
+      throw new Error(`Generated geometry output is stale: ${relativePath}`);
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  const pendingPath = `${outputPath}.pending`;
+  fs.writeFileSync(pendingPath, content);
+  fs.renameSync(pendingPath, outputPath);
+}
+
+function geometryRecord(geometry, data, vertexCount, additions = {}) {
+  if (
+    geometry.attributeEncoding.length === 0
+    || typeof geometry.render?.backgroundPass !== "boolean"
+    || !["opaque", "additive"].includes(geometry.render.blendMode)
+    || typeof geometry.render.depthTest !== "boolean"
+    || !Number.isInteger(vertexCount)
+    || vertexCount <= 0
+    || data.byteLength !== vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT
+  ) {
+    throw new Error(`${geometry.path} has an invalid geometry configuration`);
+  }
+  return {
+    path: geometry.path.replace(/^web\//, ""),
+    hash: sha256(data),
+    format: "float32x4",
+    attributeEncoding: geometry.attributeEncoding,
+    primitive: "triangles",
+    vertexCount,
+    render: geometry.render,
+    ...additions
+  };
+}
+
+function uint16IndexRecord(relativePath, data, count) {
+  if (
+    typeof relativePath !== "string"
+    || relativePath.length === 0
+    || !Number.isInteger(count)
+    || count <= 0
+    || data.byteLength !== count * Uint16Array.BYTES_PER_ELEMENT
+  ) {
+    throw new Error(`${relativePath} has an invalid index configuration`);
+  }
+  return {
+    path: relativePath.replace(/^web\//, ""),
+    hash: sha256(data),
+    format: "uint16",
+    count
+  };
+}
+
+function pairedPointCloudRecord(geometry) {
+  const geometryData = requireBuffer(geometry.path);
+  const geometryMetadata = JSON.parse(requireFile(geometry.metadata));
+  if (
+    geometryMetadata.schemaVersion !== 4
+    || !Number.isInteger(geometryMetadata.pointCount)
+    || geometryMetadata.pointCount <= 0
+    || geometryMetadata.motorcyclePointCount !== geometryMetadata.pointCount
+    || !Number.isInteger(geometryMetadata.surfacePointCount)
+    || !Number.isInteger(geometryMetadata.densityPointCount)
+    || geometryMetadata.surfacePointCount
+      + geometryMetadata.densityPointCount !== geometryMetadata.pointCount
+    || geometryData.byteLength !== geometryMetadata.pointCount * 3 * 4 * Float32Array.BYTES_PER_ELEMENT
+    || geometryMetadata.coordinateEncoding?.name !== geometry.attributeEncoding
+    || geometryMetadata.coordinateEncoding?.quantizationLevels !== 4095
+    || geometryMetadata.coordinateEncoding?.coordinateMinimum !== -2
+    || geometryMetadata.coordinateEncoding?.coordinateMaximum !== 2
+    || geometryMetadata.pointPairing?.name !== "recursive-spatial-bisection"
+    || geometryMetadata.pointPairing?.leafPointCount !== 64
+    || !Array.isArray(geometryMetadata.pointPairing?.axisOrder)
+    || geometryMetadata.pointPairing.axisOrder.length !== 3
+    || geometryMetadata.pointPairing.axisOrder.some(
+      (axis, index) => axis !== ["x", "y", "z"][index]
+    )
+    || typeof geometryMetadata.source?.uid !== "string"
+    || typeof geometryMetadata.source?.title !== "string"
+    || typeof geometryMetadata.source?.author !== "string"
+    || typeof geometryMetadata.source?.authorUrl !== "string"
+    || typeof geometryMetadata.source?.url !== "string"
+    || typeof geometryMetadata.source?.license !== "string"
+    || typeof geometryMetadata.source?.licenseUrl !== "string"
+    || !/^[a-f0-9]{64}$/.test(geometryMetadata.source?.archiveSha256)
+    || !/^[a-f0-9]{64}$/.test(geometryMetadata.source?.meshSha256)
+    || !Array.isArray(geometryMetadata.modifications)
+    || geometryMetadata.modifications.length === 0
+    || geometryMetadata.modifications.some((entry) => typeof entry !== "string")
+  ) {
+    throw new Error(`${geometry.metadata} does not describe ${geometry.path}`);
+  }
+  return geometryRecord(
+    geometry,
+    geometryData,
+    geometryMetadata.pointCount * 3,
+    {
+      pointCount: geometryMetadata.pointCount,
+      attribution: {
+        title: geometryMetadata.source.title,
+        author: geometryMetadata.source.author,
+        authorUrl: geometryMetadata.source.authorUrl,
+        sourceUrl: geometryMetadata.source.url,
+        license: geometryMetadata.source.license,
+        licenseUrl: geometryMetadata.source.licenseUrl,
+        modifications: geometryMetadata.modifications
+      }
+    }
+  );
+}
+
+function configuredGeometryRecord(geometry) {
+  if (geometry.generator === "camera-grid") {
+    const generated = generateTerrainGrid(geometry.columns, geometry.rows);
+    writeBufferOrCheck(geometry.path, generated.data);
+    writeBufferOrCheck(geometry.indexPath, generated.indices);
+    return geometryRecord(
+      geometry,
+      generated.data,
+      generated.vertexCount,
+      { indices: uint16IndexRecord(geometry.indexPath, generated.indices, generated.indexCount) }
+    );
+  }
+  if (geometry.generator === "paired-point-cloud") {
+    return pairedPointCloudRecord(geometry);
+  }
+  throw new Error(`Unsupported geometry generator: ${geometry.generator}`);
+}
+
 const compiler = await createHomepageShaderCompiler(projectDirectory);
 const records = [];
 let semanticLegend = null;
@@ -131,30 +264,13 @@ for (const scene of shaderConfig.scenes) {
   };
 
   if (scene.geometry) {
-    const geometryData = requireBuffer(scene.geometry.path);
-    const geometryMetadata = JSON.parse(requireFile(scene.geometry.metadata));
-    if (
-      geometryMetadata.schemaVersion !== 1
-      || !Number.isInteger(geometryMetadata.pointCount)
-      || geometryMetadata.pointCount <= 0
-      || geometryData.byteLength !== geometryMetadata.pointCount * 3 * 4 * Float32Array.BYTES_PER_ELEMENT
-    ) {
-      throw new Error(`${scene.geometry.metadata} does not describe ${scene.geometry.path}`);
-    }
-    record.geometry = {
-      path: scene.geometry.path.replace(/^web\//, ""),
-      hash: sha256(geometryData),
-      format: "float32x4",
-      primitive: "triangles",
-      pointCount: geometryMetadata.pointCount,
-      vertexCount: geometryMetadata.pointCount * 3
-    };
+    record.geometry = configuredGeometryRecord(scene.geometry);
   }
   records.push(record);
 }
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 2,
+  schemaVersion: 5,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;

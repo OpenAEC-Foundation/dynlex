@@ -1,25 +1,58 @@
 {
-  "alternateArmPointCount": 5000,
-  "alternateLegPointCount": 4000,
-  "format": "float32x4",
-  "framePointCount": 3600,
-  "generatorSeed": 3609075750,
-  "headPointCount": 8392,
-  "interiorPointCount": 7000,
-  "license": "CC0-1.0",
-  "pointCount": 55085,
-  "primitive": "triangles",
-  "schemaVersion": 1,
-  "source": {
-    "eyeObjects": [
-      "GEO-body_male_realistic.eye.L",
-      "GEO-body_male_realistic.eye.R"
-    ],
-    "object": "GEO-body_male_realistic",
-    "page": "https://commons.wikimedia.org/wiki/File:Body_male_realistic_by_Dan_Ulrich_(CC0).stl",
-    "sha256": "660e245812ef56768bc71293bd4c8bc1fd19a63710e16aafc8258a7351cbc35e",
-    "url": "https://download.blender.org/demo/bundles/bundles-3.6/human_base_meshes_bundle.blend"
+  "coordinateEncoding": {
+    "coordinateMaximum": 2.0,
+    "coordinateMinimum": -2.0,
+    "name": "paired-unorm12",
+    "quantizationLevels": 4095
   },
-  "surfacePointCount": 35485,
-  "vertexCount": 165255
+  "densityPointCount": 8000,
+  "format": "float32x4",
+  "generatorSeed": 3609075750,
+  "modifications": [
+    "Centered and uniformly scaled from the pinned STL.",
+    "Converted to deterministic surface and inward-density points.",
+    "Paired spatially neighboring target and motorcycle regions recursively.",
+    "Expanded into micro-triangles for the DynLex WebGL renderer."
+  ],
+  "motorcyclePointCount": 76000,
+  "pointCount": 76000,
+  "pointPairing": {
+    "axisOrder": [
+      "x",
+      "y",
+      "z"
+    ],
+    "leafPointCount": 64,
+    "name": "recursive-spatial-bisection"
+  },
+  "primitive": "triangles",
+  "schemaVersion": 4,
+  "source": {
+    "archiveSha256": "7a00f51606aa4142484e7f3ba6d153bf7bdcec43da5640d1f73f082e95440a53",
+    "author": "Fri",
+    "authorUrl": "https://sketchfab.com/manhiac",
+    "bounds": {
+      "maximum": [
+        3.4903900623321533,
+        0.47857746481895447,
+        3.5
+      ],
+      "minimum": [
+        1.3589512093403755e-07,
+        -0.3458593785762787,
+        1.1193840521173115e-07
+      ]
+    },
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "meshFile": "Vitruvian.stl",
+    "meshSha256": "093d1f10df3f7d1b1a1df7f92863966f54e379a168e0826ff15f187b7cf4f9b4",
+    "modelTriangleCount": 483637,
+    "modelVertexCount": 241794,
+    "title": "The Vitruvian Man",
+    "uid": "6c0b99ce8463468fbd00f304dbe7e105",
+    "url": "https://sketchfab.com/3d-models/the-vitruvian-man-6c0b99ce8463468fbd00f304dbe7e105"
+  },
+  "surfacePointCount": 68000,
+  "vertexCount": 228000
 }

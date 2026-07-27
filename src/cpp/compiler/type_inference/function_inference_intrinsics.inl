@@ -18,12 +18,18 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 	}
 	if (isShaderRuntimeIntrinsicKind(kind)) {
-		if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
+		const bool hasNamedShaderResource =
+			kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput ||
+			kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform;
+		if (hasNamedShaderResource) {
 			CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
 			const std::string *name = std::get_if<std::string>(&nameValue);
-			if (!name) {
+			if (!name || ((kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput) &&
+						  name->empty())) {
 				std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
-																					: "shader uniform requires string literal";
+												 : kind == IntrinsicKind::ShaderUniform
+													 ? "shader uniform requires string literal"
+													 : "shader interpolant requires string literal";
 				context.fail(
 					Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0,
 					false
@@ -57,6 +63,25 @@ case Expression::Kind::IntrinsicCall: {
 						);
 						break;
 					}
+				}
+			}
+			if (context.parseContext.options.emitSPIRV &&
+				(kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput)) {
+				const bool isVertex = context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex;
+				const bool available = (kind == IntrinsicKind::ShaderInterpolantOutput) == isVertex;
+				if (!available) {
+					std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInterpolantInput
+														 ? "shader interpolant input unavailable"
+														 : "shader interpolant output unavailable";
+					failWithDetail(
+						expr->arguments[1]->range,
+						renderConfiguredMessage(
+							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), diagnosticKey, "message",
+							{{"name", *name}}
+						),
+						0
+					);
+					break;
 				}
 			}
 		}

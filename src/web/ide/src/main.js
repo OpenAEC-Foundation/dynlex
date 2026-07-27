@@ -1,5 +1,8 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
-import { createShaderPreview } from "../../../../web/shader-renderer.js";
+import {
+  createShaderPreview,
+  validateShaderGeometryDescriptor
+} from "../../../../web/shader-renderer.js";
 import "./styles.css";
 
 self.MonacoEnvironment = {
@@ -178,6 +181,14 @@ function shouldAutoRunOnStartup() {
   return value === "1" || value === "true";
 }
 
+function isShaderAssetPath(value) {
+  return (
+    typeof value === "string"
+    && /^shaders\/[a-zA-Z0-9./-]+$/.test(value)
+    && !value.split("/").includes("..")
+  );
+}
+
 function getShaderRendererConfig() {
   const encoded = queryParams.get("renderer64");
   if (encoded === null) {
@@ -191,17 +202,12 @@ function getShaderRendererConfig() {
   const geometry = renderer?.geometry;
   if (
     !geometry
-    || geometry.format !== "float32x4"
-    || geometry.primitive !== "triangles"
-    || !Number.isInteger(geometry.pointCount)
-    || geometry.pointCount <= 0
-    || geometry.vertexCount !== geometry.pointCount * 3
-    || typeof geometry.path !== "string"
-    || !/^shaders\/[a-zA-Z0-9./-]+$/.test(geometry.path)
-    || geometry.path.split("/").includes("..")
+    || !isShaderAssetPath(geometry.path)
+    || (geometry.indices !== undefined && !isShaderAssetPath(geometry.indices.path))
   ) {
     throw new Error("Invalid shader renderer configuration");
   }
+  validateShaderGeometryDescriptor(geometry);
   return Object.freeze({ geometry: Object.freeze(geometry) });
 }
 
@@ -209,17 +215,28 @@ async function loadShaderRenderer(config) {
   if (config === null) {
     return null;
   }
-  const response = await fetch(`/${config.geometry.path}`);
-  if (!response.ok) {
+  const [geometryResponse, indexResponse] = await Promise.all([
+    fetch(`/${config.geometry.path}`),
+    config.geometry.indices ? fetch(`/${config.geometry.indices.path}`) : null
+  ]);
+  if (!geometryResponse.ok || (indexResponse && !indexResponse.ok)) {
     throw new Error("Shader geometry could not be loaded");
   }
-  const data = await response.arrayBuffer();
-  const expectedBytes = config.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT;
-  if (data.byteLength !== expectedBytes) {
-    throw new Error("Shader geometry size does not match its renderer configuration");
-  }
+  const [data, indexData] = await Promise.all([
+    geometryResponse.arrayBuffer(),
+    indexResponse ? indexResponse.arrayBuffer() : null
+  ]);
+  const indices = config.geometry.indices
+    ? Object.freeze({ ...config.geometry.indices, data: indexData })
+    : undefined;
+  const geometry = Object.freeze({
+    ...config.geometry,
+    data,
+    ...(indices ? { indices } : {})
+  });
+  validateShaderGeometryDescriptor(geometry, true);
   return Object.freeze({
-    geometry: Object.freeze({ ...config.geometry, data })
+    geometry
   });
 }
 

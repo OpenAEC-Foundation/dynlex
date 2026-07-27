@@ -13,6 +13,10 @@ const incomingTimeBinding = shaderManifest.scenes[1].uniforms.find(
   (uniform) => uniform.name === "time"
 )?.binding;
 assert.ok(Number.isInteger(incomingTimeBinding), "The incoming shader must reflect its time uniform");
+const nanoTimeBinding = shaderManifest.scenes[2].uniforms.find(
+  (uniform) => uniform.name === "time"
+)?.binding;
+assert.ok(Number.isInteger(nanoTimeBinding), "The volumetric shader must reflect its time uniform");
 
 const targets = await fetch(`${cdpOrigin}/json/list`).then((response) => response.json());
 const pageTarget = targets.find((target) => target.type === "page");
@@ -183,6 +187,18 @@ await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.shaderPlaylistReady === 'true'",
   "the live shader playlist"
 );
+await waitFor(
+  "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '1'"
+    + " && !document.querySelector('[data-shader-next]').disabled",
+  "the second shader to preload while the first shader renders"
+);
+const firstPreloadedShaderState = await evaluate(`(() => {
+  const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
+  return {
+    layer: canvas.parentElement.dataset.shaderLayer,
+    revision: Number(canvas.dataset.previewRevision)
+  };
+})()`);
 const shaderState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
   const immersiveCanvas = section.querySelector('[data-shader-layer]:not([data-layer-state="dormant"]) canvas');
@@ -277,6 +293,37 @@ assert.equal(immersiveChrome.headerIsTopLayer, true, "The fixed site header must
 assert.ok(immersiveChrome.headlineOpacity >= 0.78, "The banner headline must remain visible over the shader");
 await evaluate("document.querySelector('[data-shader-next]').click()");
 await waitFor(
+  "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'",
+  "the preloaded shader to enter its pre-expansion state"
+);
+const preparedThought = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
+  const cloudRect = section.querySelector('.thought-assembly').getBoundingClientRect();
+  const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
+  const revealingRect = revealingLayer.getBoundingClientRect();
+  return {
+    layer: revealingLayer.dataset.shaderLayer,
+    revision: Number(revealingLayer.querySelector('canvas').dataset.previewRevision),
+    renderAreaMatchesCloud: (
+      Math.abs(revealingRect.left - cloudRect.left) <= 2
+      && Math.abs(revealingRect.top - cloudRect.top) <= 2
+      && Math.abs(revealingRect.width - cloudRect.width) <= 2
+      && Math.abs(revealingRect.height - cloudRect.height) <= 2
+    )
+  };
+})()`);
+assert.equal(preparedThought.layer, firstPreloadedShaderState.layer);
+assert.equal(
+  preparedThought.revision,
+  firstPreloadedShaderState.revision,
+  "Revealing the next shader must reuse the program compiled while the previous shader rendered"
+);
+assert.equal(
+  preparedThought.renderAreaMatchesCloud,
+  true,
+  "The shader render surface must begin at the thought-cloud bounds"
+);
+await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
     + " && Number(getComputedStyle(document.querySelector('.shader-laptop')).opacity) > 0.75",
   "the next shader code to appear over the outgoing shader"
@@ -286,12 +333,9 @@ const overlappingThoughts = await evaluate(`(() => {
   const code = section.querySelector('[data-shader-code]');
   const originDot = section.querySelector('[data-thought-origin-dot]');
   const cloudDot = section.querySelector('[data-thought-cloud-dot]');
-  const cloudGuide = section.querySelector('.thought-assembly');
   const activeLayer = section.querySelector('[data-layer-state="active"]');
   const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
   const codeRect = code.getBoundingClientRect();
-  const cloudRect = cloudGuide.getBoundingClientRect();
-  const revealingRect = revealingLayer.getBoundingClientRect();
   const originRect = originDot.getBoundingClientRect();
   const center = (rect) => ({
     x: rect.left + rect.width / 2,
@@ -314,12 +358,6 @@ const overlappingThoughts = await evaluate(`(() => {
     activeLayerState: activeLayer?.dataset.layerState,
     revealingLayerState: revealingLayer?.dataset.layerState,
     revealingLayerIndex: revealingLayer?.dataset.shaderLayer,
-    renderAreaMatchesCloud: (
-      Math.abs(revealingRect.left - cloudRect.left) <= 2
-      && Math.abs(revealingRect.top - cloudRect.top) <= 2
-      && Math.abs(revealingRect.width - cloudRect.width) <= 2
-      && Math.abs(revealingRect.height - cloudRect.height) <= 2
-    ),
     revealingAboveConnector: (
       Number(getComputedStyle(revealingLayer).zIndex)
       > Number(getComputedStyle(originDot.parentElement).zIndex)
@@ -335,11 +373,6 @@ assert.equal(overlappingThoughts.connectorTravelsTowardCloud, true);
 assert.equal(overlappingThoughts.activeLayerState, "active");
 assert.equal(overlappingThoughts.revealingLayerState, "revealing");
 assert.match(overlappingThoughts.revealingLayerIndex, /^[01]$/);
-assert.equal(
-  overlappingThoughts.renderAreaMatchesCloud,
-  true,
-  "The shader render surface must begin at the thought-cloud bounds"
-);
 assert.equal(
   overlappingThoughts.revealingAboveConnector,
   true,
@@ -408,23 +441,36 @@ await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '1'",
   "the next live shader"
 );
+await captureScreenshot("homepage-terrain");
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.path}`)),
   "Advancing must compile the next configured WebGL program"
 );
-assert.equal(
-  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name')`),
-  `${shaderManifest.scenes[1].id}.dl`,
-  "The editor action must track the visible shader"
+const displayedEditorName = await evaluate(`(() => ({
+  file: document.querySelector('[data-shader-file]').textContent,
+  editor: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('name')
+}))()`);
+assert.equal(displayedEditorName.editor, displayedEditorName.file, "The editor action must track the displayed code");
+await waitFor(
+  "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '2'"
+    + " || document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '2'"
+    + " || document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '2'",
+  "the volumetric shader to preload while the terrain shader renders"
 );
 const nextShaderCanvasState = await evaluate(`(() => {
-  const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
+  const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = document.querySelector(
+    'canvas[data-preview-geometry-vertices="${shaderManifest.scenes[2].geometry.vertexCount}"]'
+  );
   return {
     layer: canvas.parentElement.dataset.shaderLayer,
-    revision: Number(canvas.dataset.previewRevision)
+    revision: Number(canvas.dataset.previewRevision),
+    needsAdvance: section.dataset.preloadedShaderIndex === '2'
   };
 })()`);
-await evaluate("document.querySelector('[data-shader-next]').click()");
+if (nextShaderCanvasState.needsAdvance) {
+  await evaluate("document.querySelector('[data-shader-next]').click()");
+}
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '2'",
   "the three-dimensional nano choreography"
@@ -435,16 +481,54 @@ const thirdShaderCanvasState = await evaluate(`(() => {
     layer: canvas.parentElement.dataset.shaderLayer,
     revision: Number(canvas.dataset.previewRevision),
     state: canvas.dataset.previewState,
-    pointCount: Number(canvas.dataset.previewGeometryPoints)
+    vertexCount: Number(canvas.dataset.previewGeometryVertices)
   };
 })()`);
 assert.equal(thirdShaderCanvasState.layer, nextShaderCanvasState.layer);
 assert.equal(thirdShaderCanvasState.state, "ready");
-assert.ok(
-  thirdShaderCanvasState.revision > nextShaderCanvasState.revision,
-  "The third generated shader must compile and replace the active WebGL program"
+assert.equal(
+  thirdShaderCanvasState.revision,
+  nextShaderCanvasState.revision,
+  "The preloaded volumetric program must become active without recompiling at code reveal"
 );
-assert.equal(thirdShaderCanvasState.pointCount, shaderManifest.scenes[2].geometry.pointCount);
+assert.equal(thirdShaderCanvasState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
+assert.ok(
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.vertex.path}`)),
+  "The terrain scene must load its DynLex-compiled displacement vertex shader"
+);
+assert.ok(
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.path}`)),
+  "The terrain scene must load its fixed camera grid"
+);
+assert.ok(
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].geometry.indices.path}`)),
+  "The terrain scene must load its indexed triangle topology"
+);
+const thirdShaderPlaybackState = await evaluate(`(async () => {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = section.querySelector('[data-layer-state="active"] canvas');
+  const gl = canvas.getContext('webgl2');
+  const timeBuffer = gl.getIndexedParameter(gl.UNIFORM_BUFFER_BINDING, ${nanoTimeBinding});
+  if (!timeBuffer) throw new Error('The volumetric shader time buffer is not bound');
+  const value = new Float32Array(1);
+  gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
+  gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
+  return {
+    progress: Number(section.dataset.sceneProgress),
+    shaderTime: value[0]
+  };
+})()`);
+assert.ok(
+  thirdShaderPlaybackState.progress >= 0 && thirdShaderPlaybackState.progress < 1,
+  "The promoted shader must remain inside its full-screen banner interval"
+);
+assert.ok(
+  thirdShaderPlaybackState.shaderTime
+    - thirdShaderPlaybackState.progress * shaderManifest.scenes[2].durationSeconds
+    >= 3.1,
+  "The shader animation must continue from the portion already rendered inside its thought cloud"
+);
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[2].shaders.vertex.path}`)),
   "The volumetric scene must load its DynLex-compiled vertex shader"
@@ -513,10 +597,42 @@ if (screenshotDirectory) {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     })()`);
   };
-  await installFixedNanoFrame(6.5);
+  await installFixedNanoFrame(3.5);
   await captureScreenshot("homepage-nano-motorcycle");
-  await installFixedNanoFrame(9.5);
+  await installFixedNanoFrame(4.85);
+  await captureScreenshot("homepage-nano-flight-departure");
+  await installFixedNanoFrame(5.8);
+  await captureScreenshot("homepage-nano-flight-midpoint");
+  await installFixedNanoFrame(6.75);
+  await captureScreenshot("homepage-nano-flight-landing");
+  await installFixedNanoFrame(8.5);
   await captureScreenshot("homepage-nano-vitruvian");
+  await installFixedNanoFrame(11.2);
+  await captureScreenshot("homepage-nano-measurement-late");
+  await installFixedNanoFrame(13);
+  await captureScreenshot("homepage-nano-after-cycle");
+  await command("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 2,
+    mobile: false
+  });
+  await installFixedNanoFrame(8.5);
+  const highDensityCanvas = await evaluate(`(() => {
+    const canvas = document.querySelector('[data-shader-canvas="immersive"]');
+    return {
+      width: canvas.width,
+      cssWidth: canvas.clientWidth,
+      pixelRatio: window.devicePixelRatio
+    };
+  })()`);
+  assert.equal(highDensityCanvas.pixelRatio, 2);
+  assert.ok(
+    highDensityCanvas.width >= highDensityCanvas.cssWidth * 2,
+    "The relative drone footprint must be rendered and inspected at high pixel density"
+  );
+  await captureScreenshot("homepage-nano-vitruvian-hidpi");
+  await command("Emulation.clearDeviceMetricsOverride");
   await evaluate(`(() => {
     window.__dynlexFixedNanoPreview.setRunning(false);
     delete window.__dynlexFixedNanoPreview;
@@ -704,7 +820,7 @@ const initialShaderState = await evaluate(`(() => {
   return {
     mode: document.documentElement.dataset.workspaceMode,
     revision: Number(canvas.dataset.previewRevision),
-    pointCount: Number(canvas.dataset.previewGeometryPoints),
+    vertexCount: Number(canvas.dataset.previewGeometryVertices),
     canvasHeight: canvas.getBoundingClientRect().height,
     shellHeight: shell.getBoundingClientRect().height,
     toolPanelHeight: toolPanel.getBoundingClientRect().height,
@@ -714,7 +830,7 @@ const initialShaderState = await evaluate(`(() => {
 })()`);
 assert.equal(initialShaderState.mode, "shader");
 assert.ok(initialShaderState.revision >= 1);
-assert.equal(initialShaderState.pointCount, shaderManifest.scenes[2].geometry.pointCount);
+assert.equal(initialShaderState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
 assert.ok(
   initialShaderState.canvasHeight >= initialShaderState.toolPanelHeight * 0.75
     && Math.abs(initialShaderState.canvasHeight - initialShaderState.shellHeight) <= 1,

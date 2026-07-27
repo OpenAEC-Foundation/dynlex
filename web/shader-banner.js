@@ -1,4 +1,7 @@
-import { createShaderPreview } from "./shader-renderer.js";
+import {
+  createShaderPreview,
+  validateShaderGeometryDescriptor
+} from "./shader-renderer.js";
 import { renderSemanticTokens } from "./semantic-highlighting.js";
 
 function required(selector, scope) {
@@ -20,7 +23,7 @@ function code64(source) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 2
+    manifest?.schemaVersion !== 5
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3
@@ -46,18 +49,17 @@ function validateManifest(manifest) {
     if (hasVertexShader !== hasGeometry) {
       throw new Error("Homepage shader geometry and vertex source must be configured together");
     }
-    if (
-      hasGeometry
-      && (
-        scene.geometry.format !== "float32x4"
-        || scene.geometry.primitive !== "triangles"
-        || !Number.isInteger(scene.geometry.pointCount)
-        || scene.geometry.pointCount <= 0
-        || scene.geometry.vertexCount !== scene.geometry.pointCount * 3
-        || typeof scene.geometry.path !== "string"
-      )
-    ) {
-      throw new Error("Invalid homepage shader geometry");
+    if (hasGeometry) {
+      if (
+        typeof scene.geometry.path !== "string"
+        || (
+          scene.geometry.indices !== undefined
+          && typeof scene.geometry.indices.path !== "string"
+        )
+      ) {
+        throw new Error("Invalid homepage shader geometry");
+      }
+      validateShaderGeometryDescriptor(scene.geometry);
     }
     if (ids.has(scene.id)) {
       throw new Error("Duplicate homepage shader id");
@@ -79,23 +81,31 @@ async function loadText(relativePath) {
   return source;
 }
 
+async function loadBinary(relativePath) {
+  const response = await fetch(relativePath);
+  if (!response.ok) {
+    throw new Error(`Unable to load shader geometry: ${relativePath}`);
+  }
+  return response.arrayBuffer();
+}
+
 async function loadSceneProgram(scene) {
   const fragmentSource = await loadText(scene.shaders.fragment.path);
   if (!scene.geometry) {
     return Object.freeze({ fragmentSource });
   }
-  const [vertexSource, geometryResponse] = await Promise.all([
+  const [vertexSource, data, indexData] = await Promise.all([
     loadText(scene.shaders.vertex.path),
-    fetch(scene.geometry.path)
+    loadBinary(scene.geometry.path),
+    scene.geometry.indices ? loadBinary(scene.geometry.indices.path) : null
   ]);
-  if (!geometryResponse.ok) {
-    throw new Error(`Unable to load shader geometry: ${scene.geometry.path}`);
-  }
-  const data = await geometryResponse.arrayBuffer();
+  const indices = scene.geometry.indices
+    ? Object.freeze({ ...scene.geometry.indices, data: indexData })
+    : undefined;
   return Object.freeze({
     fragmentSource,
     vertexSource,
-    geometry: Object.freeze({ ...scene.geometry, data })
+    geometry: Object.freeze({ ...scene.geometry, data, ...(indices ? { indices } : {}) })
   });
 }
 
@@ -220,6 +230,7 @@ export async function createShaderBanner(section) {
   const editorLink = required("[data-shader-editor-link]", section);
   const nextButton = required("[data-shader-next]", section);
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  nextButton.disabled = true;
 
   const manifestResponse = await fetch("shaders/manifest.json");
   if (!manifestResponse.ok) {
@@ -263,6 +274,7 @@ export async function createShaderBanner(section) {
   let sceneStartedAt = performance.now();
   let bannerVisible = true;
   let timelineProgress = 0;
+  let preloadGeneration = 0;
 
   function setLayerState(layer, state) {
     layer.element.dataset.layerState = state;
@@ -308,15 +320,51 @@ export async function createShaderBanner(section) {
     layer.preview.replaceProgram(scenePrograms[sceneIndex], scene.uniforms);
   }
 
+  function preloadNextScene() {
+    if (incomingLayerIndex !== null) {
+      throw new Error("Cannot preload a shader while another shader is being revealed");
+    }
+    const nextSceneIndex = (activeIndex + 1) % manifest.scenes.length;
+    const preloadLayer = layers[1 - activeLayerIndex];
+    if (preloadLayer.element.dataset.layerState !== "dormant") {
+      throw new Error("The next shader must preload on the dormant render layer");
+    }
+    if (preloadLayer.sceneIndex !== nextSceneIndex) {
+      installScene(preloadLayer, nextSceneIndex, performance.now());
+    }
+    section.dataset.preloadedShaderIndex = String(nextSceneIndex);
+    nextButton.disabled = false;
+  }
+
+  function scheduleNextScenePreload() {
+    const generation = ++preloadGeneration;
+    delete section.dataset.preloadedShaderIndex;
+    nextButton.disabled = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (generation !== preloadGeneration) return;
+        preloadNextScene();
+      });
+    });
+  }
+
   function prepareIncomingScene() {
     if (incomingLayerIndex !== null) return;
     const nextSceneIndex = (activeIndex + 1) % manifest.scenes.length;
     incomingLayerIndex = 1 - activeLayerIndex;
     const incomingLayer = layers[incomingLayerIndex];
+    if (
+      incomingLayer.sceneIndex !== nextSceneIndex
+      || section.dataset.preloadedShaderIndex !== String(nextSceneIndex)
+    ) {
+      throw new Error("The incoming shader was not preloaded");
+    }
+    preloadGeneration += 1;
+    delete section.dataset.preloadedShaderIndex;
     setLayerState(incomingLayer, "revealing");
     updateThoughtAssembly(section, shaderCode, thoughtAssembly);
     setRevealGeometry(section, thoughtAssembly, incomingLayer, 0);
-    installScene(incomingLayer, nextSceneIndex, performance.now());
+    incomingLayer.startedAt = performance.now();
     updateLaptopReadout(manifest.scenes[nextSceneIndex]);
     section.dataset.incomingShaderIndex = String(nextSceneIndex);
     section.dataset.incomingShader = manifest.scenes[nextSceneIndex].id;
@@ -332,7 +380,7 @@ export async function createShaderBanner(section) {
     incomingLayerIndex = null;
     delete section.dataset.incomingShaderIndex;
     delete section.dataset.incomingShader;
-    nextButton.disabled = false;
+    preloadNextScene();
   }
 
   function setTimeline(progress) {
@@ -404,20 +452,27 @@ export async function createShaderBanner(section) {
     updateActiveReadout(manifest.scenes[activeIndex], activeIndex);
     delete section.dataset.incomingShaderIndex;
     delete section.dataset.incomingShader;
-    nextButton.disabled = false;
+    nextButton.disabled = true;
     setTimeline(0);
+    scheduleNextScenePreload();
   }
 
   function showReducedScene(index) {
-    const activeLayer = layers[activeLayerIndex];
-    setLayerState(activeLayer, "active");
-    setFullGeometry(section, activeLayer);
-    installScene(activeLayer, index, performance.now());
-    activeIndex = index;
-    sceneStartedAt = activeLayer.startedAt;
-    updateActiveReadout(manifest.scenes[index], index);
+    const nextLayerIndex = 1 - activeLayerIndex;
+    const nextLayer = layers[nextLayerIndex];
+    if (
+      index !== (activeIndex + 1) % manifest.scenes.length
+      || nextLayer.sceneIndex !== index
+      || section.dataset.preloadedShaderIndex !== String(index)
+    ) {
+      throw new Error("Reduced-motion navigation requires a preloaded shader");
+    }
+    preloadGeneration += 1;
+    delete section.dataset.preloadedShaderIndex;
+    incomingLayerIndex = nextLayerIndex;
+    nextLayer.startedAt = performance.now();
     updateLaptopReadout(manifest.scenes[index]);
-    setTimeline(0);
+    promoteIncomingScene(nextLayer.startedAt);
   }
 
   function advanceScene() {
@@ -471,6 +526,7 @@ export async function createShaderBanner(section) {
 
   const initialLayer = layers[activeLayerIndex];
   setLayerState(initialLayer, "active");
+  setLayerState(layers[1 - activeLayerIndex], "dormant");
   setFullGeometry(section, initialLayer);
   installScene(initialLayer, activeIndex, performance.now());
   sceneStartedAt = performance.now();
@@ -480,4 +536,5 @@ export async function createShaderBanner(section) {
   setTimeline(0);
   section.dataset.shaderPlaylistReady = "true";
   requestAnimationFrame(animate);
+  scheduleNextScenePreload();
 }

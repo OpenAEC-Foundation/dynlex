@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the deterministic Vitruvian micro-triangle point cloud with Blender."""
+"""Generate a deterministic density point cloud from the Vitruvian Man STL."""
 
 from __future__ import annotations
 
@@ -13,22 +13,46 @@ import struct
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 from mathutils import Vector
 
 
-SOURCE_URL = "https://download.blender.org/demo/bundles/bundles-3.6/human_base_meshes_bundle.blend"
-SOURCE_PAGE = "https://commons.wikimedia.org/wiki/File:Body_male_realistic_by_Dan_Ulrich_(CC0).stl"
-SOURCE_SHA256 = "660e245812ef56768bc71293bd4c8bc1fd19a63710e16aafc8258a7351cbc35e"
-BODY_OBJECT = "GEO-body_male_realistic"
-EYE_OBJECTS = ("GEO-body_male_realistic.eye.L", "GEO-body_male_realistic.eye.R")
+SOURCE_UID = "6c0b99ce8463468fbd00f304dbe7e105"
+SOURCE_TITLE = "The Vitruvian Man"
+SOURCE_AUTHOR = "Fri"
+SOURCE_AUTHOR_URL = "https://sketchfab.com/manhiac"
+SOURCE_URL = (
+    "https://sketchfab.com/3d-models/"
+    "the-vitruvian-man-6c0b99ce8463468fbd00f304dbe7e105"
+)
+SOURCE_LICENSE = "CC-BY-4.0"
+SOURCE_LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/"
+SOURCE_ARCHIVE_SHA256 = (
+    "7a00f51606aa4142484e7f3ba6d153bf7bdcec43da5640d1f73f082e95440a53"
+)
+SOURCE_MESH_SHA256 = (
+    "093d1f10df3f7d1b1a1df7f92863966f54e379a168e0826ff15f187b7cf4f9b4"
+)
+SOURCE_VERTEX_COUNT = 241_794
+SOURCE_TRIANGLE_COUNT = 483_637
 SEED = 0xD71E_2026
+TARGET_EXTENT = 2.16
+VERTEX_POINT_COUNT = 24_000
+SURFACE_SAMPLE_COUNT = 44_000
+DENSITY_POINT_COUNT = 8_000
+COORDINATE_MINIMUM = -2.0
+COORDINATE_MAXIMUM = 2.0
+QUANTIZATION_LEVELS = 4095
+PACKING_RADIX = QUANTIZATION_LEVELS + 1
+SPATIAL_PAIRING_LEAF_POINT_COUNT = 64
+SPATIAL_PAIRING_AXIS_ORDER = ("x", "y", "z")
 
 
 def arguments() -> argparse.Namespace:
     script_arguments = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
-    parser.add_argument("--blend", required=True, type=Path)
+    parser.add_argument("--stl", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--metadata", required=True, type=Path)
     return parser.parse_args(script_arguments)
@@ -42,199 +66,466 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def smoothstep(lower: float, upper: float, value: float) -> float:
-    normalized = min(1.0, max(0.0, (value - lower) / (upper - lower)))
-    return normalized * normalized * (3.0 - 2.0 * normalized)
-
-
-def rotate_xz(point: Vector, pivot_x: float, pivot_z: float, angle: float) -> Vector:
-    cosine = math.cos(angle)
-    sine = math.sin(angle)
-    relative_x = point.x - pivot_x
-    relative_z = point.z - pivot_z
-    return Vector(
-        (
-            pivot_x + relative_x * cosine - relative_z * sine,
-            point.y,
-            pivot_z + relative_x * sine + relative_z * cosine,
+def source_mesh(path: Path) -> bpy.types.Mesh:
+    actual_sha256 = sha256(path)
+    if actual_sha256 != SOURCE_MESH_SHA256:
+        raise RuntimeError(
+            f"Source STL SHA-256 is {actual_sha256}; expected {SOURCE_MESH_SHA256}"
         )
+
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.delete(use_global=False)
+    bpy.ops.wm.stl_import(filepath=str(path))
+    imported = [item for item in bpy.context.selected_objects if item.type == "MESH"]
+    if len(imported) != 1:
+        raise RuntimeError("The pinned Vitruvian archive must contain exactly one mesh")
+
+    mesh = imported[0].data
+    mesh.validate(verbose=False, clean_customdata=True)
+    if len(mesh.vertices) != SOURCE_VERTEX_COUNT:
+        raise RuntimeError(
+            f"Source STL has {len(mesh.vertices)} vertices; expected {SOURCE_VERTEX_COUNT}"
+        )
+    if len(mesh.polygons) != SOURCE_TRIANGLE_COUNT:
+        raise RuntimeError(
+            f"Source STL has {len(mesh.polygons)} triangles; expected {SOURCE_TRIANGLE_COUNT}"
+        )
+
+    editable = bmesh.new()
+    editable.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(editable, faces=editable.faces)
+    editable.to_mesh(mesh)
+    editable.free()
+    mesh.update()
+    mesh.calc_loop_triangles()
+    return mesh
+
+
+def mesh_transform(mesh: bpy.types.Mesh) -> tuple[Vector, float, list[float], list[float]]:
+    minimum = Vector(
+        tuple(min(vertex.co[axis] for vertex in mesh.vertices) for axis in range(3))
+    )
+    maximum = Vector(
+        tuple(max(vertex.co[axis] for vertex in mesh.vertices) for axis in range(3))
+    )
+    center = (minimum + maximum) * 0.5
+    planar_extent = max(maximum.x - minimum.x, maximum.z - minimum.z)
+    if planar_extent <= 0.0:
+        raise RuntimeError("Source STL has no planar extent")
+    return center, TARGET_EXTENT / planar_extent, list(minimum), list(maximum)
+
+
+def normalized(point: Vector, center: Vector, scale: float) -> tuple[float, float, float]:
+    return (
+        (point.x - center.x) * scale,
+        (point.z - center.z) * scale,
+        (center.y - point.y) * scale,
     )
 
 
-def limb_weights(point: Vector) -> tuple[float, float]:
-    absolute_x = abs(point.x)
-    arm_boundary = 0.18 + max(0.0, point.z - 1.12) * 0.18
-    arm = smoothstep(arm_boundary, arm_boundary + 0.055, absolute_x)
-    arm *= smoothstep(0.68, 0.82, point.z) * (1.0 - smoothstep(1.43, 1.53, point.z))
-    leg = smoothstep(0.97, 0.78, point.z) * smoothstep(0.035, 0.12, absolute_x)
-    return arm, leg
-
-
-def posed(point: Vector, arm_angle: float, leg_angle: float) -> Vector:
-    side = 1.0 if point.x >= 0.0 else -1.0
-    arm_weight, leg_weight = limb_weights(point)
-    transformed = rotate_xz(point, side * 0.225, 1.42, side * arm_angle * arm_weight)
-    transformed = rotate_xz(transformed, side * 0.105, 0.91, side * leg_angle * leg_weight)
-    return transformed
-
-
-def normalized(point: Vector) -> tuple[float, float, float]:
-    return point.x * 2.18, (point.z - 0.90) * 1.15, (point.y + 0.045) * -2.35
-
-
-def triangle_sampler(mesh: bpy.types.Mesh, predicate=None):
-    mesh.calc_loop_triangles()
-    triangles: list[tuple[Vector, Vector, Vector]] = []
+def triangle_sampler(mesh: bpy.types.Mesh):
+    triangles: list[tuple[tuple[int, int, int], Vector]] = []
     cumulative_areas: list[float] = []
     total_area = 0.0
     for triangle in mesh.loop_triangles:
-        vertices = tuple(mesh.vertices[index].co.copy() for index in triangle.vertices)
-        centroid = sum(vertices, Vector()) / 3.0
-        if predicate is not None and not predicate(centroid):
-            continue
+        indices = tuple(triangle.vertices)
+        vertices = tuple(mesh.vertices[index].co for index in indices)
         area = (vertices[1] - vertices[0]).cross(vertices[2] - vertices[0]).length * 0.5
         if area <= 0.0:
             continue
         total_area += area
-        triangles.append(vertices)
+        triangles.append((indices, triangle.normal.copy()))
         cumulative_areas.append(total_area)
     if not triangles:
-        raise RuntimeError("No source triangles matched the requested region")
+        raise RuntimeError("Source STL has no non-degenerate triangles")
     return triangles, cumulative_areas, total_area
 
 
-def sample_triangle(sampler, rng: random.Random) -> Vector:
+def sample_triangle(
+    mesh: bpy.types.Mesh,
+    sampler,
+    rng: random.Random,
+) -> tuple[Vector, Vector]:
     triangles, cumulative_areas, total_area = sampler
-    triangle = triangles[bisect.bisect_left(cumulative_areas, rng.random() * total_area)]
+    triangle_index = bisect.bisect_left(cumulative_areas, rng.random() * total_area)
+    indices, normal = triangles[triangle_index]
+    vertices = tuple(mesh.vertices[index].co for index in indices)
     first = rng.random()
     second = rng.random()
     if first + second > 1.0:
         first = 1.0 - first
         second = 1.0 - second
-    return triangle[0] + (triangle[1] - triangle[0]) * first + (triangle[2] - triangle[0]) * second
+    point = (
+        vertices[0]
+        + (vertices[1] - vertices[0]) * first
+        + (vertices[2] - vertices[0]) * second
+    )
+    return point, normal
 
 
-def sampled_points(sampler, count: int, rng: random.Random, arm_angle: float, leg_angle: float):
-    return [normalized(posed(sample_triangle(sampler, rng), arm_angle, leg_angle)) for _ in range(count)]
-
-
-def append_frame(points: list[tuple[float, float, float, int]], count: int) -> None:
-    for index in range(count):
-        angle = math.tau * index / count
-        points.append((math.cos(angle) * 1.08, math.sin(angle) * 1.08, 0.34, 4))
-    edge_count = count // 4
-    corners = ((-0.84, -1.04), (0.84, -1.04), (0.84, 1.00), (-0.84, 1.00))
-    for edge in range(4):
-        start = corners[edge]
-        end = corners[(edge + 1) % 4]
-        for index in range(edge_count):
-            progress = index / edge_count
-            points.append(
-                (
-                    start[0] + (end[0] - start[0]) * progress,
-                    start[1] + (end[1] - start[1]) * progress,
-                    0.32,
-                    5,
-                )
-            )
-
-
-def eye_points(body: bpy.types.Object) -> list[tuple[float, float, float]]:
+def deterministic_vertex_points(
+    mesh: bpy.types.Mesh,
+    center: Vector,
+    scale: float,
+) -> list[tuple[float, float, float]]:
+    vertex_count = len(mesh.vertices)
+    step = 104_729
+    while math.gcd(step, vertex_count) != 1:
+        step += 2
+    index = SEED % vertex_count
     result = []
-    inverse_body_translation = Vector((-body.location.x, -body.location.y, -body.location.z))
-    for object_name in EYE_OBJECTS:
-        eye = bpy.data.objects[object_name]
-        for vertex in eye.data.vertices:
-            body_local = eye.matrix_world @ vertex.co + inverse_body_translation
-            result.append(normalized(body_local))
+    for _ in range(VERTEX_POINT_COUNT):
+        result.append(normalized(mesh.vertices[index].co, center, scale))
+        index = (index + step) % vertex_count
     return result
 
 
-def write_geometry(path: Path, points: list[tuple[float, float, float, int]]) -> None:
+def sampled_surface_points(
+    mesh: bpy.types.Mesh,
+    sampler,
+    count: int,
+    rng: random.Random,
+    center: Vector,
+    scale: float,
+) -> list[tuple[float, float, float]]:
+    return [
+        normalized(sample_triangle(mesh, sampler, rng)[0], center, scale)
+        for _ in range(count)
+    ]
+
+
+def sampled_density_points(
+    mesh: bpy.types.Mesh,
+    sampler,
+    count: int,
+    rng: random.Random,
+    center: Vector,
+    scale: float,
+) -> list[tuple[float, float, float]]:
+    result = []
+    for _ in range(count):
+        point, normal = sample_triangle(mesh, sampler, rng)
+        depth = rng.uniform(0.012, 0.055)
+        result.append(normalized(point - normal * depth, center, scale))
+    return result
+
+
+def sample_torus(
+    center: tuple[float, float, float],
+    major_radius: float,
+    tube_radius: float,
+    depth_radius: float,
+    rng: random.Random,
+) -> tuple[float, float, float]:
+    ring_angle = rng.random() * math.tau
+    tube_angle = rng.random() * math.tau
+    radial = major_radius + math.cos(tube_angle) * tube_radius
+    return (
+        center[0] + math.cos(ring_angle) * radial,
+        center[1] + math.sin(ring_angle) * radial,
+        center[2] + math.sin(tube_angle) * depth_radius,
+    )
+
+
+def sample_ellipsoid(
+    center: tuple[float, float, float],
+    radii: tuple[float, float, float],
+    rng: random.Random,
+) -> tuple[float, float, float]:
+    height = rng.uniform(-1.0, 1.0)
+    ring = math.sqrt(max(0.0, 1.0 - height * height))
+    angle = rng.random() * math.tau
+    return (
+        center[0] + math.cos(angle) * ring * radii[0],
+        center[1] + math.sin(angle) * ring * radii[1],
+        center[2] + height * radii[2],
+    )
+
+
+def sample_segment_tube(
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    radius: float,
+    rng: random.Random,
+) -> tuple[float, float, float]:
+    start_vector = Vector(start)
+    axis = Vector(end) - start_vector
+    if axis.length <= 0.0:
+        raise RuntimeError("Motorcycle tube segment has no length")
+    tangent = axis.normalized()
+    reference = Vector((0.0, 0.0, 1.0))
+    if abs(tangent.dot(reference)) > 0.9:
+        reference = Vector((0.0, 1.0, 0.0))
+    normal = tangent.cross(reference).normalized()
+    binormal = tangent.cross(normal).normalized()
+    angle = rng.random() * math.tau
+    offset = normal * (math.cos(angle) * radius)
+    offset += binormal * (math.sin(angle) * radius)
+    point = start_vector + axis * rng.random() + offset
+    return tuple(point)
+
+
+def motorcycle_points(
+    count: int,
+    rng: random.Random,
+) -> list[tuple[float, float, float]]:
+    points: list[tuple[float, float, float]] = []
+
+    tire_count = round(count * 0.35)
+    for index in range(tire_count):
+        center_x = -0.72 if index < tire_count // 2 else 0.72
+        points.append(
+            sample_torus((center_x, -0.42, 0.0), 0.30, 0.055, 0.072, rng)
+        )
+
+    hub_count = round(count * 0.05)
+    for index in range(hub_count):
+        center_x = -0.72 if index < hub_count // 2 else 0.72
+        points.append(
+            sample_ellipsoid((center_x, -0.42, 0.0), (0.095, 0.095, 0.13), rng)
+        )
+
+    spoke_count = round(count * 0.07)
+    for index in range(spoke_count):
+        center_x = -0.72 if index % 2 == 0 else 0.72
+        angle = rng.randrange(8) * (math.tau / 8.0)
+        reach = (math.cos(angle) * 0.275, math.sin(angle) * 0.275)
+        points.append(
+            sample_segment_tube(
+                (center_x, -0.42, 0.0),
+                (center_x + reach[0], -0.42 + reach[1], 0.0),
+                0.018,
+                rng,
+            )
+        )
+
+    shell_count = round(count * 0.18)
+    shells = (
+        ((-0.08, -0.03, 0.0), (0.34, 0.22, 0.25), 0.38),
+        ((0.10, 0.19, 0.0), (0.36, 0.18, 0.23), 0.38),
+        ((-0.40, 0.24, 0.0), (0.31, 0.075, 0.22), 0.17),
+        ((0.78, 0.08, 0.0), (0.085, 0.085, 0.105), 0.07),
+    )
+    shell_boundaries = []
+    cumulative_weight = 0.0
+    for _, _, weight in shells:
+        cumulative_weight += weight
+        shell_boundaries.append(cumulative_weight)
+    for _ in range(shell_count):
+        selection = rng.random()
+        shell_index = bisect.bisect_left(shell_boundaries, selection)
+        center, radii, _ = shells[shell_index]
+        points.append(sample_ellipsoid(center, radii, rng))
+
+    frame_count = round(count * 0.15)
+    frame_segments = (
+        ((-0.72, -0.42, 0.0), (-0.18, 0.08, 0.0), 0.045),
+        ((-0.18, 0.08, 0.0), (0.72, -0.42, 0.0), 0.045),
+        ((0.72, -0.42, 0.0), (-0.34, -0.42, 0.0), 0.045),
+        ((-0.34, -0.42, 0.0), (-0.18, 0.08, 0.0), 0.045),
+        ((0.72, -0.42, -0.07), (0.56, 0.30, -0.07), 0.032),
+        ((0.72, -0.42, 0.07), (0.56, 0.30, 0.07), 0.032),
+        ((0.56, 0.30, -0.30), (0.56, 0.30, 0.30), 0.028),
+        ((-0.34, -0.18, -0.12), (-0.72, -0.25, -0.12), 0.038),
+    )
+    for index in range(frame_count):
+        start, end, radius = frame_segments[index % len(frame_segments)]
+        points.append(sample_segment_tube(start, end, radius, rng))
+
+    rider_count = count - len(points)
+    rider_head_count = round(rider_count * 0.17)
+    rider_torso_count = round(rider_count * 0.33)
+    rider_limb_count = rider_count - rider_head_count - rider_torso_count
+    for _ in range(rider_head_count):
+        points.append(sample_ellipsoid((-0.10, 0.78, 0.0), (0.15, 0.17, 0.15), rng))
+    for _ in range(rider_torso_count):
+        points.append(sample_ellipsoid((-0.18, 0.48, 0.0), (0.24, 0.35, 0.18), rng))
+    rider_segments = (
+        ((-0.02, 0.59, -0.11), (0.37, 0.30, -0.15), 0.075),
+        ((-0.02, 0.59, 0.11), (0.37, 0.30, 0.15), 0.075),
+        ((0.37, 0.30, -0.15), (0.73, 0.27, -0.22), 0.055),
+        ((0.37, 0.30, 0.15), (0.73, 0.27, 0.22), 0.055),
+        ((-0.14, 0.24, -0.10), (-0.40, -0.18, -0.13), 0.095),
+        ((-0.14, 0.24, 0.10), (-0.40, -0.18, 0.13), 0.095),
+        ((-0.40, -0.18, -0.13), (-0.62, -0.34, -0.10), 0.075),
+        ((-0.40, -0.18, 0.13), (-0.62, -0.34, 0.10), 0.075),
+    )
+    for index in range(rider_limb_count):
+        start, end, radius = rider_segments[index % len(rider_segments)]
+        points.append(sample_segment_tube(start, end, radius, rng))
+
+    if len(points) != count:
+        raise RuntimeError(f"Generated {len(points)} motorcycle points; expected {count}")
+    rng.shuffle(points)
+    return points
+
+
+def spatially_pair_points(
+    targets: list[tuple[float, float, float]],
+    motorcycle: list[tuple[float, float, float]],
+) -> tuple[
+    list[tuple[float, float, float]],
+    list[tuple[float, float, float]],
+]:
+    if len(targets) != len(motorcycle):
+        raise RuntimeError("Motorcycle and Vitruvian point populations must be identical")
+
+    paired_targets: list[tuple[float, float, float]] = []
+    paired_motorcycle: list[tuple[float, float, float]] = []
+
+    def pair_region(
+        target_region: list[tuple[float, float, float]],
+        motorcycle_region: list[tuple[float, float, float]],
+        depth: int,
+    ) -> None:
+        axis_order = tuple((depth + offset) % 3 for offset in range(3))
+        coordinate_key = lambda point: tuple(point[axis] for axis in axis_order)
+        target_region.sort(key=coordinate_key)
+        motorcycle_region.sort(key=coordinate_key)
+        if len(target_region) <= SPATIAL_PAIRING_LEAF_POINT_COUNT:
+            paired_targets.extend(target_region)
+            paired_motorcycle.extend(motorcycle_region)
+            return
+
+        midpoint = len(target_region) // 2
+        pair_region(
+            target_region[:midpoint],
+            motorcycle_region[:midpoint],
+            depth + 1,
+        )
+        pair_region(
+            target_region[midpoint:],
+            motorcycle_region[midpoint:],
+            depth + 1,
+        )
+
+    pair_region(list(targets), list(motorcycle), 0)
+    if len(paired_targets) != len(targets):
+        raise RuntimeError("Spatial point pairing did not preserve the point population")
+    return paired_targets, paired_motorcycle
+
+
+def quantized_coordinate(value: float) -> int:
+    if not COORDINATE_MINIMUM <= value <= COORDINATE_MAXIMUM:
+        raise RuntimeError(f"Point coordinate {value} exceeds the packed geometry range")
+    normalized_value = (
+        (value - COORDINATE_MINIMUM)
+        / (COORDINATE_MAXIMUM - COORDINATE_MINIMUM)
+    )
+    return round(normalized_value * QUANTIZATION_LEVELS)
+
+
+def pack_coordinate_pair(target: float, motorcycle: float) -> float:
+    packed = quantized_coordinate(target) * PACKING_RADIX
+    packed += quantized_coordinate(motorcycle)
+    return float(packed)
+
+
+def write_geometry(
+    path: Path,
+    targets: list[tuple[float, float, float]],
+    motorcycle: list[tuple[float, float, float]],
+) -> None:
+    if len(targets) != len(motorcycle):
+        raise RuntimeError("Motorcycle and Vitruvian point populations must be identical")
     path.parent.mkdir(parents=True, exist_ok=True)
     pending = path.with_suffix(path.suffix + ".pending")
     with pending.open("wb") as output:
-        for x, y, z, group in points:
+        for target, motorcycle_point in zip(targets, motorcycle, strict=True):
+            packed = tuple(
+                pack_coordinate_pair(target[axis], motorcycle_point[axis])
+                for axis in range(3)
+            )
             for corner in range(3):
-                output.write(struct.pack("<ffff", x, y, z, float(group * 3 + corner)))
+                output.write(struct.pack("<ffff", *packed, float(corner)))
     pending.replace(path)
 
 
 def write_metadata(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     pending = path.with_suffix(path.suffix + ".pending")
-    pending.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    pending.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     pending.replace(path)
 
 
 def main() -> None:
     options = arguments()
-    actual_sha256 = sha256(options.blend)
-    if actual_sha256 != SOURCE_SHA256:
-        raise RuntimeError(f"Source blend SHA-256 is {actual_sha256}; expected {SOURCE_SHA256}")
-
-    bpy.ops.wm.open_mainfile(filepath=str(options.blend))
-    body = bpy.data.objects[BODY_OBJECT]
-    mesh = body.data
+    mesh = source_mesh(options.stl)
+    center, scale, source_minimum, source_maximum = mesh_transform(mesh)
     rng = random.Random(SEED)
     full_sampler = triangle_sampler(mesh)
-    head_sampler = triangle_sampler(mesh, lambda point: point.z >= 1.49)
 
-    surface_points = [normalized(posed(vertex.co.copy(), 1.05, 0.25)) for vertex in mesh.vertices]
-    surface_points.extend(sampled_points(full_sampler, 12000, rng, 1.05, 0.25))
-    head_points = sampled_points(head_sampler, 6500, rng, 1.05, 0.25)
-    head_points.extend(eye_points(body))
+    vertex_points = deterministic_vertex_points(mesh, center, scale)
+    surface_samples = sampled_surface_points(
+        mesh,
+        full_sampler,
+        SURFACE_SAMPLE_COUNT,
+        rng,
+        center,
+        scale,
+    )
+    density_points = sampled_density_points(
+        mesh,
+        full_sampler,
+        DENSITY_POINT_COUNT,
+        rng,
+        center,
+        scale,
+    )
 
-    arm_candidates = [vertex.co.copy() for vertex in mesh.vertices if limb_weights(vertex.co)[0] > 0.55]
-    leg_candidates = [vertex.co.copy() for vertex in mesh.vertices if limb_weights(vertex.co)[1] > 0.55]
-    if len(arm_candidates) < 1000 or len(leg_candidates) < 1000:
-        raise RuntimeError("Source mesh anatomy could not be segmented deterministically")
-
-    alternate_arms = [
-        normalized(posed(arm_candidates[rng.randrange(len(arm_candidates))], 1.48, 0.25))
-        for _ in range(5000)
-    ]
-    alternate_legs = [
-        normalized(posed(leg_candidates[rng.randrange(len(leg_candidates))], 1.05, 0.04))
-        for _ in range(4000)
-    ]
-
-    interior_points = []
-    for _ in range(7000):
-        x, y, z = surface_points[rng.randrange(len(surface_points))]
-        contraction = rng.uniform(0.12, 0.82)
-        interior_points.append((x * contraction, y, z * contraction))
-
-    points: list[tuple[float, float, float, int]] = []
-    points.extend((*point, 0) for point in surface_points)
-    points.extend((*point, 0) for point in head_points)
-    points.extend((*point, 1) for point in interior_points)
-    points.extend((*point, 2) for point in alternate_arms)
-    points.extend((*point, 3) for point in alternate_legs)
-    append_frame(points, 1800)
-    write_geometry(options.output, points)
+    points = vertex_points + surface_samples + density_points
+    motorcycle = motorcycle_points(len(points), random.Random(SEED ^ 0x4D4F_544F))
+    points, motorcycle = spatially_pair_points(points, motorcycle)
+    write_geometry(options.output, points, motorcycle)
 
     metadata = {
-        "schemaVersion": 1,
-        "license": "CC0-1.0",
+        "schemaVersion": 4,
         "generatorSeed": SEED,
-        "source": {
-            "url": SOURCE_URL,
-            "page": SOURCE_PAGE,
-            "sha256": SOURCE_SHA256,
-            "object": BODY_OBJECT,
-            "eyeObjects": list(EYE_OBJECTS),
+        "coordinateEncoding": {
+            "name": "paired-unorm12",
+            "quantizationLevels": QUANTIZATION_LEVELS,
+            "coordinateMinimum": COORDINATE_MINIMUM,
+            "coordinateMaximum": COORDINATE_MAXIMUM,
         },
+        "pointPairing": {
+            "name": "recursive-spatial-bisection",
+            "leafPointCount": SPATIAL_PAIRING_LEAF_POINT_COUNT,
+            "axisOrder": list(SPATIAL_PAIRING_AXIS_ORDER),
+        },
+        "source": {
+            "uid": SOURCE_UID,
+            "title": SOURCE_TITLE,
+            "author": SOURCE_AUTHOR,
+            "authorUrl": SOURCE_AUTHOR_URL,
+            "url": SOURCE_URL,
+            "license": SOURCE_LICENSE,
+            "licenseUrl": SOURCE_LICENSE_URL,
+            "archiveSha256": SOURCE_ARCHIVE_SHA256,
+            "meshSha256": SOURCE_MESH_SHA256,
+            "meshFile": "Vitruvian.stl",
+            "modelVertexCount": SOURCE_VERTEX_COUNT,
+            "modelTriangleCount": SOURCE_TRIANGLE_COUNT,
+            "bounds": {
+                "minimum": source_minimum,
+                "maximum": source_maximum,
+            },
+        },
+        "modifications": [
+            "Centered and uniformly scaled from the pinned STL.",
+            "Converted to deterministic surface and inward-density points.",
+            "Paired spatially neighboring target and motorcycle regions recursively.",
+            "Expanded into micro-triangles for the DynLex WebGL renderer.",
+        ],
         "format": "float32x4",
         "primitive": "triangles",
         "pointCount": len(points),
+        "motorcyclePointCount": len(motorcycle),
         "vertexCount": len(points) * 3,
-        "surfacePointCount": len(surface_points) + len(head_points),
-        "interiorPointCount": len(interior_points),
-        "headPointCount": len(head_points),
-        "alternateArmPointCount": len(alternate_arms),
-        "alternateLegPointCount": len(alternate_legs),
-        "framePointCount": 3600,
+        "surfacePointCount": len(vertex_points) + len(surface_samples),
+        "densityPointCount": len(density_points),
     }
     write_metadata(options.metadata, metadata)
     print(f"Generated {len(points)} volumetric points ({len(points) * 3} vertices)")
