@@ -174,23 +174,20 @@ static void inferOrderedExpression(
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		CompileTimeValue literalValue{};
-		if (std::holds_alternative<double>(expr->literalValue)) {
-			double value = std::get<double>(expr->literalValue);
-			std::string_view literalText = expr->range.subString;
-			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
-								   literalText.find('e') != std::string_view::npos ||
-								   literalText.find('E') != std::string_view::npos;
-			if (!explicitlyFloat && std::trunc(value) == value) {
-				expr->type = {DataType::Kind::Int, 4};
-			} else {
-				// Shader pipelines default explicit float literals to f32 to avoid
-				// introducing Float64 arithmetic from constants like 0.5 or 800.0.
-				expr->type = defaultFloatType(context.parseContext.options.emitSPIRV);
-			}
-			if (expr->type.kind == DataType::Kind::Bool)
-				literalValue = value != 0.0;
-			else
-				literalValue = value;
+		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*integer};
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
+		} else if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*minimumMagnitude};
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
+		} else if (const auto *floatingPoint = std::get_if<double>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*floatingPoint};
+			// Shader pipelines default explicit float literals to f32 to avoid
+			// introducing Float64 arithmetic from constants like 0.5 or 800.0.
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
 			expr->type = {DataType::Kind::Int, 1};
 			expr->type.pointerDepth = 1;

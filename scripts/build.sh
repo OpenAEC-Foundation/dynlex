@@ -6,11 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Parse arguments
 LINT=true
-BUILD_TYPE=Debug
+BUILD_TYPE=Optimized
 for arg in "$@"; do
     case $arg in
         --lint=false) LINT=false ;;
         --lint=true) LINT=true ;;
+        --debug) BUILD_TYPE=Debug ;;
         --release) BUILD_TYPE=Release; LINT=false ;;
     esac
 done

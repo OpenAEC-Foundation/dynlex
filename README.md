@@ -27,6 +27,10 @@ cache location instead. Build that toolchain independently with:
 ./scripts/build_llvm.sh native
 ```
 
+The normal build uses `-O2` while retaining debug information and compiler
+invariants. Use `./scripts/build.sh --debug` when an unoptimized executable is
+needed for source-level debugging.
+
 ## Browser Compiler
 
 DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.

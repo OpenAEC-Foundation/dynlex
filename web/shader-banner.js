@@ -171,7 +171,6 @@ function setFullGeometry(section, layer) {
   layer.element.style.top = "0px";
   layer.element.style.width = `${section.clientWidth}px`;
   layer.element.style.height = `${section.clientHeight}px`;
-  layer.path.setAttribute("transform", CLOUD_COVER_TRANSFORM);
 }
 
 function pointOnQuadraticCurve(origin, control, target, progress) {
@@ -281,18 +280,115 @@ export async function createShaderBanner(section) {
   let activeLayerIndex = 0;
   let incomingLayerIndex = null;
   let sceneStartedAt = performance.now();
-  let bannerVisible = true;
+  let bannerVisible = bannerIntersectsViewport();
   let timelineProgress = 0;
+  let timelineFrameRequest = 0;
+  let timelineResumeFrameRequest = 0;
+  let timelineResumeStartedAt = null;
+  let timelineResumeGeneration = 0;
+  let pausedAt = bannerVisible ? null : performance.now();
   let preloadGeneration = 0;
 
   function setLayerState(layer, state) {
     layer.element.dataset.layerState = state;
   }
 
+  function bannerIntersectsViewport() {
+    const rect = section.getBoundingClientRect();
+    return (
+      rect.bottom > 0
+      && rect.top < window.innerHeight
+      && rect.right > 0
+      && rect.left < window.innerWidth
+    );
+  }
+
   function syncPreviewActivity() {
     for (const layer of layers) {
       layer.preview.setRunning(bannerVisible && layer.element.dataset.layerState !== "dormant");
     }
+  }
+
+  function stopTimelineAnimation(timestamp = performance.now()) {
+    timelineResumeGeneration += 1;
+    if (timelineResumeStartedAt !== null) {
+      sceneStartedAt += timestamp - timelineResumeStartedAt;
+      timelineResumeStartedAt = null;
+    }
+    cancelAnimationFrame(timelineFrameRequest);
+    cancelAnimationFrame(timelineResumeFrameRequest);
+    timelineFrameRequest = 0;
+    timelineResumeFrameRequest = 0;
+  }
+
+  function scheduleTimelineAnimation() {
+    if (
+      timelineFrameRequest
+      || timelineResumeStartedAt !== null
+      || !bannerVisible
+      || reducedMotion.matches
+    ) {
+      return;
+    }
+    timelineFrameRequest = requestAnimationFrame(animate);
+  }
+
+  function scheduleTimelineResume() {
+    if (
+      timelineFrameRequest
+      || timelineResumeStartedAt !== null
+      || !bannerVisible
+      || reducedMotion.matches
+    ) {
+      return;
+    }
+    timelineResumeStartedAt = performance.now();
+    const generation = ++timelineResumeGeneration;
+    const visiblePreviews = layers
+      .filter((layer) => layer.element.dataset.layerState !== "dormant")
+      .map((layer) => layer.preview.whenNextFrameRendered());
+    Promise.all(visiblePreviews).then(() => {
+      if (
+        generation !== timelineResumeGeneration
+        || !bannerVisible
+        || reducedMotion.matches
+      ) {
+        return;
+      }
+      timelineResumeFrameRequest = requestAnimationFrame((timestamp) => {
+        if (generation !== timelineResumeGeneration) return;
+        timelineResumeFrameRequest = 0;
+        sceneStartedAt += timestamp - timelineResumeStartedAt;
+        timelineResumeStartedAt = null;
+        scheduleTimelineAnimation();
+      });
+    });
+  }
+
+  function updateBannerVisibility(nextVisible) {
+    if (nextVisible === bannerVisible) return;
+    const timestamp = performance.now();
+    if (!nextVisible) {
+      bannerVisible = false;
+      pausedAt = timestamp;
+      stopTimelineAnimation(timestamp);
+      syncPreviewActivity();
+      return;
+    }
+    if (pausedAt === null) {
+      throw new Error("Visible shader banner has no paused timeline");
+    }
+    const pausedMilliseconds = timestamp - pausedAt;
+    sceneStartedAt += pausedMilliseconds;
+    for (const layer of layers) {
+      if (layer.element.dataset.layerState !== "dormant") {
+        layer.startedAt += pausedMilliseconds;
+      }
+    }
+    pausedAt = null;
+    bannerVisible = true;
+    setTimeline(timelineProgress);
+    scheduleTimelineResume();
   }
 
   function updateActiveReadout(scene, index) {
@@ -494,10 +590,8 @@ export async function createShaderBanner(section) {
   }
 
   function animate(timestamp) {
-    if (reducedMotion.matches) {
-      requestAnimationFrame(animate);
-      return;
-    }
+    timelineFrameRequest = 0;
+    if (!bannerVisible || reducedMotion.matches) return;
     const scene = manifest.scenes[activeIndex];
     const elapsed = Math.max(0, (timestamp - sceneStartedAt) / 1000);
     const progress = Math.min(1, elapsed / scene.durationSeconds);
@@ -510,23 +604,32 @@ export async function createShaderBanner(section) {
     } else {
       setTimeline(progress);
     }
-    requestAnimationFrame(animate);
+    scheduleTimelineAnimation();
   }
 
-  const visibilityObserver = new IntersectionObserver(([entry]) => {
-    bannerVisible = entry.isIntersecting;
-    syncPreviewActivity();
+  const visibilityObserver = new IntersectionObserver(() => {
+    updateBannerVisibility(bannerIntersectsViewport());
   }, { threshold: 0.01 });
   visibilityObserver.observe(section);
 
   nextButton.addEventListener("click", advanceScene);
-  window.addEventListener("resize", () => setTimeline(timelineProgress));
+  window.addEventListener("scroll", () => {
+    updateBannerVisibility(bannerIntersectsViewport());
+  }, { passive: true });
+  window.addEventListener("resize", () => {
+    const wasVisible = bannerVisible;
+    updateBannerVisibility(bannerIntersectsViewport());
+    if (wasVisible && bannerVisible) setTimeline(timelineProgress);
+  });
   reducedMotion.addEventListener("change", () => {
+    stopTimelineAnimation();
     discardIncomingScene();
     sceneStartedAt = performance.now();
     layers[activeLayerIndex].startedAt = sceneStartedAt;
+    if (!bannerVisible) pausedAt = sceneStartedAt;
     updateLaptopReadout(manifest.scenes[activeIndex]);
     setTimeline(0);
+    scheduleTimelineAnimation();
   });
 
   const initialLayer = layers[activeLayerIndex];
@@ -540,6 +643,6 @@ export async function createShaderBanner(section) {
   updateLaptopReadout(manifest.scenes[activeIndex]);
   setTimeline(0);
   section.dataset.shaderPlaylistReady = "true";
-  requestAnimationFrame(animate);
+  scheduleTimelineAnimation();
   scheduleNextScenePreload();
 }

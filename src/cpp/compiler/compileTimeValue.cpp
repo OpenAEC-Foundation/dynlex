@@ -1,5 +1,6 @@
 #include "compileTimeValue.h"
 #include "expression.h"
+#include "numericLiteral.h"
 #include "parseContext.h"
 #include "pattern/pattern_tree/patternElement.h"
 #include <cmath>
@@ -11,6 +12,8 @@ bool isCompileTimeKnown(const CompileTimeValue &value) { return !std::holds_alte
 std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 	if (auto *boolean = std::get_if<bool>(&value))
 		return *boolean;
+	if (auto *integer = std::get_if<std::int64_t>(&value))
+		return *integer != 0;
 	if (auto *number = std::get_if<double>(&value))
 		return *number != 0.0;
 	if (auto *text = std::get_if<std::string>(&value))
@@ -19,6 +22,8 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 }
 
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value) {
+	if (auto *integer = std::get_if<std::int64_t>(&value))
+		return *integer;
 	auto *number = std::get_if<double>(&value);
 	if (!number || !std::isfinite(*number))
 		return std::nullopt;
@@ -33,6 +38,14 @@ std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &v
 		return std::nullopt;
 	}
 	return static_cast<std::int64_t>(truncated);
+}
+
+std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return static_cast<double>(*integer);
+	if (const auto *floatingPoint = std::get_if<double>(&value))
+		return *floatingPoint;
+	return std::nullopt;
 }
 
 std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value) {
@@ -50,31 +63,11 @@ std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeVal
 	return std::nullopt;
 }
 
-static std::optional<double> parseCompileTimeNumericToken(std::string_view token) {
-	if (token.empty())
+static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token) {
+	NumericLiteralParseResult parsed = parseNumericLiteral(token);
+	if (!parsed)
 		return std::nullopt;
-	bool sawDigit = false;
-	bool sawDot = false;
-	for (char c : token) {
-		if (c >= '0' && c <= '9') {
-			sawDigit = true;
-			continue;
-		}
-		if (c == '.') {
-			if (sawDot)
-				return std::nullopt;
-			sawDot = true;
-			continue;
-		}
-		return std::nullopt;
-	}
-	if (!sawDigit)
-		return std::nullopt;
-	try {
-		return std::stod(std::string(token));
-	} catch (...) {
-		return std::nullopt;
-	}
+	return numericLiteralCompileTimeValue(parsed.value);
 }
 
 CompileTimeValue getExpressionCompileTimeValue(const Expression *expr) {
@@ -90,6 +83,10 @@ void setExpressionCompileTimeValue(Expression *expr, const CompileTimeValue &val
 CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
+		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
+			return *integer;
+		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue))
+			return *minimumMagnitude;
 		if (const auto *number = std::get_if<double>(&expr->literalValue)) {
 			if (expr->type.kind == DataType::Kind::Bool)
 				return *number != 0.0;
@@ -100,7 +97,7 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 		return {};
 	case Expression::Kind::Variable:
 		if (expr->variable) {
-			if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
+			if (std::optional<CompileTimeValue> numericLiteral = parseCompileTimeNumericToken(expr->variable->name))
 				return *numericLiteral;
 		}
 		if (expr->type.kind == DataType::Kind::Type)
@@ -117,7 +114,7 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 				elements = getPatternElements(expr->patternReference->pattern.text);
 			if (elements.size() == 1 && (elements[0].type == PatternElement::Type::Variable ||
 										 elements[0].type == PatternElement::Type::VariableLike)) {
-				if (std::optional<double> numericLiteral = parseCompileTimeNumericToken(elements[0].text))
+				if (std::optional<CompileTimeValue> numericLiteral = parseCompileTimeNumericToken(elements[0].text))
 					return *numericLiteral;
 			}
 		}
@@ -206,11 +203,13 @@ std::optional<DataType> buildInfoValueType(std::string_view key) {
 
 CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key) {
 	if (key == "word size")
-		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(void *) * 8);
+		return (context.options.emitSPIRV || context.options.emitWASM) ? std::int64_t{32}
+																	   : static_cast<std::int64_t>(sizeof(void *) * 8);
 	if (key == "c long size")
-		return (context.options.emitSPIRV || context.options.emitWASM) ? 32.0 : static_cast<double>(sizeof(long) * 8);
+		return (context.options.emitSPIRV || context.options.emitWASM) ? std::int64_t{32}
+																	   : static_cast<std::int64_t>(sizeof(long) * 8);
 	if (key == "optimization level")
-		return static_cast<double>(context.options.optimizationLevel);
+		return static_cast<std::int64_t>(context.options.optimizationLevel);
 	return {};
 }
 

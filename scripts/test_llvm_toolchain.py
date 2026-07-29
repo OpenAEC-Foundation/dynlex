@@ -137,8 +137,20 @@ printf '%s\\n' \
         self.assertIn("for source_component in llvm cmake libc third-party", toolchain)
         self.assertNotIn("mapfile", toolchain)
         debug_test = (SCRIPTS_DIR / "test_debug_info.py").read_text(encoding="utf-8")
-        self.assertIn('os.environ.get("DYNLEX_LLVM_CACHE_DIR"', debug_test)
+        self.assertIn('SCRIPTS_DIR / "llvm_toolchain.sh"', debug_test)
+        self.assertIn('"$DYNLEX_LLVM_NATIVE_INSTALL_DIR"', debug_test)
+        self.assertNotIn('repo_root / ".cache" / "llvm-toolchain"', debug_test)
         self.assertNotIn("shutil.which", debug_test)
+
+    def test_normal_native_build_is_optimized_without_disabling_invariants(self) -> None:
+        native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
+        cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+
+        self.assertIn("BUILD_TYPE=Optimized", native_build)
+        self.assertIn("--debug) BUILD_TYPE=Debug", native_build)
+        self.assertIn('CMAKE_CXX_FLAGS_OPTIMIZED', cmake)
+        self.assertIn("-O2 -g", cmake)
+        self.assertNotRegex(cmake, r'CMAKE_CXX_FLAGS_OPTIMIZED[^\n]*NDEBUG')
 
     def test_codegen_uses_the_llvm_23_apis(self) -> None:
         codegen_directory = PROJECT_DIR / "src" / "cpp" / "compiler" / "codegen"

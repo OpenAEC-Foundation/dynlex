@@ -955,6 +955,6 @@ case Expression::Kind::IntrinsicCall: {
 	}
 	if (context.typesValid)
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 	break;
 }

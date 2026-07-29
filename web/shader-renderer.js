@@ -294,6 +294,7 @@ export function createShaderPreview(canvas, options = {}) {
   let revision = 0;
   let running = options.running !== false;
   let frameRequest = 0;
+  let renderedFrameResolvers = [];
 
   function currentGeometryHorizontalPixels() {
     const horizontalPixels = options.geometryHorizontalPixels
@@ -466,6 +467,9 @@ export function createShaderPreview(canvas, options = {}) {
       gl.depthMask(true);
       gl.disable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
+      const resolvers = renderedFrameResolvers;
+      renderedFrameResolvers = [];
+      for (const resolve of resolvers) resolve();
     }
     if (running) {
       frameRequest = requestAnimationFrame(drawFrame);
@@ -479,10 +483,23 @@ export function createShaderPreview(canvas, options = {}) {
     }
   }
 
+  function whenNextFrameRendered() {
+    if (!activeState) {
+      throw new Error("Shader preview cannot render before a program is installed");
+    }
+    const rendered = new Promise((resolve) => {
+      renderedFrameResolvers.push(resolve);
+    });
+    if (!frameRequest) {
+      frameRequest = requestAnimationFrame(drawFrame);
+    }
+    return rendered;
+  }
+
   canvas.dataset.previewState = "waiting";
   if (running) {
     frameRequest = requestAnimationFrame(drawFrame);
   }
 
-  return Object.freeze({ replaceProgram, setRunning });
+  return Object.freeze({ replaceProgram, setRunning, whenNextFrameRendered });
 }
