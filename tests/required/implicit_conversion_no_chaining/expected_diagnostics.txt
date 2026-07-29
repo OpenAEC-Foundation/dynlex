@@ -1,0 +1,4 @@
+tests/required/implicit_conversion_no_chaining/main.dl:7-15: Error: No overload matches call 'unwrap 5' for argument types [a 32 bit integer]. Available overloads: 'unwrap {second box:value}'
+  note: while inferring call 'unwrap 5' with arguments [a 32 bit integer] -> undeduced tests/required/implicit_conversion_no_chaining/main.dl:7-15
+  note: while inferring call 'print unwrap 5' with arguments [unresolved(?)] -> undeduced tests/required/implicit_conversion_no_chaining/main.dl:1-15
+  note: while inferring call 'print unwrap 5 as line' with arguments [unresolved(?)] -> undeduced tests/required/implicit_conversion_no_chaining/main.dl:1-23

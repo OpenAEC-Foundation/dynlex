@@ -104,7 +104,8 @@ static Diagnostic buildIncompatibleReturnTypeDiagnostic(
 }
 
 static bool reconcileFunctionReturnType(
-	InferenceContext &context, Expression *returnExpression, Expression *returnValueExpression, const DataType &returnType
+	InferenceContext &context, Expression *returnExpression, Expression *returnValueExpression, const DataType &returnType,
+	const BindingFrameStack &bindingFrameStack
 ) {
 	if (!context.currentInstantiation)
 		return true;
@@ -130,6 +131,11 @@ static bool reconcileFunctionReturnType(
 		instantiation.returnType = refinedReturnType;
 		return true;
 	}
+	if (returnValueExpression &&
+		tryApplyUserConversion(returnValueExpression, instantiation.returnType, true, context, bindingFrameStack))
+		return true;
+	if (!context.typesValid)
+		return false;
 	context.fail(buildIncompatibleReturnTypeDiagnostic(
 		context, returnExpression, returnValueExpression, instantiation.returnType, returnType
 	));

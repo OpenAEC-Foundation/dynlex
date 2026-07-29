@@ -36,11 +36,14 @@ static bool inferSectionLineRange(
 		for (auto &[name, boundVar] : section->variables) {
 			if (!boundVar)
 				continue;
-			Expression *boundExpr = bindingFrameStack.lookup(boundVar->definition);
+			ResolvedBindingLayers resolvedBinding =
+				resolveBindingReferenceWithCallerScope(boundVar->definition, nullptr, bindingFrameStack);
+			Expression *boundExpr = resolvedBinding.expression;
 			if (!boundExpr)
 				continue;
 			Expression *boundExprForType = boundExpr;
-			DataType boundType = ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, bindingFrameStack);
+			DataType boundType =
+				ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, resolvedBinding.bindingFrameStack);
 			if (!boundType.isDeduced())
 				continue;
 			if (context.trial && context.trialJournal)
@@ -48,7 +51,9 @@ static bool inferSectionLineRange(
 			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
 			CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
 			context.setKnownConstant(boundVar->definition, boundValue);
-			context.setAddressProvenance(boundVar->definition, inferAddressProvenance(boundExpr, context, bindingFrameStack));
+			context.setAddressProvenance(
+				boundVar->definition, inferAddressProvenance(boundExpr, context, resolvedBinding.bindingFrameStack)
+			);
 		}
 	} else if (initializeSection) {
 		seedNonFlexSectionParameterState(section, context);

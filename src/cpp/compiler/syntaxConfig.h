@@ -28,6 +28,8 @@ struct SyntaxConfig {
 
 	std::string sectionName = "section";
 	std::string functionName = "function";
+	std::string conversionName = "convert";
+	std::string implicitName = "implicitly";
 	std::string className = "class";
 	std::string flexName = "flex";
 	std::string localName = "local";

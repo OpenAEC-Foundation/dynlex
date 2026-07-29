@@ -43,7 +43,7 @@ function [the|] last item of {a pointer to list:values}:
             stop because a list index is out of bounds
         return item ((the length of values) - 1) of values
 
-function ensure list {a pointer to list:values} has capacity for required_count using sample:
+function ensure list {a pointer to list:values} has capacity for required_count:
     execute:
         if required_count > the capacity of values:
             set new_capacity to the capacity of values
@@ -51,13 +51,13 @@ function ensure list {a pointer to list:values} has capacity for required_count 
                 set new_capacity to 4
             loop while new_capacity < required_count:
                 set new_capacity to new_capacity * 2
-            set resized_data to @intrinsic("call", "libc", "realloc", a pointer to the type of sample, the data of values, new_capacity * the size of the type of sample)
+            set resized_data to @intrinsic("call", "libc", "realloc", a pointer to the type of item 0 of the data of values, the data of values, new_capacity * the size of the type of item 0 of the data of values)
             set the data of values to resized_data
             set the capacity of values to new_capacity
 
 function append item to {a pointer to list:values}:
     execute:
-        ensure list values has capacity for (the length of values) + 1 using item
+        ensure list values has capacity for (the length of values) + 1
         @intrinsic("initialize at", (the data of values) + (the length of values), item)
         set the length of values to (the length of values) + 1
 
@@ -65,7 +65,7 @@ function insert item into {a pointer to list:values} at index {integer:position}
     execute:
         if position < 0 or position > the length of values:
             stop because a list index is out of bounds
-        ensure list values has capacity for (the length of values) + 1 using item
+        ensure list values has capacity for (the length of values) + 1
         set move_index to the length of values
         if move_index > position:
             @intrinsic("initialize at", (the data of values) + move_index, item move_index - 1 of the data of values)

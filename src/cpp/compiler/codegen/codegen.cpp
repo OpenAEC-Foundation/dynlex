@@ -536,6 +536,8 @@ bool emitSectionFlexCallerBody(
 CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return nullptr;
+	if (expr->inferredConversion)
+		return generateExpressionCode(context, expr->inferredConversion);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 
@@ -606,12 +608,10 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	}
 
 	case Expression::Kind::Variable: {
-		Expression *resolved = resolveVariableBinding(context, expr);
-		if (resolved != expr) {
-			FlexScopeGuard guard(context);
-			if (context.flexBindingFrames.hasParentScope())
-				guard.popToCallerScope();
-			return generateExpressionCode(context, resolved);
+		ResolvedBindingLayers resolved = resolveCodegenVariableBinding(context, expr);
+		if (resolved.expression != expr) {
+			FlexBindingScope scope(context, std::move(resolved.bindingFrameStack));
+			return generateExpressionCode(context, resolved.expression);
 		}
 
 		requireCompilerInvariant(expr->variable != nullptr, "Variable expression reached codegen without a resolved variable");
@@ -681,9 +681,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (matchedSection->isFlex) {
 			// Flex: inline the body with expression substitution.
 			// Push current bindings and set only this flex's parameters (scoped).
-			BindingFrame innerBindings;
-			collectPatternCallBindings(expr, matchedDef, innerBindings);
-			pushBindingScope(context.flexBindingFrames, std::move(innerBindings));
+			pushPatternCallBindingScope(context.flexBindingFrames, expr, matchedDef);
 			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
 			ScopedVariableAllocaRestore flexVariableAllocas(context, matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);

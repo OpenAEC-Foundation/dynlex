@@ -1,0 +1,17 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a number box
+    members:
+        payload as integer
+
+implicitly convert {integer:number}:
+    execute:
+        return @intrinsic("construct", a number box, number)
+
+function unwrap {a number box:wrapped}:
+    execute:
+        return the payload of wrapped
+
+print unwrap 42 as line

@@ -143,7 +143,7 @@ function {string:text} with {cstring:old_text} replaced by {cstring:new_text}:
 
 function {cstring:text} with {cstring:old_text} replaced by {cstring:new_text}:
     execute:
-        return the string form of text with the string form of old_text replaced by the string form of new_text
+        return (the string form of text) with (the string form of old_text) replaced by (the string form of new_text)
 
 function {string:text} repeated {integer:count} times:
     execute:

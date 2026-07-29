@@ -223,6 +223,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
+	clone->inferredConversion = nullptr;
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
 	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : Expression::SectionOutcome{};
 	clone->executionFallsThrough = preserveInferenceMetadata ? expression->executionFallsThrough : std::nullopt;

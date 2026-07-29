@@ -279,6 +279,10 @@ function [the|] string form of {cstring:value}:
     execute:
         return new string from data value with length the length of value
 
+implicitly convert {cstring:value}:
+    execute:
+        return the string form of value
+
 # --- Line suffix ---
 
 function value as [a|] line:

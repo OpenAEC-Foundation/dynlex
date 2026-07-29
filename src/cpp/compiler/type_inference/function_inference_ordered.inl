@@ -131,7 +131,7 @@ static void inferOrderedExpression(
 		~ExpressionTraceGuard() { context.popExpression(); }
 	} expressionTraceGuard(context, expr);
 	auto resolveThroughFlexBindings = [&](Expression *expression) {
-		return resolveThroughBindings(expression, flexBindingFrameStack);
+		return resolveInferenceBindingLayers(expression, flexBindingFrameStack, &context).expression;
 	};
 	auto setConfiguredTypeFailure = [&](Range range, std::string_view key, std::string_view variant = "message",
 										std::vector<std::pair<std::string, std::string>> replacements = {}) {
@@ -224,23 +224,24 @@ static void inferOrderedExpression(
 		if (expr->variable) {
 			std::string varName = expr->variable->name;
 			// Check flex bindings first
-			BindingFrameStack callerBindingFrameStack;
-			Expression *flexBinding =
-				flexBindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerBindingFrameStack);
-			if (flexBinding) {
-				CompileTimeValue boundValue = resolveStoredCompileTimeValue(flexBinding, callerBindingFrameStack, &context);
+			ResolvedBindingLayers resolvedBinding = resolveVariableBindingWithCallerScope(expr, flexBindingFrameStack);
+			Expression *flexBinding = resolvedBinding.expression;
+			if (flexBinding && flexBinding != expr) {
+				CompileTimeValue boundValue =
+					resolveStoredCompileTimeValue(flexBinding, resolvedBinding.bindingFrameStack, &context);
 				bool requiresInference =
 					!flexBinding->type.isDeduced() || (flexBinding->type.isMetaType() && !isCompileTimeKnown(boundValue));
 				if (requiresInference && flexBinding != expr) {
 					bool preserveBindingGrouping =
 						context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding);
-					bool inferred = preserveBindingGrouping
-										? inferExpressionWithCurrentGrouping(flexBinding, context, callerBindingFrameStack)
-										: inferExpression(flexBinding, context, false, callerBindingFrameStack);
+					bool inferred =
+						preserveBindingGrouping
+							? inferExpressionWithCurrentGrouping(flexBinding, context, resolvedBinding.bindingFrameStack)
+							: inferExpression(flexBinding, context, false, resolvedBinding.bindingFrameStack);
 					if (!inferred)
 						return;
 				}
-				DataType boundType = ensureExpressionType(flexBinding, context, callerBindingFrameStack);
+				DataType boundType = ensureExpressionType(flexBinding, context, resolvedBinding.bindingFrameStack);
 				if (boundType.isDeduced())
 					expr->type = boundType;
 				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);

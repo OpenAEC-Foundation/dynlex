@@ -510,6 +510,8 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				requireCompilerInvariant(other->section != nullptr, "pattern tree endpoint definitions must have sections");
 				if (other == definition)
 					continue;
+				if (definition->section->isConversion && other->section->isConversion)
+					continue;
 				if (!patternDefinitionsShareVisibilityScope(*definition, *other))
 					continue;
 

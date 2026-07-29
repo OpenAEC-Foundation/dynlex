@@ -197,49 +197,45 @@ static void ensureFlexBindingRootFrame(ParseContext &context) {
 		context.flexBindingFrames.pushFrame(BindingFrame{});
 }
 
-Expression *resolveVariableBinding(ParseContext &context, Expression *expr) {
+ResolvedBindingLayers resolveCodegenVariableBinding(ParseContext &context, Expression *expression) {
 	ensureFlexBindingRootFrame(context);
-	return resolveVariableBindingAcrossFrames(expr, context.flexBindingFrames);
+	return resolveVariableBindingWithCallerScope(expression, context.flexBindingFrames);
 }
 
-// Resolve an expression through all flex layers: variable bindings (which cross
-// scope boundaries upward) and flex PatternCall expansions (which push new scopes
-// downward). Variable bindings don't modify the stack; PatternCall expansions push
-// one scope each. Returns the number of scopes pushed, so the caller can pop them
-// when done. Use this when you need to see through flex indirection to inspect the
-// underlying expression kind (e.g., detecting a property intrinsic inside a store).
-void resolveThroughFlexLayers(ParseContext &context, Expression *&expr) {
-	ensureFlexBindingRootFrame(context);
-	resolveThroughBindingLayers(expr, context.flexBindingFrames, [&](Expression *expression, BindingFrame &innerBindings) {
+ResolvedBindingLayers
+resolveCodegenBindingLayers(ParseContext &context, Expression *expression, BindingFrameStack bindingFrameStack) {
+	if (bindingFrameStack.empty())
+		bindingFrameStack.pushFrame(BindingFrame{});
+	return resolveThroughBindingLayers(
+		expression, std::move(bindingFrameStack),
+		[&](Expression *expression) -> std::optional<FlexBindingExpansion> {
 		if (!expression || expression->kind != Expression::Kind::PatternCall)
-			return static_cast<Expression *>(nullptr);
+			return std::nullopt;
 		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
-		if (!definition->section || !definition->section->isFlex)
-			return static_cast<Expression *>(nullptr);
+		if (!definition || !definition->section || !definition->section->isFlex)
+			return std::nullopt;
 		requireCompilerInvariant(
 			expression->inferredFlexExpansion, "codegen flex-layer resolution is missing the inferred expansion"
 		);
-		collectPatternCallBindings(expression, definition, innerBindings);
-		return expression->inferredFlexExpansion;
-	});
+		return FlexBindingExpansion{definition, expression->inferredFlexExpansion};
+	}
+	);
 }
 
-// FlexScopeGuard implementation
-void FlexScopeGuard::popToCallerScope() {
-	ensureFlexBindingRootFrame(context);
-	requireCompilerInvariant(context.flexBindingFrames.hasParentScope(), "FlexScopeGuard requires a caller flex scope");
-	savedBindingFrames = context.flexBindingFrames;
-	popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope for FlexScopeGuard");
-	active = true;
+FlexBindingScope::FlexBindingScope(ParseContext &context, BindingFrameStack bindingFrameStack)
+	: context(context), savedBindingFrames(context.flexBindingFrames) {
+	context.flexBindingFrames = std::move(bindingFrameStack);
 }
 
-FlexScopeGuard::~FlexScopeGuard() {
-	if (active)
-		context.flexBindingFrames = savedBindingFrames;
-}
+FlexBindingScope::~FlexBindingScope() { context.flexBindingFrames = std::move(savedBindingFrames); }
 
-DataType finalizedExpressionType(ParseContext &context, Expression *expr) {
+static DataType finalizedExpressionType(ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack) {
 	requireCompilerInvariant(expr != nullptr, "codegen requested the type of a null expression");
+	if (expr->inferredConversion)
+		return finalizedExpressionType(context, expr->inferredConversion, bindingFrameStack);
+	ResolvedBindingLayers resolved = resolveVariableBindingWithCallerScope(expr, bindingFrameStack);
+	if (resolved.expression != expr)
+		return finalizedExpressionType(context, resolved.expression, resolved.bindingFrameStack);
 	requireCompilerInvariant(expr->type.isDeduced(), "expression reached codegen without a finalized inferred type");
 	if (expr->kind == Expression::Kind::Variable && expr->variable) {
 		VariableReference *definition = normalizeBindingReference(expr->variable);
@@ -248,6 +244,11 @@ DataType finalizedExpressionType(ParseContext &context, Expression *expr) {
 			return finalizedType->second;
 	}
 	return expr->type;
+}
+
+DataType finalizedExpressionType(ParseContext &context, Expression *expr) {
+	ensureFlexBindingRootFrame(context);
+	return finalizedExpressionType(context, expr, context.flexBindingFrames);
 }
 
 PatternDefinition *finalizedPatternDefinition(ParseContext &, Expression *expr) {
@@ -421,7 +422,9 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 		~BindingFramesRestore() { context.flexBindingFrames = savedBindingFrames; }
 	} restore{context, savedBindingFrames};
 
-	resolveThroughFlexLayers(context, expr);
+	ResolvedBindingLayers resolved = resolveCodegenBindingLayers(context, expr, context.flexBindingFrames);
+	expr = resolved.expression;
+	context.flexBindingFrames = std::move(resolved.bindingFrameStack);
 	if (!expr)
 		return {};
 
@@ -463,10 +466,12 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 
 	std::string fieldName;
 	CompileTimeValue propertyValue = resolveStoredCompileTimeValue(expr->arguments[2], context.flexBindingFrames);
-	if (const auto *propertyName = std::get_if<std::string>(&propertyValue))
+	if (const auto *propertyName = std::get_if<std::string>(&propertyValue)) {
 		fieldName = *propertyName;
+	}
 	if (fieldName.empty()) {
-		Expression *fieldExpression = resolveVariableBinding(context, expr->arguments[2]);
+		Expression *fieldExpression =
+			resolveCodegenBindingLayers(context, expr->arguments[2], context.flexBindingFrames).expression;
 		if (fieldExpression && fieldExpression->kind == Expression::Kind::Literal) {
 			if (const auto *propertyName = std::get_if<std::string>(&fieldExpression->literalValue))
 				fieldName = *propertyName;
