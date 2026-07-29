@@ -548,6 +548,7 @@ run_auxiliary_test "web_runtime_path_host" 10 node "$PROJECT_DIR/tests/web/runti
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
+run_auxiliary_test "process_windows_quoting" 10 python3 -B "$SCRIPT_DIR/test_process_windows_quoting.py"
 run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/test_command_line_argument_targets.py" "$COMPILER"
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"

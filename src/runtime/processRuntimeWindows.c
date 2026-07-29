@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "processRuntimeInternal.h"
+#include "processRuntimeWindowsQuoting.h"
 
 #include "runtimeError.h"
 
@@ -411,66 +412,6 @@ static wchar_t *search_executable_path(const wchar_t *executable, const wchar_t 
 	return NULL;
 }
 
-static bool command_line_argument_needs_quotes(const wchar_t *argument) {
-	if (*argument == L'\0')
-		return true;
-	for (const wchar_t *cursor = argument; *cursor != L'\0'; ++cursor) {
-		if (*cursor == L' ' || *cursor == L'\t' || *cursor == L'"')
-			return true;
-	}
-	return false;
-}
-
-static size_t quoted_argument_length(const wchar_t *argument) {
-	if (!command_line_argument_needs_quotes(argument))
-		return wcslen(argument);
-	size_t length = 2;
-	size_t backslashes = 0;
-	for (const wchar_t *cursor = argument;; ++cursor) {
-		if (*cursor == L'\\') {
-			backslashes++;
-			continue;
-		}
-		if (*cursor == L'"')
-			length += backslashes * 2 + 2;
-		else if (*cursor == L'\0') {
-			length += backslashes * 2;
-			return length;
-		} else
-			length += backslashes + 1;
-		backslashes = 0;
-	}
-}
-
-static wchar_t *append_quoted_argument(wchar_t *destination, const wchar_t *argument) {
-	if (!command_line_argument_needs_quotes(argument)) {
-		size_t length = wcslen(argument);
-		memcpy(destination, argument, length * sizeof(wchar_t));
-		return destination + length;
-	}
-	*destination++ = L'"';
-	size_t backslashes = 0;
-	for (const wchar_t *cursor = argument;; ++cursor) {
-		if (*cursor == L'\\') {
-			backslashes++;
-			continue;
-		}
-		size_t copies = backslashes;
-		if (*cursor == L'"' || *cursor == L'\0')
-			copies *= 2;
-		for (size_t index = 0; index < copies; ++index)
-			*destination++ = L'\\';
-		if (*cursor == L'\0')
-			break;
-		if (*cursor == L'"')
-			*destination++ = L'\\';
-		*destination++ = *cursor;
-		backslashes = 0;
-	}
-	*destination++ = L'"';
-	return destination;
-}
-
 static wchar_t *build_command_line(const DynlexProcessCommand *command, const wchar_t *wide_executable) {
 	wchar_t **arguments = calloc(command->argument_count + 1, sizeof(*arguments));
 	if (arguments == NULL) {
@@ -483,13 +424,13 @@ static wchar_t *build_command_line(const DynlexProcessCommand *command, const wc
 		free(arguments);
 		return NULL;
 	}
-	size_t total = quoted_argument_length(arguments[0]) + 1;
+	size_t total = dynlex_windows_quoted_argument_length(arguments[0]) + 1;
 	for (size_t index = 0; index < command->argument_count; ++index) {
 		arguments[index + 1] =
 			utf8_to_wide(command->arguments[index].data, command->arguments[index].length, "Invalid Windows process argument");
 		if (arguments[index + 1] == NULL)
 			goto failure;
-		size_t length = quoted_argument_length(arguments[index + 1]);
+		size_t length = dynlex_windows_quoted_argument_length(arguments[index + 1]);
 		if (total > SIZE_MAX - length - 1) {
 			dynlex_runtime_set_error("Windows command line is too large");
 			goto failure;
@@ -505,7 +446,7 @@ static wchar_t *build_command_line(const DynlexProcessCommand *command, const wc
 	for (size_t index = 0; index <= command->argument_count; ++index) {
 		if (index != 0)
 			*destination++ = L' ';
-		destination = append_quoted_argument(destination, arguments[index]);
+		destination = dynlex_windows_append_quoted_argument(destination, arguments[index]);
 	}
 	*destination = L'\0';
 	for (size_t index = 0; index <= command->argument_count; ++index)

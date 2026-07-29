@@ -305,6 +305,7 @@ if(NOT EMSCRIPTEN)
             src/runtime/hostRuntimeWindows.c
             src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
+            src/runtime/processRuntimeWindowsQuoting.c
         )
     else()
         list(APPEND DYNLEX_RUNTIME_SOURCES
