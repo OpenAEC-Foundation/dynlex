@@ -1,0 +1,161 @@
+# Shared Language Server Protocol client state.
+
+import lib/json_rpc_session.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [an|a|] lsp document
+    members:
+        uri as string
+        language_id as string
+        text as string
+        version as i32
+
+class:
+    patterns:
+        [an|a|] lsp diagnostic report
+    members:
+        uri as string
+        has_version as boolean
+        version as i32
+        diagnostics as a pointer to json value
+
+class:
+    patterns:
+        [an|a|] lsp client
+    members:
+        rpc_session as a pointer to json rpc session
+        lifecycle as i32
+        synchronization_kind as i32
+        synchronization_open_close as boolean
+        synchronization_save as boolean
+        synchronization_save_include_text as boolean
+        server_capabilities as a pointer to json value
+        documents as a pointer to list
+        diagnostic_reports as a pointer to list
+        notifications as a pointer to list
+
+class:
+    patterns:
+        [an|a|] lsp client result
+    members:
+        succeeded as boolean
+        status as i32
+        client as a pointer to lsp client
+        error_message as string
+
+class:
+    patterns:
+        [an|a|] lsp document result
+    members:
+        found as boolean
+        uri as string
+        language_id as string
+        text as string
+        version as i32
+
+class:
+    patterns:
+        [an|a|] lsp diagnostics result
+    members:
+        found as boolean
+        has_version as boolean
+        version as i32
+        diagnostics as a pointer to json value
+
+function {lsp client result:outcome}'s error message:
+    replacement:
+        @intrinsic("property", outcome, "error_message")
+
+function [the|] lsp created lifecycle:
+    replacement:
+        0
+
+function [the|] lsp running lifecycle:
+    replacement:
+        1
+
+function [the|] lsp shutdown lifecycle:
+    replacement:
+        2
+
+function [the|] lsp stopped lifecycle:
+    replacement:
+        3
+
+function [the|] lsp no synchronization kind:
+    replacement:
+        0
+
+function [the|] lsp full synchronization kind:
+    replacement:
+        1
+
+function [the|] lsp incremental synchronization kind:
+    replacement:
+        2
+
+function [the|] lsp invalid state status:
+    replacement:
+        20
+
+function [the|] lsp invalid response status:
+    replacement:
+        21
+
+function [the|] lsp document error status:
+    replacement:
+        22
+
+function [the|] lsp server not initialized code:
+    replacement:
+        0 - 32002
+
+function [the|] lsp unknown error code:
+    replacement:
+        0 - 32001
+
+function [the|] lsp request failed code:
+    replacement:
+        0 - 32803
+
+function [the|] lsp server cancelled code:
+    replacement:
+        0 - 32802
+
+function [the|] lsp content modified code:
+    replacement:
+        0 - 32801
+
+function [the|] lsp request cancelled code:
+    replacement:
+        0 - 32800
+
+function {a pointer to lsp client:state}'s synchronization kind:
+    replacement:
+        @intrinsic("property", state, "synchronization_kind")
+
+function {a pointer to lsp client:state}'s synchronization open and close:
+    replacement:
+        @intrinsic("property", state, "synchronization_open_close")
+
+function {a pointer to lsp client:state}'s synchronization save:
+    replacement:
+        @intrinsic("property", state, "synchronization_save")
+
+function {a pointer to lsp client:state}'s synchronization save includes text:
+    replacement:
+        @intrinsic("property", state, "synchronization_save_include_text")
+
+function {a pointer to lsp client:state}'s lifecycle:
+    replacement:
+        @intrinsic("property", state, "lifecycle")
+
+function {a pointer to lsp client:state} server capabilities:
+    replacement:
+        @intrinsic("property", state, "server_capabilities")
+
+function {lsp diagnostics result:outcome}'s has version:
+    replacement:
+        @intrinsic("property", outcome, "has_version")

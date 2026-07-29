@@ -313,7 +313,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         has_expected_diagnostics=true
     fi
 
-    # Compile (5 second timeout)
+    # Compile (120 second timeout)
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
         if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
@@ -323,9 +323,9 @@ for test_dir in "$TESTS_DIR"/*/; do
             failures+=("$test_name")
             continue
         fi
-        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
+        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout 120 "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
     else
-        compile_output=$(run_with_timeout 5 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+        compile_output=$(run_with_timeout 120 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then

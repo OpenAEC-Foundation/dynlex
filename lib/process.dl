@@ -132,6 +132,14 @@ class:
 
 class:
     patterns:
+        [a|] process activity result
+    members:
+        succeeded as boolean
+        activity as boolean
+        error_message as string
+
+class:
+    patterns:
         [a|] process result
     members:
         launched as boolean
@@ -356,6 +364,10 @@ function {process wait result:result}'s error message:
     execute:
         return result's error_message
 
+function {process activity result:result}'s error message:
+    execute:
+        return result's error_message
+
 function {process result:result}'s standard output:
     execute:
         return result's standard_output
@@ -465,7 +477,7 @@ function read available [the|] standard error of {process:child}:
     execute:
         return read 2 from child waiting false
 
-local function status of {process:child} waiting {boolean:should_wait}:
+local function status of {process:child} waiting {integer:milliseconds}:
     execute:
         if not child launched:
             return a failed process wait result
@@ -474,7 +486,7 @@ local function status of {process:child} waiting {boolean:should_wait}:
         set terminated to 0
         set termination_signal to 0 as a 32 bit integer
         set outcome to 0
-        if should_wait:
+        if milliseconds < 0:
             set outcome to @intrinsic(
                 "call",
                 "dynlex_runtime",
@@ -486,13 +498,26 @@ local function status of {process:child} waiting {boolean:should_wait}:
                 the address of terminated,
                 the address of termination_signal
             )
-        else:
+        else if milliseconds = 0:
             set outcome to @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_process_poll",
                 an integer,
                 child's handle,
+                the address of finished,
+                the address of exit_code,
+                the address of terminated,
+                the address of termination_signal
+            )
+        else:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_process_wait_timeout",
+                an integer,
+                child's handle,
+                milliseconds,
                 the address of finished,
                 the address of exit_code,
                 the address of terminated,
@@ -513,11 +538,33 @@ local function status of {process:child} waiting {boolean:should_wait}:
 
 function poll {process:child}:
     execute:
-        return status of child waiting false
+        return status of child waiting 0
 
 function wait for {process:child}:
     execute:
-        return status of child waiting true
+        return status of child waiting 0 - 1
+
+function wait up to {integer:milliseconds} milliseconds for {process:child}:
+    execute:
+        return status of child waiting milliseconds
+
+function wait for [the|] process activity using {process:child} with timeout {integer:milliseconds}:
+    execute:
+        if not child launched:
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        set activity_value to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_wait_activity",
+            an integer,
+            child's handle,
+            milliseconds,
+            the address of activity_value
+        )
+        if outcome != 0:
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        return @intrinsic("construct", a process activity result, true, activity_value != 0, an empty process error)
 
 function terminate {process:child}:
     execute:
@@ -527,6 +574,21 @@ function terminate {process:child}:
             "call",
             "dynlex_runtime",
             "dynlex_process_terminate",
+            an integer,
+            child's handle
+        )
+        if outcome != 0:
+            return a failed process action
+        return a successful process action
+
+function kill {process:child}:
+    execute:
+        if not child launched:
+            return a failed process action
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_kill",
             an integer,
             child's handle
         )
@@ -605,7 +667,7 @@ function run {process command:command} using {string:standard_input}:
         set operation_error to an empty process error
         if communication_outcome != 0:
             set operation_error to the current process error
-        set status to status of child waiting true
+        set status to status of child waiting (0 - 1)
         if (communication_outcome = 0) and (not status's succeeded):
             set operation_error to status's error message
         set standard_output to remaining output 1 of child

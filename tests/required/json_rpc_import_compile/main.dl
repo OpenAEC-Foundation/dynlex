@@ -1,0 +1,3 @@
+import lib/json_rpc.dl
+
+print true as line

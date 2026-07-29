@@ -1,0 +1,128 @@
+# JSON constructors for Language Server Protocol messages.
+
+import lib/json_rpc_values.dl
+
+function [the|] default lsp client capabilities:
+    execute:
+        set encodings to a new json rpc array
+        append json item a new json rpc text for "utf-16" to encodings
+        set general to a new json rpc object
+        add json rpc member "positionEncodings" containing encodings to general
+        set synchronization to a new json rpc object
+        add json rpc member "dynamicRegistration" containing a new json rpc boolean for false to synchronization
+        add json rpc member "willSave" containing a new json rpc boolean for false to synchronization
+        add json rpc member "willSaveWaitUntil" containing a new json rpc boolean for false to synchronization
+        add json rpc member "didSave" containing a new json rpc boolean for true to synchronization
+        set text_document to a new json rpc object
+        add json rpc member "synchronization" containing synchronization to text_document
+        set result_node to a new json rpc object
+        add json rpc member "general" containing general to result_node
+        add json rpc member "textDocument" containing text_document to result_node
+        return result_node
+
+function lsp position at line {integer:line_number} character {integer:character_number}:
+    execute:
+        if line_number < 0 or character_number < 0:
+            @intrinsic("call", "libc", "abort", void)
+        set position_node to a new json rpc object
+        add json rpc member "line" containing a new json rpc integer for line_number to position_node
+        add json rpc member "character" containing a new json rpc integer for character_number to position_node
+        return position_node
+
+function lsp range from line {integer:start_line} character {integer:start_character} to line {integer:end_line} character {integer:end_character}:
+    execute:
+        set range_node to a new json rpc object
+        set start_node to lsp position at line start_line character start_character
+        set end_node to lsp position at line end_line character end_character
+        add json rpc member "start" containing start_node to range_node
+        add json rpc member "end" containing end_node to range_node
+        return range_node
+
+function lsp text document identifier for {string:document_uri}:
+    execute:
+        set identifier_node to a new json rpc object
+        add json rpc member "uri" containing a new json rpc text for document_uri to identifier_node
+        return identifier_node
+
+function lsp versioned text document identifier for {string:document_uri} at version {integer:document_version}:
+    execute:
+        set identifier_node to lsp text document identifier for document_uri
+        add json rpc member "version" containing a new json rpc integer for document_version to identifier_node
+        return identifier_node
+
+function lsp initialize parameters for root uri {string:root_uri} with capabilities {a pointer to json value:capability_node}:
+    execute:
+        set client_info to a new json rpc object
+        add json rpc member "name" containing a new json rpc text for "DynLex" to client_info
+        set result_node to a new json rpc object
+        add json rpc member "processId" containing a new json rpc null to result_node
+        add json rpc member "clientInfo" containing client_info to result_node
+        add json rpc member "rootUri" containing a new json rpc text for root_uri to result_node
+        add json rpc member "capabilities" containing duplicate json rpc node capability_node to result_node
+        return result_node
+
+function lsp initialize parameters with capabilities {a pointer to json value:capability_node}:
+    execute:
+        set client_info to a new json rpc object
+        add json rpc member "name" containing a new json rpc text for "DynLex" to client_info
+        set result_node to a new json rpc object
+        add json rpc member "processId" containing a new json rpc null to result_node
+        add json rpc member "clientInfo" containing client_info to result_node
+        add json rpc member "rootUri" containing a new json rpc null to result_node
+        add json rpc member "capabilities" containing duplicate json rpc node capability_node to result_node
+        return result_node
+
+function lsp did open parameters for uri {string:document_uri} language {string:language_id} version {integer:document_version} text {string:contents}:
+    execute:
+        set document_node to a new json rpc object
+        add json rpc member "uri" containing a new json rpc text for document_uri to document_node
+        add json rpc member "languageId" containing a new json rpc text for language_id to document_node
+        add json rpc member "version" containing a new json rpc integer for document_version to document_node
+        add json rpc member "text" containing a new json rpc text for contents to document_node
+        set result_node to a new json rpc object
+        add json rpc member "textDocument" containing document_node to result_node
+        return result_node
+
+function lsp did close parameters for uri {string:document_uri}:
+    execute:
+        set result_node to a new json rpc object
+        set document_node to lsp text document identifier for document_uri
+        add json rpc member "textDocument" containing document_node to result_node
+        return result_node
+
+function lsp did save parameters for uri {string:document_uri}:
+    execute:
+        set result_node to a new json rpc object
+        set document_node to lsp text document identifier for document_uri
+        add json rpc member "textDocument" containing document_node to result_node
+        return result_node
+
+function lsp did save parameters for uri {string:document_uri} with text {string:contents}:
+    execute:
+        set result_node to lsp did save parameters for uri document_uri
+        add json rpc member "text" containing a new json rpc text for contents to result_node
+        return result_node
+
+function lsp full content change for text {string:contents}:
+    execute:
+        set change_node to a new json rpc object
+        add json rpc member "text" containing a new json rpc text for contents to change_node
+        return change_node
+
+function lsp ranged content change from line {integer:start_line} character {integer:start_character} to line {integer:end_line} character {integer:end_character} with text {string:contents}:
+    execute:
+        set change_node to a new json rpc object
+        set range_node to lsp range from line start_line character start_character to line end_line character end_character
+        add json rpc member "range" containing range_node to change_node
+        add json rpc member "text" containing a new json rpc text for contents to change_node
+        return change_node
+
+function lsp did change parameters for uri {string:document_uri} version {integer:document_version} containing {a pointer to json value:change_node}:
+    execute:
+        set changes to a new json rpc array
+        append json item change_node to changes
+        set result_node to a new json rpc object
+        set document_node to lsp versioned text document identifier for document_uri at version document_version
+        add json rpc member "textDocument" containing document_node to result_node
+        add json rpc member "contentChanges" containing changes to result_node
+        return result_node

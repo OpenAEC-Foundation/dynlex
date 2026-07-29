@@ -1,0 +1,11 @@
+import lib/std.dl
+
+function choose {boolean:condition}:
+    execute:
+        if condition:
+            return 1
+        loop while true:
+            print 0 as line
+        return 2
+
+print choose false as line
