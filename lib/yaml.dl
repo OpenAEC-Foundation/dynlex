@@ -74,7 +74,7 @@ local function add {a pointer to a YAML mapping node:child} to the YAML mapping 
             if capacity < 4:
                 set capacity to 4
             else:
-                set capacity to capacity * 2
+                set capacity to (capacity * 2)
             set children to @intrinsic(
                 "call",
                 "libc",
@@ -88,7 +88,7 @@ local function add {a pointer to a YAML mapping node:child} to the YAML mapping 
             set the children of parent to children
             set the capacity of parent to capacity
         @intrinsic("initialize at", (the children of parent) + (the length of parent), child)
-        set the length of parent to (the length of parent) + 1
+        set the length of parent to ((the length of parent) + 1)
 
 local function the YAML child index named {string:name} in {a pointer to a YAML mapping node:parent}:
     execute:
@@ -97,7 +97,7 @@ local function the YAML child index named {string:name} in {a pointer to a YAML 
             set entry to the item at cursor in the children of parent
             if the key of entry = name:
                 return cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return 0 - 1
 
 function free {a pointer to a YAML mapping node:document}:
@@ -107,7 +107,7 @@ function free {a pointer to a YAML mapping node:document}:
         set index to 0
         loop while index < the length of document:
             free the item at index in the children of document
-            set index to index + 1
+            set index to (index + 1)
         @intrinsic("call", "libc", "free", nothing, the children of document)
         @intrinsic("destroy at", document)
         @intrinsic("call", "libc", "free", nothing, document)
@@ -144,27 +144,27 @@ local function the YAML scalar decoded in {string:source} from {integer:start} t
             set text to the substring of source from start spanning (finish - start) bytes
             return a successful decoded YAML scalar containing text
         set quote to first
-        set reader to start + 1
+        set reader to (start + 1)
         set length to 0
-        set closing to 0 - 1
+        set closing to (0 - 1)
         set reading to true
         loop while reading and reader < finish:
             set current to the unsigned YAML byte at reader in source
             if quote = 34 and current = 92:
                 if reader + 1 >= finish:
-                    set column to (reader - beginning) + 1
+                    set column to ((reader - beginning) + 1)
                     return a failed decoded YAML scalar at column reporting "unterminated quoted scalar escape"
-                set escaped to the unsigned YAML byte at reader + 1 in source
+                set escaped to (the unsigned YAML byte at reader + 1 in source)
                 if the YAML double-quote escape value for escaped < 0:
-                    set column to (reader - beginning) + 1
+                    set column to ((reader - beginning) + 1)
                     return a failed decoded YAML scalar at column reporting "unsupported quoted scalar escape"
-                set length to length + 1
-                set reader to reader + 2
+                set length to (length + 1)
+                set reader to (reader + 2)
             else if current = quote:
                 if quote = 39 and reader + 1 < finish:
                     if the unsigned YAML byte at reader + 1 in source = 39:
-                        set length to length + 1
-                        set reader to reader + 2
+                        set length to (length + 1)
+                        set reader to (reader + 2)
                     else:
                         set closing to reader
                         set reading to false
@@ -172,35 +172,35 @@ local function the YAML scalar decoded in {string:source} from {integer:start} t
                     set closing to reader
                     set reading to false
             else:
-                set length to length + 1
-                set reader to reader + 1
+                set length to (length + 1)
+                set reader to (reader + 1)
         if closing < 0:
-            set column to (start - beginning) + 1
+            set column to ((start - beginning) + 1)
             return a failed decoded YAML scalar at column reporting "unterminated quoted scalar"
-        set cursor to closing + 1
+        set cursor to (closing + 1)
         loop while cursor < finish:
             set octet to the unsigned YAML byte at cursor in source
             if octet = 32 or octet = 9:
-                set cursor to cursor + 1
+                set cursor to (cursor + 1)
             else:
-                set column to (cursor - beginning) + 1
+                set column to ((cursor - beginning) + 1)
                 return a failed decoded YAML scalar at column reporting "unexpected text after quoted scalar"
         set text to a new string buffer containing length bytes
         set writer to 0
-        set reader to start + 1
+        set reader to (start + 1)
         loop while reader < closing:
             set current to the unsigned YAML byte at reader in source
             if quote = 34 and current = 92:
-                set escaped to the unsigned YAML byte at reader + 1 in source
+                set escaped to (the unsigned YAML byte at reader + 1 in source)
                 store the YAML double-quote escape value for escaped as a byte into the data of text at writer
-                set reader to reader + 2
+                set reader to (reader + 2)
             else if quote = 39 and current = 39:
                 store 39 as a byte into the data of text at writer
-                set reader to reader + 2
+                set reader to (reader + 2)
             else:
                 store current as a byte into the data of text at writer
-                set reader to reader + 1
-            set writer to writer + 1
+                set reader to (reader + 1)
+            set writer to (writer + 1)
         return a successful decoded YAML scalar containing text
 
 local function a YAML parsing failure for {a pointer to a YAML mapping node:document} with {a pointer to a pointer to a YAML mapping node:ancestors} at source position {integer:line}, {integer:column} reporting message:
@@ -232,16 +232,16 @@ local function scan the YAML line in {string:source} from {integer:start} storin
             if octet = 10 or octet = 13:
                 set scanning to false
             else:
-                set ending to ending + 1
+                set ending to (ending + 1)
         set next to ending
         if next < the length of source:
             if the unsigned YAML byte at next in source = 13:
-                set next to next + 1
+                set next to (next + 1)
                 if next < the length of source:
                     if the unsigned YAML byte at next in source = 10:
-                        set next to next + 1
+                        set next to (next + 1)
             else:
-                set next to next + 1
+                set next to (next + 1)
         @intrinsic("store at", destination, ending)
         @intrinsic("store at", continuation, next)
 
@@ -252,7 +252,7 @@ local function the YAML leading content in {string:source} from {integer:start} 
         loop while trimming and position < finish:
             set octet to the unsigned YAML byte at position in source
             if octet = 32 or octet = 9:
-                set position to position + 1
+                set position to (position + 1)
             else:
                 set trimming to false
         return position
@@ -262,16 +262,16 @@ local function the YAML trailing content end in {string:source} from {integer:st
         set position to finish
         set trimming to true
         loop while trimming and position > start:
-            set octet to the unsigned YAML byte at position - 1 in source
+            set octet to (the unsigned YAML byte at position - 1 in source)
             if octet = 32 or octet = 9:
-                set position to position - 1
+                set position to (position - 1)
             else:
                 set trimming to false
         return position
 
 local function find YAML delimiters in {string:source} from {integer:start} to {integer:finish} storing colon at {a pointer to an integer:destination} and comment at {a pointer to an integer:annotation}:
     execute:
-        set delimiter to 0 - 1
+        set delimiter to (0 - 1)
         set marker to finish
         set cursor to start
         set quote to 0
@@ -288,7 +288,7 @@ local function find YAML delimiters in {string:source} from {integer:start} to {
                         set delimiter to cursor
                     if octet = 34 or octet = 39:
                         set quote to octet
-                    set cursor to cursor + 1
+                    set cursor to (cursor + 1)
             else if quote = 34:
                 if escaped:
                     set escaped to false
@@ -296,17 +296,17 @@ local function find YAML delimiters in {string:source} from {integer:start} to {
                     set escaped to true
                 else if octet = 34:
                     set quote to 0
-                set cursor to cursor + 1
+                set cursor to (cursor + 1)
             else:
                 if octet = 39:
                     if cursor + 1 < finish:
                         if the unsigned YAML byte at cursor + 1 in source = 39:
-                            set cursor to cursor + 1
+                            set cursor to (cursor + 1)
                         else:
                             set quote to 0
                     else:
                         set quote to 0
-                set cursor to cursor + 1
+                set cursor to (cursor + 1)
         @intrinsic("store at", destination, delimiter)
         @intrinsic("store at", annotation, marker)
 
@@ -328,7 +328,7 @@ local function the YAML mapping parsed from {string:source}:
             scan the YAML line in source from origin storing its end at the address of ending and its continuation at the address of next
             set offset to next
             set content to the YAML leading content in source from origin to ending
-            set present to content < ending
+            set present to (content < ending)
             if present:
                 if the unsigned YAML byte at content in source = 35:
                     set present to false
@@ -336,11 +336,11 @@ local function the YAML mapping parsed from {string:source}:
                 set cursor to origin
                 loop while cursor < content:
                     if the unsigned YAML byte at cursor in source = 9:
-                        set column to (cursor - origin) + 1
+                        set column to ((cursor - origin) + 1)
                         return a YAML parsing failure for document with ancestors at source position line, column reporting "tabs are not allowed for indentation"
-                    set cursor to cursor + 1
-                set spaces to content - origin
-                set column to spaces + 1
+                    set cursor to (cursor + 1)
+                set spaces to (content - origin)
+                set column to (spaces + 1)
                 set depth to 0
                 if spaces > 0:
                     if width = 0:
@@ -349,7 +349,7 @@ local function the YAML mapping parsed from {string:source}:
                     else:
                         if the remainder of spaces divided by width != 0:
                             return a YAML parsing failure for document with ancestors at source position line, column reporting "indentation does not match the established width"
-                        set depth to spaces / width
+                        set depth to (spaces / width)
                 if depth > previous + 1:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "indentation can only increase by one level"
                 if depth > previous:
@@ -359,7 +359,7 @@ local function the YAML mapping parsed from {string:source}:
                         return a YAML parsing failure for document with ancestors at source position line, column reporting "a scalar entry cannot contain nested entries"
                     store prior into ancestors at depth
                 set parent to the item at depth in ancestors
-                set delimiter to 0 - 1
+                set delimiter to (0 - 1)
                 set comment to ending
                 find YAML delimiters in source from content to ending storing colon at the address of delimiter and comment at the address of comment
                 if delimiter < 0 or delimiter >= comment:
@@ -368,14 +368,14 @@ local function the YAML mapping parsed from {string:source}:
                 set ending to the YAML trailing content end in source from beginning to delimiter
                 if ending <= beginning:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "a mapping key cannot be empty"
-                set column to (beginning - origin) + 1
+                set column to ((beginning - origin) + 1)
                 set initial to the unsigned YAML byte at beginning in source
                 if initial = 34 or initial = 39:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "quoted mapping keys are not supported"
                 set name to the substring of source from beginning spanning (ending - beginning) bytes
                 if the YAML child index named name in parent >= 0:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "duplicate mapping key"
-                set remainder to delimiter + 1
+                set remainder to (delimiter + 1)
                 set start to the YAML leading content in source from remainder to comment
                 set finish to the YAML trailing content end in source from start to comment
                 set child to a new YAML mapping node named name at source position line, column
@@ -391,7 +391,7 @@ local function the YAML mapping parsed from {string:source}:
                 add child to the YAML mapping parent
                 set prior to child
                 set previous to depth
-            set line to line + 1
+            set line to (line + 1)
         @intrinsic("call", "libc", "free", nothing, ancestors)
         return a successful YAML parsing with document
 

@@ -4,8 +4,8 @@ function emit condition:
     execute:
         ignore @intrinsic("call", "libc", "puts", an integer, @intrinsic("select", condition, "1", "0"))
 
-set identical to "dynlex" = "dynlex"
-set different to "dynlex" = "dyn"
+set identical to ("dynlex" = "dynlex")
+set different to ("dynlex" = "dyn")
 
 emit identical
 emit different

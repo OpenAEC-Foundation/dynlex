@@ -117,7 +117,7 @@ loop while number < the number of lines in lines:
     print the position of finish
     print "-"
     print the position of following as a line
-    set number to number + 1
+    set number to (number + 1)
 set newline to the line number at byte offset 1 in lines
 print the status of newline
 print ":"

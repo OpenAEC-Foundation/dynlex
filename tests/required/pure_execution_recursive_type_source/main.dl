@@ -30,7 +30,7 @@ function the factorial of number:
     execute:
         if number <= 1:
             return 1
-        set predecessor to number - 1
+        set predecessor to (number - 1)
         return number * the factorial of predecessor
 
 ignore @intrinsic("array", the factorial of 8)

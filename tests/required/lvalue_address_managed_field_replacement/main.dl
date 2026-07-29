@@ -9,7 +9,7 @@ class:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
     release:
-        set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1
+        set count to (@intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1)
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
 
 class:

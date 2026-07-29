@@ -95,7 +95,7 @@ function the inverse of {quaternion:value}:
 function a quaternion for rotation around {vector:axis} by {any:angle} degrees:
     execute:
         set unit to axis normalized
-        set half to angle * 0.008726646259971648
+        set half to (angle * 0.008726646259971648)
         set sine to the sine of half
         set cosine to the cosine of half
         return (a new quaternion with w cosine, x the x of unit * sine, y the y of unit * sine and z the z of unit * sine) normalized
@@ -104,7 +104,7 @@ function {vector:value} rotated around {vector:axis} by {any:angle} degrees:
     execute:
         set rotation to a quaternion for rotation around axis by angle degrees
         set point to a new quaternion with w 0.0, x the x of value, y the y of value and z the z of value
-        set result to rotation * point * the conjugate of rotation
+        set result to (rotation * point * the conjugate of rotation)
         return a new vector with x the x of result, y the y of result and z the z of result
 
 function {quaternion:value} rotated around {vector:axis} by {any:angle} degrees:

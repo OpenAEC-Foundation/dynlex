@@ -29,7 +29,7 @@ run 4 iterations starting at 9
 # alternative and bound through the parameter alternative.
 function the middle result [from gap|by default] with tail:
 	execute:
-		set gap to tail * 2
+		set gap to (tail * 2)
 		return gap
 
 print (the middle result by default with 6) as a line

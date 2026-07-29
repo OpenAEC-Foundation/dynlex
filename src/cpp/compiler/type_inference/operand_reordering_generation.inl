@@ -188,7 +188,7 @@ generateCompletedGroupingChoices(Expression *&candidateRoot, GroupingGenerationS
 }
 
 static bool
-isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpression, GroupingGenerationState &state) {
+canClaimGroupingSpan(int start, int end, int rootIndex, Expression *rootExpression, const GroupingGenerationState &state) {
 	if (!expressionHasGroupingShape(rootExpression) || state.opaqueNodes.contains(rootExpression))
 		return false;
 	bool hasLeftEdge = startsWithArgument(rootExpression);
@@ -204,17 +204,21 @@ isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpres
 		return false;
 	if (!hasRightEdge && rootIndex < end)
 		return false;
+	return true;
+}
 
+static bool
+isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpression, GroupingGenerationState &state) {
+	if (!canClaimGroupingSpan(start, end, rootIndex, rootExpression, state))
+		return false;
 	int rootPrecedence = expressionPrecedence(rootExpression);
-	if (rootPrecedence <= 0 || !hasLeftEdge || !hasRightEdge)
+	if (rootPrecedence <= 0)
 		return true;
 	for (int otherIndex = start; otherIndex <= end; otherIndex++) {
 		if (otherIndex == rootIndex)
 			continue;
 		Expression *otherExpression = state.flatNodes[otherIndex];
-		if (state.opaqueNodes.contains(otherExpression) || !expressionHasGroupingShape(otherExpression))
-			continue;
-		if (!startsWithArgument(otherExpression) || !endsWithArgument(otherExpression))
+		if (!canClaimGroupingSpan(start, end, otherIndex, otherExpression, state))
 			continue;
 		int otherPrecedence = expressionPrecedence(otherExpression);
 		if (otherPrecedence > 0 && otherPrecedence < rootPrecedence)

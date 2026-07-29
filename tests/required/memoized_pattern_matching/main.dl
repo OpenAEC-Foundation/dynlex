@@ -22,4 +22,4 @@ function first second suffix:
     execute:
         return @intrinsic("add", first, second)
 
-set red to red * 0.5 + 0.5 set green to green * 0.5 +import0.5
+set red to (red * 0.5 + 0.5 set green to green * 0.5 +import0.5)

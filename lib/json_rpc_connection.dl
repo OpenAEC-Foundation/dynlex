@@ -1,0 +1,453 @@
+# JSON-RPC 2.0 process connection, terminal state, and cleanup.
+
+import lib/json_rpc_framing.dl
+import lib/process.dl
+
+class:
+    patterns:
+        [a|] json rpc connection
+    members:
+        child as process
+        limits as json rpc limits
+        state as a 32 bit integer
+        input closed as a boolean
+        output ended as a boolean
+        buffered output as a string
+        standard error as a string
+        failure status as a 32 bit integer
+        failure message as a string
+
+class:
+    patterns:
+        [a|] json rpc connection result
+    members:
+        succeeded as a boolean
+        connection as a pointer to json rpc connection
+        error message as a string
+
+class:
+    patterns:
+        [a|] json rpc close result
+    members:
+        succeeded as a boolean
+        status as a 32 bit integer
+        exit code as a 64 bit integer
+        terminated as a boolean
+        forced as a boolean
+        standard error as a string
+        error message as a string
+
+function [the|] json rpc open state:
+    replacement:
+        0
+
+function [the|] json rpc peer closed state:
+    replacement:
+        1
+
+function [the|] json rpc broken state:
+    replacement:
+        2
+
+function [the|] json rpc closed state:
+    replacement:
+        3
+
+function {json rpc connection result:result}'s error message:
+    replacement:
+        @intrinsic("property", result, "error message")
+
+function {json rpc close result:result}'s error message:
+    replacement:
+        @intrinsic("property", result, "error message")
+
+local function a failed json rpc connection reporting {string:message}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc connection result,
+            false,
+            0 as a pointer to json rpc connection,
+            message
+        )
+
+local function a successful json rpc connection containing {a pointer to json rpc connection:connection}:
+    replacement:
+        @intrinsic("construct", a json rpc connection result, true, connection, an empty json rpc error)
+
+function the result of connecting json rpc to {process:child} under {json rpc limits:limits}:
+    execute:
+        set validation to the validation of limits as json rpc limits
+        if the inverse of (validation's succeeded):
+            set detail to validation's error message
+            return a failed json rpc connection reporting detail
+        if the inverse of (child was launched):
+            return a failed json rpc connection reporting the starting error of child
+        set initial to @intrinsic(
+            "construct",
+            a json rpc connection,
+            child,
+            limits,
+            the json rpc open state,
+            false,
+            false,
+            the string form of "",
+            the string form of "",
+            the json rpc success status,
+            the string form of ""
+        )
+        allocate 1 slots of initial and set connection to it
+        return a successful json rpc connection containing connection
+
+function the result of connecting json rpc to {process:child}:
+    execute:
+        set limits to the default json rpc limits
+        return the result of connecting json rpc to child under limits
+
+function the result of opening a json rpc connection using {process command:command} under {json rpc limits:limits}:
+    execute:
+        launch command and set child to it
+        return the result of connecting json rpc to child under limits
+
+function the result of opening a json rpc connection using {process command:command}:
+    execute:
+        set limits to the default json rpc limits
+        return the result of opening a json rpc connection using command under limits
+
+local function the result of breaking json rpc connection {a pointer to json rpc connection:connection} with status {integer:status} reporting {string:message}:
+    execute:
+        if connection's state != the json rpc broken state:
+            set connection's state to the json rpc broken state
+            set connection's failure status to status
+            set connection's failure message to message
+        set status to connection's failure status
+        set detail to connection's failure message
+        return a failed json rpc operation with status status reporting detail
+
+local function the result of breaking json rpc connection {a pointer to json rpc connection:connection} with status {integer:status} reporting {C string:message}:
+    execute:
+        return the result of breaking json rpc connection connection with status status reporting the string form of message
+
+local function the result of appending json rpc standard error {string:contents} to {a pointer to json rpc connection:connection}:
+    execute:
+        set space to (connection's limits's maximum standard error length - the length of connection's standard error)
+        if the length of contents <= space:
+            set connection's standard error to (connection's standard error + contents)
+            return a successful json rpc operation
+        if space > 0:
+            set prefix to the substring of contents from 0 spanning space bytes
+            set connection's standard error to (connection's standard error + prefix)
+        return the result of breaking json rpc connection connection with status the json rpc limit exceeded status reporting "JSON-RPC child standard error exceeds its configured limit"
+
+local function the result of draining json rpc standard error from {a pointer to json rpc connection:connection}:
+    execute:
+        set reading to true
+        loop while reading:
+            read the available standard error of connection's child and set read to it
+            if the inverse of (read succeeded):
+                set detail to read's error message
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting detail
+            if the length of read's contents > 0:
+                set appended to the result of appending json rpc standard error read's contents to connection
+                if the inverse of (appended's succeeded):
+                    return appended
+            else:
+                set reading to false
+        return a successful json rpc operation
+
+local function the result of appending json rpc output {string:contents} to {a pointer to json rpc connection:connection}:
+    execute:
+        set available to (connection's limits's maximum buffered output length - the length of connection's buffered output)
+        if the length of contents > available:
+            return the result of breaking json rpc connection connection with status the json rpc limit exceeded status reporting "Buffered JSON-RPC output exceeds its configured limit"
+        set connection's buffered output to (connection's buffered output + contents)
+        return a successful json rpc operation
+
+local function the result of reading more json rpc output using {a pointer to json rpc connection:connection} with timeout {integer:milliseconds}:
+    execute:
+        if connection's output ended:
+            return a failed json rpc operation with status the json rpc end of stream status reporting "JSON-RPC stream ended"
+        set child to connection's child
+        set waiting to true
+        loop while waiting:
+            set error to the result of draining json rpc standard error from connection
+            if the inverse of (error's succeeded):
+                return error
+            read the available standard output of child and set read to it
+            if the inverse of (read succeeded):
+                set detail to read's error message
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting detail
+            if the length of read's contents > 0:
+                return the result of appending json rpc output read's contents to connection
+            if read reached the end of stream:
+                set connection's output ended to true
+                set ending to the result of draining json rpc standard error from connection
+                if the inverse of (ending's succeeded):
+                    return ending
+                return a failed json rpc operation with status the json rpc end of stream status reporting "JSON-RPC stream ended"
+            set delay to 1000
+            if milliseconds >= 0:
+                set delay to milliseconds
+            wait up to delay milliseconds for process activity from child and set activity to it
+            if the inverse of (activity succeeded):
+                set detail to activity's error message
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting detail
+            if (activity reports no activity) and (milliseconds >= 0):
+                return a failed json rpc operation with status the json rpc timeout status reporting "Timed out waiting for a JSON-RPC frame"
+        return the result of breaking json rpc connection connection with status the json rpc io error status reporting "JSON-RPC output loop ended unexpectedly"
+
+local function the terminal json rpc reception from {a pointer to json rpc connection:connection}:
+    execute:
+        if connection's state = the json rpc peer closed state:
+            return a failed json rpc receive with status the json rpc end of stream status reporting "JSON-RPC stream ended"
+        if connection's state = the json rpc broken state:
+            set status to connection's failure status
+            set detail to connection's failure message
+            return a failed json rpc receive with status status reporting detail
+        return a failed json rpc receive with status the json rpc io error status reporting "JSON-RPC connection is closed"
+
+local function the next json rpc message from {a pointer to json rpc connection:connection} with timeout {integer:milliseconds}:
+    execute:
+        if connection's state != the json rpc open state:
+            return the terminal json rpc reception from connection
+        set receiving to true
+        loop while receiving:
+            set buffer to connection's buffered output
+            set limits to connection's limits
+            set header to the json rpc frame header in buffer under limits
+            if the inverse of (header's succeeded):
+                set status to header's status
+                set detail to header's error message
+                set broken to the result of breaking json rpc connection connection with status status reporting detail
+                set failure to broken's status
+                set detail to broken's error message
+                return a failed json rpc receive with status failure reporting detail
+            if the inverse of (header's complete):
+                set read to the result of reading more json rpc output using connection with timeout milliseconds
+                if the inverse of (read's succeeded):
+                    if read's status = the json rpc end of stream status:
+                        if the length of connection's buffered output = 0:
+                            set connection's state to the json rpc peer closed state
+                            return the terminal json rpc reception from connection
+                        set broken to the result of breaking json rpc connection connection with status the json rpc malformed frame status reporting "JSON-RPC stream ended in a header"
+                        set failure to broken's status
+                        set detail to broken's error message
+                        return a failed json rpc receive with status failure reporting detail
+                    set status to read's status
+                    set detail to read's error message
+                    return a failed json rpc receive with status status reporting detail
+            else:
+                set offset to header's header length
+                set size to header's payload length
+                set required to (offset + size)
+                if the length of connection's buffered output < required:
+                    set read to the result of reading more json rpc output using connection with timeout milliseconds
+                    if the inverse of (read's succeeded):
+                        if read's status = the json rpc end of stream status:
+                            set broken to the result of breaking json rpc connection connection with status the json rpc malformed frame status reporting "JSON-RPC stream ended in a payload"
+                            set failure to broken's status
+                            set detail to broken's error message
+                            return a failed json rpc receive with status failure reporting detail
+                        set status to read's status
+                        set detail to read's error message
+                        return a failed json rpc receive with status status reporting detail
+                else:
+                    set payload to the substring of connection's buffered output from offset spanning size bytes
+                    validate payload as UTF8 and set validation to it
+                    if validation failed:
+                        set diagnostic to the string form of "JSON-RPC payload contains invalid UTF-8 at byte "
+                        set diagnostic to (diagnostic + the string form of the error byte offset of validation)
+                        set broken to the result of breaking json rpc connection connection with status the json rpc invalid utf8 status reporting diagnostic
+                        set failure to broken's status
+                        set detail to broken's error message
+                        return a failed json rpc receive with status failure reporting detail
+                    parse payload as JSON and set parsed to it
+                    if the inverse of (parsed succeeded):
+                        set diagnostic to the string form of "JSON-RPC payload contains invalid JSON at byte "
+                        set diagnostic to (diagnostic + the string form of the JSON error position in parsed)
+                        free parsed
+                        set broken to the result of breaking json rpc connection connection with status the json rpc invalid json status reporting diagnostic
+                        set failure to broken's status
+                        set detail to broken's error message
+                        return a failed json rpc receive with status failure reporting detail
+                    set envelope to the value of parsed
+                    if the inverse of (envelope is a JSON object):
+                        free parsed
+                        set broken to the result of breaking json rpc connection connection with status the json rpc invalid message status reporting "JSON-RPC batches and non-object messages are unsupported"
+                        set failure to broken's status
+                        set detail to broken's error message
+                        return a failed json rpc receive with status failure reporting detail
+                    set remainder to (the length of connection's buffered output - required)
+                    set connection's buffered output to the substring of connection's buffered output from required spanning remainder bytes
+                    return a successful json rpc receive containing envelope
+        return the terminal json rpc reception from connection
+
+function the next json rpc message from {a pointer to json rpc connection:connection}:
+    execute:
+        return the next json rpc message from connection with timeout (0 - 1)
+
+function the next json rpc message from {a pointer to json rpc connection:connection} waiting up to {integer:milliseconds} milliseconds:
+    execute:
+        if milliseconds < 0:
+            return a failed json rpc receive with status the json rpc timeout status reporting "JSON-RPC receive timeout must not be negative"
+        return the next json rpc message from connection with timeout milliseconds
+
+local function the result of writing all {string:contents} to json rpc connection {a pointer to json rpc connection:connection}:
+    execute:
+        set written to 0
+        loop while written < the length of contents:
+            set remaining to the substring of contents from written spanning (the length of contents - written) bytes
+            write remaining to the standard input of connection's child and set operation to it
+            set count to @intrinsic("cast", operation's byte count, an integer)
+            if count < 0 or count > the length of remaining:
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting "JSON-RPC write reported an invalid byte count"
+            set written to (written + count)
+            if the inverse of (operation succeeded):
+                set message to operation's error message
+                if written > 0:
+                    set message to (the string form of "JSON-RPC frame was partially written: " + message)
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting message
+            if count = 0:
+                return the result of breaking json rpc connection connection with status the json rpc io error status reporting "JSON-RPC write made no progress"
+        return a successful json rpc operation
+
+function the result of sending json rpc value {a pointer to a JSON value:envelope} using {a pointer to json rpc connection:connection}:
+    execute:
+        if connection's state != the json rpc open state or connection's input closed:
+            return a failed json rpc operation with status the json rpc io error status reporting "JSON-RPC input is not open"
+        set validation to the validation of outbound json rpc message envelope
+        if the inverse of (validation's succeeded):
+            return validation
+        set payload to the compact JSON form of envelope
+        if the length of payload > connection's limits's maximum payload length:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "JSON-RPC output payload exceeds its configured limit"
+        set header to the string form of "Content-Length: "
+        set header to (header + the string form of the length of payload)
+        set frame to (header + the string form of "\r\n\r\n")
+        set frame to (frame + payload)
+        return the result of writing all frame to json rpc connection connection
+
+local function a new json rpc connection text for {any:input}:
+    execute:
+        set result to a new JSON value of kind the JSON text kind
+        set the text of result to the string form of input
+        return result
+
+function the result of sending json rpc notification {any:method} with {a pointer to a JSON value:parameters} using {a pointer to json rpc connection:connection}:
+    execute:
+        set envelope to a new JSON value of kind the JSON object kind
+        add a JSON member named the string form of "jsonrpc" with value a new json rpc connection text for "2.0" to envelope
+        add a JSON member named the string form of "method" with value a new json rpc connection text for method to envelope
+        add a JSON member named the string form of "params" with value parameters to envelope
+        set outcome to the result of sending json rpc value envelope using connection
+        forget the value of JSON member 2 in envelope
+        free envelope
+        return outcome
+
+function the result of sending json rpc notification {any:method} using {a pointer to json rpc connection:connection}:
+    execute:
+        set envelope to a new JSON value of kind the JSON object kind
+        add a JSON member named the string form of "jsonrpc" with value a new json rpc connection text for "2.0" to envelope
+        add a JSON member named the string form of "method" with value a new json rpc connection text for method to envelope
+        set outcome to the result of sending json rpc value envelope using connection
+        free envelope
+        return outcome
+
+function the result of closing the input of {a pointer to json rpc connection:connection}:
+    execute:
+        if connection's state = the json rpc closed state:
+            return a failed json rpc operation with status the json rpc io error status reporting "JSON-RPC connection is closed"
+        if connection's input closed:
+            return a successful json rpc operation
+        close the standard input of connection's child and set closure to it
+        if the inverse of (closure succeeded):
+            set detail to closure's error message
+            return the result of breaking json rpc connection connection with status the json rpc io error status reporting detail
+        set connection's input closed to true
+        return a successful json rpc operation
+
+local function a json rpc close outcome succeeding {boolean:succeeded} with status {integer:status} exit code {64 bit integer:code} terminated {boolean:terminated} forced {boolean:forced} error {string:detail} for {a pointer to json rpc connection:connection}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc close result,
+            succeeded,
+            status,
+            code,
+            terminated,
+            forced,
+            connection's standard error,
+            detail
+        )
+
+function the result of closing json rpc connection {a pointer to json rpc connection:state}:
+    execute:
+        if state's state = the json rpc closed state:
+            return a json rpc close outcome succeeding true with status the json rpc success status exit code 0 as a 64 bit integer terminated false forced false error an empty json rpc error for state
+        set succeeded to true
+        set status to the json rpc success status
+        set detail to an empty json rpc error
+        if the inverse of (state's input closed):
+            set input to the result of closing the input of state
+            if the inverse of (input's succeeded):
+                set succeeded to false
+                set status to input's status
+                set detail to input's error message
+        set forced to false
+        set timeout to state's limits's graceful close timeout
+        wait up to timeout milliseconds for state's child and set waiting to it
+        if the inverse of (waiting succeeded):
+            set succeeded to false
+            set status to the json rpc io error status
+            set detail to waiting's error message
+        if waiting succeeded and the inverse of (waiting reports completion):
+            set forced to true
+            terminate state's child and set termination to it
+            if the inverse of (termination succeeded):
+                set succeeded to false
+                set status to the json rpc io error status
+                set detail to termination's error message
+            else:
+                set timeout to state's limits's termination timeout
+                wait up to timeout milliseconds for state's child and set waiting to it
+                if the inverse of (waiting succeeded):
+                    set succeeded to false
+                    set status to the json rpc io error status
+                    set detail to waiting's error message
+                else if the inverse of (waiting reports completion):
+                    kill state's child and set killed to it
+                    if the inverse of (killed succeeded):
+                        set succeeded to false
+                        set status to the json rpc io error status
+                        set detail to killed's error message
+                    else:
+                        set timeout to state's limits's termination timeout
+                        wait up to timeout milliseconds for state's child and set waiting to it
+        set error to the result of draining json rpc standard error from state
+        if the inverse of (error's succeeded):
+            set succeeded to false
+            set status to error's status
+            set detail to error's error message
+        if waiting succeeded and waiting reports completion:
+            if the inverse of forced and waiting's exit code != (0 as a 64 bit integer):
+                set succeeded to false
+                set status to the json rpc child exit error status
+                set detail to the string form of "JSON-RPC child exited unsuccessfully"
+        clean up state's child and set cleaned to it
+        if the inverse of (cleaned succeeded):
+            set code to waiting's exit code
+            set terminated to (waiting reports termination)
+            set detail to cleaned's error message
+            return a json rpc close outcome succeeding false with status the json rpc io error status exit code code terminated terminated forced forced error detail for state
+        set state's state to the json rpc closed state
+        set code to waiting's exit code
+        set terminated to (waiting reports termination)
+        return a json rpc close outcome succeeding succeeded with status status exit code code terminated terminated forced forced error detail for state
+
+function free json rpc connection {a pointer to json rpc connection:state}:
+    execute:
+        set closed to the result of closing json rpc connection state
+        if state's state != the json rpc closed state:
+            @intrinsic("call", "libc", "abort", nothing)
+        @intrinsic("destroy at", state)
+        @intrinsic("call", "libc", "free", nothing, state)

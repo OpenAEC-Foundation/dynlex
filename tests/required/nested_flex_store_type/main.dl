@@ -32,7 +32,7 @@ class:
 
 flex function ensure {list:values} using sample:
     replacement:
-        set capacity to the capacity of values + sample
+        set capacity to (the capacity of values + sample)
 
 flex function append item to {list:values}:
     replacement:

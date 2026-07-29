@@ -1,0 +1,680 @@
+# JSON-RPC 2.0 message correlation, queues, cancellation, and dispatch.
+
+import lib/json_rpc_connection.dl
+import lib/json_rpc_values.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] json rpc session
+    members:
+        connection as a pointer to json rpc connection
+        next identifier as a 32 bit integer
+        pending keys as a pointer to a list
+        pending identifiers as a pointer to a list
+        notifications as a pointer to a list
+        requests as a pointer to a list
+        responses as a pointer to a list
+        diagnostics as a pointer to a list
+        diagnostic texts as a pointer to a list
+
+class:
+    patterns:
+        [a|] json rpc send result
+    members:
+        succeeded as a boolean
+        status as a 32 bit integer
+        request id as a string
+        request identifier as a pointer to a JSON value
+        error message as a string
+
+class:
+    patterns:
+        [a|] json rpc queued message
+    members:
+        succeeded as a boolean
+        status as a 32 bit integer
+        message as a pointer to a JSON value
+        error message as a string
+
+class:
+    patterns:
+        [a|] json rpc response
+    members:
+        succeeded as a boolean
+        status as a 32 bit integer
+        message as a pointer to a JSON value
+        result as a pointer to a JSON value
+        remote error code as a 32 bit integer
+        remote error code text as a string
+        remote error message as a string
+        remote error data as a pointer to a JSON value
+        error message as a string
+
+function [the|] json rpc server request pending status:
+    replacement:
+        10
+
+function [the|] json rpc remote error status:
+    replacement:
+        11
+
+function [the|] json rpc protocol error status:
+    replacement:
+        12
+
+function [the|] json rpc queue empty status:
+    replacement:
+        13
+
+function [the|] json rpc parse error code:
+    replacement:
+        0 - 32700
+
+function [the|] json rpc invalid request code:
+    replacement:
+        0 - 32600
+
+function [the|] json rpc method not found code:
+    replacement:
+        0 - 32601
+
+function [the|] json rpc invalid parameters code:
+    replacement:
+        0 - 32602
+
+function [the|] json rpc internal error code:
+    replacement:
+        0 - 32603
+
+function {json rpc send result:outcome}'s request id:
+    replacement:
+        @intrinsic("property", outcome, "request id")
+
+function {json rpc send result:outcome}'s request identifier:
+    replacement:
+        @intrinsic("property", outcome, "request identifier")
+
+function {json rpc send result:outcome}'s error message:
+    replacement:
+        @intrinsic("property", outcome, "error message")
+
+function {json rpc queued message:outcome}'s error message:
+    replacement:
+        @intrinsic("property", outcome, "error message")
+
+function {json rpc response:outcome}'s remote error code:
+    replacement:
+        @intrinsic("property", outcome, "remote error code")
+
+function {json rpc response:outcome}'s remote error code text:
+    replacement:
+        @intrinsic("property", outcome, "remote error code text")
+
+function {json rpc response:outcome}'s remote error message:
+    replacement:
+        @intrinsic("property", outcome, "remote error message")
+
+function {json rpc response:outcome}'s remote error data:
+    replacement:
+        @intrinsic("property", outcome, "remote error data")
+
+function {json rpc response:outcome}'s error message:
+    replacement:
+        @intrinsic("property", outcome, "error message")
+
+local function an empty json rpc session message:
+    replacement:
+        0 as a pointer to a JSON value
+
+function a json rpc session for {a pointer to json rpc connection:connection}:
+    execute:
+        set keys to an empty list of string
+        set identifiers to an empty list of a pointer to a JSON value
+        set notifications to an empty list of a pointer to a JSON value
+        set requests to an empty list of a pointer to a JSON value
+        set responses to an empty list of a pointer to a JSON value
+        set diagnostics to an empty list of a pointer to a JSON value
+        set descriptions to an empty list of string
+        set initial to @intrinsic(
+            "construct",
+            a json rpc session,
+            connection,
+            1,
+            keys,
+            identifiers,
+            notifications,
+            requests,
+            responses,
+            diagnostics,
+            descriptions
+        )
+        allocate 1 slots of initial and set result to it
+        return result
+
+function the json rpc key for identifier {a pointer to a JSON value:identifier}:
+    execute:
+        if the inverse of (json rpc identifier identifier is valid):
+            @intrinsic("call", "libc", "abort", nothing)
+        if identifier is JSON null:
+            return the string form of "n:"
+        if the kind of identifier = the JSON text kind:
+            set prefix to the string form of "s:"
+            return prefix + the text of identifier
+        set lexeme to the text of identifier
+        if lexeme = "-0":
+            set lexeme to the string form of "0"
+        set prefix to the string form of "i:"
+        return prefix + lexeme
+
+local function the displayed json rpc identifier {a pointer to a JSON value:identifier}:
+    execute:
+        if identifier is JSON null:
+            return the string form of "null"
+        return the text of identifier
+
+local function the pending json rpc request index for key {string:key} in {a pointer to json rpc session:state}:
+    execute:
+        set values to state's pending keys
+        set cursor to 0
+        loop while cursor < the length of values:
+            if the item at cursor in values = key:
+                return cursor
+            set cursor to (cursor + 1)
+        return 0 - 1
+
+local function the json rpc response index for key {string:key} in {a pointer to json rpc session:state}:
+    execute:
+        set values to state's responses
+        set cursor to 0
+        loop while cursor < the length of values:
+            set envelope to @intrinsic("cast", the item at cursor in values, a pointer to a JSON value)
+            set identifier to the JSON member named "id" in envelope
+            set candidate to the json rpc key for identifier identifier
+            if candidate = key:
+                return cursor
+            set cursor to (cursor + 1)
+        return 0 - 1
+
+local function a successful json rpc send for {string:label} borrowing {a pointer to a JSON value:identifier}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc send result,
+            true,
+            the json rpc success status,
+            label,
+            identifier,
+            an empty json rpc error
+        )
+
+local function a failed json rpc send with status {integer:status} reporting {string:detail}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc send result,
+            false,
+            status,
+            an empty json rpc error,
+            an empty json rpc session message,
+            detail
+        )
+
+local function a failed json rpc send with status {integer:status} reporting {C string:detail}:
+    execute:
+        return a failed json rpc send with status status reporting the string form of detail
+
+local function the result of sending json rpc request named {any:method} including parameters {boolean:included} from {a pointer to a JSON value:parameters} with id {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state}:
+    execute:
+        if the inverse of (json rpc identifier identifier is valid):
+            return a failed json rpc send with status the json rpc protocol error status reporting "JSON-RPC request ID must be an integer, string, or null"
+        set key to the json rpc key for identifier identifier
+        if the pending json rpc request index for key key in state >= 0:
+            return a failed json rpc send with status the json rpc protocol error status reporting "JSON-RPC request ID is already pending"
+        set keys to state's pending keys
+        set connection to state's connection
+        set capacity to connection's limits's maximum queue length
+        if the length of keys >= capacity:
+            return a failed json rpc send with status the json rpc limit exceeded status reporting "The JSON-RPC pending request queue is full"
+        set copy to a copy of json rpc node identifier
+        set envelope to a new json rpc object
+        add json rpc member "jsonrpc" containing a new json rpc text for "2.0" to envelope
+        add json rpc member "id" containing identifier to envelope
+        add json rpc member "method" containing a new json rpc text for method to envelope
+        if included:
+            add json rpc member "params" containing parameters to envelope
+        set delivery to the result of sending json rpc value envelope using connection
+        forget the value of JSON member 1 in envelope
+        if included:
+            forget the value of JSON member 3 in envelope
+        free envelope
+        if the inverse of (delivery's succeeded):
+            free copy
+            set reason to delivery's error message
+            return a failed json rpc send with status delivery's status reporting reason
+        append key to keys
+        set identifiers to state's pending identifiers
+        append copy to identifiers
+        set label to the displayed json rpc identifier copy
+        return a successful json rpc send for label borrowing copy
+
+function the result of sending json rpc request {any:method} with {a pointer to a JSON value:parameters} and identifier {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state}:
+    execute:
+        return the result of sending json rpc request named method including parameters true from parameters with id identifier using state
+
+function the result of sending json rpc request {any:method} and identifier {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state}:
+    execute:
+        return the result of sending json rpc request named method including parameters false from an empty json rpc session message with id identifier using state
+
+function the result of sending json rpc request {any:method} with {a pointer to a JSON value:parameters} using {a pointer to json rpc session:state}:
+    execute:
+        if state's next identifier = 2147483647:
+            return a failed json rpc send with status the json rpc protocol error status reporting "JSON-RPC generated request ID space is exhausted"
+        set label to the string form of state's next identifier
+        set state's next identifier to (state's next identifier + 1)
+        set identifier to a new json rpc text for label
+        set delivery to the result of sending json rpc request named method including parameters true from parameters with id identifier using state
+        free identifier
+        return delivery
+
+function the result of sending json rpc request {any:method} using {a pointer to json rpc session:state}:
+    execute:
+        if state's next identifier = 2147483647:
+            return a failed json rpc send with status the json rpc protocol error status reporting "JSON-RPC generated request ID space is exhausted"
+        set label to the string form of state's next identifier
+        set state's next identifier to (state's next identifier + 1)
+        set identifier to a new json rpc text for label
+        set delivery to the result of sending json rpc request named method including parameters false from an empty json rpc session message with id identifier using state
+        free identifier
+        return delivery
+
+function the result of sending json rpc session notification {any:method} with {a pointer to a JSON value:parameters} using {a pointer to json rpc session:state}:
+    execute:
+        set connection to state's connection
+        return the result of sending json rpc notification method with parameters using connection
+
+function the result of sending json rpc session notification {any:method} using {a pointer to json rpc session:state}:
+    execute:
+        set connection to state's connection
+        return the result of sending json rpc notification method using connection
+
+local function a failed queued json rpc message with status {integer:status} reporting {string:detail}:
+    replacement:
+        @intrinsic("construct", a json rpc queued message, false, status, an empty json rpc session message, detail)
+
+local function a failed queued json rpc message with status {integer:status} reporting {C string:detail}:
+    execute:
+        return a failed queued json rpc message with status status reporting the string form of detail
+
+local function a queued json rpc message containing {a pointer to a JSON value:envelope} with text {string:description}:
+    replacement:
+        @intrinsic("construct", a json rpc queued message, true, the json rpc success status, envelope, description)
+
+local function the first json rpc message from {a pointer to a list:queue}:
+    execute:
+        if the length of queue = 0:
+            return a failed queued json rpc message with status the json rpc queue empty status reporting "JSON-RPC queue is empty"
+        set envelope to @intrinsic("cast", the item at 0 in queue, a pointer to a JSON value)
+        remove item 0 from queue
+        return a queued json rpc message containing envelope with text an empty json rpc error
+
+function the next json rpc server request from {a pointer to json rpc session:state}:
+    execute:
+        set values to state's requests
+        return the first json rpc message from values
+
+function the next json rpc notification from {a pointer to json rpc session:state}:
+    execute:
+        set values to state's notifications
+        return the first json rpc message from values
+
+function the next json rpc diagnostic from {a pointer to json rpc session:state}:
+    execute:
+        set diagnostics to state's diagnostics
+        set descriptions to state's diagnostic texts
+        if the length of diagnostics = 0:
+            return a failed queued json rpc message with status the json rpc queue empty status reporting "JSON-RPC diagnostic queue is empty"
+        set envelope to @intrinsic("cast", the item at 0 in diagnostics, a pointer to a JSON value)
+        set description to the item at 0 in descriptions
+        remove item 0 from diagnostics
+        remove item 0 from descriptions
+        return a queued json rpc message containing envelope with text description
+
+local function the result of recording json rpc diagnostic {string:description} for {a pointer to a JSON value:envelope} using {a pointer to json rpc session:state}:
+    execute:
+        set diagnostics to state's diagnostics
+        set descriptions to state's diagnostic texts
+        set connection to state's connection
+        set capacity to connection's limits's maximum queue length
+        if the length of diagnostics >= capacity:
+            free envelope
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC diagnostic queue is full"
+        append envelope to diagnostics
+        append description to descriptions
+        return a successful json rpc operation
+
+local function the result of queueing json rpc message {a pointer to a JSON value:envelope} in {a pointer to a list:destination} using {a pointer to json rpc session:state}:
+    execute:
+        set connection to state's connection
+        set capacity to connection's limits's maximum queue length
+        if the length of destination >= capacity:
+            free envelope
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "A JSON-RPC incoming message queue is full"
+        append envelope to destination
+        return a successful json rpc operation
+
+local function the result of dispatching json rpc message {a pointer to a JSON value:envelope} using {a pointer to json rpc session:state}:
+    execute:
+        set validation to the validation of json rpc message envelope
+        if the inverse of (validation's succeeded):
+            set detail to validation's error message
+            set recorded to the result of recording json rpc diagnostic detail for envelope using state
+            if the inverse of (recorded's succeeded):
+                return recorded
+            return a failed json rpc operation with status the json rpc protocol error status reporting detail
+        if envelope has JSON member named "method":
+            if envelope has JSON member named "id":
+                set requests to state's requests
+                return the result of queueing json rpc message envelope in requests using state
+            set notifications to state's notifications
+            return the result of queueing json rpc message envelope in notifications using state
+        set identifier to the JSON member named "id" in envelope
+        set key to the json rpc key for identifier identifier
+        if the pending json rpc request index for key key in state < 0:
+            set description to the string form of "JSON-RPC response has an unknown ID"
+            set recorded to the result of recording json rpc diagnostic description for envelope using state
+            if the inverse of (recorded's succeeded):
+                return recorded
+            return a failed json rpc operation with status the json rpc protocol error status reporting description
+        if the json rpc response index for key key in state >= 0:
+            set description to the string form of "JSON-RPC request received more than one response"
+            set recorded to the result of recording json rpc diagnostic description for envelope using state
+            if the inverse of (recorded's succeeded):
+                return recorded
+            return a failed json rpc operation with status the json rpc protocol error status reporting description
+        set responses to state's responses
+        return the result of queueing json rpc message envelope in responses using state
+
+local function the result of pumping one json rpc message using {a pointer to json rpc session:state} with timeout {integer:milliseconds}:
+    execute:
+        set connection to state's connection
+        if milliseconds < 0:
+            set received to the next json rpc message from connection
+        else:
+            set received to the next json rpc message from connection waiting up to milliseconds milliseconds
+        if the inverse of (received's succeeded):
+            set detail to received's error message
+            return a failed json rpc operation with status received's status reporting detail
+        return the result of dispatching json rpc message received's message using state
+
+function the result of pumping one json rpc message using {a pointer to json rpc session:state}:
+    execute:
+        return the result of pumping one json rpc message using state with timeout (0 - 1)
+
+function the result of pumping one json rpc message using {a pointer to json rpc session:state} waiting up to {integer:milliseconds} milliseconds:
+    execute:
+        if milliseconds < 0:
+            return a failed json rpc operation with status the json rpc timeout status reporting "JSON-RPC pump timeout must not be negative"
+        return the result of pumping one json rpc message using state with timeout milliseconds
+
+local function remove pending json rpc request at {integer:index} from {a pointer to json rpc session:state}:
+    execute:
+        set identifiers to state's pending identifiers
+        set keys to state's pending keys
+        set copy to @intrinsic("cast", the item at index in identifiers, a pointer to a JSON value)
+        free copy
+        remove item index from keys
+        remove item index from identifiers
+
+local function a failed json rpc response with status {integer:status} reporting {string:detail}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc response,
+            false,
+            status,
+            an empty json rpc session message,
+            an empty json rpc session message,
+            0,
+            an empty json rpc error,
+            an empty json rpc error,
+            an empty json rpc session message,
+            detail
+        )
+
+local function a failed json rpc response with status {integer:status} reporting {C string:detail}:
+    execute:
+        return a failed json rpc response with status status reporting the string form of detail
+
+local function the finished json rpc response {a pointer to a JSON value:envelope} for key {string:key} using {a pointer to json rpc session:state}:
+    execute:
+        set index to the pending json rpc request index for key key in state
+        if index < 0:
+            free envelope
+            return a failed json rpc response with status the json rpc protocol error status reporting "JSON-RPC response has an unknown ID"
+        remove pending json rpc request at index from state
+        if envelope has JSON member named "result":
+            set result to the JSON member named "result" in envelope
+            return @intrinsic(
+                "construct",
+                a json rpc response,
+                true,
+                the json rpc success status,
+                envelope,
+                result,
+                0,
+                an empty json rpc error,
+                an empty json rpc error,
+                an empty json rpc session message,
+                an empty json rpc error
+            )
+        set error to the JSON member named "error" in envelope
+        set code to the JSON member named "code" in error
+        set message to the JSON member named "message" in error
+        set lexeme to the text of code
+        set numeric to 0
+        set number to the number of code
+        if number >= -2147483648.0 and number <= 2147483647.0:
+            set numeric to number as a 32 bit integer
+        set data to an empty json rpc session message
+        if error has JSON member named "data":
+            set data to the JSON member named "data" in error
+        return @intrinsic(
+            "construct",
+            a json rpc response,
+            false,
+            the json rpc remote error status,
+            envelope,
+            an empty json rpc session message,
+            numeric,
+            lexeme,
+            the text of message,
+            data,
+            an empty json rpc error
+        )
+
+local function the json rpc response at {integer:index} from {a pointer to json rpc session:state}:
+    execute:
+        set responses to state's responses
+        set envelope to @intrinsic("cast", the item at index in responses, a pointer to a JSON value)
+        remove item index from responses
+        return envelope
+
+local function the awaited json rpc response for key {string:key} using {a pointer to json rpc session:state} with timeout {integer:milliseconds}:
+    execute:
+        if the pending json rpc request index for key key in state < 0:
+            return a failed json rpc response with status the json rpc protocol error status reporting "JSON-RPC request ID is not pending"
+        set waiting to true
+        loop while waiting:
+            set index to the json rpc response index for key key in state
+            if index >= 0:
+                set envelope to the json rpc response at index from state
+                return the finished json rpc response envelope for key key using state
+            set requests to state's requests
+            if the length of requests > 0:
+                return a failed json rpc response with status the json rpc server request pending status reporting "A JSON-RPC server request is queued"
+            set pumped to the result of pumping one json rpc message using state with timeout milliseconds
+            if the inverse of (pumped's succeeded):
+                set detail to pumped's error message
+                return a failed json rpc response with status pumped's status reporting detail
+        return a failed json rpc response with status the json rpc protocol error status reporting "JSON-RPC response loop ended unexpectedly"
+
+function the json rpc response for {string:label} using {a pointer to json rpc session:state}:
+    execute:
+        set prefix to the string form of "s:"
+        set key to (prefix + label)
+        return the awaited json rpc response for key key using state with timeout (0 - 1)
+
+function the json rpc response for {string:label} using {a pointer to json rpc session:state} waiting up to {integer:milliseconds} milliseconds:
+    execute:
+        if milliseconds < 0:
+            return a failed json rpc response with status the json rpc timeout status reporting "JSON-RPC response timeout must not be negative"
+        set prefix to the string form of "s:"
+        set key to (prefix + label)
+        return the awaited json rpc response for key key using state with timeout milliseconds
+
+function the json rpc response for identifier {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state}:
+    execute:
+        if the inverse of (json rpc identifier identifier is valid):
+            return a failed json rpc response with status the json rpc protocol error status reporting "JSON-RPC request ID is invalid"
+        set key to the json rpc key for identifier identifier
+        return the awaited json rpc response for key key using state with timeout (0 - 1)
+
+function the json rpc response for identifier {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state} waiting up to {integer:milliseconds} milliseconds:
+    execute:
+        if milliseconds < 0:
+            return a failed json rpc response with status the json rpc timeout status reporting "JSON-RPC response timeout must not be negative"
+        if the inverse of (json rpc identifier identifier is valid):
+            return a failed json rpc response with status the json rpc protocol error status reporting "JSON-RPC request ID is invalid"
+        set key to the json rpc key for identifier identifier
+        return the awaited json rpc response for key key using state with timeout milliseconds
+
+local function the result of cancelling json rpc request with key {string:key} using {a pointer to json rpc session:state}:
+    execute:
+        set index to the pending json rpc request index for key key in state
+        if index < 0:
+            return a failed json rpc operation with status the json rpc protocol error status reporting "JSON-RPC request ID is not pending"
+        set identifiers to state's pending identifiers
+        set copy to @intrinsic("cast", the item at index in identifiers, a pointer to a JSON value)
+        set duplicate to a copy of json rpc node copy
+        set parameters to a new json rpc object
+        add json rpc member "id" containing duplicate to parameters
+        set sent to the result of sending json rpc session notification "$/cancelRequest" with parameters using state
+        free parameters
+        return sent
+
+function the result of cancelling json rpc request {string:label} using {a pointer to json rpc session:state}:
+    execute:
+        set prefix to the string form of "s:"
+        set key to (prefix + label)
+        return the result of cancelling json rpc request with key key using state
+
+function the result of cancelling json rpc request identifier {a pointer to a JSON value:identifier} using {a pointer to json rpc session:state}:
+    execute:
+        if the inverse of (json rpc identifier identifier is valid):
+            return a failed json rpc operation with status the json rpc protocol error status reporting "JSON-RPC request ID is invalid"
+        set key to the json rpc key for identifier identifier
+        return the result of cancelling json rpc request with key key using state
+
+local function {a pointer to a JSON value:request} is valid for a json rpc reply:
+    execute:
+        set validation to the validation of json rpc message request
+        if the inverse of (validation's succeeded):
+            return false
+        return request has JSON member named "method" and request has JSON member named "id"
+
+function the result of replying to json rpc request {a pointer to a JSON value:request} with {a pointer to a JSON value:result} using {a pointer to json rpc session:state}:
+    execute:
+        if the inverse of (request is valid for a json rpc reply):
+            return a failed json rpc send with status the json rpc protocol error status reporting "Cannot reply to an invalid JSON-RPC request"
+        set identifier to the JSON member named "id" in request
+        set envelope to a new json rpc object
+        add json rpc member "jsonrpc" containing a new json rpc text for "2.0" to envelope
+        add json rpc member "id" containing identifier to envelope
+        add json rpc member "result" containing result to envelope
+        set connection to state's connection
+        set delivery to the result of sending json rpc value envelope using connection
+        forget the value of JSON member 1 in envelope
+        forget the value of JSON member 2 in envelope
+        free envelope
+        if delivery's succeeded:
+            return a successful json rpc send for an empty json rpc error borrowing an empty json rpc session message
+        set reason to delivery's error message
+        return a failed json rpc send with status delivery's status reporting reason
+
+local function the result of replying with json rpc error to {a pointer to a JSON value:request} with code {integer:code} message {any:detail} data {a pointer to a JSON value:data} including data {boolean:included} using {a pointer to json rpc session:state}:
+    execute:
+        if the inverse of (request is valid for a json rpc reply):
+            return a failed json rpc send with status the json rpc protocol error status reporting "Cannot reply to an invalid JSON-RPC request"
+        set identifier to the JSON member named "id" in request
+        set failure to a new json rpc object
+        add json rpc member "code" containing a new json rpc integer for code to failure
+        add json rpc member "message" containing a new json rpc text for detail to failure
+        if included:
+            add json rpc member "data" containing data to failure
+        set envelope to a new json rpc object
+        add json rpc member "jsonrpc" containing a new json rpc text for "2.0" to envelope
+        add json rpc member "id" containing identifier to envelope
+        add json rpc member "error" containing failure to envelope
+        set connection to state's connection
+        set delivery to the result of sending json rpc value envelope using connection
+        forget the value of JSON member 1 in envelope
+        if included:
+            forget the value of JSON member 2 in failure
+        free envelope
+        if delivery's succeeded:
+            return a successful json rpc send for an empty json rpc error borrowing an empty json rpc session message
+        set reason to delivery's error message
+        return a failed json rpc send with status delivery's status reporting reason
+
+function the result of replying to json rpc request {a pointer to a JSON value:request} with error code {integer:code} message {any:detail} using {a pointer to json rpc session:state}:
+    execute:
+        return the result of replying with json rpc error to request with code code message detail data an empty json rpc session message including data false using state
+
+function the result of replying to json rpc request {a pointer to a JSON value:request} with error code {integer:code} message {any:detail} and data {a pointer to a JSON value:data} using {a pointer to json rpc session:state}:
+    execute:
+        return the result of replying with json rpc error to request with code code message detail data data including data true using state
+
+function free json rpc queued message {json rpc queued message:outcome}:
+    execute:
+        if outcome's message != (an empty json rpc session message):
+            free outcome's message
+
+function free json rpc response {json rpc response:outcome}:
+    execute:
+        if outcome's message != (an empty json rpc session message):
+            free outcome's message
+
+local function free json rpc messages in {a pointer to a list:queue}:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of queue:
+            set envelope to @intrinsic("cast", the item at cursor in queue, a pointer to a JSON value)
+            free envelope
+            set cursor to (cursor + 1)
+        free queue
+
+function free json rpc session {a pointer to json rpc session:state}:
+    execute:
+        set identifiers to state's pending identifiers
+        set cursor to 0
+        loop while cursor < the length of identifiers:
+            set identifier to @intrinsic("cast", the item at cursor in identifiers, a pointer to a JSON value)
+            free identifier
+            set cursor to (cursor + 1)
+        set keys to state's pending keys
+        set notifications to state's notifications
+        set requests to state's requests
+        set responses to state's responses
+        set diagnostics to state's diagnostics
+        set descriptions to state's diagnostic texts
+        free keys
+        free identifiers
+        free json rpc messages in notifications
+        free json rpc messages in requests
+        free json rpc messages in responses
+        free json rpc messages in diagnostics
+        free descriptions
+        set connection to state's connection
+        free json rpc connection connection
+        @intrinsic("call", "libc", "free", nothing, state)

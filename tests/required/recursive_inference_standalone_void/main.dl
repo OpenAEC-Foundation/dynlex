@@ -7,7 +7,7 @@ function record a recursive event:
 function the first recursive result for {integer:value}:
 	execute:
 		if value > 0:
-			set predecessor to value - 1
+			set predecessor to (value - 1)
 			set ignored to the second recursive result for predecessor
 		record a recursive event
 		return value
@@ -15,7 +15,7 @@ function the first recursive result for {integer:value}:
 function the second recursive result for {integer:value}:
 	execute:
 		if value > 0:
-			set predecessor to value - 1
+			set predecessor to (value - 1)
 			set ignored to the first recursive result for predecessor
 		return value
 

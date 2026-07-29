@@ -20,10 +20,10 @@ function fill {route plan:plan} using seed {integer:seed}:
 		set index to 0
 		set level to 0
 		loop while index < plan's count:
-			set jump to 420 + the remainder of (a random number) divided by 180
-			set slide to 100 + the remainder of (a random number) divided by 180
+			set jump to (420 + the remainder of (a random number) divided by 180)
+			set slide to (100 + the remainder of (a random number) divided by 180)
 			if the remainder of index divided by 4 = 0:
-				set jump to 340 + the remainder of (a random number) divided by 120
+				set jump to (340 + the remainder of (a random number) divided by 120)
 			if the remainder of index divided by 3 = 0 and level < 4:
 				increment level
 			else if the remainder of index divided by 5 = 0 and level > 0:

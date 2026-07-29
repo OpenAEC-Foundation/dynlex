@@ -64,7 +64,7 @@ function the length of {C string:text}:
         set count to 0
         set character to the character at count in text
         loop while character is not 0:
-            set count to count + 1
+            set count to (count + 1)
             set character to the character at count in text
         return count
 
@@ -84,7 +84,7 @@ function {C string:left} = {C string:right}:
                 return false
             if @intrinsic("equal", actual, 0 as a byte):
                 return true
-            set index to index + 1
+            set index to (index + 1)
         return false
 
 function {string:left} = {string:right}:
@@ -95,7 +95,7 @@ function {string:left} = {string:right}:
         loop while position < the length of left:
             if the character at position in left != the character at position in right:
                 return false
-            set position to position + 1
+            set position to (position + 1)
         return true
 
 function {string:left} = {C string:right}:
@@ -106,7 +106,7 @@ function {string:left} = {C string:right}:
         loop while position < the length of left:
             if the character at position in left != the character at position in right:
                 return false
-            set position to position + 1
+            set position to (position + 1)
         return true
 
 function {C string:left} = {string:right}:
@@ -163,7 +163,7 @@ function the substring of {string:text} from {integer:start} spanning {integer:c
         set cursor to 0
         loop while cursor < count:
             store the character at start + cursor in text into the data of result at cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return result
 
 function the substring of {C string:text} from {integer:start} spanning {integer:count} [byte|bytes]:
@@ -178,7 +178,7 @@ function {string:text} has {string:fragment} at offset {integer:position}:
         loop while cursor < the length of fragment:
             if the character at position + cursor in text != the character at cursor in fragment:
                 return false
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return true
 
 function {string:text} has {C string:fragment} at offset {integer:position}:
@@ -190,15 +190,15 @@ function copy {string:source} into target at offset {integer:offset}:
         set index to 0
         loop while index < source's length:
             store the character at index in source into target at offset + index
-            set index to index + 1
+            set index to (index + 1)
 
 function the count of decimal digits in {integer:value}:
     execute:
         set remaining to value as a word sized integer
         set total to 1
         loop while (remaining <= -10) or (remaining >= 10):
-            set remaining to remaining / 10
-            set total to total + 1
+            set remaining to (remaining / 10)
+            set total to (total + 1)
         return total
 
 function {integer:value} padded to {integer:width} digits:
@@ -211,59 +211,59 @@ function {integer:value} padded to {integer:width} digits:
         loop while writing:
             set digit to the remainder of remaining divided by 10
             if digit < 0:
-                set digit to 0 - digit
+                set digit to (0 - digit)
             set character to ((digit + 48) as a byte)
             store character into data at index
-            set remaining to remaining / 10
+            set remaining to (remaining / 10)
             if index = 0:
                 set writing to false
             else:
-                set index to index - 1
+                set index to (index - 1)
         return result
 
 function the string form of {integer:value}:
     execute:
         set digits to the count of decimal digits in value
-        set negative to value < 0
+        set negative to (value < 0)
         set length to digits
         if negative:
-            set length to length + 1
+            set length to (length + 1)
         set result to a new string buffer containing length bytes
         set data to the data of result
         set remaining to value as a word sized integer
-        set index to length - 1
+        set index to (length - 1)
         set writing to true
         loop while writing:
             set digit to the remainder of remaining divided by 10
             if digit < 0:
-                set digit to 0 - digit
+                set digit to (0 - digit)
             set character to ((digit + 48) as a byte)
             store character into data at index
-            set remaining to remaining / 10
+            set remaining to (remaining / 10)
             if remaining = 0:
                 set writing to false
             else:
-                set index to index - 1
+                set index to (index - 1)
         if negative:
             store 45 as a byte into data at 0
         return result
 
 function the string form of {float:value}:
     execute:
-        set negative to value < 0.0
+        set negative to (value < 0.0)
         set magnitude to the absolute value of value
         set whole to (the floor of magnitude) as a word sized integer
         set places to the count of decimal digits in whole
-        set decimals to 6 - places
+        set decimals to (6 - places)
         if decimals < 0:
             set decimals to 0
         set scale to 1
         set index to 0
         loop while index < decimals:
-            set scale to scale * 10
-            set index to index + 1
+            set scale to (scale * 10)
+            set index to (index + 1)
         set rounded to (the floor of ((magnitude * scale) as a float + 0.5)) as a word sized integer
-        set whole to rounded / scale
+        set whole to (rounded / scale)
         set fraction to the remainder of rounded divided by scale
         set integral to the string form of whole
         if fraction = 0:
@@ -271,19 +271,19 @@ function the string form of {float:value}:
                 set sign to the string form of "-"
                 return sign + integral
             return integral
-        set trimming to decimals > 0
+        set trimming to (decimals > 0)
         loop while trimming:
             set digit to the remainder of fraction divided by 10
             if digit = 0:
-                set fraction to fraction / 10
-                set decimals to decimals - 1
-                set trimming to decimals > 0
+                set fraction to (fraction / 10)
+                set decimals to (decimals - 1)
+                set trimming to (decimals > 0)
             else:
                 set trimming to false
         set decimal to fraction padded to decimals digits
         set dot to the string form of "."
-        set result to integral + dot
-        set result to result + decimal
+        set result to (integral + dot)
+        set result to (result + decimal)
         if negative:
             set sign to the string form of "-"
             return sign + result
@@ -291,7 +291,9 @@ function the string form of {float:value}:
 
 function the string form of {boolean:value}:
     execute:
-        return the string form of (value as a 64 bit integer)
+        if value:
+            return the string form of "true"
+        return the string form of "false"
 
 function the string form of {string:value}:
     execute:
@@ -336,18 +338,18 @@ function print whether condition as a line:
 function {string:left} + {string:right}:
     before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
-        set total to left's length + right's length
+        set total to (left's length + right's length)
         set result to a new string buffer containing total bytes
         set data to the data of result
         set boundary to left's length
         set index to 0
         loop while index < boundary:
             store the character at index in left into data at index
-            set index to index + 1
+            set index to (index + 1)
         set cursor to 0
         loop while cursor < right's length:
             store the character at cursor in right into data at boundary + cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return result
 
 # --- Array text ---
@@ -360,8 +362,8 @@ function a string containing count items from values:
         set index to 0
         loop while index < count:
             if index > 0:
-                set result to result + separator
-            set result to result + the string form of the item at index in the address of values
+                set result to (result + separator)
+            set result to (result + the string form of the item at index in the address of values)
             increment index
-        set result to result + end
+        set result to (result + end)
         return result

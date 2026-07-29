@@ -50,6 +50,28 @@ function set the output position with x {any:horizontal}, y {any:vertical}, z {a
             @intrinsic("construct", an aggregate of 4 float values, horizontal, vertical, depth, magnitude)
         )
 
+# Vertex-to-fragment interpolants
+
+function set [the|] shader interpolant named name to x y z w:
+    replacement:
+        @intrinsic("shader interpolant output", name, x, y, z, w)
+
+function [the|] shader interpolant x named name:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 0)
+
+function [the|] shader interpolant y named name:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 1)
+
+function [the|] shader interpolant z named name:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 2)
+
+function [the|] shader interpolant w named name:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 3)
+
 # Shader uniforms (values passed from host each frame)
 
 function the shader time:

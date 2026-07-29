@@ -417,7 +417,7 @@ local function the result of transferring bytes from origin to target:
                 set copying to false
             if copying and reading's count > (0 as a word sized integer):
                 set writing to the result of transferring reading's count bytes from buffer to target
-                set transferred to transferred + writing's count
+                set transferred to (transferred + writing's count)
                 if writing failed:
                     set message to writing's error message
                     set succeeded to false
@@ -504,9 +504,9 @@ local function the result of reading the file at path:
         set failed to false
         set message to an empty filesystem failure text
         loop while continuing:
-            set available to capacity - total
-            set chunk to the result of transferring up to available bytes into buffer + total from stream
-            set total to total + chunk's count
+            set available to (capacity - total)
+            set chunk to (the result of transferring up to available bytes into buffer + total from stream)
+            set total to (total + chunk's count)
             if chunk failed:
                 set message to chunk's error message
                 set failed to true
@@ -528,7 +528,7 @@ local function the result of reading the file at path:
                 else:
                     set limit to maximum
                     if capacity <= maximum / 2:
-                        set limit to capacity * 2
+                        set limit to (capacity * 2)
                     set resized to buffer resized to (limit + 1) bytes
                     if resized = (0 as a pointer to a byte):
                         set message to the current filesystem failure text

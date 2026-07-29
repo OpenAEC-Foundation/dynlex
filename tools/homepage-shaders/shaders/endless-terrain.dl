@@ -1,16 +1,9 @@
-# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
-
 import lib/shader_art.dl
 
 # ENDLESS TERRAIN
-# The surface is a procedural height field intersected by every camera ray.
-# Elevation therefore changes silhouette, perspective, normals, and light.
-
-class:
-    patterns:
-        terrain traversal
-    members:
-        hit, searching, travel, previous, distance, step
+# Fixed camera rays and exponentially spaced distance rows form a perspective
+# terrain plane. Its crack-free topology is displaced into an alpine height
+# field and a coarser water surface without a fragment-stage ray march.
 
 function [a|] terrain coordinate:
     replacement:
@@ -48,154 +41,259 @@ function a terrain color with red {float:red}, green {float:green} and blue {flo
             @intrinsic("construct", an aggregate of 3 float values, red, green, blue)
         )
 
-function a terrain traversal beginning at {float:distance}:
-    replacement:
-        @intrinsic("construct", terrain traversal, false, true, distance, distance, distance, 0)
-
-function {terrain traversal:traversal} continues searching:
-    execute:
-        return traversal's searching
-
-function {terrain traversal:traversal} found terrain:
-    execute:
-        return traversal's hit
-
 function the terrain height at {terrain coordinate:position}:
     execute:
-        set warp to a terrain coordinate with x ((the sine of ((position's x * 0.083) + (position's z * 0.047))) + ((the cosine of ((position's x * -0.031) + (position's z * 0.071))) * 0.53)) and z ((the cosine of ((position's x * -0.057) + (position's z * 0.061))) + ((the sine of ((position's x * 0.069) + (position's z * 0.029))) * 0.47))
-        set bent to a terrain coordinate with x (position's x + (warp's x * 3.4)) and z (position's z + (warp's z * 3.4))
-        set continental to (the sine of ((bent's x * 0.073) + (bent's z * 0.051))) * 0.62
-        set crossing to (the cosine of ((bent's x * -0.049) + (bent's z * 0.091))) * 0.34
-        set ridge to ((the cosine of (((bent's x * 0.17) - (bent's z * 0.11)) + (warp's z * 0.31))) * 0.5) + 0.5
-        set spur to ((the cosine of (((bent's x * -0.13) - (bent's z * 0.23)) - (warp's x * 0.27))) * 0.5) + 0.5
-        set crest to ((the cosine of (((bent's x * 0.29) + (bent's z * 0.07)) + (warp's z * 0.19))) * 0.5) + 0.5
-        set ridge to (ridge * ridge) * (ridge * ridge)
-        set spur to (spur * spur) * (spur * spur)
-        set crest to (crest * crest) * (crest * crest)
-        set peaks to ((ridge * 2.08) + (spur * 1.46)) + (crest * 0.92)
-        set mask to the smooth transition from -0.46 to 0.54 at (continental + crossing)
-        set elevation to peaks * (0.31 + (mask * 0.78))
-        set detail to ((the sine of ((bent's x * 0.51) + (bent's z * 0.37))) * 0.10) + ((the cosine of ((bent's x * -0.83) + (bent's z * 0.61))) * 0.045)
-        return (((-0.31 + continental) + (crossing * 0.54)) + elevation) + detail
+        set continental to the simplex field at (a point with x (position's x * 0.011) and y (position's z * 0.011)) during 1.7
+        set warp to a terrain coordinate with x (the simplex field at (a point with x ((position's x * 0.021) + 9.0) and y ((position's z * 0.021) - 4.0)) during 4.1) and z (the simplex field at (a point with x ((position's x * -0.006) + (position's z * 0.019)) and y ((position's z * 0.007) + (position's x * 0.020))) during 8.3)
+        set bent to a terrain coordinate with x (position's x + (warp's x * 9.5)) and z (position's z + (warp's z * 9.5))
 
-set pixel to a terrain coordinate with x the fragment x coordinate and z the fragment y coordinate
-set time to the shader time
-set frame to a terrain coordinate with x (the maximum of (the shader width) and 1.0) and z (the maximum of (the shader height) and 1.0)
-set aspect to frame's x / frame's z
-set screen to a terrain coordinate with x (((pixel's x / (frame's x)) * 2.0 - 1.0) * aspect) and z ((pixel's z / (frame's z)) * 2.0 - 1.0)
+        set mountain to the simplex field at (a point with x ((bent's x * 0.027) + (bent's z * 0.006)) and y ((bent's z * 0.027) - (bent's x * 0.006))) during 2.3
+        set crossing to the simplex field at (a point with x ((bent's x * -0.018) + (bent's z * 0.057)) and y ((bent's z * 0.019) + (bent's x * 0.054))) during 6.9
+        set broken to the simplex field at (a point with x ((bent's x * 0.119) + (bent's z * 0.041)) and y ((bent's z * 0.113) - (bent's x * 0.037))) during 9.7
+        set mass to (((mountain * 0.60) + (crossing * 0.27)) + (broken * 0.13))
+        set ridge to the maximum of mass and 0.0
+        set ridge to (ridge * ridge)
+        set fold to (1.0 - (the absolute value of ((mountain * 0.78) + (crossing * 0.34))))
+        set crest to the maximum of (fold - 0.42) and 0.0
+        set crest to (crest * crest)
+        set uplift to the smooth transition from -0.48 to 0.45 at continental
+        set erosion to (1.0 - the smooth transition from 0.035 to 0.31 at (the absolute value of (crossing + (broken * 0.24))))
+        set alpine to (mass * 1.38)
+        set alpine to (alpine + (ridge * (2.00 + (uplift * 6.00))))
+        set alpine to (alpine + ((crest * uplift) * (3.1 + (ridge * 2.4))))
+        set alpine to (alpine + ((broken * uplift) * 0.34))
+        set alpine to (alpine - ((erosion * uplift) * (0.16 + (ridge * 0.38))))
+        set basin to (continental * 1.20)
+        return (basin + alpine) - 0.75
 
-# The camera glides above intersecting ranges instead of following a valley.
-set camera to a spatial coordinate with x (((the sine of (time * 0.13)) * 3.1) + ((the cosine of (time * 0.071)) * 1.4)), y (3.26 + ((the sine of (time * 0.19)) * 0.13)) and z (76.0 + (time * 3.05))
-set yaw to ((the sine of (time * 0.097)) * 0.16) + ((the cosine of (time * 0.061)) * 0.07)
-set sine to the sine of yaw
-set cosine to the cosine of yaw
-set bank to (the sine of (time * 0.19)) * 0.025
-set tilt to a terrain coordinate with x ((screen's x * (the cosine of bank)) - (screen's z * (the sine of bank))) and z ((screen's x * (the sine of bank)) + (screen's z * (the cosine of bank)))
-set direction to a spatial coordinate with x (((tilt's x * 0.68) * cosine) + (1.24 * sine)), y ((tilt's z * 0.68) - 0.19) and z ((1.24 * cosine) - ((tilt's x * 0.68) * sine))
-set length to the square root of (((direction's x * direction's x) + (direction's y * direction's y)) + (direction's z * direction's z))
-set the x coordinate of direction to direction's x / length
-set the y coordinate of direction to direction's y / length
-set the z coordinate of direction to direction's z / length
+# The positive maxima of every bounded field term sum to 12.0202.
+function the maximum possible terrain height:
+    execute:
+        return 12.10
 
-# Dawn sky and curved clouds are evaluated independently from the terrain.
-set altitude to ((screen's z * 0.54) + 0.45) saturated
-set color to a terrain color with red (0.018 + (altitude * 0.075)), green (0.052 + (altitude * 0.16)) and blue (0.12 + (altitude * 0.34))
-set sweep to the flowing field at (a point with x ((screen's x * 1.25) + (time * 0.018)) and y ((screen's z * 2.4) + 3.0)) during 2.1
-set ridges to the ridged field at (a point with x ((screen's x * 2.1) - 8.0) and y ((screen's z * 3.7) + (time * 0.012))) during 5.7
-set shape to the smooth transition from 0.54 to 0.82 at ((sweep * 0.76) + (ridges * 0.24))
-set elevation to the smooth transition from -0.05 to 0.31 at screen's z
-set cloud to shape * elevation
-set the red channel of color to color's red + (cloud * 0.34)
-set the green channel of color to color's green + (cloud * 0.31)
-set the blue channel of color to color's blue + (cloud * 0.27)
-set sun to a terrain coordinate with x (screen's x - 0.56) and z (screen's z - 0.39)
-set distance to the square root of ((sun's x * sun's x) + (sun's z * sun's z))
-set core to the glow from 0.018 to 0.075 at distance
-set halo to the glow from 0.06 to 0.42 at distance
-set the red channel of color to (color's red + (halo * 0.27)) + (core * 1.3)
-set the green channel of color to (color's green + (halo * 0.16)) + (core * 0.92)
-set the blue channel of color to (color's blue + (halo * 0.08)) + (core * 0.52)
+function the terrain camera at moment:
+    execute:
+        return a spatial coordinate with x (201.7 + (((the sine of (moment * 0.091)) * 4.2) + ((the cosine of (moment * 0.037)) * 1.6))), y ((the maximum possible terrain height) + 0.70) and z (-92.1 + (moment * 3.25))
 
-# Uniform height-field traversal covers the complete view depth for every ray.
-# The previous and current samples bracket the first surface crossing, then six
-# refinements recover a stable sharp surface.
-set traversal to a terrain traversal beginning at 0.12
-set sample to camera
-set height to the terrain height at (a terrain coordinate with x sample's x and z sample's z)
-while traversal's step < 96 and traversal continues searching:
-    set the x coordinate of sample to camera's x + (direction's x * traversal's travel)
-    set the y coordinate of sample to camera's y + (direction's y * traversal's travel)
-    set the z coordinate of sample to camera's z + (direction's z * traversal's travel)
-    set height to the terrain height at (a terrain coordinate with x sample's x and z sample's z)
-    if sample's y < height:
-        set traversal's hit to true
-        set traversal's searching to false
-        set traversal's distance to traversal's travel
+function the water detail visibility at distance:
+    execute:
+        return 1.0 - the smooth transition from 48.0 to 96.0 at distance
+
+if this is a vertex shader:
+    set time to the shader time
+    set frame to a point with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
+    set aspect to (frame's x / frame's y)
+    set surface to the vertex w
+
+    if surface < 0.5:
+        set the shader interpolant named "terrain position" to (the vertex x) (the vertex y) 0.0 0.0
+        set the shader interpolant named "terrain normal" to 0.0 1.0 0.0 0.0
+        set the shader interpolant named "terrain material" to 0.5 0.0 0.0 0.0
+        set the output position with x the vertex x, y the vertex y, z 0.9999 and w 1.0
     else:
-        set traversal's previous to traversal's travel
-        set traversal's travel to traversal's travel + 0.46
-        if traversal's travel > 44.0:
-            set traversal's step to 96
-            set traversal's searching to false
-    increment traversal's step
+        set distance to the vertex y
+        set camera to the terrain camera at time
+        set pitch to 0.155
+        set sine to the sine of pitch
+        set cosine to the cosine of pitch
+        set yaw to (((the sine of (time * 0.073)) * 0.13) + ((the cosine of (time * 0.041)) * 0.045))
+        set yawsine to the sine of yaw
+        set yawcosine to the cosine of yaw
 
-set refinement to 0
-while refinement < 6 and traversal found terrain:
-    set middle to (traversal's previous + traversal's distance) * 0.5
-    set sample to a spatial coordinate with x (camera's x + (direction's x * middle)), y (camera's y + (direction's y * middle)) and z (camera's z + (direction's z * middle))
-    set height to the terrain height at (a terrain coordinate with x sample's x and z sample's z)
-    if sample's y < height:
-        set traversal's distance to middle
+        set vertical to (0.0 - camera's y)
+        set slope to (((the vertex x) * aspect) * 0.80)
+        set scale to the square root of (1.0 + ((slope * cosine) * (slope * cosine)))
+        set forward to (distance / scale)
+        set depth to ((forward * cosine) - (vertical * sine))
+        set lateral to (slope * depth)
+        set world to a terrain coordinate with x ((camera's x + (lateral * yawcosine)) + (forward * yawsine)) and z ((camera's z + (forward * yawcosine)) - (lateral * yawsine))
+
+        set elevation to 0.0
+        set normal to a spatial coordinate with x 0.0, y 1.0 and z 0.0
+        set variation to 0.5
+        set detail to 0.5
+        set submersion to 0.0
+        if surface > 1.5:
+            set level to -0.62
+            set submersion to the maximum of (level - the terrain height at world) and 0.0
+            set angle to a spatial coordinate with x (((world's x * 0.17) + (world's z * 0.07)) + (time * 0.41)), y (((world's z * 0.21) - (world's x * 0.05)) - (time * 0.32)) and z (((world's x * 0.09) + (world's z * 0.13)) + (time * 0.23))
+            set wave to a spatial coordinate with x (the sine of angle's x), y (the sine of angle's y) and z (the sine of angle's z)
+            set oscillation to a spatial coordinate with x (the cosine of angle's x), y (the cosine of angle's y) and z (the cosine of angle's z)
+            set visibility to the water detail visibility at distance
+            set displacement to ((((wave's x * 0.045) + (wave's y * 0.028)) + (wave's z * 0.018)) * visibility)
+            set elevation to (level + displacement)
+            set the x coordinate of normal to ((0.0 - (((oscillation's x * 0.00765) - (oscillation's y * 0.00140)) + (oscillation's z * 0.00162))) * visibility)
+            set the z coordinate of normal to ((0.0 - (((oscillation's x * 0.00315) + (oscillation's y * 0.00588)) + (oscillation's z * 0.00234))) * visibility)
+            set variation to (0.5 + (((wave's x + wave's y) * 0.25) * visibility))
+            set detail to (0.5 + ((wave's z * 0.5) * visibility))
+        else:
+            set stride to 0.34
+            set elevation to the terrain height at world
+            set west to the terrain height at (a terrain coordinate with x (world's x - stride) and z world's z)
+            set east to the terrain height at (a terrain coordinate with x (world's x + stride) and z world's z)
+            set south to the terrain height at (a terrain coordinate with x world's x and z (world's z - stride))
+            set north to the terrain height at (a terrain coordinate with x world's x and z (world's z + stride))
+            set the x coordinate of normal to (west - east)
+            set the y coordinate of normal to (stride * 2.0)
+            set the z coordinate of normal to (south - north)
+            set variation to (((the simplex field at (a point with x (world's x * 0.065) and y (world's z * 0.065)) during 13.7) * 0.5) + 0.5)
+            set detail to (((the simplex field at (a point with x (world's x * 0.14) and y (world's z * 0.14)) during 16.2) * 0.5) + 0.5)
+
+        set length to the square root of (((normal's x * normal's x) + (normal's y * normal's y)) + (normal's z * normal's z))
+        set the x coordinate of normal to (normal's x / length)
+        set the y coordinate of normal to (normal's y / length)
+        set the z coordinate of normal to (normal's z / length)
+
+        set vertical to (elevation - camera's y)
+        set view to a point with x (vertical * cosine + (forward * sine)) and y ((forward * cosine) - (vertical * sine))
+        set clip to a spatial coordinate with x (lateral / (aspect * 0.72)), y (view's x / 0.72) and z ((view's y * 1.00078) - 0.40016)
+
+        set the shader interpolant named "terrain position" to world's x elevation world's z surface
+        set the shader interpolant named "terrain normal" to normal's x normal's y normal's z distance
+        set the shader interpolant named "terrain material" to variation detail submersion 0.0
+        set the output position with x clip's x, y clip's y, z clip's z and w view's y
+
+if this is a fragment shader:
+    set pixel to a point with x the fragment x coordinate and y the fragment y coordinate
+    set time to the shader time
+    set frame to a point with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
+    set aspect to (frame's x / frame's y)
+    set screen to a point with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (((pixel's y / frame's y) * 2.0) - 1.0)
+
+    set world to a spatial coordinate with x (the shader interpolant x named "terrain position"), y (the shader interpolant y named "terrain position") and z (the shader interpolant z named "terrain position")
+    set surface to the shader interpolant w named "terrain position"
+    set normal to a spatial coordinate with x (the shader interpolant x named "terrain normal"), y (the shader interpolant y named "terrain normal") and z (the shader interpolant z named "terrain normal")
+    set distance to the shader interpolant w named "terrain normal"
+    set material to a spatial coordinate with x (the shader interpolant x named "terrain material"), y (the shader interpolant y named "terrain material") and z (the shader interpolant z named "terrain material")
+
+    set sun to a point with x (screen's x - 0.52) and y (screen's y - 0.36)
+    set separation to the square root of ((sun's x * sun's x) + (sun's y * sun's y))
+    set core to the glow from 0.014 to 0.065 at separation
+    set halo to the glow from 0.04 to 0.44 at separation
+    set color to a terrain color with red 0.025, green 0.064 and blue 0.13
+
+    if surface < 0.5:
+        set altitude to ((screen's y * 0.48) + 0.43) saturated
+        set color to a terrain color with red (0.022 + (altitude * 0.105)), green (0.061 + (altitude * 0.18)) and blue (0.14 + (altitude * 0.33))
+        set fold to (((the sine of (((screen's x * 1.21) + (screen's y * 1.77)) + (time * 0.021))) * 0.5) + 0.5)
+        set crossing to (((the cosine of (((screen's x * -0.67) + (screen's y * 2.93)) - (time * 0.016))) * 0.5) + 0.5)
+        set detail to (((the sine of (((screen's x * 2.47) - (screen's y * 4.11)) + (fold * 1.8))) * 0.5) + 0.5)
+        set shape to the smooth transition from 1.42 to 2.18 at ((fold + crossing) + (detail * 0.46))
+        set elevation to the smooth transition from -0.08 to 0.38 at screen's y
+        set cloud to (shape * elevation)
+        set the red channel of color to (color's red + (cloud * 0.33))
+        set the green channel of color to (color's green + (cloud * 0.31))
+        set the blue channel of color to (color's blue + (cloud * 0.29))
+        set the red channel of color to ((color's red + (halo * 0.31)) + (core * 1.36))
+        set the green channel of color to ((color's green + (halo * 0.19)) + (core * 0.96))
+        set the blue channel of color to ((color's blue + (halo * 0.09)) + (core * 0.55))
     else:
-        set traversal's previous to middle
-    increment refinement
+        set length to the square root of (((normal's x * normal's x) + (normal's y * normal's y)) + (normal's z * normal's z))
+        set the x coordinate of normal to (normal's x / length)
+        set the y coordinate of normal to (normal's y / length)
+        set the z coordinate of normal to (normal's z / length)
+        set sunlight to (((normal's x * -0.43) + (normal's y * 0.79)) + (normal's z * -0.44)) saturated
+        set skylight to ((normal's y * 0.56) + 0.44) saturated
 
-if traversal found terrain:
-    set world to a spatial coordinate with x (camera's x + (direction's x * traversal's distance)), y (camera's y + (direction's y * traversal's distance)) and z (camera's z + (direction's z * traversal's distance))
-    set height to the terrain height at (a terrain coordinate with x world's x and z world's z)
+        if surface > 1.5:
+            # Fine analytic ripples perturb the interpolated geometric waves.
+            set angle to a spatial coordinate with x (((world's x * 1.37) + (world's z * 0.91)) + (time * 1.12)), y (((world's x * -0.83) + (world's z * 1.61)) - (time * 0.94)) and z (((world's x * 2.11) - (world's z * 0.57)) + (time * 0.71))
+            set ripple to a spatial coordinate with x (the cosine of angle's x), y (the cosine of angle's y) and z (the cosine of angle's z)
+            set visibility to the water detail visibility at distance
+            set the x coordinate of normal to (normal's x - ((((ripple's x * 0.07095) - (ripple's y * 0.02835)) + (ripple's z * 0.03195)) * visibility))
+            set the z coordinate of normal to (normal's z - ((((ripple's x * 0.05115) + (ripple's y * 0.05355)) - (ripple's z * 0.00855)) * visibility))
+            set length to the square root of (((normal's x * normal's x) + (normal's y * normal's y)) + (normal's z * normal's z))
+            set the x coordinate of normal to (normal's x / length)
+            set the y coordinate of normal to (normal's y / length)
+            set the z coordinate of normal to (normal's z / length)
 
-    # Finite differences turn real elevation into real surface light.
-    set stride to 0.055 + (traversal's distance * 0.0018)
-    set west to the terrain height at (a terrain coordinate with x (world's x - stride) and z world's z)
-    set east to the terrain height at (a terrain coordinate with x (world's x + stride) and z world's z)
-    set south to the terrain height at (a terrain coordinate with x world's x and z (world's z - stride))
-    set north to the terrain height at (a terrain coordinate with x world's x and z (world's z + stride))
-    set normal to a spatial coordinate with x (west - east), y (stride * 2.0) and z (south - north)
-    set length to the square root of (((normal's x * normal's x) + (normal's y * normal's y)) + (normal's z * normal's z))
-    set the x coordinate of normal to normal's x / length
-    set the y coordinate of normal to normal's y / length
-    set the z coordinate of normal to normal's z / length
+            # A fixed-altitude camera supplies the per-pixel view vector.
+            set camera to the terrain camera at time
+            set view to a spatial coordinate with x (camera's x - world's x), y (camera's y - world's y) and z (camera's z - world's z)
+            set length to the square root of (((view's x * view's x) + (view's y * view's y)) + (view's z * view's z))
+            set the x coordinate of view to (view's x / length)
+            set the y coordinate of view to (view's y / length)
+            set the z coordinate of view to (view's z / length)
+            set facing to (((normal's x * view's x) + (normal's y * view's y)) + (normal's z * view's z)) saturated
 
-    set sunlight to (((normal's x * 0.48) + (normal's y * 0.76)) - (normal's z * 0.44)) saturated
-    set skylight to ((normal's y * 0.5) + 0.5) saturated
-    set material to the flowing field at (a point with x (world's x * 0.72) and y (world's z * 0.72)) during 9.4
-    set detail to the ridged field at (a point with x ((world's x * 1.91) + 4.0) and y ((world's z * 1.91) - 7.0)) during 3.8
-    set mineral to the flowing field at (a point with x ((world's x * 3.4) - 9.0) and y ((world's z * 3.4) + 2.0)) during 6.1
-    set exposure to the smooth transition from 0.16 to 0.61 at (1.0 - normal's y)
-    set snow to the smooth transition from 1.48 to 2.28 at height
-    set ground to a terrain color with red ((0.018 + (material * 0.047)) + (detail * 0.021)), green ((0.075 + (material * 0.15)) + (detail * 0.052)) and blue ((0.052 + (material * 0.083)) + (detail * 0.039))
-    set rock to a terrain color with red ((0.115 + (material * 0.11)) + (mineral * 0.087)), green ((0.098 + (material * 0.075)) + (mineral * 0.061)) and blue ((0.105 + (material * 0.095)) + (mineral * 0.073))
-    set the red channel of ground to (ground's red * (1.0 - exposure)) + (rock's red * exposure)
-    set the green channel of ground to (ground's green * (1.0 - exposure)) + (rock's green * exposure)
-    set the blue channel of ground to (ground's blue * (1.0 - exposure)) + (rock's blue * exposure)
-    set the red channel of ground to (ground's red * (1.0 - snow)) + (0.78 * snow)
-    set the green channel of ground to (ground's green * (1.0 - snow)) + (0.84 * snow)
-    set the blue channel of ground to (ground's blue * (1.0 - snow)) + (0.89 * snow)
-    set lighting to (0.11 + (sunlight * 1.13)) + (skylight * 0.16)
-    set the red channel of ground to (ground's red * lighting) + (sunlight * 0.24)
-    set the green channel of ground to (ground's green * lighting) + (sunlight * 0.17)
-    set the blue channel of ground to (ground's blue * lighting) + (sunlight * 0.09)
+            # Schlick Fresnel keeps the body colored while grazing angles reflect sky.
+            set grazing to (1.0 - facing)
+            set squared to (grazing * grazing)
+            set fourth to (squared * squared)
+            set fresnel to (0.020 + ((fourth * grazing) * 0.980))
+            set reflection to a spatial coordinate with x ((normal's x * facing * 2.0) - view's x), y ((normal's y * facing * 2.0) - view's y) and z ((normal's z * facing * 2.0) - view's z)
+            set altitude to ((reflection's y * 0.72) + 0.28) saturated
+            set reflected to a terrain color with red ((0.16 * (1.0 - altitude)) + (0.025 * altitude)), green ((0.24 * (1.0 - altitude)) + (0.095 * altitude)) and blue ((0.32 * (1.0 - altitude)) + (0.24 * altitude))
+            set first to (((the sine of (((reflection's x * 2.1) + (reflection's z * 1.3)) + (time * 0.018))) * 0.5) + 0.5)
+            set second to (((the cosine of (((reflection's x * -1.4) + (reflection's z * 2.7)) - (time * 0.013))) * 0.5) + 0.5)
+            set cloud to the smooth transition from 1.25 to 1.72 at (first + second)
+            set the red channel of reflected to (reflected's red + (cloud * 0.028))
+            set the green channel of reflected to (reflected's green + (cloud * 0.036))
+            set the blue channel of reflected to (reflected's blue + (cloud * 0.045))
 
-    # Atmospheric perspective reveals depth without drawing a path or band.
-    set fog to the smooth transition from 11.0 to 41.0 at traversal's distance
-    set atmosphere to a terrain color with red (0.19 + (halo * 0.16)), green (0.25 + (halo * 0.10)) and blue (0.31 + (halo * 0.05))
-    set the red channel of color to (ground's red * (1.0 - fog)) + (atmosphere's red * fog)
-    set the green channel of color to (ground's green * (1.0 - fog)) + (atmosphere's green * fog)
-    set the blue channel of color to (ground's blue * (1.0 - fog)) + (atmosphere's blue * fog)
+            # The reflected view ray meets the visible sun direction, producing
+            # a broken highlight path instead of tinting the whole lake.
+            set alignment to (((reflection's x * 0.39) + (reflection's y * 0.32)) + (reflection's z * 0.86)) saturated
+            set glint to alignment
+            set glint to (glint * glint)
+            set glint to (glint * glint)
+            set glint to (glint * glint)
+            set glint to (glint * glint)
+            set glint to (glint * glint)
+            set glow to glint
+            set glint to (glint * glint)
+            set glint to (glint * (0.35 + (fresnel * 0.65)))
 
-set edge to the square root of (((screen's x / aspect) * (screen's x / aspect)) + (screen's z * screen's z))
-set vignette to 0.34 + ((1.0 - the smooth transition from 0.57 to 1.33 at edge) * 0.66)
-set the red channel of color to the square root of ((color's red * vignette) / (1.0 + (color's red * 0.42)))
-set the green channel of color to the square root of ((color's green * vignette) / (1.0 + (color's green * 0.42)))
-set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + (color's blue * 0.42)))
-set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0
+            # Interpolated lake depth exposes turquoise shallows without a
+            # terrain evaluation in every fragment.
+            set shallows to ((1.0 - the smooth transition from 0.18 to 3.8 at material's z) * visibility)
+            set absorption to the smooth transition from 24.0 to 220.0 at distance
+            set body to a terrain color with red ((0.004 + (material's x * 0.008)) * (1.0 - (absorption * 0.42))), green ((0.018 + (material's x * 0.038)) * (1.0 - (absorption * 0.28))) and blue ((0.042 + (material's x * 0.058)) * (1.0 - (absorption * 0.12)))
+            set the red channel of body to ((body's red * (1.0 - shallows)) + ((0.018 + (material's y * 0.012)) * shallows))
+            set the green channel of body to ((body's green * (1.0 - shallows)) + ((0.105 + (material's y * 0.050)) * shallows))
+            set the blue channel of body to ((body's blue * (1.0 - shallows)) + ((0.125 + (material's y * 0.055)) * shallows))
+            set depth to ((1.0 - the smooth transition from 0.05 to 0.65 at material's z) * visibility)
+            set separation to the absolute value of ((ripple's x + (ripple's y * 0.72)) + (ripple's z * 0.28))
+            set caustic to ((the glow from 0.0 to 0.18 at separation) * depth)
+            set the red channel of body to (body's red + (caustic * 0.006))
+            set the green channel of body to (body's green + (caustic * 0.032))
+            set the blue channel of body to (body's blue + (caustic * 0.040))
+            set water to a terrain color with red ((body's red * (1.0 - fresnel)) + (reflected's red * fresnel)), green ((body's green * (1.0 - fresnel)) + (reflected's green * fresnel)) and blue ((body's blue * (1.0 - fresnel)) + (reflected's blue * fresnel))
+            set the red channel of water to ((water's red + (glow * 0.080)) + (glint * 0.70))
+            set the green channel of water to ((water's green + (glow * 0.045)) + (glint * 0.42))
+            set the blue channel of water to ((water's blue + (glow * 0.018)) + (glint * 0.16))
+            set fog to the smooth transition from 232.0 to 376.0 at distance
+            set color to a terrain color with red ((water's red * (1.0 - fog)) + (0.17 * fog)), green ((water's green * (1.0 - fog)) + (0.23 * fog)) and blue ((water's blue * (1.0 - fog)) + (0.31 * fog))
+        else:
+            set slope to (1.0 - normal's y)
+            set variation to ((material's x * 0.68) + (material's y * 0.32))
+            set fracture to (((material's y - 0.32) * 1.35) + (slope * 1.7)) saturated
+            set exposure to the smooth transition from 0.055 to 0.30 at (slope + ((fracture - 0.5) * 0.095))
+            set snow to the smooth transition from 2.75 to 4.45 at (world's y + ((variation - 0.5) * 0.48))
+            set snow to (snow * the smooth transition from 0.25 to 0.66 at normal's y)
+            set snow to (snow * (0.88 + (material's y * 0.12)))
+            set alpine to the smooth transition from 0.35 to 2.65 at world's y
+            set warmth to (((normal's x * 0.38) - (normal's z * 0.26)) + 0.48) saturated
+
+            set meadow to a terrain color with red ((0.028 + (variation * 0.050)) + (alpine * 0.034)), green ((0.094 + (variation * 0.086)) - (alpine * 0.050)) and blue ((0.043 + (variation * 0.036)) + (alpine * 0.020))
+            set rock to a terrain color with red ((0.119 + (variation * 0.066)) + (warmth * 0.074)), green ((0.112 + (variation * 0.058)) + (warmth * 0.047)) and blue ((0.118 + (variation * 0.054)) + (warmth * 0.037))
+            set ground to a terrain color with red ((meadow's red * (1.0 - exposure)) + (rock's red * exposure)), green ((meadow's green * (1.0 - exposure)) + (rock's green * exposure)) and blue ((meadow's blue * (1.0 - exposure)) + (rock's blue * exposure))
+            set the red channel of ground to ((ground's red * (1.0 - snow)) + (0.78 * snow))
+            set the green channel of ground to ((ground's green * (1.0 - snow)) + (0.83 * snow))
+            set the blue channel of ground to ((ground's blue * (1.0 - snow)) + (0.87 * snow))
+
+            set lighting to (((0.17 + (sunlight * 1.16)) + (skylight * 0.17)) * (0.80 + (material's y * 0.26)))
+            set the red channel of ground to ((ground's red * lighting) + (sunlight * 0.13))
+            set the green channel of ground to ((ground's green * lighting) + (sunlight * 0.10))
+            set the blue channel of ground to ((ground's blue * lighting) + (sunlight * 0.070))
+
+            set fog to the smooth transition from 188.0 to 376.0 at distance
+            set atmosphere to a terrain color with red (0.17 + (halo * 0.17)), green (0.23 + (halo * 0.105)) and blue (0.31 + (halo * 0.052))
+            set color to a terrain color with red ((ground's red * (1.0 - fog)) + (atmosphere's red * fog)), green ((ground's green * (1.0 - fog)) + (atmosphere's green * fog)) and blue ((ground's blue * (1.0 - fog)) + (atmosphere's blue * fog))
+
+    set edge to the square root of (((screen's x / aspect) * (screen's x / aspect)) + (screen's y * screen's y))
+    set vignette to (0.38 + ((1.0 - the smooth transition from 0.58 to 1.34 at edge) * 0.62))
+    set the red channel of color to the square root of ((color's red * vignette) / (1.0 + (color's red * 0.38)))
+    set the green channel of color to the square root of ((color's green * vignette) / (1.0 + (color's green * 0.38)))
+    set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + (color's blue * 0.38)))
+    set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0

@@ -58,7 +58,7 @@ function a new window with width {integer:width} and height {integer:height}:
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		set horizontal to width as a float
 		set vertical to height as a float
-		set negative to 0.0 - 1.0
+		set negative to (0.0 - 1.0)
 		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
 		@intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
@@ -85,7 +85,7 @@ function a new fullscreen window:
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		set horizontal to width as a float
 		set vertical to height as a float
-		set negative to 0.0 - 1.0
+		set negative to (0.0 - 1.0)
 		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
 		@intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)

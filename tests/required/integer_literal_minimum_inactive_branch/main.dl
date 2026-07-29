@@ -1,0 +1,4 @@
+import lib/std.dl
+
+if @intrinsic("equal", 0, 1):
+    ignore the negative of 9223372036854775808

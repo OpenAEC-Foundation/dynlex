@@ -1,0 +1,30 @@
+import lib/process.dl
+
+function [the|] bounded wait test interpreter:
+    execute:
+        return "python" if the process platform is Windows, else "python3"
+
+set command to a process command for the bounded wait test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import sys,time;sys.stderr.write('ready');sys.stderr.flush();time.sleep(0.2);sys.exit(7)" as an argument to command
+
+launch command and set child to it
+print whether child was launched as a line
+
+wait up to 1000 milliseconds for process activity from child and set activity to it
+print whether (activity succeeded) and (activity reports activity) as a line
+read the available standard error of child and set error to it
+print (error's contents) as a line
+
+wait up to 10 milliseconds for child and set early to it
+print whether early succeeded as a line
+print whether the inverse of (early reports completion) as a line
+
+wait up to 2000 milliseconds for child and set finished to it
+print whether finished succeeded as a line
+print whether finished reports completion as a line
+print whether (finished's exit code = (7 as a 64 bit integer)) as a line
+
+clean up child and set cleaned to it
+print whether cleaned succeeded as a line

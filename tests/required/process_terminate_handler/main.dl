@@ -45,7 +45,7 @@ loop while reading should continue:
     read the standard output of child and set chunk to it
     set reading's success to chunk succeeded
     if reading succeeded:
-        set contents to contents + chunk's contents
+        set contents to (contents + chunk's contents)
         set reading's completion to contents ends with "\n"
         set reading's stream ending to chunk reached the end of stream
 terminate child and set termination to it

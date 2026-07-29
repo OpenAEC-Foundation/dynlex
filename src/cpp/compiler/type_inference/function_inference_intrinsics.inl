@@ -1,5 +1,7 @@
 case Expression::Kind::IntrinsicCall: {
 #include "intrinsic_preflight_inference.inl"
+	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
+		break;
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
@@ -81,11 +83,13 @@ case Expression::Kind::IntrinsicCall: {
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				DataType promoted;
 				DataType refinedPointerType;
+				bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
 				bool pointerEquality =
-					(kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-					rightType.isPointer() &&
+					equality && leftType.isPointer() && rightType.isPointer() &&
 					(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
-				if (!pointerEquality && !DataType::promoteArithmetic(leftType, rightType, promoted)) {
+				bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
+										   : DataType::promoteArithmetic(leftType, rightType, promoted);
+				if (!pointerEquality && !promotable) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
 						{{"left_type", typeToUserName(leftType, context.parseContext)},
@@ -249,6 +253,12 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		case IntrinsicReturnKind::Custom:
 			#include "intrinsics/aggregate_inference.inl"
+			if (kind == IntrinsicKind::ShaderInterpolantInput) {
+				expr->type = {DataType::Kind::Vector};
+				expr->type.arraySize = 4;
+				expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+				break;
+			}
 			if (handledAggregateIntrinsic)
 				break;
 			if (kind == IntrinsicKind::LifecycleValue) {
@@ -508,7 +518,7 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				expr->type = {DataType::Kind::Int, 4};
-				context.setExpressionValue(expr, static_cast<double>(*extent));
+				context.setExpressionValue(expr, static_cast<std::int64_t>(*extent));
 			} else if (kind == IntrinsicKind::Select) {
 				DataType conditionType = expr->arguments[1]->type;
 				if (!conditionType.isDeduced())
@@ -989,6 +999,6 @@ case Expression::Kind::IntrinsicCall: {
 	}
 	if (context.typesValid)
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 	break;
 }

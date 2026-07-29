@@ -6,27 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="../icons/dynlex-icon.svg">
     <title>DynLex Wiki - Getting Started</title>
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="stylesheet" href="wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../index.html" class="nav-btn">Home</a>
-        <a href="../ide/index.html" class="nav-btn">IDE</a>
-        <a href="index.html" class="nav-btn">Wiki Home</a>
-        <a href="core-rules.html" class="nav-btn">Core Rules</a>
-        <a href="getting-started.html" class="nav-btn primary">Getting Started</a>
-        <a href="sections/index.html" class="nav-btn">Sections</a>
-        <a href="terms.html" class="nav-btn">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
-        <section class="glass-card hero-card">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
+        <section class="hero-card">
             <h1>Getting Started with DynLex</h1>
             <p>
                 DynLex lets you write code in clear words. You write your program in a <code>.dl</code> file, build
@@ -40,7 +27,7 @@
             </p>
         </section>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>Start every file by importing what you need, usually <code>lib/std.dl</code>.</li>
@@ -51,14 +38,14 @@
         </section>
 
         <section class="doc-stack">
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 1</div>
                 <h2>Write your first DynLex file</h2>
                 <p>
                     Make a file named <code>hello.dl</code>. Start by
                     <a class="inline-link" href="terms.html#import">importing</a> the standard library:
                 </p>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>import lib/std.dl
 
 print "Hello, world!" as a line</code></pre>
@@ -75,13 +62,13 @@ print "Hello, world!" as a line</code></pre>
                 </div>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 2</div>
                 <h2>Build and run your file</h2>
                 <p>
                     Build the file into a program and run it:
                 </p>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>dynlex hello.dl -o hello
 ./hello</code></pre>
                 </div>
@@ -90,13 +77,13 @@ print "Hello, world!" as a line</code></pre>
                 </p>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 3</div>
                 <h2>Store values in variables</h2>
                 <p>
                     A <a class="inline-link" href="terms.html#variable">variable</a> lets you keep a value and use it again later:
                 </p>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>import lib/std.dl
 
 set apples to 3
@@ -117,7 +104,7 @@ print total as a line</code></pre>
                 </div>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 4</div>
                 <h2>Write your first function</h2>
                 <p>
@@ -125,7 +112,7 @@ print total as a line</code></pre>
                     behavior. The words on the first line are its
                     <a class="inline-link" href="terms.html#pattern">pattern</a>.
                 </p>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>import lib/std.dl
 
 function value squared:
@@ -156,14 +143,14 @@ print 5 squared as a line</code></pre>
                 </div>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 5</div>
                 <h2>Use a <a class="inline-link" href="sections/loop.html">loop</a></h2>
                 <p>
                     A loop lets you repeat a block of code. The loop body is another
                     <a class="inline-link" href="terms.html#section">section</a>.
                 </p>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>import lib/std.dl
 
 set count to 1
@@ -184,7 +171,7 @@ loop while count <= 3:
                 </div>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Step 6</div>
                 <h2>Stay with the standard library at first</h2>
                 <p>
@@ -197,7 +184,7 @@ loop while count <= 3:
                 </p>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Next</div>
                 <h2>What to read after this</h2>
                 <p>
@@ -209,6 +196,6 @@ loop while count <= 3:
             </article>
         </section>
     </main>
-    <script src="wiki-actions.js"></script>
+    <script type="module" src="wiki-actions.js"></script>
 </body>
 </html>

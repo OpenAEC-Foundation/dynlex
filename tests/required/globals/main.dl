@@ -5,7 +5,7 @@ import lib/string.dl
 function increase total by amount:
     globals: total
     execute:
-        set total to total + amount
+        set total to (total + amount)
 
 function show total:
     globals: total
@@ -21,7 +21,7 @@ show total
 # test 2: local variable with same name as global (shadowing)
 function value doubled:
     execute:
-        set total to value * 2
+        set total to (value * 2)
         return total
 
 print 7 doubled as a line
@@ -33,7 +33,7 @@ print total as a line
 set result to 99
 function value tripled:
     execute:
-        set result to value * 3
+        set result to (value * 3)
         return result
 
 print 5 tripled as a line
@@ -44,7 +44,7 @@ print result as a line
 function set result to value times multiplier:
     globals: result
     execute:
-        set result to value * multiplier
+        set result to (value * multiplier)
 
 set result to 7 times 3
 # global "result" should now be 21

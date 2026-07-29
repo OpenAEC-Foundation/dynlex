@@ -1,0 +1,41 @@
+import lib/process.dl
+
+function [the|] partial write test interpreter:
+    execute:
+        return "python" if the process platform is Windows, else "python3"
+
+set command to a process command for the partial write test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import sys,time;time.sleep(0.1);data=sys.stdin.buffer.read();sys.stdout.write(str(len(data)));sys.stdout.flush()" as an argument to command
+launch command and set child to it
+
+wait up to 10 milliseconds for process activity from child and set idle to it
+print whether (idle succeeded) and (idle reports no activity) as a line
+
+set input to a new string buffer containing 1048576 bytes
+write input to the standard input of child and set first to it
+print whether first succeeded as a line
+print whether (first's byte count > (0 as a word sized integer)) as a line
+print whether (first's byte count < (the length of input as a word sized integer)) as a line
+
+set written to first's byte count as an integer
+loop while written < the length of input:
+    set remaining to the substring of input from written spanning ((the length of input) - written) bytes
+    write remaining to the standard input of child and set outcome to it
+    if (outcome failed) or (outcome's byte count = (0 as a word sized integer)):
+        print false as a line
+        @intrinsic("call", "libc", "abort", nothing)
+    set chunk to outcome's byte count as an integer
+    set written to (written + chunk)
+
+close the standard input of child and set closed to it
+print whether closed succeeded as a line
+wait up to 2000 milliseconds for process activity from child and set ready to it
+print whether (ready succeeded) and (ready reports activity) as a line
+read the standard output of child and set output to it
+print (output's contents) as a line
+wait up to 2000 milliseconds for child and set finished to it
+print whether (finished succeeded) and (finished reports completion) as a line
+clean up child and set cleaned to it
+print whether cleaned succeeded as a line

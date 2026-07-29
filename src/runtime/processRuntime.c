@@ -15,6 +15,7 @@ static bool checked_add(size_t left, size_t right, size_t *result) {
 }
 
 static const size_t maximum_process_output_length = INT32_MAX - sizeof(int32_t) - 1;
+static const size_t maximum_process_write_length = 65536;
 
 static char *copy_text(const char *data, size_t length) {
 	size_t allocation_size = 0;
@@ -401,7 +402,8 @@ int dynlex_process_write(DynlexProcess *process, const char *data, size_t length
 		dynlex_runtime_set_error("Invalid process write arguments");
 		return -1;
 	}
-	return dynlex_platform_process_write(process, data, length, written);
+	size_t requested = length < maximum_process_write_length ? length : maximum_process_write_length;
+	return dynlex_platform_process_write(process, data, requested, written);
 }
 
 int dynlex_process_close_input(DynlexProcess *process) {
@@ -428,7 +430,7 @@ int dynlex_process_read(
 	DynlexProcessBuffer *captured = output_buffer(process, stream);
 	bool needs_pump = captured->length == 0 && !stream_is_closed(process, stream);
 	dynlex_platform_process_unlock(process);
-	if (needs_pump && dynlex_platform_process_pump(process, wait != 0, stream) != 0)
+	if (needs_pump && dynlex_platform_process_pump(process, wait != 0 ? -1 : 0, stream) != 0)
 		return -1;
 
 	dynlex_platform_process_lock(process);
@@ -448,7 +450,8 @@ int dynlex_process_read(
 }
 
 static int process_status(
-	DynlexProcess *process, bool wait, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
+	DynlexProcess *process, int64_t timeout_milliseconds, int32_t *finished, int64_t *exit_code, int32_t *terminated,
+	int32_t *termination_signal
 ) {
 	dynlex_runtime_clear_error();
 	if (ensure_usable_process(process) != 0)
@@ -457,7 +460,7 @@ static int process_status(
 		dynlex_runtime_set_error("Invalid process status arguments");
 		return -1;
 	}
-	if ((!process->finished || wait) && dynlex_platform_process_pump(process, wait, 0) != 0)
+	if (!process->finished && dynlex_platform_process_pump(process, timeout_milliseconds, 0) != 0)
 		return -1;
 	*finished = process->finished ? 1 : 0;
 	*exit_code = process->exit_code;
@@ -469,13 +472,44 @@ static int process_status(
 int dynlex_process_poll(
 	DynlexProcess *process, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
 ) {
-	return process_status(process, false, finished, exit_code, terminated, termination_signal);
+	return process_status(process, 0, finished, exit_code, terminated, termination_signal);
 }
 
 int dynlex_process_wait(
 	DynlexProcess *process, int32_t *finished, int64_t *exit_code, int32_t *terminated, int32_t *termination_signal
 ) {
-	return process_status(process, true, finished, exit_code, terminated, termination_signal);
+	return process_status(process, -1, finished, exit_code, terminated, termination_signal);
+}
+
+int dynlex_process_wait_timeout(
+	DynlexProcess *process, int32_t timeout_milliseconds, int32_t *finished, int64_t *exit_code, int32_t *terminated,
+	int32_t *termination_signal
+) {
+	dynlex_runtime_clear_error();
+	if (timeout_milliseconds < 0) {
+		dynlex_runtime_set_error("Process wait timeout must not be negative");
+		return -1;
+	}
+	return process_status(process, timeout_milliseconds, finished, exit_code, terminated, termination_signal);
+}
+
+int dynlex_process_wait_activity(DynlexProcess *process, int32_t timeout_milliseconds, int32_t *activity) {
+	dynlex_runtime_clear_error();
+	if (ensure_usable_process(process) != 0)
+		return -1;
+	if (timeout_milliseconds < 0 || activity == NULL) {
+		dynlex_runtime_set_error("Invalid process activity wait arguments");
+		return -1;
+	}
+	if (!process->finished && dynlex_platform_process_pump(process, timeout_milliseconds, DYNLEX_PROCESS_STREAM_ANY) != 0)
+		return -1;
+	dynlex_platform_process_lock(process);
+	*activity = process->finished || process->standard_output.length > 0 || process->standard_error.length > 0 ||
+					 process->standard_output_closed || process->standard_error_closed
+				 ? 1
+				 : 0;
+	dynlex_platform_process_unlock(process);
+	return 0;
 }
 
 int dynlex_process_terminate(DynlexProcess *process) {
@@ -485,6 +519,19 @@ int dynlex_process_terminate(DynlexProcess *process) {
 	if (process->finished)
 		return 0;
 	if (dynlex_platform_process_terminate(process) != 0)
+		return -1;
+	if (!process->finished)
+		process->termination_requested = true;
+	return 0;
+}
+
+int dynlex_process_kill(DynlexProcess *process) {
+	dynlex_runtime_clear_error();
+	if (ensure_usable_process(process) != 0)
+		return -1;
+	if (process->finished)
+		return 0;
+	if (dynlex_platform_process_kill(process) != 0)
 		return -1;
 	if (!process->finished)
 		process->termination_requested = true;
@@ -533,15 +580,19 @@ int dynlex_process_communicate(DynlexProcess *process, const char *input, size_t
 		return -1;
 	char first_error[512] = {0};
 	size_t written = 0;
-	if (dynlex_process_write(process, input, input_length, &written) != 0)
-		capture_runtime_error(first_error, sizeof(first_error), "Could not write process standard input");
-	else if (written != input_length) {
-		dynlex_runtime_set_error("Process standard input closed before all input was written");
-		capture_runtime_error(first_error, sizeof(first_error), "Process standard input was only partially written");
+	while (written < input_length && first_error[0] == '\0') {
+		size_t chunk_written = 0;
+		if (dynlex_process_write(process, input + written, input_length - written, &chunk_written) != 0)
+			capture_runtime_error(first_error, sizeof(first_error), "Could not write process standard input");
+		else if (chunk_written == 0) {
+			dynlex_runtime_set_error("Process standard input write made no progress");
+			capture_runtime_error(first_error, sizeof(first_error), "Could not write all process standard input");
+		} else
+			written += chunk_written;
 	}
 	if (dynlex_process_close_input(process) != 0 && first_error[0] == '\0')
 		capture_runtime_error(first_error, sizeof(first_error), "Could not close process standard input");
-	if (dynlex_platform_process_pump(process, true, 0) != 0 && first_error[0] == '\0')
+	if (dynlex_platform_process_pump(process, -1, 0) != 0 && first_error[0] == '\0')
 		capture_runtime_error(first_error, sizeof(first_error), "Could not wait for process");
 	if (first_error[0] == '\0')
 		return 0;

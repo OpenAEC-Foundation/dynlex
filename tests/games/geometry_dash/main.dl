@@ -55,7 +55,7 @@ loop while the window remains open:
 	draw the static world
 
 	set surface to the player's ground height
-	set distance to the reference horizontal offset - scroll
+	set distance to (the reference horizontal offset - scroll)
 	set index to 0
 	loop while index < plan's count:
 		set slide to the item at index in plan's slides
@@ -67,11 +67,11 @@ loop while the window remains open:
 			apply gravity to landing
 			add the frame time in milliseconds to elapsed
 		clamp landing to the ground
-		set top to landing's y as an integer + the player size
-		set clearance to the ground height - top
-		set span to (the scroll speed * slide) / the frame time in milliseconds
+		set top to (landing's y as an integer + the player size)
+		set clearance to (the ground height - top)
+		set span to ((the scroll speed * slide) / the frame time in milliseconds)
 		add 72 to span
-		set horizontal to the player horizontal position + distance
+		set horizontal to (the player horizontal position + distance)
 		if clearance > 0:
 			draw a rectangle at x horizontal and y top with width span and height clearance in color red 210, green 120 and blue 50
 		set surface to landing's y

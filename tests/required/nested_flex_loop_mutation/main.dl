@@ -48,11 +48,11 @@ function the count from initial:
         set cursor to 0
         loop while cursor < 2:
             if cursor > 0:
-                set total to total + 1
-            set cursor to cursor + 1
+                set total to (total + 1)
+            set cursor to (cursor + 1)
         return total
 
 set initial to @intrinsic("call", "libc", "rand", an integer)
 set result to the count from initial
-set difference to result - initial
+set difference to (result - initial)
 ignore @intrinsic("call", "libc", "printf", an integer, "%d\n", difference)

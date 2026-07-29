@@ -12,7 +12,11 @@ import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution
 import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/documentSemanticTokens.js";
 import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/viewportSemanticTokens.js";
 import "monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController.js";
-import { createShaderPreview } from "../../../../web/shader-renderer.js";
+import {
+  createShaderPreview,
+  validateShaderGeometryDescriptor
+} from "../../../../web/shader-renderer.js";
+import { isGeneratedTerrainGeometryDescriptor } from "../../../../web/terrain-geometry.js";
 import { DynLexLanguageFeatures } from "./lspIntegration.js";
 import "./styles.css";
 
@@ -181,17 +185,32 @@ async function loadShaderRenderer(config) {
   if (config === null) {
     return null;
   }
-  const response = await fetch(`/${config.geometry.path}`);
-  if (!response.ok) {
+  if (isGeneratedTerrainGeometryDescriptor(config.geometry)) {
+    validateShaderGeometryDescriptor(config.geometry);
+    return Object.freeze({ geometry: config.geometry });
+  }
+  const [geometryResponse, indexResponse] = await Promise.all([
+    fetch(`/${config.geometry.path}`),
+    config.geometry.indices ? fetch(`/${config.geometry.indices.path}`) : null
+  ]);
+  if (!geometryResponse.ok || (indexResponse && !indexResponse.ok)) {
     throw new Error("Shader geometry could not be loaded");
   }
-  const data = await response.arrayBuffer();
-  const expectedBytes = config.geometry.vertexCount * 4 * Float32Array.BYTES_PER_ELEMENT;
-  if (data.byteLength !== expectedBytes) {
-    throw new Error("Shader geometry size does not match its renderer configuration");
-  }
+  const [data, indexData] = await Promise.all([
+    geometryResponse.arrayBuffer(),
+    indexResponse ? indexResponse.arrayBuffer() : null
+  ]);
+  const indices = config.geometry.indices
+    ? Object.freeze({ ...config.geometry.indices, data: indexData })
+    : undefined;
+  const geometry = Object.freeze({
+    ...config.geometry,
+    data,
+    ...(indices ? { indices } : {})
+  });
+  validateShaderGeometryDescriptor(geometry, true);
   return Object.freeze({
-    geometry: Object.freeze({ ...config.geometry, data })
+    geometry
   });
 }
 

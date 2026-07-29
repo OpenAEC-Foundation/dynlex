@@ -13,9 +13,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include <cmath>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <unordered_set>
 
 namespace {
@@ -51,10 +51,10 @@ static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outT
 	std::optional<int> numericByteSize;
 	if (intrinsicExpr->arguments.size() > 2) {
 		Expression *bitsExpr = intrinsicExpr->arguments[2];
-		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
-		if (!bits || *bits <= 0 || std::fmod(*bits, 8.0) != 0.0)
+		auto *bits = std::get_if<std::int64_t>(&bitsExpr->literalValue);
+		if (!bits || *bits <= 0 || *bits % 8 != 0 || *bits / 8 > std::numeric_limits<int>::max())
 			return false;
-		numericByteSize = static_cast<int>(*bits) / 8;
+		numericByteSize = static_cast<int>(*bits / 8);
 	}
 	std::optional<DataType> typeReference = makeBuiltinTypeReference(*kindStr, emitSPIRV, numericByteSize);
 	if (!typeReference)
@@ -158,6 +158,14 @@ void ParseContext::registerShaderUniformName(const std::string &uniformName, Cod
 		shaderUniformNames.push_back(uniformName);
 }
 
+void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
+	if (interpolantName.empty())
+		return;
+	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
+		shaderInterpolantNames.end())
+		shaderInterpolantNames.push_back(interpolantName);
+}
+
 void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 	if (!intrinsicExpr)
 		return;
@@ -240,6 +248,8 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
+	clone->minimumIntegerEffects =
+		preserveInferenceMetadata ? expression->minimumIntegerEffects : MinimumSignedIntegerMagnitudeEffects{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
 		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata));

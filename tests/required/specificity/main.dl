@@ -28,7 +28,7 @@ function the shutdown code for lights and user:
         set placeholder to 1
         set verification to the shutdown code for placeholder and user
         # Return a value that distinguishes this from the generic pattern
-        set result to 1 + 1 + user
+        set result to (1 + 1 + user)
         return result
 
 # Expected: 6 (specific pattern: 1+1+4=6, not generic: lights+100+4)

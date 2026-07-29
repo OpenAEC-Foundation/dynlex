@@ -31,8 +31,8 @@ flex section loop count times:
         set iteration to 0
         loop while iteration < count:
             execute body
-            set iteration to iteration + 1
+            set iteration to (iteration + 1)
 
 set value to 0
 loop 3 times:
-    set value to value + 1
+    set value to (value + 1)

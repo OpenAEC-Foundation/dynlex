@@ -5,7 +5,7 @@ function the factorial of number:
     execute:
         if number is less than or equal to 1:
             return 1
-        set predecessor to number - 1
+        set predecessor to (number - 1)
         return number * the factorial of predecessor
 
 print the factorial of 5 as a line

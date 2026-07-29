@@ -1,9 +1,9 @@
 import lib/std.dl
 
 set values to [10, 20, 30]
-set forward to values + 1
-set commuted to 1 + values
-set restored to (values + 2) - 1
+set forward to (values + 1)
+set commuted to (1 + values)
+set restored to ((values + 2) - 1)
 
 print the value at forward
 print " "

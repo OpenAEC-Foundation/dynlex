@@ -47,7 +47,7 @@ function number saturated:
 
 function the smooth transition from lower to upper at sample:
     execute:
-        set normalized to (sample - lower) / (upper - lower)
+        set normalized to ((sample - lower) / (upper - lower))
         set normalized to normalized saturated
         return (normalized * normalized) * (3.0 - (2.0 * normalized))
 
@@ -55,12 +55,56 @@ function the glow from inner to outer at sample:
     execute:
         return 1.0 - the smooth transition from inner to outer at sample
 
+function the simplex permutation of value:
+    execute:
+        set polynomial to (((value * 34.0) + 1.0) * value)
+        return polynomial - (the floor of (polynomial / 289.0)) * 289.0
+
+function the simplex corner at {a point:offset} with permutation {any:permutation}:
+    execute:
+        set radius to the maximum of (0.5 - ((offset's x * offset's x) + (offset's y * offset's y))) and 0.0
+        set axis to (((the fractional part of (permutation / 41.0)) * 2.0) - 1.0)
+        set elevation to ((the absolute value of axis) - 0.5)
+        set shift to the floor of (axis + 0.5)
+        set axis to (axis - shift)
+        set normalization to (1.79284291 - 0.85373472 * ((axis * axis) + (elevation * elevation)))
+        set attenuation to (radius * radius)
+        set attenuation to (attenuation * attenuation)
+        return (attenuation * normalization) * ((axis * offset's x) + (elevation * offset's y))
+
+# A triangular simplex lattice avoids the axis-aligned cells and repeating
+# wave bands that become conspicuous when a field displaces visible geometry.
+function the simplex field at {a point:point} during {any:phase}:
+    execute:
+        set sample to a point with x (point's x + phase * 17.17) and y (point's y - phase * 11.13)
+        set skew to ((sample's x + sample's y) * 0.36602540)
+        set corner to a point with x (the floor of (sample's x + skew)) and y (the floor of (sample's y + skew))
+        set unskew to ((corner's x + corner's y) * 0.21132487)
+        set offset to a point with x (sample's x - (corner's x - unskew)) and y (sample's y - (corner's y - unskew))
+
+        set second to a point with x 0.0 and y 1.0
+        if offset's x > offset's y:
+            set the x coordinate of second to 1.0
+            set the y coordinate of second to 0.0
+        set middle to a point with x ((offset's x - second's x) + 0.21132487) and y ((offset's y - second's y) + 0.21132487)
+        set third to a point with x (offset's x - 0.57735027) and y (offset's y - 0.57735027)
+
+        set wrapped to a point with x (corner's x - (the floor of (corner's x / 289.0)) * 289.0) and y (corner's y - (the floor of (corner's y / 289.0)) * 289.0)
+        set initial to the simplex permutation of ((the simplex permutation of wrapped's y) + wrapped's x)
+        set following to the simplex permutation of (((the simplex permutation of (wrapped's y + second's y)) + wrapped's x) + second's x)
+        set final to the simplex permutation of (((the simplex permutation of (wrapped's y + 1.0)) + wrapped's x) + 1.0)
+
+        set leading to the simplex corner at offset with permutation initial
+        set central to the simplex corner at middle with permutation following
+        set trailing to the simplex corner at third with permutation final
+        return ((leading + central) + trailing) * 130.0
+
 function the signed flow at {a point:point} during {any:phase}:
     execute:
         set sway to the sine of (((point's x * 0.73) - (point's y * 0.41)) + phase)
         set drift to the cosine of (((point's x * 0.37) + (point's y * 0.89)) - (phase * 0.71))
-        set longitude to point's x + sway * 0.58
-        set latitude to point's y + drift * 0.58
+        set longitude to (point's x + sway * 0.58)
+        set latitude to (point's y + drift * 0.58)
         set broad to the sine of (((longitude * 1.31) + (latitude * 0.87)) + (phase * 0.43))
         set crossing to the cosine of (((longitude * -0.79) + (latitude * 1.73)) - (phase * 0.31))
         set curl to the sine of (((longitude * 2.47) - (latitude * 2.11)) + (broad * 1.8))
@@ -74,7 +118,7 @@ function the flowing field at {a point:point} during {any:phase}:
 function the ridged field at {a point:point} during {any:phase}:
     execute:
         set wave to the absolute value of (the signed flow at point during phase)
-        set ridge to 1.0 - the minimum of wave and 1.0
+        set ridge to (1.0 - the minimum of wave and 1.0)
         return ridge * ridge
 
 function the spark field at {a point:point} during {any:phase}:
@@ -82,8 +126,8 @@ function the spark field at {a point:point} during {any:phase}:
         set sample to a point with x (point's x * 0.19) and y (point's y * 0.19)
         set warp to the signed flow at sample during phase
         set shifted to a point with x (point's x * 0.23 + 7.0) and y (point's y * 0.23 - 5.0)
-        set longitude to point's x + warp * 1.7
-        set latitude to point's y + (the signed flow at shifted during (phase + 1.7)) * 1.7
+        set longitude to (point's x + warp * 1.7)
+        set latitude to (point's y + (the signed flow at shifted during (phase + 1.7)) * 1.7)
         set primary to the absolute value of (the sine of ((longitude * 1.73) + (latitude * 0.31) + phase))
         set secondary to the absolute value of (the sine of ((longitude * -0.27) + (latitude * 1.91) - phase * 0.83))
         set crossing to the square root of (primary * primary + secondary * secondary)
@@ -94,57 +138,57 @@ function the spark field at {a point:point} during {any:phase}:
 
 function the distance from {a point:point} to segment from {a point:start} to {a point:end}:
     execute:
-        set span to end's x - start's x
-        set rise to end's y - start's y
-        set horizontal to point's x - start's x
-        set vertical to point's y - start's y
-        set measure to span * span + rise * rise
-        set projection to (horizontal * span + vertical * rise) / the maximum of measure and 0.000001
+        set span to (end's x - start's x)
+        set rise to (end's y - start's y)
+        set horizontal to (point's x - start's x)
+        set vertical to (point's y - start's y)
+        set measure to (span * span + rise * rise)
+        set projection to ((horizontal * span + vertical * rise) / the maximum of measure and 0.000001)
         set projection to projection saturated
-        set longitude to start's x + span * projection
-        set latitude to start's y + rise * projection
-        set difference to point's x - longitude
-        set deviation to point's y - latitude
+        set longitude to (start's x + span * projection)
+        set latitude to (start's y + rise * projection)
+        set difference to (point's x - longitude)
+        set deviation to (point's y - latitude)
         return the square root of (difference * difference + deviation * deviation)
 
 function the ring distance from {a point:point} around {a point:center} with radius {any:radius}:
     execute:
-        set difference to point's x - center's x
-        set deviation to point's y - center's y
+        set difference to (point's x - center's x)
+        set deviation to (point's y - center's y)
         set result to the square root of (difference * difference + deviation * deviation)
         return the absolute value of (result - radius)
 
 function the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius {any:radius}:
     execute:
-        set span to end's x - start's x
-        set rise to end's y - start's y
-        set depth to end's z - start's z
-        set horizontal to point's x - start's x
-        set vertical to point's y - start's y
-        set forward to point's z - start's z
-        set measure to ((span * span) + (rise * rise)) + (depth * depth)
-        set projection to (((horizontal * span) + (vertical * rise)) + (forward * depth)) / the maximum of measure and 0.000001
+        set span to (end's x - start's x)
+        set rise to (end's y - start's y)
+        set depth to (end's z - start's z)
+        set horizontal to (point's x - start's x)
+        set vertical to (point's y - start's y)
+        set forward to (point's z - start's z)
+        set measure to (((span * span) + (rise * rise)) + (depth * depth))
+        set projection to ((((horizontal * span) + (vertical * rise)) + (forward * depth)) / the maximum of measure and 0.000001)
         set projection to projection saturated
-        set longitude to start's x + span * projection
-        set latitude to start's y + rise * projection
-        set altitude to start's z + depth * projection
-        set difference to point's x - longitude
-        set deviation to point's y - latitude
-        set separation to point's z - altitude
+        set longitude to (start's x + span * projection)
+        set latitude to (start's y + rise * projection)
+        set altitude to (start's z + depth * projection)
+        set difference to (point's x - longitude)
+        set deviation to (point's y - latitude)
+        set separation to (point's z - altitude)
         return (the square root of (difference * difference + deviation * deviation + separation * separation)) - radius
 
 function the ellipsoid distance from {a point:point} with radii {a point:radii}:
     execute:
-        set horizontal to point's x / radii's width
-        set vertical to point's y / radii's height
-        set forward to point's z / radii's depth
+        set horizontal to (point's x / radii's width)
+        set vertical to (point's y / radii's height)
+        set forward to (point's z / radii's depth)
         set result to the square root of (((horizontal * horizontal) + (vertical * vertical)) + (forward * forward))
         set smallest to the minimum of radii's width and (the minimum of radii's height and radii's depth)
         return (result - 1.0) * smallest
 
 function the torus distance from {a point:point} with major radius {any:outer} and tube radius {any:inner}:
     execute:
-        set offset to (the square root of (point's x * point's x + point's y * point's y)) - outer
+        set offset to ((the square root of (point's x * point's x + point's y * point's y)) - outer)
         return (the square root of (offset * offset + point's z * point's z)) - inner
 
 function the nano drone field at {a point:point} with phase {any:phase}:

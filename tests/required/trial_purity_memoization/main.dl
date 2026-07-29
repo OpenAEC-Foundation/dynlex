@@ -20,7 +20,7 @@ function {C string:left}[ |]+[ |]{C string:right}:
 
 function add value to target:
 	replacement:
-		set target to target + value
+		set target to (target + value)
 
 function apply gravity to velocity:
 	execute:

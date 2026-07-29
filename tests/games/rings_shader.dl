@@ -18,17 +18,17 @@ set ring to the sine of (distance * 30.0 - time * 4.0)
 # Angle for directional color variation
 set angle to 0.0
 if distance > 0.001:
-    set angle to position's x / distance
+    set angle to (position's x / distance)
 
 set color to a light color with red (the sine of (ring + angle * 3.0) * 0.5 + 0.5), green (the sine of (ring * 1.5 + 1.0) * 0.5 + 0.5), blue (the sine of (ring * 2.0 + 2.0) * 0.5 + 0.5) and alpha 1.0
 
 # Darken edges with vignette
-set vignette to 1.0 - distance * 0.5
+set vignette to (1.0 - distance * 0.5)
 if vignette < 0.0:
     set vignette to 0.0
 
-set the red channel of color to color's red * vignette
-set the green channel of color to color's green * vignette
-set the blue channel of color to color's blue * vignette
+set the red channel of color to (color's red * vignette)
+set the green channel of color to (color's green * vignette)
+set the blue channel of color to (color's blue * vignette)
 
 set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha

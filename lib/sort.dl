@@ -17,7 +17,7 @@ function the bytewise comparison of {string:left} with {string:right}:
                 return 0 - 1
             if actual > expected:
                 return 1
-            set position to position + 1
+            set position to (position + 1)
         if the length of left < the length of right:
             return 0 - 1
         if the length of left > the length of right:
@@ -45,16 +45,16 @@ function the stable bytewise order for {a pointer to a list:keys}:
             append source to permutation
             set searching to true
             loop while searching and position > 0:
-                set previous to the item at position - 1 in permutation
+                set previous to (the item at position - 1 in permutation)
                 set current to the item at source in keys
                 set prior to the item at previous in keys
                 if the bytewise comparison of current with prior < 0:
                     replace item at index position in permutation with previous
                     replace item at index position - 1 in permutation with source
-                    set position to position - 1
+                    set position to (position - 1)
                 else:
                     set searching to false
-            set source to source + 1
+            set source to (source + 1)
         return permutation
 
 local function apply the stable ordering in {a pointer to a list:permutation} to {a pointer to a list:values}:
@@ -68,12 +68,12 @@ local function apply the stable ordering in {a pointer to a list:permutation} to
             if source < 0 or source >= the length of values:
                 @intrinsic("call", "libc", "abort", nothing)
             append the item at source in values to sorted
-            set position to position + 1
+            set position to (position + 1)
         clear values
         set position to 0
         loop while position < the length of sorted:
             append the item at position in sorted to values
-            set position to position + 1
+            set position to (position + 1)
         free sorted
 
 function sort {a pointer to a list:strings} stably in bytewise order:

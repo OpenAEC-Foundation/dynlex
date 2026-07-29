@@ -13,7 +13,7 @@ describe 9
 # caller supplies it, a fresh local when omitted.
 function amount stretched [by factor|]:
 	execute:
-		set factor to amount * 3
+		set factor to (amount * 3)
 		return factor
 
 print (2 stretched by 5) as a line

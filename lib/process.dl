@@ -132,6 +132,14 @@ class:
 
 class:
     patterns:
+        [a|] process activity result
+    members:
+        success as a boolean
+        activity as a boolean
+        error message as a string
+
+class:
+    patterns:
         [a|] process result
     members:
         launch as a boolean
@@ -148,14 +156,20 @@ local class:
         [a|] process wait strategy
     members:
         blocking as a boolean
+        time limit as a boolean
+        duration as an integer
 
 local function a blocking process wait strategy:
     replacement:
-        @intrinsic("construct", a process wait strategy, true)
+        @intrinsic("construct", a process wait strategy, true, false, 0)
 
 local function a nonblocking process wait strategy:
     replacement:
-        @intrinsic("construct", a process wait strategy, false)
+        @intrinsic("construct", a process wait strategy, false, false, 0)
+
+local function a process wait strategy with a limit of {integer:duration} milliseconds:
+    replacement:
+        @intrinsic("construct", a process wait strategy, true, true, duration)
 
 local function a successful process action:
     replacement:
@@ -238,6 +252,22 @@ function {process wait result:result} succeeded:
 function {process wait result:result} failed:
     replacement:
         the inverse of result's success
+
+function {process activity result:result} succeeded:
+    replacement:
+        result's success
+
+function {process activity result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process activity result:result} reports activity:
+    replacement:
+        result's activity
+
+function {process activity result:result} reports no activity:
+    replacement:
+        the inverse of result's activity
 
 function {process result:result} succeeded:
     replacement:
@@ -518,7 +548,20 @@ local function the status of {process:child} using {process wait strategy:strate
         set terminated to 0
         set signal to 0 as an integer
         set outcome to 0
-        if strategy's blocking:
+        if strategy's time limit:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_process_wait_timeout",
+                an integer,
+                child's handle,
+                strategy's duration,
+                the address of finished,
+                the address of code,
+                the address of terminated,
+                the address of signal
+            )
+        else if strategy's blocking:
             set outcome to @intrinsic(
                 "call",
                 "dynlex_runtime",
@@ -563,6 +606,32 @@ flex function wait for {process:child}:
     replacement:
         set the subject to the status of child using a blocking process wait strategy
 
+flex function wait up to {integer:duration} milliseconds for {process:child}:
+    replacement:
+        set the subject to the status of child using a process wait strategy with a limit of duration milliseconds
+
+local function the result of waiting up to {integer:duration} milliseconds for process activity from {process:child}:
+    execute:
+        if child failed to launch:
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        set observed to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_wait_activity",
+            an integer,
+            child's handle,
+            duration,
+            the address of observed
+        )
+        if outcome != 0:
+            return @intrinsic("construct", a process activity result, false, false, the current process error)
+        return @intrinsic("construct", a process activity result, true, observed != 0, an empty process error)
+
+flex function wait up to {integer:duration} milliseconds for process activity from {process:child}:
+    replacement:
+        set the subject to the result of waiting up to duration milliseconds for process activity from child
+
 local function the result of terminating {process:child}:
     execute:
         if child failed to launch:
@@ -581,6 +650,25 @@ local function the result of terminating {process:child}:
 flex function terminate {process:child}:
     replacement:
         set the subject to the result of terminating child
+
+local function the result of killing {process:child}:
+    execute:
+        if child failed to launch:
+            return a failed process action
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_kill",
+            an integer,
+            child's handle
+        )
+        if outcome != 0:
+            return a failed process action
+        return a successful process action
+
+flex function kill {process:child}:
+    replacement:
+        set the subject to the result of killing child
 
 local function the result of cleaning up {process:child}:
     execute:

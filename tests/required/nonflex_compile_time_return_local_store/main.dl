@@ -17,7 +17,7 @@ function left + right:
 function the sum of left and right:
     execute:
         set total to left
-        set total to total + right
+        set total to (total + right)
         return total
 
 ignore @intrinsic("type", "int", the sum of 4 and 4)

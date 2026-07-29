@@ -9,7 +9,7 @@ set input to a new string buffer containing length bytes
 set position to 0
 loop while position < length:
     store 73 as a byte into the data of input at position
-    set position to position + 1
+    set position to (position + 1)
 
 set command to a process command for the communication error test interpreter
 add "-u" as an argument to command

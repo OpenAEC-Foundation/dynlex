@@ -127,7 +127,7 @@ loop while the window remains open:
 				increment game's length
 
 			# Shift body segments backward
-			set index to game's length - 1
+			set index to (game's length - 1)
 			loop while index > 0:
 				store the item at (index - 1) in game's body into game's body at index
 				decrement index
@@ -148,8 +148,8 @@ loop while the window remains open:
 		set index to 0
 		loop while index < game's length:
 			set segment to the item at index in game's body
-			set horizontal to segment's x * board's scale
-			set vertical to segment's y * board's scale
+			set horizontal to (segment's x * board's scale)
+			set vertical to (segment's y * board's scale)
 			if index = 0:
 				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 200 and blue 0
 			else:

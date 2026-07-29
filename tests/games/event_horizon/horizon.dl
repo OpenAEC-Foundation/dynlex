@@ -48,10 +48,10 @@ function {float:number} saturated:
 
 function the smooth transition from {float:lower} to {float:upper} at {float:sample}:
     execute:
-        set span to upper - lower
-        set normalized to (sample - lower) / span
+        set span to (upper - lower)
+        set normalized to ((sample - lower) / span)
         set normalized to normalized saturated
-        set squared to normalized * normalized
+        set squared to (normalized * normalized)
         return squared * (3.0 - (2.0 * normalized))
 
 function the hash at {planar position:position}:
@@ -64,16 +64,16 @@ function the value noise at {planar position:position}:
         set cell to a planar position with x (the floor of (position's x)) and y (the floor of (position's y))
         set local to a planar position with x (the fractional part of (position's x)) and y (the fractional part of (position's y))
         set blend to a planar position with x (local's x * local's x) and y (local's y * local's y)
-        set the x coordinate of blend to blend's x * (3.0 - (2.0 * local's x))
-        set the y coordinate of blend to blend's y * (3.0 - (2.0 * local's y))
+        set the x coordinate of blend to (blend's x * (3.0 - (2.0 * local's x)))
+        set the y coordinate of blend to (blend's y * (3.0 - (2.0 * local's y)))
 
         set southwest to the hash at cell
         set southeast to the hash at (a planar position with x (cell's x + 1.0) and y cell's y)
         set northwest to the hash at (a planar position with x cell's x and y (cell's y + 1.0))
         set northeast to the hash at (a planar position with x (cell's x + 1.0) and y (cell's y + 1.0))
 
-        set lower to southwest + ((southeast - southwest) * blend's x)
-        set upper to northwest + ((northeast - northwest) * blend's x)
+        set lower to (southwest + ((southeast - southwest) * blend's x))
+        set upper to (northwest + ((northeast - northwest) * blend's x))
         return lower + ((upper - lower) * blend's y)
 
 function the nebula density at {planar position:position} during {float:phase}:
@@ -88,11 +88,11 @@ function the nebula density at {planar position:position} during {float:phase}:
             set location to a planar position with x (sample's x + (phase * 0.015)) and y (sample's y - (phase * 0.011))
             set noise to the value noise at location
             set ridge to the absolute value of ((noise * 2.0) - 1.0)
-            set ridge to 1.0 - ridge
-            set energy to ridge * ridge
-            set total to total + (energy * amplitude)
-            set frequency to frequency * 2.03
-            set amplitude to amplitude * 0.52
+            set ridge to (1.0 - ridge)
+            set energy to (ridge * ridge)
+            set total to (total + (energy * amplitude))
+            set frequency to (frequency * 2.03)
+            set amplitude to (amplitude * 0.52)
             increment octave
         return total
 
@@ -107,13 +107,13 @@ function the star brightness at {planar position:position} with scale {float:sca
         set distance to the square root of ((local's x * local's x) + (local's y * local's y))
 
         set rarity to the smooth transition from 0.82 to 0.995 at seed
-        set core to 1.0 - the smooth transition from 0.004 to 0.055 at distance
-        set rays to 1.0 - the smooth transition from 0.0 to 0.018 at (the minimum of (the absolute value of (local's x)) and (the absolute value of (local's y)))
-        set reach to 1.0 - the smooth transition from 0.02 to 0.31 at distance
+        set core to (1.0 - the smooth transition from 0.004 to 0.055 at distance)
+        set rays to (1.0 - the smooth transition from 0.0 to 0.018 at (the minimum of (the absolute value of (local's x)) and (the absolute value of (local's y))))
+        set reach to (1.0 - the smooth transition from 0.02 to 0.31 at distance)
         set twinkle to the sine of ((time * (1.5 + (seed * 4.0))) + (seed * 31.0))
-        set twinkle to (twinkle * 0.25) + 0.75
-        set glow to (rays * reach) * 0.42
-        set light to rarity * ((core * 3.5) + glow)
+        set twinkle to ((twinkle * 0.25) + 0.75)
+        set glow to ((rays * reach) * 0.42)
+        set light to (rarity * ((core * 3.5) + glow))
         return light * twinkle
 
 set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
@@ -122,120 +122,120 @@ set frame to a planar position with x (the maximum of (the shader width) and 1.0
 set mouse to a planar position with x the shader mouse x and y the shader mouse y
 set age to the shader pulse age
 set camera to a planar position with x the shader camera x and y the shader camera y
-set aspect to frame's x / frame's y
+set aspect to (frame's x / frame's y)
 
 # Screen and mouse coordinates in a centered, aspect-correct space.
 set screen to a planar position with x ((((pixel's x) / (frame's x)) * 2.0 - 1.0) * aspect) and y (((pixel's y) / (frame's y)) * 2.0 - 1.0)
 set cursor to a planar position with x (((mouse's x) / (frame's x)) * 2.0 - 1.0) and y (1.0 - (((mouse's y) / (frame's y)) * 2.0))
-set the x coordinate of screen to (screen's x + (cursor's x * 0.055)) + camera's x
-set the y coordinate of screen to (screen's y + (cursor's y * 0.035)) + camera's y
+set the x coordinate of screen to ((screen's x + (cursor's x * 0.055)) + camera's x)
+set the y coordinate of screen to ((screen's y + (cursor's y * 0.035)) + camera's y)
 
 set radius to the square root of ((screen's x * screen's x) + (screen's y * screen's y))
 set denominator to the maximum of radius and 0.001
 
 # Gravitational lensing rotates and magnifies the universe behind the horizon.
-set angle to (0.17 / ((radius * radius) + 0.035)) + (time * 0.018)
+set angle to ((0.17 / ((radius * radius) + 0.035)) + (time * 0.018))
 set angle to the minimum of angle and 3.6
 set cosine to the cosine of angle
 set sine to the sine of angle
-set scale to 1.0 + (0.075 / ((radius * radius) + 0.018))
+set scale to (1.0 + (0.075 / ((radius * radius) + 0.018)))
 set universe to a planar position with x (((screen's x * cosine) - (screen's y * sine)) * scale) and y (((screen's x * sine) + (screen's y * cosine)) * scale)
 
 # Slow, layered nebulae. The dark filaments are as important as the light.
 set broad to the nebula density at (a planar position with x ((universe's x * 1.15) + 4.0) and y ((universe's y * 1.15) - 2.0)) during time
 set fine to the nebula density at (a planar position with x ((universe's x * 2.7) - 11.0) and y ((universe's y * 2.7) + 7.0)) during (time + 19.0)
-set phase to ((universe's x * 2.2) - (universe's y * 3.1)) + (broad * 5.5)
-set phase to phase + (time * 0.045)
-set filament to (the sine of phase) * 0.5 + 0.5
+set phase to (((universe's x * 2.2) - (universe's y * 3.1)) + (broad * 5.5))
+set phase to (phase + (time * 0.045))
+set filament to ((the sine of phase) * 0.5 + 0.5)
 set voids to the smooth transition from 0.22 to 0.92 at broad
 set dust to the smooth transition from 0.38 to 0.88 at fine
 
-set brightness to dust * filament
-set shadow to dust * (1.0 - filament)
+set brightness to (dust * filament)
+set shadow to (dust * (1.0 - filament))
 set color to a light color with red (0.008 + (voids * 0.055) + (brightness * 0.13)), green (0.012 + (voids * 0.025) + (brightness * 0.055)), blue (0.028 + (voids * 0.12) + (shadow * 0.18)) and alpha 1.0
 
 # Three independently drifting star strata create depth under lensing.
 set faraway to the star brightness at (a planar position with x (universe's x + (time * 0.002)) and y universe's y) with scale 31.0 during time in layer 1.0
 set middle to the star brightness at (a planar position with x ((universe's x * 1.37) - (time * 0.004)) and y (universe's y * 1.37)) with scale 53.0 during time in layer 2.0
 set nearby to the star brightness at (a planar position with x (universe's x * 2.11) and y ((universe's y * 2.11) + (time * 0.006))) with scale 79.0 during time in layer 3.0
-set stars to ((faraway * 0.7) + (middle * 0.9)) + (nearby * 1.15)
+set stars to (((faraway * 0.7) + (middle * 0.9)) + (nearby * 1.15))
 set temperature to the hash at (a planar position with x (the floor of (universe's x * 31.0)) and y (the floor of (universe's y * 31.0)))
-set the red channel of color to color's red + (stars * (0.72 + (temperature * 0.42)))
-set the green channel of color to color's green + (stars * (0.78 + (temperature * 0.28)))
-set the blue channel of color to color's blue + (stars * (1.12 - (temperature * 0.18)))
+set the red channel of color to (color's red + (stars * (0.72 + (temperature * 0.42))))
+set the green channel of color to (color's green + (stars * (0.78 + (temperature * 0.28))))
+set the blue channel of color to (color's blue + (stars * (1.12 - (temperature * 0.18))))
 
 # Tilt the accretion plane. Its apparent speed increases toward the horizon.
-set tilt to 0.11 + (cursor's y * 0.045)
+set tilt to (0.11 + (cursor's y * 0.045))
 set cosine to the cosine of tilt
 set sine to the sine of tilt
 set disk to a planar position with x ((screen's x * cosine) + (screen's y * sine)) and y ((screen's y * cosine) - (screen's x * sine))
-set stretched to disk's y * 6.2
+set stretched to (disk's y * 6.2)
 set orbit to the square root of ((disk's x * disk's x) + (stretched * stretched))
 set inner to the smooth transition from 0.255 to 0.31 at orbit
-set outer to 1.0 - the smooth transition from 0.66 to 1.04 at orbit
-set mask to inner * outer
+set outer to (1.0 - the smooth transition from 0.66 to 1.04 at orbit)
+set mask to (inner * outer)
 
 set turbulence to the nebula density at (a planar position with x (disk's x * 8.0) and y (stretched * 1.8)) during (time * 4.0)
-set phase to ((orbit * 49.0) - (time * 5.2)) + (turbulence * 7.0)
-set wave to (the sine of phase) * 0.5 + 0.5
-set heat to 1.0 - the smooth transition from 0.30 to 0.92 at orbit
-set energy to (mask * (0.20 + (wave * 0.8))) * (0.65 + (heat * 2.8))
+set phase to (((orbit * 49.0) - (time * 5.2)) + (turbulence * 7.0))
+set wave to ((the sine of phase) * 0.5 + 0.5)
+set heat to (1.0 - the smooth transition from 0.30 to 0.92 at orbit)
+set energy to ((mask * (0.20 + (wave * 0.8))) * (0.65 + (heat * 2.8)))
 
 # Relativistic Doppler shift: the approaching side burns blue-white while
 # the receding side falls through amber into red.
-set velocity to disk's x / (the maximum of orbit and 0.001)
+set velocity to (disk's x / (the maximum of orbit and 0.001))
 set approaching to ((velocity * 0.5) + 0.5) saturated
-set the red channel of color to color's red + (energy * (1.55 - (approaching * 0.50)))
-set the green channel of color to color's green + (energy * (0.34 + (approaching * 0.86)))
-set the blue channel of color to color's blue + (energy * (0.08 + (approaching * 1.82)))
+set the red channel of color to (color's red + (energy * (1.55 - (approaching * 0.50))))
+set the green channel of color to (color's green + (energy * (0.34 + (approaching * 0.86))))
+set the blue channel of color to (color's blue + (energy * (0.08 + (approaching * 1.82))))
 
 # The event horizon consumes every layer drawn so far.
-set horizon to 1.0 - the smooth transition from 0.188 to 0.207 at radius
-set the red channel of color to color's red * (1.0 - horizon)
-set the green channel of color to color's green * (1.0 - horizon)
-set the blue channel of color to color's blue * (1.0 - horizon)
+set horizon to (1.0 - the smooth transition from 0.188 to 0.207 at radius)
+set the red channel of color to (color's red * (1.0 - horizon))
+set the green channel of color to (color's green * (1.0 - horizon))
+set the blue channel of color to (color's blue * (1.0 - horizon))
 
 # The near half of the disk passes in front of the silhouette.
-set front to 1.0 - the smooth transition from (0.0 - 0.025) to 0.018 at disk's y
-set foreground to energy * front
-set the red channel of color to color's red + (foreground * (1.50 - (approaching * 0.42)))
-set the green channel of color to color's green + (foreground * (0.32 + (approaching * 0.82)))
-set the blue channel of color to color's blue + (foreground * (0.06 + (approaching * 1.72)))
+set front to (1.0 - the smooth transition from (0.0 - 0.025) to 0.018 at disk's y)
+set foreground to (energy * front)
+set the red channel of color to (color's red + (foreground * (1.50 - (approaching * 0.42))))
+set the green channel of color to (color's green + (foreground * (0.32 + (approaching * 0.82))))
+set the blue channel of color to (color's blue + (foreground * (0.06 + (approaching * 1.72))))
 
 # Lensed polar arcs are the far side of the disk folded over the black hole.
 set separation to the absolute value of (radius - 0.224)
-set ring to 1.0 - the smooth transition from 0.003 to 0.021 at separation
+set ring to (1.0 - the smooth transition from 0.003 to 0.021 at separation)
 set poles to the absolute value of (screen's y / denominator)
-set arcs to ring * (the smooth transition from 0.18 to 0.86 at poles)
-set phase to ((time * 2.1) + (radius * 170.0)) + (turbulence * 3.0)
-set flicker to ((the sine of phase) * 0.16) + 0.84
-set the red channel of color to (color's red + ((ring * 1.15) * flicker)) + (arcs * 1.8)
-set the green channel of color to (color's green + ((ring * 0.68) * flicker)) + (arcs * 0.75)
-set the blue channel of color to (color's blue + ((ring * 0.32) * flicker)) + (arcs * 1.1)
+set arcs to (ring * (the smooth transition from 0.18 to 0.86 at poles))
+set phase to (((time * 2.1) + (radius * 170.0)) + (turbulence * 3.0))
+set flicker to (((the sine of phase) * 0.16) + 0.84)
+set the red channel of color to ((color's red + ((ring * 1.15) * flicker)) + (arcs * 1.8))
+set the green channel of color to ((color's green + ((ring * 0.68) * flicker)) + (arcs * 0.75))
+set the blue channel of color to ((color's blue + ((ring * 0.32) * flicker)) + (arcs * 1.1))
 
 # A click releases a two-second gravitational shockwave through the starfield.
 set strength to (1.0 - (age / 2.4)) saturated
-set wavefront to 0.24 + (age * 0.52)
+set wavefront to (0.24 + (age * 0.52))
 set separation to the absolute value of (radius - wavefront)
-set shockwave to 1.0 - the smooth transition from 0.004 to 0.028 at separation
-set shockwave to shockwave * (strength * strength)
-set the red channel of color to color's red + (shockwave * 0.42)
-set the green channel of color to color's green + (shockwave * 1.05)
-set the blue channel of color to color's blue + (shockwave * 1.85)
+set shockwave to (1.0 - the smooth transition from 0.004 to 0.028 at separation)
+set shockwave to (shockwave * (strength * strength))
+set the red channel of color to (color's red + (shockwave * 0.42))
+set the green channel of color to (color's green + (shockwave * 1.05))
+set the blue channel of color to (color's blue + (shockwave * 1.85))
 
 # Volumetric halo, exposure, gamma, and a restrained vignette.
 set gap to the absolute value of (radius - 0.205)
-set halo to (0.055 / (gap + 0.055)) * (1.0 - horizon)
-set the red channel of color to color's red + (halo * 0.18)
-set the green channel of color to color's green + (halo * 0.07)
-set the blue channel of color to color's blue + (halo * 0.24)
+set halo to ((0.055 / (gap + 0.055)) * (1.0 - horizon))
+set the red channel of color to (color's red + (halo * 0.18))
+set the green channel of color to (color's green + (halo * 0.07))
+set the blue channel of color to (color's blue + (halo * 0.24))
 
 set edge to the square root of (((screen's x / aspect) * (screen's x / aspect)) + (screen's y * screen's y))
-set vignette to 1.0 - the smooth transition from 0.58 to 1.28 at edge
-set vignette to 0.28 + (vignette * 0.72)
-set the red channel of color to color's red * vignette
-set the green channel of color to color's green * vignette
-set the blue channel of color to color's blue * vignette
+set vignette to (1.0 - the smooth transition from 0.58 to 1.28 at edge)
+set vignette to (0.28 + (vignette * 0.72))
+set the red channel of color to (color's red * vignette)
+set the green channel of color to (color's green * vignette)
+set the blue channel of color to (color's blue * vignette)
 
 set the red channel of color to the square root of (color's red / (1.0 + color's red))
 set the green channel of color to the square root of (color's green / (1.0 + color's green))

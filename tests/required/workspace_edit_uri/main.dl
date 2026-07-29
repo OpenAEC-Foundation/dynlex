@@ -1,0 +1,60 @@
+import lib/workspace_edit.dl
+
+create a temporary directory and set temporary to it
+if temporary failed:
+    print temporary's error message as line
+    @intrinsic("call", "libc", "abort", nothing)
+
+set root to temporary's directory path
+set native to the native path style
+set child to root joined with "a b.txt" using native's value
+set uri to the file URI for child's value interpreted as a native path
+set normalized to the normalized workspace file URI for uri's value inside native root root
+print normalized succeeded as line
+print (normalized's path = child's value) as line
+print (normalized's relative path = "a b.txt") as line
+
+set uri to the file URI for root interpreted as a native path
+set text to (uri's value + the string form of "/%2e%2e/outside.txt")
+set escaped to the normalized workspace file URI for text inside native root root
+print escaped succeeded as line
+print escaped's failure reason as line
+
+set text to (uri's value + the string form of "/folder/")
+set directory to the normalized workspace file URI for text inside native root root
+print directory succeeded as line
+print directory's directory hint as line
+
+set invalid to the normalized workspace file URI for "https://example.com/file" inside native root root
+print invalid succeeded as line
+
+set invalid to the normalized workspace file URI for "file:///tmp/a%2Fb" using the POSIX path style
+print invalid succeeded as line
+
+set drive to the normalized workspace file URI for "file:///C:/Folder/%41.txt" using the Windows path style
+print drive succeeded as line
+print drive's path as line
+print drive's identity as line
+
+set network to the normalized workspace file URI for "file://server/share/a%20b" using the Windows path style
+print network succeeded as line
+print network's path as line
+
+set target to root joined with "target.txt" using native's value
+set link to root joined with "alias.txt" using native's value
+set status to @intrinsic(
+    "call",
+    "libc",
+    "symlink",
+    an integer,
+    the data of target's value,
+    the data of link's value
+)
+print status as line
+set uri to the file URI for link's value interpreted as a native path
+set linked to the normalized workspace file URI for uri's value inside native root root
+print linked succeeded as line
+print linked's failure reason as line
+
+remove the filesystem tree at root and set cleanup to it
+print cleanup succeeded as line

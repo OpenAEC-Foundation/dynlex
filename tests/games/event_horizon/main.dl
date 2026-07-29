@@ -106,17 +106,17 @@ bind resources's buffers's pulse to binding 5
 bind resources's buffers's camera's x to binding 6
 bind resources's buffers's camera's y to binding 7
 
-set click to 0.0 - 10.0
+set click to (0.0 - 10.0)
 set ready to true
 set view to a camera at (a position with x 0.0, y 0.0 and z 0.0) facing 0.0 degrees with speed 0.72 and turn rate 0.0
 set previous to the time since start
 
 while the window remains open:
     set time to the time since start
-    set elapsed to time - previous
+    set elapsed to (time - previous)
     set previous to time
     clamp elapsed between 0.0 and 0.1
-    set movement to elapsed * view's movement
+    set movement to (elapsed * view's movement)
 
     set left to key 65 is down in window or key 263 is down in window
     set right to key 68 is down in window or key 262 is down in window

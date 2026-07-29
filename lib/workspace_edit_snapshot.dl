@@ -1,0 +1,244 @@
+# Normalize all protocol targets and snapshot touched disk resources/open buffers.
+
+import lib/workspace_edit_plan_types.dl
+import lib/workspace_edit_uri.dl
+import lib/path.dl
+import lib/filesystem.dl
+import lib/text.dl
+
+function workspace identity {string:candidate} equals or is below {string:directory}:
+    execute:
+        if candidate = directory:
+            return true
+        set boundary to the length of directory
+        if the length of candidate <= boundary:
+            return false
+        if the inverse of (candidate has directory at offset 0):
+            return false
+        return the character at boundary in candidate = 47
+
+function the workspace resource with identity {string:identity} in {a pointer to workspace resource snapshot collection:collection}:
+    execute:
+        set position to 0
+        loop while position < the length of collection:
+            set resource to workspace resource snapshot at position in collection
+            if resource's active and resource's identity = identity:
+                return resource
+            set position to (position + 1)
+        return 0 as a pointer to workspace resource snapshot
+
+function the original workspace resource with identity {string:identity} in {a pointer to workspace resource snapshot collection:collection}:
+    execute:
+        set position to 0
+        loop while position < the length of collection:
+            set resource to workspace resource snapshot at position in collection
+            if resource's original identity = identity:
+                return resource
+            set position to (position + 1)
+        return 0 as a pointer to workspace resource snapshot
+
+function normalize workspace changes from {a pointer to parsed workspace edit:edit} using {a pointer to workspace edit context:context} into {a pointer to workspace edit plan:plan}:
+    execute:
+        set position to 0
+        loop while position < the length of edit's changes and plan is valid:
+            set change to workspace change at index position in edit's changes
+            set initial to @intrinsic(
+                "construct",
+                a normalized workspace change,
+                change,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text,
+                an empty workspace edit text
+            )
+            set normalized to allocate 1 slots of initial
+            if change's kind = the workspace rename change kind:
+                set origin to the normalized workspace file URI for change's old URI inside native root the root path of context
+                set destination to the normalized workspace file URI for change's new URI inside native root the root path of context
+                if origin failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting origin's failure reason at change position)
+                else if destination failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting destination's failure reason at change position)
+                else:
+                    set the old path of normalized to origin's path
+                    set the old identity of normalized to origin's identity
+                    set the old relative path of normalized to origin's relative path
+                    set the new path of normalized to destination's path
+                    set the new identity of normalized to destination's identity
+                    set the new relative path of normalized to destination's relative path
+            else:
+                set target to the normalized workspace file URI for change's uri inside native root the root path of context
+                if target failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting target's failure reason at change position)
+                else:
+                    set the path of normalized to target's path
+                    set the identity of normalized to target's identity
+                    set the relative path of normalized to target's relative path
+            if plan is valid:
+                append normalized workspace change normalized to the normalized changes of plan
+            else:
+                @intrinsic("destroy at", normalized)
+                @intrinsic("call", "libc", "free", nothing, normalized)
+            set position to (position + 1)
+
+local function snapshot workspace resource at {string:path} with identity {string:identity} and relative path {string:relative} scanning descendants {boolean:recursive} for change {integer:protocol} using {a pointer to workspace edit context:context} in {a pointer to workspace edit plan:plan}:
+    execute:
+        set existing to the original workspace resource with identity identity in the resources of plan
+        if existing != (0 as a pointer to workspace resource snapshot):
+            if recursive and existing's disk kind = the workspace directory resource kind:
+                if the inverse of existing's descendants scanned:
+                    set the descendants scanned of existing to true
+                    snapshot workspace directory descendants of existing for change protocol using context in plan
+            @intrinsic("return")
+        set entry to the file system entry at path
+        if entry lookup failed:
+            invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace resource could not be inspected" at change protocol)
+            @intrinsic("return")
+        if entry is a symbolic link:
+            invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace edit paths may not traverse symbolic links" at change protocol)
+            @intrinsic("return")
+        if entry has another filesystem kind:
+            invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace resource must be a regular file or directory" at change protocol)
+            @intrinsic("return")
+        set kind to 0
+        if entry is a regular file:
+            set kind to the workspace regular file resource kind
+        else if entry is a directory:
+            set kind to the workspace directory resource kind
+        set contents to an empty workspace edit text
+        if entry is a regular file:
+            read the file at path and set reading to it
+            if reading failed:
+                invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace file could not be read" at change protocol)
+                @intrinsic("return")
+            set contents to the contents of reading
+        set document to the workspace open document with identity identity in context
+        set opened to (document != (0 as a pointer to workspace open document))
+        set exists to (entry was found or opened)
+        set category to kind
+        set text to contents
+        if opened:
+            set category to the workspace regular file resource kind
+            set text to document's text
+        set initial to @intrinsic(
+            "construct",
+            a workspace resource snapshot,
+            true,
+            path,
+            identity,
+            path,
+            identity,
+            relative,
+            protocol as i32,
+            entry was found,
+            kind,
+            contents,
+            entry's modification time is supported,
+            entry's modification time,
+            entry was found,
+            kind,
+            exists,
+            category,
+            text,
+            recursive and entry is a directory,
+            document,
+            opened,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            0,
+            0
+        )
+        set resource to allocate 1 slots of initial
+        if opened:
+            set the open path of resource to document's path
+            set the open identity of resource to document's identity
+            set the open text of resource to document's text
+            set the open version of resource to document's version
+            set the virtual version of resource to document's version
+        append workspace resource snapshot resource to the resources of plan
+        if recursive and entry is a directory:
+            snapshot workspace directory descendants of resource for change protocol using context in plan
+
+local function snapshot workspace directory descendants of {a pointer to workspace resource snapshot:directory} for change {integer:protocol} using {a pointer to workspace edit context:context} in {a pointer to workspace edit plan:plan}:
+    execute:
+        open the directory at directory's original path and set enumeration to it
+        if enumeration failed:
+            invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace directory could not be read" at change protocol)
+            @intrinsic("return")
+        set reading to true
+        loop while reading and plan is valid:
+            read the next directory entry from enumeration and set child to it
+            if child lookup failed:
+                invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace directory could not be read" at change protocol)
+                set reading to false
+            else if child was absent:
+                set reading to false
+            else:
+                set joined to directory's original path joined with child's name using the path style of context
+                if joined failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace child path could not be normalized" at change protocol)
+                else:
+                    set relative to the path from joined's value relative to the root path of context using the path style of context
+                    if relative failed:
+                        invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace child path could not be normalized" at change protocol)
+                    else:
+                        set identity to the workspace identity of native path joined's value using the path style of context
+                        snapshot workspace resource at joined's value with identity identity and relative path relative's value scanning descendants child is a directory for change protocol using context in plan
+        set position to 0
+        loop while position < the length of the documents of context and plan is valid:
+            set document to workspace open document at index position in the documents of context
+            if workspace identity document's identity equals or is below directory's original identity:
+                set relative to the path from document's path relative to the root path of context using the path style of context
+                if relative failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace document path could not be normalized" at change protocol)
+                else:
+                    snapshot workspace resource at document's path with identity document's identity and relative path relative's value scanning descendants false for change protocol using context in plan
+            set position to (position + 1)
+
+local function snapshot workspace ancestors of {string:path} for change {integer:protocol} using {a pointer to workspace edit context:context} in {a pointer to workspace edit plan:plan}:
+    execute:
+        set current to path
+        set searching to true
+        loop while searching and plan is valid:
+            set parent to the parent path of current using the path style of context
+            if parent failed:
+                invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace parent path could not be normalized" at change protocol)
+                set searching to false
+            else:
+                set ancestor to parent's value
+                set relative to the path from ancestor relative to the root path of context using the path style of context
+                if relative failed:
+                    invalidate workspace edit plan plan with (a failed workspace edit result reporting the string form of "Workspace parent path could not be normalized" at change protocol)
+                    set searching to false
+                else:
+                    set identity to the workspace identity of native path ancestor using the path style of context
+                    snapshot workspace resource at ancestor with identity identity and relative path relative's value scanning descendants false for change protocol using context in plan
+                    if identity = the workspace identity of native path the root path of context using the path style of context:
+                        set searching to false
+                    else:
+                        set current to ancestor
+
+function snapshot normalized workspace changes using {a pointer to workspace edit context:context} in {a pointer to workspace edit plan:plan}:
+    execute:
+        set position to 0
+        loop while position < the length of the normalized changes of plan and plan is valid:
+            set normalized to normalized workspace change at position in the normalized changes of plan
+            set change to normalized's source change
+            if change's kind = the workspace rename change kind:
+                snapshot workspace resource at normalized's old path with identity normalized's old identity and relative path normalized's old relative path scanning descendants true for change position using context in plan
+                if plan is valid:
+                    snapshot workspace resource at normalized's new path with identity normalized's new identity and relative path normalized's new relative path scanning descendants true for change position using context in plan
+                if plan is valid:
+                    snapshot workspace ancestors of normalized's new path for change position using context in plan
+            else:
+                set recursive to (change's kind = the workspace delete change kind)
+                snapshot workspace resource at normalized's path with identity normalized's identity and relative path normalized's relative path scanning descendants recursive for change position using context in plan
+                if plan is valid:
+                    snapshot workspace ancestors of normalized's path for change position using context in plan
+            set position to (position + 1)

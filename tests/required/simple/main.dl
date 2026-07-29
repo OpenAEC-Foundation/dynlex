@@ -62,5 +62,5 @@ function left + right:
 set first to 42
 set second to 10
 #this matches 'set $ to $' and the second '$' matches '$ + $'
-set total to first  + second
+set total to (first  + second)
 print total

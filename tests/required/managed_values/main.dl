@@ -10,7 +10,7 @@ class:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
     release:
-        set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1
+        set count to (@intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1)
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
         if count = 0:
             ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
@@ -83,7 +83,7 @@ function exercise loop:
         set number to 9
         loop while number <= 10:
             set iteration to a new tracked allocation numbered number
-            set number to number + 1
+            set number to (number + 1)
 
 function exercise array:
     execute:

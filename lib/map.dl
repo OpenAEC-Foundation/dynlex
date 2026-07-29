@@ -27,7 +27,7 @@ function the index of key in {a pointer to a map:mapping}:
         loop while cursor < the length of the keys of mapping:
             if the item at cursor in the keys of mapping = key:
                 return cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return 0 - 1
 
 function {a pointer to a map:mapping} contains key {any:key}:

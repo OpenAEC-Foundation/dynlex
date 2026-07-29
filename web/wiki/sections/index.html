@@ -6,27 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="../../icons/dynlex-icon.svg">
     <title>DynLex Wiki - Sections</title>
     <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../../responsive.css">
     <link rel="stylesheet" href="../wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../../index.html" class="nav-btn">Home</a>
-        <a href="../../ide/index.html" class="nav-btn">IDE</a>
-        <a href="../index.html" class="nav-btn">Wiki Home</a>
-        <a href="../core-rules.html" class="nav-btn">Core Rules</a>
-        <a href="../getting-started.html" class="nav-btn">Getting Started</a>
-        <a href="index.html" class="nav-btn primary">Sections</a>
-        <a href="../terms.html" class="nav-btn">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
-        <section class="glass-card hero-card">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
+        <section class="hero-card">
             <div class="hero-eyebrow">DynLex Sections</div>
             <h1>Section Guide</h1>
             <p>
@@ -37,7 +24,7 @@
             </p>
         </section>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>Use <a class="inline-link" href="function.html">function</a> to name reusable behavior.</li>
@@ -48,7 +35,7 @@
         </section>
 
         <section class="section-links">
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="function.html">Function</a></h2>
                 <p>Define a named piece of behavior you can call later.</p>
                 <div class="pattern-box">
@@ -58,7 +45,7 @@
                 </div>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="loop.html">While Loop</a></h2>
                 <p>Repeat a section while a condition stays true.</p>
                 <div class="pattern-box">
@@ -67,7 +54,7 @@
                 </div>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="if.html">If</a></h2>
                 <p>Run a section only when a condition is true.</p>
                 <div class="pattern-box">
@@ -76,7 +63,7 @@
                 </div>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="match.html">Match / Switch</a></h2>
                 <p>Choose one branch by comparing a value against several cases.</p>
                 <div class="pattern-box">
@@ -85,7 +72,7 @@
                 </div>
             </article>
 
-            <article class="glass-card section-link-card">
+            <article class="section-link-card">
                 <h2><a href="case.html">Case</a></h2>
                 <p>Define one branch inside a match or switch section.</p>
                 <div class="pattern-box">
@@ -95,6 +82,6 @@
             </article>
         </section>
     </main>
-    <script src="../wiki-actions.js"></script>
+    <script type="module" src="../wiki-actions.js"></script>
 </body>
 </html>

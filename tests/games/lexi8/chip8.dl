@@ -149,7 +149,7 @@ function the count of lit machine pixels:
 		set total to 0
 		set index to 0
 		loop while index < 2048:
-			set total to total + the item at index in console's display
+			set total to (total + the item at index in console's display)
 			increment index
 		return total
 
@@ -189,9 +189,9 @@ function draw a machine sprite at {pixel position:origin} with {integer:count} [
 				set column to 0
 				loop while column < 8:
 					if ((bitmap shifted right by (7 - column)) bitwise and 1) = 1:
-						set pixel's x to origin's x + column
+						set pixel's x to (origin's x + column)
 						if pixel's x < 64:
-							set cell to pixel's y * 64 + pixel's x
+							set cell to (pixel's y * 64 + pixel's x)
 							if the item at cell in console's display = 1:
 								store 1 into console's registers at 15
 							store ((the item at cell in console's display) bitwise xor 1) into console's display at cell
@@ -212,7 +212,7 @@ function step the machine:
 			set operation to low bitwise and 15
 			set operand to low
 			set address to opcode bitwise and 4095
-			set console's program to console's program + 2
+			set console's program to (console's program + 2)
 			increment console's cycles
 			match based on high shifted right by 4:
 				case 0:
@@ -234,13 +234,13 @@ function step the machine:
 					set console's program to address
 				case 3:
 					if the item at target in console's registers = operand:
-						set console's program to console's program + 2
+						set console's program to (console's program + 2)
 				case 4:
 					if the item at target in console's registers != operand:
-						set console's program to console's program + 2
+						set console's program to (console's program + 2)
 				case 5:
 					if the item at target in console's registers = the item at source in console's registers:
-						set console's program to console's program + 2
+						set console's program to (console's program + 2)
 				case 6:
 					store operand into console's registers at target
 				case 7:
@@ -275,7 +275,7 @@ function step the machine:
 						report a machine fault for opcode
 				case 9:
 					if the item at target in console's registers != the item at source in console's registers:
-						set console's program to console's program + 2
+						set console's program to (console's program + 2)
 				case 10:
 					set console's index to address
 				case 11:
@@ -288,10 +288,10 @@ function step the machine:
 				case 14:
 					if operand = 158:
 						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 1:
-							set console's program to console's program + 2
+							set console's program to (console's program + 2)
 					else if operand = 161:
 						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 0:
-							set console's program to console's program + 2
+							set console's program to (console's program + 2)
 					else:
 						report a machine fault for opcode
 				case 15:
@@ -305,7 +305,7 @@ function step the machine:
 								set pressed to key
 							increment key
 						if pressed < 0:
-							set console's program to console's program - 2
+							set console's program to (console's program - 2)
 						else:
 							store pressed into console's registers at target
 					else if operand = 21:
@@ -315,7 +315,7 @@ function step the machine:
 					else if operand = 30:
 						set console's index to (console's index + (the item at target in console's registers)) bitwise and 4095
 					else if operand = 41:
-						set console's index to ((the item at target in console's registers) bitwise and 15) * 5
+						set console's index to (((the item at target in console's registers) bitwise and 15) * 5)
 					else if operand = 51:
 						set left to the item at target in console's registers
 						store left / 100 into console's memory at console's index

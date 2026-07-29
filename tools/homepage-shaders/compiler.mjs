@@ -72,6 +72,22 @@ export async function createHomepageShaderCompiler(projectDirectory) {
     uri: "file:///workspace/homepage-shader.dl",
     languageId: "dynlex"
   });
+  const semanticTokensBySource = new Map();
+
+  async function semanticTokensFor(source) {
+    const cached = semanticTokensBySource.get(source);
+    if (cached) {
+      return cached;
+    }
+    await document.replaceText(source);
+    const payload = await lsp.request("textDocument/semanticTokens/full", {
+      textDocument: document.identifier
+    });
+    validateSemanticTokens(payload, semanticLegend);
+    const tokens = Object.freeze([...payload.data]);
+    semanticTokensBySource.set(source, tokens);
+    return tokens;
+  }
 
   return Object.freeze({
     async compile(source, sourceName, stage) {
@@ -98,22 +114,18 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         compiler.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
         "shader-uniform"
       );
-      await document.replaceText(source);
-      const semanticPayload = await lsp.request("textDocument/semanticTokens/full", {
-        textDocument: document.identifier
-      });
+      const semanticTokens = await semanticTokensFor(source);
       if (!glsl.startsWith("#version 300 es") || !glsl.includes("void main")) {
         throw new Error(`${sourceName} produced invalid WebGL2 ${stage} source`);
       }
       if (!Array.isArray(uniformPayload.uniforms)) {
         throw new Error(`${sourceName} produced invalid shader-uniform reflection`);
       }
-      validateSemanticTokens(semanticPayload, semanticLegend);
 
       return Object.freeze({
         glsl,
         uniforms: uniformPayload.uniforms,
-        semanticTokens: semanticPayload.data,
+        semanticTokens,
         semanticLegend
       });
     },

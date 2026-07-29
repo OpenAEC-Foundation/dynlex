@@ -6,27 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="../../icons/dynlex-icon.svg">
     <title>DynLex Wiki - While Loop</title>
     <link rel="stylesheet" href="../../style.css">
+    <link rel="stylesheet" href="../../responsive.css">
     <link rel="stylesheet" href="../wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../../index.html" class="nav-btn">Home</a>
-        <a href="../../ide/index.html" class="nav-btn">IDE</a>
-        <a href="../index.html" class="nav-btn">Wiki Home</a>
-        <a href="../core-rules.html" class="nav-btn">Core Rules</a>
-        <a href="../getting-started.html" class="nav-btn">Getting Started</a>
-        <a href="index.html" class="nav-btn primary">Sections</a>
-        <a href="../terms.html" class="nav-btn">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
-        <section class="glass-card hero-card">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
+        <section class="hero-card">
             <div class="hero-eyebrow">DynLex Sections</div>
             <h1>While Loop</h1>
             <p>
@@ -35,7 +22,7 @@
             </p>
         </section>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>A loop repeats while its condition is true.</li>
@@ -45,7 +32,7 @@
         </section>
 
         <section class="doc-stack">
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Pattern</div>
                 <div class="pattern-box">
 <pre><code>[loop |]while condition:</code></pre>
@@ -56,9 +43,9 @@
                 </p>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Example</div>
-                <div class="code-block glass-card">
+                <div class="code-block">
 <pre><code>import lib/std.dl
 
 set count to 1
@@ -78,7 +65,7 @@ while count <= 3:
                 </div>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Related</div>
                 <div class="related-grid">
                     <a href="if.html">If</a>
@@ -88,6 +75,6 @@ while count <= 3:
             </article>
         </section>
     </main>
-    <script src="../wiki-actions.js"></script>
+    <script type="module" src="../wiki-actions.js"></script>
 </body>
 </html>

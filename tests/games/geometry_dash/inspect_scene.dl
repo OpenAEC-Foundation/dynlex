@@ -34,5 +34,5 @@ loop while index < plan's count:
 		set run to 0
 	increment index
 
-set average to total / plan's count
+set average to (total / plan's count)
 report plan whose average is average, minimum is minimum, maximum is maximum, peak is peak and longest staircase is longest

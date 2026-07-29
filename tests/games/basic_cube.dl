@@ -5,13 +5,13 @@ function set the perspective with width {integer:width} and height {integer:heig
     execute:
         @intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
         @intrinsic("call", "GL", "glLoadIdentity", nothing)
-        set aspect to (width as a float) / (height as a float)
+        set aspect to ((width as a float) / (height as a float))
         set near to 0.1
         set far to 200.0
         set top to 0.08
-        set bottom to 0.0 - top
-        set right to top * aspect
-        set left to 0.0 - right
+        set bottom to (0.0 - top)
+        set right to (top * aspect)
+        set left to (0.0 - right)
         @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
         @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 
@@ -36,7 +36,7 @@ function position the camera from {spatial camera:view}:
 
 function draw a cube at {spatial position:position} with size {float:size}:
     execute:
-        set half to size / 2.0
+        set half to (size / 2.0)
         @intrinsic("call", "GL", "glPushMatrix", nothing)
         @intrinsic("call", "GL", "glTranslated", nothing, position's x, position's y, position's z)
         @intrinsic("call", "GL", "glBegin", nothing, 7)

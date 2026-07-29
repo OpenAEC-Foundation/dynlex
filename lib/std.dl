@@ -369,27 +369,27 @@ function the bitwise inverse of value:
 
 function multiply value by factor:
 	replacement:
-		set value to value * factor
+		set value to (value * factor)
 
 function divide value by divisor:
 	replacement:
-		set value to value / divisor
+		set value to (value / divisor)
 
 function add value to target:
 	replacement:
-		set target to target + value
+		set target to (target + value)
 
 function subtract value from target:
 	replacement:
-		set target to target - value
+		set target to (target - value)
 
 function increment value:
 	replacement:
-		set value to value + 1
+		set value to (value + 1)
 
 function decrement value:
 	replacement:
-		set value to value - 1
+		set value to (value - 1)
 
 # --- Clamping ---
 

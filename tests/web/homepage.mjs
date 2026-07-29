@@ -12,6 +12,7 @@ const files = {
   shaderBannerCss: path.join(webDir, "shader-banner.css"),
   sectionsCss: path.join(webDir, "sections.css"),
   responsiveCss: path.join(webDir, "responsive.css"),
+  navigation: path.join(webDir, "site-navigation.js"),
   javascript: path.join(webDir, "homepage.js"),
   highlightCache: path.join(webDir, "snippet-highlights.js"),
   highlightKey: path.join(webDir, "snippet-highlight-key.js"),
@@ -27,7 +28,7 @@ for (const filePath of Object.values(files)) {
 
 const html = fs.readFileSync(files.html, "utf8");
 assert.match(html, /<a[^>]+class="skip-link"[^>]+href="#main-content"/);
-assert.match(html, /<nav[^>]+aria-label="Primary navigation"/);
+assert.match(html, /<header class="site-header" data-site-header><\/header>/);
 assert.match(html, /<main[^>]+id="main-content"/);
 assert.equal((html.match(/<h1\b/g) ?? []).length, 1, "Homepage must have exactly one h1");
 assert.match(html, /<script type="module" src="homepage\.js"><\/script>/);
@@ -66,6 +67,8 @@ assert.match(homepageJavascript, /from "\.\/snippet-highlight-key\.js"/);
 assert.match(homepageJavascript, /from "\.\/semantic-highlighting\.js"/);
 assert.match(homepageJavascript, /textDocument\/semanticTokens\/full/);
 assert.match(homepageJavascript, /new LspClient/);
+assert.match(homepageJavascript, /initializeSiteNavigation\(\)/);
+assert.doesNotMatch(homepageJavascript, /function setMenu\(/);
 assert.doesNotMatch(homepageJavascript, /function decodeSemanticTokenRanges/);
 assert.doesNotMatch(homepageJavascript, /function semanticLegendsMatch/);
 

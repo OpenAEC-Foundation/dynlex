@@ -446,11 +446,11 @@ static bool inferNonFlexPatternCall(
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
-						return trialIt->second;
+						return trialIt->second.value;
 					if (context.inheritedTrialExpressionValues) {
 						auto inheritedIt = context.inheritedTrialExpressionValues->find(argumentExpression);
 						if (inheritedIt != context.inheritedTrialExpressionValues->end())
-							return inheritedIt->second;
+							return inheritedIt->second.value;
 					}
 				}
 				return getExpressionCompileTimeValue(argumentExpression);
@@ -543,12 +543,12 @@ static bool inferNonFlexPatternCall(
 	if (!inst.inferring && !inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any) {
 		inst.returnType = {DataType::Kind::Void};
 	}
-	CompileTimeValue inferredReturnValue{};
+	CompileTimeEvaluation inferredReturnValue{};
 	if (inst.returnType.isDeduced()) {
 		expr->type = inst.returnType;
 		inferredReturnValue =
 			evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context, flexBindingFrameStack);
-		context.setExpressionValue(expr, inferredReturnValue);
+		context.setExpressionEvaluation(expr, std::move(inferredReturnValue));
 	}
 	if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
 		retargetTrialSectionInstantiationWriteOrCrash(
@@ -561,7 +561,13 @@ static bool inferNonFlexPatternCall(
 		auto insertResult = matchedSection->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
-	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
+	context.setExpressionEvaluation(
+		expr,
+		{
+			.value = context.lookupExpressionValue(expr),
+			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(expr),
+		}
+	);
 	return true;
 }
 

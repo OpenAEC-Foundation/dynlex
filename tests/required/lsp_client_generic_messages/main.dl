@@ -1,0 +1,121 @@
+import lib/lsp.dl
+
+function the lsp generic message test interpreter:
+    execute:
+        return "python" if the process platform is Windows, else "python3"
+
+set script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['method']=='initialize';send({'jsonrpc':'2.0','method':'window/logMessage','params':{'type':3,'message':'starting'}});send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});assert read()['method']=='initialized'\nnote=read();assert note['method']=='custom/note' and note['params']=={'value':7}\necho=read();assert echo['method']=='custom/echo' and echo['params']=={'text':'hello'};send({'jsonrpc':'2.0','id':echo['id'],'result':{'text':'hello'}})\ncustom=read();assert custom['method']=='custom/identified' and custom['id']==41 and custom['params']=={'value':41};send({'jsonrpc':'2.0','id':41,'result':{'value':41}})\ncustom=read();assert custom['method']=='custom/string-id' and custom['id']=='chosen' and 'params' not in custom;send({'jsonrpc':'2.0','id':'chosen','result':None})\npending=read();assert pending['method']=='custom/pending' and 'params' not in pending\ncancel=read();assert cancel['method']=='$/cancelRequest' and cancel['params']['id']==pending['id'];send({'jsonrpc':'2.0','id':pending['id'],'error':{'code':-32800,'message':'cancelled'}})\nsend({'jsonrpc':'2.0','id':7,'method':'custom/get','params':{'value':9}});reply=read();assert reply['id']==7 and reply['result']=={'accepted':True}\nsend({'jsonrpc':'2.0','id':'abc','method':'custom/fail','params':{}});reply=read();assert reply['id']=='abc' and reply['error']=={'code':-32602,'message':'bad input','data':{'field':'value'}}\nsend({'jsonrpc':'2.0','method':'custom/event','params':{'ready':True}})\nsend({'jsonrpc':'2.0','id':'unknown','result':None})\nshutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});assert read()['method']=='exit'"
+set command to a process command for the lsp generic message test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add script as an argument to command
+
+set started to the result of starting an lsp client using command waiting up to 2000 milliseconds
+print started's succeeded as a line
+set client to started's client
+
+set pumped to the result of pumping one lsp message using client waiting up to 0 milliseconds
+print pumped's succeeded as a line
+set startup to the next lsp notification from client
+print startup's succeeded as a line
+print whether (the JSON text named "method" in startup's message = "window/logMessage") as a line
+free json rpc queued message startup
+
+set opened to the result of opening lsp document uri "file:///no-sync.dl" with language "dynlex" and text "one" using client
+print opened's succeeded as a line
+set edited to the result of editing lsp document uri "file:///no-sync.dl" from line 0 and character 0 to line 0 and character 3 with text "two" using client
+print edited's succeeded as a line
+set document to the lsp document with uri "file:///no-sync.dl" in client
+print whether (document's text = "two") as a line
+set closed to the result of closing lsp document uri "file:///no-sync.dl" using client
+print closed's succeeded as a line
+
+set note to a new json rpc object
+add json rpc member "value" containing a new json rpc integer for 7 to note
+set noted to the result of sending an lsp notification "custom/note" with note using client
+free note
+print noted's succeeded as a line
+
+set parameters to a new json rpc object
+add json rpc member "text" containing a new json rpc text for "hello" to parameters
+set echoed to the result of sending an lsp request "custom/echo" with parameters using client
+free parameters
+print echoed's succeeded as a line
+set echo to the lsp response for identifier echoed's request identifier using client waiting up to 2000 milliseconds
+print echo's succeeded as a line
+print whether (the JSON text named "text" in echo's result = "hello") as a line
+free json rpc response echo
+
+set parameters to a new json rpc object
+add json rpc member "value" containing a new json rpc integer for 41 to parameters
+set number to a new json rpc integer for 41
+set custom to the result of sending an lsp request "custom/identified" with parameters and identifier number using client
+free parameters
+free number
+print custom's succeeded as a line
+set response to the lsp response for identifier custom's request identifier using client waiting up to 2000 milliseconds
+print response's succeeded as a line
+set value to the JSON member named "value" in response's result
+print whether (the number of value = 41.0) as a line
+free json rpc response response
+
+set label to a new json rpc text for "chosen"
+set chosen to the result of sending an lsp request "custom/string-id" and identifier label using client
+free label
+print chosen's succeeded as a line
+set selection to the lsp response for identifier chosen's request identifier using client waiting up to 2000 milliseconds
+print selection's succeeded as a line
+print whether selection's result is JSON null as a line
+free json rpc response selection
+
+set pending to the result of sending an lsp request "custom/pending" using client
+print pending's succeeded as a line
+set cancelled to the result of cancelling lsp request identifier pending's request identifier using client
+print cancelled's succeeded as a line
+set cancellation to the lsp response for identifier pending's request identifier using client waiting up to 2000 milliseconds
+print the inverse of cancellation's succeeded as a line
+print whether (cancellation's status = the json rpc remote error status) as a line
+print whether (cancellation's remote error code = the lsp request cancelled code) as a line
+free json rpc response cancellation
+
+set pumped to the result of pumping one lsp message using client waiting up to 2000 milliseconds
+print pumped's succeeded as a line
+set request to the next lsp server request from client
+print request's succeeded as a line
+set accepted to a new json rpc object
+add json rpc member "accepted" containing a new json rpc boolean for true to accepted
+set replied to the result of replying to lsp server request request's message with accepted using client
+free accepted
+print replied's succeeded as a line
+free json rpc queued message request
+
+set pumped to the result of pumping one lsp message using client waiting up to 2000 milliseconds
+print pumped's succeeded as a line
+set failing to the next lsp server request from client
+print failing's succeeded as a line
+set data to a new json rpc object
+add json rpc member "field" containing a new json rpc text for "value" to data
+set replied to the result of replying to lsp server request failing's message with error code the json rpc invalid parameters code message "bad input" and data data using client
+free data
+print replied's succeeded as a line
+free json rpc queued message failing
+
+set pumped to the result of pumping one lsp message using client waiting up to 2000 milliseconds
+print pumped's succeeded as a line
+set event to the next lsp notification from client
+print event's succeeded as a line
+print whether (the JSON text named "method" in event's message = "custom/event") as a line
+free json rpc queued message event
+
+set protocol to the result of pumping one lsp message using client waiting up to 2000 milliseconds
+print the inverse of protocol's succeeded as a line
+print whether (protocol's status = the json rpc protocol error status) as a line
+set diagnostic to the next lsp protocol diagnostic from client
+print diagnostic's succeeded as a line
+print whether (diagnostic's error message = "JSON-RPC response has an unknown ID") as a line
+print whether (the JSON text named "id" in diagnostic's message = "unknown") as a line
+free json rpc queued message diagnostic
+
+set stopped to the result of shutting down lsp client client waiting up to 2000 milliseconds
+print stopped's succeeded as a line
+free lsp client client

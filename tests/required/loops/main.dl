@@ -42,4 +42,4 @@ set index to 0
 
 loop while index < 10:
 	print index as a line
-	set index to index + 1
+	set index to (index + 1)

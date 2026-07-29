@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "processRuntimeInternal.h"
+#include "processRuntimeWindowsQuoting.h"
 
 #include "runtimeError.h"
 
@@ -27,6 +28,7 @@ struct DynlexWindowsProcess {
 	HANDLE standard_error;
 	HANDLE output_thread;
 	HANDLE error_thread;
+	HANDLE activity_event;
 	CRITICAL_SECTION output_lock;
 	DynlexWindowsReader output_reader;
 	DynlexWindowsReader error_reader;
@@ -410,66 +412,6 @@ static wchar_t *search_executable_path(const wchar_t *executable, const wchar_t 
 	return NULL;
 }
 
-static bool command_line_argument_needs_quotes(const wchar_t *argument) {
-	if (*argument == L'\0')
-		return true;
-	for (const wchar_t *cursor = argument; *cursor != L'\0'; ++cursor) {
-		if (*cursor == L' ' || *cursor == L'\t' || *cursor == L'"')
-			return true;
-	}
-	return false;
-}
-
-static size_t quoted_argument_length(const wchar_t *argument) {
-	if (!command_line_argument_needs_quotes(argument))
-		return wcslen(argument);
-	size_t length = 2;
-	size_t backslashes = 0;
-	for (const wchar_t *cursor = argument;; ++cursor) {
-		if (*cursor == L'\\') {
-			backslashes++;
-			continue;
-		}
-		if (*cursor == L'"')
-			length += backslashes * 2 + 2;
-		else if (*cursor == L'\0') {
-			length += backslashes * 2;
-			return length;
-		} else
-			length += backslashes + 1;
-		backslashes = 0;
-	}
-}
-
-static wchar_t *append_quoted_argument(wchar_t *destination, const wchar_t *argument) {
-	if (!command_line_argument_needs_quotes(argument)) {
-		size_t length = wcslen(argument);
-		memcpy(destination, argument, length * sizeof(wchar_t));
-		return destination + length;
-	}
-	*destination++ = L'"';
-	size_t backslashes = 0;
-	for (const wchar_t *cursor = argument;; ++cursor) {
-		if (*cursor == L'\\') {
-			backslashes++;
-			continue;
-		}
-		size_t copies = backslashes;
-		if (*cursor == L'"' || *cursor == L'\0')
-			copies *= 2;
-		for (size_t index = 0; index < copies; ++index)
-			*destination++ = L'\\';
-		if (*cursor == L'\0')
-			break;
-		if (*cursor == L'"')
-			*destination++ = L'\\';
-		*destination++ = *cursor;
-		backslashes = 0;
-	}
-	*destination++ = L'"';
-	return destination;
-}
-
 static wchar_t *build_command_line(const DynlexProcessCommand *command, const wchar_t *wide_executable) {
 	wchar_t **arguments = calloc(command->argument_count + 1, sizeof(*arguments));
 	if (arguments == NULL) {
@@ -482,13 +424,13 @@ static wchar_t *build_command_line(const DynlexProcessCommand *command, const wc
 		free(arguments);
 		return NULL;
 	}
-	size_t total = quoted_argument_length(arguments[0]) + 1;
+	size_t total = dynlex_windows_quoted_argument_length(arguments[0]) + 1;
 	for (size_t index = 0; index < command->argument_count; ++index) {
 		arguments[index + 1] =
 			utf8_to_wide(command->arguments[index].data, command->arguments[index].length, "Invalid Windows process argument");
 		if (arguments[index + 1] == NULL)
 			goto failure;
-		size_t length = quoted_argument_length(arguments[index + 1]);
+		size_t length = dynlex_windows_quoted_argument_length(arguments[index + 1]);
 		if (total > SIZE_MAX - length - 1) {
 			dynlex_runtime_set_error("Windows command line is too large");
 			goto failure;
@@ -504,7 +446,7 @@ static wchar_t *build_command_line(const DynlexProcessCommand *command, const wc
 	for (size_t index = 0; index <= command->argument_count; ++index) {
 		if (index != 0)
 			*destination++ = L' ';
-		destination = append_quoted_argument(destination, arguments[index]);
+		destination = dynlex_windows_append_quoted_argument(destination, arguments[index]);
 	}
 	*destination = L'\0';
 	for (size_t index = 0; index <= command->argument_count; ++index)
@@ -573,6 +515,7 @@ static DWORD WINAPI reader_thread(void *argument) {
 				platform->io_error_code = 0;
 			}
 			LeaveCriticalSection(&platform->output_lock);
+			SetEvent(platform->activity_event);
 			if (append_result != 0)
 				break;
 			continue;
@@ -591,6 +534,7 @@ static DWORD WINAPI reader_thread(void *argument) {
 	EnterCriticalSection(&platform->output_lock);
 	dynlex_process_mark_stream_closed(platform->owner, reader->stream);
 	LeaveCriticalSection(&platform->output_lock);
+	SetEvent(platform->activity_event);
 	return 0;
 }
 
@@ -617,6 +561,11 @@ int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCo
 		return -1;
 	}
 	InitializeCriticalSection(&platform->output_lock);
+	platform->activity_event = CreateEventW(NULL, FALSE, FALSE, NULL);
+	if (platform->activity_event == NULL) {
+		dynlex_runtime_set_windows_error("Could not create Windows process activity event", GetLastError());
+		goto failure;
+	}
 	platform->owner = process;
 	platform->output_reader = (DynlexWindowsReader){platform, DYNLEX_PROCESS_STREAM_STDOUT, NULL};
 	platform->error_reader = (DynlexWindowsReader){platform, DYNLEX_PROCESS_STREAM_STDERR, NULL};
@@ -741,6 +690,7 @@ failure:
 	}
 	close_handle(&platform->standard_output);
 	close_handle(&platform->standard_error);
+	close_handle(&platform->activity_event);
 	close_handle(&platform->process);
 	DeleteCriticalSection(&platform->output_lock);
 	free(platform);
@@ -754,6 +704,9 @@ failure:
 static bool requested_stream_ready(DynlexProcess *process, DynlexProcessStream stream) {
 	if (stream == 0)
 		return false;
+	if (stream == DYNLEX_PROCESS_STREAM_ANY)
+		return process->standard_output.length > 0 || process->standard_error.length > 0 ||
+			   (process->standard_output_closed && process->standard_error_closed);
 	DynlexProcessBuffer *buffer = stream == DYNLEX_PROCESS_STREAM_STDOUT ? &process->standard_output : &process->standard_error;
 	bool closed = stream == DYNLEX_PROCESS_STREAM_STDOUT ? process->standard_output_closed : process->standard_error_closed;
 	return buffer->length > 0 || closed;
@@ -846,8 +799,11 @@ static int mark_process_finished(DynlexProcess *process, DynlexWindowsProcess *p
 	return 0;
 }
 
-int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProcessStream requested_stream) {
+int dynlex_platform_process_pump(
+	DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream
+) {
 	DynlexWindowsProcess *platform = process->platform;
+	ULONGLONG started = GetTickCount64();
 	while (true) {
 		if (report_reader_error(platform) != 0)
 			return -1;
@@ -859,19 +815,36 @@ int dynlex_platform_process_pump(DynlexProcess *process, bool wait, DynlexProces
 				return -1;
 			return report_reader_error(platform);
 		}
-		DWORD wait_time = wait && requested_stream == 0 ? INFINITE : (wait && !ready ? 1 : 0);
-		DWORD wait_result = WaitForSingleObject(platform->process, wait_time);
+		if (ready)
+			return 0;
+		DWORD wait_time = INFINITE;
+		if (timeout_milliseconds >= 0) {
+			ULONGLONG elapsed = GetTickCount64() - started;
+			if (elapsed >= (uint64_t)timeout_milliseconds)
+				wait_time = 0;
+			else {
+				uint64_t remaining = (uint64_t)timeout_milliseconds - elapsed;
+				wait_time = remaining > MAXDWORD ? MAXDWORD : (DWORD)remaining;
+			}
+		}
+		HANDLE handles[2] = {platform->process, platform->activity_event};
+		DWORD handle_count = requested_stream == 0 ? 1 : 2;
+		DWORD wait_result = WaitForMultipleObjects(handle_count, handles, FALSE, wait_time);
 		if (wait_result == WAIT_OBJECT_0) {
 			if (mark_process_finished(process, platform) != 0)
 				return -1;
 			continue;
 		}
+		if (wait_result == WAIT_OBJECT_0 + 1)
+			continue;
 		if (wait_result == WAIT_FAILED) {
 			dynlex_runtime_set_windows_error("Could not wait for Windows process", GetLastError());
 			return -1;
 		}
-		if (!wait || ready)
+		if (wait_result == WAIT_TIMEOUT)
 			return 0;
+		dynlex_runtime_set_error("Windows process wait returned an unsupported status");
+		return -1;
 	}
 }
 
@@ -921,6 +894,8 @@ int dynlex_platform_process_terminate(DynlexProcess *process) {
 	return -1;
 }
 
+int dynlex_platform_process_kill(DynlexProcess *process) { return dynlex_platform_process_terminate(process); }
+
 int dynlex_platform_process_cleanup(DynlexProcess *process) {
 	DynlexWindowsProcess *platform = process->platform;
 	close_handle(&platform->standard_input);
@@ -959,6 +934,7 @@ void dynlex_platform_process_destroy(DynlexProcess *process) {
 	cancel_reader(platform, &platform->output_thread, &platform->standard_output);
 	cancel_reader(platform, &platform->error_thread, &platform->standard_error);
 	close_handle(&platform->process);
+	close_handle(&platform->activity_event);
 	DeleteCriticalSection(&platform->output_lock);
 	free(platform);
 }

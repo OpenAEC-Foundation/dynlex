@@ -1,73 +1,95 @@
+.docs-page {
+    background: var(--ink);
+    color: var(--white);
+}
+
+.docs-page::before {
+    position: fixed;
+    z-index: 0;
+    inset: var(--header-height) 0 0;
+    border-top: 1px solid rgba(199, 255, 56, 0.18);
+    content: "";
+    pointer-events: none;
+}
+
 .wiki-shell {
     position: relative;
     z-index: 1;
-    max-width: 1040px;
+    width: min(1040px, calc(100% - 48px));
     margin: 0 auto;
-    padding: 6rem 1.25rem 3rem;
+    padding: calc(var(--header-height) + 72px) 0 80px;
 }
 
-.nav {
-    justify-content: center;
+.wiki-shell h1,
+.wiki-shell h2,
+.wiki-shell h3,
+.wiki-shell p {
+    margin-top: 0;
 }
 
 .hero-card,
+.wiki-header,
 .doc-card,
 .try-card,
 .tldr-card,
 .section-link-card,
 .term-card {
-    padding: 1.5rem;
+    position: relative;
+    border: 1px solid var(--line);
+    background: var(--ink-1);
 }
 
-.hero-card {
-    margin-bottom: 1.25rem;
+.hero-card,
+.wiki-header {
+    margin-bottom: 20px;
+    padding: clamp(28px, 6vw, 64px);
+    border-top: 2px solid var(--acid);
 }
 
-.hero-eyebrow {
+.hero-card::after,
+.wiki-header::after {
+    position: absolute;
+    right: 24px;
+    bottom: 20px;
+    color: var(--line);
+    content: "DYNLEX / DOCS";
+    font: 500 0.6rem/1 var(--mono);
+    letter-spacing: 0.14em;
+}
+
+.hero-eyebrow,
+.step-label {
     display: inline-flex;
-    align-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 999px;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.78rem;
-    letter-spacing: 0.05em;
+    margin-bottom: 16px;
+    padding: 5px 8px;
+    border: 1px solid #66705f;
+    color: var(--acid);
+    font: 500 0.66rem/1 var(--mono);
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.78);
-    margin-bottom: 0.85rem;
 }
 
 .hero-card h1,
 .wiki-header h1 {
-    font-size: clamp(2.2rem, 8vw, 4rem);
-    margin-bottom: 0.8rem;
-    background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.75));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    max-width: 760px;
+    margin-bottom: 18px;
+    color: var(--white);
+    font-size: clamp(2.6rem, 8vw, 5.8rem);
+    line-height: 0.94;
+    letter-spacing: -0.07em;
 }
 
 .hero-card p,
-.doc-card p,
-.doc-card li,
-.try-card p,
-.wiki-header p,
-.term-card p,
-.section-link-card p {
-    color: var(--text-secondary);
+.wiki-header p {
+    max-width: 710px;
+    margin-bottom: 0;
+    color: #b2b7b0;
+    font-size: clamp(1rem, 2vw, 1.18rem);
     line-height: 1.75;
 }
 
-.hero-card p + p,
-.doc-card p + p,
-.doc-card p + ul,
-.doc-card ul + p,
-.doc-card .code-block,
-.doc-card .pattern-box,
-.doc-card .related-grid,
-.hero-card + .tldr-card,
-.try-card,
-.section-link-card .pattern-box {
-    margin-top: 1rem;
+.hero-card p + p {
+    margin-top: 14px;
 }
 
 .doc-stack,
@@ -75,144 +97,111 @@
 .section-links,
 .related-grid {
     display: grid;
-    gap: 1rem;
+    gap: 16px;
 }
 
-.wiki-header {
-    margin-bottom: 2rem;
+.doc-stack,
+.terms-grid,
+.section-links {
+    margin-top: 16px;
+}
+
+.doc-card,
+.try-card,
+.tldr-card,
+.section-link-card,
+.term-card {
+    padding: clamp(22px, 4vw, 36px);
+}
+
+.doc-card::before,
+.try-card::before,
+.section-link-card::before,
+.term-card::before {
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 34px;
+    height: 2px;
+    background: var(--sky);
+    content: "";
 }
 
 .doc-card h2,
 .section-link-card h2,
 .term-card h2 {
-    font-size: 1.55rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 12px;
+    color: var(--white);
+    font-size: 1.45rem;
+    letter-spacing: -0.035em;
 }
 
 .doc-card h3,
 .try-card h3 {
-    font-size: 1.1rem;
-    margin-bottom: 0.55rem;
+    margin-bottom: 10px;
+    color: var(--white);
+    font-size: 1.05rem;
 }
 
-.doc-card ul {
-    padding-left: 1.25rem;
+.doc-card p,
+.doc-card li,
+.try-card p,
+.tldr-card p,
+.tldr-card li,
+.term-card p,
+.section-link-card p {
+    color: #aeb4ac;
+    line-height: 1.75;
+}
+
+.doc-card p:last-child,
+.try-card p:last-child,
+.tldr-card p:last-child,
+.term-card p:last-child,
+.section-link-card p:last-child {
+    margin-bottom: 0;
+}
+
+.doc-card p + p,
+.doc-card p + ul,
+.doc-card ul + p,
+.doc-card .code-block,
+.doc-card .pattern-box,
+.doc-card .related-grid,
+.try-card,
+.section-link-card .pattern-box {
+    margin-top: 16px;
+}
+
+.doc-card ul,
+.tldr-list {
+    padding-left: 20px;
 }
 
 .tldr-card {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 18px;
-    background: linear-gradient(135deg, rgba(88, 101, 242, 0.14), rgba(12, 206, 180, 0.1));
-}
-
-.tldr-card p {
-    color: var(--text-secondary);
-    line-height: 1.7;
+    margin-top: 16px;
+    border-left: 3px solid var(--acid);
+    background: var(--ink-2);
 }
 
 .tldr-list {
     margin: 0;
-    padding-left: 1.15rem;
 }
 
 .tldr-list li + li {
-    margin-top: 0.45rem;
-}
-
-.code-block,
-.pattern-box {
-    margin: 0;
-}
-
-.wiki-code-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.55rem;
-    margin-bottom: 0.85rem;
-}
-
-.wiki-code-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.42rem 0.78rem;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
-    text-decoration: none;
-    font-size: 0.82rem;
-    line-height: 1;
-    letter-spacing: 0.01em;
-    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-}
-
-.wiki-code-btn:hover {
-    transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.17);
-    border-color: rgba(255, 255, 255, 0.45);
-}
-
-.wiki-code-btn-run {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.7), rgba(245, 87, 108, 0.65));
-    border-color: rgba(255, 255, 255, 0.32);
-}
-
-.wiki-code-btn-run:hover {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.85), rgba(245, 87, 108, 0.8));
-}
-
-.code-block pre,
-.pattern-box pre {
-    white-space: pre-wrap;
-}
-
-.step-label {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 999px;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.78rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.78);
-    margin-bottom: 0.85rem;
+    margin-top: 7px;
 }
 
 .try-card {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.17), rgba(245, 87, 108, 0.14));
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 18px;
-}
-
-.note {
-    font-size: 0.95rem;
-}
-
-a.inline-link,
-.section-link-card a,
-.related-grid a {
-    color: #ffffff;
-    text-decoration-color: rgba(255, 255, 255, 0.35);
-}
-
-a.inline-link:hover,
-.section-link-card a:hover,
-.related-grid a:hover {
-    text-decoration-color: rgba(255, 255, 255, 0.7);
-}
-
-.pattern-box {
-    background: var(--code-bg);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 1rem 1.1rem;
+    border-left: 3px solid var(--violet);
 }
 
 .section-links {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.section-link-card {
+    min-height: 174px;
 }
 
 .section-link-card h2 {
@@ -221,4 +210,108 @@ a.inline-link:hover,
 
 .related-grid {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.code-block,
+.pattern-box {
+    margin: 0;
+    padding: 18px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    background: #090c0a;
+}
+
+.code-block pre,
+.pattern-box pre {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.code-block code,
+.pattern-box code {
+    color: var(--paper);
+    font-size: 0.86rem;
+    line-height: 1.7;
+}
+
+.wiki-code-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.wiki-code-btn {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 11px;
+    border: 1px solid #626a62;
+    background: var(--ink-2);
+    color: var(--white);
+    font: 500 0.68rem/1 var(--mono);
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.wiki-code-btn:hover {
+    border-color: var(--sky);
+    background: var(--ink-3);
+}
+
+.wiki-code-btn-run {
+    border-color: var(--acid);
+    color: var(--acid);
+}
+
+.wiki-code-btn-run:hover {
+    border-color: var(--white);
+    color: var(--white);
+}
+
+a.inline-link,
+.section-link-card a,
+.related-grid a {
+    color: var(--sky);
+    text-decoration: underline;
+    text-decoration-color: rgba(133, 220, 255, 0.35);
+    text-underline-offset: 3px;
+}
+
+a.inline-link:hover,
+.section-link-card a:hover,
+.related-grid a:hover {
+    color: var(--white);
+    text-decoration-color: var(--white);
+}
+
+.note {
+    font-size: 0.95rem;
+}
+
+@media (max-width: 700px) {
+    .wiki-shell {
+        width: min(100% - 32px, 1040px);
+        padding-top: calc(var(--header-height) + 36px);
+    }
+
+    .hero-card,
+    .wiki-header {
+        padding: 28px 22px 54px;
+    }
+
+    .hero-card h1,
+    .wiki-header h1 {
+        font-size: clamp(2.35rem, 14vw, 4.3rem);
+    }
+
+    .doc-card,
+    .try-card,
+    .tldr-card,
+    .section-link-card,
+    .term-card {
+        padding: 22px;
+    }
 }

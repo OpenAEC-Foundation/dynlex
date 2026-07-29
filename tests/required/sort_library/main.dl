@@ -34,7 +34,7 @@ set position to 0
 loop while position < the length of strings:
     print the item at position in strings
     print "|"
-    set position to position + 1
+    set position to (position + 1)
 print "" as a line
 
 set keys to an empty list of a string
@@ -55,7 +55,7 @@ loop while position < the length of order:
     if position > 0:
         print " "
     print the item at position in order
-    set position to position + 1
+    set position to (position + 1)
 print "" as a line
 
 sort records stably in the bytewise order of keys
@@ -66,7 +66,7 @@ loop while ordinal < the length of records:
     print ":"
     print the sequence of record
     print "|"
-    set ordinal to ordinal + 1
+    set ordinal to (ordinal + 1)
 print "" as a line
 
 free order

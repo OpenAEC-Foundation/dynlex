@@ -12,7 +12,7 @@ set first to 0 as a pointer to an integer
 set second to 0 as a pointer to an integer
 set textual to the selected overload for "text"
 set numeric to the selected overload for first
-set equality to first = second
+set equality to (first = second)
 
 print textual as a line
 print numeric as a line

@@ -24,8 +24,8 @@ function {float:value} clamped between zero and one:
 
 function the hash of x {float:x} and z {float:z}:
     execute:
-        set phase to x * 127.1 + z * 311.7
-        set wave to (the sine of phase) * 43758.5453
+        set phase to (x * 127.1 + z * 311.7)
+        set wave to ((the sine of phase) * 43758.5453)
         return the fractional part of wave
 
 function set city perspective for a viewport measuring {integer:width} by {integer:height}:
@@ -35,13 +35,13 @@ function set city perspective for a viewport measuring {integer:width} by {integ
         set divisor to height
         if divisor < 1:
             set divisor to 1
-        set aspect to (width as a float) / (divisor as a float)
+        set aspect to ((width as a float) / (divisor as a float))
         set near to 0.4
         set far to 1400.0
         set top to 0.28
-        set bottom to 0.0 - top
-        set right to top * aspect
-        set left to 0.0 - right
+        set bottom to (0.0 - top)
+        set right to (top * aspect)
+        set left to (0.0 - right)
         @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
         @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 
@@ -136,12 +136,12 @@ function the district intensity at {spatial position:position}:
 
         set secondary to a position with x (position's x - 220.0), y 0.0 and z (position's z + 180.0)
         set distance to the square root of (secondary's x * secondary's x + secondary's z * secondary's z)
-        set satellite to ((1.0 - distance / 260.0) clamped between zero and one) * 0.60
+        set satellite to (((1.0 - distance / 260.0) clamped between zero and one) * 0.60)
 
         set curve to the sine of (position's x * 0.008)
-        set corridor to position's z + (curve * 120.0)
+        set corridor to (position's z + (curve * 120.0))
         set distance to the square root of (corridor * corridor)
-        set influence to ((1.0 - distance / 150.0) clamped between zero and one) * 0.40
+        set influence to (((1.0 - distance / 150.0) clamped between zero and one) * 0.40)
 
         set density to center
         if satellite > density:
@@ -266,7 +266,7 @@ function draw a distant block silhouette at grid position {float:column}, {float
             draw a low poly roof cap centered at summit with cap and roof
 
         if secondary > 0.66:
-            set altitude to size's height * 0.55
+            set altitude to (size's height * 0.55)
             set extension to a position with x (center's x + 9.0), y (altitude / 2.0) and z (center's z - 7.0)
             set annex to the dimensions measuring 8.0 by altitude by 8.0
             set shade to a color with red (color's red - 8), green (color's green - 8) and blue (color's blue - 8)
@@ -292,19 +292,19 @@ function draw a lot scene at grid position {float:column}, {float:row} with deta
                     draw a vehicle module centered at (a position with x (center's x + 2.2), y 0.0 and z (center's z + 2.0)) heading 180.0 with (a color with red 66, green 108 and blue 184)
             else:
                 set footprint to the dimensions measuring (7.2 + hue * 3.4) by 0.0 by (7.2 + accent * 3.4)
-                set boost to 2.0 + (intensity * 11.0)
+                set boost to (2.0 + (intensity * 11.0))
                 set count to the floor of (boost + (occupancy * 6.0))
                 if count < 2.0:
                     set count to 2.0
                 set facade to a color with red ((110 + (hue * 95.0)) as an integer), green ((104 + (accent * 88.0)) as an integer) and blue ((116 + (hue * 72.0)) as an integer)
 
                 if quality < 0.5:
-                    set altitude to count * 2.8
+                    set altitude to (count * 2.8)
                     set building to the dimensions measuring (footprint's width) by altitude by (footprint's depth)
                     set midpoint to a position with x (center's x), y (altitude / 2.0) and z (center's z)
                     draw a box centered at midpoint with building and facade
                     if occupancy > 0.44:
-                        set rise to 1.2 + accent * 2.4
+                        set rise to (1.2 + accent * 2.4)
                         set roof to a color with red (facade's red + 18), green (facade's green + 18) and blue (facade's blue + 18)
                         set the red channel of roof to (roof's red clamped between 0 and 255)
                         set the green channel of roof to (roof's green clamped between 0 and 255)
@@ -315,7 +315,7 @@ function draw a lot scene at grid position {float:column}, {float:row} with deta
                 else:
                     set index to 0.0
                     while index < count:
-                        set altitude to index * 2.8 + 1.4
+                        set altitude to (index * 2.8 + 1.4)
                         set storey to a position with x (center's x), y altitude and z (center's z)
                         draw a story module centered at storey with footprint and facade
                         if quality > 1.5:
@@ -327,7 +327,7 @@ function draw a lot scene at grid position {float:column}, {float:row} with deta
 
                     if quality > 1.5:
                         if occupancy > 0.58:
-                            set altitude to count * 2.8 + 0.7
+                            set altitude to (count * 2.8 + 0.7)
                             set rooftop to a position with x (center's x), y altitude and z (center's z)
                             set unit to the dimensions measuring (footprint's width * 0.36) by 1.2 by (footprint's depth * 0.32)
                             draw a rooftop unit centered at rooftop with unit and (a color with red 76, green 82 and blue 88)
@@ -380,7 +380,7 @@ while the window remains open:
     set height to the framebuffer height of window
     set city perspective for a viewport measuring width by height
 
-    set radians to view's yaw * 0.0174533
+    set radians to (view's yaw * 0.0174533)
     set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
     set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
 
@@ -417,9 +417,9 @@ while the window remains open:
     set time to the time since start
     set region to a position with x (the floor of (view's position's x / 48.0)), y 0.0 and z (the floor of (view's position's z / 48.0))
 
-    set row to region's z - distant
+    set row to (region's z - distant)
     while row <= region's z + distant:
-        set column to region's x - distant
+        set column to (region's x - distant)
         while column <= region's x + distant:
             set center to a position with x (column * 48.0 + 24.0), y 0.0 and z (row * 48.0 + 24.0)
             set distance to the squared distance from center to view's position

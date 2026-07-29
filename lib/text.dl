@@ -24,7 +24,7 @@ function the index of {any:fragment} in {any:text} starting at {integer:start}:
         loop while cursor + the length of fragment <= the length of text:
             if text has fragment at offset cursor:
                 return cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return 0 - 1
 
 function the index of {any:fragment} in {any:text}:
@@ -73,7 +73,7 @@ function the lowercase form of {string:text}:
         set cursor to 0
         loop while cursor < the length of text:
             store the lowercase ASCII character corresponding to the character at cursor in text into the data of result at cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return result
 
 function the lowercase form of {C string:text}:
@@ -86,7 +86,7 @@ function the uppercase form of {string:text}:
         set cursor to 0
         loop while cursor < the length of text:
             store the uppercase ASCII character corresponding to the character at cursor in text into the data of result at cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return result
 
 function the uppercase form of {C string:text}:
@@ -97,10 +97,10 @@ function {string:text} trimmed:
     execute:
         set start to 0
         loop while start < the length of text and the character at start in text is an ASCII whitespace character:
-            set start to start + 1
+            set start to (start + 1)
         set finish to the length of text
         loop while finish > start and the character at (finish - 1) in text is an ASCII whitespace character:
-            set finish to finish - 1
+            set finish to (finish - 1)
         return the substring of text from start spanning (finish - start) bytes
 
 function {C string:text} trimmed:
@@ -115,11 +115,11 @@ function {string:text} with {string:original} replaced by {string:replacement}:
         set reader to 0
         loop while reader + the length of original <= the length of text:
             if text has original at offset reader:
-                set occurrences to occurrences + 1
-                set reader to reader + the length of original
+                set occurrences to (occurrences + 1)
+                set reader to (reader + the length of original)
             else:
-                set reader to reader + 1
-        set length to the length of text + occurrences * (the length of replacement - the length of original)
+                set reader to (reader + 1)
+        set length to (the length of text + occurrences * (the length of replacement - the length of original))
         set result to a new string buffer containing length bytes
         set reader to 0
         set writer to 0
@@ -128,13 +128,13 @@ function {string:text} with {string:original} replaced by {string:replacement}:
                 set cursor to 0
                 loop while cursor < the length of replacement:
                     store the character at cursor in replacement into the data of result at writer
-                    set cursor to cursor + 1
-                    set writer to writer + 1
-                set reader to reader + the length of original
+                    set cursor to (cursor + 1)
+                    set writer to (writer + 1)
+                set reader to (reader + the length of original)
             else:
                 store the character at reader in text into the data of result at writer
-                set reader to reader + 1
-                set writer to writer + 1
+                set reader to (reader + 1)
+                set writer to (writer + 1)
         return result
 
 function {string:text} with {C string:original} replaced by {C string:replacement}:
@@ -153,7 +153,7 @@ function {string:text} repeated {integer:count} times:
         set repetition to 0
         loop while repetition < count:
             copy text into (the data of result) at offset (repetition * the length of text)
-            set repetition to repetition + 1
+            set repetition to (repetition + 1)
         return result
 
 function {C string:text} repeated {integer:count} times:
@@ -170,10 +170,10 @@ function {string:text} split at {string:separator}:
         loop while cursor + the length of separator <= the length of text:
             if text has separator at offset cursor:
                 append the substring of text from start spanning (cursor - start) bytes to pieces
-                set cursor to cursor + the length of separator
+                set cursor to (cursor + the length of separator)
                 set start to cursor
             else:
-                set cursor to cursor + 1
+                set cursor to (cursor + 1)
         append the substring of text from start spanning (the length of text - start) bytes to pieces
         return pieces
 
@@ -190,21 +190,21 @@ function {a pointer to a list:parts} joined with {string:separator}:
         set length to 0
         set cursor to 0
         loop while cursor < the length of parts:
-            set length to length + the length of the item at cursor in parts
+            set length to (length + the length of the item at cursor in parts)
             if cursor > 0:
-                set length to length + the length of separator
-            set cursor to cursor + 1
+                set length to (length + the length of separator)
+            set cursor to (cursor + 1)
         set result to a new string buffer containing length bytes
         set writer to 0
         set cursor to 0
         loop while cursor < the length of parts:
             if cursor > 0:
                 copy separator into (the data of result) at offset writer
-                set writer to writer + the length of separator
+                set writer to (writer + the length of separator)
             set part to the item at cursor in parts
             copy part into (the data of result) at offset writer
-            set writer to writer + the length of part
-            set cursor to cursor + 1
+            set writer to (writer + the length of part)
+            set cursor to (cursor + 1)
         return result
 
 function {a pointer to a list:parts} joined with {C string:separator}:

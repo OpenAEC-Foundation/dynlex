@@ -8,8 +8,8 @@ set time to the shader time
 
 # Animated zoom: oscillate zoom level with time
 set wave to the sine of (time * 0.3)
-set zoom to 1.0 + ((2.0 * wave) * wave)
-set zoom to (zoom * zoom) * zoom
+set zoom to (1.0 + ((2.0 * wave) * wave))
+set zoom to ((zoom * zoom) * zoom)
 
 # Zoom target: Seahorse Valley area (-0.745, 0.186)
 set center to a complex number with real (0.0 - 0.745) and imaginary 0.186
@@ -20,17 +20,17 @@ set coordinate to a complex number with real (center's real part + (pixel's x / 
 set orbit to a complex number with real 0.0 and imaginary 0.0
 set iteration to 0
 set limit to 100
-set magnitude to (orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part)
+set magnitude to ((orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part))
 
 while iteration < limit and magnitude < 4.0:
-    set next to ((orbit's real part * orbit's real part) - (orbit's imaginary part * orbit's imaginary part)) + coordinate's real part
-    set the imaginary part of orbit to ((2.0 * orbit's real part) * orbit's imaginary part) + coordinate's imaginary part
+    set next to (((orbit's real part * orbit's real part) - (orbit's imaginary part * orbit's imaginary part)) + coordinate's real part)
+    set the imaginary part of orbit to (((2.0 * orbit's real part) * orbit's imaginary part) + coordinate's imaginary part)
     set the real part of orbit to next
-    set iteration to iteration + 1
-    set magnitude to (orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part)
+    set iteration to (iteration + 1)
+    set magnitude to ((orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part))
 
 # Color based on iteration count
-set progress to (iteration as a float) / (limit as a float)
+set progress to ((iteration as a float) / (limit as a float))
 if iteration = limit:
     set the fragment color with red 0.0, green 0.0, blue 0.0 and alpha 1.0
 else:

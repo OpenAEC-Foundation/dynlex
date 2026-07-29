@@ -68,8 +68,8 @@ function render the phosphor screen:
 		loop while row < 32:
 			set column to 0
 			loop while column < 64:
-				set cell to row * 64 + column
-				set brightness to (the item at cell in panel's phosphor) * 0.76
+				set cell to (row * 64 + column)
+				set brightness to ((the item at cell in panel's phosphor) * 0.76)
 				if the machine pixel at column, row = 1:
 					set brightness to 1.0
 				store brightness into panel's phosphor at cell

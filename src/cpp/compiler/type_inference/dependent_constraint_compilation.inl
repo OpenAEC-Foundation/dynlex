@@ -1,3 +1,5 @@
+#include "numericLiteral.h"
+
 struct SymbolicSignatureValue {
 	DataType type;
 	TypeConstraint domain = TypeConstraint::any();
@@ -62,13 +64,18 @@ struct SymbolicConstraintCompiler {
 
 	SymbolicSignatureValue evaluateLiteral(Expression *expression) {
 		SymbolicSignatureValue result;
-		if (const auto *number = std::get_if<double>(&expression->literalValue)) {
-			DataType type = resolveKnownExpressionType(expression, {});
-			if (!type.isDeduced())
-				return fail("dependent constraint contains an untyped number");
-			result.type = type;
-			result.domain = TypeConstraint::fromValueType(type);
-			result.constantValue = *number;
+		std::optional<NumericLiteralValue> number;
+		if (const auto *integer = std::get_if<std::int64_t>(&expression->literalValue))
+			number = *integer;
+		else if (const auto *minimumMagnitude =
+					 std::get_if<MinimumSignedIntegerMagnitude>(&expression->literalValue))
+			number = *minimumMagnitude;
+		else if (const auto *floatingPoint = std::get_if<double>(&expression->literalValue))
+			number = *floatingPoint;
+		if (number) {
+			result.type = numericLiteralType(*number, parseContext.options.emitSPIRV);
+			result.domain = TypeConstraint::fromValueType(result.type);
+			result.constantValue = numericLiteralCompileTimeValue(*number);
 			if (std::optional<std::int64_t> integer = getCompileTimeIntegerValue(result.constantValue))
 				result.integerTerm = ConstraintIntegerTerm::constantValue(*integer);
 			return result;

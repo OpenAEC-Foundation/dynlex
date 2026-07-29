@@ -21,7 +21,7 @@ function print a runtime marker:
 function the sum of left and right:
     execute:
         set result to left
-        set result to result + right
+        set result to (result + right)
         return result
 
 function input increased by one:

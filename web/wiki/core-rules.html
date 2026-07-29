@@ -6,27 +6,14 @@
     <link rel="icon" type="image/svg+xml" href="../icons/dynlex-icon.svg">
     <title>DynLex Wiki - Core Rules</title>
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="stylesheet" href="wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../index.html" class="nav-btn">Home</a>
-        <a href="../ide/index.html" class="nav-btn">IDE</a>
-        <a href="index.html" class="nav-btn">Wiki Home</a>
-        <a href="core-rules.html" class="nav-btn primary">Core Rules</a>
-        <a href="getting-started.html" class="nav-btn">Getting Started</a>
-        <a href="sections/index.html" class="nav-btn">Sections</a>
-        <a href="terms.html" class="nav-btn">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
-        <section class="glass-card hero-card">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
+        <section class="hero-card">
             <div class="hero-eyebrow">DynLex Wiki</div>
             <h1>Core Rules</h1>
             <p>
@@ -34,7 +21,7 @@
             </p>
         </section>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>DynLex code reads like clear sentences.</li>
@@ -50,7 +37,7 @@
         </section>
 
         <section class="doc-stack">
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Pattern Words Become Variables</div>
                 <p>
                     In a plain-word function pattern, DynLex decides variable words by usage.
@@ -66,7 +53,7 @@
                 </p>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Argument, In Simple Words</div>
                 <p>
                     An argument is the real value you give to that variable slot when calling a function.
@@ -79,7 +66,7 @@
                 </p>
             </article>
 
-            <article class="glass-card doc-card">
+            <article class="doc-card">
                 <div class="step-label">Not Core, But Useful</div>
                 <p>
                     These are common tools you will use often:
@@ -94,6 +81,6 @@
             </article>
         </section>
     </main>
-    <script src="wiki-actions.js"></script>
+    <script type="module" src="wiki-actions.js"></script>
 </body>
 </html>

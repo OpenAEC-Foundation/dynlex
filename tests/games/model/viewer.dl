@@ -25,14 +25,14 @@ function set model viewer perspective for a viewport measuring {integer:width} b
         set divisor to height
         if divisor < 1:
             set divisor to 1
-        set aspect to (width as a float) / (divisor as a float)
+        set aspect to ((width as a float) / (divisor as a float))
         set near to 0.8
         set far to 24000.0
         # fov = 88 degrees, so top = near * tan(44 deg)
-        set top to near * 0.96568877
-        set bottom to 0.0 - top
-        set right to top * aspect
-        set left to 0.0 - right
+        set top to (near * 0.96568877)
+        set bottom to (0.0 - top)
+        set right to (top * aspect)
+        set left to (0.0 - right)
         @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
         @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 
@@ -111,50 +111,50 @@ else:
 
     set scale to 1.0
     if span > 0.0001:
-        set scale to 160.0 / span
+        set scale to (160.0 / span)
 
     set center to a position with x ((bounds's minimum's x + bounds's maximum's x) / 2.0), y bounds's minimum's y and z ((bounds's minimum's z + bounds's maximum's z) / 2.0)
     set offset to a position with x (0.0 - center's x * scale), y (0.0 - center's y * scale) and z (0.0 - center's z * scale)
 
     set message to the string form of "mesh vertices: "
-    set message to message + (the string form of (mesh's vertex count))
-    set message to message + (the string form of ", triangles: ")
-    set message to message + (the string form of (mesh's triangle count))
+    set message to (message + (the string form of (mesh's vertex count)))
+    set message to (message + (the string form of ", triangles: "))
+    set message to (message + (the string form of (mesh's triangle count)))
     print message as a line
 
     set message to the string form of "bounds x: "
-    set message to message + (the string form of (bounds's minimum's x))
-    set message to message + (the string form of " .. ")
-    set message to message + (the string form of (bounds's maximum's x))
+    set message to (message + (the string form of (bounds's minimum's x)))
+    set message to (message + (the string form of " .. "))
+    set message to (message + (the string form of (bounds's maximum's x)))
     print message as a line
 
     set message to the string form of "bounds y: "
-    set message to message + (the string form of (bounds's minimum's y))
-    set message to message + (the string form of " .. ")
-    set message to message + (the string form of (bounds's maximum's y))
+    set message to (message + (the string form of (bounds's minimum's y)))
+    set message to (message + (the string form of " .. "))
+    set message to (message + (the string form of (bounds's maximum's y)))
     print message as a line
 
     set message to the string form of "bounds z: "
-    set message to message + (the string form of (bounds's minimum's z))
-    set message to message + (the string form of " .. ")
-    set message to message + (the string form of (bounds's maximum's z))
+    set message to (message + (the string form of (bounds's minimum's z)))
+    set message to (message + (the string form of " .. "))
+    set message to (message + (the string form of (bounds's maximum's z)))
     print message as a line
 
     set message to the string form of "model scale: "
-    set message to message + (the string form of scale)
+    set message to (message + (the string form of scale))
     print message as a line
     print "render modes: 1=textured/material, 2=uv debug, 3=vertex colors" as a line
 
     enable the model viewer render state
     set the model viewer clear color to (a normalized color with red 0.74, green 0.84 and blue 0.95)
 
-    set altitude to (extent's height * scale) * 0.8
+    set altitude to ((extent's height * scale) * 0.8)
     if altitude < 50.0:
         set altitude to 50.0
-    set distance to (span * scale) * 1.8
+    set distance to ((span * scale) * 1.8)
     if distance < 180.0:
         set distance to 180.0
-    set pace to (span * scale) * 0.005
+    set pace to ((span * scale) * 0.005)
     if pace < 1.4:
         set pace to 1.4
     set view to a camera at (a position with x 0.0, y altitude and z distance) facing 0.0 degrees with speed pace and turn rate 1.6
@@ -165,7 +165,7 @@ else:
         set height to the framebuffer height of window
         set model viewer perspective for a viewport measuring width by height
 
-        set radians to view's yaw * 0.0174533
+        set radians to (view's yaw * 0.0174533)
         set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
         set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
 

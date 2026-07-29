@@ -135,6 +135,10 @@ static void collectSectionsPreorder(Section *section, std::vector<Section *> &ou
 static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue &value) {
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
+	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return std::to_string(*integer);
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return "9223372036854775808";
 	if (const auto *number = std::get_if<double>(&value)) {
 		double integralPart = 0.0;
 		if (std::modf(*number, &integralPart) == 0.0)

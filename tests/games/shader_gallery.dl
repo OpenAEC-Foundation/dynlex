@@ -45,7 +45,7 @@ while the window remains open:
     if key > 0:
         if key < 5:
             if ready:
-                set current to current + 1
+                set current to (current + 1)
                 if current > 3:
                     set current to 0
                 use (the item at current in programs) as the shader program

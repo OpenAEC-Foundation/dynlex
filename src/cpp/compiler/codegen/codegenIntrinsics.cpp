@@ -18,13 +18,12 @@
 #include <cstdio>
 #include <cstdlib>
 
-// Helper to extract string literal from an expression
-std::string getStringLiteral(Expression *expr) {
-	if (expr && expr->kind == Expression::Kind::Literal) {
-		if (auto *str = std::get_if<std::string>(&expr->literalValue))
-			return *str;
-	}
-	return "";
+std::string getCompileTimeString(ParseContext &context, Expression *expr) {
+	requireCompilerInvariant(expr != nullptr, "compile-time string codegen received a null expression");
+	CompileTimeValue value = resolveStoredCompileTimeValue(expr, context.flexBindingFrames);
+	const auto *text = std::get_if<std::string>(&value);
+	requireCompilerInvariant(text != nullptr, "compile-time string argument reached codegen without its inferred value");
+	return *text;
 }
 
 // Diagnostics for intrinsics inside flex replacement bodies should point at
@@ -627,10 +626,10 @@ CodegenResult generateIntrinsicCode(
 											   : builder.CreateICmpNE(left, right, "pne");
 		} else {
 			DataType promoted;
-			requireCompilerInvariant(
-				DataType::promoteArithmetic(leftType, rightType, promoted),
-				"comparison operands accepted by inference have no common codegen type"
-			);
+			bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
+			bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
+									   : DataType::promoteArithmetic(leftType, rightType, promoted);
+			requireCompilerInvariant(promotable, "comparison operands accepted by inference have no common codegen type");
 			left = ensureType(context, left, leftType, promoted);
 			right = ensureType(context, right, rightType, promoted);
 			if (promoted.kind == DataType::Kind::Float) {

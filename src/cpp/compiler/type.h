@@ -343,6 +343,14 @@ struct DataType {
 		return false;
 	}
 
+	static bool promoteEquality(const DataType &a, const DataType &b, DataType &result) {
+		if (a.kind == Kind::Bool && b.kind == Kind::Bool) {
+			result = {Kind::Bool};
+			return true;
+		}
+		return promoteArithmetic(a, b, result);
+	}
+
 	// Promote for bitwise operators: integers only, using the wider integer width.
 	static bool promoteBitwise(const DataType &a, const DataType &b, DataType &result) {
 		DataType left = a;

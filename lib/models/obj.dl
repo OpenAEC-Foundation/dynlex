@@ -168,7 +168,7 @@ function a loaded OBJ texture from PPM file at path:
 
         ignore @intrinsic("call", "libc", "fgetc", an integer, stream)
 
-        set count to width * height
+        set count to (width * height)
         multiply count by 3
         set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
         if pixels = 0 as a pointer to a byte:
@@ -601,12 +601,12 @@ function draw {OBJ mesh:mesh} at x {any:horizontal}, y {any:vertical} and z {any
                 set other to a new OBJ vertex at x ((third's x) - (first's x)), y ((third's y) - (first's y)) and z ((third's z) - (first's z))
                 set normal to a new OBJ vertex at x (((edge's y) * (other's z)) - ((edge's z) * (other's y))), y (((edge's z) * (other's x)) - ((edge's x) * (other's z))) and z (((edge's x) * (other's y)) - ((edge's y) * (other's x)))
 
-                set squared to ((normal's x) * (normal's x)) + (((normal's y) * (normal's y)) + ((normal's z) * (normal's z)))
+                set squared to (((normal's x) * (normal's x)) + (((normal's y) * (normal's y)) + ((normal's z) * (normal's z))))
                 set shade to 0.7
                 if squared > 0.000000000001:
                     set magnitude to the square root of squared
                     if magnitude > 0.000001:
-                        set shade to (((normal's x) / magnitude) * 0.45) + ((((normal's y) / magnitude) * 0.85) + (((normal's z) / magnitude) * 0.30))
+                        set shade to ((((normal's x) / magnitude) * 0.45) + ((((normal's y) / magnitude) * 0.85) + (((normal's z) / magnitude) * 0.30)))
                 if shade < 0.2:
                     set shade to 0.2
                 if shade > 1.0:

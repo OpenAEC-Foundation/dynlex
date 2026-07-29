@@ -151,10 +151,10 @@ local function the horizontal position after rendering character {any:code} at x
         @intrinsic("call", "GL", "glColor3ub", nothing, color's red, color's green, color's blue)
 
         # Calculate quad corners
-        set west to horizontal + left
-        set north to vertical - top
-        set east to west + width
-        set south to north + height
+        set west to (horizontal + left)
+        set north to (vertical - top)
+        set east to (west + width)
+        set south to (north + height)
 
         # Draw textured quad
         @intrinsic("call", "GL", "glBegin", nothing, 7)
@@ -224,5 +224,5 @@ function draw {any:message} as text at x {any:horizontal} and y {any:vertical} u
         set position to 0
         loop while position < the length of message:
             render (the character at position in message) at x cursor and y vertical using typeface in ink and set cursor to it
-            set position to position + 1
+            set position to (position + 1)
         disable text rendering

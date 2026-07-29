@@ -6,7 +6,7 @@ function this is not a {word:stage} shader:
 
 set native to (1 if the build target is CPU, else 0)
 set ordinary to 1 if (this is not a fragment shader) and (this is not a vertex shader), else 0
-set width to 64 if the build word size = 64, else 32
+set width to (64 if the build word size = 64, else 32)
 
 print native as a line
 print ordinary as a line

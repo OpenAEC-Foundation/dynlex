@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
+import {
+  captureScreenshot, closeBrowserSession, command, dispatchKey, evaluate, findMonacoText,
+  hoverMonacoText, navigate, replaceMonacoSource, requestedUrls, runtimeExceptions,
+  screenshotDirectory, siteOrigin, sourceEditExpression, waitFor
+} from "./browser_test_driver.mjs";
+import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
 
-const cdpOrigin = process.env.DYNLEX_CDP_ORIGIN || "http://127.0.0.1:9222";
-const siteOrigin = process.env.DYNLEX_SITE_ORIGIN || "http://127.0.0.1:8765";
-const screenshotDirectory = process.env.DYNLEX_SCREENSHOT_DIRECTORY;
 const shaderManifest = await fetch(`${siteOrigin}/shaders/manifest.json`).then((response) => {
   assert.equal(response.ok, true, "The live shader manifest must load");
   return response.json();
@@ -13,189 +14,10 @@ const incomingTimeBinding = shaderManifest.scenes[1].uniforms.find(
   (uniform) => uniform.name === "time"
 )?.binding;
 assert.ok(Number.isInteger(incomingTimeBinding), "The incoming shader must reflect its time uniform");
-
-const targets = await fetch(`${cdpOrigin}/json/list`).then((response) => response.json());
-const pageTarget = targets.find((target) => target.type === "page");
-assert.ok(pageTarget?.webSocketDebuggerUrl, "Chrome must expose a page target over CDP");
-
-const socket = new WebSocket(pageTarget.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => {
-  socket.addEventListener("open", resolve, { once: true });
-  socket.addEventListener("error", reject, { once: true });
-});
-
-let nextCommandId = 1;
-const pendingCommands = new Map();
-const requestedUrls = [];
-const runtimeExceptions = [];
-const consoleMessages = [];
-
-socket.addEventListener("message", (event) => {
-  const message = JSON.parse(event.data);
-  if (typeof message.id === "number") {
-    const pending = pendingCommands.get(message.id);
-    if (!pending) return;
-    pendingCommands.delete(message.id);
-    if (message.error) {
-      pending.reject(new Error(message.error.message));
-    } else {
-      pending.resolve(message.result);
-    }
-    return;
-  }
-
-  if (message.method === "Network.requestWillBeSent") {
-    requestedUrls.push(message.params.request.url);
-  } else if (message.method === "Runtime.exceptionThrown") {
-    runtimeExceptions.push(message.params.exceptionDetails);
-  } else if (message.method === "Runtime.consoleAPICalled") {
-    consoleMessages.push({
-      type: message.params.type,
-      values: message.params.args.map((argument) => argument.value ?? argument.description ?? argument.type)
-    });
-  }
-});
-
-function command(method, params = {}) {
-  const id = nextCommandId++;
-  return new Promise((resolve, reject) => {
-    pendingCommands.set(id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
-  });
-}
-
-async function evaluate(expression) {
-  const response = await command("Runtime.evaluate", {
-    expression,
-    awaitPromise: true,
-    returnByValue: true
-  });
-  if (response.exceptionDetails) {
-    throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
-  }
-  return response.result.value;
-}
-
-async function waitFor(expression, description, timeoutMilliseconds = 120000) {
-  const deadline = Date.now() + timeoutMilliseconds;
-  while (Date.now() < deadline) {
-    if (await evaluate(`Boolean(${expression})`)) return;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  const pageState = await evaluate(`(() => ({
-    status: document.querySelector('#status-text')?.textContent ?? '',
-    diagnostics: document.querySelector('#diagnostics-list')?.textContent ?? '',
-    activity: document.querySelector('#compiler-log')?.textContent ?? '',
-    source: document.querySelector('.monaco-editor')?.textContent ?? ''
-  }))()`);
-  throw new Error(
-    `Timed out waiting for ${description}\n`
-      + `Page state: ${JSON.stringify(pageState)}\n`
-      + `Console: ${JSON.stringify(consoleMessages.slice(-10))}\n`
-      + `Runtime exceptions: ${JSON.stringify(runtimeExceptions.slice(-10))}`
-  );
-}
-
-async function navigate(path) {
-  await command("Page.navigate", { url: `${siteOrigin}${path}` });
-  await waitFor("document.readyState === 'complete'", `${path} to load`);
-}
-
-async function captureScreenshot(name) {
-  if (!screenshotDirectory) return;
-  fs.mkdirSync(screenshotDirectory, { recursive: true });
-  const response = await command("Page.captureScreenshot", { format: "png" });
-  fs.writeFileSync(path.join(screenshotDirectory, `${name}.png`), response.data, "base64");
-}
-
-async function dispatchKey(key, code, virtualKeyCode, modifiers = 0) {
-  for (const type of ["keyDown", "keyUp"]) {
-    await command("Input.dispatchKeyEvent", {
-      type,
-      key,
-      code,
-      windowsVirtualKeyCode: virtualKeyCode,
-      nativeVirtualKeyCode: virtualKeyCode,
-      modifiers
-    });
-  }
-}
-
-function sourceEditExpression(sketchIndex, sourceText) {
-  return `(() => {
-    const sketch = document.querySelectorAll('[data-runnable-sketch]')[${sketchIndex}];
-    const source = sketch.querySelector('[data-lab-panel]:not([hidden]) [data-snippet-source]')
-      || sketch.querySelector('[data-snippet-source]');
-    source.value = ${JSON.stringify(sourceText)};
-    source.dispatchEvent(new Event('input', { bubbles: true }));
-    return { state: sketch.dataset.runState, value: source.value };
-  })()`;
-}
-
-async function replaceMonacoSource(sourceText) {
-  await command("Page.bringToFront");
-  await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor textarea.inputarea');
-    if (!input) throw new Error('Monaco input is missing');
-    input.focus();
-  })()`);
-  await evaluate(`navigator.clipboard.writeText(${JSON.stringify(sourceText)})`);
-  await dispatchKey("a", "KeyA", 65, 2);
-  await dispatchKey("v", "KeyV", 86, 2);
-}
-
-async function findMonacoText(text) {
-  await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor textarea.inputarea');
-    if (!input) throw new Error('Monaco input is missing');
-    input.focus();
-  })()`);
-  await dispatchKey("f", "KeyF", 70, 2);
-  await dispatchKey("a", "KeyA", 65, 2);
-  await command("Input.insertText", { text });
-  await dispatchKey("Enter", "Enter", 13);
-  await dispatchKey("Escape", "Escape", 27);
-  await dispatchKey("ArrowLeft", "ArrowLeft", 37);
-}
-
-async function hoverMonacoText(text, occurrence = 0) {
-  await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const point = await evaluate(`(() => {
-    const walker = document.createTreeWalker(
-      document.querySelector('.view-lines'),
-      NodeFilter.SHOW_TEXT
-    );
-    let remaining = ${occurrence};
-    while (walker.nextNode()) {
-      const index = walker.currentNode.data.indexOf(${JSON.stringify(text)});
-      if (index === -1) continue;
-      if (remaining > 0) {
-        remaining -= 1;
-        continue;
-      }
-      const range = document.createRange();
-      range.setStart(walker.currentNode, index);
-      range.setEnd(walker.currentNode, index + ${JSON.stringify(text)}.length);
-      const rect = range.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }
-    throw new Error(${JSON.stringify(`Monaco text is not visible: ${text}`)});
-  })()`);
-  await command("Input.dispatchMouseEvent", {
-    type: "mouseMoved",
-    x: point.x,
-    y: point.y
-  });
-}
-
-await command("Page.enable");
-await command("Runtime.enable");
-await command("Network.enable");
-await command("Browser.grantPermissions", {
-  origin: siteOrigin,
-  permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"]
-});
+const nanoTimeBinding = shaderManifest.scenes[2].uniforms.find(
+  (uniform) => uniform.name === "time"
+)?.binding;
+assert.ok(Number.isInteger(nanoTimeBinding), "The volumetric shader must reflect its time uniform");
 
 await navigate("/");
 await waitFor(
@@ -211,6 +33,23 @@ await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.shaderPlaylistReady === 'true'",
   "the live shader playlist"
 );
+await waitFor(
+  "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '1'"
+    + " && !document.querySelector('[data-shader-next]').disabled",
+  "the second shader to preload while the first shader renders"
+);
+const firstPreloadedShaderState = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
+  return {
+    layer: canvas.parentElement.dataset.shaderLayer,
+    revision: Number(canvas.dataset.previewRevision),
+    vertexCount: Number(canvas.dataset.previewGeometryVertices),
+    horizontalPixels: Number(canvas.dataset.previewGeometryHorizontalPixels),
+    sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1))
+  };
+})()`);
+assert.equal(firstPreloadedShaderState.horizontalPixels, firstPreloadedShaderState.sectionPixels);
 const shaderState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
   const immersiveCanvas = section.querySelector('[data-shader-layer]:not([data-layer-state="dormant"]) canvas');
@@ -226,6 +65,8 @@ const shaderState = await evaluate(`(() => {
     immersiveCssWidth: immersiveCanvas.clientWidth,
     immersiveCssHeight: immersiveCanvas.clientHeight,
     pixelRatio: window.devicePixelRatio || 1,
+    clipPath: getComputedStyle(immersiveLayer).clipPath,
+    filter: getComputedStyle(immersiveLayer).filter,
     sectionHeight: section.getBoundingClientRect().height,
     viewportHeight: window.innerHeight,
     activeShaderIndex: section.dataset.activeShaderIndex,
@@ -250,6 +91,8 @@ assert.equal(shaderState.layerState, "active");
 assert.equal(shaderState.scenePhase, "immersive");
 assert.equal(shaderState.cloudCoverage, "viewport");
 assert.equal(shaderState.fillsSection, true, "The first shader must fill the banner immediately");
+assert.equal(shaderState.clipPath, "none", "The active shader must not retain its reveal mask");
+assert.equal(shaderState.filter, "none", "The active shader must not retain its reveal filter");
 assert.equal(shaderState.laptopOpacity, 0, "The first shader must not replay the thought-cloud entrance");
 assert.ok(
   shaderState.immersiveWidth >= Math.round(shaderState.immersiveCssWidth * shaderState.pixelRatio),
@@ -280,32 +123,57 @@ const immersiveChrome = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
   const header = document.querySelector('[data-site-header]');
   const headline = section.querySelector('.shader-copy');
-  const path = section.querySelector('[data-thought-cloud-path]');
-  const geometry = section.querySelector('#thought-cloud-geometry');
-  const coveredCorners = [
-    [1 / 3, 1 / 3],
-    [2 / 3, 1 / 3],
-    [1 / 3, 2 / 3],
-    [2 / 3, 2 / 3]
-  ].every(([x, y]) => geometry.isPointInFill(new DOMPoint(x, y)));
   return {
-    cloudTransform: path.getAttribute('transform'),
     cloudCoverage: section.dataset.cloudCoverage,
     headerOpacity: getComputedStyle(header).opacity,
     headerVisibility: getComputedStyle(header).visibility,
     headerIsTopLayer: document.elementFromPoint(window.innerWidth / 2, 10)?.closest('[data-site-header]') === header,
-    headlineOpacity: Number(getComputedStyle(headline).opacity),
-    coveredCorners
+    headlineOpacity: Number(getComputedStyle(headline).opacity)
   };
 })()`);
-assert.equal(immersiveChrome.cloudTransform, "translate(-1 -1) scale(3 3)");
 assert.equal(immersiveChrome.cloudCoverage, "viewport");
-assert.equal(immersiveChrome.coveredCorners, true, "Every viewport corner must be inside the expanded cloud");
 assert.equal(immersiveChrome.headerOpacity, "1");
 assert.equal(immersiveChrome.headerVisibility, "visible");
 assert.equal(immersiveChrome.headerIsTopLayer, true, "The fixed site header must remain above the immersed shader");
 assert.ok(immersiveChrome.headlineOpacity >= 0.78, "The banner headline must remain visible over the shader");
-await evaluate("document.querySelector('[data-shader-next]').click()");
+const preparedThought = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
+  section.querySelector('[data-shader-next]').click();
+  if (section.dataset.incomingShaderIndex !== '1') {
+    throw new Error('The preloaded shader did not enter its reveal state synchronously');
+  }
+  const cloudRect = section.querySelector('.thought-assembly').getBoundingClientRect();
+  const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
+  const revealingRect = revealingLayer.getBoundingClientRect();
+  const revealingStyle = getComputedStyle(revealingLayer);
+  return {
+    layer: revealingLayer.dataset.shaderLayer,
+    revision: Number(revealingLayer.querySelector('canvas').dataset.previewRevision),
+    clipPath: revealingStyle.clipPath,
+    filter: revealingStyle.filter,
+    cloudRect: [cloudRect.left, cloudRect.top, cloudRect.width, cloudRect.height],
+    revealingRect: [revealingRect.left, revealingRect.top, revealingRect.width, revealingRect.height],
+    renderAreaMatchesCloud: (
+      Math.abs(revealingRect.left - cloudRect.left) <= 2
+      && Math.abs(revealingRect.top - cloudRect.top) <= 2
+      && Math.abs(revealingRect.width - cloudRect.width) <= 2
+      && Math.abs(revealingRect.height - cloudRect.height) <= 2
+    )
+  };
+})()`);
+assert.equal(preparedThought.layer, firstPreloadedShaderState.layer);
+assert.equal(
+  preparedThought.revision,
+  firstPreloadedShaderState.revision,
+  "Revealing the next shader must reuse the program compiled while the previous shader rendered"
+);
+assert.equal(
+  preparedThought.renderAreaMatchesCloud,
+  true,
+  `The shader render surface must begin at the thought-cloud bounds: ${JSON.stringify(preparedThought)}`
+);
+assert.match(preparedThought.clipPath, /thought-cloud-mask-[01]/);
+assert.notEqual(preparedThought.filter, "none", "The revealing thought cloud must retain its glow");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
     + " && Number(getComputedStyle(document.querySelector('.shader-laptop')).opacity) > 0.75",
@@ -316,12 +184,9 @@ const overlappingThoughts = await evaluate(`(() => {
   const code = section.querySelector('[data-shader-code]');
   const originDot = section.querySelector('[data-thought-origin-dot]');
   const cloudDot = section.querySelector('[data-thought-cloud-dot]');
-  const cloudGuide = section.querySelector('.thought-assembly');
   const activeLayer = section.querySelector('[data-layer-state="active"]');
   const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
   const codeRect = code.getBoundingClientRect();
-  const cloudRect = cloudGuide.getBoundingClientRect();
-  const revealingRect = revealingLayer.getBoundingClientRect();
   const originRect = originDot.getBoundingClientRect();
   const center = (rect) => ({
     x: rect.left + rect.width / 2,
@@ -344,12 +209,6 @@ const overlappingThoughts = await evaluate(`(() => {
     activeLayerState: activeLayer?.dataset.layerState,
     revealingLayerState: revealingLayer?.dataset.layerState,
     revealingLayerIndex: revealingLayer?.dataset.shaderLayer,
-    renderAreaMatchesCloud: (
-      Math.abs(revealingRect.left - cloudRect.left) <= 2
-      && Math.abs(revealingRect.top - cloudRect.top) <= 2
-      && Math.abs(revealingRect.width - cloudRect.width) <= 2
-      && Math.abs(revealingRect.height - cloudRect.height) <= 2
-    ),
     revealingAboveConnector: (
       Number(getComputedStyle(revealingLayer).zIndex)
       > Number(getComputedStyle(originDot.parentElement).zIndex)
@@ -366,53 +225,12 @@ assert.equal(overlappingThoughts.activeLayerState, "active");
 assert.equal(overlappingThoughts.revealingLayerState, "revealing");
 assert.match(overlappingThoughts.revealingLayerIndex, /^[01]$/);
 assert.equal(
-  overlappingThoughts.renderAreaMatchesCloud,
-  true,
-  "The shader render surface must begin at the thought-cloud bounds"
-);
-assert.equal(
   overlappingThoughts.revealingAboveConnector,
   true,
   "The expanding cloud must cover its connector circles"
 );
 await captureScreenshot("homepage-next-shader-code");
-await waitFor(
-  "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
-    + " && Number(document.querySelector('[data-live-shader-banner]').dataset.sceneProgress) >= 0.8",
-  "the next shader to appear inside its thought cloud"
-);
-const incomingShaderMoves = await evaluate(`(async () => {
-  const canvas = document.querySelector(
-    '[data-shader-layer="${overlappingThoughts.revealingLayerIndex}"] canvas'
-  );
-  const gl = canvas.getContext('webgl2');
-  const timeBuffer = gl.getIndexedParameter(
-    gl.UNIFORM_BUFFER_BINDING,
-    ${incomingTimeBinding}
-  );
-  if (!timeBuffer) throw new Error('The incoming shader time buffer is not bound');
-  const readTime = () => {
-    const value = new Float32Array(1);
-    gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
-    gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
-    return value[0];
-  };
-  const first = readTime();
-  await new Promise((resolve) => {
-    let frameCount = 0;
-    const waitForRenderedFrame = () => {
-      frameCount += 1;
-      if (frameCount === 4) {
-        resolve();
-      } else {
-        requestAnimationFrame(waitForRenderedFrame);
-      }
-    };
-    requestAnimationFrame(waitForRenderedFrame);
-  });
-  return readTime() > first;
-})()`);
-assert.equal(incomingShaderMoves, true, "The shader must animate while it is inside the thought cloud");
+await verifyOffscreenRevealReturn(incomingTimeBinding);
 await captureScreenshot("homepage-overlapping-thoughts");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
@@ -438,23 +256,46 @@ await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '1'",
   "the next live shader"
 );
+await captureScreenshot("homepage-terrain");
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.path}`)),
   "Advancing must compile the next configured WebGL program"
 );
+const editorSceneState = await evaluate(`(() => ({
+  activeIndex: Number(document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex),
+  incomingIndex: document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex,
+  shaderFile: document.querySelector('[data-shader-file]').textContent,
+  editorScene: new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')
+}))()`);
+const editorSceneIndex = editorSceneState.incomingIndex === undefined
+  ? editorSceneState.activeIndex
+  : Number(editorSceneState.incomingIndex);
 assert.equal(
-  await evaluate(`new URL(document.querySelector('[data-shader-editor-link]').href).searchParams.get('scene')`),
-  shaderManifest.scenes[1].id,
-  "The editor action must track the visible shader"
+  editorSceneState.editorScene,
+  shaderManifest.scenes[editorSceneIndex].id,
+  "The editor action must track the shader displayed in the laptop"
+);
+assert.equal(editorSceneState.shaderFile, `${editorSceneState.editorScene}.dl`);
+await waitFor(
+  "document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '2'"
+    + " || document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '2'"
+    + " || document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '2'",
+  "the volumetric shader to preload while the terrain shader renders"
 );
 const nextShaderCanvasState = await evaluate(`(() => {
-  const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
+  const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = document.querySelector(
+    'canvas[data-preview-geometry-vertices="${shaderManifest.scenes[2].geometry.vertexCount}"]'
+  );
   return {
     layer: canvas.parentElement.dataset.shaderLayer,
-    revision: Number(canvas.dataset.previewRevision)
+    revision: Number(canvas.dataset.previewRevision),
+    needsAdvance: section.dataset.preloadedShaderIndex === '2'
   };
 })()`);
-await evaluate("document.querySelector('[data-shader-next]').click()");
+if (nextShaderCanvasState.needsAdvance) {
+  await evaluate("document.querySelector('[data-shader-next]').click()");
+}
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '2'",
   "the three-dimensional nano choreography"
@@ -465,16 +306,46 @@ const thirdShaderCanvasState = await evaluate(`(() => {
     layer: canvas.parentElement.dataset.shaderLayer,
     revision: Number(canvas.dataset.previewRevision),
     state: canvas.dataset.previewState,
-    pointCount: Number(canvas.dataset.previewGeometryPoints)
+    vertexCount: Number(canvas.dataset.previewGeometryVertices)
   };
 })()`);
 assert.equal(thirdShaderCanvasState.layer, nextShaderCanvasState.layer);
 assert.equal(thirdShaderCanvasState.state, "ready");
-assert.ok(
-  thirdShaderCanvasState.revision > nextShaderCanvasState.revision,
-  "The third generated shader must compile and replace the active WebGL program"
+assert.equal(
+  thirdShaderCanvasState.revision,
+  nextShaderCanvasState.revision,
+  "The preloaded volumetric program must become active without recompiling at code reveal"
 );
-assert.equal(thirdShaderCanvasState.pointCount, shaderManifest.scenes[2].geometry.pointCount);
+assert.equal(thirdShaderCanvasState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
+assert.ok(
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.vertex.path}`)),
+  "The terrain scene must load its DynLex-compiled displacement vertex shader"
+);
+const thirdShaderPlaybackState = await evaluate(`(async () => {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = section.querySelector('[data-layer-state="active"] canvas');
+  const gl = canvas.getContext('webgl2');
+  const timeBuffer = gl.getIndexedParameter(gl.UNIFORM_BUFFER_BINDING, ${nanoTimeBinding});
+  if (!timeBuffer) throw new Error('The volumetric shader time buffer is not bound');
+  const value = new Float32Array(1);
+  gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
+  gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
+  return {
+    progress: Number(section.dataset.sceneProgress),
+    shaderTime: value[0]
+  };
+})()`);
+assert.ok(
+  thirdShaderPlaybackState.progress >= 0 && thirdShaderPlaybackState.progress < 1,
+  "The promoted shader must remain inside its full-screen banner interval"
+);
+assert.ok(
+  thirdShaderPlaybackState.shaderTime
+    - thirdShaderPlaybackState.progress * shaderManifest.scenes[2].durationSeconds
+    >= 3.1,
+  "The shader animation must continue from the portion already rendered inside its thought cloud"
+);
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[2].shaders.vertex.path}`)),
   "The volumetric scene must load its DynLex-compiled vertex shader"
@@ -493,10 +364,7 @@ assert.equal(
   true,
   "The volumetric editor link must stay below ordinary HTTP request-line limits"
 );
-const volumetricShaderEditorPath = await evaluate(`(() => {
-  const url = new URL(document.querySelector('[data-shader-editor-link]').href);
-  return url.pathname + url.search;
-})()`);
+const terrainShaderEditorPath = `/ide/index.html?mode=shader&scene=${shaderManifest.scenes[1].id}`;
 if (screenshotDirectory) {
   const installFixedNanoFrame = async (elapsedSeconds) => {
     await evaluate(`(async () => {
@@ -544,10 +412,42 @@ if (screenshotDirectory) {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     })()`);
   };
-  await installFixedNanoFrame(6.5);
+  await installFixedNanoFrame(3.5);
   await captureScreenshot("homepage-nano-motorcycle");
-  await installFixedNanoFrame(9.5);
+  await installFixedNanoFrame(4.85);
+  await captureScreenshot("homepage-nano-flight-departure");
+  await installFixedNanoFrame(5.8);
+  await captureScreenshot("homepage-nano-flight-midpoint");
+  await installFixedNanoFrame(6.75);
+  await captureScreenshot("homepage-nano-flight-landing");
+  await installFixedNanoFrame(8.5);
   await captureScreenshot("homepage-nano-vitruvian");
+  await installFixedNanoFrame(11.2);
+  await captureScreenshot("homepage-nano-measurement-late");
+  await installFixedNanoFrame(13);
+  await captureScreenshot("homepage-nano-after-cycle");
+  await command("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 2,
+    mobile: false
+  });
+  await installFixedNanoFrame(8.5);
+  const highDensityCanvas = await evaluate(`(() => {
+    const canvas = document.querySelector('[data-shader-canvas="immersive"]');
+    return {
+      width: canvas.width,
+      cssWidth: canvas.clientWidth,
+      pixelRatio: window.devicePixelRatio
+    };
+  })()`);
+  assert.equal(highDensityCanvas.pixelRatio, 2);
+  assert.ok(
+    highDensityCanvas.width >= highDensityCanvas.cssWidth * 2,
+    "The relative drone footprint must be rendered and inspected at high pixel density"
+  );
+  await captureScreenshot("homepage-nano-vitruvian-hidpi");
+  await command("Emulation.clearDeviceMetricsOverride");
   await evaluate(`(() => {
     window.__dynlexFixedNanoPreview.setRunning(false);
     delete window.__dynlexFixedNanoPreview;
@@ -716,7 +616,7 @@ for (const section of ["sketches", "language"]) {
   await captureScreenshot(`homepage-${section}`);
 }
 
-await navigate(volumetricShaderEditorPath);
+await navigate(terrainShaderEditorPath);
 await waitFor(
   "document.querySelector('#shader-preview')?.dataset.previewState === 'ready'",
   "the editable shader's first successful preview"
@@ -749,7 +649,9 @@ const initialShaderState = await evaluate(`(() => {
   return {
     mode: document.documentElement.dataset.workspaceMode,
     revision: Number(canvas.dataset.previewRevision),
-    pointCount: Number(canvas.dataset.previewGeometryPoints),
+    vertexCount: Number(canvas.dataset.previewGeometryVertices),
+    horizontalPixels: Number(canvas.dataset.previewGeometryHorizontalPixels),
+    canvasPixels: Math.ceil(canvas.clientWidth * (window.devicePixelRatio || 1)),
     canvasHeight: canvas.getBoundingClientRect().height,
     shellHeight: shell.getBoundingClientRect().height,
     toolPanelHeight: toolPanel.getBoundingClientRect().height,
@@ -759,7 +661,8 @@ const initialShaderState = await evaluate(`(() => {
 })()`);
 assert.equal(initialShaderState.mode, "shader");
 assert.ok(initialShaderState.revision >= 1);
-assert.equal(initialShaderState.pointCount, shaderManifest.scenes[2].geometry.pointCount);
+assert.ok(initialShaderState.vertexCount > 0);
+assert.equal(initialShaderState.horizontalPixels, initialShaderState.canvasPixels);
 assert.ok(
   initialShaderState.canvasHeight >= initialShaderState.toolPanelHeight * 0.75
     && Math.abs(initialShaderState.canvasHeight - initialShaderState.shellHeight) <= 1,
@@ -767,7 +670,7 @@ assert.ok(
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
-await hoverMonacoText("motorcycle", 1);
+await hoverMonacoText("continental");
 await waitFor(
   "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
   "the shader IDE to display DynLex hover information",
@@ -900,7 +803,6 @@ await waitFor(
   "returning from a definition to render the preserved editable source model"
 );
 await captureScreenshot("ide-finished");
-
 await command("Emulation.setDeviceMetricsOverride", {
   width: 2560,
   height: 900,
@@ -908,17 +810,20 @@ await command("Emulation.setDeviceMetricsOverride", {
   mobile: false
 });
 await navigate("/");
-await waitFor(
-  "document.querySelector('[data-live-shader-banner]')?.dataset.shaderPlaylistReady === 'true'",
-  "the ultrawide shader banner"
-);
+await waitFor("document.querySelector('[data-live-shader-banner]')?.dataset.shaderPlaylistReady === 'true'", "the ultrawide shader banner");
+await waitFor("document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '1'", "the ultrawide terrain topology");
 const ultrawideThoughtLayout = await evaluate(`(() => {
+  const section = document.querySelector('[data-live-shader-banner]');
   const codeRect = document.querySelector('[data-shader-code]').getBoundingClientRect();
   const cloudGuide = document.querySelector('.thought-assembly');
   const cloudRect = cloudGuide.getBoundingClientRect();
+  const terrainCanvas = section.querySelector('[data-layer-state="dormant"] canvas');
   return {
     cloudWidthInScreens: cloudRect.width / codeRect.width,
     gapInScreens: (cloudRect.left - codeRect.right) / codeRect.width,
+    terrainVertices: Number(terrainCanvas.dataset.previewGeometryVertices),
+    terrainPixels: Number(terrainCanvas.dataset.previewGeometryHorizontalPixels),
+    sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1)),
     guideIsTransparent: (
       getComputedStyle(cloudGuide).backgroundImage === 'none'
       && getComputedStyle(cloudGuide).backgroundColor === 'rgba(0, 0, 0, 0)'
@@ -926,6 +831,8 @@ const ultrawideThoughtLayout = await evaluate(`(() => {
     )
   };
 })()`);
+assert.equal(ultrawideThoughtLayout.terrainPixels, ultrawideThoughtLayout.sectionPixels);
+assert.ok(ultrawideThoughtLayout.terrainVertices > firstPreloadedShaderState.vertexCount);
 assert.ok(
   ultrawideThoughtLayout.cloudWidthInScreens >= 0.74
     && ultrawideThoughtLayout.cloudWidthInScreens <= 0.82,
@@ -987,13 +894,68 @@ const mobileLayout = await evaluate(`({
 assert.equal(mobileLayout.pageWidth, mobileLayout.viewportWidth, "Mobile homepage must not scroll sideways");
 assert.deepEqual(mobileLayout.overflowingEditors, [], "Initial mobile snippets must fit before scrolling");
 assert.equal(mobileLayout.runButtonsFit, true, "Mobile run controls must remain inside the viewport");
+await evaluate("document.querySelector('.menu-toggle').click()");
+await waitFor("document.body.classList.contains('menu-open')", "the opaque mobile navigation to open");
+const mobileMenu = await evaluate(`(() => {
+  const header = document.querySelector('[data-site-header]');
+  const nav = document.querySelector('[data-primary-nav]');
+  const firstLink = nav.querySelector('a');
+  const headerRect = header.getBoundingClientRect();
+  const navRect = nav.getBoundingClientRect();
+  const firstLinkRect = firstLink.getBoundingClientRect();
+  return {
+    background: getComputedStyle(nav).backgroundColor,
+    headerHeight: headerRect.height,
+    navTop: navRect.top,
+    firstLinkTop: firstLinkRect.top,
+    viewportHeight: window.innerHeight,
+    itemsInside: [...nav.querySelectorAll('a')].every((link) => {
+      const bounds = link.getBoundingClientRect();
+      return bounds.top >= navRect.top && bounds.bottom <= navRect.bottom;
+    })
+  };
+})()`);
+assert.equal(mobileMenu.background, "rgb(8, 10, 9)", "The open menu must be fully opaque");
+assert.ok(mobileMenu.headerHeight >= mobileMenu.viewportHeight, "The open header must cover the viewport");
+assert.ok(mobileMenu.navTop >= 65, "Menu items must start below the mobile header");
+assert.ok(mobileMenu.firstLinkTop >= mobileMenu.navTop + 20, "Menu items need breathing room below the header");
+assert.equal(mobileMenu.itemsInside, true, "Every mobile navigation item must remain inside the menu");
 await captureScreenshot("homepage-mobile");
+await navigate("/wiki/sections/function.html");
+await waitFor("document.querySelector('[data-primary-nav] a')", "the documentation navigation");
+await evaluate("document.querySelector('.menu-toggle').click()");
+await waitFor("document.body.classList.contains('menu-open')", "the documentation menu to open");
+const documentationMenu = await evaluate(`(() => {
+  const nav = document.querySelector('[data-primary-nav]');
+  return {
+    background: getComputedStyle(nav).backgroundColor,
+    current: nav.querySelector('[aria-current="page"]')?.textContent.trim(),
+    paths: [...nav.querySelectorAll('a')].map((link) => {
+      const url = new URL(link.href);
+      return url.pathname + url.hash;
+    }),
+    styledCardBackground: getComputedStyle(document.querySelector('.hero-card')).backgroundColor
+  };
+})()`);
+assert.equal(documentationMenu.background, "rgb(8, 10, 9)");
+assert.equal(documentationMenu.current, "Docs");
+assert.deepEqual(
+  documentationMenu.paths,
+  ["/index.html#sketches", "/index.html#language", "/index.html#studio", "/wiki/index.html", "/ide/index.html"]
+);
+assert.equal(
+  documentationMenu.styledCardBackground,
+  "rgb(13, 16, 14)",
+  "Documentation must use the homepage surface palette"
+);
+await evaluate("document.querySelector('[data-primary-nav] a[aria-current=\"page\"]').click()");
+await waitFor("window.location.pathname === '/wiki/index.html'", "documentation navigation to reach the docs home");
+await captureScreenshot("documentation-mobile");
 await command("Emulation.clearDeviceMetricsOverride");
-
 assert.deepEqual(
   runtimeExceptions,
   [],
   "Homepage and IDE interactions must not raise uncaught browser exceptions"
 );
-socket.close();
+closeBrowserSession();
 console.log("Homepage sketches and IDE compile and run in Chrome.");

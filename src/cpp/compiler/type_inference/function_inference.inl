@@ -578,7 +578,7 @@ static bool expressionIsLValueOnlyUse(const InferenceContext &context, Expressio
 	return false;
 }
 
-static std::optional<double> parseCompileTimeNumericToken(std::string_view token);
+static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token);
 
 static bool rangeStartsEarlier(const Range &candidate, const Range &currentBest) {
 	if (!candidate.line)

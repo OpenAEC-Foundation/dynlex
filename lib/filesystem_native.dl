@@ -767,7 +767,7 @@ local function the result of committing {file system staging file:staging} where
             the address of cleanup
         )
         set supported to outcome != -2
-        set succeeded to outcome = 0
+        set succeeded to (outcome = 0)
         set failed to outcome != 0
         set message to an empty native filesystem failure text
         if failed:

@@ -21,16 +21,16 @@ function a new vector with x {any:horizontal}, y {any:vertical} and z {any:depth
 
 function {vector:left} + right:
     execute:
-        set horizontal to (the x of left) + right
-        set vertical to (the y of left) + right
-        set depth to (the z of left) + right
+        set horizontal to ((the x of left) + right)
+        set vertical to ((the y of left) + right)
+        set depth to ((the z of left) + right)
         return a new vector with x horizontal, y vertical and z depth
 
 function {vector:left} * factor:
     execute:
-        set horizontal to (the x of left) * factor
-        set vertical to (the y of left) * factor
-        set depth to (the z of left) * factor
+        set horizontal to ((the x of left) * factor)
+        set vertical to ((the y of left) * factor)
+        set depth to ((the z of left) * factor)
         return a new vector with x horizontal, y vertical and z depth
 
 function the string form of {vector:value}:

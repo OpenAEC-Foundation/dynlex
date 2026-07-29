@@ -11,7 +11,7 @@ set counterpart to the file system entry at second's directory path
 print whether ((origin lookup succeeded) and (origin was found)) and (origin is a directory) as a line
 print whether ((counterpart lookup succeeded) and (counterpart was found)) and (counterpart is a directory) as a line
 
-set file to first's directory path + the string form of "/payload.bin"
+set file to (first's directory path + the string form of "/payload.bin")
 set payload to a new string buffer containing 5 bytes
 store 65 as a byte into the data of payload at 0
 store 0 as a byte into the data of payload at 1
