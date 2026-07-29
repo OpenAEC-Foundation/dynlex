@@ -1,14 +1,14 @@
 import lib/filesystem.dl
 
-set source_path to "tests/required/filesystem_copy_rename/input.txt"
-set copy_path to "tests/required/filesystem_copy_rename/copy.tmp"
-delete copy_path
+set source to "tests/required/filesystem_copy_rename/input.txt"
+set copy to "tests/required/filesystem_copy_rename/copy.tmp"
+delete the filesystem entry at copy
 
-copy source_path to copy_path
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", @intrinsic("cast", it succeeded, an integer)))
-set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, copy_path, "rb")
-set first_character to @intrinsic("call", "libc", "fgetc", an integer, stream)
-@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", first_character))
+copy the filesystem entry at source to copy
+print whether it succeeded as a line
+set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, copy, "rb")
+set initial to @intrinsic("call", "libc", "fgetc", an integer, stream)
+ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", initial)
 
-delete copy_path
+delete the filesystem entry at copy

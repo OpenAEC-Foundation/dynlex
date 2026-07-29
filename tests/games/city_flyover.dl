@@ -1,4 +1,5 @@
 import lib/graphics.dl
+import tests/games/three_dimensional.dl
 
 # Modular low-poly city flyover
 # Controls:
@@ -11,440 +12,425 @@ import lib/graphics.dl
 # Run:
 #   ./tests/games/city_flyover
 
-function fract of value:
+function the fractional part of {float:value}:
     execute:
         return value - the floor of value
 
-function clamp01 of value:
+function {float:value} clamped between zero and one:
     execute:
         set result to value
         clamp result between 0.0 and 1.0
         return result
 
-function hash from x and z:
+function the hash of x {float:x} and z {float:z}:
     execute:
-        set n to x * 127.1 + z * 311.7
-        set s to (the sine of n) * 43758.5453
-        return fract of s
+        set phase to x * 127.1 + z * 311.7
+        set wave to (the sine of phase) * 43758.5453
+        return the fractional part of wave
 
-function set city perspective with width viewport_width and height viewport_height:
+function set city perspective for a viewport measuring {integer:width} by {integer:height}:
     execute:
-        @intrinsic("call", "GL", "glMatrixMode", void, 5889)
-        @intrinsic("call", "GL", "glLoadIdentity", void)
-        set safe_height to the maximum of viewport_height and 1
-        set aspect to (viewport_width as a float) / (safe_height as a float)
-        set near_plane to 0.4
-        set far_plane to 1400.0
-        set top_plane to 0.28
-        set bottom_plane to 0.0 - top_plane
-        set right_plane to top_plane * aspect
-        set left_plane to 0.0 - right_plane
-        @intrinsic("call", "GL", "glFrustum", void, left_plane, right_plane, bottom_plane, top_plane, near_plane, far_plane)
-        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
+        @intrinsic("call", "GL", "glLoadIdentity", nothing)
+        set divisor to height
+        if divisor < 1:
+            set divisor to 1
+        set aspect to (width as a float) / (divisor as a float)
+        set near to 0.4
+        set far to 1400.0
+        set top to 0.28
+        set bottom to 0.0 - top
+        set right to top * aspect
+        set left to 0.0 - right
+        @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 
-function clear [the|] city screen:
+function clear the city screen:
     execute:
-        @intrinsic("call", "GL", "glClear", void, 16640)
+        @intrinsic("call", "GL", "glClear", nothing, 16640)
 
-function enable [the|] city render state:
+function enable the city render state:
     execute:
-        @intrinsic("call", "GL", "glEnable", void, 2929)
-        @intrinsic("call", "GL", "glEnable", void, 2884)
-        @intrinsic("call", "GL", "glCullFace", void, 1029)
-        @intrinsic("call", "GL", "glShadeModel", void, 7424)
+        @intrinsic("call", "GL", "glEnable", nothing, 2929)
+        @intrinsic("call", "GL", "glEnable", nothing, 2884)
+        @intrinsic("call", "GL", "glCullFace", nothing, 1029)
+        @intrinsic("call", "GL", "glShadeModel", nothing, 7424)
 
-function set [the|] city clear color to r g b:
+function set the city clear color to {normalized color:color}:
     execute:
-        @intrinsic("call", "GL", "glClearColor", void, r as a 32 bit float, g as a 32 bit float, b as a 32 bit float, 1.0 as a 32 bit float)
+        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit float, color's green as a 32 bit float, color's blue as a 32 bit float, 1.0 as a 32 bit float)
 
-function apply flyover camera at x y z yaw degrees:
+function position the flyover camera from {spatial camera:view}:
     execute:
-        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
-        @intrinsic("call", "GL", "glLoadIdentity", void)
-        @intrinsic("call", "GL", "glRotated", void, 0.0 - degrees, 0.0, 1.0, 0.0)
-        @intrinsic("call", "GL", "glTranslated", void, 0.0 - x, 0.0 - y, 0.0 - z)
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
+        @intrinsic("call", "GL", "glLoadIdentity", nothing)
+        @intrinsic("call", "GL", "glRotated", nothing, 0.0 - view's yaw, 0.0, 1.0, 0.0)
+        @intrinsic("call", "GL", "glTranslated", nothing, 0.0 - view's position's x, 0.0 - view's position's y, 0.0 - view's position's z)
 
-function draw box centered at x y z with size width height depth and color r g b:
+function draw a box centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        set half_width to width / 2.0
-        set half_height to height / 2.0
-        set half_depth to depth / 2.0
+        set half to the dimensions measuring (size's width / 2.0) by (size's height / 2.0) by (size's depth / 2.0)
 
-        set top_r to r + 18
-        set top_g to g + 18
-        set top_b to b + 18
-        clamp top_r between 0 and 255
-        clamp top_g between 0 and 255
-        clamp top_b between 0 and 255
+        set highlight to a color with red (color's red + 18), green (color's green + 18) and blue (color's blue + 18)
+        set the red channel of highlight to (highlight's red clamped between 0 and 255)
+        set the green channel of highlight to (highlight's green clamped between 0 and 255)
+        set the blue channel of highlight to (highlight's blue clamped between 0 and 255)
 
-        set side_r to r - 14
-        set side_g to g - 14
-        set side_b to b - 14
-        clamp side_r between 0 and 255
-        clamp side_g between 0 and 255
-        clamp side_b between 0 and 255
+        set side to a color with red (color's red - 14), green (color's green - 14) and blue (color's blue - 14)
+        set the red channel of side to (side's red clamped between 0 and 255)
+        set the green channel of side to (side's green clamped between 0 and 255)
+        set the blue channel of side to (side's blue clamped between 0 and 255)
 
-        set dark_r to r - 28
-        set dark_g to g - 28
-        set dark_b to b - 28
-        clamp dark_r between 0 and 255
-        clamp dark_g between 0 and 255
-        clamp dark_b between 0 and 255
+        set dark to a color with red (color's red - 28), green (color's green - 28) and blue (color's blue - 28)
+        set the red channel of dark to (dark's red clamped between 0 and 255)
+        set the green channel of dark to (dark's green clamped between 0 and 255)
+        set the blue channel of dark to (dark's blue clamped between 0 and 255)
 
-        @intrinsic("call", "GL", "glPushMatrix", void)
-        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
-        @intrinsic("call", "GL", "glBegin", void, 7)
+        @intrinsic("call", "GL", "glPushMatrix", nothing)
+        @intrinsic("call", "GL", "glTranslated", nothing, center's x, center's y, center's z)
+        @intrinsic("call", "GL", "glBegin", nothing, 7)
 
-        @intrinsic("call", "GL", "glColor3ub", void, top_r, top_g, top_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, highlight's red, highlight's green, highlight's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, 0.0 - half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, dark_r, dark_g, dark_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, dark's red, dark's green, dark's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, color's red, color's green, color's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, side's red, side's green, side's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, 0.0 - half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0 - half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, half_height, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, side's red, side's green, side's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0 - half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, half's height, 0.0 - half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, side_r, side_g, side_b)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, half_height, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0 - half_height, half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, side's red, side's green, side's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, half's height, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0 - half's height, half's depth)
 
-        @intrinsic("call", "GL", "glEnd", void)
-        @intrinsic("call", "GL", "glPopMatrix", void)
+        @intrinsic("call", "GL", "glEnd", nothing)
+        @intrinsic("call", "GL", "glPopMatrix", nothing)
 
-function district intensity at x z:
+function the district intensity at {spatial position:position}:
     execute:
-        set center_distance to the square root of (x * x + z * z)
-        set center_intensity to clamp01 of (1.0 - center_distance / 520.0)
+        set distance to the square root of ((position's x * position's x) + (position's z * position's z))
+        set center to (1.0 - distance / 520.0) clamped between zero and one
 
-        set secondary_x to x - 220.0
-        set secondary_z to z + 180.0
-        set secondary_distance to the square root of (secondary_x * secondary_x + secondary_z * secondary_z)
-        set secondary_intensity to clamp01 of (1.0 - secondary_distance / 260.0)
-        set secondary_intensity to secondary_intensity * 0.60
+        set secondary to a position with x (position's x - 220.0), y 0.0 and z (position's z + 180.0)
+        set distance to the square root of (secondary's x * secondary's x + secondary's z * secondary's z)
+        set satellite to ((1.0 - distance / 260.0) clamped between zero and one) * 0.60
 
-        set corridor_curve to the sine of (x * 0.008)
-        set corridor_z to z + corridor_curve * 120.0
-        set corridor_abs to the square root of (corridor_z * corridor_z)
-        set corridor_intensity to clamp01 of (1.0 - corridor_abs / 150.0)
-        set corridor_intensity to corridor_intensity * 0.40
+        set curve to the sine of (position's x * 0.008)
+        set corridor to position's z + (curve * 120.0)
+        set distance to the square root of (corridor * corridor)
+        set influence to ((1.0 - distance / 150.0) clamped between zero and one) * 0.40
 
-        set result_intensity to center_intensity
-        if secondary_intensity > result_intensity:
-            set result_intensity to secondary_intensity
-        if corridor_intensity > result_intensity:
-            set result_intensity to corridor_intensity
-        return result_intensity
+        set density to center
+        if satellite > density:
+            set density to satellite
+        if influence > density:
+            set density to influence
+        return density
 
-function squared distance from x1 z1 to x2 z2:
+function the squared distance from {spatial position:first} to {spatial position:second}:
     execute:
-        set delta_x to x1 - x2
-        set delta_z to z1 - z2
-        return delta_x * delta_x + delta_z * delta_z
+        set delta to a position with x (first's x - second's x), y 0.0 and z (first's z - second's z)
+        return delta's x * delta's x + delta's z * delta's z
 
-function draw story module at x y z with width story_width and depth story_depth and color r g b:
+function draw a story module centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        draw box centered at x y z with size story_width 2.8 story_depth and color r g b
+        set shape to the dimensions measuring (size's width) by 2.8 by (size's depth)
+        draw a box centered at center with shape and color
 
-function draw rooftop unit at x y z with width roof_width and depth roof_depth and color r g b:
+function draw a rooftop unit centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        draw box centered at x y z with size roof_width 1.2 roof_depth and color r g b
+        set unit to the dimensions measuring (size's width) by 1.2 by (size's depth)
+        draw a box centered at center with unit and color
 
-function draw low poly roof cap at x y z with width roof_width and depth roof_depth and height roof_height and color r g b:
+function draw a low poly roof cap centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        set half_width to roof_width / 2.0
-        set half_depth to roof_depth / 2.0
+        set half to the dimensions measuring (size's width / 2.0) by (size's height) by (size's depth / 2.0)
 
-        set light_r to r + 18
-        set light_g to g + 18
-        set light_b to b + 18
-        clamp light_r between 0 and 255
-        clamp light_g between 0 and 255
-        clamp light_b between 0 and 255
+        set light to a color with red (color's red + 18), green (color's green + 18) and blue (color's blue + 18)
+        set the red channel of light to (light's red clamped between 0 and 255)
+        set the green channel of light to (light's green clamped between 0 and 255)
+        set the blue channel of light to (light's blue clamped between 0 and 255)
 
-        set dark_r to r - 18
-        set dark_g to g - 18
-        set dark_b to b - 18
-        clamp dark_r between 0 and 255
-        clamp dark_g between 0 and 255
-        clamp dark_b between 0 and 255
+        set dark to a color with red (color's red - 18), green (color's green - 18) and blue (color's blue - 18)
+        set the red channel of dark to (dark's red clamped between 0 and 255)
+        set the green channel of dark to (dark's green clamped between 0 and 255)
+        set the blue channel of dark to (dark's blue clamped between 0 and 255)
 
-        @intrinsic("call", "GL", "glPushMatrix", void)
-        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
-        @intrinsic("call", "GL", "glBegin", void, 4)
+        @intrinsic("call", "GL", "glPushMatrix", nothing)
+        @intrinsic("call", "GL", "glTranslated", nothing, center's x, center's y, center's z)
+        @intrinsic("call", "GL", "glBegin", nothing, 4)
 
-        @intrinsic("call", "GL", "glColor3ub", void, light_r, light_g, light_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, light's red, light's green, light's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0, half's height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0, half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, color's red, color's green, color's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0, half's height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0, half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0, 0.0 - half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, dark_r, dark_g, dark_b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
-        @intrinsic("call", "GL", "glVertex3d", void, half_width, 0.0, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, 0.0 - half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, dark's red, dark's green, dark's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0, half's height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", nothing, half's width, 0.0, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0, 0.0 - half's depth)
 
-        @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0, roof_height, 0.0)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, 0.0 - half_depth)
-        @intrinsic("call", "GL", "glVertex3d", void, 0.0 - half_width, 0.0, half_depth)
+        @intrinsic("call", "GL", "glColor3ub", nothing, color's red, color's green, color's blue)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0, half's height, 0.0)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0, 0.0 - half's depth)
+        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half's width, 0.0, half's depth)
 
-        @intrinsic("call", "GL", "glEnd", void)
-        @intrinsic("call", "GL", "glPopMatrix", void)
+        @intrinsic("call", "GL", "glEnd", nothing)
+        @intrinsic("call", "GL", "glPopMatrix", nothing)
 
-function draw vehicle module at x y z heading angle and color r g b:
+function draw a vehicle module centered at {spatial position:center} heading {float:angle} with {spatial color:color}:
     execute:
-        @intrinsic("call", "GL", "glPushMatrix", void)
-        @intrinsic("call", "GL", "glTranslated", void, x, y, z)
-        @intrinsic("call", "GL", "glRotated", void, angle, 0.0, 1.0, 0.0)
-        draw box centered at 0.0 0.55 0.0 with size 3.6 0.9 1.7 and color r g b
-        draw box centered at 0.35 1.12 0.0 with size 1.4 0.55 1.45 and color r + 18 g + 18 b + 18
-        @intrinsic("call", "GL", "glPopMatrix", void)
+        @intrinsic("call", "GL", "glPushMatrix", nothing)
+        @intrinsic("call", "GL", "glTranslated", nothing, center's x, center's y, center's z)
+        @intrinsic("call", "GL", "glRotated", nothing, angle, 0.0, 1.0, 0.0)
+        set body to the dimensions measuring 3.6 by 0.9 by 1.7
+        set cabin to the dimensions measuring 1.4 by 0.55 by 1.45
+        set highlight to a color with red (color's red + 18), green (color's green + 18) and blue (color's blue + 18)
+        draw a box centered at (a position with x 0.0, y 0.55 and z 0.0) with body and color
+        draw a box centered at (a position with x 0.35, y 1.12 and z 0.0) with cabin and highlight
+        @intrinsic("call", "GL", "glPopMatrix", nothing)
 
-function draw traffic light module at x and z:
+function draw a traffic light module at {spatial position:center}:
     execute:
-        draw box centered at x 2.1 z with size 0.18 4.2 0.18 and color 86 90 94
-        draw box centered at x + 0.72 3.86 z with size 1.44 0.12 0.12 and color 86 90 94
-        draw box centered at x + 1.34 3.52 z with size 0.34 0.86 0.34 and color 42 44 46
-        draw box centered at x + 1.34 3.72 z + 0.08 with size 0.10 0.10 0.10 and color 216 48 48
-        draw box centered at x + 1.34 3.52 z + 0.08 with size 0.10 0.10 0.10 and color 224 182 44
-        draw box centered at x + 1.34 3.32 z + 0.08 with size 0.10 0.10 0.10 and color 56 202 78
+        set metal to a color with red 86, green 90 and blue 94
+        set housing to a color with red 42, green 44 and blue 46
+        draw a box centered at (a position with x (center's x), y 2.1 and z (center's z)) with (the dimensions measuring 0.18 by 4.2 by 0.18) and metal
+        draw a box centered at (a position with x (center's x + 0.72), y 3.86 and z center's z) with (the dimensions measuring 1.44 by 0.12 by 0.12) and metal
+        draw a box centered at (a position with x (center's x + 1.34), y 3.52 and z center's z) with (the dimensions measuring 0.34 by 0.86 by 0.34) and housing
+        draw a box centered at (a position with x (center's x + 1.34), y 3.72 and z (center's z + 0.08)) with (the dimensions measuring 0.10 by 0.10 by 0.10) and (a color with red 216, green 48 and blue 48)
+        draw a box centered at (a position with x (center's x + 1.34), y 3.52 and z (center's z + 0.08)) with (the dimensions measuring 0.10 by 0.10 by 0.10) and (a color with red 224, green 182 and blue 44)
+        draw a box centered at (a position with x (center's x + 1.34), y 3.32 and z (center's z + 0.08)) with (the dimensions measuring 0.10 by 0.10 by 0.10) and (a color with red 56, green 202 and blue 78)
 
-function draw street slab at x z with width slab_width and depth slab_depth and color r g b:
+function draw a street slab centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        draw box centered at x 0.03 z with size slab_width 0.06 slab_depth and color r g b
+        set shape to the dimensions measuring (size's width) by 0.06 by (size's depth)
+        set raised to a position with x (center's x), y 0.03 and z (center's z)
+        draw a box centered at raised with shape and color
 
-function draw sidewalk slab at x z with width slab_width and depth slab_depth and color r g b:
+function draw a sidewalk slab centered at {spatial position:center} with {spatial dimensions:size} and {spatial color:color}:
     execute:
-        draw box centered at x 0.11 z with size slab_width 0.14 slab_depth and color r g b
+        set shape to the dimensions measuring (size's width) by 0.14 by (size's depth)
+        set raised to a position with x (center's x), y 0.11 and z (center's z)
+        draw a box centered at raised with shape and color
 
-function draw distant block silhouette at block_x and block_z:
+function draw a distant block silhouette at grid position {float:column}, {float:row}:
     execute:
-        set block_origin_x to block_x * 48.0
-        set block_origin_z to block_z * 48.0
-        set block_center_x to block_origin_x + 24.0
-        set block_center_z to block_origin_z + 24.0
+        set origin to a position with x (column * 48.0), y 0.0 and z (row * 48.0)
+        set center to a position with x (origin's x + 24.0), y 0.0 and z (origin's z + 24.0)
 
-        set seed_a to hash from (block_x + 17.0) and (block_z + 11.0)
-        set seed_b to hash from (block_x + 29.0) and (block_z + 37.0)
+        set primary to the hash of x (column + 17.0) and z (row + 11.0)
+        set secondary to the hash of x (column + 29.0) and z (row + 37.0)
 
-        set tower_width to 14.0 + seed_a * 10.0
-        set tower_depth to 14.0 + seed_b * 10.0
-        set tower_height to 18.0 + seed_a * 74.0
+        set size to the dimensions measuring (14.0 + primary * 10.0) by (18.0 + primary * 74.0) by (14.0 + secondary * 10.0)
 
-        set tower_r to (98 + seed_b * 90.0) as an integer
-        set tower_g to (96 + seed_a * 80.0) as an integer
-        set tower_b to (110 + seed_b * 70.0) as an integer
+        set color to a color with red ((98 + secondary * 90.0) as an integer), green ((96 + primary * 80.0) as an integer) and blue ((110 + secondary * 70.0) as an integer)
 
-        draw box centered at block_center_x tower_height / 2.0 block_center_z with size tower_width tower_height tower_depth and color tower_r tower_g tower_b
+        set raised to a position with x (center's x), y (size's height / 2.0) and z (center's z)
+        draw a box centered at raised with size and color
 
-        if seed_a > 0.34:
-            set roof_r to tower_r + 22
-            set roof_g to tower_g + 22
-            set roof_b to tower_b + 22
-            clamp roof_r between 0 and 255
-            clamp roof_g between 0 and 255
-            clamp roof_b between 0 and 255
-            draw low poly roof cap at block_center_x tower_height block_center_z with width tower_width * 0.9 and depth tower_depth * 0.9 and height (2.4 + seed_b * 4.2) and color roof_r roof_g roof_b
+        if primary > 0.34:
+            set roof to a color with red (color's red + 22), green (color's green + 22) and blue (color's blue + 22)
+            set the red channel of roof to (roof's red clamped between 0 and 255)
+            set the green channel of roof to (roof's green clamped between 0 and 255)
+            set the blue channel of roof to (roof's blue clamped between 0 and 255)
+            set cap to the dimensions measuring (size's width * 0.9) by (2.4 + secondary * 4.2) by (size's depth * 0.9)
+            set summit to a position with x (center's x), y (size's height) and z (center's z)
+            draw a low poly roof cap centered at summit with cap and roof
 
-        if seed_b > 0.66:
-            set annex_height to tower_height * 0.55
-            draw box centered at block_center_x + 9.0 annex_height / 2.0 block_center_z - 7.0 with size 8.0 annex_height 8.0 and color tower_r - 8 tower_g - 8 tower_b - 8
+        if secondary > 0.66:
+            set altitude to size's height * 0.55
+            set extension to a position with x (center's x + 9.0), y (altitude / 2.0) and z (center's z - 7.0)
+            set annex to the dimensions measuring 8.0 by altitude by 8.0
+            set shade to a color with red (color's red - 8), green (color's green - 8) and blue (color's blue - 8)
+            draw a box centered at extension with annex and shade
 
-function draw lot scene at lot_x lot_z in detail detail_level:
+function draw a lot scene at grid position {float:column}, {float:row} with detail level {float:quality}:
     execute:
-        set lot_center_x to lot_x * 18.0 + 21.0
-        set lot_center_z to lot_z * 18.0 + 21.0
-        set occupancy_seed to hash from lot_x and lot_z
-        set color_seed to hash from (lot_x + 13.0) and (lot_z + 19.0)
-        set accent_seed to hash from (lot_x + 31.0) and (lot_z + 41.0)
-        set intensity to district intensity at lot_center_x lot_center_z
+        set center to a position with x (column * 18.0 + 21.0), y 0.0 and z (row * 18.0 + 21.0)
+        set occupancy to the hash of x column and z row
+        set hue to the hash of x (column + 13.0) and z (row + 19.0)
+        set accent to the hash of x (column + 31.0) and z (row + 41.0)
+        set intensity to the district intensity at center
 
-        if occupancy_seed < 0.12:
-            draw sidewalk slab at lot_center_x lot_center_z with width 12.0 and depth 12.0 and color 82 118 78
-            draw box centered at lot_center_x 1.2 lot_center_z with size 1.4 2.4 1.4 and color 92 86 70
-            draw box centered at lot_center_x 3.4 lot_center_z with size 4.4 2.2 4.4 and color 84 128 82
+        if occupancy < 0.12:
+            draw a sidewalk slab centered at center with (the dimensions measuring 12.0 by 0.0 by 12.0) and (a color with red 82, green 118 and blue 78)
+            draw a box centered at (a position with x (center's x), y 1.2 and z (center's z)) with (the dimensions measuring 1.4 by 2.4 by 1.4) and (a color with red 92, green 86 and blue 70)
+            draw a box centered at (a position with x (center's x), y 3.4 and z (center's z)) with (the dimensions measuring 4.4 by 2.2 by 4.4) and (a color with red 84, green 128 and blue 82)
         else:
-            if occupancy_seed < 0.22:
-                draw sidewalk slab at lot_center_x lot_center_z with width 12.0 and depth 12.0 and color 118 116 110
-                if detail_level > 0.5:
-                    draw vehicle module at lot_center_x - 2.2 0.0 lot_center_z - 2.0 heading 0.0 and color 182 64 52
-                    draw vehicle module at lot_center_x + 2.2 0.0 lot_center_z + 2.0 heading 180.0 and color 66 108 184
+            if occupancy < 0.22:
+                draw a sidewalk slab centered at center with (the dimensions measuring 12.0 by 0.0 by 12.0) and (a color with red 118, green 116 and blue 110)
+                if quality > 0.5:
+                    draw a vehicle module centered at (a position with x (center's x - 2.2), y 0.0 and z (center's z - 2.0)) heading 0.0 with (a color with red 182, green 64 and blue 52)
+                    draw a vehicle module centered at (a position with x (center's x + 2.2), y 0.0 and z (center's z + 2.0)) heading 180.0 with (a color with red 66, green 108 and blue 184)
             else:
-                set footprint_x to 7.2 + color_seed * 3.4
-                set footprint_z to 7.2 + accent_seed * 3.4
-                set center_story_boost to 2.0 + (intensity * 11.0)
-                set base_stories to center_story_boost + (occupancy_seed * 6.0)
-                set story_count to the floor of base_stories
-                if story_count < 2.0:
-                    set story_count to 2.0
-                set facade_r to (110 + (color_seed * 95.0)) as an integer
-                set facade_g to (104 + (accent_seed * 88.0)) as an integer
-                set facade_b to (116 + (color_seed * 72.0)) as an integer
+                set footprint to the dimensions measuring (7.2 + hue * 3.4) by 0.0 by (7.2 + accent * 3.4)
+                set boost to 2.0 + (intensity * 11.0)
+                set count to the floor of (boost + (occupancy * 6.0))
+                if count < 2.0:
+                    set count to 2.0
+                set facade to a color with red ((110 + (hue * 95.0)) as an integer), green ((104 + (accent * 88.0)) as an integer) and blue ((116 + (hue * 72.0)) as an integer)
 
-                if detail_level < 0.5:
-                    set total_height to story_count * 2.8
-                    draw box centered at lot_center_x total_height / 2.0 lot_center_z with size footprint_x total_height footprint_z and color facade_r facade_g facade_b
-                    if occupancy_seed > 0.44:
-                        set roof_height to 1.2 + accent_seed * 2.4
-                        set roof_r to facade_r + 18
-                        set roof_g to facade_g + 18
-                        set roof_b to facade_b + 18
-                        clamp roof_r between 0 and 255
-                        clamp roof_g between 0 and 255
-                        clamp roof_b between 0 and 255
-                        draw low poly roof cap at lot_center_x total_height lot_center_z with width footprint_x * 0.92 and depth footprint_z * 0.92 and height roof_height and color roof_r roof_g roof_b
+                if quality < 0.5:
+                    set altitude to count * 2.8
+                    set building to the dimensions measuring (footprint's width) by altitude by (footprint's depth)
+                    set midpoint to a position with x (center's x), y (altitude / 2.0) and z (center's z)
+                    draw a box centered at midpoint with building and facade
+                    if occupancy > 0.44:
+                        set rise to 1.2 + accent * 2.4
+                        set roof to a color with red (facade's red + 18), green (facade's green + 18) and blue (facade's blue + 18)
+                        set the red channel of roof to (roof's red clamped between 0 and 255)
+                        set the green channel of roof to (roof's green clamped between 0 and 255)
+                        set the blue channel of roof to (roof's blue clamped between 0 and 255)
+                        set cap to the dimensions measuring (footprint's width * 0.92) by rise by (footprint's depth * 0.92)
+                        set summit to a position with x (center's x), y altitude and z (center's z)
+                        draw a low poly roof cap centered at summit with cap and roof
                 else:
-                    set story_index to 0.0
-                    while story_index < story_count:
-                        set story_y to story_index * 2.8 + 1.4
-                        draw story module at lot_center_x story_y lot_center_z with width footprint_x and depth footprint_z and color facade_r facade_g facade_b
-                        if detail_level > 1.5:
-                            if (the floor of (story_index / 4.0)) * 4.0 = story_index:
-                                draw box centered at lot_center_x story_y + 1.1 lot_center_z with size footprint_x + 0.2 0.08 footprint_z + 0.2 and color 196 186 140
-                        increment story_index
+                    set index to 0.0
+                    while index < count:
+                        set altitude to index * 2.8 + 1.4
+                        set storey to a position with x (center's x), y altitude and z (center's z)
+                        draw a story module centered at storey with footprint and facade
+                        if quality > 1.5:
+                            if (the floor of (index / 4.0)) * 4.0 = index:
+                                set trim to a position with x (center's x), y (altitude + 1.1) and z (center's z)
+                                set ledge to the dimensions measuring (footprint's width + 0.2) by 0.08 by (footprint's depth + 0.2)
+                                draw a box centered at trim with ledge and (a color with red 196, green 186 and blue 140)
+                        increment index
 
-                    if detail_level > 1.5:
-                        if occupancy_seed > 0.58:
-                            set roof_y to story_count * 2.8 + 0.7
-                            draw rooftop unit at lot_center_x roof_y lot_center_z with width footprint_x * 0.36 and depth footprint_z * 0.32 and color 76 82 88
+                    if quality > 1.5:
+                        if occupancy > 0.58:
+                            set altitude to count * 2.8 + 0.7
+                            set rooftop to a position with x (center's x), y altitude and z (center's z)
+                            set unit to the dimensions measuring (footprint's width * 0.36) by 1.2 by (footprint's depth * 0.32)
+                            draw a rooftop unit centered at rooftop with unit and (a color with red 76, green 82 and blue 88)
 
-function draw block at block_x block_z with detail detail_level and time city_time:
+function draw a block at grid position {float:column}, {float:row} at {float:time} with detail level {float:quality}:
     execute:
-        set block_origin_x to block_x * 48.0
-        set block_origin_z to block_z * 48.0
-        set build_center_x to block_origin_x + 30.0
-        set build_center_z to block_origin_z + 30.0
+        set origin to a position with x (column * 48.0), y 0.0 and z (row * 48.0)
+        set asphalt to a color with red 38, green 40 and blue 46
+        set pavement to a color with red 126, green 122 and blue 116
 
-        draw street slab at block_origin_x + 24.0 block_origin_z + 6.0 with width 48.0 and depth 12.0 and color 38 40 46
-        draw street slab at block_origin_x + 6.0 block_origin_z + 24.0 with width 12.0 and depth 48.0 and color 38 40 46
-        draw sidewalk slab at block_origin_x + 30.0 block_origin_z + 30.0 with width 36.0 and depth 36.0 and color 126 122 116
+        draw a street slab centered at (a position with x (origin's x + 24.0), y 0.0 and z (origin's z + 6.0)) with (the dimensions measuring 48.0 by 0.0 by 12.0) and asphalt
+        draw a street slab centered at (a position with x (origin's x + 6.0), y 0.0 and z (origin's z + 24.0)) with (the dimensions measuring 12.0 by 0.0 by 48.0) and asphalt
+        draw a sidewalk slab centered at (a position with x (origin's x + 30.0), y 0.0 and z (origin's z + 30.0)) with (the dimensions measuring 36.0 by 0.0 by 36.0) and pavement
 
-        draw lot scene at block_x * 2.0 block_z * 2.0 in detail detail_level
-        draw lot scene at block_x * 2.0 + 1.0 block_z * 2.0 in detail detail_level
-        draw lot scene at block_x * 2.0 block_z * 2.0 + 1.0 in detail detail_level
-        draw lot scene at block_x * 2.0 + 1.0 block_z * 2.0 + 1.0 in detail detail_level
+        draw a lot scene at grid position (column * 2.0), (row * 2.0) with detail level quality
+        draw a lot scene at grid position ((column * 2.0) + 1.0), (row * 2.0) with detail level quality
+        draw a lot scene at grid position (column * 2.0), ((row * 2.0) + 1.0) with detail level quality
+        draw a lot scene at grid position ((column * 2.0) + 1.0), ((row * 2.0) + 1.0) with detail level quality
 
-        if detail_level > 1.5:
-            set road_seed to hash from (block_x + 71.0) and (block_z + 23.0)
-            set travel_a to fract of (city_time * 0.07 + road_seed)
-            set car_x_a to block_origin_x + travel_a * 48.0
-            draw vehicle module at car_x_a 0.0 block_origin_z + 3.3 heading 0.0 and color 202 82 68
+        if quality > 1.5:
+            set seed to the hash of x (column + 71.0) and z (row + 23.0)
+            set progress to the fractional part of (time * 0.07 + seed)
+            set car to a position with x (origin's x + progress * 48.0), y 0.0 and z (origin's z + 3.3)
+            draw a vehicle module centered at car heading 0.0 with (a color with red 202, green 82 and blue 68)
 
-            set travel_b to fract of (((city_time * 0.05) + (road_seed * 0.7)) + 0.3)
-            set car_z_b to block_origin_z + (1.0 - travel_b) * 48.0
-            draw vehicle module at block_origin_x + 8.7 0.0 car_z_b heading 90.0 and color 78 122 208
+            set progress to the fractional part of (((time * 0.05) + (seed * 0.7)) + 0.3)
+            set car to a position with x (origin's x + 8.7), y 0.0 and z (origin's z + (1.0 - progress) * 48.0)
+            draw a vehicle module centered at car heading 90.0 with (a color with red 78, green 122 and blue 208)
 
-            set light_x to block_origin_x + 10.2
-            set light_z to block_origin_z + 10.2
-            draw traffic light module at light_x and light_z
+            set signal to a position with x (origin's x + 10.2), y 0.0 and z (origin's z + 10.2)
+            draw a traffic light module at signal
 
-function print city module stats:
+function print the city module statistics:
     execute:
-        print "story module: 8-11 x 2.8 x 8-11, 12 triangles" as line
-        print "vehicle module: 3.6 x 1.45 x 1.7, 24 triangles" as line
-        print "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles" as line
+        print "story module: 8-11 x 2.8 x 8-11, 12 triangles" as a line
+        print "vehicle module: 3.6 x 1.45 x 1.7, 24 triangles" as a line
+        print "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles" as a line
 
 set window to a new window with width 1280 and height 720
-set window_handle to window as cstring
 enable the city render state
-set the city clear color to 0.68 0.80 0.95
-print city module stats
+set the city clear color to (a normalized color with red 0.68, green 0.80 and blue 0.95)
+print the city module statistics
 
-set camera_x to 0.0
-set camera_y to 8.0
-set camera_z to 24.0
-set yaw to 0.0
-set move_speed to 1.15
-set turn_speed to 2.4
-set near_render_radius to 1.0
-set far_render_radius to 4.0
+set view to a camera at (a position with x 0.0, y 8.0 and z 24.0) facing 0.0 degrees with speed 1.15 and turn rate 2.4
+set nearby to 1.0
+set distant to 4.0
 
-while not the window should close:
-    set framebuffer_width to query the framebuffer width of window_handle
-    set framebuffer_height to query the framebuffer height of window_handle
-    set city perspective with width framebuffer_width and height framebuffer_height
+while the window remains open:
+    set width to the framebuffer width of window
+    set height to the framebuffer height of window
+    set city perspective for a viewport measuring width by height
 
-    set yaw_radians to yaw * 0.0174533
-    set forward_x to 0.0 - (the sine of yaw_radians)
-    set forward_z to 0.0 - (the cosine of yaw_radians)
-    set right_x to 0.0 - forward_z
-    set right_z to forward_x
+    set radians to view's yaw * 0.0174533
+    set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
+    set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
 
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
-        add forward_x * move_speed to camera_x
-        add forward_z * move_speed to camera_z
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 83) = 1:
-        subtract forward_x * move_speed from camera_x
-        subtract forward_z * move_speed from camera_z
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 65) = 1:
-        subtract right_x * move_speed from camera_x
-        subtract right_z * move_speed from camera_z
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 68) = 1:
-        add right_x * move_speed to camera_x
-        add right_z * move_speed to camera_z
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 81) = 1:
-        subtract 0.8 from camera_y
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
-        add 0.8 to camera_y
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
-        add turn_speed to yaw
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
-        subtract turn_speed from yaw
+    if key 87 is down in window:
+        increase the x coordinate of view's position by forward's x * view's movement
+        increase the z coordinate of view's position by forward's z * view's movement
+    if key 83 is down in window:
+        decrease the x coordinate of view's position by forward's x * view's movement
+        decrease the z coordinate of view's position by forward's z * view's movement
+    if key 65 is down in window:
+        decrease the x coordinate of view's position by rightward's x * view's movement
+        decrease the z coordinate of view's position by rightward's z * view's movement
+    if key 68 is down in window:
+        increase the x coordinate of view's position by rightward's x * view's movement
+        increase the z coordinate of view's position by rightward's z * view's movement
+    if key 81 is down in window:
+        decrease the y coordinate of view's position by 0.8
+    if key 69 is down in window:
+        increase the y coordinate of view's position by 0.8
+    if key 263 is down in window:
+        add view's turning to view's yaw
+    if key 262 is down in window:
+        subtract view's turning from view's yaw
 
-    if camera_y < 2.4:
-        set camera_y to 2.4
+    if view's position's y < 2.4:
+        set the y coordinate of view's position to 2.4
 
     clear the city screen
-    apply flyover camera at camera_x camera_y camera_z yaw yaw
+    position the flyover camera from view
 
-    draw box centered at camera_x 0.0 camera_z with size 1400.0 0.02 1400.0 and color 92 112 88
+    set ground to a position with x (view's position's x), y 0.0 and z (view's position's z)
+    draw a box centered at ground with (the dimensions measuring 1400.0 by 0.02 by 1400.0) and (a color with red 92, green 112 and blue 88)
 
-    set city_time to the time since start
-    set camera_block_x to the floor of (camera_x / 48.0)
-    set camera_block_z to the floor of (camera_z / 48.0)
+    set time to the time since start
+    set region to a position with x (the floor of (view's position's x / 48.0)), y 0.0 and z (the floor of (view's position's z / 48.0))
 
-    set block_z to camera_block_z - far_render_radius
-    while block_z <= camera_block_z + far_render_radius:
-        set block_x to camera_block_x - far_render_radius
-        while block_x <= camera_block_x + far_render_radius:
-            set block_center_x to block_x * 48.0 + 24.0
-            set block_center_z to block_z * 48.0 + 24.0
-            set block_distance_squared to squared distance from block_center_x block_center_z to camera_x camera_z
-            if block_distance_squared < 1100000.0:
-                if ((block_x >= camera_block_x - near_render_radius) and (block_x <= camera_block_x + near_render_radius)) and ((block_z >= camera_block_z - near_render_radius) and (block_z <= camera_block_z + near_render_radius)):
-                    set detail_level to 0.0
-                    draw block at block_x block_z with detail detail_level and time city_time
+    set row to region's z - distant
+    while row <= region's z + distant:
+        set column to region's x - distant
+        while column <= region's x + distant:
+            set center to a position with x (column * 48.0 + 24.0), y 0.0 and z (row * 48.0 + 24.0)
+            set distance to the squared distance from center to view's position
+            if distance < 1100000.0:
+                if ((column >= region's x - nearby) and (column <= region's x + nearby)) and ((row >= region's z - nearby) and (row <= region's z + nearby)):
+                    set quality to 0.0
+                    draw a block at grid position column, row at time with detail level quality
                 else:
-                    draw distant block silhouette at block_x and block_z
-            add 1.0 to block_x
-        add 1.0 to block_z
+                    draw a distant block silhouette at grid position column, row
+            add 1.0 to column
+        add 1.0 to row
 
     display the frame of window
 

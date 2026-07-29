@@ -1,22 +1,22 @@
 import list.dl
 
-set numbers to an empty list of integer
+set numbers to an empty list of an integer
 append 10 to numbers
 append 30 to numbers
 insert 20 into numbers at index 1
-print the length of numbers as line
-print item 0 of numbers as line
-print item 1 of numbers as line
-print item 2 of numbers as line
-print numbers contains 20 as line
-print the index of 30 in numbers as line
+print the length of numbers as a line
+print the item at 0 in numbers as a line
+print the item at 1 in numbers as a line
+print the item at 2 in numbers as a line
+print whether (numbers contains 20) as a line
+print the index of 30 in numbers as a line
 replace item at index 1 in numbers with 25
-print item 1 of numbers as line
-print the last item of numbers as line
-print remove and return the last item from numbers as line
+print the item at 1 in numbers as a line
+print the last item of numbers as a line
+remove the last item from numbers and print it as a line
 remove item 1 from numbers
-print the length of numbers as line
-print item 0 of numbers as line
+print the length of numbers as a line
+print the item at 0 in numbers as a line
 clear numbers
-print numbers is empty as line
-free list numbers
+print whether numbers is empty as a line
+free numbers

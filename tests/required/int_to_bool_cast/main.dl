@@ -1,16 +1,19 @@
 import lib/std.dl
 
-function wasm output msg:
+function output message through WebAssembly:
     replacement:
-        @intrinsic("call", "env", "dynlex_print_i64", an integer, msg as a 64 bit integer)
+        ignore @intrinsic("call", "env", "dynlex_print_i64", an integer, message as a 64 bit integer)
 
-function native output msg:
+function output message natively:
     replacement:
-        @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", msg as a 64 bit integer)
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
 
-function output msg:
+function output message:
     execute:
-        discard (wasm output msg) if the build target is wasm, else (native output msg)
+        if the build target is WebAssembly:
+            output message through WebAssembly
+        else:
+            output message natively
 
 set one to 1 as a boolean
 set zero to 0 as a boolean

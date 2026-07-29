@@ -1,4 +1,4 @@
-rom size
+program size
 424
 first opcode
 0

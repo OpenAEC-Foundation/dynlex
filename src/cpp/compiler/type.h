@@ -123,12 +123,37 @@ struct DataType {
 	int vectorSize() const { return arraySize; }
 	int matrixColumns() const { return arraySize; }
 	int matrixRows() const { return matrixRowCount; }
+	std::optional<int> extent(int dimension) const {
+		DataType valueType = *this;
+		if (valueType.kind == Kind::Type)
+			valueType = valueType.toReferencedType();
+		if (valueType.pointerDepth != 0 || dimension < 0)
+			return std::nullopt;
+		if ((valueType.kind == Kind::Array || valueType.kind == Kind::Vector) && dimension == 0)
+			return valueType.arraySize;
+		if (valueType.kind == Kind::Matrix) {
+			if (dimension == 0)
+				return valueType.matrixRows();
+			if (dimension == 1)
+				return valueType.matrixColumns();
+		}
+		return std::nullopt;
+	}
 	DataType vectorElementType() const {
 		requireCompilerInvariant(hasVectorPayload() && arrayElementType, "Vector type must have element type");
 		return *arrayElementType;
 	}
 	DataType matrixElementType() const {
 		requireCompilerInvariant(hasMatrixPayload() && arrayElementType, "Matrix type must have element type");
+		return *arrayElementType;
+	}
+	bool hasAggregateElementType() const {
+		return pointerDepth == 0 &&
+			   (kind == Kind::Array || kind == Kind::Vector || kind == Kind::Matrix) &&
+			   static_cast<bool>(arrayElementType);
+	}
+	DataType aggregateElementType() const {
+		requireCompilerInvariant(hasAggregateElementType(), "Aggregate type must have an element type");
 		return *arrayElementType;
 	}
 	bool isPointer() const { return pointerDepth > 0; }
@@ -193,8 +218,13 @@ struct DataType {
 		if (concreteToType.kind == Kind::Vector && concreteToType.pointerDepth == 0 && concreteToType.arrayElementType &&
 			concreteFromType.isNumeric())
 			return supportsRuntimeConversion(concreteFromType, *concreteToType.arrayElementType);
-		if (concreteFromType.kind == Kind::Vector && concreteFromType.pointerDepth == 0 && concreteFromType.arrayElementType &&
-			concreteToType.kind == Kind::Vector && concreteToType.pointerDepth == 0 && concreteToType.arrayElementType &&
+		bool fromIsSequentialAggregate =
+			(concreteFromType.kind == Kind::Array || concreteFromType.kind == Kind::Vector) &&
+			concreteFromType.pointerDepth == 0 && concreteFromType.arrayElementType;
+		bool toIsSequentialAggregate =
+			(concreteToType.kind == Kind::Array || concreteToType.kind == Kind::Vector) &&
+			concreteToType.pointerDepth == 0 && concreteToType.arrayElementType;
+		if (fromIsSequentialAggregate && toIsSequentialAggregate &&
 			concreteFromType.arraySize == concreteToType.arraySize)
 			return supportsRuntimeConversion(*concreteFromType.arrayElementType, *concreteToType.arrayElementType);
 
@@ -325,6 +355,21 @@ struct DataType {
 			return false;
 		result = {Kind::Int, std::max(left.numericSize, right.numericSize)};
 		return true;
+	}
+
+	// Convert a Type literal to the type it references
+	DataType asTypeReference() const {
+		requireCompilerInvariant(isDeduced() && kind != Kind::Type, "Only value types can become type references");
+		DataType result{Kind::Type};
+		result.referencedKind = kind;
+		result.numericSize = numericSize;
+		result.pointerDepth = pointerDepth;
+		result.classDefinition = classDefinition;
+		result.classInstIndex = classInstIndex;
+		result.arraySize = arraySize;
+		result.matrixRowCount = matrixRowCount;
+		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
+		return result;
 	}
 
 	// Convert a Type literal to the type it references

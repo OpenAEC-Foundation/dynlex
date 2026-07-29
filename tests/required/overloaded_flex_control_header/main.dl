@@ -18,4 +18,4 @@ choose true:
 fallback:
     set result to 2
 
-print result as line
+print result as a line

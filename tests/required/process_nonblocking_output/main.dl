@@ -1,25 +1,29 @@
 import lib/process.dl
 
-function [the|] nonblocking process test interpreter:
+function {process wait result:status} has no completion report:
+    replacement:
+        the inverse of (status reports completion)
+
+function the nonblocking process test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
 set command to a process command for the nonblocking process test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add "import os\nchunk=b'X'*4096\nwhile True:\n os.write(1,chunk)\n os.write(2,chunk)" as an argument to command
-set child to launch command
+launch command and set child to it
 
-set output to read the standard output of child
-set error to read the standard error of child
-set status to poll child
-set cleanup_result to clean up child
+read the standard output of child and set output to it
+read the standard error of child and set error to it
+poll child and set status to it
+clean up child and set cleanup to it
 
-print child's launched as line
-print output's succeeded as line
-print (output's contents's length > 0) as line
-print error's succeeded as line
-print (error's contents's length > 0) as line
-print status's succeeded as line
-print (not status's finished) as line
-print cleanup_result's succeeded as line
+print whether child was launched as a line
+print whether output succeeded as a line
+print whether (output's contents's length > 0) as a line
+print whether error succeeded as a line
+print whether (error's contents's length > 0) as a line
+print whether status succeeded as a line
+print whether status has no completion report as a line
+print whether cleanup succeeded as a line

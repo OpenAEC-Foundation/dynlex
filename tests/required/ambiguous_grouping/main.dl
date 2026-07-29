@@ -1,7 +1,7 @@
 import lib/std.dl
 
-function combine {integer:left} and {integer:right}:
+function the combination of {integer:left} and {integer:right}:
     execute:
         return left - right
 
-print combine 1 + 2 and 3 + 4 as line
+print the combination of 1 + 2 and 3 + 4 as a line

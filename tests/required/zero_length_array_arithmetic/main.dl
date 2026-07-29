@@ -1,0 +1,16 @@
+import lib/std.dl
+
+set integers to @intrinsic("construct", an integer array of 0 items)
+set floats to @intrinsic("construct", a float array of 0 items)
+
+set added to integers + floats
+set subtracted to floats - integers
+set scaled to added * 2
+set divided to subtracted / 2
+
+set promoted to scaled as a float array of 0 items
+print the length of promoted
+print " "
+print the length of divided
+print " "
+print the length of integers as a line

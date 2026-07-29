@@ -2,54 +2,60 @@ import lib/std.dl
 
 # Fragment shader I/O
 
-function [the|] fragment coordinates:
+function the fragment coordinates:
     replacement:
         @intrinsic("shader input", "FragCoord")
 
-function [the|] fragment x coordinate:
+function the fragment x coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 0)
 
-function [the|] fragment y coordinate:
+function the fragment y coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
 
-function set [the|] fragment color to r g b a:
+function set the fragment color with red {any:red}, green {any:green}, blue {any:blue} and alpha {any:alpha}:
     replacement:
-        @intrinsic("shader output", r, g, b, a)
+        @intrinsic(
+            "shader output",
+            @intrinsic("construct", an aggregate of 4 float values, red, green, blue, alpha)
+        )
 
 # Vertex shader I/O
 
-function [the|] vertex position:
+function the vertex position:
     replacement:
         @intrinsic("shader input", "Position")
 
-function [the|] vertex x:
+function the vertex x:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 0)
 
-function [the|] vertex y:
+function the vertex y:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 1)
 
-function [the|] vertex z:
+function the vertex z:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 2)
 
-function [the|] vertex w:
+function the vertex w:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
-function set [the|] output position to x y z w:
+function set the output position with x {any:horizontal}, y {any:vertical}, z {any:depth} and w {any:magnitude}:
     replacement:
-        @intrinsic("shader output", x, y, z, w)
+        @intrinsic(
+            "shader output",
+            @intrinsic("construct", an aggregate of 4 float values, horizontal, vertical, depth, magnitude)
+        )
 
 # Shader uniforms (values passed from host each frame)
 
-function [the|] shader time:
+function the shader time:
     replacement:
         @intrinsic("shader uniform", "time")
 
-function [the|] shader render pass:
+function the shader render pass:
     replacement:
         @intrinsic("shader uniform", "render_pass")

@@ -1,5 +1,15 @@
 import lib/std.dl
 
+class:
+	patterns:
+		runner state
+	members:
+		y, velocity
+
+function a runner at height {float:y} moving with velocity {float:velocity}:
+	replacement:
+		@intrinsic("construct", runner state, y, velocity)
+
 function the window width:
 	execute:
 		return 1000
@@ -8,7 +18,7 @@ function the world height:
 	execute:
 		return 420
 
-function the ground y:
+function the ground height:
 	execute:
 		return 340
 
@@ -20,11 +30,11 @@ function the player size:
 	execute:
 		return 32
 
-function the player x:
+function the player horizontal position:
 	execute:
 		return 180
 
-function the reference x offset:
+function the reference horizontal offset:
 	execute:
 		return 84
 
@@ -44,22 +54,22 @@ function the jump speed:
 	execute:
 		return 15.5
 
-function the player ground y:
+function the player's ground height:
 	execute:
-		return (the ground y - the player size) as a float
+		return (the ground height - the player size) as a float
 
-function start a jump on velocity:
+function start a jump for {runner state:body}:
 	execute:
-		set velocity to the negative of the jump speed
+		set body's velocity to the negative of the jump speed
 
-function apply gravity to y and velocity:
+function apply gravity to {runner state:body}:
 	execute:
-		add the gravity strength to velocity
-		add velocity to y
+		add the gravity strength to body's velocity
+		add body's velocity to body's y
 
-function clamp y and velocity to the ground:
+function clamp {runner state:body} to the ground:
 	execute:
-		set ground_level to the player ground y
-		if y > ground_level:
-			set y to ground_level
-			set velocity to 0.0
+		set floor to the player's ground height
+		if body's y > floor:
+			set body's y to floor
+			set body's velocity to 0.0

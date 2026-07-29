@@ -1,19 +1,23 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 flex section if condition:
 	replacement:
 		@intrinsic("if", condition)
 
-function first value:
+function the first recursive result for value:
 	execute:
 		if @intrinsic("not equal", value, 0):
-			@intrinsic("store", recursive_result, second @intrinsic("subtract", value, 1))
-			@intrinsic("return", recursive_result)
+			@intrinsic("store", answer, the second recursive result for @intrinsic("subtract", value, 1))
+			@intrinsic("return", answer)
 		@intrinsic("return", @intrinsic("equal", value, 0))
 
-function second value:
+function the second recursive result for value:
 	execute:
 		if @intrinsic("not equal", value, 0):
-			@intrinsic("store", recursive_result, first @intrinsic("subtract", value, 1))
-			@intrinsic("return", recursive_result)
+			@intrinsic("store", answer, the first recursive result for @intrinsic("subtract", value, 1))
+			@intrinsic("return", answer)
 		@intrinsic("return", @intrinsic("equal", value, 0))
 
-@intrinsic("discard", first 2)
+ignore the first recursive result for 2

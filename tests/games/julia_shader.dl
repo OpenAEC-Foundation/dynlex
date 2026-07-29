@@ -1,38 +1,34 @@
-import lib/shader.dl
+import tests/games/shader_values.dl
 
 # Julia set fragment shader — animated beautiful fractal
 # DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
-set px to the fragment x coordinate
-set py to the fragment y coordinate
-set t to the shader time
+set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set time to the shader time
 
 # Map pixel to complex plane [-2, 2] x [-1.5, 1.5]
-set zx to px / 200.0 - 2.0
-set zy to py / 200.0 - 1.5
+set orbit to a complex number with real (pixel's x / 200.0 - 2.0) and imaginary (pixel's y / 200.0 - 1.5)
 
 # Animate Julia constant — orbits around interesting values
-set cx to 0.0 - 0.8 + 0.2 * the sine of (t * 0.7)
-set cy to 0.156 + 0.15 * the cosine of (t * 0.5)
+set constant to a complex number with real (0.0 - 0.8 + 0.2 * the sine of (time * 0.7)) and imaginary (0.156 + 0.15 * the cosine of (time * 0.5))
 
 set iteration to 0
-set max_iterations to 200
+set limit to 200
+set magnitude to (orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part)
 
-while iteration < max_iterations and zx * zx + zy * zy < 4.0:
-    set zx2 to zx * zx
-    set zy2 to zy * zy
-    set tmp to zx2 - zy2 + cx
-    set zy to 2.0 * zx * zy + cy
-    set zx to tmp
+while iteration < limit and magnitude < 4.0:
+    set square to a complex number with real (orbit's real part * orbit's real part) and imaginary (orbit's imaginary part * orbit's imaginary part)
+    set next to (square's real part - square's imaginary part) + constant's real part
+    set the imaginary part of orbit to ((2.0 * orbit's real part) * orbit's imaginary part) + constant's imaginary part
+    set the real part of orbit to next
     set iteration to iteration + 1
+    set magnitude to (orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part)
 
-if iteration = max_iterations:
-    set the fragment color to 0.0 0.0 0.0 1.0
+if iteration = limit:
+    set the fragment color with red 0.0, green 0.0, blue 0.0 and alpha 1.0
 else:
     # Smooth coloring using sqrt for gradient
-    set tf to iteration as a float / max_iterations as a float
-    set st to the square root of tf
-    set r to st
-    set g to tf * tf
-    set b to the sine of (tf * 6.283) * 0.5 + 0.5
-    set the fragment color to r g b 1.0
+    set progress to (iteration as a float) / (limit as a float)
+    set shade to the square root of progress
+    set color to a light color with red shade, green (progress * progress), blue (the sine of (progress * 6.283) * 0.5 + 0.5) and alpha 1.0
+    set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha

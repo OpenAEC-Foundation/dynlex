@@ -416,11 +416,15 @@ if (kind == IntrinsicKind::Function) {
 	PatternDefinition *definition = callExpr->selectedCallableDefinition;
 	requireCompilerInvariant(definition, "function intrinsic reached codegen without its inferred callable definition");
 	requireCompilerInvariant(
-		callExpr->selectedInstantiation == definition->callableInstantiation,
-		"function intrinsic callable selection diverged after inference"
+		callExpr->selectedCallablePathIndex.has_value(),
+		"function intrinsic reached codegen without its inferred callable path"
 	);
+	requireCompilerInvariant(callExpr->selectedInstantiation, "function intrinsic reached codegen without its instantiation");
 	llvm::Function *callableFunction = nullptr;
-	if (!ensureCallableFunctionGenerated(context, definition, definition->section->isExposed, callableFunction))
+	if (!ensureCallableFunctionGenerated(
+			context, {definition, *callExpr->selectedCallablePathIndex}, *callExpr->selectedInstantiation,
+			definition->section->isExposed, callableFunction
+		))
 		return CodegenResult::failure();
 	if (callableFunction->getType() == builder.getPtrTy())
 		return callableFunction;
@@ -457,7 +461,8 @@ if (kind == IntrinsicKind::SizeOf) {
 	return builder.getInt64(valueType.getByteSize(context.llvmModule->getDataLayout(), *context.llvmContext));
 }
 
-if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
+if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs ||
+	kind == IntrinsicKind::TypeExtent) {
 	CompileTimeValue value = resolveStoredCompileTimeValue(callExpr, context.flexBindingFrames);
 	if (auto *number = std::get_if<double>(&value)) {
 		llvm::Type *llvmType = getLLVMType(context, resultType);
@@ -697,31 +702,14 @@ if (kind == IntrinsicKind::ShaderUniform) {
 }
 
 if (kind == IntrinsicKind::ShaderOutput) {
-	// @intrinsic("shader output", r, g, b, a) → store vec4 to shader output global
-	llvm::Value *r = nullptr;
-	llvm::Value *g = nullptr;
-	llvm::Value *b = nullptr;
-	llvm::Value *a = nullptr;
-	if (!generateRuntimeValue(args[1], r) || !generateRuntimeValue(args[2], g) || !generateRuntimeValue(args[3], b) ||
-		!generateRuntimeValue(args[4], a))
+	// @intrinsic("shader output", value) → store a four-element aggregate in the shader output global
+	llvm::Value *color = nullptr;
+	if (!generateRuntimeValue(args[1], color))
 		return CodegenResult::failure();
-
-	DataType rType = finalizedExpressionType(context, args[1]);
-	DataType gType = finalizedExpressionType(context, args[2]);
-	DataType bType = finalizedExpressionType(context, args[3]);
-	DataType aType = finalizedExpressionType(context, args[4]);
-	DataType f32 = {DataType::Kind::Float, 4};
-	r = ensureType(context, r, rType, f32);
-	g = ensureType(context, g, gType, f32);
-	b = ensureType(context, b, bType, f32);
-	a = ensureType(context, a, aType, f32);
-
-	llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
-	llvm::Value *color = llvm::Constant::getNullValue(vec4Ty);
-	color = builder.CreateInsertElement(color, a, getVectorLaneIndexValue(context, 3), "color_a");
-	color = builder.CreateInsertElement(color, b, getVectorLaneIndexValue(context, 2), "color_b");
-	color = builder.CreateInsertElement(color, g, getVectorLaneIndexValue(context, 1), "color_g");
-	color = builder.CreateInsertElement(color, r, getVectorLaneIndexValue(context, 0), "color_r");
+	DataType shaderVector{DataType::Kind::Vector};
+	shaderVector.arraySize = 4;
+	shaderVector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+	color = ensureType(context, color, finalizedExpressionType(context, args[1]), shaderVector);
 
 	// Find the output global: gl_FragColor (fragment) or gl_Position (vertex)
 	std::string outName = (context.options.shaderStage == ParseContext::ShaderStage::Vertex) ? "gl_Position" : "gl_FragColor";
@@ -733,18 +721,78 @@ if (kind == IntrinsicKind::ShaderOutput) {
 }
 
 if (kind == IntrinsicKind::ExtractElement) {
-	// @intrinsic("extract element", vector, index) → extract scalar from vector
-	llvm::Value *vec = nullptr;
-	if (!generateRuntimeValue(args[1], vec))
+	llvm::Value *aggregate = nullptr;
+	if (!generateRuntimeValue(args[1], aggregate))
 		return CodegenResult::failure();
-	if (auto *idxLit = std::get_if<double>(&args[2]->literalValue)) {
-		return builder.CreateExtractElement(vec, getVectorLaneIndexValue(context, static_cast<unsigned>(*idxLit)), "elem");
+	DataType aggregateType = finalizedExpressionType(context, args[1]);
+	int constantIndex = 0;
+	if (resolveStoredCompileTimeInteger(args[2], context.flexBindingFrames, constantIndex)) {
+		requireCompilerInvariant(
+			constantIndex >= 0 && constantIndex < aggregateType.arraySize,
+			"validated aggregate index is outside its fixed extent"
+		);
+		if (aggregateType.kind == DataType::Kind::Array)
+			return builder.CreateExtractValue(aggregate, static_cast<unsigned>(constantIndex), "elem");
+		return builder.CreateExtractElement(
+			aggregate, getVectorLaneIndexValue(context, static_cast<unsigned>(constantIndex)), "elem"
+		);
 	}
 	llvm::Value *idx = nullptr;
 	if (!generateRuntimeValue(args[2], idx))
 		return CodegenResult::failure();
 	idx = ensureType(context, idx, finalizedExpressionType(context, args[2]), {DataType::Kind::Int, 4});
-	return builder.CreateExtractElement(vec, idx, "elem");
+	if (aggregateType.kind == DataType::Kind::Vector)
+		return builder.CreateExtractElement(aggregate, idx, "elem");
+	requireCompilerInvariant(
+		aggregateType.kind == DataType::Kind::Array && aggregateType.arrayElementType,
+		"validated element extraction reached codegen with a non-aggregate type"
+	);
+	llvm::AllocaInst *storage = createEntryAlloca(context, "aggregate_extract", aggregateType);
+	builder.CreateStore(aggregate, storage);
+	llvm::Value *address = builder.CreateInBoundsGEP(
+		getLLVMType(context, aggregateType), storage, {builder.getInt32(0), idx}, "element_address"
+	);
+	return builder.CreateAlignedLoad(
+		getLLVMType(context, *aggregateType.arrayElementType), address,
+		getLLVMABIAlignment(context, *aggregateType.arrayElementType), "elem"
+	);
+}
+
+if (kind == IntrinsicKind::InsertElement) {
+	llvm::Value *aggregate = nullptr;
+	llvm::Value *element = nullptr;
+	if (!generateRuntimeValue(args[1], aggregate) || !generateRuntimeValue(args[3], element))
+		return CodegenResult::failure();
+	DataType aggregateType = finalizedExpressionType(context, args[1]);
+	DataType elementType = *aggregateType.arrayElementType;
+	element = ensureType(context, element, finalizedExpressionType(context, args[3]), elementType);
+	int constantIndex = 0;
+	if (resolveStoredCompileTimeInteger(args[2], context.flexBindingFrames, constantIndex)) {
+		requireCompilerInvariant(
+			constantIndex >= 0 && constantIndex < aggregateType.arraySize,
+			"validated aggregate index is outside its fixed extent"
+		);
+		if (aggregateType.kind == DataType::Kind::Array)
+			return builder.CreateInsertValue(aggregate, element, static_cast<unsigned>(constantIndex), "aggregate_insert");
+		return builder.CreateInsertElement(
+			aggregate, element, getVectorLaneIndexValue(context, static_cast<unsigned>(constantIndex)), "vector_insert"
+		);
+	}
+	llvm::Value *index = nullptr;
+	if (!generateRuntimeValue(args[2], index))
+		return CodegenResult::failure();
+	index = ensureType(context, index, finalizedExpressionType(context, args[2]), {DataType::Kind::Int, 4});
+	if (aggregateType.kind == DataType::Kind::Vector)
+		return builder.CreateInsertElement(aggregate, element, index, "vector_insert");
+	llvm::AllocaInst *storage = createEntryAlloca(context, "aggregate_insert", aggregateType);
+	builder.CreateStore(aggregate, storage);
+	llvm::Value *address = builder.CreateInBoundsGEP(
+		getLLVMType(context, aggregateType), storage, {builder.getInt32(0), index}, "element_address"
+	);
+	builder.CreateAlignedStore(element, address, getLLVMABIAlignment(context, elementType));
+	return builder.CreateAlignedLoad(
+		getLLVMType(context, aggregateType), storage, getLLVMABIAlignment(context, aggregateType), "aggregate_inserted"
+	);
 }
 
 std::string uri =

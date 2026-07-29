@@ -6,18 +6,18 @@ local class:
     patterns:
         [a|] process text
     members:
-        data as pointer to byte
-        length as word sized integer
-        storage as string
+        data as a pointer to a byte
+        length as a word sized integer
+        storage as a string
 
-local function a process text for {cstring:value}:
+local function a process text for {C string:value}:
     execute:
         set storage to @intrinsic(
             "construct",
             a string,
-            @intrinsic("cast", 0, a pointer to byte),
+            0 as a pointer to a byte,
             0,
-            @intrinsic("cast", 0, a pointer to integer)
+            0 as a pointer to an integer
         )
         set length to the length of value
         return @intrinsic("construct", a process text, value, length as a word sized integer, storage)
@@ -36,29 +36,29 @@ local function an empty process error:
     execute:
         return the string form of ""
 
-local function [the|] current process error:
+local function the current process error:
     execute:
-        set message_length to @intrinsic(
+        set size to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_error_message",
             a word sized integer,
-            @intrinsic("cast", 0, a pointer to byte),
-            @intrinsic("cast", 0, a word sized integer)
+            0 as a pointer to a byte,
+            0 as a word sized integer
         )
-        set error_text to a new string buffer with length message_length as an integer
-        if message_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set message to a new string buffer containing (size as an integer) bytes
+        if size > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_process_error_message",
                 a word sized integer,
-                the data of error_text,
-                message_length + 1
+                the data of message,
+                size + 1
             )
-        return error_text
+        return message
 
-function [the|] process platform is windows:
+function the process platform is Windows:
     execute:
         return @intrinsic(
             "call",
@@ -71,77 +71,91 @@ class:
     patterns:
         [a|] process command
     members:
-        handle as pointer
+        handle as a pointer
     retain:
         set handle to the handle of @intrinsic("lifecycle value")
-        if handle != (0 as a pointer to byte):
-            @intrinsic("call", "dynlex_runtime", "dynlex_process_command_retain", void, handle)
+        if handle != (0 as a pointer to a byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_process_command_retain", nothing, handle)
     release:
         set handle to the handle of @intrinsic("lifecycle value")
-        if handle != (0 as a pointer to byte):
-            @intrinsic("call", "dynlex_runtime", "dynlex_process_command_release", void, handle)
+        if handle != (0 as a pointer to a byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_process_command_release", nothing, handle)
 
 class:
     patterns:
         [a|] process
     members:
-        handle as pointer
+        handle as a pointer
     retain:
         set handle to the handle of @intrinsic("lifecycle value")
-        if handle != (0 as a pointer to byte):
-            @intrinsic("call", "dynlex_runtime", "dynlex_process_retain", void, handle)
+        if handle != (0 as a pointer to a byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_process_retain", nothing, handle)
     release:
         set handle to the handle of @intrinsic("lifecycle value")
-        if handle != (0 as a pointer to byte):
-            @intrinsic("call", "dynlex_runtime", "dynlex_process_release", void, handle)
+        if handle != (0 as a pointer to a byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_process_release", nothing, handle)
 
 class:
     patterns:
         [a|] process action
     members:
-        succeeded as boolean
-        error_message as string
+        success as a boolean
+        error message as a string
 
 class:
     patterns:
         [a|] process write result
     members:
-        succeeded as boolean
-        byte_count as word sized integer
-        error_message as string
+        success as a boolean
+        byte count as a word sized integer
+        error message as a string
 
 class:
     patterns:
         [a|] process read result
     members:
-        succeeded as boolean
-        contents as string
-        end_of_stream as boolean
-        error_message as string
+        success as a boolean
+        contents as a string
+        end of stream as a boolean
+        error message as a string
 
 class:
     patterns:
         [a|] process wait result
     members:
-        succeeded as boolean
-        finished as boolean
-        exit_code as i64
-        terminated as boolean
-        termination_signal as i32
-        error_message as string
+        success as a boolean
+        completion as a boolean
+        exit code as a word sized integer
+        termination as a boolean
+        termination signal as an integer
+        error message as a string
 
 class:
     patterns:
         [a|] process result
     members:
-        launched as boolean
-        succeeded as boolean
-        standard_output as string
-        standard_error as string
-        exit_code as i64
-        terminated as boolean
-        termination_signal as i32
-        error_message as string
+        launch as a boolean
+        success as a boolean
+        standard output as a string
+        standard error as a string
+        exit code as a word sized integer
+        termination as a boolean
+        termination signal as an integer
+        error message as a string
+
+local class:
+    patterns:
+        [a|] process wait strategy
+    members:
+        blocking as a boolean
+
+local function a blocking process wait strategy:
+    replacement:
+        @intrinsic("construct", a process wait strategy, true)
+
+local function a nonblocking process wait strategy:
+    replacement:
+        @intrinsic("construct", a process wait strategy, false)
 
 local function a successful process action:
     replacement:
@@ -185,6 +199,70 @@ local function a failed process wait result:
             the current process error
         )
 
+function {process action:result} succeeded:
+    replacement:
+        result's success
+
+function {process action:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process write result:result} succeeded:
+    replacement:
+        result's success
+
+function {process write result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process read result:result} succeeded:
+    replacement:
+        result's success
+
+function {process read result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process read result:result} reached the end of stream:
+    replacement:
+        result's end of stream
+
+function {process read result:result} has not reached the end of stream:
+    replacement:
+        the inverse of result's end of stream
+
+function {process wait result:result} succeeded:
+    replacement:
+        result's success
+
+function {process wait result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process result:result} succeeded:
+    replacement:
+        result's success
+
+function {process result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {process wait result:result} reports completion:
+    replacement:
+        result's completion
+
+function {process wait result:result} reports termination:
+    replacement:
+        result's termination
+
+function {process result:result} was launched:
+    replacement:
+        result's launch
+
+function {process result:result} reports termination:
+    replacement:
+        result's termination
+
 function a process command for executable:
     execute:
         set prepared to a process text for executable
@@ -192,16 +270,16 @@ function a process command for executable:
             "call",
             "dynlex_runtime",
             "dynlex_process_command_create",
-            a pointer to byte,
+            a pointer to a byte,
             prepared's data,
             prepared's length
         )
         return @intrinsic("construct", a process command, handle)
 
-function add argument as an argument to {process command:command}:
+function add value as an argument to {process command:command}:
     execute:
-        set prepared to a process text for argument
-        discard @intrinsic(
+        set prepared to a process text for value
+        ignore @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_add_argument",
@@ -211,10 +289,10 @@ function add argument as an argument to {process command:command}:
             prepared's length
         )
 
-function use directory as [the|] working directory of {process command:command}:
+function use path as the working directory of {process command:command}:
     execute:
-        set prepared to a process text for directory
-        discard @intrinsic(
+        set prepared to a process text for path
+        ignore @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_set_working_directory",
@@ -224,69 +302,73 @@ function use directory as [the|] working directory of {process command:command}:
             prepared's length
         )
 
-function inherit [the|] environment in {process command:command}:
+function inherit the environment in {process command:command}:
     execute:
         @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_inherit_environment",
-            void,
+            nothing,
             command's handle,
             1
         )
 
-function do not inherit [the|] environment in {process command:command}:
+function do not inherit the environment in {process command:command}:
     execute:
         @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_inherit_environment",
-            void,
+            nothing,
             command's handle,
             0
         )
 
 function set environment variable name of {process command:command} to value:
     execute:
-        set prepared_name to a process text for name
-        set prepared_value to a process text for value
-        discard @intrinsic(
+        set key to a process text for name
+        set setting to a process text for value
+        ignore @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_set_environment",
             an integer,
             command's handle,
-            prepared_name's data,
-            prepared_name's length,
-            prepared_value's data,
-            prepared_value's length
+            key's data,
+            key's length,
+            setting's data,
+            setting's length
         )
 
 function unset environment variable name of {process command:command}:
     execute:
-        set prepared_name to a process text for name
-        discard @intrinsic(
+        set key to a process text for name
+        ignore @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_command_unset_environment",
             an integer,
             command's handle,
-            prepared_name's data,
-            prepared_name's length
+            key's data,
+            key's length
         )
 
-function launch {process command:command}:
+local function the process launched from {process command:command}:
     execute:
         set handle to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_launch",
-            a pointer to byte,
+            a pointer to a byte,
             command's handle
         )
         return @intrinsic("construct", a process, handle)
 
-function {process:child} launched:
+flex function launch {process command:command}:
+    replacement:
+        set the subject to the process launched from command
+
+function {process:child} was launched:
     execute:
         return @intrinsic(
             "call",
@@ -296,91 +378,45 @@ function {process:child} launched:
             child's handle
         ) != 0
 
-function {process:child}'s launched:
+function {process:child} failed to launch:
     execute:
-        return child launched
+        return @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_process_was_launched",
+            an integer,
+            child's handle
+        ) = 0
 
-function [the|] starting error of {process:child}:
+function the starting error of {process:child}:
     execute:
-        set message_length to @intrinsic(
+        set size to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_launch_error",
             a word sized integer,
             child's handle,
-            @intrinsic("cast", 0, a pointer to byte),
-            @intrinsic("cast", 0, a word sized integer)
+            0 as a pointer to a byte,
+            0 as a word sized integer
         )
-        set error_text to a new string buffer with length message_length as an integer
-        if message_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set message to a new string buffer containing (size as an integer) bytes
+        if size > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_process_launch_error",
                 a word sized integer,
                 child's handle,
-                the data of error_text,
-                message_length + 1
+                the data of message,
+                size + 1
             )
-        return error_text
+        return message
 
-function {process action:action}'s error message:
+local function the result of writing {string:input} to {process:child}:
     execute:
-        return action's error_message
-
-function {process write result:result}'s byte count:
-    execute:
-        return result's byte_count
-
-function {process write result:result}'s error message:
-    execute:
-        return result's error_message
-
-function {process read result:result}'s end of stream:
-    execute:
-        return result's end_of_stream
-
-function {process read result:result}'s error message:
-    execute:
-        return result's error_message
-
-function {process wait result:result}'s exit code:
-    execute:
-        return result's exit_code
-
-function {process wait result:result}'s termination signal:
-    execute:
-        return result's termination_signal
-
-function {process wait result:result}'s error message:
-    execute:
-        return result's error_message
-
-function {process result:result}'s standard output:
-    execute:
-        return result's standard_output
-
-function {process result:result}'s standard error:
-    execute:
-        return result's standard_error
-
-function {process result:result}'s exit code:
-    execute:
-        return result's exit_code
-
-function {process result:result}'s termination signal:
-    execute:
-        return result's termination_signal
-
-function {process result:result}'s error message:
-    execute:
-        return result's error_message
-
-function write {string:input} to {process:child}:
-    execute:
-        if not child launched:
-            return (a failed process write after writing @intrinsic("cast", 0, a word sized integer))
-        set written to @intrinsic("cast", 0, a word sized integer)
+        if child failed to launch:
+            return (a failed process write after writing 0 as a word sized integer)
+        set written to 0 as a word sized integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -395,13 +431,17 @@ function write {string:input} to {process:child}:
             return (a failed process write after writing written)
         return @intrinsic("construct", a process write result, true, written, an empty process error)
 
-function write {cstring:input} to {process:child}:
+local function the result of writing {C string:input} to {process:child}:
     execute:
-        return write the string form of input to child
+        return the result of writing the string form of input to child
 
-function close [the|] standard input of {process:child}:
+flex function write input to the standard input of {process:child}:
+    replacement:
+        set the subject to the result of writing input to child
+
+local function the result of closing the standard input of {process:child}:
     execute:
-        if not child launched:
+        if child failed to launch:
             return a failed process action
         set outcome to @intrinsic(
             "call",
@@ -414,67 +454,71 @@ function close [the|] standard input of {process:child}:
             return a failed process action
         return a successful process action
 
-local function read {integer:stream_number} from {process:child} waiting {boolean:should_wait}:
+flex function close the standard input of {process:child}:
+    replacement:
+        set the subject to the result of closing the standard input of child
+
+local function the result of reading {integer:stream} from {process:child} using {process wait strategy:strategy}:
     execute:
-        if not child launched:
+        if child failed to launch:
             return a failed process read result
         set capacity to 4096
-        set buffer to a new string buffer with length capacity
-        set read_count to @intrinsic("cast", 0, a word sized integer)
-        set end_of_stream to 0
+        set buffer to a new string buffer containing capacity bytes
+        set count to 0 as a word sized integer
+        set ended to 0
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_read",
             an integer,
             child's handle,
-            stream_number,
-            should_wait as an integer,
+            stream,
+            strategy's blocking as an integer,
             the data of buffer,
             capacity as a word sized integer,
-            the address of read_count,
-            the address of end_of_stream
+            the address of count,
+            the address of ended
         )
         if outcome != 0:
             return a failed process read result
         set contents to buffer
-        if read_count < capacity as a word sized integer:
-            set contents to the substring of buffer from 0 with length read_count as an integer
+        if count < capacity as a word sized integer:
+            set contents to the substring of buffer from 0 spanning (count as an integer) bytes
         return @intrinsic(
             "construct",
             a process read result,
             true,
             contents,
-            end_of_stream != 0,
+            ended != 0,
             an empty process error
         )
 
-function read [the|] standard output of {process:child}:
-    execute:
-        return read 1 from child waiting true
+flex function read the standard output of {process:child}:
+    replacement:
+        set the subject to the result of reading 1 from child using a blocking process wait strategy
 
-function read [the|] standard error of {process:child}:
-    execute:
-        return read 2 from child waiting true
+flex function read the standard error of {process:child}:
+    replacement:
+        set the subject to the result of reading 2 from child using a blocking process wait strategy
 
-function read available [the|] standard output of {process:child}:
-    execute:
-        return read 1 from child waiting false
+flex function read the available standard output of {process:child}:
+    replacement:
+        set the subject to the result of reading 1 from child using a nonblocking process wait strategy
 
-function read available [the|] standard error of {process:child}:
-    execute:
-        return read 2 from child waiting false
+flex function read the available standard error of {process:child}:
+    replacement:
+        set the subject to the result of reading 2 from child using a nonblocking process wait strategy
 
-local function status of {process:child} waiting {boolean:should_wait}:
+local function the status of {process:child} using {process wait strategy:strategy}:
     execute:
-        if not child launched:
+        if child failed to launch:
             return a failed process wait result
         set finished to 0
-        set exit_code to 0 as a 64 bit integer
+        set code to 0 as a word sized integer
         set terminated to 0
-        set termination_signal to 0 as a 32 bit integer
+        set signal to 0 as an integer
         set outcome to 0
-        if should_wait:
+        if strategy's blocking:
             set outcome to @intrinsic(
                 "call",
                 "dynlex_runtime",
@@ -482,9 +526,9 @@ local function status of {process:child} waiting {boolean:should_wait}:
                 an integer,
                 child's handle,
                 the address of finished,
-                the address of exit_code,
+                the address of code,
                 the address of terminated,
-                the address of termination_signal
+                the address of signal
             )
         else:
             set outcome to @intrinsic(
@@ -494,9 +538,9 @@ local function status of {process:child} waiting {boolean:should_wait}:
                 an integer,
                 child's handle,
                 the address of finished,
-                the address of exit_code,
+                the address of code,
                 the address of terminated,
-                the address of termination_signal
+                the address of signal
             )
         if outcome != 0:
             return a failed process wait result
@@ -505,23 +549,23 @@ local function status of {process:child} waiting {boolean:should_wait}:
             a process wait result,
             true,
             finished != 0,
-            exit_code,
+            code,
             terminated != 0,
-            termination_signal,
+            signal,
             an empty process error
         )
 
-function poll {process:child}:
-    execute:
-        return status of child waiting false
+flex function poll {process:child}:
+    replacement:
+        set the subject to the status of child using a nonblocking process wait strategy
 
-function wait for {process:child}:
-    execute:
-        return status of child waiting true
+flex function wait for {process:child}:
+    replacement:
+        set the subject to the status of child using a blocking process wait strategy
 
-function terminate {process:child}:
+local function the result of terminating {process:child}:
     execute:
-        if not child launched:
+        if child failed to launch:
             return a failed process action
         set outcome to @intrinsic(
             "call",
@@ -534,9 +578,13 @@ function terminate {process:child}:
             return a failed process action
         return a successful process action
 
-function clean up {process:child}:
+flex function terminate {process:child}:
+    replacement:
+        set the subject to the result of terminating child
+
+local function the result of cleaning up {process:child}:
     execute:
-        if not child launched:
+        if child failed to launch:
             return a failed process action
         set outcome to @intrinsic(
             "call",
@@ -549,36 +597,40 @@ function clean up {process:child}:
             return a failed process action
         return a successful process action
 
-local function remaining output {integer:stream_number} of {process:child}:
+flex function clean up {process:child}:
+    replacement:
+        set the subject to the result of cleaning up child
+
+local function the remaining output from stream {integer:stream} of {process:child}:
     execute:
-        set output_length to @intrinsic(
+        set size to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_output_size",
             a word sized integer,
             child's handle,
-            stream_number
+            stream
         )
-        set captured_text to a new string buffer with length output_length as an integer
-        if output_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set text to a new string buffer containing (size as an integer) bytes
+        if size > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_process_copy_output",
                 a word sized integer,
                 child's handle,
-                stream_number,
-                the data of captured_text,
-                output_length
+                stream,
+                the data of text,
+                size
             )
-        return captured_text
+        return text
 
-local function a failed process result with launch state {boolean:launch_state}:
+local function a failed process result that was not launched:
     replacement:
         @intrinsic(
             "construct",
             a process result,
-            launch_state,
+            false,
             false,
             the string form of "",
             the string form of "",
@@ -588,45 +640,53 @@ local function a failed process result with launch state {boolean:launch_state}:
             the current process error
         )
 
-function run {process command:command} using {string:standard_input}:
+local function the result of running {process command:command} using {string:input}:
     execute:
-        set child to launch command
-        if not child launched:
-            return a failed process result with launch state false
-        set communication_outcome to @intrinsic(
+        launch command and set child to it
+        if child failed to launch:
+            return a failed process result that was not launched
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_process_communicate",
             an integer,
             child's handle,
-            the data of standard_input,
-            standard_input's length as a word sized integer
+            the data of input,
+            input's length as a word sized integer
         )
-        set operation_error to an empty process error
-        if communication_outcome != 0:
-            set operation_error to the current process error
-        set status to status of child waiting true
-        if (communication_outcome = 0) and (not status's succeeded):
-            set operation_error to status's error message
-        set standard_output to remaining output 1 of child
-        set standard_error to remaining output 2 of child
+        set failure to an empty process error
+        if outcome != 0:
+            set failure to the current process error
+        set status to the status of child using a blocking process wait strategy
+        if (outcome = 0) and status failed:
+            set failure to status's error message
+        set output to the remaining output from stream 1 of child
+        set errors to the remaining output from stream 2 of child
         return @intrinsic(
             "construct",
             a process result,
             true,
-            (communication_outcome = 0) and status's succeeded,
-            standard_output,
-            standard_error,
-            status's exit_code,
-            status's terminated,
-            status's termination_signal,
-            operation_error
+            (outcome = 0) and status succeeded,
+            output,
+            errors,
+            status's exit code,
+            status's termination,
+            status's termination signal,
+            failure
         )
 
-function run {process command:command} using {cstring:standard_input}:
+local function the result of running {process command:command} using {C string:input}:
     execute:
-        return run command using (the string form of standard_input)
+        return the result of running command using (the string form of input)
 
-function run {process command:command}:
+local function the result of running {process command:command}:
     execute:
-        return run command using (the string form of "")
+        return the result of running command using (the string form of "")
+
+flex function run {process command:command} using input:
+    replacement:
+        set the subject to the result of running command using input
+
+flex function run {process command:command}:
+    replacement:
+        set the subject to the result of running command

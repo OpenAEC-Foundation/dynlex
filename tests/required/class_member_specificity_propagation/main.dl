@@ -1,0 +1,40 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function nothing:
+    replacement:
+        @intrinsic("type", "void")
+
+function the type for item and quantity:
+    replacement:
+        ignore item
+        ignore quantity
+        an integer
+
+class:
+    patterns:
+        [a|] packet
+    members:
+        payload as the type for lights and an integer
+
+function the type for lights and quantity:
+    replacement:
+        ignore the type for placeholder and quantity
+        a byte
+
+@intrinsic(
+    "call",
+    "libc",
+    "exit",
+    nothing,
+    @intrinsic("subtract", @intrinsic("size of", a packet), 1)
+)

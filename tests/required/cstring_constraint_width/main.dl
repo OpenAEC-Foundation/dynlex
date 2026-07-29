@@ -1,19 +1,19 @@
 import lib/std.dl
 
-function selected overload for {cstring:value}:
+function the selected overload for {C string:value}:
     execute:
         return 1
 
-function selected overload for {any:value}:
+function the selected overload for {any:value}:
     execute:
         return 2
 
-set integer_pointer to 0 as a pointer to integer
-set other_integer_pointer to 0 as a pointer to integer
-set cstring_selection to selected overload for "text"
-set integer_pointer_selection to selected overload for integer_pointer
-set pointers_are_equal to integer_pointer = other_integer_pointer
+set first to 0 as a pointer to an integer
+set second to 0 as a pointer to an integer
+set textual to the selected overload for "text"
+set numeric to the selected overload for first
+set equality to first = second
 
-print cstring_selection as line
-print integer_pointer_selection as line
-print pointers_are_equal as line
+print textual as a line
+print numeric as a line
+print equality as a line

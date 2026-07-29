@@ -36,7 +36,13 @@ def main() -> int:
                 source_path = temporary_path / f"{target_name}-{intrinsic_name.rsplit(' ', 1)[-1]}.dl"
                 output_path = temporary_path / f"{target_name}-{intrinsic_name.rsplit(' ', 1)[-1]}.out"
                 source_path.write_text(
-                    f'@intrinsic("discard", @intrinsic("{intrinsic_name}"))\n',
+                    "function ignore value:\n"
+                    "    replacement:\n"
+                    "        @intrinsic(\"discard\", value)\n\n"
+                    "function the unavailable command line value:\n"
+                    "    replacement:\n"
+                    f"        @intrinsic(\"{intrinsic_name}\")\n\n"
+                    "ignore the unavailable command line value\n",
                     encoding="utf-8",
                 )
                 result = subprocess.run(

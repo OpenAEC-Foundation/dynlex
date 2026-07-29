@@ -583,89 +583,7 @@ bool isInternalSourcePath(std::string_view path) {
 		   normalized.starts_with("/usr/share/dynlex/lib/") || normalized.starts_with(projectLibPrefix);
 }
 
-std::vector<PatternDefinition *> findDefinitionsBySignature(
-	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
-) {
-	std::string converted(signature);
-	for (char &c : converted) {
-		if (c == '$')
-			c = argumentChar;
-	}
-
-	auto elements = getPatternElements(converted);
-	PatternTreeNode *node = context.patternTrees[(int)sectionType];
-	for (const auto &elem : elements) {
-		if (!node)
-			return {};
-		if (elem.type == PatternElement::Type::Variable) {
-			node = node->argumentChild;
-		} else {
-			auto it = node->literalChildren.find(elem.text);
-			node = (it != node->literalChildren.end()) ? it->second : nullptr;
-		}
-	}
-
-	std::vector<PatternDefinition *> matches;
-	if (!node)
-		return matches;
-	requireCompilerInvariant(sourceFile != nullptr, "signature lookup requires a source file");
-	for (PatternDefinition *definition : node->matchingDefinitions) {
-		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
-		if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
-			matches.push_back(definition);
-	}
-	return matches;
-}
-
-std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(
-	ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile
-) {
-	std::vector<PatternDefinition *> matches =
-		findDefinitionsBySignature(context, SectionType::Function, signature, sourceFile);
-	std::vector<PatternDefinition *> callableMatches;
-	for (PatternDefinition *definition : matches) {
-		if (definition && definition->section && definition->section->type == SectionType::Function &&
-			!definition->section->isFlex) {
-			callableMatches.push_back(definition);
-		}
-	}
-	return callableMatches;
-}
-
-static DataType concretizeCallableParameterType(const DefinitionPatternElement &element) {
-	DataType type = element.resolvedParameterType;
-	if (type.kind == DataType::Kind::Class && type.classDefinition && type.classInstIndex == -1 &&
-		!type.classDefinition->instantiations.empty()) {
-		type.classInstIndex = 0;
-	}
-	return type;
-}
-
-static void collectCallablePatternParameters(
-	const std::vector<DefinitionPatternElement> &elements, std::vector<std::pair<std::string, DataType>> &outParameters
-) {
-	for (const DefinitionPatternElement &element : elements) {
-		switch (element.type) {
-		case PatternElement::Type::Choice:
-			if (!element.alternatives.empty())
-				collectCallablePatternParameters(element.alternatives.front(), outParameters);
-			break;
-		case PatternElement::Type::Variable:
-			outParameters.push_back({element.text, concretizeCallableParameterType(element)});
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-void collectCallableFunctionParameters(
-	PatternDefinition *definition, std::vector<std::pair<std::string, DataType>> &outParameters
-) {
-	outParameters.clear();
-	if (definition)
-		collectCallablePatternParameters(definition->patternElements, outParameters);
-}
+#include "callableFunctionLookup.inl"
 
 PatternDefinition *findDefinitionBySignature(
 	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
@@ -687,7 +605,7 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 		return nullptr;
 
 	auto materializeTemporaryVariableReferences =
-		[&context](PatternReference *reference, PatternMatch &match, auto &self) -> void {
+		[&context, section](PatternReference *reference, PatternMatch &match, auto &self) -> void {
 		int offset = reference->range().start();
 		for (VariableMatch &varMatch : match.discoveredVariables) {
 			if (varMatch.variableReference)
@@ -695,6 +613,9 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 			varMatch.variableReference = context.createVariableReference(
 				Range(reference->range().line, offset + varMatch.lineStartPos, offset + varMatch.lineEndPos), varMatch.name
 			);
+			auto definition = section->variableDefinitions.find(varMatch.name);
+			if (definition != section->variableDefinitions.end())
+				varMatch.variableReference->definition = normalizeBindingReference(definition->second);
 		}
 		for (PatternMatch &subMatch : match.subMatches)
 			self(reference, subMatch, self);

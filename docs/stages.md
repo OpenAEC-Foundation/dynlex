@@ -48,16 +48,16 @@ The consequence: we cannot know what order nested expressions should have.
 Example:
 
 ```text
-print x as line
+print value as a line
 ```
 
-We do not know that `print x` returns `void` and cannot be used as an argument for `as line`.
+We do not know that `print value` returns `void` and cannot be used as an argument for `as a line`.
 
 Since we are fully agnostic, we will make all left expressions subexpressions:
 
 ```text
-(print x) as line
-((x + x) + x) + x
+(print value) as a line
+((value + value) + value) + value
 ```
 
 Pattern elements are not splittable, except for `Other` tokens in pattern references.
@@ -120,27 +120,27 @@ The `store` intrinsic does not break this, since `store` should always be used l
 
 Example:
 
-```text
-set x to 1 and increment x
+```dynlex
+set count to 1 and increment count
 ```
 
 We infer:
 
-```text
-{void:expr1} and {void:expr2}
+```dynlex
+{void:first} and {void:second}
 ```
 
-We infer the arguments first, so we infer `expr1` and `expr2` after. `x` has a type when we get to `expr2`.
+We infer the arguments first, so we infer `first` and `second` after. `count` has a type when we get to `second`.
 
-- We infer `x`. If `x` is compile-time-known, we set its value to that value. If it is unset, we keep it unset but do not emit an error yet. The intrinsic checking will do that.
+- We infer `count`. If `count` is compile-time-known, we set its value to that value. If it is unset, we keep it unset but do not emit an error yet. The intrinsic checking will do that.
 - We infer `1`. We set the compile-time value to the value of the literal.
-- Now we infer the `set to` flex.
-- We infer the `store` intrinsic. We resolve `var` and `val`.
-- We set the value of `var` to `1`.
+- Now we infer the `set variable to value` flex.
+- We infer the `store` intrinsic. We resolve `variable` and `value`.
+- We set the value of `variable` to `1`.
 - We set the result of this `store` intrinsic to `void`.
 - We infer `increment`.
-- We infer the second `x`, which reads `1` from the variable.
-- We resolve `val`.
+- We infer the second `count`, which reads `1` from the variable.
+- We resolve `value`.
 - Etc.
 
 So we build up compile-time values hierarchically: from the bottom of the tree to the top (a natural result of top-down inference while inferring the arguments first).
@@ -151,9 +151,9 @@ When processing a function call, we infer that function right away so we can kno
 
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
 
-`(print x) as line` is incorrect, since `void` as an argument is not allowed unless explicitly specified in the pattern, and `print x` returns `void`.
+`(print value) as a line` is incorrect, since `void` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `void`.
 
-We know this because we instantiate `print x` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
+We know this because we instantiate `print value` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
 
 All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
@@ -169,7 +169,7 @@ The only exception is the `store` intrinsic: it takes a value whose first argume
 
 We prefer sub-first, aka `left = subexpression`, just like pattern matching.
 
-A function's return value may never be unused. This prevents wrong groupings. If we want to discard a function's return value, we can use a `discard` intrinsic.
+A function's return value may never be unused. This prevents wrong groupings. Public value-producing patterns therefore use noun, adjective, or predicate phrases whose values are consumed by their surrounding sentence. Imperative action patterns return `void`. Only replacement-level compiler or library code may intentionally drop a raw intrinsic result with the `discard` intrinsic.
 
 Enclosed expressions like `1 + 4` in `the minimum of 1 + 4 and 5 + 6` are inferred first. When an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
 
@@ -222,10 +222,10 @@ For every increment, we need to reset and revalidate the whole expression tree. 
 For example, the `store` intrinsic has a side effect:
 
 ```text
-set x to y and print x
+set destination to source and print destination
 ```
 
-The second `x` type is not known at first and should be set by the `load` intrinsic.
+The second `destination` type is not known at first and should be set by the `load` intrinsic.
 
 Therefore, we sadly cannot just use a recursive "increment until next valid option."
 
@@ -262,7 +262,7 @@ All other arguments are **IRRELEVANT**. We can never start or end with 2 argumen
 Prefix operator:
 
 ```text
-not $
+the inverse of $
 set $ to $
 vector of $ $ #
 ```
@@ -302,9 +302,9 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
 
 External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
-library function names. `@intrinsic("call", library, function, return_type, arguments...)` emits a fixed signature.
-`@intrinsic("variadic call", library, function, return_type, fixed_argument_count, arguments...)` emits the first
-`fixed_argument_count` argument types as the fixed prefix and marks the remaining parameters variadic. Only the variadic suffix
+library function names. `@intrinsic("call", library, function, return type, arguments...)` emits a fixed signature.
+`@intrinsic("variadic call", library, function, return type, fixed argument count, arguments...)` emits the first
+`fixed argument count` argument types as the fixed prefix and marks the remaining parameters variadic. Only the variadic suffix
 receives C's default argument promotions: booleans and integers narrower than 32 bits become 32-bit integers, 32-bit floats become
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.

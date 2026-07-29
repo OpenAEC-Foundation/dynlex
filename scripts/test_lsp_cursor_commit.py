@@ -4,12 +4,17 @@ import pathlib
 from lsp_tokens import LspSession, default_server_path, initialize_session, to_file_uri
 
 
+CALL_CHARACTER = 7
+FIRST_CALL_LINE = 4
+SECOND_CALL_LINE = 5
+
+
 def cursor_notification(uri: str, version: int, line: int) -> dict:
     return {
         "clientId": "cursor-commit-regression",
         "uri": uri,
         "version": version,
-        "position": {"line": line, "character": 23},
+        "position": {"line": line, "character": CALL_CHARACTER + 1},
     }
 
 
@@ -21,8 +26,14 @@ def replace_number(session: LspSession, uri: str, version: int, replacement: str
             "contentChanges": [
                 {
                     "range": {
-                        "start": {"line": 0, "character": 22},
-                        "end": {"line": 0, "character": 23},
+                        "start": {
+                            "line": FIRST_CALL_LINE,
+                            "character": CALL_CHARACTER,
+                        },
+                        "end": {
+                            "line": FIRST_CALL_LINE,
+                            "character": CALL_CHARACTER + 1,
+                        },
                     },
                     "text": replacement,
                 }
@@ -62,12 +73,24 @@ def main() -> int:
             },
         )
 
-        session.notify("dynlex/activeCursorChanged", cursor_notification(uri, 1, 0))
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 1, FIRST_CALL_LINE),
+        )
         replace_number(session, uri, 2, ")")
-        session.notify("dynlex/activeCursorChanged", cursor_notification(uri, 2, 1))
-        session.notify("dynlex/activeCursorChanged", cursor_notification(uri, 2, 0))
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 2, SECOND_CALL_LINE),
+        )
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 2, FIRST_CALL_LINE),
+        )
         replace_number(session, uri, 3, "1")
-        session.notify("dynlex/activeCursorChanged", cursor_notification(uri, 3, 1))
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 3, SECOND_CALL_LINE),
+        )
 
         result = session.request(
             "textDocument/semanticTokens/full",
@@ -94,7 +117,7 @@ def main() -> int:
             raise RuntimeError("diagnostics were not cleared after committing the repaired line")
 
         lines = token_lines(result.get("data", []))
-        if not {0, 1}.issubset(lines):
+        if not {FIRST_CALL_LINE, SECOND_CALL_LINE}.issubset(lines):
             raise RuntimeError(f"semantic highlighting did not recover for both lines: {sorted(lines)}")
     finally:
         session.close()

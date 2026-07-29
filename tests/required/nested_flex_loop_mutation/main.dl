@@ -2,15 +2,15 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to value:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, value)
+        @intrinsic("store", variable, value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -42,7 +42,7 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function count from initial:
+function the count from initial:
     execute:
         set total to initial
         set cursor to 0
@@ -52,7 +52,7 @@ function count from initial:
             set cursor to cursor + 1
         return total
 
-set initial to @intrinsic("call", "libc", "rand", integer)
-set result to count from initial
+set initial to @intrinsic("call", "libc", "rand", an integer)
+set result to the count from initial
 set difference to result - initial
-discard @intrinsic("call", "libc", "printf", integer, "%d\n", difference)
+ignore @intrinsic("call", "libc", "printf", an integer, "%d\n", difference)

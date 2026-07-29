@@ -1,0 +1,5 @@
+lib/std.dl:16-51: Error: Incompatible operand types 'a 32 bit integer' and 'array[2] of i32'
+  note: while inferring intrinsic 'subtract' in 'return @intrinsic("subtract", left, right)' with arguments [i8*, a 32 bit integer, array[2] of i32] -> undeduced lib/std.dl:16-51
+  note: while inferring call 'return @intrinsic("subtract", left, right)' with arguments [unresolved(?)] -> undeduced lib/std.dl:9-51
+  note: while inferring call '1 - [2, 3]' with arguments [a 32 bit integer, array[2] of i32] -> undeduced tests/required/integer_minus_fixed_array/main.dl:9-19
+  note: while inferring call 'ignore (1 - [2, 3]' with arguments [unresolved(?)] -> undeduced tests/required/integer_minus_fixed_array/main.dl:1-19

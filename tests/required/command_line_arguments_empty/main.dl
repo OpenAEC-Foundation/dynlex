@@ -1,5 +1,5 @@
 import lib/std.dl
 
 set arguments to the command line arguments
-print arguments' length as line
-print "end" as line
+print arguments' length as a line
+print "end" as a line

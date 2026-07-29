@@ -4,7 +4,7 @@ class:
     patterns:
         [a|] tracked value
     members:
-        references as pointer to integer
+        references as a pointer to an integer
     retain:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
@@ -18,10 +18,10 @@ class:
     members:
         value as tracked value
 
-set old_references to 0
-set new_references to 0
-set container to @intrinsic("construct", managed container, @intrinsic("construct", a tracked value, the address of old_references))
-set value_address to the address of the value of container
-@intrinsic("store at", value_address, @intrinsic("construct", a tracked value, the address of new_references))
-print old_references as line
-print new_references as line
+set previous to 0
+set current to 0
+set container to @intrinsic("construct", managed container, @intrinsic("construct", a tracked value, the address of previous))
+set address to the address of the value of container
+@intrinsic("store at", address, @intrinsic("construct", a tracked value, the address of current))
+print previous as a line
+print current as a line

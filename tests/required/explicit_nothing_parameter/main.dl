@@ -1,0 +1,13 @@
+function nothing:
+    replacement:
+        @intrinsic("type", "void")
+
+function finish:
+    execute:
+        @intrinsic("return")
+
+flex function continue after {nothing:action}:
+    replacement:
+        action
+
+continue after finish

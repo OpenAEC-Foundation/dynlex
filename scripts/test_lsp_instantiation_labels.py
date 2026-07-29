@@ -29,7 +29,7 @@ def main() -> int:
     finally:
         session.close()
 
-    expected = "send {string:message} to {user:user}"
+    expected = "send {string:message} to {user record:recipient}"
     labels = {
         option["label"]
         for entry in entries

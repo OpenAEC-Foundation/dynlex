@@ -2,7 +2,7 @@ import lib/std.dl
 
 function consume a private subject:
     execute:
-        discard it
+        ignore it
 
 function call with a caller subject:
     execute:

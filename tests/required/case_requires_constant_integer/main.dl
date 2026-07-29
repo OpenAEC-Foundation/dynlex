@@ -1,6 +1,6 @@
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 flex section switch value:
     replacement:
@@ -10,8 +10,8 @@ flex section case value:
     replacement:
         @intrinsic("case", value)
 
-set x to 1
+set choice to 1
 
 switch 1:
-    case x:
-        set x to 2
+    case choice:
+        set choice to 2

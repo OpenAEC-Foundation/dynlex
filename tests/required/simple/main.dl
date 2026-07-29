@@ -2,61 +2,65 @@ function return value:
 	replacement:
 		@intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-function fixed tofix:
+function fixed quantity:
     replacement:
-        @intrinsic("fix", tofix)
+        @intrinsic("fix", quantity)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [an|a|] {fixed integer:bits} bit integer:
+function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
-function value as [a|an|] {fixed integer:bits} bit integer:
+function value as [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function true_value if condition, else false_value:
+function affirmative if condition, else negative:
     replacement:
-        @intrinsic("select", condition, true_value, false_value)
+        @intrinsic("select", condition, affirmative, negative)
 
-function [the|] build target is {word:platform}:
+function the build target is WebAssembly:
     replacement:
-        @intrinsic("target is", platform)
+        @intrinsic("target is", "wasm")
 
 function left = right:
     replacement:
         @intrinsic("equal", left, right)
 
-function wasm print msg:
+function the WebAssembly output result for message:
     replacement:
-        @intrinsic("call", "env", "dynlex_print_i64", a 32 bit integer, msg as a 64 bit integer)
+        @intrinsic("call", "env", "dynlex_print_i64", a 32 bit integer, message as a 64 bit integer)
 
-function native print msg:
+function the native output result for message:
     replacement:
-        @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%ld", msg as a 64 bit integer)
+        @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%ld", message as a 64 bit integer)
 
-function print msg:
-    execute:
-        discard (wasm print msg) if the build target is wasm, else (native print msg)
+function print message:
+    replacement:
+        ignore (
+            (the WebAssembly output result for message)
+            if the build target is WebAssembly,
+            else (the native output result for message)
+        )
 
 function left + right:
     replacement:
         @intrinsic("add", left, right)
 
 # Simple test
-set x to 42
-set y to 10
+set first to 42
+set second to 10
 #this matches 'set $ to $' and the second '$' matches '$ + $'
-set z to x  + y
-print z
+set total to first  + second
+print total

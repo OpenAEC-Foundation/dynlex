@@ -1,20 +1,24 @@
-function integer:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
 	replacement:
 		@intrinsic("type", "int")
 
-function fixed tofix:
+function fixed quantity:
 	replacement:
-		@intrinsic("fix", tofix)
+		@intrinsic("fix", quantity)
 
 flex section if condition:
 	replacement:
 		@intrinsic("if", condition)
 
-function specialize {fixed integer:depth} value [slot|done]:
+function the specialization at {fixed integer:depth} for value [slot|done]:
 	execute:
 		@intrinsic("store", slot, value)
 		if @intrinsic("equal", depth, 1):
-			@intrinsic("discard", specialize 0 1.5 done)
+			@intrinsic("discard", the specialization at 0 for 1.5 done)
 		@intrinsic("return", slot)
 
-@intrinsic("discard", specialize 1 2 done)
+ignore the specialization at 1 for 2 done

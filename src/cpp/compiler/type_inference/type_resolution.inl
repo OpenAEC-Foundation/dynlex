@@ -254,7 +254,9 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 					DataType result;
-					if (DataType::promoteArithmetic(leftType, rightType, result))
+					if (promoteIntrinsicArithmetic(
+							arithmeticIntrinsicKind(resolved->intrinsicName), leftType, rightType, result
+						))
 						return result;
 				}
 				return {};
@@ -399,19 +401,35 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return {DataType::Kind::Constraint};
 		} else if (kind == IntrinsicKind::TypeOf) {
 			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-			if (valueType.isDeduced()) {
-				DataType typeRef;
-				typeRef.kind = DataType::Kind::Type;
-				typeRef.referencedKind = valueType.kind;
-				typeRef.numericSize = valueType.numericSize;
-				typeRef.pointerDepth = valueType.pointerDepth;
-				typeRef.classDefinition = valueType.classDefinition;
-				typeRef.classInstIndex = valueType.classInstIndex;
-				typeRef.arraySize = valueType.arraySize;
-				typeRef.arrayElementType =
-					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
-				return typeRef;
-			}
+			if (valueType.isDeduced())
+				return valueType.asTypeReference();
+		} else if (kind == IntrinsicKind::ElementType) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.kind == DataType::Kind::Type)
+				aggregateType = aggregateType.toReferencedType();
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType.aggregateElementType().asTypeReference();
+		} else if (kind == IntrinsicKind::PromoteArithmeticType) {
+			return {DataType::Kind::Type};
+		} else if (kind == IntrinsicKind::Number) {
+			return {DataType::Kind::Constraint};
+		} else if (kind == IntrinsicKind::ExtractElement) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType.aggregateElementType();
+		} else if (kind == IntrinsicKind::InsertElement) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType;
+		} else if (kind == IntrinsicKind::ShaderInput) {
+			DataType vectorType{DataType::Kind::Vector};
+			vectorType.arraySize = 4;
+			vectorType.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+			return vectorType;
+		} else if (kind == IntrinsicKind::TypeExtent) {
+			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (valueType.isDeduced())
+				return {DataType::Kind::Int, 4};
 		} else if (kind == IntrinsicKind::SizeOf) {
 			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
@@ -436,6 +454,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			if (selectedBranch)
 				return resolveKnownExpressionType(selectedBranch, effectiveBindingFrameStack);
 		} else if (kind == IntrinsicKind::Array) {
+			if (resolved->arguments.size() == 1)
+				return {DataType::Kind::Constraint};
 			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
 				DataType typeRef;

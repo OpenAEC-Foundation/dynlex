@@ -1,13 +1,13 @@
 import lib/std.dl
 
-function draw rectangle with width width and depth depth:
+function draw a rectangle using width as the width and depth as the depth:
     execute:
-        print width as line
-        print depth as line
+        print width as a line
+        print depth as a line
 
-function [branch1 width|nodup] [branch2 width|nodup]:
+function [report width as|report no value for] [the width|the measurement]:
     execute:
-        print width as line
+        print width as a line
 
-draw rectangle with 48 width and 12 depth
-branch1 7 nodup
+draw a rectangle using 48 as the width and 12 as the depth
+report 7 as the width

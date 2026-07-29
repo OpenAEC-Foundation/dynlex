@@ -1,3 +1,4 @@
+#include "arithmeticTypePromotion.h"
 #include "classDefinition.h"
 #include "codegenInternal.h"
 #include "compileTimeValue.h"
@@ -137,14 +138,14 @@ buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<E
 	llvm::Type *llvmVectorType = getLLVMType(context, vectorType);
 	llvm::Value *vectorValue = llvm::Constant::getNullValue(llvmVectorType);
 	DataType elementType = vectorType.vectorElementType();
-	for (int i = 0; i < vectorType.vectorSize(); i++) {
-		CodegenResult element = generateExpressionCode(context, args[startIndex + i]);
+	for (int lane = 0; lane < vectorType.vectorSize(); lane++) {
+		CodegenResult element = generateExpressionCode(context, args[startIndex + lane]);
 		if (!element)
 			return element;
 		llvm::Value *elementValue = element.value;
-		DataType fromType = finalizedExpressionType(context, args[startIndex + i]);
+		DataType fromType = finalizedExpressionType(context, args[startIndex + lane]);
 		elementValue = ensureType(context, elementValue, fromType, elementType);
-		vectorValue = builder.CreateInsertElement(vectorValue, elementValue, getVectorLaneIndexValue(context, i), "vec_ins");
+		vectorValue = builder.CreateInsertElement(vectorValue, elementValue, getVectorLaneIndexValue(context, lane), "vec_ins");
 	}
 	return vectorValue;
 }
@@ -516,12 +517,41 @@ CodegenResult generateIntrinsicCode(
 
 	// Arithmetic intrinsics
 	if (isArithmeticIntrinsic(arithmeticOp)) {
+		DataType leftType = finalizedExpressionType(context, args[1]);
+		DataType rightType = finalizedExpressionType(context, args[2]);
+		int arrayOperandIndex = decayingArrayOperandIndex(arithmeticOp, leftType, rightType);
+		if (arrayOperandIndex != 0) {
+			int indexOperandIndex = arrayOperandIndex == 1 ? 2 : 1;
+			LValueAddressResult arrayStorage = generateLValueAddress(context, args[arrayOperandIndex]);
+			if (arrayStorage.status == LValueAddressStatus::Failed)
+				return CodegenResult::failure();
+			requireCompilerInvariant(
+				arrayStorage.status == LValueAddressStatus::Addressable && arrayStorage.address != nullptr,
+				"fixed-array decay reached codegen without addressable storage"
+			);
+
+			llvm::Value *indexValue = nullptr;
+			if (!generateRuntimeValue(args[indexOperandIndex], indexValue))
+				return CodegenResult::failure();
+			DataType indexType = finalizedExpressionType(context, args[indexOperandIndex]);
+			indexValue = coerceIndexToSizeT(context, indexValue, indexType);
+			if (arithmeticOp == ArithmeticIntrinsicKind::Subtract)
+				indexValue = builder.CreateNeg(indexValue, "neg_idx");
+
+			DataType arrayType = finalizedExpressionType(context, args[arrayOperandIndex]);
+			requireCompilerInvariant(
+				isFixedArrayValue(arrayType) && arrayType.arrayElementType,
+				"fixed-array decay reached codegen without an element type"
+			);
+			return builder.CreateGEP(
+				getLLVMType(context, arrayType), arrayStorage.address, {builder.getInt64(0), indexValue}, "array_decay"
+			);
+		}
+
 		llvm::Value *left = nullptr;
 		llvm::Value *right = nullptr;
 		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
 			return CodegenResult::failure();
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
 
 		// Pointer arithmetic: ptr +/- integer → GEP
 		if (isPointerArithmeticIntrinsic(arithmeticOp) && (leftType.isPointer() || rightType.isPointer())) {

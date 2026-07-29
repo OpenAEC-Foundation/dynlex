@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function value for condition:
+function the value for condition:
     execute:
         if condition:
             return 41
@@ -8,5 +8,5 @@ function value for condition:
             return 42
         return "unreachable"
 
-print value for true as line
-print value for false as line
+print the value for true as a line
+print the value for false as a line

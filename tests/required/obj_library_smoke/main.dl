@@ -1,5 +1,5 @@
 import lib/std.dl
 import lib/models/obj.dl
 
-set mesh to an empty obj mesh
-free obj mesh mesh
+set mesh to an empty OBJ mesh
+free mesh

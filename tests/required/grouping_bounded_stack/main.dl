@@ -10,32 +10,32 @@ function left[ |]+[ |]right:
     execute:
         return @intrinsic("add", left, right)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function trigger value:
+function the result after one step from value:
     execute:
         return value + 2 + 3 + 4 + 5 & 1.5
 
-function trigger two value:
+function the result after two steps from value:
     execute:
-        return trigger value
+        return the result after one step from value
 
-function trigger three value:
+function the result after three steps from value:
     execute:
-        return trigger two value
+        return the result after two steps from value
 
-function trigger four value:
+function the result after four steps from value:
     execute:
-        return trigger three value
+        return the result after three steps from value
 
-function trigger five value:
+function the result after five steps from value:
     execute:
-        return trigger four value
+        return the result after four steps from value
 
-function trigger six value:
+function the result after six steps from value:
     execute:
-        return trigger five value
+        return the result after five steps from value
 
-discard trigger six 1
+ignore the result after six steps from 1

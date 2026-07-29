@@ -1,3 +1,7 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 flex function execute body:
     replacement:
         @intrinsic("execute body")
@@ -17,4 +21,4 @@ flex section repeat count:
 repeat 3:
     @intrinsic("store", total, @intrinsic("add", total, 2))
 
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", total))
+ignore @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", total)

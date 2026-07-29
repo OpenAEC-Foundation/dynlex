@@ -4,77 +4,84 @@ import tests/games/geometry_dash/generator.dl
 import tests/games/geometry_dash/physics.dl
 import tests/games/geometry_dash/scene.dl
 
-set count to 24
-set levels to allocate count slots of an integer
-set jump_ms to allocate count slots of an integer
-set slide_ms to allocate count slots of an integer
-fill plan levels jump_ms slide_ms with count count using seed 1337
+class:
+	patterns:
+		route follower
+	members:
+		runner, step, elapsed, sliding
+
+function a route follower tracking {runner state:body}:
+	replacement:
+		@intrinsic("construct", route follower, body, 0, 0, true)
+
+function {route follower:follower} is sliding:
+	execute:
+		return follower's sliding
+
+set plan to a route plan with 24 steps
+fill plan using seed 1337
 
 set window to a new window with width the window width and height the world height
-set player_y to the player ground y
-set player_velocity to 0.0
-set reference_y to the player ground y
-set reference_velocity to 0.0
-set reference_step to 0
-set reference_phase_ms to 0
-set reference_is_sliding to true
-set scroll_offset to 0
+set player to a runner at height the player's ground height moving with velocity 0.0
+set reference to a route follower tracking (a runner at height the player's ground height moving with velocity 0.0)
+set scroll to 0
 
-loop while not the window should close:
+loop while the window remains open:
 	set key to the pressed key of window
-	if key = 1 and player_y >= the player ground y:
-		start a jump on player_velocity
+	if key = 1 and player's y >= the player's ground height:
+		start a jump for player
 
-	apply gravity to player_y and player_velocity
-	clamp player_y and player_velocity to the ground
+	apply gravity to player
+	clamp player to the ground
 
-	set scroll_offset to scroll_offset + the scroll speed
+	add the scroll speed to scroll
 
-	if reference_step < count:
-		if reference_is_sliding:
-			set reference_phase_ms to reference_phase_ms + the frame time in milliseconds
-			if reference_phase_ms >= item reference_step of slide_ms:
-				set reference_phase_ms to 0
-				set reference_is_sliding to false
-				start a jump on reference_velocity
+	if reference's step < plan's count:
+		if reference is sliding:
+			add the frame time in milliseconds to reference's elapsed
+			if reference's elapsed >= the item at reference's step in plan's slides:
+				set reference's elapsed to 0
+				set reference's sliding to false
+				start a jump for reference's runner
 		else:
-			apply gravity to reference_y and reference_velocity
-			clamp reference_y and reference_velocity to the ground
-			set reference_phase_ms to reference_phase_ms + the frame time in milliseconds
-			if reference_phase_ms >= item reference_step of jump_ms:
-				set reference_phase_ms to 0
-				set reference_is_sliding to true
-				set reference_step to reference_step + 1
+			apply gravity to reference's runner
+			clamp reference's runner to the ground
+			add the frame time in milliseconds to reference's elapsed
+			if reference's elapsed >= the item at reference's step in plan's jumps:
+				set reference's elapsed to 0
+				set reference's sliding to true
+				increment reference's step
 
-	draw static world in window
+	draw the static world
 
-	set simulated_surface_y to the player ground y
-	set accumulated_distance to the reference x offset - scroll_offset
-	set i to 0
-	loop while i < count:
-		set step_slide_ms to item i of slide_ms
-		set step_jump_ms to item i of jump_ms
-		set landing_y to simulated_surface_y
-		set landing_velocity to 0.0
-		start a jump on landing_velocity
-		set elapsed_ms to 0
-		loop while elapsed_ms < step_jump_ms:
-			apply gravity to landing_y and landing_velocity
-			set elapsed_ms to elapsed_ms + the frame time in milliseconds
-		clamp landing_y and landing_velocity to the ground
-		set platform_top_y to landing_y as an integer + the player size
-		set platform_height to the ground y - platform_top_y
-		set platform_width to 72 + the scroll speed * step_slide_ms / the frame time in milliseconds
-		set platform_x to the player x + accumulated_distance
-		if platform_height > 0:
-			draw rectangle at platform_x platform_top_y size platform_width platform_height with color 210 120 50
-		set simulated_surface_y to landing_y
-		set accumulated_distance to accumulated_distance + the scroll speed * (step_slide_ms + step_jump_ms) / the frame time in milliseconds
-		set i to i + 1
+	set surface to the player's ground height
+	set distance to the reference horizontal offset - scroll
+	set index to 0
+	loop while index < plan's count:
+		set slide to the item at index in plan's slides
+		set jump to the item at index in plan's jumps
+		set landing to a runner at height surface moving with velocity 0.0
+		start a jump for landing
+		set elapsed to 0
+		loop while elapsed < jump:
+			apply gravity to landing
+			add the frame time in milliseconds to elapsed
+		clamp landing to the ground
+		set top to landing's y as an integer + the player size
+		set clearance to the ground height - top
+		set span to (the scroll speed * slide) / the frame time in milliseconds
+		add 72 to span
+		set horizontal to the player horizontal position + distance
+		if clearance > 0:
+			draw a rectangle at x horizontal and y top with width span and height clearance in color red 210, green 120 and blue 50
+		set surface to landing's y
+		add the scroll speed * (slide + jump) / the frame time in milliseconds to distance
+		increment index
 
-	draw runner at the player x player_y as an integer with color 80 220 255
-	draw runner at the player x + the reference x offset reference_y as an integer with color 255 220 80
+	draw a runner at (a screen position with x the player horizontal position and y (player's y as an integer)) with (a screen color with red 80, green 220 and blue 255)
+	draw a runner at (a screen position with x (the player horizontal position + the reference horizontal offset) and y (reference's runner's y as an integer)) with (a screen color with red 255, green 220 and blue 80)
 	display the frame of window
-	sleep for the frame time in milliseconds milliseconds
+	set delay to the frame time in milliseconds
+	sleep for delay milliseconds
 
 close the window

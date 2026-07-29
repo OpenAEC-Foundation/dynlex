@@ -2,14 +2,14 @@ import lib/std.dl
 
 function value after guaranteed loop:
     execute:
-        set keep_going to true
+        set ongoing to true
         set result to 0
-        loop while keep_going:
+        loop while ongoing:
             set result to 1
-            set keep_going to false
+            set ongoing to false
         if result = 1:
             return 1
         else:
             return "wrong"
 
-print value after guaranteed loop as line
+print value after guaranteed loop as a line

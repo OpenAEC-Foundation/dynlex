@@ -1,5 +1,5 @@
-tests/required/fixed_constraint_requires_compile_time/main.dl:16-29: Error: No overload matches call 'require value' for argument types [a 32 bit integer]. Available overloads: 'require {fixed integer:value}'
-  note: while inferring call 'return require value' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:16-29
-  note: while inferring call 'return require value' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:9-29
-  note: while inferring call 'discard pass runtime 1' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:9-23
-  note: while inferring call 'discard pass runtime 1' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:1-23
+tests/required/fixed_constraint_requires_compile_time/main.dl:16-34: Error: No overload matches call 'the required value' for argument types [a 32 bit integer]. Available overloads: 'the required {fixed integer:value}'
+  note: while inferring call 'return the required value' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:16-34
+  note: while inferring call 'return the required value' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:9-34
+  note: while inferring call 'ignore the runtime 1' with arguments [a 32 bit integer] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:8-21
+  note: while inferring call 'ignore the runtime 1' with arguments [unresolved(?)] -> undeduced tests/required/fixed_constraint_requires_compile_time/main.dl:1-21

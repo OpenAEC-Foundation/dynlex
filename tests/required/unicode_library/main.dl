@@ -1,8 +1,8 @@
 import unicode.dl
 
-function a unicode test string:
+function a Unicode test string:
     execute:
-        set text to a new string buffer with length 10
+        set text to a new string buffer containing 10 bytes
         store 65 as a byte into the data of text at 0
         store 194 as a byte into the data of text at 1
         store 162 as a byte into the data of text at 2
@@ -17,66 +17,66 @@ function a unicode test string:
 
 function a string containing bytes first second:
     execute:
-        set text to a new string buffer with length 2
+        set text to a new string buffer containing 2 bytes
         store first as a byte into the data of text at 0
         store second as a byte into the data of text at 1
         return text
 
-function a three byte string from {integer:first_byte} then {integer:second_byte} then {integer:third_byte}:
+function a three byte string from {integer:first} then {integer:second} then {integer:third}:
     execute:
-        set text to a new string buffer with length 3
-        store first_byte as a byte into the data of text at 0
-        store second_byte as a byte into the data of text at 1
-        store third_byte as a byte into the data of text at 2
+        set text to a new string buffer containing 3 bytes
+        store first as a byte into the data of text at 0
+        store second as a byte into the data of text at 1
+        store third as a byte into the data of text at 2
         return text
 
-function a four byte string from {integer:first_byte} then {integer:second_byte} then {integer:third_byte} then {integer:fourth_byte}:
+function a four byte string from {integer:first} then {integer:second} then {integer:third} then {integer:fourth}:
     execute:
-        set text to a new string buffer with length 4
-        store first_byte as a byte into the data of text at 0
-        store second_byte as a byte into the data of text at 1
-        store third_byte as a byte into the data of text at 2
-        store fourth_byte as a byte into the data of text at 3
+        set text to a new string buffer containing 4 bytes
+        store first as a byte into the data of text at 0
+        store second as a byte into the data of text at 1
+        store third as a byte into the data of text at 2
+        store fourth as a byte into the data of text at 3
         return text
 
 function print validation of {string:text}:
     execute:
-        set validation to validate text as utf8
+        validate text as UTF8 and set validation to it
         print the status of validation
         print ":"
-        print the error byte offset of validation as line
+        print the error byte offset of validation as a line
 
-set text to a unicode test string
-set validation to validate text as utf8
-print the status of validation as line
+set text to a Unicode test string
+validate text as UTF8 and set validation to it
+print the status of validation as a line
 
-set byte_offset to 0
-loop while byte_offset < the length of text:
-    set decoded to decode utf8 code point in text at byte offset byte_offset
+set offset to 0
+loop while offset < the length of text:
+    decode the UTF8 code point in text at byte offset and set decoded to it
     print the code point of decoded
     print "@"
     print the byte offset of decoded
     print "-"
-    print the next byte offset of decoded as line
-    set byte_offset to the next byte offset of decoded
+    print the next byte offset of decoded as a line
+    set offset to the next byte offset of decoded
 
-set middle to decode utf8 code point in text at byte offset 2
-print the status of middle as line
-set past_end to decode utf8 code point in text at byte offset 10
-print the status of past_end as line
+decode the UTF8 code point in text at byte 2 and set middle to it
+print the status of middle as a line
+decode the UTF8 code point in text at byte 10 and set past to it
+print the status of past as a line
 
-set byte_position to utf8 byte offset 6 to utf16 position in text
-print the status of byte_position
+set encoded to the UTF16 position of UTF8 byte offset 6 in text
+print the status of encoded
 print ":"
-print the position of byte_position as line
-set utf16_position to utf16 position 3 to utf8 byte offset in text
-print the status of utf16_position
+print the position of encoded as a line
+set position to the UTF8 byte offset of UTF16 position 3 in text
+print the status of position
 print ":"
-print the position of utf16_position as line
-set split_surrogate to utf16 position 4 to utf8 byte offset in text
-print the status of split_surrogate as line
-set split_sequence to utf8 byte offset 8 to utf16 position in text
-print the status of split_sequence as line
+print the position of position as a line
+set surrogate to the UTF8 byte offset of UTF16 position 4 in text
+print the status of surrogate as a line
+set sequence to the UTF16 position of UTF8 byte offset 8 in text
+print the status of sequence as a line
 
 print validation of a string containing bytes 192 128
 print validation of a string containing bytes 226 130
@@ -92,61 +92,61 @@ print validation of a three byte string from 226 then 130 then 65
 print validation of a four byte string from 240 then 144 then 128 then 65
 print validation of a four byte string from 245 then 128 then 128 then 128
 
-set invalid_decode_text to a string containing bytes 192 128
-set invalid_decode to decode utf8 code point in invalid_decode_text at byte offset 0
-print the status of invalid_decode
+set malformed to a string containing bytes 192 128
+decode the UTF8 code point in malformed at byte 0 and set decoding to it
+print the status of decoding
 print ":"
-print the error byte offset of invalid_decode as line
-set invalid_conversion to utf8 byte offset 0 to utf16 position in invalid_decode_text
-print the status of invalid_conversion
+print the error byte offset of decoding as a line
+set conversion to the UTF16 position of UTF8 byte offset 0 in malformed
+print the status of conversion
 print ":"
-print the error byte offset of invalid_conversion as line
+print the error byte offset of conversion as a line
 
-set lines_text to the string form of "a\r\nb\rc\n"
-set indexed to scan lines in lines_text
-print the status of indexed as line
+set source to the string form of "a\r\nb\rc\n"
+scan lines in source and set indexed to it
+print the status of indexed as a line
 set lines to the line index of indexed
-print the number of lines in lines as line
-set line_number to 0
-loop while line_number < the number of lines in lines:
-    set start to line start for line line_number in lines
-    set finish to line content end for line line_number in lines
-    set next_start to next line start for line line_number in lines
+print the number of lines in lines as a line
+set number to 0
+loop while number < the number of lines in lines:
+    set start to the start of line number in lines
+    set finish to the content end of line number in lines
+    set following to the next start after line number in lines
     print the position of start
     print "-"
     print the position of finish
     print "-"
-    print the position of next_start as line
-    set line_number to line_number + 1
-set newline_position to line number at byte offset 1 in lines
-print the status of newline_position
+    print the position of following as a line
+    set number to number + 1
+set newline to the line number at byte offset 1 in lines
+print the status of newline
 print ":"
-print the position of newline_position as line
-set second_newline_byte to line number at byte offset 2 in lines
-print the status of second_newline_byte
+print the position of newline as a line
+set carriage to the line number at byte offset 2 in lines
+print the status of carriage
 print ":"
-print the position of second_newline_byte as line
-set second_line_position to line number at byte offset 3 in lines
-print the status of second_line_position
+print the position of carriage as a line
+set following to the line number at byte offset 3 in lines
+print the status of following
 print ":"
-print the position of second_line_position as line
-set invalid_line to line start for line 4 in lines
-print the status of invalid_line as line
-free line index result indexed
+print the position of following as a line
+set nonexistent to the start of line 4 in lines
+print the status of nonexistent as a line
+free indexed
 
-set invalid_lines to scan lines in a string containing bytes 192 128
-print the status of invalid_lines
+scan lines in a string containing bytes 192 128 and set scanning to it
+print the status of scanning
 print ":"
-print the error byte offset of invalid_lines as line
-free line index result invalid_lines
+print the error byte offset of scanning as a line
+free scanning
 
-set empty_lines_result to scan lines in ""
-print the status of empty_lines_result
+scan lines in "" and set empty to it
+print the status of empty
 print ":"
-print the number of lines in the line index of empty_lines_result as line
-set empty_line_start to line start for line 0 in the line index of empty_lines_result
-set empty_line_end to line content end for line 0 in the line index of empty_lines_result
-print the position of empty_line_start
+print the number of lines in the line index of empty as a line
+set beginning to the start of line 0 in the line index of empty
+set ending to the content end of line 0 in the line index of empty
+print the position of beginning
 print "-"
-print the position of empty_line_end as line
-free line index result empty_lines_result
+print the position of ending as a line
+free empty

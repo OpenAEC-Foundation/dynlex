@@ -1,8 +1,8 @@
 import lib/std.dl
 
-function toint {float:x}:
+function the integer form of {float:value}:
     execute:
-        return x as a 32 bit integer
+        return value as a 32 bit integer
 
-set a to 4.0
-set a to toint a
+set number to 4.0
+set number to the integer form of number

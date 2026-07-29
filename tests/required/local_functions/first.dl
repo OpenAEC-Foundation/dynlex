@@ -9,21 +9,21 @@ local class:
     patterns:
         [a|] shared record
     members:
-        number as integer
+        number as an integer
 
 local flex section when shared condition:
     replacement:
         @intrinsic("if", condition)
 
-local function visibility hidden_parameter after:
+local function visibility private after:
     execute:
-        discard hidden_parameter
+        ignore private
 
-function visibility visible_parameter before:
+function visibility public before:
     execute:
-        discard visible_parameter
+        ignore public
 
-function result from first module:
+function the result from first module:
     execute:
         set record to @intrinsic("construct", a shared record, secret)
         set output to 0

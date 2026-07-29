@@ -1,4 +1,4 @@
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -10,14 +10,14 @@ class:
     patterns:
         textlike
     members:
-        length as integer
+        length as an integer
 
 class:
     patterns:
         vectorlike
     members:
-        element as integer
+        element as an integer
 
-function [the|] length of {vectorlike:value}:
+function the length of {vectorlike:value}:
     execute:
         return 7

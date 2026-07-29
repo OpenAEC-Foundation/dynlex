@@ -2,6 +2,7 @@ struct PatternCallResolution {
 	PatternDefinition *definition;
 	size_t pathIndex;
 	std::vector<DataType> argumentTypes;
+	std::vector<TypeConstraint> argumentConstraints;
 };
 
 static std::optional<PatternCallResolution> resolvePatternCall(
@@ -23,14 +24,19 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	// Arguments are sorted by source position and include both Variable and Word captures.
 	std::vector<DataType> argTypesForOverload;
 	std::vector<bool> argCompileTimeKnown;
+	std::vector<CompileTimeValue> argCompileTimeValues;
 	argCompileTimeKnown.reserve(expr->arguments.size());
+	argCompileTimeValues.reserve(expr->arguments.size());
 	for (size_t ai = 0; ai < expr->arguments.size(); ai++) {
 		Expression *inferArg = expr->arguments[ai];
 		DataType argumentType =
 			requestKnownOrInferExpressionType(inferArg, context, flexBindingFrameStack, preserveCurrentGrouping);
 		argTypesForOverload.push_back(argumentType);
 		expr->arguments[ai] = inferArg;
-		argCompileTimeKnown.push_back(argumentType.isMetaType() || isCompileTimeKnown(context.lookupExpressionValue(inferArg)));
+		CompileTimeValue argumentValue =
+			resolveStoredCompileTimeValue(inferArg, flexBindingFrameStack, &context);
+		argCompileTimeKnown.push_back(argumentType.isMetaType() || isCompileTimeKnown(argumentValue));
+		argCompileTimeValues.push_back(std::move(argumentValue));
 	}
 	auto overloadFailurePriority = [&](Range diagnosticRange) {
 		(void)diagnosticRange;
@@ -41,9 +47,80 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 		return 1;
 	};
 
+	std::map<std::tuple<PatternDefinition *, size_t, size_t>, ResolvedPatternConstraint> resolvedConstraints;
+	PatternConstraintResolver resolveConstraint =
+		[&](PatternDefinition *candidate, size_t pathIndex, size_t argumentIndex)
+		-> std::optional<ResolvedPatternConstraint> {
+		auto key = std::make_tuple(candidate, pathIndex, argumentIndex);
+		auto existing = resolvedConstraints.find(key);
+		if (existing != resolvedConstraints.end())
+			return existing->second;
+		if (pathIndex >= candidate->signaturePaths.size() ||
+			argumentIndex >= candidate->signaturePaths[pathIndex].parameters.size()) {
+			const DefinitionPatternElement *parameterElement = nullptr;
+			size_t currentArgument = 0;
+			forEachPatternParameterName(
+				candidate, pathIndex,
+				[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+					if (currentArgument++ == argumentIndex)
+						parameterElement = matchedPatternParameterElement(candidate, name, startPos);
+				}
+			);
+			requireCompilerInvariant(
+				parameterElement, "pattern parameter is absent before signature compilation"
+			);
+			return ResolvedPatternConstraint{
+				parameterElement->resolvedTypeConstraint,
+				parameterElement->resolvedTypeConstraint.structuralSpecificity(),
+				parameterElement->type == PatternElement::Type::Word ||
+					parameterElement->resolvedTypeConstraint.requiresCompileTimeValue,
+				!parameterElement->resolvedTypeConstraint.isResolved(),
+				!parameterElement->typeConstraintName.empty() &&
+					parameterElement->resolvedTypeConstraint.isResolved() &&
+					parameterElement->resolvedTypeConstraint.accepts(
+						DataType{DataType::Kind::Void}, false
+					)
+			};
+		}
+		requireCompilerInvariant(
+			pathIndex < candidate->signaturePaths.size() &&
+				argumentIndex < candidate->signaturePaths[pathIndex].parameters.size(),
+			"pattern signature is absent during call resolution"
+		);
+		const PatternParameterSignature &signature =
+			candidate->signaturePaths[pathIndex].parameters[argumentIndex];
+		std::optional<TypeConstraint> materialized =
+			signature.constraint.materialize(argTypesForOverload, argCompileTimeValues);
+		if (!materialized)
+			return std::nullopt;
+		bool acceptsNothing =
+			signature.hasExplicitTypeConstraint &&
+			materialized->accepts(DataType{DataType::Kind::Void}, false);
+		ResolvedPatternConstraint resolution{
+			std::move(*materialized), signature.constraint.structuralSpecificity(),
+			signature.requiresCompileTimeValue, signature.acceptsUnresolvedType,
+			acceptsNothing
+		};
+		resolvedConstraints.emplace(key, resolution);
+		return resolution;
+	};
+
 	// Select the best overload based on argument types
 	PatternOverloadSelection overload =
-		selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown);
+		selectOverload(
+			defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown,
+			resolveConstraint
+		);
+	if (overload.ambiguous) {
+		std::string detail = renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, expr->range), "ambiguous overload for call", "message",
+			{{"call", (std::string)expr->range.subString},
+			 {"argument_types", formatTypeList(argTypesForOverload, context.parseContext)}}
+		);
+		context.setTypeFailure(detail);
+		context.fail(buildFailureDetailDiagnostic(expr->range, detail), overloadFailurePriority(expr->range));
+		return std::nullopt;
+	}
 	if (!overload) {
 		std::string candidates;
 		std::unordered_set<std::string> uniqueCandidates;
@@ -94,25 +171,33 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 		return std::nullopt;
 	}
 	PatternDefinition *def = overload.definition;
-	for (size_t ai = 0; ai < argTypesForOverload.size(); ai++) {
-		if (argTypesForOverload[ai].kind != DataType::Kind::Void)
-			continue;
-		if (definitionParameterAcceptsVoid(def, overload.pathIndex, ai))
-			continue;
-		std::string detail = renderConfiguredMessage(
-			syntaxConfigForRange(context.parseContext, expr->arguments[ai]->range), "no overload matches call", "message",
-			{{"call", (std::string)expr->range.subString},
-			 {"argument_types", formatTypeList(argTypesForOverload, context.parseContext)}}
-		);
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
-		break;
-	}
-	if (!context.typesValid)
-		return std::nullopt;
+	std::vector<TypeConstraint> argumentConstraints;
+	argumentConstraints.reserve(argTypesForOverload.size());
+	size_t constraintArgumentIndex = 0;
+	forEachPatternParameterName(
+		def, overload.pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+			const DefinitionPatternElement *parameterElement =
+				matchedPatternParameterElement(def, parameterName, startPos);
+			requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
+			std::optional<ResolvedPatternConstraint> constraint =
+				resolveConstraint(def, overload.pathIndex, constraintArgumentIndex);
+			requireCompilerInvariant(constraint.has_value(), "selected overload lost its resolved parameter constraint");
+			constraint->constraint.requiresCompileTimeValue =
+				constraint->constraint.requiresCompileTimeValue || constraint->requiresCompileTimeValue;
+			argumentConstraints.push_back(std::move(constraint->constraint));
+			constraintArgumentIndex++;
+		}
+	);
+	requireCompilerInvariant(
+		argumentConstraints.size() == argTypesForOverload.size(),
+		"selected overload constraints and arguments diverged"
+	);
 	expr->selectedPatternDefinition = def;
 	expr->selectedPatternPathIndex = overload.pathIndex;
-	return PatternCallResolution{def, overload.pathIndex, std::move(argTypesForOverload)};
+	return PatternCallResolution{
+		def, overload.pathIndex, std::move(argTypesForOverload), std::move(argumentConstraints)
+	};
 }
 
 static void inferClassPatternCall(
@@ -307,7 +392,9 @@ static bool inferNonFlexPatternCall(
 		argTypes.push_back(argType);
 	}
 	std::unordered_set<std::string> explicitCompileTimeParameters =
-		collectExplicitCompileTimeParameters(def, paramBindings, resolution.pathIndex, argTypes);
+		collectExplicitCompileTimeParameters(
+			def, paramBindings, resolution.pathIndex, argTypes, resolution.argumentConstraints
+		);
 	auto evaluateParameterValue = [&](Expression *argumentExpression) {
 		(void)flexBindingFrameStack;
 		if (!argumentExpression)

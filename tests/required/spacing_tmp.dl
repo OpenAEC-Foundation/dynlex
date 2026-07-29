@@ -1,7 +1,7 @@
 import lib/std.dl
 
-set a to 1
-set b to 2
-print a+b as line
-print a + b as line
-print 3*-2 as line
+set first to 1
+set second to 2
+print first+second as a line
+print first + second as a line
+print 3*-2 as a line

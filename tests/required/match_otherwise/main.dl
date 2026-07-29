@@ -2,7 +2,7 @@ import std.dl
 
 # `otherwise` (or `default`) runs when no case matches.
 
-function classify value:
+function the classification of value:
 	execute:
 		set result to 0
 		match based on value:
@@ -14,36 +14,36 @@ function classify value:
 				set result to 99
 		return result
 
-print (classify 1) as line
-print (classify 2) as line
-print (classify 7) as line
+print (the classification of 1) as a line
+print (the classification of 2) as a line
+print (the classification of 7) as a line
 
-set r to 0
+set result to 0
 match based on 5:
 	case 1:
-		set r to 1
+		set result to 1
 	default:
-		set r to 42
-print r as line
+		set result to 42
+print result as a line
 
 # Nested matches keep their case and default branches on their own switch.
-function pair code a and b:
+function the pair code for first and second:
 	execute:
-		set r to 0
-		match based on a:
+		set result to 0
+		match based on first:
 			case 1:
-				match based on b:
+				match based on second:
 					case 5:
-						set r to 15
+						set result to 15
 					otherwise:
-						set r to 19
+						set result to 19
 			case 2:
-				set r to 2
+				set result to 2
 			otherwise:
-				set r to 90
-		return r
+				set result to 90
+		return result
 
-print (pair code 1 and 5) as line
-print (pair code 1 and 8) as line
-print (pair code 2 and 5) as line
-print (pair code 7 and 7) as line
+print (the pair code for 1 and 5) as a line
+print (the pair code for 1 and 8) as a line
+print (the pair code for 2 and 5) as a line
+print (the pair code for 7 and 7) as a line

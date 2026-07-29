@@ -15,6 +15,7 @@ struct TypeConstraint {
 	std::optional<int> arraySize;
 	std::optional<int> matrixRows;
 	std::optional<int> matrixColumns;
+	bool requiresNumeric = false;
 	bool constrainsClassDefinition = false;
 	ClassDefinition *classDefinition = nullptr;
 	std::optional<int> classInstantiationIndex;
@@ -93,9 +94,21 @@ struct TypeConstraint {
 
 	bool isResolved() const { return resolved; }
 
+	bool equivalentTo(const TypeConstraint &other) const {
+		if (resolved != other.resolved || kind != other.kind || numericSize != other.numericSize ||
+			pointerDepth != other.pointerDepth || arraySize != other.arraySize || matrixRows != other.matrixRows ||
+			matrixColumns != other.matrixColumns || requiresNumeric != other.requiresNumeric ||
+			constrainsClassDefinition != other.constrainsClassDefinition ||
+			classDefinition != other.classDefinition || classInstantiationIndex != other.classInstantiationIndex ||
+			requiresCompileTimeValue != other.requiresCompileTimeValue ||
+			static_cast<bool>(elementConstraint) != static_cast<bool>(other.elementConstraint))
+			return false;
+		return !elementConstraint || elementConstraint->equivalentTo(*other.elementConstraint);
+	}
+
 	bool isStructurallyUnconstrained() const {
 		return !kind && !numericSize && !pointerDepth && !arraySize && !matrixRows && !matrixColumns &&
-			   !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
+			   !requiresNumeric && !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
 	}
 
 	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
@@ -114,6 +127,8 @@ struct TypeConstraint {
 		if (matrixRows && argumentType.matrixRowCount != *matrixRows)
 			return false;
 		if (matrixColumns && argumentType.arraySize != *matrixColumns)
+			return false;
+		if (requiresNumeric && !argumentType.isNumeric())
 			return false;
 		if (constrainsClassDefinition && argumentType.classDefinition != classDefinition)
 			return false;
@@ -142,6 +157,13 @@ struct TypeConstraint {
 			incompatible(pointerDepth, other.pointerDepth) || incompatible(arraySize, other.arraySize) ||
 			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns))
 			return false;
+		auto constrainsNonNumericKind = [](const TypeConstraint &constraint) {
+			return constraint.kind && *constraint.kind != DataType::Kind::Int &&
+				   *constraint.kind != DataType::Kind::Float;
+		};
+		if ((requiresNumeric && constrainsNonNumericKind(other)) ||
+			(other.requiresNumeric && constrainsNonNumericKind(*this)))
+			return false;
 		if (constrainsClassDefinition && other.constrainsClassDefinition && classDefinition != other.classDefinition)
 			return false;
 		if (classInstantiationIndex && other.classInstantiationIndex &&
@@ -163,6 +185,46 @@ struct TypeConstraint {
 		return true;
 	}
 
+	// Whether every value accepted by other is also accepted by this constraint.
+	bool contains(const TypeConstraint &other) const {
+		if (!resolved || !other.resolved)
+			return false;
+		auto containsField = [](const auto &required, const auto &provided) {
+			return !required.has_value() || (provided.has_value() && *required == *provided);
+		};
+		if (!containsField(kind, other.kind) || !containsField(numericSize, other.numericSize) ||
+			!containsField(pointerDepth, other.pointerDepth) || !containsField(arraySize, other.arraySize) ||
+			!containsField(matrixRows, other.matrixRows) || !containsField(matrixColumns, other.matrixColumns) ||
+			(requiresCompileTimeValue && !other.requiresCompileTimeValue))
+			return false;
+		if (requiresNumeric &&
+			!other.requiresNumeric &&
+			(!other.kind || (*other.kind != DataType::Kind::Int && *other.kind != DataType::Kind::Float)))
+			return false;
+		if (constrainsClassDefinition &&
+			(!other.constrainsClassDefinition || classDefinition != other.classDefinition))
+			return false;
+		if (classInstantiationIndex) {
+			if (!other.classInstantiationIndex)
+				return false;
+			DataType requiredClassType{DataType::Kind::Class};
+			requiredClassType.pointerDepth = pointerDepth.value_or(0);
+			requiredClassType.classDefinition = classDefinition;
+			requiredClassType.classInstIndex = *classInstantiationIndex;
+			DataType providedClassType{DataType::Kind::Class};
+			providedClassType.pointerDepth = other.pointerDepth.value_or(0);
+			providedClassType.classDefinition = other.classDefinition;
+			providedClassType.classInstIndex = *other.classInstantiationIndex;
+			if (providedClassType != requiredClassType &&
+				!ClassDefinition::typeStructurallyRefines(providedClassType, requiredClassType))
+				return false;
+		}
+		if (elementConstraint &&
+			(!other.elementConstraint || !elementConstraint->contains(*other.elementConstraint)))
+			return false;
+		return true;
+	}
+
 	int structuralSpecificity() const {
 		if (!resolved)
 			return 0;
@@ -172,6 +234,7 @@ struct TypeConstraint {
 		result += arraySize ? 1 : 0;
 		result += matrixRows ? 1 : 0;
 		result += matrixColumns ? 1 : 0;
+		result += requiresNumeric ? 3 : 0;
 		result += constrainsClassDefinition ? 2 : 0;
 		result += classInstantiationIndex ? 1 : 0;
 		result += elementConstraint ? elementConstraint->structuralSpecificity() : 0;
@@ -221,6 +284,8 @@ struct TypeConstraint {
 			return "unresolved constraint";
 		std::string result = requiresCompileTimeValue ? "fixed " : "";
 		if (!kind) {
+			if (requiresNumeric)
+				return result + "number";
 			if (numericSize)
 				return result + "a " + std::to_string(*numericSize * 8) + " bit any";
 			return result + "any";
@@ -241,7 +306,8 @@ struct TypeConstraint {
 							elementConstraint->samePayload(*other.elementConstraint, includeCompileTimeRequirement));
 		return resolved == other.resolved && kind == other.kind && numericSize == other.numericSize &&
 			   pointerDepth == other.pointerDepth && arraySize == other.arraySize && matrixRows == other.matrixRows &&
-			   matrixColumns == other.matrixColumns && constrainsClassDefinition == other.constrainsClassDefinition &&
+			   matrixColumns == other.matrixColumns && requiresNumeric == other.requiresNumeric &&
+			   constrainsClassDefinition == other.constrainsClassDefinition &&
 			   classDefinition == other.classDefinition && classInstantiationIndex == other.classInstantiationIndex &&
 			   sameElement && (!includeCompileTimeRequirement || requiresCompileTimeValue == other.requiresCompileTimeValue);
 	}
@@ -250,12 +316,13 @@ struct TypeConstraint {
 	bool operator!=(const TypeConstraint &other) const { return !(*this == other); }
 	bool operator<(const TypeConstraint &other) const {
 		auto leftScalars = std::tie(
-			resolved, kind, numericSize, pointerDepth, arraySize, matrixRows, matrixColumns, constrainsClassDefinition,
-			classInstantiationIndex, requiresCompileTimeValue
+			resolved, kind, numericSize, pointerDepth, arraySize, matrixRows, matrixColumns, requiresNumeric,
+			constrainsClassDefinition, classInstantiationIndex, requiresCompileTimeValue
 		);
 		auto rightScalars = std::tie(
 			other.resolved, other.kind, other.numericSize, other.pointerDepth, other.arraySize, other.matrixRows,
-			other.matrixColumns, other.constrainsClassDefinition, other.classInstantiationIndex, other.requiresCompileTimeValue
+			other.matrixColumns, other.requiresNumeric, other.constrainsClassDefinition, other.classInstantiationIndex,
+			other.requiresCompileTimeValue
 		);
 		if (leftScalars != rightScalars)
 			return leftScalars < rightScalars;

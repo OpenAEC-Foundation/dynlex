@@ -89,6 +89,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
+	expr->selectedCallablePathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
 	expr->sectionOutcome = {};

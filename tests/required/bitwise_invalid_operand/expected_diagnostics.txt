@@ -3,4 +3,4 @@ lib/std.dl:16-54: Error: Bitwise operator 'bitwise and' requires integer operand
   note: while inferring call 'return @intrinsic("bitwise and", left, right)' with arguments [unresolved(?)] -> undeduced lib/std.dl:9-54
   note: while inferring call '1.5 & 1' with arguments [a 64 bit float, a 32 bit integer] -> undeduced tests/required/bitwise_invalid_operand/main.dl:7-14
   note: while inferring call 'print 1.5 & 1' with arguments [unresolved(?)] -> undeduced tests/required/bitwise_invalid_operand/main.dl:1-14
-  note: while inferring call 'print 1.5 & 1 as line' with arguments [unresolved(?)] -> undeduced tests/required/bitwise_invalid_operand/main.dl:1-22
+  note: while inferring call 'print 1.5 & 1 as a line' with arguments [unresolved(?)] -> undeduced tests/required/bitwise_invalid_operand/main.dl:1-24

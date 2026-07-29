@@ -11,7 +11,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PROJECT_DIR / "scripts"
 PINNED_REPOSITORY = "https://github.com/OpenAEC-Foundation/llvm-project.git"
-PINNED_REVISION = "e5be62d86c56bdd295ad5993b1cb54f0aa4ae9ef"
+PINNED_REVISION = "102332db2c124acd59d44b3463d12d9c2da218a7"
 
 
 class LlvmToolchainTests(unittest.TestCase):

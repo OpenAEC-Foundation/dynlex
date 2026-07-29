@@ -1,6 +1,10 @@
 import lib/graphics.dl
 
+function window should remain open:
+	replacement:
+		the inverse of (the window should close)
+
 if false:
 	set window to a new window with width 1 and height 1
-	loop while not the window should close:
+	loop while window should remain open:
 		close the window

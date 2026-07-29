@@ -1,4 +1,4 @@
-flex function [an|a|] integer:
+flex function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -6,6 +6,6 @@ class:
     patterns:
         [a|] box
     members:
-        value as integer
+        value as an integer
 
 @intrinsic("return", @intrinsic("construct", a box, 1))

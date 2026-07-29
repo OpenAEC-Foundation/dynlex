@@ -1,18 +1,18 @@
 import lib/std.dl
 
-function choose value for n:
+function the value chosen for choice:
     execute:
         set result to 20
-        match on n:
+        match on choice:
             case 1:
-                discard (invoke wider specialization)
+                ignore (the wider specialization)
                 set result to 10
             otherwise:
-                discard result
+                ignore result
         return result
 
-function invoke wider specialization:
+function the wider specialization:
     execute:
-        return choose value for (2 as a 64 bit integer)
+        return the value chosen for (2 as a 64 bit integer)
 
-discard (choose value for 1)
+ignore (the value chosen for 1)

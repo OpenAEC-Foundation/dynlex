@@ -8,19 +8,19 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function a new variabletype from value:
+function a new {type:kind} from value:
 	replacement:
-		@intrinsic("construct", variabletype, value)
+		@intrinsic("construct", kind, value)
 
 # --- Variables ---
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
 flex function set the subject to value:
     replacement:
@@ -32,13 +32,23 @@ flex function it:
 
 # --- Primitive types ---
 
-function [an|a|] integer:
-    patterns:
-        int
+function any:
+    replacement:
+        @intrinsic("type", "any")
+
+function fixed:
+    replacement:
+        @intrinsic("fix", any)
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [an|a|] {fixed integer:bits} bit integer:
+function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
@@ -74,95 +84,83 @@ function [a|] constraint:
     replacement:
         @intrinsic("type", "constraint")
 
-function any:
-    replacement:
-        @intrinsic("type", "any")
-
-function fix:
-    replacement:
-        @intrinsic("fix", any)
-
-function fix tofix:
-    replacement:
-        @intrinsic("fix", tofix)
-
-function fixed:
-    replacement:
-        @intrinsic("fix", any)
-
-function fixed tofix:
-    replacement:
-        @intrinsic("fix", tofix)
-
-function [a|an|] {fixed integer:bits} bit any:
+function [a|] {fixed integer:bits} bit any:
     replacement:
         @intrinsic("type", "any", bits)
 
-function i8:
-    replacement:
-        a byte
-
-function i16:
-    replacement:
-        a 16 bit integer
-
-function i32:
-    replacement:
-        a 32 bit integer
-
-function i64:
-    replacement:
-        a 64 bit integer
-
-function f32:
-    replacement:
-        a 32 bit float
-
-function f64:
-    replacement:
-        a 64 bit float
-
-function void:
+function nothing:
     replacement:
         @intrinsic("type", "void")
 
+function a number:
+    replacement:
+        @intrinsic("number")
+
 # --- Pointer and string types ---
 
-function pointer:
+function [a|] pointer:
     replacement:
-        a pointer to byte
+        a pointer to a byte
 
-function [a|] pointer to pointedtype:
+function [a|] pointer to {type:kind}:
     replacement:
-        @intrinsic("add pointer depth", pointedtype)
+        @intrinsic("add pointer depth", kind)
 
-function [an|a|] array of {fixed integer:n} [item|items]:
+function an array:
     replacement:
-        @intrinsic("array", n)
+        @intrinsic("array")
 
-function [an|a|] elementtype array of {fixed integer:n} [item|items]:
+function [an|] array of {fixed integer:count} [item|items]:
     replacement:
-        @intrinsic("array", n, elementtype)
+        @intrinsic("array", count)
 
-function [an|a|] {fixed integer:n} elementtype array:
+function {type:kind} array of {fixed integer:count} [item|items]:
     replacement:
-        @intrinsic("array", n, elementtype)
+        @intrinsic("array", count, kind)
+
+function {fixed integer:count} {type:kind} array:
+    replacement:
+        @intrinsic("array", count, kind)
+
+flex function [an|] array as long as value:
+    replacement:
+        @intrinsic("array", @intrinsic("type extent", value, 0))
+
+function [an|] array of numbers:
+    replacement:
+        @intrinsic("array", a number)
+
+flex function [an|] array of numbers as long as value:
+    replacement:
+        @intrinsic("array", @intrinsic("type extent", value, 0), a number)
+
+function the length of {an array:values}:
+    replacement:
+        @intrinsic("type extent", values, 0)
+
+function the element type of value:
+    replacement:
+        @intrinsic("element type", value)
+
+function the arithmetic type promoted from {type:left} and {type:right}:
+    replacement:
+        @intrinsic("promote arithmetic type", left, right)
 
 # --- Type casts ---
 
-function value as destinationtype:
+function value as {type:destination}:
     execute:
-        return @intrinsic("cast", value, destinationtype)
+        return @intrinsic("cast", value, destination)
 
-function true_value if condition, else false_value:
+function truth if {boolean:condition}, else falsehood:
     replacement:
-        @intrinsic("select", condition, true_value, false_value)
+        @intrinsic("select", condition, truth, falsehood)
 
-function [the|] build info {fixed cstring:key}:
+function the build info {fixed C string:key}:
     replacement:
         @intrinsic("build info", key)
 
-function [the|] build word size:
+function the build word size:
     replacement:
         @intrinsic("build info", "word size")
 
@@ -170,110 +168,128 @@ function [a|] word sized integer:
     replacement:
         @intrinsic("type", "int", @intrinsic("build info", "word size"))
 
-function [a|] c long integer:
+function [a|] C long integer:
     replacement:
         @intrinsic("type", "int", @intrinsic("build info", "c long size"))
 
-function [the|] build optimization level:
+function the build optimization level:
     replacement:
         @intrinsic("build info", "optimization level")
 
-function [the|] build target is {word:platform}:
+function the build target is CPU:
     replacement:
-        @intrinsic("target is", platform)
+        @intrinsic("target is", "cpu")
 
-function this is a {word:shaderstage} shader:
+function the build target is GPU:
     replacement:
-        @intrinsic("shader stage is", shaderstage)
+        @intrinsic("target is", "gpu")
 
-function [the|] size of typetomeasure:
+function the build target is WebAssembly:
     replacement:
-        @intrinsic("size of", typetomeasure)
+        @intrinsic("target is", "wasm")
 
-function [the|] type of value:
+function an aggregate of {fixed integer:count} {type:kind} values:
+    execute:
+        if the build target is GPU:
+            return @intrinsic("vector", count, kind)
+        return @intrinsic("array", count, kind)
+
+function this is a {word:stage} shader:
+    replacement:
+        @intrinsic("shader stage is", stage)
+
+function the size of kind:
+    replacement:
+        @intrinsic("size of", kind)
+
+function the type of value:
     replacement:
         @intrinsic("type of", value)
 
-function [the|] function named {fixed cstring:name}:
+function the function named {fixed C string:name}:
     replacement:
         @intrinsic("function", name)
 
 # --- Pointers ---
 
-function [the|] address of var:
+function the address of variable:
     replacement:
-        @intrinsic("address of", var)
+        @intrinsic("address of", variable)
 
-function [the|] value at ptr:
+function the value at address:
     replacement:
-        @intrinsic("dereference", ptr)
+        @intrinsic("dereference", address)
 
-function element index of ptr:
+function store value at address:
     replacement:
-        @intrinsic("dereference", ptr + index)
+        @intrinsic("store at", address, value)
+
+function the item at index in address:
+    replacement:
+        @intrinsic("dereference", address + index)
 
 # --- Arithmetic (with precedence) ---
 
 # Precedence chain (lowest to highest):
-#   or < and < not < | < ^ < & < comparisons < <<,>> < +,- < *,/,mod < negative, bitwise not
+#   or < and < the inverse of < | < ^ < & < comparisons < <<,>> < +,- < *,remainder < negative, bitwise inverse
 
 function left[ |]|[ |]right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, the inverse of $
     execute:
         return @intrinsic("bitwise or", left, right)
 
 function left bitwise or right:
-    before: $ or $, $ and $, not $
+    before: $ or $, $ and $, the inverse of $
     execute:
         return @intrinsic("bitwise or", left, right)
 
 function left[ |]^[ |]right:
-    before: $ or $, $ and $, not $, $ | $
+    before: $ or $, $ and $, the inverse of $, $ | $
     execute:
         return @intrinsic("bitwise xor", left, right)
 
 function left bitwise xor right:
-    before: $ or $, $ and $, not $, $ | $
+    before: $ or $, $ and $, the inverse of $, $ | $
     execute:
         return @intrinsic("bitwise xor", left, right)
 
 function left[ |]&[ |]right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $
     execute:
         return @intrinsic("bitwise and", left, right)
 
 function left bitwise and right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $
     execute:
         return @intrinsic("bitwise and", left, right)
 
 function left[ |]<<[ |]right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift left", left, right)
 
-function left shifted left by right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+function value shifted left by distance:
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
-        return @intrinsic("shift left", left, right)
+        return @intrinsic("shift left", value, distance)
 
 function left[ |]>>[ |]right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift right", left, right)
 
-function left shifted right by right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+function value shifted right by distance:
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
-        return @intrinsic("shift right", left, right)
+        return @intrinsic("shift right", value, distance)
 
 function left[ |]+[ |]right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("add", left, right)
 
 function left[ |]-[ |]right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("subtract", left, right)
 
@@ -287,23 +303,67 @@ function left[ |]/[ |]right:
     execute:
         return @intrinsic("divide", left, right)
 
-function left mod right:
+function {an array of numbers:left}[ |]+[ |]{an array of numbers as long as left:right}:
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    execute:
+        set result to left as (
+            (the arithmetic type promoted from (the element type of left) and (the element type of right))
+            array of the length of left items
+        )
+        loop position from 0 to the length of result:
+            store ((the item at position in left) + (the item at position in right)) at result + position
+        return result
+
+function {an array of numbers:left}[ |]-[ |]{an array of numbers as long as left:right}:
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    execute:
+        set result to left as (
+            (the arithmetic type promoted from (the element type of left) and (the element type of right))
+            array of the length of left items
+        )
+        loop position from 0 to the length of result:
+            store ((the item at position in left) - (the item at position in right)) at result + position
+        return result
+
+function {an array of numbers:left}[ |]*[ |]{a number:factor}:
+    before: $ + $, $ - $
+    execute:
+        set result to left as (
+            (the arithmetic type promoted from (the element type of left) and (the type of factor))
+            array of the length of left items
+        )
+        loop position from 0 to the length of result:
+            store ((the item at position in left) * factor) at result + position
+        return result
+
+function {an array of numbers:left}[ |]/[ |]{a number:divisor}:
+    before: $ + $, $ - $
+    execute:
+        set result to left as (
+            (the arithmetic type promoted from (the element type of left) and (the type of divisor))
+            array of the length of left items
+        )
+        loop position from 0 to the length of result:
+            store ((the item at position in left) / divisor) at result + position
+        return result
+
+function the remainder of left divided by right:
     before: $ + $, $ - $
     execute:
         return @intrinsic("modulo", left, right)
 
-function [the |][negative [of ]|opposite [of ]|-]value:
-    before: $ * $, $ / $, $ mod $
+function [the negative of |the opposite of |-]value:
+    before: $ * $, $ / $, the remainder of $ divided by $
     execute:
         return @intrinsic("negate", value)
 
-function [the |]~value:
-    before: $ * $, $ / $, $ mod $
+function ~value:
+    before: $ * $, $ / $, the remainder of $ divided by $
     execute:
         return @intrinsic("bitwise not", value)
 
-function [the|] bitwise not [of|] value:
-    before: $ * $, $ / $, $ mod $
+function the bitwise inverse of value:
+    before: $ * $, $ / $, the remainder of $ divided by $
     execute:
         return @intrinsic("bitwise not", value)
 
@@ -323,71 +383,75 @@ function subtract value from target:
 	replacement:
 		set target to target - value
 
-function increment val:
+function increment value:
 	replacement:
-		set val to val + 1
+		set value to value + 1
 
-function decrement val:
+function decrement value:
 	replacement:
-		set val to val - 1
+		set value to value - 1
 
 # --- Clamping ---
 
-function clamp val between low and high:
+function clamp value between low and high:
 	replacement:
-		if val < low:
-			set val to low
-		if val > high:
-			set val to high
+		if value < low:
+			set value to low
+		if value > high:
+			set value to high
+
+function {a number:value} clamped between {a number:low} and {a number:high}:
+    execute:
+        return @intrinsic("min", @intrinsic("max", value, low), high)
 
 # --- Math functions ---
 
-function [the|] sine of value:
+function the sine of value:
     after: default
     execute:
         return @intrinsic("sin", value)
 
-function [the|] cosine of value:
+function the cosine of value:
     after: default
     execute:
         return @intrinsic("cos", value)
 
-function [the|] square root of value:
+function the square root of value:
     after: default
     execute:
         return @intrinsic("sqrt", value)
 
-function [the|] absolute value of magnitude:
+function the absolute value of magnitude:
     after: default
     execute:
         return @intrinsic("abs", magnitude)
 
-function [the|] floor of value:
+function the floor of value:
     after: default
     execute:
         return @intrinsic("floor", value)
 
-function [the|] ceiling of value:
+function the ceiling of value:
     after: default
     execute:
         return @intrinsic("ceil", value)
 
-function value [raised|] to the power [of|] exponent:
+function value [raised to the power of|to the power of] exponent:
     after: default
     execute:
         return @intrinsic("pow", value, exponent)
 
-function [the|] minimum of a and b:
+function the minimum of left and right:
     after: default
     execute:
-        return @intrinsic("min", a, b)
+        return @intrinsic("min", left, right)
 
-function [the|] maximum of a and b:
+function the maximum of left and right:
     after: default
     execute:
-        return @intrinsic("max", a, b)
+        return @intrinsic("max", left, right)
 
-function [the|] product of left and right:
+function the product of left and right:
     after: default
     execute:
         return @intrinsic("multiply", left, right)
@@ -395,43 +459,43 @@ function [the|] product of left and right:
 # --- Comparison ---
 
 function left < right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than", left, right)
 
 function left > right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than", left, right)
 
 function left = right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left is right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left [!=|is not] right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     replacement:
-        not left = right
+        the inverse of left = right
 
 function left [is less than or equal to|<=] right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than or equal", left, right)
 
 function left [is greater than or equal to|>=] right:
-    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than or equal", left, right)
 
 # --- Logic ---
 
-function not value:
+function the inverse of value:
     before: $ or $, $ and $
     replacement:
         @intrinsic("not", value)
@@ -441,7 +505,7 @@ function {boolean:left} and {boolean:right}:
     execute:
         return @intrinsic("and", left, right)
 
-flex function {void:left} and {void:right}:
+flex function {nothing:left} and {nothing:right}:
     before: $ or $
     replacement:
         left
@@ -454,15 +518,11 @@ function left or right:
 
 # --- Control flow ---
 
-function if {boolean:condition}:
-    execute:
-        return condition
-
 flex function loop while condition:
     replacement:
         @intrinsic("loop while", condition)
 
-flex function execute [the |]body:
+flex function execute the body:
     replacement:
         @intrinsic("execute body")
 
@@ -470,10 +530,10 @@ flex section [loop |]while condition:
     replacement:
         loop while condition
 
-flex section loop iterationcount [time|times]:
+flex section loop count [time|times]:
     replacement:
         set iteration to 0
-        loop while iteration < iterationcount:
+        loop while iteration < count:
             execute the body
             increment iteration
 
@@ -517,7 +577,7 @@ flex section else:
     replacement:
         @intrinsic("else")
 
-flex section [match|switch] [based|] [on|] value:
+flex section [match|switch] [based on|on] value:
     replacement:
         @intrinsic("switch", value)
 
@@ -535,10 +595,10 @@ class:
     patterns:
         [an|] argument list
     members:
-        data as a pointer to cstring
-        length as i32
+        data as a pointer to a C string
+        length as an integer
 
-function [the|] command line arguments:
+function the command line arguments:
     execute:
         return @intrinsic(
             "construct",
@@ -547,9 +607,9 @@ function [the|] command line arguments:
             @intrinsic("command line argument count")
         )
 
-function argument {integer:index} of {argument list:arguments}:
+function the argument at {integer:index} in {argument list:arguments}:
     execute:
         if index < 0 or index >= arguments' length:
-            @intrinsic("call", "libc", "abort", void)
-        set value to item index of arguments' data
-        return new string from data value with length the length of value
+            @intrinsic("call", "libc", "abort", nothing)
+        set value to the item at index in arguments' data
+        return a new string from value containing (the length of value) bytes

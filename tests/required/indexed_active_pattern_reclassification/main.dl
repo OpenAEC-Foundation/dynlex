@@ -1,10 +1,10 @@
-function use b z:
+function value used with sentinel:
     replacement:
-        b
-        hold z
+        value
+        hold sentinel
 
-function recur argument marker:
+function the recurrence of argument with marker:
     replacement:
         argument
-        recur marker marker
-        use q z
+        the recurrence of marker with marker
+        missing used with sentinel

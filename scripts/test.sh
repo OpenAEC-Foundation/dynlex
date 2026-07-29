@@ -4,6 +4,16 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$PROJECT_DIR/tests/required"
+if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX")"; then
+    echo "Failed to create the required-test output directory." >&2
+    exit 1
+fi
+
+cleanup_test_output() {
+    rm -f "$TEST_OUTPUT_DIR/main.out" "$TEST_OUTPUT_DIR/main.exe"
+    rmdir "$TEST_OUTPUT_DIR"
+}
+trap cleanup_test_output EXIT
 
 is_windows=false
 case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
@@ -275,7 +285,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     echo "Testing $test_name..."
     source_file="$test_dir/main.dl"
     expected_file="$test_dir/expected.txt"
-    output_binary="$test_dir/main.out"
+    output_binary="$TEST_OUTPUT_DIR/main.out"
     stack_limit_file="$test_dir/stack_limit_kb.txt"
     arguments_file="$test_dir/arguments.txt"
     standard_input_file="$test_dir/standard_input.txt"
@@ -283,7 +293,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     working_directory_file="$test_dir/working_directory.txt"
     expected_runtime_failure_file="$test_dir/expected_runtime_failure.txt"
     if [[ "$is_windows" == "true" ]]; then
-        output_binary="$test_dir/main.exe"
+        output_binary="$TEST_OUTPUT_DIR/main.exe"
     fi
 
     if [[ ! -f "$source_file" ]]; then
@@ -314,6 +324,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     fi
 
     # Compile (5 second timeout)
+    rm -f "$output_binary"
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
         if [[ ! "$stack_limit_kb" =~ ^[1-9][0-9]*$ ]]; then
@@ -531,6 +542,7 @@ run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
+run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \

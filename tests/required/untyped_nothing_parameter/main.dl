@@ -1,0 +1,9 @@
+function finish:
+    execute:
+        @intrinsic("return")
+
+flex function continue after action:
+    replacement:
+        action
+
+continue after finish

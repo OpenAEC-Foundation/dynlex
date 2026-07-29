@@ -1,4 +1,5 @@
 #include "type.h"
+#include "classLayout.h"
 #include "classDefinition.h"
 #include "compilerUtils.h"
 #include "llvm/IR/DataLayout.h"
@@ -91,7 +92,7 @@ std::string DataType::toString() const {
 	case Kind::Unresolved:
 		return result + "unresolved(" + (typeExpression ? std::string("expr") : std::string("?")) + ")";
 	}
-	for (int i = 0; i < pointerDepth; i++)
+	for (int pointerLevel = 0; pointerLevel < pointerDepth; pointerLevel++)
 		result += "*";
 	return result;
 }
@@ -175,31 +176,24 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 			inst.llvmStructType = llvm::StructType::create(ctx, "class");
 			std::vector<llvm::Type *> llvmFields;
 			llvmFields.reserve(inst.fieldTypes.size());
-			inst.llvmFieldIndices.clear();
-			uint64_t offset = 0;
-			uint64_t structAlignment = 1;
+			std::vector<uint64_t> fieldAlignments;
+			fieldAlignments.reserve(inst.fieldTypes.size());
 			requireCompilerInvariant(
 				inst.fieldTypes.size() == classDefinition->fields.size(),
 				"class instantiation field count differs from its definition"
 			);
-			for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
-				llvm::Type *fieldType = inst.fieldTypes[i].toLLVM(ctx, dataLayout);
-				uint64_t fieldAlignment = inst.fieldTypes[i].getABIAlignment(dataLayout, ctx);
-				fieldAlignment = std::max<uint64_t>(fieldAlignment, classDefinition->fields[i].alignment);
-				uint64_t fieldOffset = llvm::alignTo(offset, fieldAlignment);
-				if (fieldOffset != offset)
-					llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), fieldOffset - offset));
-				inst.llvmFieldIndices.push_back(llvmFields.size());
+			for (size_t fieldIndex = 0; fieldIndex < inst.fieldTypes.size(); fieldIndex++) {
+				llvm::Type *fieldType = inst.fieldTypes[fieldIndex].toLLVM(ctx, dataLayout);
+				uint64_t fieldAlignment = inst.fieldTypes[fieldIndex].getABIAlignment(dataLayout, ctx);
+				fieldAlignment = std::max<uint64_t>(fieldAlignment, classDefinition->fields[fieldIndex].alignment);
 				llvmFields.push_back(fieldType);
-				offset = fieldOffset + fixedAllocationSize(dataLayout, fieldType);
-				structAlignment = std::max(structAlignment, fieldAlignment);
+				fieldAlignments.push_back(fieldAlignment);
 			}
-			structAlignment = std::max<uint64_t>(structAlignment, classDefinition->alignment);
-			uint64_t allocationSize = llvm::alignTo(offset, structAlignment);
-			if (allocationSize != offset)
-				llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(ctx), allocationSize - offset));
-			inst.llvmStructType->setBody(llvmFields);
-			inst.llvmABIAlignment = structAlignment;
+			LLVMClassLayout layout = layoutLLVMClass(
+				ctx, dataLayout, *inst.llvmStructType, llvmFields, fieldAlignments, classDefinition->alignment
+			);
+			inst.llvmFieldIndices = std::move(layout.fieldIndices);
+			inst.llvmABIAlignment = layout.abiAlignment;
 		}
 		return inst.llvmStructType;
 	}

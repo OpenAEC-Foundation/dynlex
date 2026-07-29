@@ -1,19 +1,23 @@
 import lib/process.dl
 
-set invalid_argument to a new string buffer with length 3
-store 65 as a byte into the data of invalid_argument at 0
-store 0 as a byte into the data of invalid_argument at 1
-store 66 as a byte into the data of invalid_argument at 2
+function {process result:result} failed to launch:
+    replacement:
+        the inverse of (result was launched)
+
+set argument to a new string buffer containing 3 bytes
+store 65 as a byte into the data of argument at 0
+store 0 as a byte into the data of argument at 1
+store 66 as a byte into the data of argument at 2
 
 set command to a process command for "unused-executable"
-add invalid_argument as an argument to command
-set child to launch command
-set expected_error to the string form of "Process argument must not be null or contain a zero byte"
+add argument as an argument to command
+launch command and set child to it
+set expected to the string form of "Process argument must not be null or contain a zero byte"
 
-print (not child's launched) as line
-print (the starting error of child = expected_error) as line
+print whether child failed to launch as a line
+print whether (the starting error of child = expected) as a line
 
-set result to run command
-print (not result's launched) as line
-print (not result's succeeded) as line
-print (result's error message = expected_error) as line
+run command and set result to it
+print whether result failed to launch as a line
+print whether result failed as a line
+print whether (result's error message = expected) as a line

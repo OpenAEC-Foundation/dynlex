@@ -4,8 +4,8 @@ class:
     patterns:
         [a|] tracked value
     members:
-        references as pointer to integer
-        number as integer
+        references as a pointer to an integer
+        number as an integer
     retain:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
@@ -13,12 +13,12 @@ class:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
         if count = 0:
-            discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
-            @intrinsic("call", "libc", "free", void, the references of @intrinsic("lifecycle value"))
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
+            @intrinsic("call", "libc", "free", nothing, the references of @intrinsic("lifecycle value"))
 
 function a new tracked value numbered number:
     execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
         return @intrinsic("construct", a tracked value, references, number)
 
 function replace {tracked value:value}:

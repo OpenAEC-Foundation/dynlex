@@ -91,11 +91,11 @@ notifyLsp("initialized", {});
 const mainUri = "file:///workspace/main.dl";
 const mainSource = `import lib/std.dl
 
-function square value:
+function value squared:
     execute:
         return value * value
 
-print square 8 as line
+print 8 squared as a line
 `;
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [mainSource]);
 const didOpenMessages = notifyLsp("textDocument/didOpen", {
@@ -188,7 +188,7 @@ const completionPayload = requestLsp("textDocument/completion", {
 assert.ok(Array.isArray(completionPayload?.items) && completionPayload.items.length > 0);
 
 const documentSymbols = requestLsp("textDocument/documentSymbol", { textDocument });
-assert.ok(Array.isArray(documentSymbols) && documentSymbols.some((symbol) => symbol.name.includes("square")));
+assert.ok(Array.isArray(documentSymbols) && documentSymbols.some((symbol) => symbol.name.includes("squared")));
 
 const semanticTokensPayload = requestLsp("textDocument/semanticTokens/full", { textDocument });
 if (!Array.isArray(semanticTokensPayload.data) || semanticTokensPayload.data.length === 0) {
@@ -207,9 +207,9 @@ const instantiations = requestLsp("dynlex/instantiationsInDocument", textDocumen
 assert.ok(Array.isArray(instantiations));
 assert.ok(
   instantiations.some((entry) => (
-    entry.options.some((option) => option.label === "square {a 32 bit integer:value}")
+    entry.options.some((option) => option.label === "{a 32 bit integer:value} squared")
   )),
-  `Expected typed square instantiation label, got: ${JSON.stringify(instantiations)}`
+  `Expected typed squared-value instantiation label, got: ${JSON.stringify(instantiations)}`
 );
 notifyLsp("dynlex/activeCursorChanged", {
   clientId: "web-smoke",
@@ -253,14 +253,14 @@ assert.equal(codeActions.length, 1);
 assert.equal(codeActions[0].title, "Replace print");
 assert.equal(codeActions[0].edit.changes[mainUri][0].newText, "print");
 
-const changedSource = mainSource.replace("square 8", "square 9");
+const changedSource = mainSource.replace("8 squared", "9 squared");
 const didChangeMessages = notifyLsp("textDocument/didChange", {
   textDocument: { uri: mainUri, version: 2 },
   contentChanges: [
     {
       range: {
-        start: { line: 6, character: 13 },
-        end: { line: 6, character: 14 }
+        start: { line: 6, character: 6 },
+        end: { line: 6, character: 7 }
       },
       text: "9"
     }
@@ -277,8 +277,8 @@ moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
 
 set pulse to the shader time
 set pulse to the sine of pulse
-set pulse to saturate pulse
-set the fragment color to pulse 0.2 0.8 1.0
+set pulse to pulse saturated
+set the fragment color with red pulse, green 0.2, blue 0.8 and alpha 1.0
 `
 ]);
 const shaderStatus = moduleInstance.ccall(
@@ -307,7 +307,7 @@ if (shaderUniforms.uniforms[0].name !== "time" || shaderUniforms.uniforms[0].bin
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
 
-set the output position to the vertex x the vertex y the vertex z the vertex w
+set the output position with x the vertex x, y the vertex y, z the vertex z and w the vertex w
 `
 ]);
 const vertexShaderStatus = moduleInstance.ccall(
@@ -410,15 +410,11 @@ async function compileAndRun(source) {
 
 const writeOutput = await compileAndRun(`import lib/filesystem.dl
 
-write the string form of "saved" to "session.txt" and print if it succeeded
-print "" as line
-append the string form of "-data" to "session.txt" and print if it succeeded
-print "" as line
-copy "session.txt" to "copy.txt" and print if it succeeded
-print "" as line
-rename "copy.txt" to "moved.txt" and print if it succeeded
-print "" as line
-delete "session.txt" and print if it succeeded
+write the string form of "saved" to the file at "session.txt" and print whether it succeeded as a line
+append the string form of "-data" to the file at "session.txt" and print whether it succeeded as a line
+copy the filesystem entry at "session.txt" to "copy.txt" and print whether it succeeded as a line
+rename the filesystem entry at "copy.txt" to "moved.txt" and print whether it succeeded as a line
+delete the filesystem entry at "session.txt" and print whether it succeeded
 `);
 if (writeOutput !== "1\n1\n1\n1\n1") {
   throw new Error(`Unexpected filesystem mutation output: ${JSON.stringify(writeOutput)}`);
@@ -426,10 +422,9 @@ if (writeOutput !== "1\n1\n1\n1\n1") {
 
 const readOutput = await compileAndRun(`import lib/filesystem.dl
 
-read "moved.txt" and print if it succeeded
-print "" as line
-print (the contents of it) as line
-delete "moved.txt" and print if it succeeded
+read the file at "moved.txt" and print whether it succeeded as a line
+print the contents of it as a line
+delete the filesystem entry at "moved.txt" and print whether it succeeded
 `);
 if (readOutput !== "1\nsaved-data\n1") {
   throw new Error(`Unexpected persistent filesystem output: ${JSON.stringify(readOutput)}`);
@@ -437,20 +432,17 @@ if (readOutput !== "1\nsaved-data\n1") {
 
 const metadataOutput = await compileAndRun(`import lib/filesystem.dl
 
-create directory at "metadata" and print if it succeeded
-print "" as line
-print "metadata" is a regular file as line
-print "metadata" is readable as line
-write the string form of "contents" to "metadata/file.txt" and print if it succeeded
-print "" as line
-print "metadata/file.txt" is a regular file as line
-set metadata_entry to the file system entry at "metadata/file.txt"
-print (metadata_entry's modification time)'s seconds > 0 as line
-read "missing.txt" and print if it succeeded
-print "" as line
-print (the length of the error message of it) > 0 as line
-delete "metadata/file.txt"
-delete "metadata"
+create a directory at "metadata" and print whether it succeeded as a line
+print whether "metadata" is a regular file as a line
+print whether "metadata" is readable as a line
+write the string form of "contents" to the file at "metadata/file.txt" and print whether it succeeded as a line
+print whether "metadata/file.txt" is a regular file as a line
+set entry to the file system entry at "metadata/file.txt"
+print whether entry's modification time's seconds > 0 as a line
+read the file at "missing.txt" and print whether it succeeded as a line
+print whether the error message of it is not empty as a line
+delete the filesystem entry at "metadata/file.txt"
+delete the filesystem entry at "metadata"
 `);
 if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
   throw new Error(`Unexpected filesystem metadata output: ${JSON.stringify(metadataOutput)}`);
@@ -458,21 +450,20 @@ if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
 
 const transactionOutput = await compileAndRun(`import lib/filesystem.dl
 
-write the string form of "web" to "transaction-source.txt"
+write the string form of "web" to the file at "transaction-source.txt"
 set entry to the file system entry at "transaction-source.txt"
-print entry's supported as line
-print entry's succeeded as line
-print entry's found as line
-print entry's regular file as line
-print (not entry's mode supported) as line
-print entry's modification time supported as line
-print (not entry's identity's supported) as line
-create a staging file beside "transaction-source.txt"
-set staging to it
-print (not staging's supported) as line
-print (not staging's succeeded) as line
-print ((the length of staging's error message) > 0) as line
-delete "transaction-source.txt"
+print whether entry is supported as a line
+print whether entry lookup succeeded as a line
+print whether entry was found as a line
+print whether entry is a regular file as a line
+print whether entry's mode is unsupported as a line
+print whether entry's modification time is supported as a line
+print whether entry's identity is unsupported as a line
+create a staging file beside "transaction-source.txt" and set staging to it
+print whether staging is unsupported as a line
+print whether staging failed as a line
+print whether staging's error message is not empty as a line
+delete the filesystem entry at "transaction-source.txt"
 `);
 if (transactionOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
   throw new Error(`Unexpected filesystem transaction-capability output: ${JSON.stringify(transactionOutput)}`);
@@ -480,23 +471,23 @@ if (transactionOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
 
 const pathOutput = await compileAndRun(`import lib/path.dl
 
-set posix to the POSIX path style
-set explicit_path to a path from file URI "file:///tmp/%C3%A9%20path" using posix
-print explicit_path's succeeded as line
-print explicit_path's supported as line
-print (explicit_path's value = "/tmp/é path") as line
-set explicit_uri to a file URI for "/tmp/é path" using posix
-print (explicit_uri's succeeded and (explicit_uri's supported and (explicit_uri's value = "file:///tmp/%C3%A9%20path"))) as line
+set style to the POSIX path style
+set decoding to the path from "file:///tmp/%C3%A9%20path" interpreted as a file URI using style
+print whether decoding succeeded as a line
+print whether decoding is supported as a line
+print whether (decoding's value = "/tmp/é path") as a line
+set encoding to the file URI representing "/tmp/é path" using style
+print whether ((encoding succeeded) and ((encoding is supported) and ((encoding's value) = "file:///tmp/%C3%A9%20path"))) as a line
 
-set native_resolution to resolve file URI the string form of "file:///tmp/native"
-print (not native_resolution's succeeded) as line
-print (not native_resolution's supported) as line
-print (native_resolution's value = "") as line
-print (not (native_resolution's error message = "")) as line
-set native_uri to a file URI from native path the string form of "/tmp/native"
-print (not native_uri's succeeded) as line
-print (not native_uri's supported) as line
-print (not (native_uri's error message = "")) as line
+set resolution to the path from (the string form of "file:///tmp/native") interpreted as a file URI
+print whether resolution failed as a line
+print whether resolution is unsupported as a line
+print whether (resolution's value is empty) as a line
+print whether resolution's error message is not empty as a line
+set reference to the file URI for (the string form of "/tmp/native") interpreted as a native path
+print whether reference failed as a line
+print whether reference is unsupported as a line
+print whether reference's error message is not empty as a line
 `);
 if (pathOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
   throw new Error(`Unexpected browser path output: ${JSON.stringify(pathOutput)}`);
@@ -507,28 +498,32 @@ const hostOutput = await compileAndRun(`import lib/host.dl
 set executable to the running executable path
 set directory to the running executable directory
 set platform to whether the host platform is Windows
-set input_chunk to read a chunk from standard input
-print (not executable's succeeded) as line
-print (not executable's supported) as line
-print (not (executable's error message = "")) as line
-print (not directory's succeeded) as line
-print (not directory's supported) as line
-print (not (directory's error message = "")) as line
-print (not platform's succeeded) as line
-print (not platform's supported) as line
-print (not (platform's error message = "")) as line
-print (not input_chunk's succeeded) as line
-print (not input_chunk's supported) as line
-print (input_chunk's contents = "") as line
-print (not input_chunk's end of file) as line
-print (not (input_chunk's error message = "")) as line
+read a chunk from the standard input and set input to it
+print whether executable failed as a line
+print whether executable is unsupported as a line
+print whether executable's error message is not empty as a line
+print whether directory failed as a line
+print whether directory is unsupported as a line
+print whether directory's error message is not empty as a line
+print whether platform failed as a line
+print whether platform is unsupported as a line
+print whether platform's error message is not empty as a line
+print whether input failed as a line
+print whether input is unsupported as a line
+print whether the length of input's contents is 0 as a line
+print whether input has not reached the end of file as a line
+print whether input's error message is not empty as a line
 `);
 if (hostOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
   throw new Error(`Unexpected browser host output: ${JSON.stringify(hostOutput)}`);
 }
 
 const variadicOutput = await compileAndRun(
-  `@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %.1f %d %s\\n", @intrinsic("cast", 7, @intrinsic("type", "int", 8)), @intrinsic("cast", 1.5, @intrinsic("type", "float", 32)), @intrinsic("cast", 1, @intrinsic("type", "bool")), "ok"))`
+  `function print a variadic sample:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %.1f %d %s\\n", @intrinsic("cast", 7, @intrinsic("type", "int", 8)), @intrinsic("cast", 1.5, @intrinsic("type", "float", 32)), @intrinsic("cast", 1, @intrinsic("type", "bool")), "ok"))
+
+print a variadic sample`
 );
 if (variadicOutput !== "7 1.5 1 ok\n") {
   throw new Error(`Unexpected variadic runtime output: ${JSON.stringify(variadicOutput)}`);
@@ -540,29 +535,33 @@ class:
     patterns:
         [a|] layout sample
     members:
-        marker as byte
-        text as string
-        count as i32
+        marker as a byte
+        text as a string
+        count as a 32 bit integer
 
 class:
     patterns:
-        [an|a|] aligned layout sample
+        [an|] aligned layout sample
     alignment:
         16
     members:
-        marker as byte
+        marker as a byte
         padding:
             8
-        count as i32
-        tail as byte
+        count as a 32 bit integer
+        tail as a byte
 
-print the size of a string as line
-print the size of a layout sample as line
-print the size of a c long integer as line
-print the size of an aligned layout sample as line
-set aligned to @intrinsic("construct", an aligned layout sample, 1 as a byte, 42, 2 as a byte)
-print the count of aligned as line
-print the tail of aligned as line
+function an aligned layout sample with marker {byte:marker}, count {a 32 bit integer:count} and tail {byte:tail}:
+    replacement:
+        @intrinsic("construct", an aligned layout sample, marker, count, tail)
+
+print the size of a string as a line
+print the size of a layout sample as a line
+print the size of a C long integer as a line
+print the size of an aligned layout sample as a line
+set sample to an aligned layout sample with marker 1 as a byte, count 42 and tail 2 as a byte
+print sample's count as a line
+print sample's tail as a line
 `);
 if (targetLayoutOutput !== "12\n20\n4\n16\n42\n2\n") {
   throw new Error(`Unexpected wasm target layout output: ${JSON.stringify(targetLayoutOutput)}`);
@@ -606,7 +605,7 @@ assert.equal(
 );
 const shaderHover = requestLsp("textDocument/hover", {
   textDocument: { uri: shaderHoverUri },
-  position: { line: 6, character: 10 }
+  position: { line: 84, character: 14 }
 });
 assert.ok(
   shaderHover?.contents,

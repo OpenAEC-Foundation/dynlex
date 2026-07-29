@@ -1,379 +1,433 @@
-# UTF-8 decoding, UTF-16 position conversion, and byte-based line indexing.
-# Status 0 is success, 1 is invalid UTF-8 input, and 2 is an invalid requested
+# UTF8 decoding, UTF16 position conversion, and byte-based line indexing.
+# Status 0 is success, 1 is invalid UTF8 input, and 2 is an invalid requested
 # code-point boundary or position. Error byte offsets are zero-based.
 
 import lib/string.dl
 
 class:
     patterns:
-        [a|] utf8 validation result
+        [a|] UTF8 validation result
     members:
-        status as i32
-        error_byte_offset as i32
+        status as an integer
+        error byte offset as an integer
 
 class:
     patterns:
-        [a|] utf8 code point result
+        [a|] UTF8 code point result
     members:
-        status as i32
-        code_point as i32
-        byte_offset as i32
-        next_byte_offset as i32
-        error_byte_offset as i32
+        status as an integer
+        code point as an integer
+        byte offset as an integer
+        next byte offset as an integer
+        error byte offset as an integer
 
 class:
     patterns:
         [a|] text position result
     members:
-        status as i32
-        position as i32
-        error_byte_offset as i32
+        status as an integer
+        position as an integer
+        error byte offset as an integer
+
+class:
+    patterns:
+        [a|] text line
+    members:
+        start as an integer
+        content end as an integer
+        next start as an integer
 
 class:
     patterns:
         [a|] text line index
     members:
-        starts as a pointer to i32
-        content_ends as a pointer to i32
-        next_starts as a pointer to i32
-        line_count as i32
-        source_length as i32
+        lines as a pointer to a text line
+        line count as an integer
+        source length as an integer
 
 class:
     patterns:
         [a|] text line index result
     members:
-        status as i32
-        line_index as a pointer to text line index
-        error_byte_offset as i32
+        status as an integer
+        line index as a pointer to a text line index
+        error byte offset as an integer
 
-function [the|] text position success status:
+function the text position success status:
     replacement:
         0
 
-function [the|] invalid utf8 status:
+function the invalid UTF8 status:
     replacement:
         1
 
-function [the|] invalid text position status:
+function the invalid text position status:
     replacement:
         2
 
-function [the|] error byte offset of {utf8 validation result:result}:
+function the error byte offset of {UTF8 validation result:result}:
     replacement:
-        @intrinsic("property", result, "error_byte_offset")
+        result's error byte offset
 
-function [the|] error byte offset of {utf8 code point result:result}:
+function the error byte offset of {UTF8 code point result:result}:
     replacement:
-        @intrinsic("property", result, "error_byte_offset")
+        result's error byte offset
 
-function [the|] error byte offset of {text position result:result}:
+function the error byte offset of {text position result:result}:
     replacement:
-        @intrinsic("property", result, "error_byte_offset")
+        result's error byte offset
 
-function [the|] error byte offset of {text line index result:result}:
+function the error byte offset of {text line index result:result}:
     replacement:
-        @intrinsic("property", result, "error_byte_offset")
+        result's error byte offset
 
-function [the|] code point of {utf8 code point result:result}:
+function the code point of {UTF8 code point result:result}:
     replacement:
-        @intrinsic("property", result, "code_point")
+        result's code point
 
-function [the|] byte offset of {utf8 code point result:result}:
+function the byte offset of {UTF8 code point result:result}:
     replacement:
-        @intrinsic("property", result, "byte_offset")
+        result's byte offset
 
-function [the|] next byte offset of {utf8 code point result:result}:
+function the next byte offset of {UTF8 code point result:result}:
     replacement:
-        @intrinsic("property", result, "next_byte_offset")
+        result's next byte offset
 
-function [the|] line index of {text line index result:result}:
+function the line index of {text line index result:result}:
     replacement:
-        @intrinsic("property", result, "line_index")
+        result's line index
 
-local function [the|] unsigned utf8 byte at {integer:offset} in {string:text}:
+function {UTF8 validation result:result} succeeded:
+    replacement:
+        result's status = the text position success status
+
+function {UTF8 validation result:result} failed:
+    replacement:
+        result's status != the text position success status
+
+function {UTF8 code point result:result} succeeded:
+    replacement:
+        result's status = the text position success status
+
+function {UTF8 code point result:result} failed:
+    replacement:
+        result's status != the text position success status
+
+function {text position result:result} succeeded:
+    replacement:
+        result's status = the text position success status
+
+function {text position result:result} failed:
+    replacement:
+        result's status != the text position success status
+
+function {text line index result:result} succeeded:
+    replacement:
+        result's status = the text position success status
+
+function {text line index result:result} failed:
+    replacement:
+        result's status != the text position success status
+
+local function the unsigned UTF8 byte at {integer:offset} in {string:text}:
     execute:
-        return (character offset of text as i32) bitwise and 255
+        return (the character at offset in text as a 32 bit integer) bitwise and 255
 
-local function a successful utf8 validation:
+local function a successful UTF8 validation:
     replacement:
-        @intrinsic("construct", a utf8 validation result, the text position success status, 0 - 1)
+        @intrinsic("construct", a UTF8 validation result, the text position success status, 0 - 1)
 
-local function an invalid utf8 validation at {integer:error_offset}:
+local function an invalid UTF8 validation at {integer:error}:
     replacement:
-        @intrinsic("construct", a utf8 validation result, the invalid utf8 status, error_offset)
+        @intrinsic("construct", a UTF8 validation result, the invalid UTF8 status, error)
 
-local function a decoded utf8 code point {integer:value} at {integer:offset} ending at {integer:next_offset}:
+local function a decoded UTF8 code point {integer:value} at {integer:offset} ending at {integer:finish}:
     replacement:
-        @intrinsic("construct", a utf8 code point result, the text position success status, value, offset, next_offset, 0 - 1)
+        @intrinsic("construct", a UTF8 code point result, the text position success status, value, offset, finish, 0 - 1)
 
-local function an invalid utf8 code point at {integer:offset} reporting {integer:error_offset}:
+local function an invalid UTF8 code point at {integer:offset} reporting {integer:error}:
     replacement:
-        @intrinsic("construct", a utf8 code point result, the invalid utf8 status, 0, offset, offset, error_offset)
+        @intrinsic("construct", a UTF8 code point result, the invalid UTF8 status, 0, offset, offset, error)
 
-local function an invalid utf8 code point position at {integer:offset}:
+local function an invalid UTF8 code point position at {integer:offset}:
     replacement:
-        @intrinsic("construct", a utf8 code point result, the invalid text position status, 0, offset, offset, 0 - 1)
+        @intrinsic("construct", a UTF8 code point result, the invalid text position status, 0, offset, offset, 0 - 1)
 
-local function utf8 {integer:byte_value} is a continuation byte:
+local function {integer:value} is a UTF8 continuation byte:
     execute:
-        return byte_value >= 128 and byte_value <= 191
+        return value >= 128 and value <= 191
 
-local function decode raw utf8 code point in {string:text} at {integer:offset}:
+local function {integer:value} is not a UTF8 continuation byte:
     execute:
-        set first to the unsigned utf8 byte at offset in text
+        return value < 128 or value > 191
+
+local function the raw UTF8 code point in {string:text} at {integer:offset}:
+    execute:
+        set first to the unsigned UTF8 byte at offset in text
         if first <= 127:
-            return a decoded utf8 code point first at offset ending at offset + 1
+            return a decoded UTF8 code point first at offset ending at offset + 1
         if first < 194 or first > 244:
-            return an invalid utf8 code point at offset reporting offset
+            return an invalid UTF8 code point at offset reporting offset
         if offset + 1 >= the length of text:
-            return an invalid utf8 code point at offset reporting the length of text
-        set second to the unsigned utf8 byte at offset + 1 in text
-        if not utf8 second is a continuation byte:
-            return an invalid utf8 code point at offset reporting offset + 1
+            return an invalid UTF8 code point at offset reporting the length of text
+        set second to the unsigned UTF8 byte at offset + 1 in text
+        if second is not a UTF8 continuation byte:
+            return an invalid UTF8 code point at offset reporting offset + 1
         if first = 224 and second < 160:
-            return an invalid utf8 code point at offset reporting offset + 1
+            return an invalid UTF8 code point at offset reporting offset + 1
         if first = 237 and second > 159:
-            return an invalid utf8 code point at offset reporting offset + 1
+            return an invalid UTF8 code point at offset reporting offset + 1
         if first = 240 and second < 144:
-            return an invalid utf8 code point at offset reporting offset + 1
+            return an invalid UTF8 code point at offset reporting offset + 1
         if first = 244 and second > 143:
-            return an invalid utf8 code point at offset reporting offset + 1
+            return an invalid UTF8 code point at offset reporting offset + 1
         if first <= 223:
-            set code_point to ((first - 192) * 64) + (second - 128)
-            return a decoded utf8 code point code_point at offset ending at offset + 2
+            set scalar to ((first - 192) * 64) + (second - 128)
+            return a decoded UTF8 code point scalar at offset ending at offset + 2
         if offset + 2 >= the length of text:
-            return an invalid utf8 code point at offset reporting the length of text
-        set third to the unsigned utf8 byte at offset + 2 in text
-        if not utf8 third is a continuation byte:
-            return an invalid utf8 code point at offset reporting offset + 2
+            return an invalid UTF8 code point at offset reporting the length of text
+        set third to the unsigned UTF8 byte at offset + 2 in text
+        if third is not a UTF8 continuation byte:
+            return an invalid UTF8 code point at offset reporting offset + 2
         if first <= 239:
-            set code_point to (((first - 224) * 4096) + ((second - 128) * 64)) + (third - 128)
-            return a decoded utf8 code point code_point at offset ending at offset + 3
+            set scalar to (((first - 224) * 4096) + ((second - 128) * 64)) + (third - 128)
+            return a decoded UTF8 code point scalar at offset ending at offset + 3
         if offset + 3 >= the length of text:
-            return an invalid utf8 code point at offset reporting the length of text
-        set fourth to the unsigned utf8 byte at offset + 3 in text
-        if not utf8 fourth is a continuation byte:
-            return an invalid utf8 code point at offset reporting offset + 3
-        set code_point to ((((first - 240) * 262144) + ((second - 128) * 4096)) + ((third - 128) * 64)) + (fourth - 128)
-        return a decoded utf8 code point code_point at offset ending at offset + 4
+            return an invalid UTF8 code point at offset reporting the length of text
+        set fourth to the unsigned UTF8 byte at offset + 3 in text
+        if fourth is not a UTF8 continuation byte:
+            return an invalid UTF8 code point at offset reporting offset + 3
+        set scalar to ((((first - 240) * 262144) + ((second - 128) * 4096)) + ((third - 128) * 64)) + (fourth - 128)
+        return a decoded UTF8 code point scalar at offset ending at offset + 4
 
-function validate {string:text} as utf8:
+local function the UTF8 validation of {string:text}:
     execute:
         set offset to 0
         loop while offset < the length of text:
-            set decoded to decode raw utf8 code point in text at offset
+            set decoded to the raw UTF8 code point in text at offset
             if the status of decoded != the text position success status:
-                return an invalid utf8 validation at the error byte offset of decoded
+                return an invalid UTF8 validation at the error byte offset of decoded
             set offset to the next byte offset of decoded
-        return a successful utf8 validation
+        return a successful UTF8 validation
 
-function validate {cstring:text} as utf8:
+local function the UTF8 validation of {C string:text}:
     execute:
-        return validate the string form of text as utf8
+        return the UTF8 validation of the string form of text
 
-function {string:text} is valid utf8:
-    execute:
-        set validation to validate text as utf8
-        return the status of validation = the text position success status
+flex function validate text as UTF8:
+    replacement:
+        set the subject to the UTF8 validation of text
 
-function {cstring:text} is valid utf8:
+function {string:text} is valid UTF8:
     execute:
-        return the string form of text is valid utf8
+        validate text as UTF8 and set validation to it
+        return validation succeeded
 
-function decode utf8 code point in {string:text} at byte offset {integer:requested_offset}:
+function {C string:text} is valid UTF8:
     execute:
-        if requested_offset < 0 or requested_offset >= the length of text:
-            return an invalid utf8 code point position at requested_offset
+        return the string form of text is valid UTF8
+
+local function the UTF8 code point decoded in {string:text} at byte {integer:offset}:
+    execute:
+        if offset < 0 or offset >= the length of text:
+            return an invalid UTF8 code point position at offset
         set cursor to 0
-        loop while cursor < requested_offset:
-            set decoded to decode raw utf8 code point in text at cursor
-            if the status of decoded != the text position success status:
-                return decoded
-            if the next byte offset of decoded > requested_offset:
-                return an invalid utf8 code point position at requested_offset
-            set cursor to the next byte offset of decoded
-        return decode raw utf8 code point in text at requested_offset
+        loop while cursor < offset:
+            set entry to the raw UTF8 code point in text at cursor
+            if the status of entry != the text position success status:
+                return entry
+            if the next byte offset of entry > offset:
+                return an invalid UTF8 code point position at offset
+            set cursor to the next byte offset of entry
+        return the raw UTF8 code point in text at offset
 
-function decode utf8 code point in {cstring:text} at byte offset {integer:requested_offset}:
+local function the UTF8 code point decoded in {C string:text} at byte {integer:offset}:
     execute:
-        return decode utf8 code point in the string form of text at byte offset requested_offset
+        return the UTF8 code point decoded in the string form of text at byte offset
+
+flex function decode the UTF8 code point in {string:text} at byte {integer:offset}:
+    replacement:
+        set the subject to the UTF8 code point decoded in text at byte offset
+
+flex function decode the UTF8 code point in {C string:text} at byte {integer:offset}:
+    replacement:
+        set the subject to the UTF8 code point decoded in text at byte offset
 
 local function a successful text position at {integer:position}:
     replacement:
         @intrinsic("construct", a text position result, the text position success status, position, 0 - 1)
 
-local function an invalid text input position reporting {integer:error_offset}:
+local function an invalid text input position reporting {integer:error}:
     replacement:
-        @intrinsic("construct", a text position result, the invalid utf8 status, 0, error_offset)
+        @intrinsic("construct", a text position result, the invalid UTF8 status, 0, error)
 
 local function an invalid requested text position:
     replacement:
         @intrinsic("construct", a text position result, the invalid text position status, 0, 0 - 1)
 
-local function convert utf8 offset {integer:requested_offset} into utf16 units for {string:text}:
+local function the UTF16 position result in {string:text} for byte {integer:offset}:
     execute:
-        set validation to validate text as utf8
-        if the status of validation != the text position success status:
+        validate text as UTF8 and set validation to it
+        if validation failed:
             return an invalid text input position reporting the error byte offset of validation
-        if requested_offset < 0 or requested_offset > the length of text:
+        if offset < 0 or offset > the length of text:
             return an invalid requested text position
-        set byte_offset to 0
-        set utf16_position to 0
-        loop while byte_offset < requested_offset:
-            set decoded to decode raw utf8 code point in text at byte_offset
-            if the next byte offset of decoded > requested_offset:
+        set cursor to 0
+        set total to 0
+        loop while cursor < offset:
+            set decoded to the raw UTF8 code point in text at cursor
+            if the next byte offset of decoded > offset:
                 return an invalid requested text position
             if the code point of decoded > 65535:
-                set utf16_position to utf16_position + 2
+                set total to total + 2
             else:
-                set utf16_position to utf16_position + 1
-            set byte_offset to the next byte offset of decoded
-        return a successful text position at utf16_position
+                set total to total + 1
+            set cursor to the next byte offset of decoded
+        return a successful text position at total
 
-function utf8 byte offset {integer:requested_offset} to utf16 position in {string:text}:
+function the UTF16 position of UTF8 byte offset {integer:offset} in {string:text}:
     replacement:
-        convert utf8 offset requested_offset into utf16 units for text
+        the UTF16 position result in text for byte offset
 
-function utf8 byte offset {integer:requested_offset} to utf16 position in {cstring:text}:
+function the UTF16 position of UTF8 byte offset {integer:offset} in {C string:text}:
     replacement:
-        convert utf8 offset requested_offset into utf16 units for the string form of text
+        the UTF16 position result in the string form of text for byte offset
 
-local function convert utf16 units {integer:requested_position} into utf8 offset for {string:text}:
+local function the UTF8 byte offset result for UTF16 position {integer:request} in {string:text}:
     execute:
-        set validation to validate text as utf8
-        if the status of validation != the text position success status:
+        validate text as UTF8 and set validation to it
+        if validation failed:
             return an invalid text input position reporting the error byte offset of validation
-        if requested_position < 0:
+        if request < 0:
             return an invalid requested text position
-        set byte_offset to 0
-        set utf16_position to 0
-        loop while byte_offset < the length of text:
-            if utf16_position = requested_position:
-                return a successful text position at byte_offset
-            set decoded to decode raw utf8 code point in text at byte_offset
-            set next_utf16_position to utf16_position + 1
+        set cursor to 0
+        set total to 0
+        loop while cursor < the length of text:
+            if total = request:
+                return a successful text position at cursor
+            set decoded to the raw UTF8 code point in text at cursor
+            set next to total + 1
             if the code point of decoded > 65535:
-                set next_utf16_position to utf16_position + 2
-            if requested_position < next_utf16_position:
+                set next to total + 2
+            if request < next:
                 return an invalid requested text position
-            set utf16_position to next_utf16_position
-            set byte_offset to the next byte offset of decoded
-        if utf16_position = requested_position:
-            return a successful text position at byte_offset
+            set total to next
+            set cursor to the next byte offset of decoded
+        if total = request:
+            return a successful text position at cursor
         return an invalid requested text position
 
-function utf16 position {integer:requested_position} to utf8 byte offset in {string:text}:
+function the UTF8 byte offset of UTF16 position {integer:request} in {string:text}:
     replacement:
-        convert utf16 units requested_position into utf8 offset for text
+        the UTF8 byte offset result for UTF16 position request in text
 
-function utf16 position {integer:requested_position} to utf8 byte offset in {cstring:text}:
+function the UTF8 byte offset of UTF16 position {integer:request} in {C string:text}:
     replacement:
-        convert utf16 units requested_position into utf8 offset for the string form of text
+        the UTF8 byte offset result for UTF16 position request in the string form of text
 
-local function a failed text line index reporting {integer:error_offset}:
+local function a failed text line index reporting {integer:error}:
     replacement:
-        @intrinsic("construct", a text line index result, the invalid utf8 status, 0 as a pointer to text line index, error_offset)
+        @intrinsic("construct", a text line index result, the invalid UTF8 status, 0 as a pointer to a text line index, error)
 
-local function a successful text line index containing {a pointer to text line index:index}:
+local function a successful text line index containing {a pointer to a text line index:index}:
     replacement:
         @intrinsic("construct", a text line index result, the text position success status, index, 0 - 1)
 
-function scan lines in {string:text}:
+local function the line index scanned from {string:text}:
     execute:
-        set validation to validate text as utf8
-        if the status of validation != the text position success status:
+        validate text as UTF8 and set validation to it
+        if validation failed:
             return a failed text line index reporting the error byte offset of validation
-        set maximum_lines to the length of text + 1
-        set starts to allocate maximum_lines slots of i32
-        set content_ends to allocate maximum_lines slots of i32
-        set next_starts to allocate maximum_lines slots of i32
-        store 0 into starts at 0
-        set line_count to 1
+        set capacity to the length of text + 1
+        allocate capacity slots of a text line and set lines to it
+        set count to 0
+        set start to 0
         set offset to 0
         loop while offset < the length of text:
-            set character_value to the unsigned utf8 byte at offset in text
-            if character_value = 13:
-                store offset into content_ends at line_count - 1
-                set next_start to offset + 1
-                if next_start < the length of text:
-                    if the unsigned utf8 byte at next_start in text = 10:
-                        set next_start to next_start + 1
-                store next_start into next_starts at line_count - 1
-                store next_start into starts at line_count
-                set line_count to line_count + 1
-                set offset to next_start
-            else if character_value = 10:
-                store offset into content_ends at line_count - 1
-                set next_start to offset + 1
-                store next_start into next_starts at line_count - 1
-                store next_start into starts at line_count
-                set line_count to line_count + 1
-                set offset to next_start
+            set character to the unsigned UTF8 byte at offset in text
+            if character = 13:
+                set next to offset + 1
+                if next < the length of text:
+                    if the unsigned UTF8 byte at next in text = 10:
+                        set next to next + 1
+                set entry to @intrinsic("construct", a text line, start, offset, next)
+                @intrinsic("initialize at", lines + count, entry)
+                set count to count + 1
+                set start to next
+                set offset to next
+            else if character = 10:
+                set next to offset + 1
+                set entry to @intrinsic("construct", a text line, start, offset, next)
+                @intrinsic("initialize at", lines + count, entry)
+                set count to count + 1
+                set start to next
+                set offset to next
             else:
                 set offset to offset + 1
-        store the length of text into content_ends at line_count - 1
-        store the length of text into next_starts at line_count - 1
-        set initial_index to @intrinsic("construct", a text line index, starts, content_ends, next_starts, line_count, the length of text)
-        set line_map to allocate 1 slots of initial_index
-        return a successful text line index containing line_map
+        set entry to @intrinsic("construct", a text line, start, the length of text, the length of text)
+        @intrinsic("initialize at", lines + count, entry)
+        set count to count + 1
+        set initial to @intrinsic("construct", a text line index, lines, count, the length of text)
+        allocate 1 slots of initial and set catalogue to it
+        return a successful text line index containing catalogue
 
-function scan lines in {cstring:text}:
+local function the line index scanned from {C string:text}:
     execute:
-        return scan lines in the string form of text
+        return the line index scanned from the string form of text
 
-function [the|] number of lines in {a pointer to text line index:index}:
+flex function scan lines in text:
     replacement:
-        @intrinsic("property", index, "line_count")
+        set the subject to the line index scanned from text
 
-function line start for line {integer:requested_line} in {a pointer to text line index:index}:
+function the number of lines in {a pointer to a text line index:index}:
+    replacement:
+        index's line count
+
+function the start of line {integer:number} in {a pointer to a text line index:index}:
     execute:
-        set line_count to @intrinsic("property", index, "line_count")
-        if requested_line < 0 or requested_line >= line_count:
+        set count to index's line count
+        if number < 0 or number >= count:
             return an invalid requested text position
-        return a successful text position at item requested_line of the starts of index
+        set entry to the item at number in (index's lines)
+        return a successful text position at entry's start
 
-function line content end for line {integer:requested_line} in {a pointer to text line index:index}:
+function the content end of line {integer:number} in {a pointer to a text line index:index}:
     execute:
-        set line_count to @intrinsic("property", index, "line_count")
-        if requested_line < 0 or requested_line >= line_count:
+        set count to index's line count
+        if number < 0 or number >= count:
             return an invalid requested text position
-        set content_ends to @intrinsic("property", index, "content_ends")
-        return a successful text position at item requested_line of content_ends
+        set entry to the item at number in (index's lines)
+        return a successful text position at entry's content end
 
-function next line start for line {integer:requested_line} in {a pointer to text line index:index}:
+function the next start after line {integer:number} in {a pointer to a text line index:index}:
     execute:
-        set line_count to @intrinsic("property", index, "line_count")
-        if requested_line < 0 or requested_line >= line_count:
+        set count to index's line count
+        if number < 0 or number >= count:
             return an invalid requested text position
-        set next_starts to @intrinsic("property", index, "next_starts")
-        return a successful text position at item requested_line of next_starts
+        set entry to the item at number in (index's lines)
+        return a successful text position at entry's next start
 
-function line number at byte offset {integer:requested_offset} in {a pointer to text line index:index}:
+function the line number at byte offset {integer:offset} in {a pointer to a text line index:index}:
     execute:
-        set source_length to @intrinsic("property", index, "source_length")
-        if requested_offset < 0 or requested_offset > source_length:
+        set length to index's source length
+        if offset < 0 or offset > length:
             return an invalid requested text position
-        set line_count to @intrinsic("property", index, "line_count")
-        set next_starts to @intrinsic("property", index, "next_starts")
-        set line_number to 0
-        loop while line_number + 1 < line_count:
-            if requested_offset < item line_number of next_starts:
-                return a successful text position at line_number
-            set line_number to line_number + 1
-        return a successful text position at line_number
+        set count to index's line count
+        set cursor to 0
+        loop while cursor + 1 < count:
+            set entry to the item at cursor in (index's lines)
+            if offset < entry's next start:
+                return a successful text position at cursor
+            set cursor to cursor + 1
+        return a successful text position at cursor
 
-function free line index {a pointer to text line index:line_map}:
+function free {a pointer to a text line index:index}:
     execute:
-        @intrinsic("call", "libc", "free", void, the starts of line_map)
-        set content_ends to @intrinsic("property", line_map, "content_ends")
-        set next_starts to @intrinsic("property", line_map, "next_starts")
-        @intrinsic("call", "libc", "free", void, content_ends)
-        @intrinsic("call", "libc", "free", void, next_starts)
-        @intrinsic("call", "libc", "free", void, line_map)
+        @intrinsic("call", "libc", "free", nothing, index's lines)
+        @intrinsic("call", "libc", "free", nothing, index)
 
-function free line index result {text line index result:outcome}:
+function free {text line index result:outcome}:
     execute:
-        set line_map to @intrinsic("property", outcome, "line_index")
-        if line_map != (0 as a pointer to text line index):
-            free line index line_map
+        set catalogue to outcome's line index
+        if catalogue != (0 as a pointer to a text line index):
+            free catalogue

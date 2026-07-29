@@ -4,6 +4,6 @@ import std.dl
 # would hang the compiler, so it is rejected with a diagnostic instead.
 function probe [a1|b1] [a2|b2] [a3|b3] [a4|b4] [a5|b5] [a6|b6] [a7|b7] [a8|b8] [a9|b9] [a10|b10] [a11|b11]:
 	execute:
-		print 1 as line
+		print 1 as a line
 
 probe a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11

@@ -2,15 +2,15 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [an|a|] {fixed integer:bits} bit integer:
+function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
@@ -30,14 +30,6 @@ function any:
     replacement:
         @intrinsic("type", "any")
 
-function fix:
-    replacement:
-        @intrinsic("fix", any)
-
-function fix value:
-    replacement:
-        @intrinsic("fix", value)
-
 function fixed:
     replacement:
         @intrinsic("fix", any)
@@ -46,7 +38,7 @@ function fixed value:
     replacement:
         @intrinsic("fix", value)
 
-function [a|an|] {fixed integer:bits} bit any:
+function [a|] {fixed integer:bits} bit any:
     replacement:
         @intrinsic("type", "any", bits)
 
@@ -54,7 +46,7 @@ function [a|] pointer to pointed:
     replacement:
         @intrinsic("add pointer depth", pointed)
 
-function array of {fixed integer:size} element:
+function [an|] array containing {fixed integer:size} element [item|items]:
     replacement:
         @intrinsic("array", size, element)
 
@@ -62,29 +54,29 @@ function value as {fixed type:destination}:
     replacement:
         @intrinsic("cast", value, destination)
 
-function capture {fix:value}:
+function the captured value of {fixed:value}:
     execute:
         return 1
 
-function describe {a 64 bit any:value}:
+function the description of {a 64 bit any:value}:
     execute:
         return 64
 
-function describe pointer {a pointer to any:value}:
+function the description of pointer {a pointer to any:value}:
     execute:
         return 8
 
-function describe pair {array of 2 any:value}:
+function the description of pair {an array containing 2 any items:value}:
     execute:
         return 2
 
 function print value:
     execute:
-        discard @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value)
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value)
 
-print capture 12
-print capture integer
-print describe (1 as a 64 bit integer)
-print describe (1 as a 64 bit float)
-print describe pointer "value"
-print describe pair [1, 2]
+print the captured value of 12
+print the captured value of an integer
+print the description of (1 as a 64 bit integer)
+print the description of (1 as a 64 bit float)
+print the description of pointer "value"
+print the description of pair [1, 2]

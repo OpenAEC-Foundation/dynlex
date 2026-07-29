@@ -354,7 +354,9 @@ static bool isInternalSection(Section *section) {
 struct PatternDomainAutomaton {
 	struct Transition {
 		size_t target;
-		DefinitionPatternElement element;
+		PatternElement element;
+		TypeConstraint constraint = TypeConstraint::any();
+		int constraintSpecificity = 0;
 	};
 	struct State {
 		std::vector<size_t> epsilonTargets;
@@ -366,8 +368,12 @@ struct PatternDomainAutomaton {
 
 	explicit PatternDomainAutomaton(const PatternDefinition &definition) {
 		states[1].accepting = true;
-		for (const auto &path : canonicalPatternPaths(definition.patternElements))
-			addSequence(path, 0, 1);
+		requireCompilerInvariant(
+			definition.indexedPaths.size() == definition.signaturePaths.size(),
+			"pattern paths and compiled signatures diverged during conflict validation"
+		);
+		for (size_t pathIndex = 0; pathIndex < definition.indexedPaths.size(); pathIndex++)
+			addSequence(definition.indexedPaths[pathIndex], definition.signaturePaths[pathIndex], 0, 1);
 	}
 
   private:
@@ -376,17 +382,35 @@ struct PatternDomainAutomaton {
 		return states.size() - 1;
 	}
 
-	void addSequence(const std::vector<DefinitionPatternElement> &elements, size_t start, size_t end) {
+	void addSequence(
+		const std::vector<PatternElement> &elements, const PatternPathSignature &signature, size_t start, size_t end
+	) {
 		if (elements.empty()) {
 			states[start].epsilonTargets.push_back(end);
 			return;
 		}
 		size_t current = start;
+		size_t parameterIndex = 0;
 		for (size_t i = 0; i < elements.size(); i++) {
 			size_t next = i + 1 == elements.size() ? end : addState();
-			states[current].transitions.push_back({next, elements[i]});
+			Transition transition{next, elements[i]};
+			if (elements[i].type == PatternElement::Type::Variable ||
+				elements[i].type == PatternElement::Type::Word) {
+				requireCompilerInvariant(
+					parameterIndex < signature.parameters.size(),
+					"compiled signature has fewer parameters than its pattern path"
+				);
+				const TypeConstraintTemplate &constraint = signature.parameters[parameterIndex++].constraint;
+				transition.constraint = constraint.structuralEnvelope();
+				transition.constraintSpecificity = constraint.structuralSpecificity();
+			}
+			states[current].transitions.push_back(std::move(transition));
 			current = next;
 		}
+		requireCompilerInvariant(
+			parameterIndex == signature.parameters.size(),
+			"compiled signature has more parameters than its pattern path"
+		);
 	}
 };
 
@@ -407,14 +431,16 @@ struct PatternDomainSearchStateHash {
 	}
 };
 
-static bool patternElementsShareTrieTransition(const DefinitionPatternElement &left, const DefinitionPatternElement &right) {
-	if (left.type != right.type)
+static bool patternTransitionsOverlap(
+	const PatternDomainAutomaton::Transition &left, const PatternDomainAutomaton::Transition &right
+) {
+	if (left.element.type != right.element.type)
 		return false;
-	if (left.type == PatternElement::Type::Variable)
-		return left.resolvedTypeConstraint.structurallyOverlaps(right.resolvedTypeConstraint);
-	if (left.type == PatternElement::Type::Word)
+	if (left.element.type == PatternElement::Type::Variable)
+		return left.constraint.structurallyOverlaps(right.constraint);
+	if (left.element.type == PatternElement::Type::Word)
 		return true;
-	return left.text == right.text;
+	return left.element.text == right.element.text;
 }
 
 static bool
@@ -441,12 +467,13 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 			pending.push_back({current.leftState, target, current.constraintScoreDifference});
 		for (const auto &leftTransition : leftState.transitions) {
 			for (const auto &rightTransition : rightState.transitions) {
-				if (!patternElementsShareTrieTransition(leftTransition.element, rightTransition.element))
+				if (!patternTransitionsOverlap(leftTransition, rightTransition))
 					continue;
 				int nextDifference = current.constraintScoreDifference;
-				if (leftTransition.element.type == PatternElement::Type::Variable) {
-					nextDifference += leftTransition.element.resolvedTypeConstraint.structuralSpecificity();
-					nextDifference -= rightTransition.element.resolvedTypeConstraint.structuralSpecificity();
+				if (leftTransition.element.type == PatternElement::Type::Variable ||
+					leftTransition.element.type == PatternElement::Type::Word) {
+					nextDifference += leftTransition.constraintSpecificity;
+					nextDifference -= rightTransition.constraintSpecificity;
 				}
 				pending.push_back({leftTransition.target, rightTransition.target, nextDifference});
 			}
@@ -520,7 +547,8 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				bool flexSectionOverload = earlierDefinition->section->type == SectionType::Section &&
 										   laterDefinition->section->type == SectionType::Section &&
 										   (earlierDefinition->section->isFlex || laterDefinition->section->isFlex);
-				if (flexSectionOverload || definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
+				if (flexSectionOverload ||
+					definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
 					conflicts.push_back({laterDefinition, earlierDefinition});
 			}
 		}

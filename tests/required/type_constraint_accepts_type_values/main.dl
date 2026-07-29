@@ -1,17 +1,21 @@
-function type:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [a|] type:
     replacement:
         @intrinsic("type", "type")
 
-function byte:
+function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-function pointer to pointed:
+function [a|] pointer to pointed:
     replacement:
         @intrinsic("add pointer depth", pointed)
 
-function relay {type:value}:
+function the identity of {type:value}:
     replacement:
         value
 
-@intrinsic("discard", @intrinsic("size of", relay pointer to byte))
+ignore @intrinsic("size of", the identity of a pointer to a byte)

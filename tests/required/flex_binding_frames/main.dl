@@ -1,5 +1,5 @@
 import lib/array.dl
 
-set values to allocate 4 slots of an integer
+allocate 4 slots of an integer and set values to it
 store 7 into values at 0
-print item 0 of values
+print the item at 0 in values

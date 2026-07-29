@@ -1,5 +1,6 @@
 import lib/graphics.dl
 import lib/models/fbx.dl
+import tests/games/three_dimensional.dl
 
 # FBX Model Viewer (via pre-converted OBJ)
 #
@@ -17,208 +18,204 @@ import lib/models/fbx.dl
 #   2: UV debug mode
 #   3: vertex-color mode
 
-function set model viewer perspective with width viewport_width and height viewport_height:
+function set model viewer perspective for a viewport measuring {integer:width} by {integer:height}:
     execute:
-        @intrinsic("call", "GL", "glMatrixMode", void, 5889)
-        @intrinsic("call", "GL", "glLoadIdentity", void)
-        set safe_height to the maximum of viewport_height and 1
-        set aspect to (viewport_width as a float) / (safe_height as a float)
-        set near_plane to 0.8
-        set far_plane to 24000.0
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
+        @intrinsic("call", "GL", "glLoadIdentity", nothing)
+        set divisor to height
+        if divisor < 1:
+            set divisor to 1
+        set aspect to (width as a float) / (divisor as a float)
+        set near to 0.8
+        set far to 24000.0
         # fov = 88 degrees, so top = near * tan(44 deg)
-        set top_plane to near_plane * 0.96568877
-        set bottom_plane to 0.0 - top_plane
-        set right_plane to top_plane * aspect
-        set left_plane to 0.0 - right_plane
-        @intrinsic("call", "GL", "glFrustum", void, left_plane, right_plane, bottom_plane, top_plane, near_plane, far_plane)
-        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
+        set top to near * 0.96568877
+        set bottom to 0.0 - top
+        set right to top * aspect
+        set left to 0.0 - right
+        @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
 
-function clear [the|] model viewer screen:
+function clear the model viewer screen:
     execute:
-        @intrinsic("call", "GL", "glClear", void, 16640)
+        @intrinsic("call", "GL", "glClear", nothing, 16640)
 
-function enable [the|] model viewer render state:
+function enable the model viewer render state:
     execute:
-        @intrinsic("call", "GL", "glEnable", void, 2929)
-        @intrinsic("call", "GL", "glEnable", void, 2884)
-        @intrinsic("call", "GL", "glCullFace", void, 1029)
-        @intrinsic("call", "GL", "glShadeModel", void, 7424)
+        @intrinsic("call", "GL", "glEnable", nothing, 2929)
+        @intrinsic("call", "GL", "glEnable", nothing, 2884)
+        @intrinsic("call", "GL", "glCullFace", nothing, 1029)
+        @intrinsic("call", "GL", "glShadeModel", nothing, 7424)
 
-function set [the|] model viewer clear color to r g b:
+function set the model viewer clear color to {normalized color:color}:
     execute:
-        @intrinsic("call", "GL", "glClearColor", void, r as a 32 bit float, g as a 32 bit float, b as a 32 bit float, 1.0 as a 32 bit float)
+        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit float, color's green as a 32 bit float, color's blue as a 32 bit float, 1.0 as a 32 bit float)
 
-function apply model viewer camera at x y z yaw degrees:
+function position the model viewer camera from {spatial camera:view}:
     execute:
-        @intrinsic("call", "GL", "glMatrixMode", void, 5888)
-        @intrinsic("call", "GL", "glLoadIdentity", void)
-        @intrinsic("call", "GL", "glRotated", void, 0.0 - degrees, 0.0, 1.0, 0.0)
-        @intrinsic("call", "GL", "glTranslated", void, 0.0 - x, 0.0 - y, 0.0 - z)
+        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
+        @intrinsic("call", "GL", "glLoadIdentity", nothing)
+        @intrinsic("call", "GL", "glRotated", nothing, 0.0 - view's yaw, 0.0, 1.0, 0.0)
+        @intrinsic("call", "GL", "glTranslated", nothing, 0.0 - view's position's x, 0.0 - view's position's y, 0.0 - view's position's z)
+
+function the configured model path:
+    replacement:
+        @intrinsic("call", "libc", "getenv", a pointer to a byte, "DYNLEX_MODEL_PATH")
 
 set window to a new window with width 1400 and height 900
-if window = 0 as a pointer to byte:
-    print "failed to create viewer window" as line
+if window = 0 as a pointer to a byte:
+    print "failed to create viewer window" as a line
 else:
-    set model_path to "tests/games/model/assets/generated/city.obj"
-    set override_model_path to @intrinsic("call", "libc", "getenv", a pointer to byte, "DYNLEX_MODEL_PATH")
-    if override_model_path != 0 as a pointer to byte:
-        set model_path to override_model_path
+    set path to "tests/games/model/assets/generated/city.obj"
+    set override to the configured model path
+    if override != 0 as a pointer to a byte:
+        set path to override
 
-    set mesh to a loaded fbx mesh from model_path
+    set mesh to a loaded FBX mesh from path
 
-    if mesh's vertex_count <= 0:
-        print "failed to load mesh. convert city.fbx to city.obj first" as line
+    if mesh's vertex count <= 0:
+        print "failed to load mesh. convert city.fbx to city.obj first" as a line
 
-    set min_x to 0.0
-    set min_y to 0.0
-    set min_z to 0.0
-    set max_x to 0.0
-    set max_y to 0.0
-    set max_z to 0.0
+    set bounds to a bounding box from (a position with x 0.0, y 0.0 and z 0.0) to (a position with x 0.0, y 0.0 and z 0.0)
 
-    if mesh's vertex_count > 0:
-        set first_vertex to item 0 of mesh's vertices
-        set min_x to first_vertex's x
-        set min_y to first_vertex's y
-        set min_z to first_vertex's z
-        set max_x to first_vertex's x
-        set max_y to first_vertex's y
-        set max_z to first_vertex's z
+    if mesh's vertex count > 0:
+        set anchor to the item at 0 in mesh's vertices
+        set bounds's minimum to a position with x anchor's x, y anchor's y and z anchor's z
+        set bounds's maximum to a position with x anchor's x, y anchor's y and z anchor's z
 
-        set vertex_index to 1
-        while vertex_index < mesh's vertex_count:
-            set vertex to item vertex_index of mesh's vertices
-            if vertex's x < min_x:
-                set min_x to vertex's x
-            if vertex's y < min_y:
-                set min_y to vertex's y
-            if vertex's z < min_z:
-                set min_z to vertex's z
+        set index to 1
+        while index < mesh's vertex count:
+            set vertex to the item at index in mesh's vertices
+            if vertex's x < bounds's minimum's x:
+                set the x coordinate of bounds's minimum to vertex's x
+            if vertex's y < bounds's minimum's y:
+                set the y coordinate of bounds's minimum to vertex's y
+            if vertex's z < bounds's minimum's z:
+                set the z coordinate of bounds's minimum to vertex's z
 
-            if vertex's x > max_x:
-                set max_x to vertex's x
-            if vertex's y > max_y:
-                set max_y to vertex's y
-            if vertex's z > max_z:
-                set max_z to vertex's z
+            if vertex's x > bounds's maximum's x:
+                set the x coordinate of bounds's maximum to vertex's x
+            if vertex's y > bounds's maximum's y:
+                set the y coordinate of bounds's maximum to vertex's y
+            if vertex's z > bounds's maximum's z:
+                set the z coordinate of bounds's maximum to vertex's z
 
-            increment vertex_index
+            increment index
 
-    set extent_x to max_x - min_x
-    set extent_y to max_y - min_y
-    set extent_z to max_z - min_z
-    set max_extent to the maximum of extent_x and extent_y
-    set max_extent to the maximum of max_extent and extent_z
+    set extent to the dimensions measuring (bounds's maximum's x - bounds's minimum's x) by (bounds's maximum's y - bounds's minimum's y) by (bounds's maximum's z - bounds's minimum's z)
+    set span to extent's width
+    if extent's height > span:
+        set span to extent's height
+    if extent's depth > span:
+        set span to extent's depth
 
-    set model_scale to 1.0
-    if max_extent > 0.0001:
-        set model_scale to 160.0 / max_extent
+    set scale to 1.0
+    if span > 0.0001:
+        set scale to 160.0 / span
 
-    set center_x to (min_x + max_x) / 2.0
-    set center_z to (min_z + max_z) / 2.0
+    set center to a position with x ((bounds's minimum's x + bounds's maximum's x) / 2.0), y bounds's minimum's y and z ((bounds's minimum's z + bounds's maximum's z) / 2.0)
+    set offset to a position with x (0.0 - center's x * scale), y (0.0 - center's y * scale) and z (0.0 - center's z * scale)
 
-    set model_offset_x to 0.0 - center_x * model_scale
-    set model_offset_y to 0.0 - min_y * model_scale
-    set model_offset_z to 0.0 - center_z * model_scale
+    set message to the string form of "mesh vertices: "
+    set message to message + (the string form of (mesh's vertex count))
+    set message to message + (the string form of ", triangles: ")
+    set message to message + (the string form of (mesh's triangle count))
+    print message as a line
 
-    set mesh_stats to the string form of "mesh vertices: "
-    set mesh_stats to mesh_stats + (the string form of (mesh's vertex_count))
-    set mesh_stats to mesh_stats + (the string form of ", triangles: ")
-    set mesh_stats to mesh_stats + (the string form of (mesh's triangle_count))
-    print mesh_stats as line
+    set message to the string form of "bounds x: "
+    set message to message + (the string form of (bounds's minimum's x))
+    set message to message + (the string form of " .. ")
+    set message to message + (the string form of (bounds's maximum's x))
+    print message as a line
 
-    set bounds_x_text to the string form of "bounds x: "
-    set bounds_x_text to bounds_x_text + (the string form of min_x)
-    set bounds_x_text to bounds_x_text + (the string form of " .. ")
-    set bounds_x_text to bounds_x_text + (the string form of max_x)
-    print bounds_x_text as line
+    set message to the string form of "bounds y: "
+    set message to message + (the string form of (bounds's minimum's y))
+    set message to message + (the string form of " .. ")
+    set message to message + (the string form of (bounds's maximum's y))
+    print message as a line
 
-    set bounds_y_text to the string form of "bounds y: "
-    set bounds_y_text to bounds_y_text + (the string form of min_y)
-    set bounds_y_text to bounds_y_text + (the string form of " .. ")
-    set bounds_y_text to bounds_y_text + (the string form of max_y)
-    print bounds_y_text as line
+    set message to the string form of "bounds z: "
+    set message to message + (the string form of (bounds's minimum's z))
+    set message to message + (the string form of " .. ")
+    set message to message + (the string form of (bounds's maximum's z))
+    print message as a line
 
-    set bounds_z_text to the string form of "bounds z: "
-    set bounds_z_text to bounds_z_text + (the string form of min_z)
-    set bounds_z_text to bounds_z_text + (the string form of " .. ")
-    set bounds_z_text to bounds_z_text + (the string form of max_z)
-    print bounds_z_text as line
-
-    set scale_text to the string form of "model scale: "
-    set scale_text to scale_text + (the string form of model_scale)
-    print scale_text as line
-    print "render modes: 1=textured/material, 2=uv debug, 3=vertex colors" as line
+    set message to the string form of "model scale: "
+    set message to message + (the string form of scale)
+    print message as a line
+    print "render modes: 1=textured/material, 2=uv debug, 3=vertex colors" as a line
 
     enable the model viewer render state
-    set the model viewer clear color to 0.74 0.84 0.95
+    set the model viewer clear color to (a normalized color with red 0.74, green 0.84 and blue 0.95)
 
-    set camera_x to 0.0
-    set camera_y to the maximum of 50.0 and ((extent_y * model_scale) * 0.8)
-    set camera_z to the maximum of 180.0 and ((max_extent * model_scale) * 1.8)
-    set yaw to 0.0
-    set move_speed to the maximum of 1.4 and ((max_extent * model_scale) * 0.005)
-    set turn_speed to 1.6
-    set render_mode to 0
+    set altitude to (extent's height * scale) * 0.8
+    if altitude < 50.0:
+        set altitude to 50.0
+    set distance to (span * scale) * 1.8
+    if distance < 180.0:
+        set distance to 180.0
+    set pace to (span * scale) * 0.005
+    if pace < 1.4:
+        set pace to 1.4
+    set view to a camera at (a position with x 0.0, y altitude and z distance) facing 0.0 degrees with speed pace and turn rate 1.6
+    set mode to 0
 
-    while not the window should close:
-        set framebuffer_width to query the framebuffer width of window
-        set framebuffer_height to query the framebuffer height of window
-        set model viewer perspective with width framebuffer_width and height framebuffer_height
+    while the window remains open:
+        set width to the framebuffer width of window
+        set height to the framebuffer height of window
+        set model viewer perspective for a viewport measuring width by height
 
-        set yaw_radians to yaw * 0.0174533
-        set forward_x to 0.0 - (the sine of yaw_radians)
-        set forward_z to 0.0 - (the cosine of yaw_radians)
-        set right_x to 0.0 - forward_z
-        set right_z to forward_x
+        set radians to view's yaw * 0.0174533
+        set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
+        set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
 
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 87) = 1:
-            add forward_x * move_speed to camera_x
-            add forward_z * move_speed to camera_z
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 83) = 1:
-            subtract forward_x * move_speed from camera_x
-            subtract forward_z * move_speed from camera_z
+        if key 87 is down in window:
+            increase the x coordinate of view's position by forward's x * view's movement
+            increase the z coordinate of view's position by forward's z * view's movement
+        if key 83 is down in window:
+            decrease the x coordinate of view's position by forward's x * view's movement
+            decrease the z coordinate of view's position by forward's z * view's movement
 
         # Requested mapping: A moves right, D moves left
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 65) = 1:
-            add right_x * move_speed to camera_x
-            add right_z * move_speed to camera_z
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 68) = 1:
-            subtract right_x * move_speed from camera_x
-            subtract right_z * move_speed from camera_z
+        if key 65 is down in window:
+            increase the x coordinate of view's position by rightward's x * view's movement
+            increase the z coordinate of view's position by rightward's z * view's movement
+        if key 68 is down in window:
+            decrease the x coordinate of view's position by rightward's x * view's movement
+            decrease the z coordinate of view's position by rightward's z * view's movement
 
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 81) = 1:
-            subtract 1.1 from camera_y
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 69) = 1:
-            add 1.1 to camera_y
+        if key 81 is down in window:
+            decrease the y coordinate of view's position by 1.1
+        if key 69 is down in window:
+            increase the y coordinate of view's position by 1.1
 
         # Left rotates left, right rotates right
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
-            add turn_speed to yaw
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
-            subtract turn_speed from yaw
+        if key 263 is down in window:
+            add view's turning to view's yaw
+        if key 262 is down in window:
+            subtract view's turning from view's yaw
 
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 49) = 1:
-            if render_mode != 0:
-                set render_mode to 0
-                print "render mode: textured/material" as line
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 50) = 1:
-            if render_mode != 1:
-                set render_mode to 1
-                print "render mode: uv debug" as line
-        if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 51) = 1:
-            if render_mode != 2:
-                set render_mode to 2
-                print "render mode: vertex colors" as line
+        if key 49 is down in window:
+            if mode != 0:
+                set mode to 0
+                print "render mode: textured/material" as a line
+        if key 50 is down in window:
+            if mode != 1:
+                set mode to 1
+                print "render mode: uv debug" as a line
+        if key 51 is down in window:
+            if mode != 2:
+                set mode to 2
+                print "render mode: vertex colors" as a line
 
-        if camera_y < 4.0:
-            set camera_y to 4.0
+        if view's position's y < 4.0:
+            set the y coordinate of view's position to 4.0
 
         clear the model viewer screen
-        apply model viewer camera at camera_x camera_y camera_z yaw yaw
-        draw fbx mesh mesh at model_offset_x model_offset_y model_offset_z with scale model_scale and color 152 176 196 and render mode render_mode
+        position the model viewer camera from view
+        draw mesh at x offset's x, y offset's y and z offset's z scaled by scale in (a normalized OBJ color from byte values 152, 176 and 196) with mode as its render mode
 
         display the frame of window
 
-    free fbx mesh mesh
+    free mesh
     close the window

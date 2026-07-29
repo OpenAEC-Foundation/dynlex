@@ -1,10 +1,10 @@
 import lib/std.dl
 
-function value for condition:
+function the value for condition:
     execute:
         if condition:
             return 1
         else:
             return false
 
-print value for true as line
+print the value for true as a line

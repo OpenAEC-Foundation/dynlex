@@ -15,6 +15,10 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value);
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value);
 std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value);
 std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeValue &value);
+bool readTypeConstraintValue(
+	const CompileTimeValue &value, const DataType &expressionType, TypeConstraint &outConstraint,
+	DataType &outParameterType
+);
 std::optional<DataType> buildInfoValueType(std::string_view key);
 CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key);
 std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName);

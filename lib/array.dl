@@ -2,37 +2,47 @@
 
 import lib/std.dl
 
-function allocate count bytes:
+local function the allocation of count bytes:
     execute:
         return @intrinsic("call", "libc", "calloc", a pointer to a byte, count as a word sized integer, 1 as a word sized integer)
 
-function allocate count bytes as output_type:
+local function the allocation of count bytes as {type:kind}:
     replacement:
-        @intrinsic("call", "libc", "calloc", output_type, count as a word sized integer, 1 as a word sized integer)
+        @intrinsic("call", "libc", "calloc", kind, count as a word sized integer, 1 as a word sized integer)
 
-function allocate count items:
+flex function allocate count bytes:
     replacement:
-        allocate count bytes
+        set the subject to the allocation of count bytes
 
-function:
+flex function allocate count bytes as {type:kind}:
+    replacement:
+        set the subject to the allocation of count bytes as kind
+
+local function:
     patterns:
-        allocate count slots of {type:elementtype}
+        the allocation of count slots of {type:kind}
     execute:
-        return allocate (count * the size of elementtype) bytes as a pointer to elementtype
+        return the allocation of (count * the size of kind) bytes as a pointer to kind
 
-function allocate count slots of value:
+flex function:
+    patterns:
+        allocate count slots of {type:kind}
+    replacement:
+        set the subject to the allocation of count slots of kind
+
+local function the allocation of count slots initialized with value:
     execute:
-        set array to allocate count slots of the type of value
-        set i to 0
-        loop while i < count:
-            @intrinsic("initialize at", (array + i), value)
-            set i to i + 1
+        set array to the allocation of count slots of the type of value
+        set index to 0
+        loop while index < count:
+            @intrinsic("initialize at", (array + index), value)
+            increment index
         return array
+
+flex function allocate count slots of value:
+    replacement:
+        set the subject to the allocation of count slots initialized with value
 
 function store value into array at index:
     execute:
         @intrinsic("store at", array + index, value)
-
-function item index of array:
-    execute:
-        return @intrinsic("dereference", array + index)

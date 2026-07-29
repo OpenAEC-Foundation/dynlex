@@ -2,4 +2,4 @@ local class:
     patterns:
         [a|] hidden record
     members:
-        number as integer
+        number as an integer

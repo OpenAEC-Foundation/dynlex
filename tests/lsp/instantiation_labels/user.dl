@@ -1,9 +1,9 @@
-local class:
+class:
     patterns:
-        user
+        user record
     members:
         name
 
-function build account named name:
-    execute:
-        return @intrinsic("construct", user, name)
+function a user named {C string:name}:
+    replacement:
+        @intrinsic("construct", user record, name)

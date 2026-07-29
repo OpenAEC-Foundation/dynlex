@@ -30,13 +30,13 @@ def main() -> int:
         raise AssertionError("completion hid a local function from its declaring source file")
 
     imported_placeholders = completion_labels(compiler, fixture_dir / "main.dl", "7:12")
-    if "<hidden_parameter>" in imported_placeholders:
+    if "<private>" in imported_placeholders:
         raise AssertionError("completion exposed a local parameter name from an imported source file")
-    if "<visible_parameter>" not in imported_placeholders:
+    if "<public>" not in imported_placeholders:
         raise AssertionError("completion hid the public parameter name sharing the same pattern edge")
 
     declaring_placeholders = completion_labels(compiler, fixture_dir / "first.dl", "34:12")
-    if "<hidden_parameter>" not in declaring_placeholders:
+    if "<private>" not in declaring_placeholders:
         raise AssertionError("completion hid a local parameter name from its declaring source file")
 
     return 0

@@ -8,37 +8,41 @@ class:
     members:
         values
 
-function an empty set of {type:element_type}:
+function an empty set of {type:kind}:
     execute:
-        set values to an empty list of element_type
-        set initial_value to @intrinsic("construct", a unique set, values)
-        set result to allocate 1 slots of initial_value
+        set values to an empty list of kind
+        set initial to @intrinsic("construct", a unique set, values)
+        allocate 1 slots of initial and set result to it
         return result
 
-function [the|] size of {a pointer to unique set:items}:
+function the size of {a pointer to a unique set:items}:
     execute:
         return the length of the values of items
 
-function {a pointer to unique set:items} contains value:
+function {a pointer to a unique set:items} contains value:
     execute:
         return the values of items contains value
 
-function add value to {a pointer to unique set:items}:
+function {a pointer to a unique set:items} does not contain value:
     execute:
-        if not items contains value:
+        return the inverse of (the values of items contains value)
+
+function add value to {a pointer to a unique set:items}:
+    execute:
+        if items does not contain value:
             append value to the values of items
 
-function remove value from {a pointer to unique set:items}:
+function remove value from {a pointer to a unique set:items}:
     execute:
         set position to the index of value in the values of items
         if position >= 0:
             remove item position from the values of items
 
-function clear {a pointer to unique set:items}:
+function clear {a pointer to a unique set:items}:
     execute:
         clear the values of items
 
-function free set {a pointer to unique set:items}:
+function free {a pointer to a unique set:items}:
     execute:
-        free list the values of items
-        @intrinsic("call", "libc", "free", void, items)
+        free (the values of items)
+        @intrinsic("call", "libc", "free", nothing, items)

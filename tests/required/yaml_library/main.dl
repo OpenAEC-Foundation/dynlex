@@ -1,59 +1,59 @@
 import yaml.dl
 
-function print yaml error for {any:input}:
+function print YAML error for {any:input}:
     execute:
-        set parsed to parse input as yaml mapping
-        print yaml parsing succeeded for parsed
+        parse input as a YAML mapping and set parsed to it
+        print whether parsed succeeded
         print ":"
-        print the yaml error line of parsed
+        print parsed's error line
         print ":"
-        print the yaml error column of parsed
+        print parsed's error column
         print ":"
-        print the yaml error message of parsed as line
-        free yaml result parsed
+        print parsed's error message as a line
+        free parsed
 
 set source to the string form of "# heading\r\nroot: # root comment\r\n  plain: hello world # comment\r\n  quoted: \"hello # world\"\r\n  escaped: \"line\\nnext\"\r\n  single: 'it''s here'\r\n  empty: \"\"\r\n  colon: scheme:value\r\n  nested:\r\n    leaf: value\r\nsibling: done\r\n"
-set parsed to parse source as yaml mapping
-print yaml parsing succeeded for parsed as line
-set document to the yaml document of parsed
-print the number of yaml entries in document as line
-set root to yaml entry named "root" in document
-print root is a yaml mapping as line
-print yaml scalar named "plain" in root as line
-print yaml scalar named "quoted" in root as line
-print yaml scalar named "escaped" in root as line
-print yaml scalar named "single" in root as line
-set empty_scalar to yaml entry named "empty" in root
-print empty_scalar is a yaml scalar as line
+parse source as a YAML mapping and set parsed to it
+print whether parsed succeeded as a line
+set document to parsed's document
+print the number of YAML entries in document as a line
+set root to the YAML entry named "root" in document
+print whether root is a YAML mapping as a line
+print the YAML scalar named "plain" in root as a line
+print the YAML scalar named "quoted" in root as a line
+print the YAML scalar named "escaped" in root as a line
+print the YAML scalar named "single" in root as a line
+set empty to the YAML entry named "empty" in root
+print whether empty is a YAML scalar as a line
 print "["
-print the yaml scalar of empty_scalar
-print "]" as line
-print yaml scalar named "colon" in root as line
-set nested to yaml entry named "nested" in root
-print yaml scalar named "leaf" in nested as line
-set sibling to yaml entry named "sibling" in document
-print the yaml scalar of sibling as line
-print the yaml source line of sibling
+print the YAML scalar of empty
+print "]" as a line
+print the YAML scalar named "colon" in root as a line
+set nested to the YAML entry named "nested" in root
+print the YAML scalar named "leaf" in nested as a line
+set sibling to the YAML entry named "sibling" in document
+print the YAML scalar of sibling as a line
+print the YAML source line of sibling
 print ":"
-print the yaml source column of sibling as line
-free yaml result parsed
+print the YAML source column of sibling as a line
+free parsed
 
-set blank to parse "# only a comment\n\n" as yaml mapping
-print yaml parsing succeeded for blank
+parse "# only a comment\n\n" as a YAML mapping and set blank to it
+print whether blank succeeded
 print ":"
-print the number of yaml entries in the yaml document of blank as line
-free yaml result blank
+print the number of YAML entries in blank's document as a line
+free blank
 
-print yaml error for "root:\n   child: yes\n  broken: no\n"
-print yaml error for "root: scalar\n  child: no\n"
-print yaml error for "root:\n    child:\n            leaf: no\n"
-print yaml error for "missing colon\n"
-print yaml error for ": empty\n"
-print yaml error for "key: \"unterminated\n"
-print yaml error for "key: \"value\" trailing\n"
-print yaml error for "key: one\nkey: two\n"
-print yaml error for "root:\n\tchild: no\n"
-print yaml error for "  root: no\n"
-print yaml error for "list:\n  - item\n"
-print yaml error for "\"key\": value\n"
-print yaml error for "key: \"bad\\q\"\n"
+print YAML error for "root:\n   child: yes\n  broken: no\n"
+print YAML error for "root: scalar\n  child: no\n"
+print YAML error for "root:\n    child:\n            leaf: no\n"
+print YAML error for "missing colon\n"
+print YAML error for ": empty\n"
+print YAML error for "key: \"unterminated\n"
+print YAML error for "key: \"value\" trailing\n"
+print YAML error for "key: one\nkey: two\n"
+print YAML error for "root:\n\tchild: no\n"
+print YAML error for "  root: no\n"
+print YAML error for "list:\n  - item\n"
+print YAML error for "\"key\": value\n"
+print YAML error for "key: \"bad\\q\"\n"

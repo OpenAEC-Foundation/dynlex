@@ -5,39 +5,39 @@ class:
         [a|] sortable record
     members:
         name as a string
-        sequence as i32
+        sequence as a 32 bit integer
 
 function a new sortable record named {string:name} at index {integer:ordinal}:
     replacement:
         @intrinsic("construct", a sortable record, name, ordinal)
 
-print (bytewise compare "a" with "a") as line
-print (bytewise compare "a" with "aa") as line
-print (bytewise compare "b" with "aa") as line
+print (the bytewise comparison of "a" with "a") as a line
+print (the bytewise comparison of "a" with "aa") as a line
+print (the bytewise comparison of "b" with "aa") as a line
 
-set high_byte to a new string buffer with length 1
-store 255 as a byte into the data of high_byte at 0
-print (bytewise compare high_byte with "z") as line
+set extended to a new string buffer containing 1 byte
+store 255 as a byte into the data of extended at 0
+print (the bytewise comparison of extended with "z") as a line
 
-set empty_strings to an empty list of string
-stable sort empty_strings in bytewise order
-print the length of empty_strings as line
-free list empty_strings
+set empty to an empty list of a string
+sort empty stably in bytewise order
+print the length of empty as a line
+free empty
 
-set strings to an empty list of string
+set strings to an empty list of a string
 append the string form of "beta" to strings
 append the string form of "alpha" to strings
 append the string form of "alpha" to strings
 append the string form of "" to strings
-stable sort strings in bytewise order
-set string_index to 0
-loop while string_index < the length of strings:
-    print item string_index of strings
+sort strings stably in bytewise order
+set position to 0
+loop while position < the length of strings:
+    print the item at position in strings
     print "|"
-    set string_index to string_index + 1
-print "" as line
+    set position to position + 1
+print "" as a line
 
-set keys to an empty list of string
+set keys to an empty list of a string
 append the string form of "b" to keys
 append the string form of "a" to keys
 append the string form of "b" to keys
@@ -49,27 +49,27 @@ append a new sortable record named the string form of "first-a" at index 1 to re
 append a new sortable record named the string form of "second-b" at index 2 to records
 append a new sortable record named the string form of "second-a" at index 3 to records
 
-set order to stable bytewise order for keys
-set order_index to 0
-loop while order_index < the length of order:
-    if order_index > 0:
+set order to the stable bytewise order for keys
+set position to 0
+loop while position < the length of order:
+    if position > 0:
         print " "
-    print item order_index of order
-    set order_index to order_index + 1
-print "" as line
+    print the item at position in order
+    set position to position + 1
+print "" as a line
 
-stable sort records using bytewise keys keys
-set record_index to 0
-loop while record_index < the length of records:
-    set record to item record_index of records
+sort records stably in the bytewise order of keys
+set ordinal to 0
+loop while ordinal < the length of records:
+    set record to the item at ordinal in records
     print the name of record
     print ":"
     print the sequence of record
     print "|"
-    set record_index to record_index + 1
-print "" as line
+    set ordinal to ordinal + 1
+print "" as a line
 
-free list order
-free list records
-free list keys
-free list strings
+free order
+free records
+free keys
+free strings

@@ -1,31 +1,27 @@
-import lib/shader.dl
+import tests/games/shader_values.dl
 
 # Plasma fragment shader — animated colorful interference pattern
 # DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
-set px to the fragment x coordinate
-set py to the fragment y coordinate
-set t to the shader time
+set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set time to the shader time
 
 # Normalize to [-1, 1]
-set x to px / 400.0 - 1.0
-set y to py / 300.0 - 1.0
+set position to a planar position with x (pixel's x / 400.0 - 1.0) and y (pixel's y / 300.0 - 1.0)
 
 # Layered sine waves that create plasma interference (animated with time)
-set v1 to the sine of (x * 10.0 + t * 3.0)
-set v2 to the sine of (10.0 * y + v1 + t * 2.0)
-set d to the square root of (x * x + y * y)
-set v3 to the sine of (d * 10.0 - v2 + t * 1.5)
-set v to v1 + v2 + v3
+set horizontal to the sine of ((position's x * 10.0) + (time * 3.0))
+set vertical to the sine of (((10.0 * position's y) + horizontal) + (time * 2.0))
+set distance to the square root of ((position's x * position's x) + (position's y * position's y))
+set radial to the sine of (((distance * 10.0) - vertical) + (time * 1.5))
+set interference to (horizontal + vertical) + radial
 
 # Map to RGB via phase-shifted sines
-set r to the sine of (v * 3.14159)
-set g to the sine of (v * 3.14159 + 2.094)
-set b to the sine of (v * 3.14159 + 4.189)
+set color to a light color with red (the sine of (interference * 3.14159)), green (the sine of (interference * 3.14159 + 2.094)), blue (the sine of (interference * 3.14159 + 4.189)) and alpha 1.0
 
 # Remap [-1,1] to [0,1]
-set r to r * 0.5 + 0.5
-set g to g * 0.5 + 0.5
-set b to b * 0.5 + 0.5
+set the red channel of color to color's red * 0.5 + 0.5
+set the green channel of color to color's green * 0.5 + 0.5
+set the blue channel of color to color's blue * 0.5 + 0.5
 
-set the fragment color to r g b 1.0
+set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha

@@ -1,0 +1,43 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function an integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function print number as a line:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", number))
+
+function the address of value:
+    replacement:
+        @intrinsic("address of", value)
+
+class:
+    patterns:
+        inner state
+    members:
+        value as an integer
+
+class:
+    patterns:
+        outer state
+    members:
+        inner as inner state
+
+function an inner state containing {an integer:value}:
+    replacement:
+        @intrinsic("construct", inner state, value)
+
+function an outer state containing {inner state:inner}:
+    replacement:
+        @intrinsic("construct", outer state, inner)
+
+set inner to an inner state containing 0
+set outer to an outer state containing inner
+set outer's inner's value to 1
+print outer's inner's value as a line
+set pointer to the address of outer
+set pointer's inner's value to 2
+print outer's inner's value as a line

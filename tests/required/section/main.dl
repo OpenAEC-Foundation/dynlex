@@ -1,20 +1,20 @@
 import std.dl
-set var to 3
+set variable to 3
 
-if var < 2:
-	print "var is less than 4" as line
-else if var < 4:
-	print "var is less than 4" as line
+if variable < 2:
+	print "variable is less than 4" as a line
+else if variable < 4:
+	print "variable is less than 4" as a line
 else:
-	print "var is not less than 4" as line
+	print "variable is not less than 4" as a line
 
-match based on var:
+match based on variable:
 	case 1:
-		print "var is 1" as line
+		print "variable is 1" as a line
 	case 2:
-		print "var is 2" as line
+		print "variable is 2" as a line
 	case 3:
-		print "var is 3" as line
+		print "variable is 3" as a line
 	case 4:
-		print "var is 4" as line
+		print "variable is 4" as a line
 

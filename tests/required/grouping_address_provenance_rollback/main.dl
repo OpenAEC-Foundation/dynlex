@@ -2,7 +2,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -10,11 +10,11 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function float:
+function [a|] float:
     replacement:
         @intrinsic("type", "float")
 
@@ -28,22 +28,22 @@ function {float:value} odded:
 
 function {integer:value} odded:
     globals:
-        rollback_guard
+        guard
     execute:
-        set rejected_pointer to @intrinsic("address of", rollback_guard)
+        set rejected to @intrinsic("address of", guard)
         return @intrinsic("cast", value, @intrinsic("type", "float"))
 
-function test value:
+function value tested:
     execute:
         return value - 1 odded
 
-function identity value:
+function the identity of value:
     execute:
         return value
 
-set rollback_guard to 32
-set safe_target to 0
-discard test 4
-set safe_pointer to identity @intrinsic("address of", safe_target)
-@intrinsic("store at", safe_pointer, 1)
-discard @intrinsic("call", "libc", "abs", @intrinsic("type", "int", rollback_guard), 1)
+set guard to 32
+set target to 0
+ignore 4 tested
+set pointer to the identity of @intrinsic("address of", target)
+@intrinsic("store at", pointer, 1)
+ignore @intrinsic("call", "libc", "abs", @intrinsic("type", "int", guard), 1)

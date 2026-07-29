@@ -3,54 +3,55 @@ import lib/std.dl
 # ==========================================================
 # Test 1: Basic literal vs argument specificity
 # ==========================================================
-# Generic pattern: "item" resolves as a Variable (argument slot)
-function turn the item off for user:
+# Generic pattern: "item" resolves as a variable (argument slot)
+function the shutdown code for item and user:
     execute:
         return item + 100 + user
 
-# Body reference "turn the lights off for 4" exists BEFORE the specific pattern.
+# Body reference "the shutdown code for lights and 4" exists before the specific
+# pattern.
 # It initially matches the generic pattern (with "lights" captured as argument).
 # When the specific pattern is added later, the compiler must detect the overlap
 # and re-match this reference to the specific pattern.
 function shut down the lights:
     execute:
-        print turn the lights off for 4
+        print the shutdown code for lights and 4
 
 shut down the lights
 
 # Specific pattern: "lights" is a literal (not an argument).
 # This is more specific than the generic pattern at the "lights" position.
 # Adding it must invalidate references that matched the generic pattern.
-function turn the lights off for user:
+function the shutdown code for lights and user:
     execute:
         # Reference the generic pattern to confirm it still works independently
-        set dummy to 1
-        set test to turn the dummy off for user
+        set placeholder to 1
+        set verification to the shutdown code for placeholder and user
         # Return a value that distinguishes this from the generic pattern
         set result to 1 + 1 + user
         return result
 
-# Expected: 6 (specific pattern: 1+1+4=6, NOT generic: lights+100+4)
+# Expected: 6 (specific pattern: 1+1+4=6, not generic: lights+100+4)
 
 # ==========================================================
 # Test 2: Specificity with submatch overlap
 # ==========================================================
 # "a new message" is a valid function that returns a value.
-# This means the generic "show msg" pattern's argument slot could
+# This means the generic "show message" pattern's argument slot could
 # consume "a new message" as a sub-expression match.
 function a new message:
     execute:
         return 77
 
-# Generic: "show msg" has an argument slot. When matching
+# Generic: "show message" has an argument slot. When matching
 # "show a new message", the argument could consume the sub-expression
 # "a new message" (which evaluates to 77).
-function show msg:
+function show message:
     execute:
-        print msg
+        print message
 
 # Body reference uses "show a new message" — initially matches
-# "show msg" with msg = sub-expression "a new message" (value 77).
+# "show message" with message = sub-expression "a new message" (value 77).
 # When the specific function is added later, the overlap detector must
 # recognize that the generic's argument consumed a sub-expression
 # matching the specific's literal words, and re-match.
@@ -61,15 +62,15 @@ function demonstrate:
 demonstrate
 
 # Specific: "a new message" are literals in the function pattern,
-# more specific than the generic "show msg". Its body calls
+# more specific than the generic "show message". Its body calls
 # "show 99" (the generic) to confirm both coexist.
-# Defined AFTER the reference above.
+# Defined after the reference above.
 function show a new message:
     execute:
         show 99
 
 # Expected: 99 (specific "show a new message" calls "show 99",
-# NOT generic "show msg" with msg=77)
+# not generic "show message" with message=77)
 
 # ==========================================================
 # Test 3: Specificity with word capture vs literal
@@ -77,17 +78,17 @@ function show a new message:
 # {word:name} captures a single word as a string. A literal at the same
 # position is more specific. The overlap detector must recognize that
 # a word capture is less specific than a literal.
-function get the {word:prop} of item:
+function the {word:prop} of item:
     execute:
         # word capture version: just return the item
         return item
 
-function get the name of item:
+function the name of item:
     execute:
         # literal "name" is more specific than {word:prop}
         return item + 1
 
 # The reference should match the specific "name" pattern
-print get the name of 50
+print the name of 50
 
-# Expected: 51 (specific "name" pattern: 50+1=51, NOT word capture: 50)
+# Expected: 51 (specific "name" pattern: 50+1=51, not word capture: 50)

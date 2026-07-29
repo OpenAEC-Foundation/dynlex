@@ -1,0 +1,21 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function an array:
+    replacement:
+        @intrinsic("array")
+
+flex function [an|] array as long as value:
+    replacement:
+        @intrinsic("array", @intrinsic("type extent", value, 0))
+
+function compare {an array as long as right:left} with {an array:right}:
+    replacement:
+        1
+
+@intrinsic("discard", compare [1, 2] with [3, 4])

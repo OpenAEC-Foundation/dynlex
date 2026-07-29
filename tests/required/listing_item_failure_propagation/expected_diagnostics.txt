@@ -1,0 +1,1 @@
+tests/required/listing_item_failure_propagation/main.dl:19-19: Error: unmatched closing character found: '('

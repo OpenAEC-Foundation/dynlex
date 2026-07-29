@@ -4,25 +4,25 @@ import std.dl
 
 function describe amount [loudly|]:
 	execute:
-		print amount as line
+		print amount as a line
 
 describe 4 loudly
 describe 9
 
 # The same works when the trailing alternative is a parameter: bound when the
 # caller supplies it, a fresh local when omitted.
-function stretch amount [factor|]:
+function amount stretched [by factor|]:
 	execute:
 		set factor to amount * 3
 		return factor
 
-print (stretch 2 5) as line
-print (stretch 4) as line
+print (2 stretched by 5) as a line
+print (4 stretched) as a line
 
 # Adjacent omittable choices: every combination composes with clean separators.
 function report [gently|] [twice|]:
 	execute:
-		print 5 as line
+		print 5 as a line
 
 report
 report gently
@@ -32,7 +32,7 @@ report gently twice
 # Author-placed spaces inside alternatives are equivalent to spaces outside.
 function start [the |]drill:
 	execute:
-		print 8 as line
+		print 8 as a line
 
 start the drill
 start drill

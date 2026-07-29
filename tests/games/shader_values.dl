@@ -1,0 +1,56 @@
+import lib/shader.dl
+import lib/geometry.dl
+
+function [a|] planar position:
+    replacement:
+        a point
+
+function [a|] complex number:
+    replacement:
+        a point
+
+function [a|] light color:
+    replacement:
+        a color
+
+function a planar position with x {float:x} and y {float:y}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 2 float values, x, y)
+        )
+
+function a complex number with real {float:real} and imaginary {float:imaginary}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 2 float values, real, imaginary)
+        )
+
+function a light color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 4 float values, red, green, blue, alpha)
+        )
+
+function {complex number:value}'s real part:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's x
+
+function {complex number:value}'s imaginary part:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value's y
+
+flex function set the real part of {complex number:value} to {a number:component}:
+    replacement:
+        set the x coordinate of value to component
+
+flex function set the imaginary part of {complex number:value} to {a number:component}:
+    replacement:
+        set the y coordinate of value to component

@@ -594,9 +594,9 @@ assert.equal(
 
 const heroEdit = await evaluate(sourceEditExpression(0, `import lib/std.dl
 
-print 81 as line`));
+print 81 as a line`));
 assert.equal(heroEdit.state, "edited");
-assert.match(heroEdit.value, /print 81 as line/);
+assert.match(heroEdit.value, /print 81 as a line/);
 await waitFor(
   "document.querySelectorAll('.snippet-editor-shell')[0].dataset.highlightState === 'semantic'",
   "semantic highlighting for the edited hero sketch"
@@ -635,10 +635,10 @@ assert.ok(
 await evaluate(sourceEditExpression(1, `import lib/std.dl
 
 loop 2 times:
-    print "Hello" as line`));
+    print "Hello" as a line`));
 await evaluate(sourceEditExpression(2, `import lib/std.dl
 
-print "neon violet" as line`));
+print "neon violet" as a line`));
 await evaluate(`(() => {
   const buttons = document.querySelectorAll('[data-snippet-run]');
   buttons[1].click();
@@ -659,7 +659,7 @@ assert.deepEqual(
 
 await evaluate(sourceEditExpression(3, `import lib/std.dl
 
-print "Found it." as line`));
+print "Found it." as a line`));
 await evaluate(`(() => {
   const source = document.querySelectorAll('[data-runnable-sketch]')[3].querySelector('[data-snippet-source]');
   source.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
@@ -695,7 +695,7 @@ assert.equal(compileFailure.output, "Found it.", "A failed compile must never ru
 await evaluate("document.querySelector('[data-lab-tab=\"reuse\"]').click()");
 await evaluate(sourceEditExpression(4, `import lib/std.dl
 
-print "Words become tools." as line`));
+print "Words become tools." as a line`));
 await evaluate("document.querySelectorAll('[data-snippet-run]')[4].click()");
 await waitFor(
   "document.querySelectorAll('[data-runnable-sketch]')[4].dataset.runState === 'done'",
@@ -767,7 +767,7 @@ assert.ok(
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
-await hoverMonacoText("scene");
+await hoverMonacoText("motorcycle", 1);
 await waitFor(
   "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
   "the shader IDE to display DynLex hover information",
@@ -778,13 +778,13 @@ await captureScreenshot("ide-shader-initial");
 await replaceMonacoSource(`import lib/shader.dl
 
 if this is a vertex shader:
-    set the output position to the vertex x the vertex y the vertex z 1.0
+    set the output position with x the vertex x, y the vertex y, z the vertex z and w 1.0
 else:
     set pulse to the shader time
     set pulse to the sine of pulse
     set pulse to pulse * 0.5 + 0.5
-    set pass_glow to the shader render pass * 0.22
-    set the fragment color to (pulse + pass_glow) 0.12 0.72 1.0
+    set glow to the shader render pass * 0.22
+    set the fragment color with red (pulse + glow), green 0.12, blue 0.72 and alpha 1.0
 `);
 await waitFor(
   `Number(document.querySelector('#shader-preview').dataset.previewRevision) > ${initialShaderState.revision}`,
@@ -819,7 +819,7 @@ await waitFor(
   "the IDE to compile and run its starting sketch"
 );
 assert.equal(await evaluate("document.querySelector('#runtime-output').textContent.trim()"), "64");
-await hoverMonacoText("square", 1);
+await hoverMonacoText("squared", 1);
 await waitFor(
   `[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => {
     const rect = hover.getBoundingClientRect();
@@ -846,19 +846,21 @@ await waitFor(
   10000
 );
 await captureScreenshot("ide-hover");
-await hoverMonacoText("square");
-await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('square {a 32 bit integer:value}'))`, "the inferred-instance hover to display its parameter type");
-await findMonacoText("square 8");
+await hoverMonacoText("squared");
+await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('{a 32 bit integer:value} squared'))`, "the inferred-instance hover to display its parameter type");
+await findMonacoText("8 squared");
+await dispatchKey("ArrowRight", "ArrowRight", 39);
+await dispatchKey("ArrowRight", "ArrowRight", 39);
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",
-  "the square invocation to be selected"
+  "the squared-value invocation to be selected"
 );
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '3'",
-  "F12 to navigate from the square invocation to its definition"
+  "F12 to navigate from the squared-value invocation to its definition"
 );
-await findMonacoText("print square 8");
+await findMonacoText("print 8 squared");
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'string.dl')",
@@ -894,7 +896,7 @@ await waitFor(
   "the editable file to reopen from the project list"
 );
 await waitFor(
-  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as line')",
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print 8 squared as a line')",
   "returning from a definition to render the preserved editable source model"
 );
 await captureScreenshot("ide-finished");
@@ -993,6 +995,5 @@ assert.deepEqual(
   [],
   "Homepage and IDE interactions must not raise uncaught browser exceptions"
 );
-
 socket.close();
 console.log("Homepage sketches and IDE compile and run in Chrome.");

@@ -2,9 +2,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 function left + right:
     execute:

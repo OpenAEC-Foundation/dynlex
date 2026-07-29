@@ -1,6 +1,4 @@
 import lib/filesystem.dl
 
-set invalid_path to new string from data "A" with length 2
-write the string form of "invalid" to invalid_path
-print if it succeeded
-print "" as line
+set path to a new string from "A" containing 2 bytes
+write the string form of "invalid" to the file at path and print whether it succeeded as a line

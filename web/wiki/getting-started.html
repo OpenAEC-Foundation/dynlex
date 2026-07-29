@@ -61,10 +61,10 @@
                 <div class="code-block glass-card">
 <pre><code>import lib/std.dl
 
-print "Hello, world!" as line</code></pre>
+print "Hello, world!" as a line</code></pre>
                 </div>
                 <p>
-                    The line <code>print "Hello, world!" as line</code> matches a
+                    The line <code>print "Hello, world!" as a line</code> matches a
                     <a class="inline-link" href="terms.html#pattern">pattern</a> from the standard library.
                 </p>
                 <div class="try-card">
@@ -103,7 +103,7 @@ set apples to 3
 set oranges to 2
 set total to apples + oranges
 
-print total as line</code></pre>
+print total as a line</code></pre>
                 </div>
                 <p>
                     Here, <code>set ... to ...</code> and <code>...</code> <code>+</code> <code>...</code> are both
@@ -128,15 +128,15 @@ print total as line</code></pre>
                 <div class="code-block glass-card">
 <pre><code>import lib/std.dl
 
-function square value:
+function value squared:
     execute:
         return value * value
 
-print square 5 as line</code></pre>
+print 5 squared as a line</code></pre>
                 </div>
                 <p>
                     In this example, <code>value</code> is the variable word in the pattern. When you write
-                    <code>square 5</code>, the number <code>5</code> is the real value passed to that slot
+                    <code>5 squared</code>, the number <code>5</code> is the real value passed to that slot
                     (called an <a class="inline-link" href="terms.html#argument">argument</a>).
                 </p>
                 <p>
@@ -151,7 +151,7 @@ print square 5 as line</code></pre>
                 <div class="try-card">
                     <h3>Try yourself</h3>
                     <p>
-                        Change <code>square</code> into <code>double</code>. Then make it return <code>value + value</code>.
+                        Change <code>squared</code> into <code>doubled</code>. Then make it return <code>value + value</code>.
                     </p>
                 </div>
             </article>
@@ -169,7 +169,7 @@ print square 5 as line</code></pre>
 set count to 1
 
 loop while count <= 3:
-    print count as line
+    print count as a line
     increment count</code></pre>
                 </div>
                 <p>

@@ -156,6 +156,8 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return *numericValue;
 	}
 	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix || kind == IntrinsicKind::TypeOf ||
+		kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType ||
+		kind == IntrinsicKind::Number || kind == IntrinsicKind::TypeExtent ||
 		kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix ||
 		kind == IntrinsicKind::AddPointerDepth) {
 		return readStoredValue(expr);
@@ -534,6 +536,8 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	state.activeCalls.pop_back();
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
+	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
+		state.inferenceContext->trialJournal->recordInstantiationWrite(&instantiation);
 	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
 	return executionResult.value;
 }
@@ -832,8 +836,9 @@ static CompileTimeValue evaluatePureFunctionCallReturnValue(
 }
 
 static Instantiation *ensureCallableFunctionInstantiationInferred(
-	PatternDefinition *definition, InferenceContext &context, const Range &referenceRange
+	const CallableFunctionMatch &match, InferenceContext &context, const Range &referenceRange
 ) {
+	PatternDefinition *definition = match.definition;
 	if (!definition || !definition->section || definition->section->type != SectionType::Function ||
 		definition->section->isFlex) {
 		context.setTypeFailure("function reference requires a non-flex function");
@@ -843,27 +848,27 @@ static Instantiation *ensureCallableFunctionInstantiationInferred(
 		context.setTypeFailure("function references are unavailable for SPIR-V targets");
 		return nullptr;
 	}
-	std::vector<std::pair<std::string, DataType>> parameters;
-	collectCallableFunctionParameters(definition, parameters);
+	std::vector<CallableFunctionParameter> parameters;
+	collectCallableFunctionParameters(match, parameters);
 	std::vector<std::unique_ptr<Expression>> ownedArguments;
 	std::vector<std::pair<std::string, Expression *>> parameterBindings;
 	std::vector<DataType> argumentTypes;
 	ownedArguments.reserve(parameters.size());
 	parameterBindings.reserve(parameters.size());
 	argumentTypes.reserve(parameters.size());
-	for (const auto &[parameterName, parameterType] : parameters) {
-		if (!parameterType.isDeduced()) {
+	for (const CallableFunctionParameter &parameter : parameters) {
+		const std::string &parameterName = parameter.name;
+		const DataType &parameterType = parameter.type;
+		if (parameter.requiresCompileTimeValue || parameterType.isMetaType()) {
+			context.setTypeFailure("function reference cannot bind fixed parameter '" + parameterName + "'");
+			return nullptr;
+		}
+		if (!parameterType.isConcrete()) {
 			context.setTypeFailure("function reference requires a concrete type for parameter '" + parameterName + "'");
 			return nullptr;
 		}
 		if (parameterType.isMetaType() || parameterType.kind == DataType::Kind::Void) {
 			context.setTypeFailure("function reference parameter '" + parameterName + "' is not a runtime value");
-			return nullptr;
-		}
-		DefinitionPatternElement *parameterElement = findParameterElement(definition->patternElements, parameterName);
-		requireCompilerInvariant(parameterElement != nullptr, "callable parameter has no definition element");
-		if (patternParameterRequiresCompileTimeValue(*parameterElement, parameterType)) {
-			context.setTypeFailure("function reference cannot bind fixed parameter '" + parameterName + "'");
 			return nullptr;
 		}
 		auto argument = std::make_unique<Expression>();

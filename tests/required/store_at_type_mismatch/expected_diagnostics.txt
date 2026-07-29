@@ -1,2 +1,2 @@
-tests/required/store_at_type_mismatch/main.dl:1-68: Error: store at cannot store box through a pointer to a 32 bit integer
-  note: while inferring intrinsic 'store at' in '@intrinsic("store at", @intrinsic("address of", target), box_value)' with arguments [i8*, i32*, box] -> undeduced tests/required/store_at_type_mismatch/main.dl:1-68
+tests/required/store_at_type_mismatch/main.dl:1-67: Error: store at cannot store box through a pointer to a 32 bit integer
+  note: while inferring intrinsic 'store at' in '@intrinsic("store at", @intrinsic("address of", target), instance)' with arguments [i8*, i32*, box] -> undeduced tests/required/store_at_type_mismatch/main.dl:1-67

@@ -1,69 +1,60 @@
 import lib/filesystem.dl
 
-create a temporary directory
-set first_temporary to it
-create a temporary directory
-set second_temporary to it
-print first_temporary's succeeded as line
-print second_temporary's succeeded as line
-print (not ((first_temporary's directory_path) = (second_temporary's directory_path))) as line
+create a temporary directory and set first to it
+create a temporary directory and set second to it
+print whether first succeeded as a line
+print whether second succeeded as a line
+print whether (first's directory path is not second's directory path) as a line
 
-set first_status to the file system entry at first_temporary's directory_path
-set second_status to the file system entry at second_temporary's directory_path
-print (((first_status's succeeded) and (first_status's found)) and (first_status's directory)) as line
-print (((second_status's succeeded) and (second_status's found)) and (second_status's directory)) as line
+set origin to the file system entry at first's directory path
+set counterpart to the file system entry at second's directory path
+print whether ((origin lookup succeeded) and (origin was found)) and (origin is a directory) as a line
+print whether ((counterpart lookup succeeded) and (counterpart was found)) and (counterpart is a directory) as a line
 
-set payload_path to first_temporary's directory_path + the string form of "/payload.bin"
-set payload to a new string buffer with length 5
+set file to first's directory path + the string form of "/payload.bin"
+set payload to a new string buffer containing 5 bytes
 store 65 as a byte into the data of payload at 0
 store 0 as a byte into the data of payload at 1
 store 66 as a byte into the data of payload at 2
 store 67 as a byte into the data of payload at 3
 store 68 as a byte into the data of payload at 4
-write payload to payload_path
-print it succeeded as line
+write payload to the file at file and print whether it succeeded as a line
 
-open file at payload_path for streaming reads
+open the file at file for streaming reads
 set input to it
-print input's succeeded as line
-read up to 3 bytes from input
-set first_chunk to it
-print first_chunk's succeeded as line
-print first_chunk's count as line
-print first_chunk's end_of_file as line
-print (character 0 of first_chunk's data) as line
-print (character 1 of first_chunk's data) as line
-print (character 2 of first_chunk's data) as line
+print whether input succeeded as a line
+read up to 3 bytes from input and set initial to it
+print whether initial succeeded as a line
+print initial's count as a line
+print whether initial reached the end of file as a line
+print (the character at 0 in initial's data) as a line
+print (the character at 1 in initial's data) as a line
+print (the character at 2 in initial's data) as a line
 
-read up to 3 bytes from input
-set second_chunk to it
-print second_chunk's succeeded as line
-print second_chunk's count as line
-print second_chunk's end_of_file as line
-print (character 0 of second_chunk's data) as line
-print (character 1 of second_chunk's data) as line
+read up to 3 bytes from input and set following to it
+print whether following succeeded as a line
+print following's count as a line
+print whether following reached the end of file as a line
+print (the character at 0 in following's data) as a line
+print (the character at 1 in following's data) as a line
 
-read up to 3 bytes from input
-set final_chunk to it
-print final_chunk's succeeded as line
-print final_chunk's count as line
-print final_chunk's end_of_file as line
+read up to 3 bytes from input and set final to it
+print whether final succeeded as a line
+print final's count as a line
+print whether final reached the end of file as a line
 
-read up to (-1) bytes from input
-set invalid_chunk to it
-print invalid_chunk's succeeded as line
-print invalid_chunk's count as line
-print invalid_chunk's end_of_file as line
-print (the length of invalid_chunk's error_message) > 0 as line
+read up to (-1) bytes from input and set invalid to it
+print whether invalid succeeded as a line
+print invalid's count as a line
+print whether invalid reached the end of file as a line
+print whether (the length of invalid's error message) > 0 as a line
 
-open file at "tests/required/filesystem_streaming_temp/missing.bin" for streaming reads
-set missing_input to it
-print missing_input's succeeded as line
-print the length of missing_input's error_message > 0 as line
+open the file at "tests/required/filesystem_streaming_temp/missing.bin" for streaming reads
+set missing to it
+print whether missing succeeded as a line
+print whether the length of missing's error message > 0 as a line
 
-remove filesystem tree at first_temporary's directory_path
-set first_cleanup to it
-remove filesystem tree at second_temporary's directory_path
-set second_cleanup to it
-print first_cleanup's succeeded as line
-print second_cleanup's succeeded as line
+remove the filesystem tree at first's directory path and set purge to it
+remove the filesystem tree at second's directory path and set removal to it
+print whether purge succeeded as a line
+print whether removal succeeded as a line

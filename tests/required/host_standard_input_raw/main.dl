@@ -1,35 +1,35 @@
 import lib/host.dl
 
-local function [the|] unsigned byte at {integer:offset} in {string:text}:
+local function the unsigned byte at {integer:offset} in {string:text}:
     execute:
-        return (character offset of text as i32) bitwise and 255
+        return (the character at offset in text as a 32 bit integer) bitwise and 255
 
-set first to read a chunk from standard input
-print first's succeeded as line
-print first's supported as line
-print (first's contents's length = 4096) as line
-print (the unsigned byte at 4094 in first's contents) as line
-print (the unsigned byte at 4095 in first's contents) as line
-print (not first's end of file) as line
-print (first's error message = "") as line
+read a chunk from the standard input and set first to it
+print whether first succeeded as a line
+print whether first is supported as a line
+print whether first's contents's length = 4096 as a line
+print (the unsigned byte at 4094 in first's contents) as a line
+print (the unsigned byte at 4095 in first's contents) as a line
+print whether first has not reached the end of file as a line
+print whether (first's error message = "") as a line
 
-set second to read a chunk from standard input
-print second's succeeded as line
-print second's supported as line
-print (second's contents's length = 4) as line
-print (the unsigned byte at 0 in second's contents) as line
-print (the unsigned byte at 1 in second's contents) as line
-print (the unsigned byte at 2 in second's contents) as line
-print (the unsigned byte at 3 in second's contents) as line
-print second's end of file as line
-print (second's error message = "") as line
+read a chunk from the standard input and set second to it
+print whether second succeeded as a line
+print whether second is supported as a line
+print whether second's contents's length = 4 as a line
+print (the unsigned byte at 0 in second's contents) as a line
+print (the unsigned byte at 1 in second's contents) as a line
+print (the unsigned byte at 2 in second's contents) as a line
+print (the unsigned byte at 3 in second's contents) as a line
+print whether second reached the end of file as a line
+print whether (second's error message = "") as a line
 
-set after_end to read a chunk from standard input
-print after_end's succeeded as line
-print after_end's supported as line
-print (after_end's contents's length = 0) as line
-print after_end's end of file as line
-print (after_end's error message = "") as line
+read a chunk from the standard input and set finished to it
+print whether finished succeeded as a line
+print whether finished is supported as a line
+print whether finished's contents's length = 0 as a line
+print whether finished reached the end of file as a line
+print whether (finished's error message = "") as a line
 
-print (the unsigned byte at 4094 in first's contents) as line
-print (the unsigned byte at 0 in second's contents) as line
+print (the unsigned byte at 4094 in first's contents) as a line
+print (the unsigned byte at 0 in second's contents) as a line

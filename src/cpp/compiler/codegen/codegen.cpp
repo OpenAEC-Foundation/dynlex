@@ -297,130 +297,7 @@ bool generateSpecializedFunction(
 	return bodySucceeded;
 }
 
-static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argTypes) {
-	std::string name = getPatternFunctionName(definition->section) + "_callable";
-	for (const DataType &type : argTypes)
-		name += "_" + type.toString();
-	return name;
-}
-
-bool ensureCallableFunctionGenerated(
-	ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage, llvm::Function *&generatedFunction
-) {
-	generatedFunction = nullptr;
-	requireCompilerInvariant(
-		definition && definition->section && definition->section->type == SectionType::Function && !definition->section->isFlex,
-		"non-callable definition reached callable codegen"
-	);
-	requireCompilerInvariant(!context.options.emitSPIRV, "function reference reached SPIR-V codegen");
-
-	std::vector<std::pair<std::string, DataType>> parameters;
-	collectCallableFunctionParameters(definition, parameters);
-	Instantiation *inst = definition->callableInstantiation;
-	requireCompilerInvariant(inst, "callable definition reached codegen without its inferred instantiation");
-	const std::vector<DataType> &argTypes = inst->argumentTypes;
-	requireCompilerInvariant(parameters.size() == argTypes.size(), "callable parameter count changed after inference");
-
-	std::vector<std::pair<std::string, Expression *>> paramBindings;
-	paramBindings.reserve(parameters.size());
-	for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
-		requireCompilerInvariant(
-			parameters[parameterIndex].second == argTypes[parameterIndex], "callable parameter type changed after inference"
-		);
-		paramBindings.push_back({parameters[parameterIndex].first, nullptr});
-	}
-
-	Section *section = definition->section;
-	if (!inst->llvmFunction && !generateSpecializedFunction(context, section, paramBindings, *inst))
-		return false;
-	requireCompilerInvariant(inst->valid, "invalid callable instantiation reached codegen");
-	requireCompilerInvariant(!inst->needsReinfer, "unfinished callable instantiation reached codegen");
-	requireCompilerInvariant(inst->returnType.isDeduced(), "callable without a return type reached codegen");
-	if (inst->llvmCallableFunction) {
-		if (requireExternalLinkage)
-			inst->llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
-		generatedFunction = inst->llvmCallableFunction;
-		return true;
-	}
-
-	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	std::vector<llvm::Type *> parameterTypes;
-	parameterTypes.reserve(argTypes.size());
-	for (const DataType &parameterType : argTypes)
-		parameterTypes.push_back(getLLVMType(context, parameterType));
-	llvm::Type *returnType = getLLVMType(context, inst->returnType);
-	llvm::FunctionType *callableType = llvm::FunctionType::get(returnType, parameterTypes, false);
-	std::string callableName = buildCallableFunctionName(definition, argTypes);
-	llvm::GlobalValue::LinkageTypes linkage = (requireExternalLinkage || section->isExposed)
-												  ? llvm::GlobalValue::ExternalLinkage
-												  : llvm::GlobalValue::InternalLinkage;
-	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
-	inst->llvmCallableFunction = callableFunction;
-
-	size_t argumentIndex = 0;
-	for (llvm::Argument &argument : callableFunction->args())
-		argument.setName(parameters[argumentIndex++].first);
-
-	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", callableFunction);
-	llvm::BasicBlock *savedBlock = builder.GetInsertBlock();
-	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
-	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
-	std::vector<ParseContext::ManagedStorageState> savedManagedLocalStorage = std::move(context.managedLocalStorage);
-	context.managedLocalStorage.clear();
-	builder.SetInsertPoint(entry);
-
-	std::vector<llvm::Value *> callArguments;
-	std::vector<llvm::Value *> managedParameterStorage;
-	callArguments.reserve(argTypes.size());
-	argumentIndex = 0;
-	bool succeeded = true;
-	for (llvm::Argument &argument : callableFunction->args()) {
-		const DataType &argumentType = argTypes[argumentIndex];
-		llvm::AllocaInst *parameterAlloca = createEntryAlloca(context, parameters[argumentIndex].first, argumentType);
-		if (typeHasManagedLifecycle(argumentType)) {
-			if (!retainManagedValue(context, argumentType, &argument)) {
-				succeeded = false;
-				break;
-			}
-			registerManagedStorage(context, parameterAlloca, argumentType, section);
-			initializeManagedStorage(context, parameterAlloca, argumentType, &argument);
-			managedParameterStorage.push_back(parameterAlloca);
-		} else {
-			builder.CreateAlignedStore(&argument, parameterAlloca, getLLVMABIAlignment(context, argumentType));
-		}
-		callArguments.push_back(parameterAlloca);
-		argumentIndex++;
-	}
-
-	if (succeeded) {
-		llvm::CallInst *call = builder.CreateCall(inst->llvmFunction, callArguments);
-		for (auto iterator = managedParameterStorage.rbegin(); iterator != managedParameterStorage.rend(); iterator++) {
-			if (!releaseManagedTemporaryStorage(context, *iterator)) {
-				succeeded = false;
-				break;
-			}
-		}
-		if (succeeded) {
-			if (inst->returnType.kind == DataType::Kind::Void)
-				builder.CreateRetVoid();
-			else
-				builder.CreateRet(call);
-		}
-	}
-	if (succeeded)
-		requireCompilerInvariant(context.managedLocalStorage.empty(), "callable wrapper left managed storage unclosed");
-	context.managedLocalStorage = std::move(savedManagedLocalStorage);
-
-	if (savedBlock) {
-		builder.SetInsertPoint(savedBlock, savedPoint);
-		builder.SetCurrentDebugLocation(savedDebugLoc);
-	}
-
-	if (!succeeded)
-		return false;
-	generatedFunction = callableFunction;
-	return true;
-}
+#include "callableCodegen.inl"
 
 static bool generateExposedFunctions(ParseContext &context, Section *section) {
 	if (!section)
@@ -435,7 +312,18 @@ static bool generateExposedFunctions(ParseContext &context, Section *section) {
 			return false;
 		}
 		llvm::Function *generatedFunction = nullptr;
-		if (!ensureCallableFunctionGenerated(context, section->patternDefinitions.front(), true, generatedFunction))
+		PatternDefinition *definition = section->patternDefinitions.front();
+		requireCompilerInvariant(
+			definition->indexedPaths.size() == 1,
+			"exposed function with multiple pattern paths reached code generation"
+		);
+		requireCompilerInvariant(
+			definition->callableInstantiation,
+			"exposed function reached code generation without its inferred instantiation"
+		);
+		if (!ensureCallableFunctionGenerated(
+				context, {definition, 0}, *definition->callableInstantiation, true, generatedFunction
+			))
 			return false;
 	}
 

@@ -1,0 +1,73 @@
+import lib/geometry.dl
+
+class:
+    patterns:
+        spatial camera
+    members:
+        position, yaw, movement, turning
+
+class:
+    patterns:
+        spatial bounds
+    members:
+        minimum, maximum
+
+function [a|] spatial position:
+    replacement:
+        a point
+
+function [a|] spatial dimensions:
+    replacement:
+        a point
+
+function [a|] spatial color:
+    replacement:
+        a color
+
+function [a|] normalized color:
+    replacement:
+        a color
+
+function a position with x {float:x}, y {float:y} and z {float:z}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 3 float values, x, y, z)
+        )
+
+function the dimensions measuring {float:width} by {float:height} by {float:depth}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 3 float values, width, height, depth)
+        )
+
+function a color with red {integer:red}, green {integer:green} and blue {integer:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 integer values, red, green, blue)
+        )
+
+function a normalized color with red {float:red}, green {float:green} and blue {float:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 float values, red, green, blue)
+        )
+
+function a camera at {spatial position:position} facing {float:yaw} degrees with speed {float:movement} and turn rate {float:turning}:
+    replacement:
+        @intrinsic("construct", spatial camera, position, yaw, movement, turning)
+
+function a bounding box from {spatial position:minimum} to {spatial position:maximum}:
+    replacement:
+        @intrinsic("construct", spatial bounds, minimum, maximum)
+
+function key {integer:number} is down in {C string:window}:
+    execute:
+        return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = 1

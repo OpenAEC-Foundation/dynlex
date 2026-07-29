@@ -2,9 +2,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
 function left + right:
     execute:
@@ -14,12 +14,12 @@ function left * right:
     execute:
         return @intrinsic("multiply", left, right)
 
-function increment value:
+function one more than value:
     execute:
         return value + 1
 
-function double value:
+function value doubled:
     execute:
-        return value * increment value
+        return value * one more than value
 
-discard @intrinsic("array", double 5)
+ignore @intrinsic("array", 5 doubled)

@@ -1,10 +1,9 @@
 import lib/std.dl
 import tests/lsp/instantiation_labels/user.dl
 
-function send message to user:
+function send {string:message} to {user record:recipient}:
     execute:
-        print message as line
-        @intrinsic("discard", user)
+        print message as a line
 
-set recipient to build account named "DynLex"
-send (the string form of "hello") to recipient
+set recipient to a user named "DynLex"
+send the string form of "hello" to recipient

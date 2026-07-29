@@ -2,7 +2,7 @@
 # Supported: ordered indentation-based block mappings, blank/comment lines,
 # plain keys and strings, single-quoted strings, and double-quoted strings.
 # Outside quoted scalars, "#" begins a comment. Errors use one-based source
-# lines and UTF-8 byte columns.
+# lines and UTF8 byte columns.
 # Sequences, flow collections, tags, anchors, aliases, directives, typed
 # scalars, and multiline scalars are not part of this library's syntax.
 
@@ -10,468 +10,469 @@ import lib/string.dl
 
 class:
     patterns:
-        [a|] yaml mapping node
+        [a|] YAML mapping node
     members:
         key as a string
         scalar as a string
-        has_scalar as boolean
-        children as a pointer to a pointer to yaml mapping node
-        length as i32
-        capacity as i32
-        source_line as i32
-        source_column as i32
+        scalar presence as a boolean
+        children as a pointer to a pointer to a YAML mapping node
+        length as an integer
+        capacity as an integer
+        source line as an integer
+        source column as an integer
 
 class:
     patterns:
-        [a|] yaml result
+        [a|] YAML result
     members:
-        succeeded as boolean
-        document as a pointer to yaml mapping node
-        error_line as i32
-        error_column as i32
-        error_message as a string
+        success as a boolean
+        document as a pointer to a YAML mapping node
+        error line as an integer
+        error column as an integer
+        error message as a string
 
 local class:
     patterns:
-        [a|] decoded yaml scalar
+        [a|] decoded YAML scalar
     members:
-        succeeded as boolean
+        success as a boolean
         value as a string
-        error_column as i32
-        error_message as a string
+        error column as an integer
+        error message as a string
 
-local function an empty yaml string:
+local function an empty YAML string:
     execute:
         return the string form of ""
 
-local function [the|] unsigned yaml byte at {integer:offset} in {string:source}:
+local function the unsigned YAML byte at {integer:offset} in {string:source}:
     execute:
-        return (character offset of source as i32) bitwise and 255
+        return (the character at offset in source as a 32 bit integer) bitwise and 255
 
-local function a new yaml mapping node named {string:node_key} at source line {integer:source_line} column {integer:source_column}:
+local function a new YAML mapping node named {string:name} at source position {integer:line}, {integer:column}:
     execute:
-        set empty_scalar to an empty yaml string
-        set no_children to 0 as a pointer to a pointer to yaml mapping node
-        set initial_node to @intrinsic(
+        set scalar to an empty YAML string
+        set children to 0 as a pointer to a pointer to a YAML mapping node
+        set initial to @intrinsic(
             "construct",
-            a yaml mapping node,
-            node_key,
-            empty_scalar,
+            a YAML mapping node,
+            name,
+            scalar,
             false,
-            no_children,
+            children,
             0,
             0,
-            source_line,
-            source_column
+            line,
+            column
         )
-        return allocate 1 slots of initial_node
+        allocate 1 slots of initial and set result to it
+        return result
 
-local function append yaml child {a pointer to yaml mapping node:child_node} to {a pointer to yaml mapping node:parent_node}:
+local function add {a pointer to a YAML mapping node:child} to the YAML mapping {a pointer to a YAML mapping node:parent}:
     execute:
-        if the length of parent_node = the capacity of parent_node:
-            set new_capacity to the capacity of parent_node
-            if new_capacity < 4:
-                set new_capacity to 4
+        if the length of parent = the capacity of parent:
+            set capacity to the capacity of parent
+            if capacity < 4:
+                set capacity to 4
             else:
-                set new_capacity to new_capacity * 2
-            set resized_children to @intrinsic(
+                set capacity to capacity * 2
+            set children to @intrinsic(
                 "call",
                 "libc",
                 "realloc",
-                a pointer to a pointer to yaml mapping node,
-                the children of parent_node,
-                new_capacity * the size of a pointer to yaml mapping node
+                a pointer to a pointer to a YAML mapping node,
+                the children of parent,
+                capacity * the size of a pointer to a YAML mapping node
             )
-            if resized_children = (0 as a pointer to a pointer to yaml mapping node):
-                @intrinsic("call", "libc", "abort", void)
-            set the children of parent_node to resized_children
-            set the capacity of parent_node to new_capacity
-        @intrinsic("initialize at", (the children of parent_node) + (the length of parent_node), child_node)
-        set the length of parent_node to (the length of parent_node) + 1
+            if children = (0 as a pointer to a pointer to a YAML mapping node):
+                @intrinsic("call", "libc", "abort", nothing)
+            set the children of parent to children
+            set the capacity of parent to capacity
+        @intrinsic("initialize at", (the children of parent) + (the length of parent), child)
+        set the length of parent to (the length of parent) + 1
 
-local function yaml child index named {string:searched_name} in {a pointer to yaml mapping node:parent_node}:
+local function the YAML child index named {string:name} in {a pointer to a YAML mapping node:parent}:
     execute:
-        set child_index to 0
-        loop while child_index < the length of parent_node:
-            set child_node to item child_index of the children of parent_node
-            if the key of child_node = searched_name:
-                return child_index
-            set child_index to child_index + 1
+        set cursor to 0
+        loop while cursor < the length of parent:
+            set entry to the item at cursor in the children of parent
+            if the key of entry = name:
+                return cursor
+            set cursor to cursor + 1
         return 0 - 1
 
-function free yaml document {a pointer to yaml mapping node:document_root}:
+function free {a pointer to a YAML mapping node:document}:
     execute:
-        if document_root = (0 as a pointer to yaml mapping node):
+        if document = (0 as a pointer to a YAML mapping node):
             @intrinsic("return")
-        set child_index to 0
-        loop while child_index < the length of document_root:
-            free yaml document item child_index of the children of document_root
-            set child_index to child_index + 1
-        @intrinsic("call", "libc", "free", void, the children of document_root)
-        @intrinsic("destroy at", document_root)
-        @intrinsic("call", "libc", "free", void, document_root)
+        set index to 0
+        loop while index < the length of document:
+            free the item at index in the children of document
+            set index to index + 1
+        @intrinsic("call", "libc", "free", nothing, the children of document)
+        @intrinsic("destroy at", document)
+        @intrinsic("call", "libc", "free", nothing, document)
 
-local function a successful decoded yaml scalar containing {string:decoded_text}:
+local function a successful decoded YAML scalar containing {string:text}:
     execute:
-        set no_error to an empty yaml string
-        return @intrinsic("construct", a decoded yaml scalar, true, decoded_text, 0, no_error)
+        set message to an empty YAML string
+        return @intrinsic("construct", a decoded YAML scalar, true, text, 0, message)
 
-local function a failed decoded yaml scalar at column {integer:error_column} reporting message:
+local function a failed decoded YAML scalar at {integer:column} reporting message:
     execute:
-        set no_value to an empty yaml string
-        set error_text to the string form of message
-        return @intrinsic("construct", a decoded yaml scalar, false, no_value, error_column, error_text)
+        set value to an empty YAML string
+        set text to the string form of message
+        return @intrinsic("construct", a decoded YAML scalar, false, value, column, text)
 
-local function yaml double quote escape value for {integer:escaped_byte}:
+local function the YAML double-quote escape value for {integer:escaped}:
     execute:
-        if escaped_byte = 110:
+        if escaped = 110:
             return 10
-        if escaped_byte = 114:
+        if escaped = 114:
             return 13
-        if escaped_byte = 116:
+        if escaped = 116:
             return 9
-        if escaped_byte = 34:
+        if escaped = 34:
             return 34
-        if escaped_byte = 92:
+        if escaped = 92:
             return 92
         return 0 - 1
 
-local function decode yaml scalar in {string:source} from {integer:value_start} to {integer:value_end} relative to {integer:line_start}:
+local function the YAML scalar decoded in {string:source} from {integer:start} to {integer:finish} relative to {integer:beginning}:
     execute:
-        set first_byte to the unsigned yaml byte at value_start in source
-        if first_byte != 34 and first_byte != 39:
-            set plain_text to the substring of source from value_start with length value_end - value_start
-            return a successful decoded yaml scalar containing plain_text
-        set quote_byte to first_byte
-        set read_position to value_start + 1
-        set output_length to 0
-        set closing_position to 0 - 1
+        set first to the unsigned YAML byte at start in source
+        if first != 34 and first != 39:
+            set text to the substring of source from start spanning (finish - start) bytes
+            return a successful decoded YAML scalar containing text
+        set quote to first
+        set reader to start + 1
+        set length to 0
+        set closing to 0 - 1
         set reading to true
-        loop while reading and read_position < value_end:
-            set current_byte to the unsigned yaml byte at read_position in source
-            if quote_byte = 34 and current_byte = 92:
-                if read_position + 1 >= value_end:
-                    set error_column to (read_position - line_start) + 1
-                    return a failed decoded yaml scalar at column error_column reporting "unterminated quoted scalar escape"
-                set escaped_byte to the unsigned yaml byte at read_position + 1 in source
-                if yaml double quote escape value for escaped_byte < 0:
-                    set error_column to (read_position - line_start) + 1
-                    return a failed decoded yaml scalar at column error_column reporting "unsupported quoted scalar escape"
-                set output_length to output_length + 1
-                set read_position to read_position + 2
-            else if current_byte = quote_byte:
-                if quote_byte = 39 and read_position + 1 < value_end:
-                    if the unsigned yaml byte at read_position + 1 in source = 39:
-                        set output_length to output_length + 1
-                        set read_position to read_position + 2
+        loop while reading and reader < finish:
+            set current to the unsigned YAML byte at reader in source
+            if quote = 34 and current = 92:
+                if reader + 1 >= finish:
+                    set column to (reader - beginning) + 1
+                    return a failed decoded YAML scalar at column reporting "unterminated quoted scalar escape"
+                set escaped to the unsigned YAML byte at reader + 1 in source
+                if the YAML double-quote escape value for escaped < 0:
+                    set column to (reader - beginning) + 1
+                    return a failed decoded YAML scalar at column reporting "unsupported quoted scalar escape"
+                set length to length + 1
+                set reader to reader + 2
+            else if current = quote:
+                if quote = 39 and reader + 1 < finish:
+                    if the unsigned YAML byte at reader + 1 in source = 39:
+                        set length to length + 1
+                        set reader to reader + 2
                     else:
-                        set closing_position to read_position
+                        set closing to reader
                         set reading to false
                 else:
-                    set closing_position to read_position
+                    set closing to reader
                     set reading to false
             else:
-                set output_length to output_length + 1
-                set read_position to read_position + 1
-        if closing_position < 0:
-            set error_column to (value_start - line_start) + 1
-            return a failed decoded yaml scalar at column error_column reporting "unterminated quoted scalar"
-        set trailing_position to closing_position + 1
-        loop while trailing_position < value_end:
-            set trailing_byte to the unsigned yaml byte at trailing_position in source
-            if trailing_byte = 32 or trailing_byte = 9:
-                set trailing_position to trailing_position + 1
+                set length to length + 1
+                set reader to reader + 1
+        if closing < 0:
+            set column to (start - beginning) + 1
+            return a failed decoded YAML scalar at column reporting "unterminated quoted scalar"
+        set cursor to closing + 1
+        loop while cursor < finish:
+            set octet to the unsigned YAML byte at cursor in source
+            if octet = 32 or octet = 9:
+                set cursor to cursor + 1
             else:
-                set error_column to (trailing_position - line_start) + 1
-                return a failed decoded yaml scalar at column error_column reporting "unexpected text after quoted scalar"
-        set decoded_text to a new string buffer with length output_length
-        set write_position to 0
-        set read_position to value_start + 1
-        loop while read_position < closing_position:
-            set current_byte to the unsigned yaml byte at read_position in source
-            if quote_byte = 34 and current_byte = 92:
-                set escaped_byte to the unsigned yaml byte at read_position + 1 in source
-                store yaml double quote escape value for escaped_byte as a byte into the data of decoded_text at write_position
-                set read_position to read_position + 2
-            else if quote_byte = 39 and current_byte = 39:
-                store 39 as a byte into the data of decoded_text at write_position
-                set read_position to read_position + 2
+                set column to (cursor - beginning) + 1
+                return a failed decoded YAML scalar at column reporting "unexpected text after quoted scalar"
+        set text to a new string buffer containing length bytes
+        set writer to 0
+        set reader to start + 1
+        loop while reader < closing:
+            set current to the unsigned YAML byte at reader in source
+            if quote = 34 and current = 92:
+                set escaped to the unsigned YAML byte at reader + 1 in source
+                store the YAML double-quote escape value for escaped as a byte into the data of text at writer
+                set reader to reader + 2
+            else if quote = 39 and current = 39:
+                store 39 as a byte into the data of text at writer
+                set reader to reader + 2
             else:
-                store current_byte as a byte into the data of decoded_text at write_position
-                set read_position to read_position + 1
-            set write_position to write_position + 1
-        return a successful decoded yaml scalar containing decoded_text
+                store current as a byte into the data of text at writer
+                set reader to reader + 1
+            set writer to writer + 1
+        return a successful decoded YAML scalar containing text
 
-local function yaml parsing failure for {a pointer to yaml mapping node:document_root} with {a pointer to a pointer to yaml mapping node:parent_stack} at source line {integer:error_line} column {integer:error_column} reporting message:
+local function a YAML parsing failure for {a pointer to a YAML mapping node:document} with {a pointer to a pointer to a YAML mapping node:ancestors} at source position {integer:line}, {integer:column} reporting message:
     execute:
-        @intrinsic("call", "libc", "free", void, parent_stack)
-        free yaml document document_root
-        set error_text to the string form of message
+        @intrinsic("call", "libc", "free", nothing, ancestors)
+        free document
+        set text to the string form of message
         return @intrinsic(
             "construct",
-            a yaml result,
+            a YAML result,
             false,
-            0 as a pointer to yaml mapping node,
-            error_line,
-            error_column,
-            error_text
+            0 as a pointer to a YAML mapping node,
+            line,
+            column,
+            text
         )
 
-local function a successful yaml parsing with {a pointer to yaml mapping node:document_root}:
+local function a successful YAML parsing with {a pointer to a YAML mapping node:document}:
     execute:
-        set no_error to an empty yaml string
-        return @intrinsic("construct", a yaml result, true, document_root, 0, 0, no_error)
+        set message to an empty YAML string
+        return @intrinsic("construct", a YAML result, true, document, 0, 0, message)
 
-local function scan yaml line in {string:source} from {integer:source_start} storing end in line_end_output and next start in next_start_output:
+local function scan the YAML line in {string:source} from {integer:start} storing its end at {a pointer to an integer:destination} and its continuation at {a pointer to an integer:continuation}:
     execute:
-        set line_end to source_start
+        set ending to start
         set scanning to true
-        loop while scanning and line_end < the length of source:
-            set line_byte to the unsigned yaml byte at line_end in source
-            if line_byte = 10 or line_byte = 13:
+        loop while scanning and ending < the length of source:
+            set octet to the unsigned YAML byte at ending in source
+            if octet = 10 or octet = 13:
                 set scanning to false
             else:
-                set line_end to line_end + 1
-        set next_start to line_end
-        if next_start < the length of source:
-            if the unsigned yaml byte at next_start in source = 13:
-                set next_start to next_start + 1
-                if next_start < the length of source:
-                    if the unsigned yaml byte at next_start in source = 10:
-                        set next_start to next_start + 1
+                set ending to ending + 1
+        set next to ending
+        if next < the length of source:
+            if the unsigned YAML byte at next in source = 13:
+                set next to next + 1
+                if next < the length of source:
+                    if the unsigned YAML byte at next in source = 10:
+                        set next to next + 1
             else:
-                set next_start to next_start + 1
-        @intrinsic("store at", line_end_output, line_end)
-        @intrinsic("store at", next_start_output, next_start)
+                set next to next + 1
+        @intrinsic("store at", destination, ending)
+        @intrinsic("store at", continuation, next)
 
-local function yaml leading content in {string:source} from {integer:start_position} to {integer:end_position}:
+local function the YAML leading content in {string:source} from {integer:start} to {integer:finish}:
     execute:
-        set position to start_position
+        set position to start
         set trimming to true
-        loop while trimming and position < end_position:
-            set byte_value to the unsigned yaml byte at position in source
-            if byte_value = 32 or byte_value = 9:
+        loop while trimming and position < finish:
+            set octet to the unsigned YAML byte at position in source
+            if octet = 32 or octet = 9:
                 set position to position + 1
             else:
                 set trimming to false
         return position
 
-local function yaml trailing content end in {string:source} from {integer:start_position} to {integer:end_position}:
+local function the YAML trailing content end in {string:source} from {integer:start} to {integer:finish}:
     execute:
-        set position to end_position
+        set position to finish
         set trimming to true
-        loop while trimming and position > start_position:
-            set byte_value to the unsigned yaml byte at position - 1 in source
-            if byte_value = 32 or byte_value = 9:
+        loop while trimming and position > start:
+            set octet to the unsigned YAML byte at position - 1 in source
+            if octet = 32 or octet = 9:
                 set position to position - 1
             else:
                 set trimming to false
         return position
 
-local function find yaml delimiters in {string:source} from {integer:start_position} to {integer:end_position} storing colon in colon_output and comment in comment_output:
+local function find YAML delimiters in {string:source} from {integer:start} to {integer:finish} storing colon at {a pointer to an integer:destination} and comment at {a pointer to an integer:annotation}:
     execute:
-        set colon_position to 0 - 1
-        set comment_position to end_position
-        set scan_position to start_position
-        set quote_byte to 0
+        set delimiter to 0 - 1
+        set marker to finish
+        set cursor to start
+        set quote to 0
         set escaped to false
         set scanning to true
-        loop while scanning and scan_position < end_position:
-            set scan_byte to the unsigned yaml byte at scan_position in source
-            if quote_byte = 0:
-                if scan_byte = 35:
-                    set comment_position to scan_position
+        loop while scanning and cursor < finish:
+            set octet to the unsigned YAML byte at cursor in source
+            if quote = 0:
+                if octet = 35:
+                    set marker to cursor
                     set scanning to false
                 else:
-                    if colon_position < 0 and scan_byte = 58:
-                        set colon_position to scan_position
-                    if scan_byte = 34 or scan_byte = 39:
-                        set quote_byte to scan_byte
-                    set scan_position to scan_position + 1
-            else if quote_byte = 34:
+                    if delimiter < 0 and octet = 58:
+                        set delimiter to cursor
+                    if octet = 34 or octet = 39:
+                        set quote to octet
+                    set cursor to cursor + 1
+            else if quote = 34:
                 if escaped:
                     set escaped to false
-                else if scan_byte = 92:
+                else if octet = 92:
                     set escaped to true
-                else if scan_byte = 34:
-                    set quote_byte to 0
-                set scan_position to scan_position + 1
+                else if octet = 34:
+                    set quote to 0
+                set cursor to cursor + 1
             else:
-                if scan_byte = 39:
-                    if scan_position + 1 < end_position:
-                        if the unsigned yaml byte at scan_position + 1 in source = 39:
-                            set scan_position to scan_position + 1
+                if octet = 39:
+                    if cursor + 1 < finish:
+                        if the unsigned YAML byte at cursor + 1 in source = 39:
+                            set cursor to cursor + 1
                         else:
-                            set quote_byte to 0
+                            set quote to 0
                     else:
-                        set quote_byte to 0
-                set scan_position to scan_position + 1
-        @intrinsic("store at", colon_output, colon_position)
-        @intrinsic("store at", comment_output, comment_position)
+                        set quote to 0
+                set cursor to cursor + 1
+        @intrinsic("store at", destination, delimiter)
+        @intrinsic("store at", annotation, marker)
 
-function parse {string:source} as yaml mapping:
+local function the YAML mapping parsed from {string:source}:
     execute:
-        set root_key to an empty yaml string
-        set document_root to a new yaml mapping node named root_key at source line 0 column 0
-        set parent_stack to allocate (the length of source + 1) slots of a pointer to yaml mapping node
-        store document_root into parent_stack at 0
-        set indentation_width to 0
-        set previous_level to 0
-        set previous_node to 0 as a pointer to yaml mapping node
-        set source_offset to 0
-        set source_line to 1
-        loop while source_offset < the length of source:
-            set line_start to source_offset
-            set line_end to line_start
-            set next_line_start to line_end
-            scan yaml line in source from line_start storing end in the address of line_end and next start in the address of next_line_start
-            set source_offset to next_line_start
-            set first_content to yaml leading content in source from line_start to line_end
-            set has_content to first_content < line_end
-            if has_content:
-                if the unsigned yaml byte at first_content in source = 35:
-                    set has_content to false
-            if has_content:
-                set indentation_position to line_start
-                loop while indentation_position < first_content:
-                    if the unsigned yaml byte at indentation_position in source = 9:
-                        set tab_column to (indentation_position - line_start) + 1
-                        return yaml parsing failure for document_root with parent_stack at source line source_line column tab_column reporting "tabs are not allowed for indentation"
-                    set indentation_position to indentation_position + 1
-                set indentation_count to first_content - line_start
-                set content_column to indentation_count + 1
-                set indentation_level to 0
-                if indentation_count > 0:
-                    if indentation_width = 0:
-                        set indentation_width to indentation_count
-                        set indentation_level to 1
+        set name to an empty YAML string
+        set document to a new YAML mapping node named name at source position 0, 0
+        allocate (the length of source + 1) slots of a pointer to a YAML mapping node and set ancestors to it
+        store document into ancestors at 0
+        set width to 0
+        set previous to 0
+        set prior to 0 as a pointer to a YAML mapping node
+        set offset to 0
+        set line to 1
+        loop while offset < the length of source:
+            set origin to offset
+            set ending to origin
+            set next to ending
+            scan the YAML line in source from origin storing its end at the address of ending and its continuation at the address of next
+            set offset to next
+            set content to the YAML leading content in source from origin to ending
+            set present to content < ending
+            if present:
+                if the unsigned YAML byte at content in source = 35:
+                    set present to false
+            if present:
+                set cursor to origin
+                loop while cursor < content:
+                    if the unsigned YAML byte at cursor in source = 9:
+                        set column to (cursor - origin) + 1
+                        return a YAML parsing failure for document with ancestors at source position line, column reporting "tabs are not allowed for indentation"
+                    set cursor to cursor + 1
+                set spaces to content - origin
+                set column to spaces + 1
+                set depth to 0
+                if spaces > 0:
+                    if width = 0:
+                        set width to spaces
+                        set depth to 1
                     else:
-                        if indentation_count mod indentation_width != 0:
-                            return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "indentation does not match the established width"
-                        set indentation_level to indentation_count / indentation_width
-                if indentation_level > previous_level + 1:
-                    return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "indentation can only increase by one level"
-                if indentation_level > previous_level:
-                    if previous_node = (0 as a pointer to yaml mapping node):
-                        return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "an indented entry must follow a parent entry"
-                    if @intrinsic("property", previous_node, "has_scalar"):
-                        return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "a scalar entry cannot contain nested entries"
-                    store previous_node into parent_stack at indentation_level
-                set parent_node to item indentation_level of parent_stack
-                set colon_position to 0 - 1
-                set comment_start to line_end
-                find yaml delimiters in source from first_content to line_end storing colon in the address of colon_position and comment in the address of comment_start
-                if colon_position < 0 or colon_position >= comment_start:
-                    return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "expected a mapping entry with ':'"
-                set key_start to first_content
-                set key_end to yaml trailing content end in source from key_start to colon_position
-                if key_end <= key_start:
-                    return yaml parsing failure for document_root with parent_stack at source line source_line column content_column reporting "a mapping key cannot be empty"
-                set key_column to (key_start - line_start) + 1
-                set first_key_byte to the unsigned yaml byte at key_start in source
-                if first_key_byte = 34 or first_key_byte = 39:
-                    return yaml parsing failure for document_root with parent_stack at source line source_line column key_column reporting "quoted mapping keys are not supported"
-                set node_key to the substring of source from key_start with length key_end - key_start
-                if yaml child index named node_key in parent_node >= 0:
-                    return yaml parsing failure for document_root with parent_stack at source line source_line column key_column reporting "duplicate mapping key"
-                set after_colon to colon_position + 1
-                set value_start to yaml leading content in source from after_colon to comment_start
-                set value_end to yaml trailing content end in source from value_start to comment_start
-                set child_node to a new yaml mapping node named node_key at source line source_line column key_column
-                if value_start < value_end:
-                    set decoded_scalar to decode yaml scalar in source from value_start to value_end relative to line_start
-                    if not the succeeded of decoded_scalar:
-                        set scalar_error_column to @intrinsic("property", decoded_scalar, "error_column")
-                        set scalar_error_message to @intrinsic("property", decoded_scalar, "error_message")
-                        free yaml document child_node
-                        return yaml parsing failure for document_root with parent_stack at source line source_line column scalar_error_column reporting scalar_error_message
-                    set the scalar of child_node to the value of decoded_scalar
-                    set child_node's has_scalar to true
-                append yaml child child_node to parent_node
-                set previous_node to child_node
-                set previous_level to indentation_level
-            set source_line to source_line + 1
-        @intrinsic("call", "libc", "free", void, parent_stack)
-        return a successful yaml parsing with document_root
+                        if the remainder of spaces divided by width != 0:
+                            return a YAML parsing failure for document with ancestors at source position line, column reporting "indentation does not match the established width"
+                        set depth to spaces / width
+                if depth > previous + 1:
+                    return a YAML parsing failure for document with ancestors at source position line, column reporting "indentation can only increase by one level"
+                if depth > previous:
+                    if prior = (0 as a pointer to a YAML mapping node):
+                        return a YAML parsing failure for document with ancestors at source position line, column reporting "an indented entry must follow a parent entry"
+                    if prior's scalar presence:
+                        return a YAML parsing failure for document with ancestors at source position line, column reporting "a scalar entry cannot contain nested entries"
+                    store prior into ancestors at depth
+                set parent to the item at depth in ancestors
+                set delimiter to 0 - 1
+                set comment to ending
+                find YAML delimiters in source from content to ending storing colon at the address of delimiter and comment at the address of comment
+                if delimiter < 0 or delimiter >= comment:
+                    return a YAML parsing failure for document with ancestors at source position line, column reporting "expected a mapping entry with ':'"
+                set beginning to content
+                set ending to the YAML trailing content end in source from beginning to delimiter
+                if ending <= beginning:
+                    return a YAML parsing failure for document with ancestors at source position line, column reporting "a mapping key cannot be empty"
+                set column to (beginning - origin) + 1
+                set initial to the unsigned YAML byte at beginning in source
+                if initial = 34 or initial = 39:
+                    return a YAML parsing failure for document with ancestors at source position line, column reporting "quoted mapping keys are not supported"
+                set name to the substring of source from beginning spanning (ending - beginning) bytes
+                if the YAML child index named name in parent >= 0:
+                    return a YAML parsing failure for document with ancestors at source position line, column reporting "duplicate mapping key"
+                set remainder to delimiter + 1
+                set start to the YAML leading content in source from remainder to comment
+                set finish to the YAML trailing content end in source from start to comment
+                set child to a new YAML mapping node named name at source position line, column
+                if start < finish:
+                    set decoded to the YAML scalar decoded in source from start to finish relative to origin
+                    if decoded failed:
+                        set column to decoded's error column
+                        set message to decoded's error message
+                        free child
+                        return a YAML parsing failure for document with ancestors at source position line, column reporting message
+                    set the scalar of child to the value of decoded
+                    set child's scalar presence to true
+                add child to the YAML mapping parent
+                set prior to child
+                set previous to depth
+            set line to line + 1
+        @intrinsic("call", "libc", "free", nothing, ancestors)
+        return a successful YAML parsing with document
 
-function parse {cstring:source} as yaml mapping:
+local function the YAML mapping parsed from {C string:source}:
     execute:
-        return parse the string form of source as yaml mapping
+        return the YAML mapping parsed from the string form of source
 
-function yaml parsing succeeded for {yaml result:outcome}:
+flex function parse source as a YAML mapping:
+    replacement:
+        set the subject to the YAML mapping parsed from source
+
+function {YAML result:outcome} succeeded:
+    replacement:
+        outcome's success
+
+function {YAML result:outcome} failed:
+    replacement:
+        the inverse of outcome's success
+
+local function {decoded YAML scalar:outcome} succeeded:
+    replacement:
+        outcome's success
+
+local function {decoded YAML scalar:outcome} failed:
+    replacement:
+        the inverse of outcome's success
+
+function the number of YAML entries in {a pointer to a YAML mapping node:parent}:
     execute:
-        return outcome's succeeded
+        return the length of parent
 
-function [the|] yaml document of {yaml result:outcome}:
+function {a pointer to a YAML mapping node:node} is a YAML mapping:
     replacement:
-        @intrinsic("property", outcome, "document")
+        the inverse of node's scalar presence
 
-function [the|] yaml error line of {yaml result:outcome}:
+function {a pointer to a YAML mapping node:node} is a YAML scalar:
     replacement:
-        @intrinsic("property", outcome, "error_line")
+        node's scalar presence
 
-function [the|] yaml error column of {yaml result:outcome}:
-    replacement:
-        @intrinsic("property", outcome, "error_column")
-
-function [the|] yaml error message of {yaml result:outcome}:
-    replacement:
-        @intrinsic("property", outcome, "error_message")
-
-function [the|] number of yaml entries in {a pointer to yaml mapping node:parent_node}:
-    execute:
-        return the length of parent_node
-
-function {a pointer to yaml mapping node:node} is a yaml mapping:
-    replacement:
-        not @intrinsic("property", node, "has_scalar")
-
-function {a pointer to yaml mapping node:node} is a yaml scalar:
-    replacement:
-        @intrinsic("property", node, "has_scalar")
-
-function [the|] yaml key of {a pointer to yaml mapping node:node}:
+function the YAML key of {a pointer to a YAML mapping node:node}:
     execute:
         return the key of node
 
-function [the|] yaml scalar of {a pointer to yaml mapping node:node}:
+function the YAML scalar of {a pointer to a YAML mapping node:node}:
     execute:
-        if not @intrinsic("property", node, "has_scalar"):
-            @intrinsic("call", "libc", "abort", void)
+        if node is a YAML mapping:
+            @intrinsic("call", "libc", "abort", nothing)
         return the scalar of node
 
-function [the|] yaml source line of {a pointer to yaml mapping node:node}:
+function the YAML source line of {a pointer to a YAML mapping node:node}:
     replacement:
-        @intrinsic("property", node, "source_line")
+        node's source line
 
-function [the|] yaml source column of {a pointer to yaml mapping node:node}:
+function the YAML source column of {a pointer to a YAML mapping node:node}:
     replacement:
-        @intrinsic("property", node, "source_column")
+        node's source column
 
-function yaml entry at index {integer:entry_index} in {a pointer to yaml mapping node:parent_node}:
+function the YAML entry at index {integer:index} in {a pointer to a YAML mapping node:parent}:
     execute:
-        if entry_index < 0 or entry_index >= the length of parent_node:
-            @intrinsic("call", "libc", "abort", void)
-        return item entry_index of the children of parent_node
+        if index < 0 or index >= the length of parent:
+            @intrinsic("call", "libc", "abort", nothing)
+        return the item at index in the children of parent
 
-function {a pointer to yaml mapping node:parent_node} has yaml entry named {any:searched_name}:
+function {a pointer to a YAML mapping node:parent} has YAML entry named {any:name}:
     execute:
-        return yaml child index named the string form of searched_name in parent_node >= 0
+        return the YAML child index named the string form of name in parent >= 0
 
-function yaml entry named {any:searched_name} in {a pointer to yaml mapping node:parent_node}:
+function the YAML entry named {any:name} in {a pointer to a YAML mapping node:parent}:
     execute:
-        set child_index to yaml child index named the string form of searched_name in parent_node
-        if child_index < 0:
-            @intrinsic("call", "libc", "abort", void)
-        return item child_index of the children of parent_node
+        set index to the YAML child index named the string form of name in parent
+        if index < 0:
+            @intrinsic("call", "libc", "abort", nothing)
+        return the item at index in the children of parent
 
-function yaml scalar named {any:searched_name} in {a pointer to yaml mapping node:parent_node}:
+function the YAML scalar named {any:name} in {a pointer to a YAML mapping node:parent}:
     execute:
-        set child_node to yaml entry named searched_name in parent_node
-        return the yaml scalar of child_node
+        set child to the YAML entry named name in parent
+        return the YAML scalar of child
 
-function free yaml result {yaml result:outcome}:
+function free {YAML result:outcome}:
     execute:
-        set document_root to @intrinsic("property", outcome, "document")
-        if document_root != (0 as a pointer to yaml mapping node):
-            free yaml document document_root
+        set document to outcome's document
+        if document != (0 as a pointer to a YAML mapping node):
+            free document

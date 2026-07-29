@@ -6,79 +6,131 @@ class:
     patterns:
         [a|] path style
     members:
-        value as i32
+        value as an integer
 
 class:
     patterns:
         [a|] path result
     members:
-        succeeded as boolean
-        value as string
-        error message as string
+        success as a boolean
+        value as a string
+        error message as a string
 
 class:
     patterns:
         [a|] path truth result
     members:
-        succeeded as boolean
-        value as boolean
-        error message as string
+        success as a boolean
+        value as a boolean
+        error message as a string
 
 class:
     patterns:
         [a|] native path style result
     members:
-        succeeded as boolean
-        supported as boolean
+        success as a boolean
+        support as a boolean
         value as path style
-        error message as string
+        error message as a string
 
 class:
     patterns:
         [a|] file URI result
     members:
-        succeeded as boolean
-        supported as boolean
-        value as string
-        error message as string
+        success as a boolean
+        support as a boolean
+        value as a string
+        error message as a string
 
 local class:
     patterns:
         [a|] path text
     members:
-        data as pointer to byte
-        length as word sized integer
-        valid as boolean
-        storage as string
+        data as a pointer to a byte
+        length as a word sized integer
+        validity as a boolean
+        storage as a string
 
-function [the|] POSIX path style:
+local function {path text:text} is invalid:
+    replacement:
+        the inverse of text's validity
+
+function {path result:result} succeeded:
+    replacement:
+        result's success
+
+function {path result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {path truth result:result} succeeded:
+    replacement:
+        result's success
+
+function {path truth result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {native path style result:result} succeeded:
+    replacement:
+        result's success
+
+function {native path style result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {native path style result:result} is supported:
+    replacement:
+        result's support
+
+function {native path style result:result} is unsupported:
+    replacement:
+        the inverse of result's support
+
+function {file URI result:result} succeeded:
+    replacement:
+        result's success
+
+function {file URI result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {file URI result:result} is supported:
+    replacement:
+        result's support
+
+function {file URI result:result} is unsupported:
+    replacement:
+        the inverse of result's support
+
+function the POSIX path style:
     replacement:
         @intrinsic("construct", a path style, 1 as a 32 bit integer)
 
-function [the|] Windows path style:
+function the Windows path style:
     replacement:
         @intrinsic("construct", a path style, 2 as a 32 bit integer)
 
-function [the|] native path style:
+function the native path style:
     execute:
-        set style_value to 0 as a 32 bit integer
-        set supported to 0 as a 32 bit integer
+        set value to 0 as an integer
+        set supported to 0 as an integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_path_native_style",
             an integer,
-            the address of style_value,
+            the address of value,
             the address of supported
         )
-        set native_style to @intrinsic("construct", a path style, style_value)
+        set selection to @intrinsic("construct", a path style, value)
         if outcome != 0:
             return @intrinsic(
                 "construct",
                 a native path style result,
                 false,
                 supported != 0,
-                native_style,
+                selection,
                 the current path error message
             )
         if supported = 0:
@@ -87,7 +139,7 @@ function [the|] native path style:
                 a native path style result,
                 false,
                 false,
-                native_style,
+                selection,
                 the current path error message
             )
         return @intrinsic(
@@ -95,7 +147,7 @@ function [the|] native path style:
             a native path style result,
             true,
             true,
-            native_style,
+            selection,
             an empty path string
         )
 
@@ -103,10 +155,10 @@ local function an empty path string:
     execute:
         return the string form of ""
 
-local function a path text for {cstring:input}:
+local function a path text for {C string:input}:
     execute:
         set storage to an empty path string
-        if input = (0 as a pointer to byte):
+        if input = (0 as a pointer to a byte):
             return @intrinsic(
                 "construct",
                 a path text,
@@ -135,31 +187,31 @@ local function a path text for {string:input}:
             input
         )
 
-local function [the|] current path error message:
+local function the current path error message:
     execute:
-        set message_length to @intrinsic(
+        set length to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_path_error_message",
             a word sized integer,
-            0 as a pointer to byte,
+            0 as a pointer to a byte,
             0 as a word sized integer
         )
-        set error_text to a new string buffer with length message_length as an integer
-        if message_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set text to a new string buffer containing (length as an integer) bytes
+        if length > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_path_error_message",
                 a word sized integer,
-                the data of error_text,
-                message_length + 1
+                the data of text,
+                length + 1
             )
-        return error_text
+        return text
 
-local function a successful path result containing result_value:
+local function a successful path result containing value:
     replacement:
-        @intrinsic("construct", a path result, true, result_value, an empty path string)
+        @intrinsic("construct", a path result, true, value, an empty path string)
 
 local function a failed path result reporting message:
     replacement:
@@ -169,49 +221,55 @@ local function a failed path result:
     replacement:
         a failed path result reporting the current path error message
 
-local function finish path operation with {integer:status} and {a pointer to byte:native_data} of length {word sized integer:native_length}:
+local function a path operation result for {integer:status} from {a pointer to a byte:data} spanning {word sized integer:length} bytes:
     execute:
         if status != 0:
-            @intrinsic("call", "libc", "free", void, native_data)
+            @intrinsic("call", "libc", "free", nothing, data)
             return a failed path result
-        set output to a new string buffer with length native_length as an integer
-        if native_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set output to a new string buffer containing (length as an integer) bytes
+        if length > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "libc",
                 "memcpy",
-                a pointer to byte,
+                a pointer to a byte,
                 the data of output,
-                native_data,
-                native_length
+                data,
+                length
             )
-        @intrinsic("call", "libc", "free", void, native_data)
+        @intrinsic("call", "libc", "free", nothing, data)
         return a successful path result containing output
 
-local function a failed file URI result with support {boolean:supported} reporting {string:message}:
+local function a supported file URI failure reporting {string:message}:
     replacement:
-        @intrinsic("construct", a file URI result, false, supported, an empty path string, message)
+        @intrinsic("construct", a file URI result, false, true, an empty path string, message)
 
-local function finish file URI operation with {integer:status}, support {integer:supported}, and {a pointer to byte:native_data} of length {word sized integer:native_length}:
+local function an unsupported file URI failure reporting {string:message}:
+    replacement:
+        @intrinsic("construct", a file URI result, false, false, an empty path string, message)
+
+local function a file URI operation result for {integer:status} with support indicated by {integer:supported} from {a pointer to a byte:data} spanning {word sized integer:length} bytes:
     execute:
         if status != 0:
-            @intrinsic("call", "libc", "free", void, native_data)
-            return a failed file URI result with support (supported != 0) reporting the current path error message
+            @intrinsic("call", "libc", "free", nothing, data)
+            if supported != 0:
+                return a supported file URI failure reporting the current path error message
+            return an unsupported file URI failure reporting the current path error message
         if supported = 0:
-            @intrinsic("call", "libc", "free", void, native_data)
-            return a failed file URI result with support false reporting the current path error message
-        set output to a new string buffer with length native_length as an integer
-        if native_length > 0 as a word sized integer:
-            discard @intrinsic(
+            @intrinsic("call", "libc", "free", nothing, data)
+            return an unsupported file URI failure reporting the current path error message
+        set output to a new string buffer containing (length as an integer) bytes
+        if length > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "libc",
                 "memcpy",
-                a pointer to byte,
+                a pointer to a byte,
                 the data of output,
-                native_data,
-                native_length
+                data,
+                length
             )
-        @intrinsic("call", "libc", "free", void, native_data)
+        @intrinsic("call", "libc", "free", nothing, data)
         return @intrinsic(
             "construct",
             a file URI result,
@@ -221,14 +279,14 @@ local function finish file URI operation with {integer:status}, support {integer
             an empty path string
         )
 
-function join left with right using {path style:style}:
+function left joined with right using {path style:style}:
     execute:
-        set prepared_left to a path text for left
-        set prepared_right to a path text for right
-        if (not prepared_left's valid) or (not prepared_right's valid):
+        set first to a path text for left
+        set second to a path text for right
+        if first is invalid or second is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -236,83 +294,83 @@ function join left with right using {path style:style}:
             an integer,
             1,
             style's value,
-            prepared_left's data,
-            prepared_left's length,
-            prepared_right's data,
-            prepared_right's length,
-            the address of native_data,
-            the address of native_length
+            first's data,
+            first's length,
+            second's data,
+            second's length,
+            the address of data,
+            the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [the|] parent path of input using {path style:style}:
+function the parent path of input using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_unary", an integer,
             2, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of data, the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [the|] filename of input using {path style:style}:
+function the filename of input using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_unary", an integer,
             3, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of data, the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [the|] base name of input using {path style:style}:
+function the base name of input using {path style:style}:
     execute:
         return the filename of input using style
 
-function [the|] stem of input using {path style:style}:
+function the stem of input using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_unary", an integer,
             4, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of data, the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [the|] suffix of input using {path style:style}:
+function the suffix of input using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_unary", an integer,
             5, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of data, the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [the|] extension of input using {path style:style}:
+function the extension of input using {path style:style}:
     execute:
         return the suffix of input using style
 
-function whether path input is absolute using {path style:style}:
+function whether input is an absolute path using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return @intrinsic(
                 "construct",
                 a path truth result,
@@ -320,7 +378,7 @@ function whether path input is absolute using {path style:style}:
                 false,
                 the string form of "Invalid path text"
             )
-        set is_absolute to 0 as a 32 bit integer
+        set outcome to 0 as an integer
         set status to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -329,7 +387,7 @@ function whether path input is absolute using {path style:style}:
             style's value,
             prepared's data,
             prepared's length,
-            the address of is_absolute
+            the address of outcome
         )
         if status != 0:
             return @intrinsic(
@@ -343,32 +401,32 @@ function whether path input is absolute using {path style:style}:
             "construct",
             a path truth result,
             true,
-            is_absolute != 0,
+            outcome != 0,
             an empty path string
         )
 
-function lexically normalize input using {path style:style}:
+function input lexically normalized using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
+        if prepared is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_unary", an integer,
             1, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length
+            the address of data, the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function resolve path input against base base_path using {path style:style}:
+function the path obtained by resolving input against foundation using {path style:style}:
     execute:
-        set prepared_input to a path text for input
-        set prepared_base to a path text for base_path
-        if (not prepared_input's valid) or (not prepared_base's valid):
+        set prepared to a path text for input
+        set basis to a path text for foundation
+        if prepared is invalid or basis is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -376,23 +434,23 @@ function resolve path input against base base_path using {path style:style}:
             an integer,
             2,
             style's value,
-            prepared_input's data,
-            prepared_input's length,
-            prepared_base's data,
-            prepared_base's length,
-            the address of native_data,
-            the address of native_length
+            prepared's data,
+            prepared's length,
+            basis's data,
+            basis's length,
+            the address of data,
+            the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function make path input relative to base base_path using {path style:style}:
+function the path from input relative to foundation using {path style:style}:
     execute:
-        set prepared_input to a path text for input
-        set prepared_base to a path text for base_path
-        if (not prepared_input's valid) or (not prepared_base's valid):
+        set prepared to a path text for input
+        set basis to a path text for foundation
+        if prepared is invalid or basis is invalid:
             return a failed path result reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
         set status to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -400,57 +458,61 @@ function make path input relative to base base_path using {path style:style}:
             an integer,
             3,
             style's value,
-            prepared_input's data,
-            prepared_input's length,
-            prepared_base's data,
-            prepared_base's length,
-            the address of native_data,
-            the address of native_length
+            prepared's data,
+            prepared's length,
+            basis's data,
+            basis's length,
+            the address of data,
+            the address of length
         )
-        return finish path operation with status and native_data of length native_length
+        return a path operation result for status from data spanning length bytes
 
-function [a|the|] file URI for input using {path style:style}:
+function the file URI representing input using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
-            return a failed file URI result with support true reporting the string form of "Invalid path text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
-        set supported to 0 as a 32 bit integer
+        if prepared is invalid:
+            return a supported file URI failure reporting the string form of "Invalid path text"
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
+        set supported to 0 as an integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_file_uri", an integer,
             1, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length,
+            the address of data, the address of length,
             the address of supported
         )
-        return finish file URI operation with status, support supported, and native_data of length native_length
+        return a file URI operation result for status with support indicated by supported from data spanning length bytes
 
-function [a|the|] path from file URI input using {path style:style}:
+function the path from input interpreted as a file URI using {path style:style}:
     execute:
         set prepared to a path text for input
-        if not prepared's valid:
-            return a failed file URI result with support true reporting the string form of "Invalid file URI text"
-        set native_data to 0 as a pointer to byte
-        set native_length to 0 as a word sized integer
-        set supported to 0 as a 32 bit integer
+        if prepared is invalid:
+            return a supported file URI failure reporting the string form of "Invalid file URI text"
+        set data to 0 as a pointer to a byte
+        set length to 0 as a word sized integer
+        set supported to 0 as an integer
         set status to @intrinsic(
             "call", "dynlex_runtime", "dynlex_path_file_uri", an integer,
             2, style's value, prepared's data, prepared's length,
-            the address of native_data, the address of native_length,
+            the address of data, the address of length,
             the address of supported
         )
-        return finish file URI operation with status, support supported, and native_data of length native_length
+        return a file URI operation result for status with support indicated by supported from data spanning length bytes
 
-function resolve file URI {string:input}:
+function the path from {string:input} interpreted as a file URI:
     execute:
-        set native_style_result to (the native path style)
-        if not native_style_result's succeeded:
-            return a failed file URI result with support native_style_result's supported reporting native_style_result's error message
-        return a path from file URI input using native_style_result's value
+        set conversion to (the native path style)
+        if conversion failed:
+            if conversion is supported:
+                return a supported file URI failure reporting conversion's error message
+            return an unsupported file URI failure reporting conversion's error message
+        return the path from input interpreted as a file URI using conversion's value
 
-function [a|the|] file URI from native path {string:input}:
+function the file URI for {string:input} interpreted as a native path:
     execute:
-        set native_style_result to (the native path style)
-        if not native_style_result's succeeded:
-            return a failed file URI result with support native_style_result's supported reporting native_style_result's error message
-        return a file URI for input using native_style_result's value
+        set conversion to (the native path style)
+        if conversion failed:
+            if conversion is supported:
+                return a supported file URI failure reporting conversion's error message
+            return an unsupported file URI failure reporting conversion's error message
+        return the file URI representing input using conversion's value

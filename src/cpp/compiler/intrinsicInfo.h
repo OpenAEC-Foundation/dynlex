@@ -69,10 +69,11 @@ enum class IntrinsicPurityKind {
 	X(Switch, "switch", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                         \
 	X(Case, "case", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
 	X(DefaultCase, "default case", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
-	X(ShaderOutput, "shader output", 5, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
-	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                           \
+	X(ShaderOutput, "shader output", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
+	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \
-	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Pure)                       \
+	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
+	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                       \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
@@ -83,6 +84,10 @@ enum class IntrinsicPurityKind {
 	X(Property, "property", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Custom)                                 \
 	X(Cast, "cast", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                                           \
 	X(TypeOf, "type of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                      \
+	X(ElementType, "element type", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                            \
+	X(PromoteArithmeticType, "promote arithmetic type", 3, IntrinsicReturnKind::Custom, 1, 2, IntrinsicPurityKind::Pure)       \
+	X(Number, "number", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(TypeExtent, "type extent", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                             \
 	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                      \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                \
 	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                  \
@@ -97,7 +102,7 @@ enum class IntrinsicPurityKind {
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                                     \
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)                    \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
-	X(Array, "array", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
+	X(Array, "array", 1, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
 	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
 	X(Matrix, "matrix", 3, 4, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)
 

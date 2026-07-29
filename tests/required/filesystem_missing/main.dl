@@ -1,8 +1,6 @@
 import lib/filesystem.dl
 
 set path to "tests/required/filesystem_missing/missing.tmp"
-delete path
+delete the filesystem entry at path
 
-read path
-print if it succeeded
-print "" as line
+read the file at path and print whether it succeeded as a line

@@ -1,1 +1,1 @@
-tests/required/missing_default_switch_return/main.dl:10-28: Error: Function 'choose value for n' does not return a value on every reachable path
+tests/required/missing_default_switch_return/main.dl:10-37: Error: Function 'the value chosen for choice' does not return a value on every reachable path

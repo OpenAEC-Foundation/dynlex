@@ -46,52 +46,61 @@ const shaderSources = shaderConfig.scenes.map((scene) => (
 ));
 const sharedSource = fs.readFileSync(path.join(projectDir, "lib/shader_art.dl"), "utf8");
 for (const [index, source] of shaderSources.entries()) {
+  const sourceWithoutImports = source
+    .split("\n")
+    .filter((line) => !line.startsWith("import "))
+    .join("\n");
   assert.doesNotMatch(
     source,
     /\b(?:cell_x|cell_y|grid_x|grid_y|value noise|fractal noise)\b/i,
     `${shaderConfig.scenes[index].id} must not reconstruct a visible square lattice`
+  );
+  assert.doesNotMatch(
+    sourceWithoutImports,
+    /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/,
+    `${shaderConfig.scenes[index].id} must use plain-English identifiers`
   );
 }
 assert.doesNotMatch(sharedSource, /function (?:value|fractal) noise\b/i);
 assert.doesNotMatch(sharedSource, /\bcell_[xy]\b/i);
 
 const terrainSource = shaderSources[1];
-assert.match(terrainSource, /function terrain height at x z/);
-assert.match(terrainSource, /while march_step < \d+ and not terrain_hit/);
-assert.match(terrainSource, /set surface_height to terrain height at sample_x sample_z/);
-assert.match(terrainSource, /set ridge_three /);
-assert.match(terrainSource, /set alpine_peaks /);
-assert.match(terrainSource, /set ground_detail /);
+assert.match(terrainSource, /function the terrain height at \{terrain coordinate:position\}/);
+assert.match(terrainSource, /while traversal's step < \d+ and traversal continues searching/);
+assert.match(
+  terrainSource,
+  /set height to the terrain height at \(a terrain coordinate with x sample's x and z sample's z\)/
+);
+assert.match(terrainSource, /set crest /);
+assert.match(terrainSource, /set peaks /);
+assert.match(terrainSource, /set detail /);
 assert.doesNotMatch(terrainSource, /\briver\b/i);
 
 const nanoSource = shaderSources[2];
 for (const threeDimensionalDetail of [
-  "motorcycle distance at x y z",
-  "camera_ray_x",
-  "camera_ray_y",
-  "camera_ray_z",
-  "sample_z",
-  "motorcycle_yaw",
-  "wheel_depth",
+  "function the motorcycle distance at {spatial coordinate:position} with {motorcycle motion:motion}",
+  "set ray to a spatial coordinate",
+  "set sample to a spatial coordinate",
+  "a motorcycle motion at progress",
+  "set depth to 0.13",
   "this is a vertex shader",
   "shader render pass",
   "volumetric point"
 ]) {
-  assert.match(
-    nanoSource,
-    new RegExp(threeDimensionalDetail.replaceAll(" ", "\\s+")),
-    `Nano choreography must define ${threeDimensionalDetail.replaceAll("_", " ")}`
+  assert.ok(
+    nanoSource.includes(threeDimensionalDetail),
+    `Nano choreography must define ${threeDimensionalDetail}`
   );
 }
-assert.match(nanoSource, /while ray_step < \d+ and not ray_finished/);
+assert.match(nanoSource, /while traversal's step < \d+ and traversal continues/);
 assert.match(
   nanoSource,
-  /set point_size to .* \/ width/,
+  /set size to .* \/ \(frame's x\)/,
   "Volumetric points must keep a resolution-independent physical footprint"
 );
 assert.match(
   nanoSource,
-  /set figure_offset_x to .*smooth transition/,
+  /set offset to .*smooth transition/,
   "The Vitruvian composition must move clear of the headline on wide viewports"
 );
 assert.doesNotMatch(
@@ -105,13 +114,12 @@ assert.doesNotMatch(
   "The motorcycle and Vitruvian figure must not be 2D line drawings"
 );
 for (const sharedThreeDimensionalPrimitive of [
-  "function distance from three dimensional point x y z to capsule",
-  "function ellipsoid distance at x y z",
-  "function torus distance at x y z"
+  "function the distance from {a point:point} to capsule",
+  "function the ellipsoid distance from {a point:point} with radii",
+  "function the torus distance from {a point:point}"
 ]) {
-  assert.match(
-    sharedSource,
-    new RegExp(sharedThreeDimensionalPrimitive.replaceAll(" ", "\\s+")),
+  assert.ok(
+    sharedSource.includes(sharedThreeDimensionalPrimitive),
     `Shared shader art must provide ${sharedThreeDimensionalPrimitive}`
   );
 }

@@ -6,4 +6,4 @@ function recursive reference {integer:value}:
 			return recursive reference (value - 1)
 		return recursive reference value
 
-set recursive_function to the function named "recursive reference $"
+set reference to the function named "recursive reference $"

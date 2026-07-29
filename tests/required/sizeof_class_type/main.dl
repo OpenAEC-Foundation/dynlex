@@ -2,10 +2,10 @@ import lib/std.dl
 
 class:
     patterns:
-        [an|a|] pair value
+        [a|] pair value
     members:
-        left as i32
-        right as i32
+        left as a 32 bit integer
+        right as a 32 bit integer
 
-print the size of a 32 bit integer as line
-print the size of a pair value as line
+print the size of a 32 bit integer as a line
+print the size of a pair value as a line

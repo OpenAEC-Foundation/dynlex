@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function branch value for condition:
+function the branch value for condition:
     execute:
         set answer to 1
         if condition:
@@ -11,11 +11,11 @@ function branch value for condition:
 
 function value after one loop:
     execute:
-        set keep_going to true
+        set ongoing to true
         set result to 0
-        loop while keep_going:
+        loop while ongoing:
             set result to 1
-            set keep_going to false
+            set ongoing to false
         return result
 
 class:
@@ -28,15 +28,15 @@ function write value through holder:
     execute:
         @intrinsic("store at", @intrinsic("property", holder, "target"), value)
 
-print branch value for true as line
-print branch value for false as line
-print value after one loop as line
+print the branch value for true as a line
+print the branch value for false as a line
+print value after one loop as a line
 
 set target to 0
 set holder to @intrinsic("construct", state pointer holder, @intrinsic("address of", target))
 write 7 through holder
-print target as line
+print target as a line
 
-set externally_written to 0
-discard @intrinsic("variadic call", "libc", "sscanf", i32, 2, "17", "%d", @intrinsic("address of", externally_written))
-print externally_written as line
+set external to 0
+ignore @intrinsic("variadic call", "libc", "sscanf", a 32 bit integer, 2, "17", "%d", @intrinsic("address of", external))
+print external as a line

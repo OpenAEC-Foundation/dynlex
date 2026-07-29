@@ -18,7 +18,8 @@ The game is not rhythm-gated. Rhythm shapes the baseline route generation, not p
 ### Generation
 
 - Generate a reference trajectory first, then place geometry to match it.
-- For every planned landing, set `platform_top_y` to the reference player bottom `y` at landing time.
+- For every planned landing, set the platform's top to the reference player's
+  bottom at landing time.
 - For every planned slide, keep continuous support under the reference player for the full slide duration.
 - Use the reference player hitbox to reject any geometry that intersects the route.
 - Quick jump sequences must create visible staircases.
@@ -72,8 +73,8 @@ If DynLex limitations force a different split, keep the same separation of conce
 
 Produce:
 
-- `jump_time_ms[i]`
-- `slide_time_ms[i]`
+- `the item at index in plan's jumps`
+- `the item at index in plan's slides`
 
 Rules:
 

@@ -1,77 +1,5 @@
 case Expression::Kind::IntrinsicCall: {
-	const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
-	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-	if (info) {
-		for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
-			if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
-				continue;
-			Expression *argumentExpression = expr->arguments[argumentIndex];
-			if (!argumentExpression)
-				crashCompilerBug("intrinsic compile-time argument validation encountered null argument expression");
-			CompileTimeValue argumentValue = resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
-			if (!isCompileTimeKnown(argumentValue)) {
-				failCompileTimeOnlyIntrinsicArgument(argumentIndex, "compile-time known");
-				break;
-			}
-		}
-		if (!context.typesValid)
-			break;
-	}
-	if (isShaderRuntimeIntrinsicKind(kind)) {
-		if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
-			CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
-			const std::string *name = std::get_if<std::string>(&nameValue);
-			if (!name) {
-				std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
-																					: "shader uniform requires string literal";
-				context.fail(
-					Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0,
-					false
-				);
-				break;
-			}
-			if (kind == IntrinsicKind::ShaderInput) {
-				bool knownInput = *name == "FragCoord" || *name == "Position";
-				if (!knownInput) {
-					failWithDetail(
-						expr->arguments[1]->range,
-						renderConfiguredMessage(
-							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "unknown shader input",
-							"message", {{"name", *name}}
-						),
-						0
-					);
-					break;
-				}
-				if (context.parseContext.options.emitSPIRV) {
-					bool stageProvidesInput = (*name == "Position") ==
-											  (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
-					if (!stageProvidesInput) {
-						failWithDetail(
-							expr->arguments[1]->range,
-							renderConfiguredMessage(
-								syntaxConfigForRange(context.parseContext, expr->arguments[1]->range),
-								"shader input unavailable", "message", {{"name", *name}}
-							),
-							0
-						);
-						break;
-					}
-				}
-			}
-		}
-		if (!context.parseContext.options.emitSPIRV) {
-			failWithDetail(
-				expr->range,
-				renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-					{{"operation", expr->intrinsicName}}
-				),
-				0
-			);
-			break;
-		}
-	}
+#include "intrinsic_preflight_inference.inl"
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
@@ -81,12 +9,19 @@ case Expression::Kind::IntrinsicCall: {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				DataType result;
-				if (!DataType::promoteArithmetic(leftType, rightType, result)) {
+				ArithmeticIntrinsicKind arithmeticOperation = arithmeticIntrinsicKind(expr->intrinsicName);
+				if (!promoteIntrinsicArithmetic(arithmeticOperation, leftType, rightType, result)) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
 						{{"left_type", typeToUserName(leftType, context.parseContext)},
 						 {"right_type", typeToUserName(rightType, context.parseContext)}}
 					);
+					break;
+				}
+				int arrayOperandIndex = decayingArrayOperandIndex(arithmeticOperation, leftType, rightType);
+				if (arrayOperandIndex != 0 &&
+					!inferLValueAddressProvenance(expr->arguments[arrayOperandIndex], context, flexBindingFrameStack)) {
+					setConfiguredTypeFailure(expr->range, "fixed array pointer arithmetic requires an addressable array");
 					break;
 				}
 				expr->type = result;
@@ -293,6 +228,19 @@ case Expression::Kind::IntrinsicCall: {
 				}
 				context.currentSubject = {.setter = expr, .ambiguous = false};
 			}
+			if (kind == IntrinsicKind::ShaderOutput) {
+				DataType outputType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				DataType shaderVector{DataType::Kind::Vector};
+				shaderVector.arraySize = 4;
+				shaderVector.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+				if (!DataType::supportsRuntimeConversion(outputType, shaderVector)) {
+					setConfiguredTypeFailure(
+						expr->range, "shader output requires four numbers", "message",
+						{{"value_type", typeToUserName(outputType, context.parseContext)}}
+					);
+					break;
+				}
+			}
 			expr->type = {DataType::Kind::Void};
 			break;
 		}
@@ -300,6 +248,9 @@ case Expression::Kind::IntrinsicCall: {
 			expr->type = {DataType::Kind::Float, 4};
 			break;
 		case IntrinsicReturnKind::Custom:
+			#include "intrinsics/aggregate_inference.inl"
+			if (handledAggregateIntrinsic)
+				break;
 			if (kind == IntrinsicKind::LifecycleValue) {
 				Section *sourceSection = expr->range.line ? expr->range.line->section : nullptr;
 				while (sourceSection && sourceSection->type != SectionType::Retain &&
@@ -428,7 +379,7 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				std::string signature = std::get<std::string>(functionExpr->literalValue);
-				std::vector<PatternDefinition *> callableMatches = findCallableFunctionDefinitionsBySignature(
+				std::vector<CallableFunctionMatch> callableMatches = findCallableFunctionsBySignature(
 					context.parseContext, signature, functionExpr->range.line ? functionExpr->range.line->sourceFile : nullptr
 				);
 				if (callableMatches.empty()) {
@@ -457,7 +408,8 @@ case Expression::Kind::IntrinsicCall: {
 					ensureCallableFunctionInstantiationInferred(callableMatches.front(), context, functionExpr->range);
 				if (!callableInstantiation)
 					break;
-				expr->selectedCallableDefinition = callableMatches.front();
+				expr->selectedCallableDefinition = callableMatches.front().definition;
+				expr->selectedCallablePathIndex = callableMatches.front().pathIndex;
 				expr->selectedInstantiation = callableInstantiation;
 				expr->type = {DataType::Kind::Int, 1};
 				expr->type.pointerDepth = 1;
@@ -538,17 +490,25 @@ case Expression::Kind::IntrinsicCall: {
 			} else if (kind == IntrinsicKind::TypeOf) {
 				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (valueType.isDeduced()) {
-					expr->type.kind = DataType::Kind::Type;
-					expr->type.referencedKind = valueType.kind;
-					expr->type.numericSize = valueType.numericSize;
-					expr->type.pointerDepth = valueType.pointerDepth;
-					expr->type.classDefinition = valueType.classDefinition;
-					expr->type.classInstIndex = valueType.classInstIndex;
-					expr->type.arraySize = valueType.arraySize;
-					expr->type.arrayElementType =
-						valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
+					expr->type = valueType.asTypeReference();
 					context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 				}
+			} else if (kind == IntrinsicKind::TypeExtent) {
+				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				int dimension = 0;
+				if (!resolveStoredCompileTimeInteger(
+						expr->arguments[2], flexBindingFrameStack, dimension, &context
+					)) {
+					failIntrinsicArgumentRequirement(2, "a compile-time integer");
+					break;
+				}
+				std::optional<int> extent = valueType.extent(dimension);
+				if (!extent) {
+					setConfiguredTypeFailure(expr->range, "type extent invalid");
+					break;
+				}
+				expr->type = {DataType::Kind::Int, 4};
+				context.setExpressionValue(expr, static_cast<double>(*extent));
 			} else if (kind == IntrinsicKind::Select) {
 				DataType conditionType = expr->arguments[1]->type;
 				if (!conditionType.isDeduced())
@@ -662,52 +622,73 @@ case Expression::Kind::IntrinsicCall: {
 				}
 				expr->type = {DataType::Kind::Bool};
 			} else if (kind == IntrinsicKind::Array) {
-				int arraySize = 0;
-				if (!resolveStoredCompileTimeInteger(expr->arguments[1], flexBindingFrameStack, arraySize, &context) ||
-					arraySize < 0) {
-					failIntrinsicArgumentRequirement(1, "a non-negative integer");
+				if (expr->arguments.size() == 1) {
+					TypeConstraint arrayConstraint = TypeConstraint::any();
+					arrayConstraint.kind = DataType::Kind::Array;
+					arrayConstraint.pointerDepth = 0;
+					expr->type = {DataType::Kind::Constraint};
+					context.setExpressionValue(expr, arrayConstraint);
 					break;
 				}
-				expr->type.kind = DataType::Kind::Type;
-				expr->type.referencedKind = DataType::Kind::Array;
-				expr->type.arraySize = arraySize;
-				if (expr->arguments.size() > 2) {
-					DataType elemTypeRef = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-					if (elemTypeRef.kind == DataType::Kind::Constraint) {
-						std::optional<TypeConstraint> elementConstraint = getCompileTimeConstraintValue(
-							resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
-						);
-						if (!elementConstraint) {
-							failCompileTimeOnlyIntrinsicArgument(2, "a compile-time element constraint");
-							break;
-						}
-						TypeConstraint arrayConstraint = TypeConstraint::any();
-						arrayConstraint.kind = DataType::Kind::Array;
-						arrayConstraint.pointerDepth = 0;
-						arrayConstraint.arraySize = arraySize;
-						arrayConstraint.elementConstraint = std::make_shared<TypeConstraint>(*elementConstraint);
-						expr->type = {DataType::Kind::Constraint};
-						context.setExpressionValue(expr, arrayConstraint);
+				std::optional<int> arraySize;
+				size_t elementArgumentIndex = 0;
+				DataType firstArgumentType =
+					ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				if (firstArgumentType.isInteger()) {
+					int resolvedSize = 0;
+					if (!resolveStoredCompileTimeInteger(
+							expr->arguments[1], flexBindingFrameStack, resolvedSize, &context
+						) ||
+						resolvedSize < 0) {
+						failIntrinsicArgumentRequirement(1, "a non-negative compile-time integer");
 						break;
 					}
-					if (elemTypeRef.kind != DataType::Kind::Type) {
-						failCompileTimeOnlyIntrinsicArgument(2, "a compile-time element type reference");
+					arraySize = resolvedSize;
+					if (expr->arguments.size() > 2)
+						elementArgumentIndex = 2;
+				} else {
+					if (expr->arguments.size() != 2) {
+						failIntrinsicArgumentRequirement(1, "an array length before its element type");
 						break;
 					}
-					expr->type.arrayElementType = std::make_shared<DataType>(elemTypeRef.toReferencedType());
+					elementArgumentIndex = 1;
 				}
+
+				std::optional<TypeConstraint> elementConstraint;
+				std::optional<DataType> exactElementType;
+				if (elementArgumentIndex != 0) {
+					DataType elementReferenceType =
+						ensureExpressionType(expr->arguments[elementArgumentIndex], context, flexBindingFrameStack);
+					CompileTimeValue elementValue = resolveStoredCompileTimeValue(
+						expr->arguments[elementArgumentIndex], flexBindingFrameStack, &context
+					);
+					elementConstraint = getCompileTimeConstraintValue(elementValue);
+					if (!elementConstraint) {
+						failCompileTimeOnlyIntrinsicArgument(
+							static_cast<int>(elementArgumentIndex), "a compile-time element type or constraint"
+						);
+						break;
+					}
+					if (elementReferenceType.kind == DataType::Kind::Type)
+						exactElementType = elementReferenceType.toReferencedType();
+				}
+
 				TypeConstraint arrayConstraint = TypeConstraint::any();
 				arrayConstraint.kind = DataType::Kind::Array;
 				arrayConstraint.pointerDepth = 0;
 				arrayConstraint.arraySize = arraySize;
-				if (expr->arguments.size() > 2) {
-					std::optional<TypeReferenceValue> elementValue = getCompileTimeTypeReferenceValue(
-						resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
-					);
-					if (!elementValue)
-						crashCompilerBug("inferred array element type is missing its type-reference value");
-					arrayConstraint.elementConstraint = std::make_shared<TypeConstraint>(elementValue->constraint);
+				if (elementConstraint)
+					arrayConstraint.elementConstraint = std::make_shared<TypeConstraint>(*elementConstraint);
+				if (!arraySize || (elementConstraint && !exactElementType)) {
+					expr->type = {DataType::Kind::Constraint};
+					context.setExpressionValue(expr, arrayConstraint);
+					break;
 				}
+				expr->type.kind = DataType::Kind::Type;
+				expr->type.referencedKind = DataType::Kind::Array;
+				expr->type.arraySize = *arraySize;
+				if (exactElementType)
+					expr->type.arrayElementType = std::make_shared<DataType>(*exactElementType);
 				context.setExpressionValue(expr, TypeReferenceValue{expr->type, std::move(arrayConstraint)});
 			} else if (kind == IntrinsicKind::Vector) {
 				int vectorSize = 0;

@@ -1,8 +1,8 @@
 import lib/std.dl
 
-function publish choice for {fixed integer:n}:
+function publish choice for {fixed integer:choice}:
     execute:
-        match on n:
+        match on choice:
             case 1:
                 set the subject to 10
             otherwise:

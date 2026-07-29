@@ -4,25 +4,25 @@ class:
     patterns:
         [a|] layout sample
     members:
-        marker as byte
-        text as string
-        count as i32
+        marker as a byte
+        text as a string
+        count as a 32 bit integer
 
 class:
     patterns:
-        [an|a|] aligned layout sample
+        [an|] aligned layout sample
     alignment:
         16
     members:
-        marker as byte
+        marker as a byte
         padding:
             8
-        count as i32
-        tail as byte
+        count as a 32 bit integer
+        tail as a byte
 
-print the size of a string as line
-print the size of a layout sample as line
-print the size of an aligned layout sample as line
+print the size of a string as a line
+print the size of a layout sample as a line
+print the size of an aligned layout sample as a line
 set aligned to @intrinsic("construct", an aligned layout sample, 1 as a byte, 42, 2 as a byte)
-print the count of aligned as line
-print the tail of aligned as line
+print the count of aligned as a line
+print the tail of aligned as a line

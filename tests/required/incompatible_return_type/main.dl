@@ -2,11 +2,11 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function byte:
+function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
@@ -32,4 +32,4 @@ function widened value:
             return value + 32
         return value
 
-discard widened (65 as byte)
+ignore widened (65 as a byte)

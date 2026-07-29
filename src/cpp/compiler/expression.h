@@ -72,8 +72,9 @@ struct Expression {
 	// alternatives can share one structural trie path while carrying different
 	// parameter constraints or names.
 	std::optional<size_t> selectedPatternPathIndex;
-	// For the function intrinsic: the exact callable definition selected during inference.
+	// For the function intrinsic: the exact callable definition and authored path selected during inference.
 	PatternDefinition *selectedCallableDefinition{};
+	std::optional<size_t> selectedCallablePathIndex;
 	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.
 	Expression *subjectSetter{};
 	// For non-flex PatternCalls: the exact monomorphized callee selected during

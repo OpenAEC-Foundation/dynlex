@@ -1,12 +1,16 @@
 import lib/process.dl
 
-set command to a process command for "dynlex-executable-that-does-not-exist-72f4a7"
-set child to launch command
-print (not child's launched) as line
-set launch_error to (the starting error of child)
-print (not (launch_error = "")) as line
+function {process result:result} failed to launch:
+    replacement:
+        the inverse of (result was launched)
 
-set result to run command
-print (not result's launched) as line
-print (not result's succeeded) as line
-print (not (result's error message = "")) as line
+set command to a process command for "dynlex-executable-that-does-not-exist-72f4a7"
+launch command and set child to it
+print whether child failed to launch as a line
+set failure to (the starting error of child)
+print whether failure is not empty as a line
+
+run command and set result to it
+print whether result failed to launch as a line
+print whether result failed as a line
+print whether result's error message is not empty as a line

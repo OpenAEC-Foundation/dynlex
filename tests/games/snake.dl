@@ -3,136 +3,170 @@
 import lib/font.dl
 import lib/random.dl
 
+class:
+	patterns:
+		board layout
+	members:
+		cells, scale, capacity, extent
+
+class:
+	patterns:
+		[a|] grid position
+	members:
+		x, y
+
+class:
+	patterns:
+		snake game
+	members:
+		body, length, direction, food, running, score
+
+function a board with {integer:count} cells of {integer:scale} pixels each:
+	replacement:
+		@intrinsic("construct", board layout, count, scale, count * count, count * scale)
+
+function a grid position at x {integer:x} and y {integer:y}:
+	replacement:
+		@intrinsic("construct", grid position, x, y)
+
+function a snake game with {a pointer to a grid position:body} moving {integer:direction} toward {grid position:food}:
+	replacement:
+		@intrinsic("construct", snake game, body, 3, direction, food, true, 0)
+
+function {snake game:game} is running:
+	execute:
+		return game's running
+
+function {grid position:position} is outside {board layout:board}:
+	execute:
+		if position's x < 0:
+			return true
+		if position's x >= board's cells:
+			return true
+		if position's y < 0:
+			return true
+		return position's y >= board's cells
+
+function {grid position:position} overlaps {grid position:other}:
+	execute:
+		if position's x != other's x:
+			return false
+		return position's y = other's y
+
 # Game constants
-set grid_size to 20
-set cell_size to 20
-set window_size to grid_size * cell_size
-set max_length to grid_size * grid_size
+set board to a board with 20 cells of 20 pixels each
 
 # Direction constants
-set dir_up to 1
-set dir_right to 2
-set dir_down to 3
-set dir_left to 4
+set upward to 1
+set rightward to 2
+set downward to 3
+set leftward to 4
 
 # Initialize
-seed random with current time
-set window to a new window with width window_size and height window_size
-set font to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+seed the random number generator with the current time
+set window to a new window with width board's extent and height board's extent
+set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
 
-# Snake body arrays
-set snake_x to allocate max_length slots of an integer
-set snake_y to allocate max_length slots of an integer
+# Snake body
+allocate board's capacity slots of (a grid position at x 0 and y 0) and set body to it
 
 # Initialize snake at center, moving right
-set snake_length to 3
-store 10 into snake_x at 0
-store 10 into snake_y at 0
-store 9 into snake_x at 1
-store 10 into snake_y at 1
-store 8 into snake_x at 2
-store 10 into snake_y at 2
-
-set direction to dir_right
-set food_x to 15
-set food_y to 10
-set game_over to false
-set score to 0
+store a grid position at x 10 and y 10 into body at 0
+store a grid position at x 9 and y 10 into body at 1
+store a grid position at x 8 and y 10 into body at 2
+set game to a snake game with body moving rightward toward (a grid position at x 15 and y 10)
 
 # Main game loop
-loop while not the window should close:
+loop while the window remains open:
 	set key to the pressed key of window
 
 	# Update direction
 	if key = 1:
-		set direction to dir_up
+		set game's direction to upward
 	else if key = 2:
-		set direction to dir_right
+		set game's direction to rightward
 	else if key = 3:
-		set direction to dir_down
+		set game's direction to downward
 	else if key = 4:
-		set direction to dir_left
+		set game's direction to leftward
 	else if key = 5:
-		set game_over to true
+		set game's running to false
 
-	if not game_over:
+	if game is running:
 		# Calculate new head position
-		set new_x to item 0 of snake_x
-		set new_y to item 0 of snake_y
+		set head to the item at 0 in game's body
 
-		if direction = dir_up:
-			set new_y to new_y - 1
-		else if direction = dir_right:
-			set new_x to new_x + 1
-		else if direction = dir_down:
-			set new_y to new_y + 1
-		else if direction = dir_left:
-			set new_x to new_x - 1
+		if game's direction = upward:
+			decrement head's y
+		else if game's direction = rightward:
+			increment head's x
+		else if game's direction = downward:
+			increment head's y
+		else if game's direction = leftward:
+			decrement head's x
 
 		# Check wall collision
-		if new_x < 0 or new_x >= grid_size or new_y < 0 or new_y >= grid_size:
-			set game_over to true
+		if head is outside board:
+			set game's running to false
 
 		# Check self collision
-		if not game_over:
-			set i to 0
-			loop while i < snake_length:
-				if item i of snake_x = new_x and item i of snake_y = new_y:
-					set game_over to true
-				set i to i + 1
+		if game is running:
+			set index to 0
+			loop while index < game's length:
+				set segment to the item at index in game's body
+				if segment's x = head's x and segment's y = head's y:
+					set game's running to false
+				increment index
 
 		# Move snake
-		if not game_over:
+		if game is running:
 			# Grow if food eaten
-			if new_x = food_x and new_y = food_y:
-				set score to score + 1
-				set food_x to a random number mod grid_size
-				set food_y to a random number mod grid_size
-				set snake_length to snake_length + 1
+			if head overlaps game's food:
+				increment game's score
+				set game's food to a grid position at x (the remainder of (a random number) divided by board's cells) and y (the remainder of (a random number) divided by board's cells)
+				increment game's length
 
 			# Shift body segments backward
-			set i to snake_length - 1
-			loop while i > 0:
-				store item i - 1 of snake_x into snake_x at i
-				store item i - 1 of snake_y into snake_y at i
-				set i to i - 1
+			set index to game's length - 1
+			loop while index > 0:
+				store the item at (index - 1) in game's body into game's body at index
+				decrement index
 
-			store new_x into snake_x at 0
-			store new_y into snake_y at 0
+			store head into game's body at 0
 
 	# Render
-	clear screen
+	clear the screen
 
-	if not game_over:
-		draw rectangle at 0 0 size window_size window_size with color 30 30 30
+	if game is running:
+		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 30, green 30 and blue 30
 
 		# Draw food
-		set fx to food_x * cell_size
-		set fy to food_y * cell_size
-		draw rectangle at fx fy size cell_size cell_size with color 200 0 0
+		set food to game's food
+		draw a rectangle at x (food's x * board's scale) and y (food's y * board's scale) with width board's scale and height board's scale in color red 200, green 0 and blue 0
 
 		# Draw snake (head = bright green, body = dark green)
-		set i to 0
-		loop while i < snake_length:
-			set px to item i of snake_x * cell_size
-			set py to item i of snake_y * cell_size
-			if i = 0:
-				draw rectangle at px py size cell_size cell_size with color 0 200 0
+		set index to 0
+		loop while index < game's length:
+			set segment to the item at index in game's body
+			set horizontal to segment's x * board's scale
+			set vertical to segment's y * board's scale
+			if index = 0:
+				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 200 and blue 0
 			else:
-				draw rectangle at px py size cell_size cell_size with color 0 150 0
-			set i to i + 1
+				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 150 and blue 0
+			increment index
 
 		# Draw score
-		draw text "SCORE" at 4 20 using font and color 200 200 200
-		draw number score at 100 20 using font and color 255 255 100
+		draw "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200
+		draw game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100
 	else:
-		draw rectangle at 0 0 size window_size window_size with color 80 20 20
-		draw text "GAME OVER" at 60 180 using font and color 255 255 255
-		draw text "SCORE" at 120 220 using font and color 200 200 200
-		draw number score at 196 220 using font and color 255 255 100
+		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 80, green 20 and blue 20
+		draw "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255
+		draw "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200
+		draw game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100
 
 	display the frame of window
 	sleep for 150 milliseconds
 
 close the window
-print score as line
+print game's score as a line

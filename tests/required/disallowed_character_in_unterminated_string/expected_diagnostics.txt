@@ -1,1 +1,1 @@
-tests/required/disallowed_character_in_unterminated_string/main.dl:30-31: Error: Disallowed character U+0007
+tests/required/disallowed_character_in_unterminated_string/main.dl:15-16: Error: Disallowed character U+0007

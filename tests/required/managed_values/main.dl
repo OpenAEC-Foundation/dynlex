@@ -4,8 +4,8 @@ class:
     patterns:
         [a|] tracked allocation
     members:
-        references as pointer to integer
-        number as integer
+        references as a pointer to an integer
+        number as an integer
     retain:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
@@ -13,8 +13,8 @@ class:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
         if count = 0:
-            discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
-            @intrinsic("call", "libc", "free", void, the references of @intrinsic("lifecycle value"))
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
+            @intrinsic("call", "libc", "free", nothing, the references of @intrinsic("lifecycle value"))
 
 class:
     patterns:
@@ -26,21 +26,21 @@ class:
     patterns:
         [a|] padded tracked container
     members:
-        marker as byte
+        marker as a byte
         value as tracked allocation
 
 function a new tracked allocation numbered number:
     execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
         return @intrinsic("construct", a tracked allocation, references, number)
 
-function pass through {tracked allocation:value}:
+function the identity of {tracked allocation:value}:
     execute:
         return value
 
 function consume {tracked allocation:value}:
     execute:
-        discard the number of value
+        ignore the number of value
 
 flex function publish {tracked allocation:value}:
     replacement:
@@ -55,12 +55,12 @@ function exercise copies:
         set first to a new tracked allocation numbered 1
         set second to first
         set second to a new tracked allocation numbered 2
-        discard a new tracked allocation numbered 3
+        ignore a new tracked allocation numbered 3
 
 function exercise return:
     execute:
         set original to a new tracked allocation numbered 4
-        set returned to pass through original
+        set returned to the identity of original
 
 function exercise temporary argument:
     execute:
@@ -69,20 +69,20 @@ function exercise temporary argument:
 function exercise subject:
     execute:
         publish a new tracked allocation numbered 6
-        discard it
+        ignore it
 
-function exercise branch condition:
+function exercise conditional ownership for condition:
     execute:
         if condition:
-            set branch_value to a new tracked allocation numbered 7
+            set branch to a new tracked allocation numbered 7
         else:
-            set branch_value to a new tracked allocation numbered 8
+            set branch to a new tracked allocation numbered 8
 
 function exercise loop:
     execute:
         set number to 9
         loop while number <= 10:
-            set loop_value to a new tracked allocation numbered number
+            set iteration to a new tracked allocation numbered number
             set number to number + 1
 
 function exercise array:
@@ -107,14 +107,14 @@ function exercise nested subject condition:
     execute:
         if condition:
             publish through a nested flex a new tracked allocation numbered 16
-            discard it
+            ignore it
 
 function exercise runtime select:
     execute:
         set left to a new tracked allocation numbered 17
         set right to a new tracked allocation numbered 18
-        set runtime_condition to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
-        set selected to (left if runtime_condition, else right)
+        set condition to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
+        set selected to (left if condition, else right)
 
 function exercise compile time select:
     execute:
@@ -124,28 +124,28 @@ function exercise compile time select:
 
 function observe explicit return global:
     globals:
-        explicit_return_global
+        global
     execute:
-        discard the number of explicit_return_global
+        ignore the number of global
 
 function exercise managed pointer reads:
     execute:
         set original to a new tracked allocation numbered 23
         set source to @intrinsic("address of", original)
         set dereferenced to @intrinsic("dereference", source)
-        set second_read to @intrinsic("dereference", source)
+        set second to @intrinsic("dereference", source)
 
 function exercise direct managed construction:
     execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
         set value to @intrinsic("construct", a tracked allocation, references, 24)
 
 exercise copies
 exercise return
 exercise temporary argument
 exercise subject
-exercise branch true
-exercise branch false
+exercise conditional ownership for true
+exercise conditional ownership for false
 exercise loop
 exercise array
 exercise aggregate
@@ -155,8 +155,8 @@ exercise nested subject true
 exercise nested subject false
 exercise runtime select
 exercise compile time select
-set explicit_return_value to a new tracked allocation numbered 21
-set explicit_return_global to a new tracked allocation numbered 22
+set result to a new tracked allocation numbered 21
+set global to a new tracked allocation numbered 22
 observe explicit return global
 exercise managed pointer reads
 exercise direct managed construction

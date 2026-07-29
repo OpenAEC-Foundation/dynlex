@@ -4,6 +4,6 @@ class:
     patterns:
         [a|] box
     members:
-        value as integer
+        value as an integer
 
 set the value of @intrinsic("construct", a box, 1) to 2

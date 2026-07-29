@@ -17,4 +17,4 @@ function exercise nested duplicate for condition:
         execute nested body twice:
             @intrinsic("discard", 0)
 
-@intrinsic("discard", exercise nested duplicate for @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0), 1))
+exercise nested duplicate for @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0), 1)
