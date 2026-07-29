@@ -44,41 +44,16 @@ class:
 
 class:
     patterns:
-        [a|] file metadata restoration
-    members:
-        supported as boolean
-        succeeded as boolean
-        error message as a string
-
-class:
-    patterns:
-        [a|] file system cleanup result
-    members:
-        supported as boolean
-        succeeded as boolean
-        cleanup succeeded as boolean
-        error message as a string
-
-class:
-    patterns:
-        [a|] file system commit result
-    members:
-        supported as boolean
-        succeeded as boolean
-        commit outcome known as boolean
-        committed as boolean
-        durable as boolean
-        cleanup succeeded as boolean
-        error message as a string
-
-class:
-    patterns:
         [a|] file system staging file
     members:
         handle as pointer
         supported as boolean
         succeeded as boolean
         path as string
+        commit outcome known as boolean
+        committed as boolean
+        durable as boolean
+        cleanup succeeded as boolean
         error message as a string
     retain:
         set handle to the handle of @intrinsic("lifecycle value")
@@ -372,10 +347,30 @@ local function a failed staging file with support state {boolean:support} report
             support,
             false,
             the string form of "",
+            false,
+            false,
+            false,
+            false,
             message
         )
 
-function create a staging file beside target:
+local function a staging file outcome based on {file system staging file:staging} supported if {boolean:support} succeeded if {boolean:success} cleaned up if {boolean:cleanup} reporting {string:message}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a file system staging file,
+            staging's handle,
+            support,
+            success,
+            staging's path,
+            staging's commit outcome known,
+            staging's committed,
+            staging's durable,
+            cleanup,
+            message
+        )
+
+local function the result of creating a staging file beside target:
     execute:
         set prepared_target to a native filesystem path for target
         if not prepared_target's valid:
@@ -422,26 +417,32 @@ function create a staging file beside target:
             set message to the current native filesystem error message
             @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", void, handle)
             return a failed staging file with support state true reporting message
-        set result to @intrinsic(
+        set staging_file to @intrinsic(
             "construct",
             a file system staging file,
             handle,
             true,
             true,
             staging_path,
+            false,
+            false,
+            false,
+            false,
             an empty native filesystem error message
         )
         @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", void, handle)
-        return result
+        return staging_file
 
-function write {string:contents} to {file system staging file:staging}:
+flex function create a staging file beside target:
+    replacement:
+        set the subject to the result of creating a staging file beside target
+
+local function the result of writing {string:contents} to {file system staging file:staging}:
     execute:
-        if not staging's supported:
-            return @intrinsic("construct", a file action, false, staging's error message)
-        if not staging's succeeded:
-            return @intrinsic("construct", a file action, false, staging's error message)
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if (staging's cleanup succeeded) reporting staging's error message
         if not contents is valid:
-            return @intrinsic("construct", a file action, false, the string form of "Invalid file contents")
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the string form of "Invalid file contents"
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -452,23 +453,19 @@ function write {string:contents} to {file system staging file:staging}:
             @intrinsic("cast", contents's length, a word sized integer)
         )
         if outcome != 0:
-            return @intrinsic("construct", a file action, false, the current native filesystem error message)
-        return @intrinsic("construct", a file action, true, an empty native filesystem error message)
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (staging's cleanup succeeded) reporting an empty native filesystem error message
 
-function restore metadata from {file system entry:snapshot} to {file system staging file:staging}:
+flex function write {string:contents} to {file system staging file:staging}:
+    replacement:
+        set the subject to the result of writing contents to staging
+
+local function the result of restoring metadata from {file system entry:snapshot} to {file system staging file:staging}:
     execute:
-        if not staging's supported:
-            return @intrinsic("construct", a file metadata restoration, false, false, staging's error message)
-        if not staging's succeeded:
-            return @intrinsic("construct", a file metadata restoration, true, false, staging's error message)
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if (staging's cleanup succeeded) reporting staging's error message
         if (not snapshot's succeeded) or (not snapshot's found):
-            return @intrinsic(
-                "construct",
-                a file metadata restoration,
-                true,
-                false,
-                the string form of "Metadata snapshot does not describe an existing filesystem entry"
-            )
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the string form of "Metadata snapshot does not describe an existing filesystem entry"
         set access_time to snapshot's access time
         set modification_time to snapshot's modification time
         set creation_time to snapshot's creation time
@@ -493,49 +490,19 @@ function restore metadata from {file system entry:snapshot} to {file system stag
             creation_time's nanoseconds
         )
         if outcome = -2:
-            return @intrinsic(
-                "construct",
-                a file metadata restoration,
-                false,
-                false,
-                the current native filesystem error message
-            )
+            return a staging file outcome based on staging supported if false succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
         if outcome != 0:
-            return @intrinsic(
-                "construct",
-                a file metadata restoration,
-                true,
-                false,
-                the current native filesystem error message
-            )
-        return @intrinsic(
-            "construct",
-            a file metadata restoration,
-            true,
-            true,
-            an empty native filesystem error message
-        )
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (staging's cleanup succeeded) reporting an empty native filesystem error message
 
-function cancel {file system staging file:staging}:
+flex function restore metadata from {file system entry:snapshot} to {file system staging file:staging}:
+    replacement:
+        set the subject to the result of restoring metadata from snapshot to staging
+
+local function the result of cancelling {file system staging file:staging}:
     execute:
-        if not staging's supported:
-            return @intrinsic(
-                "construct",
-                a file system cleanup result,
-                false,
-                false,
-                false,
-                staging's error message
-            )
-        if not staging's succeeded:
-            return @intrinsic(
-                "construct",
-                a file system cleanup result,
-                true,
-                false,
-                false,
-                staging's error message
-            )
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if false reporting staging's error message
         set cleanup_succeeded to 0
         set outcome to @intrinsic(
             "call",
@@ -546,43 +513,23 @@ function cancel {file system staging file:staging}:
             the address of cleanup_succeeded
         )
         if outcome != 0:
-            return @intrinsic(
-                "construct",
-                a file system cleanup result,
-                true,
-                false,
-                cleanup_succeeded != 0,
-                the current native filesystem error message
-            )
-        return @intrinsic(
-            "construct",
-            a file system cleanup result,
-            true,
-            true,
-            cleanup_succeeded != 0,
-            an empty native filesystem error message
-        )
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (cleanup_succeeded != 0) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (cleanup_succeeded != 0) reporting an empty native filesystem error message
 
-function commit {file system staging file:staging} allowing overwrite {boolean:overwrite} and requiring durability {boolean:require_durability}:
+flex function cancel {file system staging file:staging}:
+    replacement:
+        set the subject to the result of cancelling staging
+
+local function the result of committing {file system staging file:staging} allowing overwrite {boolean:overwrite} and requiring durability {boolean:require_durability}:
     execute:
-        if not staging's supported:
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
             return @intrinsic(
                 "construct",
-                a file system commit result,
+                a file system staging file,
+                staging's handle,
+                staging's supported,
                 false,
-                false,
-                true,
-                false,
-                false,
-                false,
-                staging's error message
-            )
-        if not staging's succeeded:
-            return @intrinsic(
-                "construct",
-                a file system commit result,
-                true,
-                false,
+                staging's path,
                 true,
                 false,
                 false,
@@ -613,12 +560,18 @@ function commit {file system staging file:staging} allowing overwrite {boolean:o
             set message to the current native filesystem error message
         return @intrinsic(
             "construct",
-            a file system commit result,
+            a file system staging file,
+            staging's handle,
             supported,
             succeeded,
+            staging's path,
             outcome_known != 0,
             committed != 0,
             durable != 0,
             cleanup_succeeded != 0,
             message
         )
+
+flex function commit {file system staging file:staging} allowing overwrite {boolean:overwrite} and requiring durability {boolean:require_durability}:
+    replacement:
+        set the subject to the result of committing staging allowing overwrite overwrite and requiring durability require_durability

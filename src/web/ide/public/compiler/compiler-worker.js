@@ -22,14 +22,14 @@ function postResponse(id, ok, payload, error) {
   self.postMessage({ id, ok, payload, error });
 }
 
-function parseJsonOr(text, fallback) {
-  if (!text) {
-    return fallback;
+function parseCompilerJson(text, label) {
+  if (typeof text !== "string" || text.length === 0) {
+    throw new Error(`Compiler returned no ${label} JSON`);
   }
   try {
     return JSON.parse(text);
-  } catch {
-    return fallback;
+  } catch (error) {
+    throw new Error(`Compiler returned invalid ${label} JSON`, { cause: error });
   }
 }
 
@@ -104,19 +104,32 @@ function syncCompilerSource(source, version) {
   state.syncedVersion = nextVersion;
 }
 
+function compilerFeedback(module) {
+  const diagnosticsPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_diagnostics_json", "string", [], []),
+    "diagnostics"
+  );
+  const compilerLogPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_compiler_log_json", "string", [], []),
+    "log"
+  );
+  if (!Array.isArray(diagnosticsPayload.diagnostics) || !Array.isArray(compilerLogPayload.messages)) {
+    throw new Error("Compiler returned malformed feedback");
+  }
+  return {
+    diagnostics: diagnosticsPayload.diagnostics,
+    compilerLog: compilerLogPayload.messages
+  };
+}
+
 function compileSource(source, version) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
+  const compilationStartedAt = performance.now();
   const status = module.ccall("dynlex_web_compile_and_emit_wasm", "number", [], []);
+  const compilationMilliseconds = performance.now() - compilationStartedAt;
 
-  const diagnosticsPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_diagnostics_json", "string", [], []),
-    { diagnostics: [] }
-  );
-  const compilerLogPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_compiler_log_json", "string", [], []),
-    { messages: [] }
-  );
+  const feedback = compilerFeedback(module);
 
   if (status === 0) {
     const wasmLength = module.ccall("dynlex_web_get_output_wasm_len", "number", [], []);
@@ -129,72 +142,88 @@ function compileSource(source, version) {
 
   return {
     status,
-    diagnostics: diagnosticsPayload.diagnostics ?? [],
-    compilerLog: compilerLogPayload.messages ?? [],
+    ...feedback,
+    compilationMilliseconds,
     hasArtifact: !!state.lastSuccessfulWasm,
     artifactVersion: state.artifactVersion
   };
 }
 
-function extractLspError(payload) {
-  if (payload && typeof payload === "object" && typeof payload.error === "string" && payload.error.length > 0) {
-    return payload.error;
-  }
-  return "";
-}
-
-function getLspHover(source, version, line, column) {
+function compileShaderStage(source, version, stage) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
-  const hoverPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_lsp_hover_json", "string", ["number", "number"], [line, column]),
-    null
+  const compilationStartedAt = performance.now();
+  const status = module.ccall(
+    "dynlex_web_compile_and_emit_shader_glsl",
+    "number",
+    ["string"],
+    [stage]
   );
-  const error = extractLspError(hoverPayload);
-  if (error) {
-    throw new Error(error);
+  const compilationMilliseconds = performance.now() - compilationStartedAt;
+  const feedback = compilerFeedback(module);
+  const glslSource = module.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+  const uniformPayload = parseCompilerJson(
+    module.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
+    "shader uniform"
+  );
+
+  if (status === 0 && (typeof glslSource !== "string" || glslSource.length === 0)) {
+    throw new Error("Successful shader compilation returned no WebGL source");
   }
-  return hoverPayload;
+  if (!Array.isArray(uniformPayload.uniforms)) {
+    throw new Error("Successful shader compilation returned invalid uniform reflection");
+  }
+
+  return {
+    status,
+    ...feedback,
+    compilationMilliseconds,
+    glslSource: status === 0 ? glslSource : "",
+    uniforms: status === 0 ? uniformPayload.uniforms : []
+  };
 }
 
-function getLspDefinition(source, version, line, column) {
-  const module = state.compilerModule;
-  syncCompilerSource(source, version);
-  const definitionPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_lsp_definition_json", "string", ["number", "number"], [line, column]),
-    null
-  );
-  const error = extractLspError(definitionPayload);
-  if (error) {
-    throw new Error(error);
+function compileShaderSource(source, version, compileVertexStage) {
+  const fragment = compileShaderStage(source, version, "fragment");
+  if (fragment.status !== 0 || !compileVertexStage) {
+    return {
+      ...fragment,
+      fragmentSource: fragment.glslSource,
+      vertexSource: ""
+    };
   }
-  return definitionPayload;
+
+  const vertex = compileShaderStage(source, version, "vertex");
+  return {
+    status: vertex.status,
+    diagnostics: vertex.diagnostics,
+    compilerLog: [...fragment.compilerLog, ...vertex.compilerLog],
+    compilationMilliseconds: fragment.compilationMilliseconds + vertex.compilationMilliseconds,
+    glslSource: fragment.glslSource,
+    fragmentSource: fragment.glslSource,
+    vertexSource: vertex.status === 0 ? vertex.glslSource : "",
+    uniforms: fragment.uniforms
+  };
 }
 
-function getLspSemanticTokens(source, version) {
+function exchangeLsp(message) {
+  if (!message || typeof message !== "object" || message.jsonrpc !== "2.0") {
+    throw new Error("Worker received an invalid LSP JSON-RPC message");
+  }
   const module = state.compilerModule;
-  syncCompilerSource(source, version);
-  const semanticPayload = parseJsonOr(
-    module.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []),
-    { data: [], legend: { tokenTypes: [], tokenModifiers: [] } }
+  const messages = parseCompilerJson(
+    module.ccall(
+      "dynlex_web_lsp_exchange_json",
+      "string",
+      ["string"],
+      [JSON.stringify(message)]
+    ),
+    "LSP exchange"
   );
-  const error = extractLspError(semanticPayload);
-  if (error) {
-    throw new Error(error);
+  if (!Array.isArray(messages)) {
+    throw new Error("Compiler returned malformed LSP exchange JSON");
   }
-  if (!Array.isArray(semanticPayload.data)) {
-    semanticPayload.data = [];
-  }
-  if (!semanticPayload.legend || typeof semanticPayload.legend !== "object") {
-    semanticPayload.legend = { tokenTypes: [], tokenModifiers: [] };
-  }
-  if (!Array.isArray(semanticPayload.legend.tokenTypes)) {
-    semanticPayload.legend.tokenTypes = [];
-  }
-  if (!Array.isArray(semanticPayload.legend.tokenModifiers)) {
-    semanticPayload.legend.tokenModifiers = [];
-  }
-  return semanticPayload;
+  return messages;
 }
 
 async function runLastSuccessfulProgram() {
@@ -268,10 +297,9 @@ async function runLastSuccessfulProgram() {
 // Worker protocol.
 // - init -> initResult
 // - compile { source, version } -> compileResult
+// - compile.shader { source, version } -> shaderCompileResult
 // - run -> runResult
-// - lsp.hover { source, version, line, column } -> hover|null
-// - lsp.definition { source, version, line, column } -> location|null
-// - lsp.semanticTokens { source, version } -> { data, legend }
+// - lsp.exchange { message } -> JSON-RPC messages emitted by the DynLex language server
 self.onmessage = async (event) => {
   const { id, type, payload } = event.data ?? {};
   if (typeof id !== "number" || typeof type !== "string") {
@@ -294,6 +322,16 @@ self.onmessage = async (event) => {
       return;
     }
 
+    if (type === "compile.shader") {
+      await ensureCompilerInitialized();
+      const source = typeof payload?.source === "string" ? payload.source : "";
+      const version = Number.isInteger(payload?.version) ? payload.version : -1;
+      const compileVertexStage = payload?.renderer === true;
+      const result = compileShaderSource(source, version, compileVertexStage);
+      postResponse(id, true, result);
+      return;
+    }
+
     if (type === "run") {
       await ensureCompilerInitialized();
       const result = await runLastSuccessfulProgram();
@@ -301,43 +339,15 @@ self.onmessage = async (event) => {
       return;
     }
 
-    if (type === "lsp.hover") {
+    if (type === "lsp.exchange") {
       await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const line = toNonNegativeInteger(payload?.line);
-      const column = toNonNegativeInteger(payload?.column);
-      const hover = getLspHover(source, version, line, column);
-      postResponse(id, true, hover);
-      return;
-    }
-
-    if (type === "lsp.definition") {
-      await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const line = toNonNegativeInteger(payload?.line);
-      const column = toNonNegativeInteger(payload?.column);
-      const definition = getLspDefinition(source, version, line, column);
-      postResponse(id, true, definition);
-      return;
-    }
-
-    if (type === "lsp.semanticTokens") {
-      await ensureCompilerInitialized();
-      const source = typeof payload?.source === "string" ? payload.source : "";
-      const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const tokens = getLspSemanticTokens(source, version);
-      postResponse(id, true, tokens);
+      postResponse(id, true, exchangeLsp(payload?.message));
       return;
     }
 
     postResponse(id, false, null, `Unknown worker message type '${type}'.`);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? [error.message, error.stack].filter((part) => typeof part === "string" && part.length > 0).join("\n")
-        : String(error);
-    postResponse(id, false, null, message);
+    console.error("Compiler worker request failed", error);
+    postResponse(id, false, null, "An error occurred. Check the browser log.");
   }
 };

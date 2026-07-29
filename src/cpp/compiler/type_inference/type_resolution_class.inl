@@ -318,7 +318,7 @@ static DataType instantiateBoundClassType(
 
 	struct ScopedInferenceVariableStateOverride {
 		InferenceContext *context{};
-		std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+		KnownConstantState savedKnownConstants;
 		AddressInferenceState savedAddressState;
 
 		explicit ScopedInferenceVariableStateOverride(InferenceContext *inferenceContext)

@@ -184,6 +184,7 @@ struct ParseContext {
 	// SPIR-V UBO fallback bindings are assigned from source location order, not codegen use order.
 	std::vector<std::string> shaderUniformNames;
 	std::unordered_map<std::string, ShaderUniformSourceOrder> shaderUniformSourceOrder;
+	std::vector<std::string> shaderInterpolantNames;
 
 	// imported source files by path (also prevents circular imports)
 	std::unordered_map<std::string, lsp::SourceFile *> importedFiles;
@@ -231,9 +232,10 @@ struct ParseContext {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}
 	void printDiagnostics();
-	PatternMatch *match(PatternReference *reference, MatchOptions options = {});
+	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
 	void processEncounteredIntrinsic(Expression *intrinsicExpr);
 	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
+	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	Expression *cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata = false);
 	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, bool preserveInferenceMetadata = false);

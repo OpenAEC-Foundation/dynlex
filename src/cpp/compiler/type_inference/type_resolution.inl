@@ -3,6 +3,7 @@
 #include "addressProvenance.h"
 #include "compiler.h"
 #include "const_evaluation.inl"
+#include "knownConstantState.h"
 #include <limits>
 #include <tuple>
 
@@ -89,12 +90,10 @@ static bool readInferredTypeReferenceValue(Expression *expression, InferenceCont
 	return false;
 }
 
-static std::unordered_map<VariableReference *, CompileTimeValue>
-snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext);
+static KnownConstantState snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext);
 static AddressInferenceState snapshotAddressStateForClassInstantiation(InferenceContext *inferenceContext);
-static void restoreKnownConstantsForClassInstantiation(
-	InferenceContext *inferenceContext, std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants
-);
+static void
+restoreKnownConstantsForClassInstantiation(InferenceContext *inferenceContext, KnownConstantState savedKnownConstants);
 static void
 restoreAddressStateForClassInstantiation(InferenceContext *inferenceContext, AddressInferenceState savedAddressState);
 static void

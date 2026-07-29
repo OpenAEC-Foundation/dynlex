@@ -6,6 +6,7 @@
 #include "runtimeText.h"
 
 #include <errno.h>
+#include <pwd.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,84 @@ static int validate_executable_path(char *path, size_t length, char **output, si
 	*output = path;
 	*output_length = length;
 	return 0;
+}
+
+static int copy_cache_path(
+	const char *base, size_t base_length, const char *suffix, size_t suffix_length, char **output, size_t *output_length
+) {
+	if (base_length == 0 || base[0] != '/') {
+		dynlex_runtime_set_error("The user cache directory base path is not absolute");
+		return -1;
+	}
+	if (!dynlex_runtime_is_valid_utf8(base, base_length)) {
+		dynlex_runtime_set_error("The user cache directory base path is not valid UTF-8");
+		return -1;
+	}
+	bool needs_separator = suffix_length != 0 && base[base_length - 1] != '/';
+	size_t separator_length = needs_separator ? 1 : 0;
+	if (base_length > (size_t)INT32_MAX - separator_length - suffix_length) {
+		dynlex_runtime_set_error("The user cache directory path exceeds the maximum string length");
+		return -1;
+	}
+	size_t length = base_length + separator_length + suffix_length;
+	char *path = malloc(length);
+	if (path == NULL) {
+		dynlex_runtime_set_errno_error("Could not allocate user cache directory path", ENOMEM);
+		return -1;
+	}
+	memcpy(path, base, base_length);
+	size_t position = base_length;
+	if (needs_separator)
+		path[position++] = '/';
+	if (suffix_length != 0)
+		memcpy(path + position, suffix, suffix_length);
+	*output = path;
+	*output_length = length;
+	return 0;
+}
+
+static int cache_directory_from_home(const char *home, char **path, size_t *length) {
+#if defined(__APPLE__)
+	static const char suffix[] = "Library/Caches";
+#else
+	static const char suffix[] = ".cache";
+#endif
+	return copy_cache_path(home, strlen(home), suffix, sizeof(suffix) - 1, path, length);
+}
+
+static int user_home_directory(char **path, size_t *length) {
+	long configured_capacity = sysconf(_SC_GETPW_R_SIZE_MAX);
+	size_t capacity = configured_capacity > 0 ? (size_t)configured_capacity : 1024;
+	if (capacity > (size_t)INT32_MAX)
+		capacity = (size_t)INT32_MAX;
+
+	for (;;) {
+		char *buffer = malloc(capacity);
+		if (buffer == NULL) {
+			dynlex_runtime_set_errno_error("Could not allocate user account lookup buffer", ENOMEM);
+			return -1;
+		}
+		struct passwd record;
+		struct passwd *result = NULL;
+		int status = getpwuid_r(geteuid(), &record, buffer, capacity, &result);
+		if (status == 0 && result != NULL) {
+			int outcome = cache_directory_from_home(record.pw_dir, path, length);
+			free(buffer);
+			return outcome;
+		}
+		free(buffer);
+		if (status != ERANGE) {
+			dynlex_runtime_set_errno_error(
+				"Could not retrieve the current user's home directory", status == 0 ? ENOENT : status
+			);
+			return -1;
+		}
+		if (capacity > (size_t)INT32_MAX / 2) {
+			dynlex_runtime_set_error("The user account lookup exceeds the maximum buffer length");
+			return -1;
+		}
+		capacity *= 2;
+	}
 }
 
 #if defined(__linux__)
@@ -135,6 +214,26 @@ int dynlex_platform_executable_path(char **path, size_t *length, int32_t *suppor
 	dynlex_runtime_set_error("Executable path retrieval is not supported on this POSIX platform");
 	return 0;
 #endif
+}
+
+int dynlex_platform_user_cache_directory(char **path, size_t *length, int32_t *supported) {
+	if (path == NULL || length == NULL || supported == NULL) {
+		dynlex_runtime_set_errno_error("Invalid user cache directory result arguments", EINVAL);
+		return -1;
+	}
+	*path = NULL;
+	*length = 0;
+	*supported = 1;
+
+	const char *xdg_cache_home = getenv("XDG_CACHE_HOME");
+	if (xdg_cache_home != NULL && xdg_cache_home[0] == '/')
+		return copy_cache_path(xdg_cache_home, strlen(xdg_cache_home), "", 0, path, length);
+
+	const char *home = getenv("HOME");
+	if (home != NULL && home[0] == '/')
+		return cache_directory_from_home(home, path, length);
+
+	return user_home_directory(path, length);
 }
 
 int dynlex_platform_prepare_standard_input(void) { return 0; }

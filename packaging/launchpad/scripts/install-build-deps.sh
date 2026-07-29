@@ -9,10 +9,10 @@ sudo apt install -y \
     devscripts \
     dput \
     cmake \
+    git \
     gnupg \
-    llvm-20-dev \
-    libzstd-dev \
     ninja-build \
     nlohmann-json3-dev \
+    python3 \
     rsync \
-    zlib1g-dev
+    tar

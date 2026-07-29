@@ -1,0 +1,337 @@
+import lib/shader_art.dl
+
+# ENDLESS TERRAIN
+# Fixed camera rays and exponentially spaced distance rows form a perspective
+# terrain plane. Its crack-free topology is displaced into an alpine height
+# field and a coarser water surface without a fragment-stage ray march.
+
+function terrain height at x z:
+    execute:
+        set continental_fold to simplex field at (x * 0.011) (z * 0.011) 1.7
+        set warp_x to simplex field at (x * 0.021 + 9.0) (z * 0.021 - 4.0) 4.1
+        set warp_z to simplex field at ((x * -0.006) + (z * 0.019)) ((z * 0.007) + (x * 0.020)) 8.3
+        set bent_x to x + warp_x * 9.5
+        set bent_z to z + warp_z * 9.5
+
+        set mountain_wave to simplex field at ((bent_x * 0.027) + (bent_z * 0.006)) ((bent_z * 0.027) - (bent_x * 0.006)) 2.3
+        set crossing_wave to simplex field at ((bent_x * -0.018) + (bent_z * 0.057)) ((bent_z * 0.019) + (bent_x * 0.054)) 6.9
+        set broken_wave to simplex field at ((bent_x * 0.119) + (bent_z * 0.041)) ((bent_z * 0.113) - (bent_x * 0.037)) 9.7
+        set folded_mass to ((mountain_wave * 0.60) + (crossing_wave * 0.27)) + (broken_wave * 0.13)
+        set mountain_ridge to the maximum of folded_mass and 0.0
+        set mountain_ridge to mountain_ridge * mountain_ridge
+        set ridge_fold to 1.0 - (the absolute value of ((mountain_wave * 0.78) + (crossing_wave * 0.34)))
+        set ridge_crest to the maximum of (ridge_fold - 0.42) and 0.0
+        set ridge_crest to ridge_crest * ridge_crest
+        set uplift to smooth transition from -0.48 to 0.45 at continental_fold
+        set erosion_channels to 1.0 - smooth transition from 0.035 to 0.31 at (the absolute value of (crossing_wave + broken_wave * 0.24))
+        set alpine_mass to folded_mass * 1.38
+        set alpine_mass to alpine_mass + mountain_ridge * (2.00 + uplift * 6.00)
+        set alpine_mass to alpine_mass + (ridge_crest * uplift) * (3.1 + mountain_ridge * 2.4)
+        set alpine_mass to alpine_mass + (broken_wave * uplift) * 0.34
+        set alpine_mass to alpine_mass - ((erosion_channels * uplift) * (0.16 + mountain_ridge * 0.38))
+        set basin to continental_fold * 1.20
+        return (basin + alpine_mass) - 0.75
+
+function terrain camera x at moment:
+    execute:
+        return 201.7 + ((the sine of (moment * 0.091)) * 4.2 + (the cosine of (moment * 0.037)) * 1.6)
+
+function terrain camera z at moment:
+    execute:
+        return (-92.1) + (moment * 3.25)
+
+# The positive maxima of every bounded field term sum to 12.0202.
+function terrain maximum possible height:
+    execute:
+        return 12.10
+
+function terrain camera altitude:
+    execute:
+        return (terrain maximum possible height) + 0.70
+
+function water detail visibility at distance:
+    execute:
+        return 1.0 - (smooth transition from 48.0 to 96.0 at distance)
+
+if this is a vertex shader:
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set aspect to width / height
+    set surface_vertex to the vertex w
+
+    if surface_vertex < 0.5:
+        set the shader interpolant named "terrain_position" to (the vertex x) (the vertex y) 0.0 0.0
+        set the shader interpolant named "terrain_normal" to 0.0 1.0 0.0 0.0
+        set the shader interpolant named "terrain_material" to 0.5 0.0 0.0 0.0
+        set the output position to (the vertex x) (the vertex y) 0.9999 1.0
+    else:
+        set ray_distance to the vertex y
+        set camera_x to terrain camera x at time
+        set camera_z to terrain camera z at time
+        set camera_y to terrain camera altitude
+        set camera_pitch to 0.155
+        set pitch_sine to the sine of camera_pitch
+        set pitch_cosine to the cosine of camera_pitch
+        set yaw to (the sine of (time * 0.073)) * 0.13 + (the cosine of (time * 0.041)) * 0.045
+        set yaw_sine to the sine of yaw
+        set yaw_cosine to the cosine of yaw
+
+        set base_vertical_distance to 0.0 - camera_y
+        set ray_slope to ((the vertex x) * aspect) * 0.80
+        set ray_forward_scale to the square root of (1.0 + ((ray_slope * pitch_cosine) * (ray_slope * pitch_cosine)))
+        set forward_distance to ray_distance / ray_forward_scale
+        set base_view_depth to (forward_distance * pitch_cosine) - (base_vertical_distance * pitch_sine)
+        set lateral_distance to ray_slope * base_view_depth
+        set world_x to (camera_x + (lateral_distance * yaw_cosine)) + (forward_distance * yaw_sine)
+        set world_z to (camera_z + (forward_distance * yaw_cosine)) - (lateral_distance * yaw_sine)
+
+        set displaced_height to 0.0
+        set normal_x to 0.0
+        set normal_y to 1.0
+        set normal_z to 0.0
+        set surface_variation to 0.5
+        set surface_detail to 0.5
+        set water_depth to 0.0
+        if surface_vertex > 1.5:
+            set water_level to -0.62
+            set water_depth to water_level - (terrain height at world_x world_z)
+            set water_depth to the maximum of water_depth and 0.0
+            set water_angle_x to (world_x * 0.17) + (world_z * 0.07) + (time * 0.41)
+            set water_angle_z to (world_z * 0.21) - (world_x * 0.05) - (time * 0.32)
+            set water_angle_cross to (world_x * 0.09) + (world_z * 0.13) + (time * 0.23)
+            set water_wave_x to the sine of water_angle_x
+            set water_wave_z to the sine of water_angle_z
+            set water_wave_cross to the sine of water_angle_cross
+            set water_cosine_x to the cosine of water_angle_x
+            set water_cosine_z to the cosine of water_angle_z
+            set water_cosine_cross to the cosine of water_angle_cross
+            set water_geometry_visibility to water detail visibility at ray_distance
+            set water_displacement to (((water_wave_x * 0.045) + (water_wave_z * 0.028)) + (water_wave_cross * 0.018)) * water_geometry_visibility
+            set displaced_height to water_level + water_displacement
+            set normal_x to (0.0 - (((water_cosine_x * 0.00765) - (water_cosine_z * 0.00140)) + (water_cosine_cross * 0.00162))) * water_geometry_visibility
+            set normal_z to (0.0 - (((water_cosine_x * 0.00315) + (water_cosine_z * 0.00588)) + (water_cosine_cross * 0.00234))) * water_geometry_visibility
+            set surface_variation to 0.5 + (((water_wave_x + water_wave_z) * 0.25) * water_geometry_visibility)
+            set surface_detail to 0.5 + ((water_wave_cross * 0.5) * water_geometry_visibility)
+        else:
+            set normal_step to 0.34
+            set displaced_height to terrain height at world_x world_z
+            set height_left to terrain height at (world_x - normal_step) world_z
+            set height_right to terrain height at (world_x + normal_step) world_z
+            set height_back to terrain height at world_x (world_z - normal_step)
+            set height_front to terrain height at world_x (world_z + normal_step)
+            set normal_x to height_left - height_right
+            set normal_y to normal_step * 2.0
+            set normal_z to height_back - height_front
+            set surface_variation to (simplex field at (world_x * 0.065) (world_z * 0.065) 13.7) * 0.5 + 0.5
+            set surface_detail to (simplex field at (world_x * 0.14) (world_z * 0.14) 16.2) * 0.5 + 0.5
+
+        set normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
+        set normal_x to normal_x / normal_length
+        set normal_y to normal_y / normal_length
+        set normal_z to normal_z / normal_length
+
+        set vertical_distance to displaced_height - camera_y
+        set view_y to vertical_distance * pitch_cosine + forward_distance * pitch_sine
+        set view_z to forward_distance * pitch_cosine - vertical_distance * pitch_sine
+        set clip_x to lateral_distance / (aspect * 0.72)
+        set clip_y to view_y / 0.72
+        set clip_z to view_z * 1.00078 - 0.40016
+
+        set the shader interpolant named "terrain_position" to world_x displaced_height world_z surface_vertex
+        set the shader interpolant named "terrain_normal" to normal_x normal_y normal_z ray_distance
+        set the shader interpolant named "terrain_material" to surface_variation surface_detail water_depth 0.0
+        set the output position to clip_x clip_y clip_z view_z
+
+if this is a fragment shader:
+    set pixel_x to the fragment x coordinate
+    set pixel_y to the fragment y coordinate
+    set time to the shader time
+    set width to the maximum of the shader width and 1.0
+    set height to the maximum of the shader height and 1.0
+    set aspect to width / height
+    set screen_x to (((pixel_x / width) * 2.0) - 1.0) * aspect
+    set screen_y to ((pixel_y / height) * 2.0) - 1.0
+
+    set world_x to the shader interpolant x named "terrain_position"
+    set world_y to the shader interpolant y named "terrain_position"
+    set world_z to the shader interpolant z named "terrain_position"
+    set surface_kind to the shader interpolant w named "terrain_position"
+    set normal_x to the shader interpolant x named "terrain_normal"
+    set normal_y to the shader interpolant y named "terrain_normal"
+    set normal_z to the shader interpolant z named "terrain_normal"
+    set ray_distance to the shader interpolant w named "terrain_normal"
+    set surface_variation to the shader interpolant x named "terrain_material"
+    set surface_detail to the shader interpolant y named "terrain_material"
+    set water_depth to the shader interpolant z named "terrain_material"
+
+    set sun_x to screen_x - 0.52
+    set sun_y to screen_y - 0.36
+    set sun_distance to the square root of (sun_x * sun_x + sun_y * sun_y)
+    set sun_core to glow from 0.014 to 0.065 at sun_distance
+    set sun_halo to glow from 0.04 to 0.44 at sun_distance
+    set red to 0.025
+    set green to 0.064
+    set blue to 0.13
+
+    if surface_kind < 0.5:
+        set sky_height to saturate (screen_y * 0.48 + 0.43)
+        set red to 0.022 + sky_height * 0.105
+        set green to 0.061 + sky_height * 0.18
+        set blue to 0.14 + sky_height * 0.33
+        set cloud_fold to (the sine of (screen_x * 1.21 + screen_y * 1.77 + time * 0.021)) * 0.5 + 0.5
+        set cloud_crossing to (the cosine of (screen_x * -0.67 + screen_y * 2.93 - time * 0.016)) * 0.5 + 0.5
+        set cloud_detail to (the sine of (screen_x * 2.47 - screen_y * 4.11 + cloud_fold * 1.8)) * 0.5 + 0.5
+        set cloud_shape to smooth transition from 1.42 to 2.18 at ((cloud_fold + cloud_crossing) + (cloud_detail * 0.46))
+        set cloud_altitude to smooth transition from -0.08 to 0.38 at screen_y
+        set cloud_light to cloud_shape * cloud_altitude
+        set red to red + cloud_light * 0.33
+        set green to green + cloud_light * 0.31
+        set blue to blue + cloud_light * 0.29
+        set red to (red + (sun_halo * 0.31)) + (sun_core * 1.36)
+        set green to (green + (sun_halo * 0.19)) + (sun_core * 0.96)
+        set blue to (blue + (sun_halo * 0.09)) + (sun_core * 0.55)
+    else:
+        set normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
+        set normal_x to normal_x / normal_length
+        set normal_y to normal_y / normal_length
+        set normal_z to normal_z / normal_length
+        set sunlight to saturate (((normal_x * -0.43) + (normal_y * 0.79)) + (normal_z * -0.44))
+        set sky_fill to saturate (normal_y * 0.56 + 0.44)
+
+        if surface_kind > 1.5:
+            # Fine analytic ripples perturb the interpolated geometric waves.
+            set ripple_angle_one to (world_x * 1.37) + (world_z * 0.91) + (time * 1.12)
+            set ripple_angle_two to (world_x * -0.83) + (world_z * 1.61) - (time * 0.94)
+            set ripple_angle_three to (world_x * 2.11) - (world_z * 0.57) + (time * 0.71)
+            set ripple_cosine_one to the cosine of ripple_angle_one
+            set ripple_cosine_two to the cosine of ripple_angle_two
+            set ripple_cosine_three to the cosine of ripple_angle_three
+            set water_ripple_visibility to water detail visibility at ray_distance
+            set ripple_normal_x to (((ripple_cosine_one * 0.07095) - (ripple_cosine_two * 0.02835)) + (ripple_cosine_three * 0.03195)) * water_ripple_visibility
+            set ripple_normal_z to (((ripple_cosine_one * 0.05115) + (ripple_cosine_two * 0.05355)) - (ripple_cosine_three * 0.00855)) * water_ripple_visibility
+            set normal_x to normal_x - ripple_normal_x
+            set normal_z to normal_z - ripple_normal_z
+            set water_normal_length to the square root of (((normal_x * normal_x) + (normal_y * normal_y)) + (normal_z * normal_z))
+            set normal_x to normal_x / water_normal_length
+            set normal_y to normal_y / water_normal_length
+            set normal_z to normal_z / water_normal_length
+
+            # A fixed-altitude camera supplies the per-pixel view vector.
+            set camera_x to terrain camera x at time
+            set camera_y to terrain camera altitude
+            set camera_z to terrain camera z at time
+            set water_view_x to camera_x - world_x
+            set water_view_y to camera_y - world_y
+            set water_view_z to camera_z - world_z
+            set water_view_length to the square root of (((water_view_x * water_view_x) + (water_view_y * water_view_y)) + (water_view_z * water_view_z))
+            set water_view_x to water_view_x / water_view_length
+            set water_view_y to water_view_y / water_view_length
+            set water_view_z to water_view_z / water_view_length
+            set water_view_facing to saturate (((normal_x * water_view_x) + (normal_y * water_view_y)) + (normal_z * water_view_z))
+
+            # Schlick Fresnel keeps the body colored while grazing angles reflect sky.
+            set fresnel_grazing to 1.0 - water_view_facing
+            set fresnel_squared to fresnel_grazing * fresnel_grazing
+            set fresnel_fourth to fresnel_squared * fresnel_squared
+            set water_fresnel to 0.020 + (fresnel_fourth * fresnel_grazing) * 0.980
+            set reflected_x to (normal_x * water_view_facing * 2.0) - water_view_x
+            set reflected_y to (normal_y * water_view_facing * 2.0) - water_view_y
+            set reflected_z to (normal_z * water_view_facing * 2.0) - water_view_z
+            set reflected_sky_height to saturate (reflected_y * 0.72 + 0.28)
+            set reflection_red to 0.16 * (1.0 - reflected_sky_height) + 0.025 * reflected_sky_height
+            set reflection_green to 0.24 * (1.0 - reflected_sky_height) + 0.095 * reflected_sky_height
+            set reflection_blue to 0.32 * (1.0 - reflected_sky_height) + 0.24 * reflected_sky_height
+            set reflected_cloud_one to (the sine of (((reflected_x * 2.1) + (reflected_z * 1.3)) + (time * 0.018))) * 0.5 + 0.5
+            set reflected_cloud_two to (the cosine of (((reflected_x * -1.4) + (reflected_z * 2.7)) - (time * 0.013))) * 0.5 + 0.5
+            set reflected_cloud to smooth transition from 1.25 to 1.72 at (reflected_cloud_one + reflected_cloud_two)
+            set reflection_red to reflection_red + reflected_cloud * 0.028
+            set reflection_green to reflection_green + reflected_cloud * 0.036
+            set reflection_blue to reflection_blue + reflected_cloud * 0.045
+
+            # The reflected view ray meets the visible sun direction, producing
+            # a broken highlight path instead of tinting the whole lake.
+            set reflected_sun_alignment to saturate (((reflected_x * 0.39) + (reflected_y * 0.32)) + (reflected_z * 0.86))
+            set water_sun_glint to reflected_sun_alignment
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glow to water_sun_glint
+            set water_sun_glint to water_sun_glint * water_sun_glint
+            set water_sun_glint to water_sun_glint * (0.35 + water_fresnel * 0.65)
+
+            # Interpolated lake depth exposes turquoise shallows without a
+            # terrain evaluation in every fragment.
+            set shallow_water to (1.0 - (smooth transition from 0.18 to 3.8 at water_depth)) * water_ripple_visibility
+            set water_absorption to smooth transition from 24.0 to 220.0 at ray_distance
+            set water_body_red to (0.004 + surface_variation * 0.008) * (1.0 - water_absorption * 0.42)
+            set water_body_green to (0.018 + surface_variation * 0.038) * (1.0 - water_absorption * 0.28)
+            set water_body_blue to (0.042 + surface_variation * 0.058) * (1.0 - water_absorption * 0.12)
+            set water_body_red to water_body_red * (1.0 - shallow_water) + (0.018 + surface_detail * 0.012) * shallow_water
+            set water_body_green to water_body_green * (1.0 - shallow_water) + (0.105 + surface_detail * 0.050) * shallow_water
+            set water_body_blue to water_body_blue * (1.0 - shallow_water) + (0.125 + surface_detail * 0.055) * shallow_water
+            set water_caustic_depth to (1.0 - (smooth transition from 0.05 to 0.65 at water_depth)) * water_ripple_visibility
+            set water_caustic_distance to the absolute value of ((ripple_cosine_one + (ripple_cosine_two * 0.72)) + (ripple_cosine_three * 0.28))
+            set water_caustic to (glow from 0.0 to 0.18 at water_caustic_distance) * water_caustic_depth
+            set water_body_red to water_body_red + water_caustic * 0.006
+            set water_body_green to water_body_green + water_caustic * 0.032
+            set water_body_blue to water_body_blue + water_caustic * 0.040
+            set water_red to water_body_red * (1.0 - water_fresnel) + reflection_red * water_fresnel
+            set water_green to water_body_green * (1.0 - water_fresnel) + reflection_green * water_fresnel
+            set water_blue to water_body_blue * (1.0 - water_fresnel) + reflection_blue * water_fresnel
+            set water_red to water_red + water_sun_glow * 0.080
+            set water_green to water_green + water_sun_glow * 0.045
+            set water_blue to water_blue + water_sun_glow * 0.018
+            set water_red to water_red + water_sun_glint * 0.70
+            set water_green to water_green + water_sun_glint * 0.42
+            set water_blue to water_blue + water_sun_glint * 0.16
+            set water_fog to smooth transition from 232.0 to 376.0 at ray_distance
+            set red to water_red * (1.0 - water_fog) + 0.17 * water_fog
+            set green to water_green * (1.0 - water_fog) + 0.23 * water_fog
+            set blue to water_blue * (1.0 - water_fog) + 0.31 * water_fog
+        else:
+            set slope to 1.0 - normal_y
+            set material_variation to (surface_variation * 0.68) + (surface_detail * 0.32)
+            set fracture to saturate ((surface_detail - 0.32) * 1.35 + slope * 1.7)
+            set exposed_rock to smooth transition from 0.055 to 0.30 at (slope + ((fracture - 0.5) * 0.095))
+            set snow to smooth transition from 2.75 to 4.45 at (world_y + ((material_variation - 0.5) * 0.48))
+            set snow to snow * smooth transition from 0.25 to 0.66 at normal_y
+            set snow to snow * (0.88 + surface_detail * 0.12)
+            set alpine_zone to smooth transition from 0.35 to 2.65 at world_y
+            set rock_warmth to saturate (((normal_x * 0.38) - (normal_z * 0.26)) + 0.48)
+
+            set meadow_red to (0.028 + material_variation * 0.050) + alpine_zone * 0.034
+            set meadow_green to (0.094 + material_variation * 0.086) - alpine_zone * 0.050
+            set meadow_blue to (0.043 + material_variation * 0.036) + alpine_zone * 0.020
+            set rock_red to (0.119 + material_variation * 0.066) + rock_warmth * 0.074
+            set rock_green to (0.112 + material_variation * 0.058) + rock_warmth * 0.047
+            set rock_blue to (0.118 + material_variation * 0.054) + rock_warmth * 0.037
+            set ground_red to meadow_red * (1.0 - exposed_rock) + rock_red * exposed_rock
+            set ground_green to meadow_green * (1.0 - exposed_rock) + rock_green * exposed_rock
+            set ground_blue to meadow_blue * (1.0 - exposed_rock) + rock_blue * exposed_rock
+            set ground_red to ground_red * (1.0 - snow) + 0.78 * snow
+            set ground_green to ground_green * (1.0 - snow) + 0.83 * snow
+            set ground_blue to ground_blue * (1.0 - snow) + 0.87 * snow
+
+            set material_light to 0.80 + surface_detail * 0.26
+            set lighting to ((0.17 + (sunlight * 1.16)) + (sky_fill * 0.17)) * material_light
+            set ground_red to ground_red * lighting + sunlight * 0.13
+            set ground_green to ground_green * lighting + sunlight * 0.10
+            set ground_blue to ground_blue * lighting + sunlight * 0.070
+
+            set fog to smooth transition from 188.0 to 376.0 at ray_distance
+            set fog_red to 0.17 + sun_halo * 0.17
+            set fog_green to 0.23 + sun_halo * 0.105
+            set fog_blue to 0.31 + sun_halo * 0.052
+            set red to ground_red * (1.0 - fog) + fog_red * fog
+            set green to ground_green * (1.0 - fog) + fog_green * fog
+            set blue to ground_blue * (1.0 - fog) + fog_blue * fog
+
+    set vignette_radius to the square root of ((screen_x / aspect) * (screen_x / aspect) + screen_y * screen_y)
+    set vignette to 0.38 + (1.0 - smooth transition from 0.58 to 1.34 at vignette_radius) * 0.62
+    set red to the square root of ((red * vignette) / (1.0 + red * 0.38))
+    set green to the square root of ((green * vignette) / (1.0 + green * 0.38))
+    set blue to the square root of ((blue * vignette) / (1.0 + blue * 0.38))
+    set the fragment color to red green blue 1.0

@@ -54,7 +54,7 @@ static bool inferSectionLineRange(
 	}
 
 	bool loopSection = stabilizeLoop && sectionOutcomeIsLoop(openingExpression);
-	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
+	KnownConstantState constantsAtLoopEntry;
 	AddressInferenceState addressesAtLoopEntry;
 	InferenceContext::SubjectState subjectAtLoopEntry;
 	if (loopSection) {
@@ -172,7 +172,7 @@ static bool inferSectionLineRange(
 				selectedBranch = defaultBranch;
 		}
 
-		std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> fallthroughConstantStates;
+		std::vector<KnownConstantState> fallthroughConstantStates;
 		std::vector<AddressInferenceState> fallthroughAddressStates;
 		std::vector<InferenceContext::SubjectState> fallthroughSubjectStates;
 		auto inferBranch = [&](const SwitchBranch &branch) {
@@ -239,10 +239,10 @@ static bool inferSectionLineRange(
 			std::optional<size_t> selectedBranch;
 			bool branchKnown = true;
 			bool fallthroughReachable = true;
-			std::unordered_map<VariableReference *, CompileTimeValue> fallthroughConstants = context.currentVariableValues;
+			KnownConstantState fallthroughConstants = context.currentVariableValues;
 			AddressInferenceState fallthroughAddresses = context.currentAddressState;
 			InferenceContext::SubjectState fallthroughSubject = context.currentSubject;
-			std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchConstantStates;
+			std::vector<KnownConstantState> branchConstantStates;
 			std::vector<AddressInferenceState> branchAddressStates;
 			std::vector<InferenceContext::SubjectState> branchSubjectStates;
 			for (size_t k = i;; k++) {

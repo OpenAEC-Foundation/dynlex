@@ -1,0 +1,180 @@
+import lib/shader.dl
+
+# Shared procedural-art vocabulary for editable fragment shaders.
+
+function [the|] shader width:
+    replacement:
+        @intrinsic("shader uniform", "width")
+
+function [the|] shader height:
+    replacement:
+        @intrinsic("shader uniform", "height")
+
+function fractional part of number:
+    execute:
+        return number - the floor of number
+
+function saturate number:
+    execute:
+        set result to number
+        clamp result between 0.0 and 1.0
+        return result
+
+function smooth transition from lower to upper at sample:
+    execute:
+        set normalized to (sample - lower) / (upper - lower)
+        set normalized to saturate normalized
+        return (normalized * normalized) * (3.0 - (2.0 * normalized))
+
+function glow from inner to outer at sample:
+    execute:
+        return 1.0 - smooth transition from inner to outer at sample
+
+function simplex permutation of value:
+    execute:
+        set polynomial to ((value * 34.0) + 1.0) * value
+        return polynomial - (the floor of (polynomial / 289.0)) * 289.0
+
+function simplex corner at x y permutation:
+    execute:
+        set radius to the maximum of (0.5 - ((x * x) + (y * y))) and 0.0
+        set gradient_axis to ((fractional part of (permutation / 41.0)) * 2.0) - 1.0
+        set gradient_height to (the absolute value of gradient_axis) - 0.5
+        set gradient_offset to the floor of (gradient_axis + 0.5)
+        set gradient_axis to gradient_axis - gradient_offset
+        set normalization to 1.79284291 - 0.85373472 * ((gradient_axis * gradient_axis) + (gradient_height * gradient_height))
+        set attenuation to radius * radius
+        set attenuation to attenuation * attenuation
+        return (attenuation * normalization) * ((gradient_axis * x) + (gradient_height * y))
+
+# A triangular simplex lattice avoids the axis-aligned cells and repeating
+# wave bands that become conspicuous when a field displaces visible geometry.
+function simplex field at x y phase:
+    execute:
+        set sample_x to x + phase * 17.17
+        set sample_y to y - phase * 11.13
+        set skew to (sample_x + sample_y) * 0.36602540
+        set corner_x to the floor of (sample_x + skew)
+        set corner_y to the floor of (sample_y + skew)
+        set unskew to (corner_x + corner_y) * 0.21132487
+        set local_x to sample_x - (corner_x - unskew)
+        set local_y to sample_y - (corner_y - unskew)
+
+        set second_x to 0.0
+        if local_x > local_y:
+            set second_x to 1.0
+        set second_y to 1.0 - second_x
+        set second_local_x to (local_x - second_x) + 0.21132487
+        set second_local_y to (local_y - second_y) + 0.21132487
+        set third_local_x to local_x - 0.57735027
+        set third_local_y to local_y - 0.57735027
+
+        set wrapped_x to corner_x - (the floor of (corner_x / 289.0)) * 289.0
+        set wrapped_y to corner_y - (the floor of (corner_y / 289.0)) * 289.0
+        set first_permutation to simplex permutation of ((simplex permutation of wrapped_y) + wrapped_x)
+        set second_permutation to simplex permutation of (((simplex permutation of (wrapped_y + second_y)) + wrapped_x) + second_x)
+        set third_permutation to simplex permutation of (((simplex permutation of (wrapped_y + 1.0)) + wrapped_x) + 1.0)
+
+        set first_corner to simplex corner at local_x local_y first_permutation
+        set second_corner to simplex corner at second_local_x second_local_y second_permutation
+        set third_corner to simplex corner at third_local_x third_local_y third_permutation
+        return ((first_corner + second_corner) + third_corner) * 130.0
+
+function signed flow at x y phase:
+    execute:
+        set warp_x to the sine of (((x * 0.73) - (y * 0.41)) + phase)
+        set warp_y to the cosine of (((x * 0.37) + (y * 0.89)) - (phase * 0.71))
+        set bent_x to x + warp_x * 0.58
+        set bent_y to y + warp_y * 0.58
+        set broad to the sine of (((bent_x * 1.31) + (bent_y * 0.87)) + (phase * 0.43))
+        set crossing to the cosine of (((bent_x * -0.79) + (bent_y * 1.73)) - (phase * 0.31))
+        set curl to the sine of (((bent_x * 2.47) - (bent_y * 2.11)) + (broad * 1.8))
+        set detail to the cosine of (((bent_x * 4.03) + (bent_y * 3.17)) + (crossing * 1.4))
+        return ((broad * 0.46) + (crossing * 0.29)) + ((curl * 0.17) + (detail * 0.08))
+
+function flowing field at x y phase:
+    execute:
+        return (signed flow at x y phase) * 0.5 + 0.5
+
+function ridged field at x y phase:
+    execute:
+        set wave to the absolute value of (signed flow at x y phase)
+        set ridge to 1.0 - the minimum of wave and 1.0
+        return ridge * ridge
+
+function spark field at x y phase:
+    execute:
+        set warp to signed flow at (x * 0.19) (y * 0.19) phase
+        set bent_x to x + warp * 1.7
+        set bent_y to y + (signed flow at (x * 0.23 + 7.0) (y * 0.23 - 5.0) (phase + 1.7)) * 1.7
+        set wave_a to the absolute value of (the sine of ((bent_x * 1.73) + (bent_y * 0.31) + phase))
+        set wave_b to the absolute value of (the sine of ((bent_x * -0.27) + (bent_y * 1.91) - phase * 0.83))
+        set crossing_distance to the square root of (wave_a * wave_a + wave_b * wave_b)
+        set point to glow from 0.0 to 0.115 at crossing_distance
+        set rarity to flowing field at (bent_x * 0.11) (bent_y * 0.11) (phase + 4.0)
+        return point * smooth transition from 0.48 to 0.82 at rarity
+
+function distance from point x y to segment ax ay bx by:
+    execute:
+        set segment_x to bx - ax
+        set segment_y to by - ay
+        set point_x to x - ax
+        set point_y to y - ay
+        set length_squared to segment_x * segment_x + segment_y * segment_y
+        set projection to (point_x * segment_x + point_y * segment_y) / the maximum of length_squared and 0.000001
+        set projection to saturate projection
+        set nearest_x to ax + segment_x * projection
+        set nearest_y to ay + segment_y * projection
+        set delta_x to x - nearest_x
+        set delta_y to y - nearest_y
+        return the square root of (delta_x * delta_x + delta_y * delta_y)
+
+function ring distance at x y around center_x center_y with radius:
+    execute:
+        set delta_x to x - center_x
+        set delta_y to y - center_y
+        set radial_distance to the square root of (delta_x * delta_x + delta_y * delta_y)
+        return the absolute value of (radial_distance - radius)
+
+function distance from three dimensional point x y z to capsule ax ay az bx by bz with radius:
+    execute:
+        set segment_x to bx - ax
+        set segment_y to by - ay
+        set segment_z to bz - az
+        set point_x to x - ax
+        set point_y to y - ay
+        set point_z to z - az
+        set length_squared to ((segment_x * segment_x) + (segment_y * segment_y)) + (segment_z * segment_z)
+        set projection to (((point_x * segment_x) + (point_y * segment_y)) + (point_z * segment_z)) / the maximum of length_squared and 0.000001
+        set projection to saturate projection
+        set nearest_x to ax + segment_x * projection
+        set nearest_y to ay + segment_y * projection
+        set nearest_z to az + segment_z * projection
+        set delta_x to x - nearest_x
+        set delta_y to y - nearest_y
+        set delta_z to z - nearest_z
+        return (the square root of (delta_x * delta_x + delta_y * delta_y + delta_z * delta_z)) - radius
+
+function ellipsoid distance at x y z with radii radius_x radius_y radius_z:
+    execute:
+        set scaled_x to x / radius_x
+        set scaled_y to y / radius_y
+        set scaled_z to z / radius_z
+        set scaled_length to the square root of (((scaled_x * scaled_x) + (scaled_y * scaled_y)) + (scaled_z * scaled_z))
+        set smallest_radius to the minimum of radius_x and (the minimum of radius_y and radius_z)
+        return (scaled_length - 1.0) * smallest_radius
+
+function torus distance at x y z with major radius major_radius and tube radius tube_radius:
+    execute:
+        set ring_offset to (the square root of (x * x + y * y)) - major_radius
+        return (the square root of (ring_offset * ring_offset + z * z)) - tube_radius
+
+function nano drone field at x y z phase:
+    execute:
+        set wave_a to the absolute value of (the sine of (x * 43.13 + y * 17.71 + z * 7.19 + phase))
+        set wave_b to the absolute value of (the sine of (x * -13.37 + y * 47.07 + z * 21.41 - phase * 0.73))
+        set wave_c to the absolute value of (the sine of (x * 29.79 - y * 11.91 + z * 59.33 + phase * 1.31))
+        set crossing_distance to the square root of (((wave_a * wave_a) + (wave_b * wave_b)) + (wave_c * wave_c))
+        set core to glow from 0.0 to 0.42 at crossing_distance
+        set aura to glow from 0.0 to 0.70 at crossing_distance
+        return core * 4.2 + aura * 0.16

@@ -1,16 +1,13 @@
-static std::unordered_map<VariableReference *, CompileTimeValue>
-snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext) {
-	return inferenceContext ? inferenceContext->currentVariableValues
-							: std::unordered_map<VariableReference *, CompileTimeValue>{};
+static KnownConstantState snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext) {
+	return inferenceContext ? inferenceContext->currentVariableValues : KnownConstantState{};
 }
 
 static AddressInferenceState snapshotAddressStateForClassInstantiation(InferenceContext *inferenceContext) {
 	return inferenceContext ? inferenceContext->currentAddressState : AddressInferenceState{};
 }
 
-static void restoreKnownConstantsForClassInstantiation(
-	InferenceContext *inferenceContext, std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants
-) {
+static void
+restoreKnownConstantsForClassInstantiation(InferenceContext *inferenceContext, KnownConstantState savedKnownConstants) {
 	if (inferenceContext)
 		inferenceContext->currentVariableValues = std::move(savedKnownConstants);
 }

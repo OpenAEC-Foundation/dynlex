@@ -61,7 +61,7 @@ def main() -> int:
             text=True,
             check=False,
         )
-        expected_error = "Program return value must be convertible to a 32 bit integer, got class"
+        expected_error = "Program return value must be convertible to a 32 bit integer, got box"
         if invalid_result.returncode == 0 or expected_error not in invalid_result.stderr:
             sys.stderr.write(invalid_result.stdout)
             sys.stderr.write(invalid_result.stderr)

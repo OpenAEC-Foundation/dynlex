@@ -60,7 +60,7 @@ static void emitPendingInferenceFailure(InferenceContext &context) {
 }
 
 static void mergeSectionExecutionStates(
-	InferenceContext &context, const std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> &constantStates,
+	InferenceContext &context, const std::vector<KnownConstantState> &constantStates,
 	const std::vector<AddressInferenceState> &addressStates, const std::vector<InferenceContext::SubjectState> &subjectStates
 ) {
 	requireCompilerInvariant(!constantStates.empty(), "section state merge requires a reachable path");
@@ -68,25 +68,27 @@ static void mergeSectionExecutionStates(
 		constantStates.size() == addressStates.size() && constantStates.size() == subjectStates.size(),
 		"section execution state counts diverged"
 	);
-	std::unordered_map<VariableReference *, CompileTimeValue> mergedConstants;
+	KnownConstantStorage mergedConstants;
 	for (const auto &state : constantStates) {
-		for (const auto &[reference, value] : state) {
+		for (const auto &[reference, value] : state.read()) {
 			(void)value;
 			mergedConstants.try_emplace(reference, CompileTimeValue{});
 		}
 	}
 	for (auto &[reference, mergedValue] : mergedConstants) {
-		auto first = constantStates.front().find(reference);
-		if (first == constantStates.front().end())
+		const KnownConstantStorage &firstState = constantStates.front().read();
+		auto first = firstState.find(reference);
+		if (first == firstState.end())
 			continue;
 		bool sameValueOnEveryPath = std::ranges::all_of(constantStates, [&](const auto &state) {
-			auto value = state.find(reference);
-			return value != state.end() && value->second == first->second;
+			const KnownConstantStorage &values = state.read();
+			auto value = values.find(reference);
+			return value != values.end() && value->second == first->second;
 		});
 		if (sameValueOnEveryPath)
 			mergedValue = first->second;
 	}
-	context.currentVariableValues = std::move(mergedConstants);
+	context.currentVariableValues = KnownConstantState(std::move(mergedConstants));
 	context.currentAddressState = mergeAddressInferenceStates(addressStates);
 	context.currentSubject = subjectStates.front();
 	for (size_t index = 1; index < subjectStates.size(); index++) {

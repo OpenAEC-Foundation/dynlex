@@ -1,14 +1,20 @@
+import assert from "node:assert/strict";
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
   buildRuntimeImports,
   createRuntimeFilesystem,
   inspectRuntimeWasmLayout,
   isSupportedRuntimeImport
-} from "../../src/web/ide/src/worker/runtimeImports.js";
+} from "../../src/web/ide/public/compiler/runtimeImports.js";
 
 const buildDir = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve("build-web");
 const modulePath = path.join(buildDir, "dynlex_web.js");
+const moduleGlue = await readFile(modulePath, "utf8");
+if (!moduleGlue.includes("__cxa_begin_catch")) {
+  throw new Error("Browser compiler was built without C++ exception catching");
+}
 
 const imported = await import(pathToFileURL(modulePath).href);
 const createModule = imported.default ?? imported;
@@ -23,13 +29,113 @@ const moduleInstance = await createModule({
 });
 
 moduleInstance.ccall("dynlex_web_init", null, [], []);
-moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
-  `import lib/std.dl
 
-set answer to 42
-print answer
-`
-]);
+let nextLspRequestId = 1;
+function exchangeLsp(message) {
+  const json = moduleInstance.ccall(
+    "dynlex_web_lsp_exchange_json",
+    "string",
+    ["string"],
+    [JSON.stringify(message)]
+  );
+  const messages = JSON.parse(json);
+  assert.ok(Array.isArray(messages), `LSP exchange must return an array, got: ${json}`);
+  return messages;
+}
+
+function settleLspMessages(messages) {
+  for (const message of messages) {
+    if (typeof message?.method === "string" && Object.hasOwn(message, "id")) {
+      const response = message.method === "workspace/semanticTokens/refresh"
+        ? { jsonrpc: "2.0", id: message.id, result: null }
+        : {
+            jsonrpc: "2.0",
+            id: message.id,
+            error: { code: -32601, message: `Unsupported test client method: ${message.method}` }
+          };
+      settleLspMessages(exchangeLsp(response));
+    }
+  }
+  return messages;
+}
+
+function requestLsp(method, params) {
+  const id = nextLspRequestId++;
+  const messages = settleLspMessages(exchangeLsp({ jsonrpc: "2.0", id, method, params }));
+  const response = messages.find((message) => message?.id === id && !message.method);
+  assert.ok(response, `LSP request ${method} returned no response: ${JSON.stringify(messages)}`);
+  if (response.error) {
+    throw new Error(`LSP request ${method} failed: ${JSON.stringify(response.error)}`);
+  }
+  return response.result;
+}
+
+function notifyLsp(method, params) {
+  return settleLspMessages(exchangeLsp({ jsonrpc: "2.0", method, params }));
+}
+
+const initializeResult = requestLsp("initialize", {
+  processId: null,
+  rootUri: "file:///workspace",
+  capabilities: {}
+});
+assert.equal(initializeResult.capabilities.textDocumentSync, 2);
+assert.equal(initializeResult.capabilities.definitionProvider, true);
+assert.equal(initializeResult.capabilities.hoverProvider, true);
+assert.equal(initializeResult.capabilities.documentSymbolProvider, true);
+assert.equal(initializeResult.capabilities.codeActionProvider, true);
+assert.ok(initializeResult.capabilities.completionProvider);
+assert.ok(initializeResult.capabilities.semanticTokensProvider);
+notifyLsp("initialized", {});
+
+const mainUri = "file:///workspace/main.dl";
+const mainSource = `import lib/std.dl
+
+function square value:
+    execute:
+        return value * value
+
+print square 8 as line
+`;
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [mainSource]);
+const didOpenMessages = notifyLsp("textDocument/didOpen", {
+  textDocument: {
+    uri: mainUri,
+    languageId: "dynlex",
+    version: 1,
+    text: mainSource
+  }
+});
+const publishedDiagnostics = didOpenMessages.find(
+  (message) => message?.method === "textDocument/publishDiagnostics" && message.params?.uri === mainUri
+);
+assert.ok(publishedDiagnostics, `didOpen published no diagnostics: ${JSON.stringify(didOpenMessages)}`);
+assert.deepEqual(publishedDiagnostics.params.diagnostics, []);
+
+const nestedImportUri = "file:///workspace/nested-import.dl";
+const nestedImportSource = await readFile(
+  path.resolve(import.meta.dirname, "../../tools/homepage-shaders/shaders/nano-choreography.dl"),
+  "utf8"
+);
+const nestedImportMessages = notifyLsp("textDocument/didOpen", {
+  textDocument: {
+    uri: nestedImportUri,
+    languageId: "dynlex",
+    version: 1,
+    text: nestedImportSource
+  }
+});
+const nestedImportDiagnosticUris = nestedImportMessages
+  .filter((message) => message?.method === "textDocument/publishDiagnostics")
+  .map((message) => message.params?.uri);
+assert.ok(
+  nestedImportDiagnosticUris.some((uri) => uri?.endsWith("/lib/shader.dl")),
+  `Nested web import did not publish the expected library diagnostic: ${JSON.stringify(nestedImportMessages)}`
+);
+for (const uri of nestedImportDiagnosticUris) {
+  assert.match(uri, /^file:\/\/\/[^/]/, `LSP published a non-canonical document URI: ${uri}`);
+}
+notifyLsp("textDocument/didClose", { textDocument: { uri: nestedImportUri } });
 
 const status = moduleInstance.ccall("dynlex_web_compile_and_emit_wasm", "number", [], []);
 const diagnosticsJson = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
@@ -53,37 +159,233 @@ if (typeof wasmBase64 !== "string" || wasmBase64.length === 0) {
   throw new Error("Expected emitted wasm base64 payload");
 }
 
-const hoverJson = moduleInstance.ccall("dynlex_web_get_lsp_hover_json", "string", ["number", "number"], [3, 8]);
-const hoverPayload = JSON.parse(hoverJson);
-if (hoverPayload && hoverPayload.error) {
-  throw new Error(`Hover request failed: ${hoverPayload.error}`);
-}
-if (!hoverPayload || !hoverPayload.contents) {
-  throw new Error(`Expected hover payload, got: ${hoverJson}`);
-}
+const textDocument = { uri: mainUri };
+const hoverPayload = requestLsp("textDocument/hover", {
+  textDocument,
+  position: { line: 6, character: 8 }
+});
+assert.ok(hoverPayload?.contents, `Expected hover payload, got: ${JSON.stringify(hoverPayload)}`);
 
-const definitionJson = moduleInstance.ccall("dynlex_web_get_lsp_definition_json", "string", ["number", "number"], [3, 8]);
-const definitionPayload = JSON.parse(definitionJson);
-if (definitionPayload && definitionPayload.error) {
-  throw new Error(`Definition request failed: ${definitionPayload.error}`);
-}
-if (!definitionPayload || typeof definitionPayload.uri !== "string") {
-  throw new Error(`Expected go-to-definition payload, got: ${definitionJson}`);
-}
+const definitionPayload = requestLsp("textDocument/definition", {
+  textDocument,
+  position: { line: 6, character: 8 }
+});
+assert.equal(definitionPayload?.uri, mainUri);
+const importedDefinitionPayload = requestLsp("textDocument/definition", {
+  textDocument,
+  position: { line: 6, character: 2 }
+});
+assert.notEqual(importedDefinitionPayload?.uri, mainUri);
+assert.equal(
+  typeof requestLsp("dynlex/readDocument", { uri: importedDefinitionPayload.uri }),
+  "string"
+);
 
-const semanticTokensJson = moduleInstance.ccall("dynlex_web_get_lsp_semantic_tokens_json", "string", [], []);
-const semanticTokensPayload = JSON.parse(semanticTokensJson);
-if (semanticTokensPayload && semanticTokensPayload.error) {
-  throw new Error(`Semantic token request failed: ${semanticTokensPayload.error}`);
-}
+const completionPayload = requestLsp("textDocument/completion", {
+  textDocument,
+  position: { line: 6, character: 3 }
+});
+assert.ok(Array.isArray(completionPayload?.items) && completionPayload.items.length > 0);
+
+const documentSymbols = requestLsp("textDocument/documentSymbol", { textDocument });
+assert.ok(Array.isArray(documentSymbols) && documentSymbols.some((symbol) => symbol.name.includes("square")));
+
+const semanticTokensPayload = requestLsp("textDocument/semanticTokens/full", { textDocument });
 if (!Array.isArray(semanticTokensPayload.data) || semanticTokensPayload.data.length === 0) {
-  throw new Error(`Expected semantic token data, got: ${semanticTokensJson}`);
+  throw new Error(`Expected semantic token data, got: ${JSON.stringify(semanticTokensPayload)}`);
 }
 if (semanticTokensPayload.data.length % 5 !== 0) {
   throw new Error(`Semantic token payload must be groups of 5, got ${semanticTokensPayload.data.length}`);
 }
-if (!semanticTokensPayload.legend || !Array.isArray(semanticTokensPayload.legend.tokenTypes)) {
-  throw new Error(`Missing semantic token legend in payload: ${semanticTokensJson}`);
+assert.ok(Array.isArray(initializeResult.capabilities.semanticTokensProvider.legend.tokenTypes));
+
+const renderedSemanticTokens = requestLsp("dynlex/renderSemanticTokens", textDocument);
+assert.equal(typeof renderedSemanticTokens, "string");
+assert.ok(renderedSemanticTokens.length > mainSource.length);
+
+const instantiations = requestLsp("dynlex/instantiationsInDocument", textDocument);
+assert.ok(Array.isArray(instantiations));
+assert.ok(
+  instantiations.some((entry) => (
+    entry.options.some((option) => option.label === "square {a 32 bit integer:value}")
+  )),
+  `Expected typed square instantiation label, got: ${JSON.stringify(instantiations)}`
+);
+notifyLsp("dynlex/activeCursorChanged", {
+  clientId: "web-smoke",
+  uri: mainUri,
+  version: 1,
+  position: { line: 6, character: 8 }
+});
+
+const documentText = requestLsp("dynlex/readDocument", textDocument);
+assert.equal(documentText, mainSource);
+const standardLibraryText = requestLsp("dynlex/readDocument", { uri: "file:///lib/std.dl" });
+assert.match(standardLibraryText, /function|flex|import/);
+
+const quickFixDiagnostic = {
+  range: {
+    start: { line: 6, character: 0 },
+    end: { line: 6, character: 5 }
+  },
+  severity: 1,
+  message: "synthetic quick fix",
+  data: {
+    quickFixes: [
+      {
+        title: "Replace print",
+        replacement: "print",
+        range: {
+          start: { line: 6, character: 0 },
+          end: { line: 6, character: 5 }
+        },
+        uri: mainUri
+      }
+    ]
+  }
+};
+const codeActions = requestLsp("textDocument/codeAction", {
+  textDocument,
+  range: quickFixDiagnostic.range,
+  context: { diagnostics: [quickFixDiagnostic] }
+});
+assert.equal(codeActions.length, 1);
+assert.equal(codeActions[0].title, "Replace print");
+assert.equal(codeActions[0].edit.changes[mainUri][0].newText, "print");
+
+const changedSource = mainSource.replace("square 8", "square 9");
+const didChangeMessages = notifyLsp("textDocument/didChange", {
+  textDocument: { uri: mainUri, version: 2 },
+  contentChanges: [
+    {
+      range: {
+        start: { line: 6, character: 13 },
+        end: { line: 6, character: 14 }
+      },
+      text: "9"
+    }
+  ]
+});
+assert.ok(
+  didChangeMessages.some((message) => message?.method === "workspace/semanticTokens/refresh"),
+  "Incremental document sync must request semantic-token refresh"
+);
+assert.equal(requestLsp("dynlex/readDocument", textDocument), changedSource);
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader_art.dl
+
+set pulse to the shader time
+set pulse to the sine of pulse
+set pulse to saturate pulse
+set the fragment color to pulse 0.2 0.8 1.0
+`
+]);
+const shaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["fragment"]
+);
+const shaderDiagnosticsJson = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
+const shaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+const shaderUniformsJson = moduleInstance.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []);
+if (shaderStatus !== 0) {
+  throw new Error(`Shader compile status ${shaderStatus}. Diagnostics: ${shaderDiagnosticsJson}`);
+}
+if (!shaderGlsl.startsWith("#version 300 es") || !shaderGlsl.includes("void main")) {
+  throw new Error(`Expected WebGL2 fragment source, got: ${shaderGlsl}`);
+}
+const shaderUniforms = JSON.parse(shaderUniformsJson);
+if (!Array.isArray(shaderUniforms.uniforms) || shaderUniforms.uniforms.length !== 1) {
+  throw new Error(`Expected one reflected shader uniform, got: ${shaderUniformsJson}`);
+}
+if (shaderUniforms.uniforms[0].name !== "time" || shaderUniforms.uniforms[0].binding !== 0) {
+  throw new Error(`Unexpected reflected shader uniform: ${shaderUniformsJson}`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader.dl
+
+set the output position to the vertex x the vertex y the vertex z the vertex w
+`
+]);
+const vertexShaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["vertex"]
+);
+const vertexShaderDiagnosticsJson = moduleInstance.ccall(
+  "dynlex_web_get_diagnostics_json",
+  "string",
+  [],
+  []
+);
+const vertexShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+if (vertexShaderStatus !== 0) {
+  throw new Error(
+    `Vertex shader compile status ${vertexShaderStatus}. Diagnostics: ${vertexShaderDiagnosticsJson}`
+  );
+}
+if (!vertexShaderGlsl.startsWith("#version 300 es") || !vertexShaderGlsl.includes("gl_Position")) {
+  throw new Error(`Expected WebGL2 vertex source, got: ${vertexShaderGlsl}`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `import lib/shader.dl
+
+if this is a vertex shader:
+    set the shader interpolant named "surface" to (the vertex x) (the vertex y) (the vertex z) 1.0
+    set the output position to (the vertex x) (the vertex y) (the vertex z) (the vertex w)
+
+if this is a fragment shader:
+    set shade to the shader interpolant x named "surface"
+    set the fragment color to shade shade shade 1.0
+`
+]);
+const interpolantGlsl = {};
+for (const stage of ["fragment", "vertex"]) {
+  const status = moduleInstance.ccall(
+    "dynlex_web_compile_and_emit_shader_glsl",
+    "number",
+    ["string"],
+    [stage]
+  );
+  const diagnostics = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
+  if (status !== 0) {
+    throw new Error(`Shader interpolant ${stage} compile failed: ${diagnostics}`);
+  }
+  interpolantGlsl[stage] = moduleInstance.ccall(
+    "dynlex_web_get_output_shader_glsl",
+    "string",
+    [],
+    []
+  );
+}
+const surfaceInterpolantName = "dynlex_interpolant_73757266616365";
+if (
+  !interpolantGlsl.vertex.includes(surfaceInterpolantName)
+  || !interpolantGlsl.fragment.includes(surfaceInterpolantName)
+) {
+  throw new Error(`Named shader interpolant did not survive WebGL translation: ${
+    JSON.stringify(interpolantGlsl)
+  }`);
+}
+
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], ["this shader does not compile"]);
+const invalidShaderStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_glsl",
+  "number",
+  ["string"],
+  ["fragment"]
+);
+const invalidShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+if (invalidShaderStatus === 0) {
+  throw new Error("Invalid shader source compiled successfully");
+}
+if (invalidShaderGlsl !== "") {
+  throw new Error("A failed shader compilation retained a stale GLSL artifact");
 }
 
 const wasmBytes = Uint8Array.from(Buffer.from(wasmBase64, "base64"));
@@ -104,8 +406,8 @@ if (typeof entryPoint !== "function") {
 }
 entryPoint();
 const runtimeOutput = stdoutChunks.join("");
-if (runtimeOutput !== "42") {
-  throw new Error(`Expected runtime output \"42\", got ${JSON.stringify(runtimeOutput)}`);
+if (runtimeOutput !== "64\n") {
+  throw new Error(`Expected runtime output \"64\\n\", got ${JSON.stringify(runtimeOutput)}`);
 }
 
 async function compileAndRun(source) {
@@ -206,7 +508,8 @@ print entry's regular file as line
 print (not entry's mode supported) as line
 print entry's modification time supported as line
 print (not entry's identity's supported) as line
-set staging to create a staging file beside "transaction-source.txt"
+create a staging file beside "transaction-source.txt"
+set staging to it
 print (not staging's supported) as line
 print (not staging's succeeded) as line
 print ((the length of staging's error message) > 0) as line
@@ -305,5 +608,62 @@ print the tail of aligned as line
 if (targetLayoutOutput !== "12\n20\n4\n16\n42\n2\n") {
   throw new Error(`Unexpected wasm target layout output: ${JSON.stringify(targetLayoutOutput)}`);
 }
+
+moduleInstance.ccall("dynlex_web_init", null, [], []);
+nextLspRequestId = 1;
+const shaderInitializeResult = requestLsp("initialize", {
+  processId: null,
+  rootUri: "file:///workspace",
+  capabilities: {},
+  initializationOptions: {
+    dynlex: {
+      analysisProfiles: [
+        { target: "spirv", shaderStage: "fragment" },
+        { target: "spirv", shaderStage: "vertex" }
+      ]
+    }
+  }
+});
+assert.equal(shaderInitializeResult.capabilities.hoverProvider, true);
+notifyLsp("initialized", {});
+
+const shaderHoverUri = "file:///workspace/nano-choreography.dl";
+const shaderHoverSource = nestedImportSource;
+const shaderHoverMessages = notifyLsp("textDocument/didOpen", {
+  textDocument: {
+    uri: shaderHoverUri,
+    languageId: "dynlex",
+    version: 1,
+    text: shaderHoverSource
+  }
+});
+const shaderDiagnostics = shaderHoverMessages
+  .filter((message) => message?.method === "textDocument/publishDiagnostics")
+  .flatMap((message) => message.params.diagnostics);
+assert.equal(
+  shaderDiagnostics.some((diagnostic) => diagnostic.severity === 1),
+  false,
+  `Dual-stage shader LSP analysis reported errors: ${JSON.stringify(shaderDiagnostics)}`
+);
+const shaderHover = requestLsp("textDocument/hover", {
+  textDocument: { uri: shaderHoverUri },
+  position: { line: 6, character: 10 }
+});
+assert.ok(
+  shaderHover?.contents,
+  `Expected shader hover payload, got ${JSON.stringify(shaderHover)} after ${JSON.stringify(shaderHoverMessages)}`
+);
+const shaderSemanticTokens = requestLsp("textDocument/semanticTokens/full", {
+  textDocument: { uri: shaderHoverUri }
+});
+assert.ok(
+  Array.isArray(shaderSemanticTokens?.data) && shaderSemanticTokens.data.length > 0,
+  `Expected dual-stage shader semantic tokens, got ${JSON.stringify(shaderSemanticTokens)}`
+);
+assert.ok(
+  new Set(shaderSemanticTokens.data.filter((_, index) => index % 5 === 3)).size >= 3,
+  `Expected several shader semantic token types, got ${JSON.stringify(shaderSemanticTokens)}`
+);
+notifyLsp("textDocument/didClose", { textDocument: { uri: shaderHoverUri } });
 
 console.log(`DynLex web smoke passed (status=${status}, wasmLength=${wasmLength})`);

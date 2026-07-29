@@ -791,6 +791,11 @@ export function createHostImports(memory) {
       void capacity;
       return unsupportedText(outputLength, supported);
     },
+    dynlex_host_user_cache_directory(output, capacity, outputLength, supported) {
+      void output;
+      void capacity;
+      return unsupportedText(outputLength, supported);
+    },
     dynlex_host_platform_is_windows(isWindows, supported) {
       lastError = "Host platform information is not available in the browser";
       const platformRange = range(memory, isWindows, 4);

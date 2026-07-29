@@ -1,0 +1,35 @@
+name: Deploy website
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-website
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    uses: OpenAEC-Foundation/github/.github/workflows/deploy-site.yml@main
+    with:
+      deploy_host: ${{ vars.DEPLOY_HOST }}
+      deploy_port: ${{ vars.DEPLOY_PORT }}
+      deploy_user: ${{ vars.DEPLOY_USER }}
+      deploy_path: /var/www/dynlex.com
+      deploy_source: web
+      node_version: "22"
+      setup_command: |
+        test -f src/web/ide/public/compiler/dynlex_web.js
+        test -f src/web/ide/public/compiler/dynlex_web.wasm
+      install_command: cd src/web/ide && npm ci
+      build_command: |
+        ./scripts/build_web_root.sh
+        test -f web/compiler/dynlex_web.js
+        test -f web/compiler/dynlex_web.wasm
+    secrets:
+      deploy_ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}

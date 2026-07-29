@@ -309,6 +309,11 @@ receives C's default argument promotions: booleans and integers narrower than 32
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.
 
+SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
+stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
+vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
+the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
+
 # LSP Interaction
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.

@@ -16,34 +16,32 @@ A natural-language-like programming language that compiles to native code via LL
 ./scripts/build.sh
 ```
 
-Requires C++23, CMake, Ninja, `nlohmann_json`, LLVM 20+, and GNU binutils on ELF systems.
-
-## Browser Compiler (Phase 1)
-
-DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.
-This target requires Emscripten (`emcmake`, `emcc`) and an LLVM build/toolchain compatible with the Emscripten target (`LLVM_DIR` if needed).
-Host-native LLVM installs (for example `/usr/lib/llvm-*`) are not wasm-linkable for this target.
-
-Install the pinned Emscripten and WebAssembly LLVM toolchain. This is separate from the native dependency installation because building LLVM for WebAssembly is substantial:
+Requires C++23, Clang 20 or newer, CMake, Ninja, `nlohmann_json`, Git, and GNU
+binutils on ELF systems. `scripts/build.sh` checks out and caches the exact LLVM
+23 fork recorded in `metadata/LLVM_TOOLCHAIN`; system LLVM installations are not
+used. Build that toolchain independently with:
 
 ```bash
-./scripts/install.sh --web
+./scripts/build_llvm.sh native
 ```
 
-The web installer defaults to Emscripten 6.0.3, LLVM 20.1.8, two parallel LLVM build jobs, and these locations:
+## Browser Compiler
 
-- `$HOME/emsdk`
-- `$HOME/toolchains/llvm-wasm-20`
-
-Override them with `DYNLEX_EMSCRIPTEN_VERSION`, `DYNLEX_LLVM_WASM_RELEASE`, `DYNLEX_LLVM_WASM_JOBS`, `DYNLEX_EMSDK_ROOT`, or `DYNLEX_LLVM_WASM_ROOT`. The LLVM release must have the configured DynLex LLVM major version.
+DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) with a Monaco-based web UI.
+This target requires Emscripten (`emcmake`, `emcc`). The build compiles and
+caches a WebAssembly version of the same pinned LLVM fork with the WebAssembly
+and SPIR-V targets.
+The build fetches its pinned SPIRV-Cross revision and links the GLSL translator into the compiler module.
 
 Build compiler WASM artifacts and copy them into the web app:
 
 ```bash
+source ~/emsdk/emsdk_env.sh
 ./scripts/build_web.sh
 ```
 
-The build script uses the installed default paths automatically. Set `DYNLEX_EMSDK_ROOT`, `DYNLEX_LLVM_WASM_ROOT`, or `LLVM_DIR` when using custom locations.
+The build script uses the active Emscripten SDK and builds the exact web LLVM
+toolchain recorded in `metadata/LLVM_TOOLCHAIN`.
 
 `./scripts/build_web.sh` refreshes `src/web/ide/public/compiler/dynlex_web.js` and
 `src/web/ide/public/compiler/dynlex_web.wasm`; commit those files when updating the deployed web compiler.
@@ -79,10 +77,12 @@ Web layout:
 - `web/`: deployable web root (site/wiki source + built IDE assets)
 
 The web app uses:
-- single editable source file at `/workspace/main.dl`
+- one editable `/workspace/*.dl` entry file plus read-only imported definitions
 - bundled stdlib from `/lib/*.dl` in Emscripten virtual FS
-- live debounced compile with diagnostics markers
-- LSP-powered Monaco interactions (hover, go-to-definition, semantic tokens)
+- live debounced compile with diagnostics published by the DynLex language server
+- one persistent DynLex LSP session for completion, hover, go-to-definition,
+  semantic tokens, document symbols, quick fixes, and DynLex instantiation selection
+- live WebGL2 previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
 - built-in light and dark themes
 - `Run` executing the latest successful emitted program WASM
 
@@ -90,13 +90,14 @@ Compiler WASM C ABI exports:
 - `dynlex_web_init`
 - `dynlex_web_set_main_source`
 - `dynlex_web_compile_and_emit_wasm`
+- `dynlex_web_compile_and_emit_shader_glsl`
 - `dynlex_web_get_diagnostics_json`
 - `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
 - `dynlex_web_get_output_wasm_base64`
+- `dynlex_web_get_output_shader_glsl`
+- `dynlex_web_get_shader_uniforms_json`
 - `dynlex_web_get_compiler_log_json`
-- `dynlex_web_get_lsp_hover_json`
-- `dynlex_web_get_lsp_definition_json`
-- `dynlex_web_get_lsp_semantic_tokens_json`
+- `dynlex_web_lsp_exchange_json`
 
 ## Install Dependencies
 
@@ -119,7 +120,9 @@ export LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(b
 ```
 
 The installer reuses tools already available on `PATH` and installs missing
-Homebrew formulae without upgrading unrelated installed packages.
+Homebrew formulae without upgrading unrelated installed packages. The Homebrew
+LLVM formula supplies the bootstrap Clang only; DynLex links the pinned fork
+built by `scripts/build_llvm.sh`.
 
 Windows (winget):
 

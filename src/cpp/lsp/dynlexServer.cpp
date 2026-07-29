@@ -5,6 +5,7 @@
 #include "completion.h"
 #include "configDocument.h"
 #include "expression.h"
+#include "lspAnalysis.h"
 #include "lspFileSystem.h"
 #include "pathUtils.h"
 #include "patternMatch.h"
@@ -34,115 +35,6 @@ static std::string lineTerminator(const TextDocument &document, int line) {
 	return std::string(withTerminator.substr(withoutTerminator.size()));
 }
 
-using ParseContextMap = std::unordered_map<std::string, std::shared_ptr<ParseContext>>;
-using ImportGraph = std::unordered_map<std::string, std::unordered_set<std::string>>;
-
-static void eraseImportTrackingForMain(ImportGraph &graph, const std::string &mainUri) {
-	for (auto it = graph.begin(); it != graph.end();) {
-		it->second.erase(mainUri);
-		if (it->second.empty()) {
-			it = graph.erase(it);
-		} else {
-			++it;
-		}
-	}
-}
-
-static void updateImportTrackingForMain(ImportGraph &graph, const std::string &mainUri, const ParseContext &context) {
-	eraseImportTrackingForMain(graph, mainUri);
-	for (const auto &[path, sourceFile] : context.importedFiles) {
-		(void)path;
-		if (!sourceFile)
-			continue;
-		std::string importedUri = pathutil::toAbsoluteUri(sourceFile->uri);
-		if (importedUri != mainUri) {
-			graph[importedUri].insert(mainUri);
-		}
-	}
-}
-
-static ParseContext *findBestContextForUri(const std::string &uri, const ParseContextMap &contexts, const ImportGraph &graph) {
-	struct Candidate {
-		ParseContext *context{};
-		bool fromImporter = false;
-		int score = -1;
-	};
-
-	auto scoreContextForUri = [&](ParseContext *context) -> int {
-		if (!context || !context->mainSection)
-			return -1;
-		int score = 0;
-		std::vector<Section *> stack{context->mainSection};
-		while (!stack.empty()) {
-			Section *section = stack.back();
-			stack.pop_back();
-			if (!section)
-				continue;
-			for (Section *child : section->children) {
-				if (child)
-					stack.push_back(child);
-			}
-
-			bool hasDefinitionInUri = false;
-			for (PatternDefinition *def : section->patternDefinitions) {
-				if (!def || !def->range.line || !def->range.line->sourceFile)
-					continue;
-				if (pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) == uri) {
-					hasDefinitionInUri = true;
-					break;
-				}
-			}
-			if (!hasDefinitionInUri)
-				continue;
-
-			int instCount = static_cast<int>(section->instantiations.size());
-			if (instCount > 1)
-				score += 1000 + instCount;
-			else if (instCount == 1)
-				score += 10;
-		}
-		return score;
-	};
-
-	std::vector<Candidate> candidates;
-	auto addCandidate = [&](ParseContext *context, bool fromImporter) {
-		if (!context)
-			return;
-		for (const Candidate &existing : candidates) {
-			if (existing.context == context)
-				return;
-		}
-		candidates.push_back({context, fromImporter, scoreContextForUri(context)});
-	};
-
-	auto ownIt = contexts.find(uri);
-	if (ownIt != contexts.end())
-		addCandidate(ownIt->second.get(), false);
-
-	auto importIt = graph.find(uri);
-	if (importIt != graph.end()) {
-		for (const auto &mainUri : importIt->second) {
-			auto mainCtxIt = contexts.find(mainUri);
-			if (mainCtxIt != contexts.end())
-				addCandidate(mainCtxIt->second.get(), true);
-		}
-	}
-
-	if (candidates.empty())
-		return nullptr;
-
-	auto better = [](const Candidate &a, const Candidate &b) {
-		if (a.score != b.score)
-			return a.score > b.score;
-		if (a.fromImporter != b.fromImporter)
-			return a.fromImporter;
-		return a.context < b.context;
-	};
-	return std::max_element(candidates.begin(), candidates.end(), [&](const Candidate &lhs, const Candidate &rhs) {
-		return better(rhs, lhs);
-	})->context;
-}
-
 template <typename TLockedLines>
 static std::string rebuildDocumentContent(const TextDocument &document, const TLockedLines *lockedLines) {
 	std::string rebuilt;
@@ -170,6 +62,7 @@ DynLexServer::DynLexServer(std::unique_ptr<Transport> transport) : LanguageServe
 DynLexServer::~DynLexServer() = default;
 
 InitializeResult DynLexServer::onInitialize(const InitializeParams &params) {
+	analysisProfiles = parseAnalysisProfiles(params.initializationOptions);
 	if (params.rootUri) {
 		workspaceRootPath = pathutil::toFilesystemPath(*params.rootUri);
 	} else {
@@ -310,11 +203,17 @@ void DynLexServer::onActiveCursorChanged(const ActiveCursorParams &params) {
 }
 
 ParseContext *DynLexServer::findContextFor(const std::string &uri) {
-	return findBestContextForUri(uri, parseContexts, importedBy);
+	std::vector<ParseContext *> contexts = findContextsFor(uri);
+	return contexts.empty() ? nullptr : contexts.front();
 }
 
 ParseContext *DynLexServer::findCompletionContextFor(const std::string &uri) {
-	return findBestContextForUri(uri, completionParseContexts, completionImportedBy);
+	std::vector<ParseContext *> contexts = findContextsForUri(uri, completionParseContexts, completionImportedBy);
+	return contexts.empty() ? nullptr : contexts.front();
+}
+
+std::vector<ParseContext *> DynLexServer::findContextsFor(const std::string &uri) {
+	return findContextsForUri(uri, parseContexts, importedBy);
 }
 
 bool DynLexServer::isStructuralEdit(const DidChangeTextDocumentParams &params) const {
@@ -418,9 +317,8 @@ bool DynLexServer::updateCursorLock(const std::string &clientId, const std::opti
 
 void DynLexServer::recompileMainDocument(const std::string &uri) {
 	auto docIt = compiledDocuments.find(uri);
-	if (docIt == compiledDocuments.end()) {
+	if (docIt == compiledDocuments.end())
 		return;
-	}
 
 	// Collect file URIs that previously had diagnostics from this main document
 	std::unordered_set<std::string> previouslyAffected;
@@ -431,23 +329,31 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 		}
 	}
 
-	// Create new parse context with LSP file system
-	auto context = std::make_shared<ParseContext>();
-	context->fileSystem = std::make_unique<LspFileSystem>(compiledDocuments);
+	ParseContexts contexts;
+	contexts.reserve(analysisProfiles.size());
+	for (const ParseContext::Options &analysisProfile : analysisProfiles) {
+		auto context = std::make_shared<ParseContext>();
+		context->options = analysisProfile;
+		context->fileSystem = std::make_unique<LspFileSystem>(compiledDocuments);
+		compile(uri, *context);
+		contexts.push_back(std::move(context));
+	}
 
-	// Use the compiler to parse and analyze
-	compile(uri, *context);
+	// Update the import graph from every target profile. Imports are available
+	// as soon as the ImportedFiles stage completes, even if a later stage fails.
+	eraseImportTrackingForMain(importedBy, uri);
+	for (const std::shared_ptr<ParseContext> &context : contexts)
+		addImportTrackingForMain(importedBy, uri, *context);
 
-	// Update import graph for the latest compiled state, even when later stages fail.
-	updateImportTrackingForMain(importedBy, uri, *context);
-
-	// Group diagnostics by their actual source file
+	// Group diagnostics from every target profile by their actual source file.
 	auto &diagsForMain = diagnosticsPerMain[uri];
 	diagsForMain.clear();
 	diagsForMain[uri]; // always include main file so it gets cleared
-	for (const auto &diag : context->diagnostics) {
-		std::string fileUri = diag.range.line ? pathutil::toAbsoluteUri(diag.range.line->sourceFile->uri) : uri;
-		diagsForMain[fileUri].push_back(convertDiagnostic(diag));
+	for (const std::shared_ptr<ParseContext> &context : contexts) {
+		for (const auto &diag : context->diagnostics) {
+			std::string fileUri = diag.range.line ? pathutil::toAbsoluteUri(diag.range.line->sourceFile->uri) : uri;
+			diagsForMain[fileUri].push_back(convertDiagnostic(diag));
+		}
 	}
 
 	// Collect all affected file URIs (old and new) and re-publish
@@ -459,23 +365,33 @@ void DynLexServer::recompileMainDocument(const std::string &uri) {
 		publishMergedDiagnostics(fileUri);
 	}
 
-	// Store the latest context for diagnostics, hover, definition, and tokens.
-	parseContexts[uri] = context;
+	// Store every target context for hover, definition, diagnostics, and tokens.
+	parseContexts[uri] = contexts;
 
 	// Completion matching only needs symbol/pattern state. Keep the last context
-	// that reached ResolvedPatterns so completions stay useful while the latest
+	// per profile that reached ResolvedPatterns so completions stay useful while the latest
 	// compile is broken.
-	if (context->hasCompleted(ParseContext::CompilationStage::ResolvedPatterns)) {
-		updateImportTrackingForMain(completionImportedBy, uri, *context);
-		completionParseContexts[uri] = context;
+	ParseContexts completionContexts;
+	std::copy_if(contexts.begin(), contexts.end(), std::back_inserter(completionContexts), [](const auto &context) {
+		return context->hasCompleted(ParseContext::CompilationStage::ResolvedPatterns);
+	});
+	if (!completionContexts.empty()) {
+		eraseImportTrackingForMain(completionImportedBy, uri);
+		for (const std::shared_ptr<ParseContext> &context : completionContexts)
+			addImportTrackingForMain(completionImportedBy, uri, *context);
+		completionParseContexts[uri] = std::move(completionContexts);
 	}
 }
 
 void DynLexServer::recompileDependents(const std::string &uri) {
 	if (isConfigDocumentUri(uri)) {
 		std::vector<std::string> dependentMainUris;
-		for (const auto &[mainUri, context] : parseContexts) {
-			if (!context->projectSyntaxConfigPath.empty() && pathutil::toAbsoluteUri(context->projectSyntaxConfigPath) == uri)
+		for (const auto &[mainUri, contexts] : parseContexts) {
+			const bool usesConfig = std::any_of(contexts.begin(), contexts.end(), [&](const auto &context) {
+				return !context->projectSyntaxConfigPath.empty() &&
+					   pathutil::toAbsoluteUri(context->projectSyntaxConfigPath) == uri;
+			});
+			if (usesConfig)
 				dependentMainUris.push_back(mainUri);
 		}
 		for (const std::string &mainUri : dependentMainUris)
@@ -942,7 +858,7 @@ static std::string formatInstancePattern(
 					typeName = typeToUserPatternName(parseContext, signatureTypes[index]);
 			}
 
-			if (!elem.typeConstraintName.empty()) {
+			if (!typeName.empty()) {
 				if (constantValue.has_value())
 					result += "{" + typeName + ":" + formatValue(*constantValue) + "}";
 				else

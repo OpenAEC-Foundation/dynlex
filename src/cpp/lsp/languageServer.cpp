@@ -87,6 +87,8 @@ void LanguageServer::shutdown() {
 	}
 }
 
+void LanguageServer::processMessage(const Json &message) { handleMessage(message); }
+
 void LanguageServer::handleConnection() {
 	while (running && transport && transport->isConnected()) {
 		std::string message = readMessage();
@@ -246,12 +248,16 @@ void LanguageServer::handleRequest(const Json &message) {
 		} else if (method == "dynlex/instantiationsInDocument") {
 			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
 			sendResponse(id, onInstantiationsInDocument(p));
+		} else if (method == "dynlex/readDocument") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			std::optional<std::string> result = onReadDocument(p);
+			sendResponse(id, result ? Json(*result) : Json(nullptr));
 		} else {
 			sendError(id, -32601, "Method not found: " + method);
 		}
 	} catch (const std::exception &e) {
 		logError("Error handling request " + method + ": " + e.what());
-		sendError(id, -32603, "Internal error: " + std::string(e.what()));
+		sendError(id, -32603, "Internal error");
 	}
 }
 
@@ -380,6 +386,8 @@ std::string LanguageServer::onRenderSemanticTokens(const TextDocumentIdentifier 
 void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
 
 Json LanguageServer::onInstantiationsInDocument(const TextDocumentIdentifier & /*params*/) { return Json::array(); }
+
+std::optional<std::string> LanguageServer::onReadDocument(const TextDocumentIdentifier & /*params*/) { return std::nullopt; }
 
 void LanguageServer::onSelectInstantiation(const Json & /*params*/) {}
 

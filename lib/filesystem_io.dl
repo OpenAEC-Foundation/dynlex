@@ -252,15 +252,15 @@ local function a filesystem path for {string:input}:
         discard @intrinsic("call", "libc", "memcpy", a pointer to byte, the data of storage, the data of input, @intrinsic("cast", input's length, a word sized integer))
         return @intrinsic("construct", a filesystem path, the data of storage, @intrinsic("cast", storage's length, a word sized integer), storage, true)
 
-local function allocate a filesystem buffer with size byte_count:
+local function a filesystem buffer with size byte_count:
     execute:
         return @intrinsic("call", "libc", "calloc", a pointer to byte, byte_count, @intrinsic("cast", 1, a word sized integer))
 
-local function resize filesystem buffer input to size byte_count:
+local function filesystem buffer input resized to size byte_count:
     execute:
         return @intrinsic("call", "libc", "realloc", a pointer to byte, input, byte_count)
 
-local function transfer up to count bytes into buffer from stream:
+local function the result of transferring up to count bytes into buffer from stream:
     execute:
         set transferred to @intrinsic("cast", 0, a word sized integer)
         set end_of_file to 0
@@ -279,7 +279,7 @@ local function transfer up to count bytes into buffer from stream:
             return a failed filesystem stream transfer of transferred bytes reporting the current filesystem error message
         return a new successful filesystem stream transfer of transferred bytes with end state (end_of_file != 0)
 
-local function transfer count bytes from buffer to stream:
+local function the result of transferring count bytes from buffer to stream:
     execute:
         set transferred to @intrinsic("cast", 0, a word sized integer)
         set outcome to @intrinsic(
@@ -296,10 +296,10 @@ local function transfer count bytes from buffer to stream:
             return a failed filesystem stream transfer of transferred bytes reporting the current filesystem error message
         return a new successful filesystem stream transfer of transferred bytes with end state false
 
-local function transfer bytes from source_stream to destination_stream:
+local function the result of transferring bytes from source_stream to destination_stream:
     execute:
         set buffer_size to @intrinsic("cast", 4096, a word sized integer)
-        set buffer to allocate a filesystem buffer with size buffer_size
+        set buffer to a filesystem buffer with size buffer_size
         if buffer = @intrinsic("cast", 0, a pointer to byte):
             return a failed filesystem stream transfer of 0 bytes reporting the current filesystem error message
 
@@ -308,13 +308,13 @@ local function transfer bytes from source_stream to destination_stream:
         set succeeded to true
         set error_message to an empty filesystem error message
         loop while is_copying:
-            set read_result to transfer up to buffer_size bytes into buffer from source_stream
+            set read_result to the result of transferring up to buffer_size bytes into buffer from source_stream
             if not read_result's succeeded:
                 set error_message to read_result's error message
                 set succeeded to false
                 set is_copying to false
             if is_copying and read_result's count > @intrinsic("cast", 0, a word sized integer):
-                set write_result to transfer read_result's count bytes from buffer to destination_stream
+                set write_result to the result of transferring read_result's count bytes from buffer to destination_stream
                 set transferred to transferred + write_result's count
                 if not write_result's succeeded:
                     set error_message to write_result's error message
@@ -328,7 +328,7 @@ local function transfer bytes from source_stream to destination_stream:
             return a new successful filesystem stream transfer of transferred bytes with end state true
         return a failed filesystem stream transfer of transferred bytes reporting error_message
 
-local function store {string:contents} at {filesystem path:path} with mode:
+local function the result of storing {string:contents} at {filesystem path:path} with mode:
     execute:
         if not contents is valid:
             return a new file action which failed reporting invalid file contents error message
@@ -348,7 +348,7 @@ local function store {string:contents} at {filesystem path:path} with mode:
         set expected to @intrinsic("cast", contents's length, a word sized integer)
         set write_result to a new successful filesystem stream transfer of 0 bytes with end state false
         if expected > @intrinsic("cast", 0, a word sized integer):
-            set write_result to transfer expected bytes from the data of contents to stream
+            set write_result to the result of transferring expected bytes from the data of contents to stream
         set succeeded to write_result's succeeded and write_result's count = expected
         set error_message to an empty filesystem error message
         if not succeeded:
@@ -370,7 +370,7 @@ local function store {string:contents} at {filesystem path:path} with mode:
             return a new file action which succeeded
         return a new file action which failed reporting error_message
 
-local function perform reading of path:
+local function the result of reading path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
@@ -392,7 +392,7 @@ local function perform reading of path:
         set capacity to @intrinsic("cast", 4096, a word sized integer)
         set maximum_length to @intrinsic("cast", the maximum string buffer length, a word sized integer)
         set length to @intrinsic("cast", 0, a word sized integer)
-        set buffer to allocate a filesystem buffer with size (capacity + 1)
+        set buffer to a filesystem buffer with size (capacity + 1)
         if buffer = @intrinsic("cast", 0, a pointer to byte):
             set error_message to the current filesystem error message
             @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, stream)
@@ -403,7 +403,7 @@ local function perform reading of path:
         set error_message to an empty filesystem error message
         loop while is_reading:
             set available to capacity - length
-            set read_result to transfer up to available bytes into buffer + length from stream
+            set read_result to the result of transferring up to available bytes into buffer + length from stream
             set length to length + read_result's count
             if not read_result's succeeded:
                 set error_message to read_result's error message
@@ -414,7 +414,7 @@ local function perform reading of path:
             if is_reading and length = capacity:
                 if capacity = maximum_length:
                     set extra_byte to 0 as a byte
-                    set extra_result to transfer up to 1 bytes into the address of extra_byte from stream
+                    set extra_result to the result of transferring up to 1 bytes into the address of extra_byte from stream
                     if not extra_result's succeeded:
                         set error_message to extra_result's error message
                         set succeeded to false
@@ -427,7 +427,7 @@ local function perform reading of path:
                     set next_capacity to maximum_length
                     if capacity <= maximum_length / 2:
                         set next_capacity to capacity * 2
-                    set resized to resize filesystem buffer buffer to size (next_capacity + 1)
+                    set resized to filesystem buffer buffer resized to size (next_capacity + 1)
                     if resized = @intrinsic("cast", 0, a pointer to byte):
                         set error_message to the current filesystem error message
                         set succeeded to false
@@ -447,27 +447,27 @@ local function perform reading of path:
         @intrinsic("call", "libc", "free", void, buffer)
         return a new file read action containing result_contents which succeeded
 
-local function perform writing of {string:contents} to path:
+local function the result of writing {string:contents} to path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
-        return store contents at prepared_path with 2
+        return the result of storing contents at prepared_path with 2
 
-local function perform appending of {string:contents} to path:
+local function the result of appending {string:contents} to path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
-        return store contents at prepared_path with 3
+        return the result of storing contents at prepared_path with 3
 
-local function perform deletion of path:
+local function the result of deleting path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic(
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_filesystem_remove_tree",
@@ -475,16 +475,16 @@ local function perform deletion of path:
             prepared_path's data,
             prepared_path's length
         )
-        return a new file action which succeeded if (result = 0)
+        return a new file action which succeeded if (outcome = 0)
 
-local function perform renaming of source to destination:
+local function the result of renaming source to destination:
     execute:
         set source_path to a filesystem path for source
         set destination_path to a filesystem path for destination
         if (not source_path's valid) or (not destination_path's valid):
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic(
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_filesystem_rename",
@@ -494,9 +494,9 @@ local function perform renaming of source to destination:
             destination_path's data,
             destination_path's length
         )
-        return a new file action which succeeded if (result = 0)
+        return a new file action which succeeded if (outcome = 0)
 
-local function perform copying of source to destination:
+local function the result of copying source to destination:
     execute:
         set source_path to a filesystem path for source
         set destination_path to a filesystem path for destination
@@ -527,7 +527,7 @@ local function perform copying of source to destination:
             return a new file action which failed reporting error_message
         @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, staging_stream)
 
-        set staged to transfer bytes from source_stream to staging_stream
+        set staged to the result of transferring bytes from source_stream to staging_stream
         set error_message to staged's error message
         set staging_succeeded to staged's succeeded
         @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", void, source_stream)
@@ -574,7 +574,7 @@ local function perform copying of source to destination:
         @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_retain", void, destination_stream)
 
         set succeeded to true
-        set copied to transfer bytes from staging_stream to destination_stream
+        set copied to the result of transferring bytes from staging_stream to destination_stream
         if (not copied's succeeded) or (copied's count != staged's count):
             set error_message to copied's error message
             set succeeded to false
@@ -595,13 +595,13 @@ local function perform copying of source to destination:
             return a new file action which succeeded
         return a new file action which failed reporting error_message
 
-local function perform directory creation at path:
+local function the result of creating a directory at path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
             return a new file action which failed reporting an invalid filesystem path error message
         clear the filesystem error
-        set result to @intrinsic(
+        set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_filesystem_create_directories",
@@ -609,45 +609,45 @@ local function perform directory creation at path:
             prepared_path's data,
             prepared_path's length
         )
-        return a new file action which succeeded if (result = 0)
+        return a new file action which succeeded if (outcome = 0)
 
 flex function read path:
     replacement:
-        set the subject to perform reading of path
+        set the subject to the result of reading path
 
 flex function write {string:contents} to path:
     replacement:
-        set the subject to perform writing of contents to path
+        set the subject to the result of writing contents to path
 
 flex function append {string:contents} to path:
     replacement:
-        set the subject to perform appending of contents to path
+        set the subject to the result of appending contents to path
 
 flex function delete path:
     replacement:
-        set the subject to perform deletion of path
+        set the subject to the result of deleting path
 
 flex function rename source to destination:
     replacement:
-        set the subject to perform renaming of source to destination
+        set the subject to the result of renaming source to destination
 
 flex function copy source to destination:
     replacement:
-        set the subject to perform copying of source to destination
+        set the subject to the result of copying source to destination
 
 flex function create directory at path:
     replacement:
-        set the subject to perform directory creation at path
+        set the subject to the result of creating a directory at path
 
-function create directory tree at path:
-    execute:
-        return perform directory creation at path
+flex function create directory tree at path:
+    replacement:
+        set the subject to the result of creating a directory at path
 
-function remove filesystem tree at path:
-    execute:
-        return perform deletion of path
+flex function remove filesystem tree at path:
+    replacement:
+        set the subject to the result of deleting path
 
-function open directory at path:
+local function the result of opening a directory at path:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
@@ -670,7 +670,7 @@ function open directory at path:
             an empty filesystem error message
         )
 
-function read next directory entry from {directory enumeration:enumeration}:
+local function the result of reading the next directory entry from {directory enumeration:enumeration}:
     execute:
         if not enumeration's succeeded:
             return a failed directory entry result reporting enumeration's error_message
@@ -727,7 +727,7 @@ function read next directory entry from {directory enumeration:enumeration}:
             an empty filesystem error message
         )
 
-function open file at path for streaming reads:
+local function the result of opening a file at path for streaming reads:
     execute:
         set prepared_path to a filesystem path for path
         if not prepared_path's valid:
@@ -751,7 +751,7 @@ function open file at path for streaming reads:
             an empty filesystem error message
         )
 
-function read up to {integer:byte_limit} bytes from {file input stream:stream}:
+local function the result of reading up to {integer:byte_limit} bytes from {file input stream:stream}:
     execute:
         if not stream's succeeded:
             return a failed file chunk read result reporting stream's error_message
@@ -789,7 +789,7 @@ function read up to {integer:byte_limit} bytes from {file input stream:stream}:
             an empty filesystem error message
         )
 
-function create a temporary directory:
+local function the result of creating a temporary directory:
     execute:
         set handle to @intrinsic(
             "call",
@@ -852,6 +852,26 @@ function create a temporary directory:
             an empty filesystem error message
         )
 
+flex function open directory at path:
+    replacement:
+        set the subject to the result of opening a directory at path
+
+flex function read the next directory entry from {directory enumeration:enumeration}:
+    replacement:
+        set the subject to the result of reading the next directory entry from enumeration
+
+flex function open file at path for streaming reads:
+    replacement:
+        set the subject to the result of opening a file at path for streaming reads
+
+flex function read up to {integer:byte_limit} bytes from {file input stream:stream}:
+    replacement:
+        set the subject to the result of reading up to byte_limit bytes from stream
+
+flex function create a temporary directory:
+    replacement:
+        set the subject to the result of creating a temporary directory
+
 function path is a regular file:
     execute:
         set entry to the file system entry at path
@@ -866,5 +886,5 @@ function path is readable:
             return false
         if not entry's regular file:
             return false
-        set stream to open file at path for streaming reads
+        set stream to the result of opening a file at path for streaming reads
         return stream's succeeded

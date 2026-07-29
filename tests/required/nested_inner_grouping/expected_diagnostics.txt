@@ -6,4 +6,4 @@ tests/required/nested_inner_grouping/main.dl:9-65: Warning: Expression 'return n
   note: while inferring call 'print the length of (the text of 123 at character 0) as line' with arguments [unresolved(?)] -> undeduced tests/required/nested_inner_grouping/main.dl:7-61
   note: while inferring call 'print the length of (the text of 123 at character 0) as line' with arguments [unresolved(?)] -> undeduced tests/required/nested_inner_grouping/main.dl:1-61
 tests/required/nested_inner_grouping/main.dl:1-61: Warning: Expression 'print the length of (the text of 123 at character 0) as line' has multiple valid operand groupings. Using 'print ((the length of (the text of (123 at character 0))) as line)' instead of 'print (the length of (((the text of 123) at character 0) as line))'.
-  note: while inferring call 'print the length of (the text of 123 at character 0) as line' with arguments [class] -> nothing tests/required/nested_inner_grouping/main.dl:1-61
+  note: while inferring call 'print the length of (the text of 123 at character 0) as line' with arguments [string] -> nothing tests/required/nested_inner_grouping/main.dl:1-61

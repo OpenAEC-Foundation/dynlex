@@ -76,6 +76,7 @@ void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector
 // resulting path. Every consumer of pattern structure must use these paths so
 // insertion, removal, specificity, spelling, and overlap checks agree exactly.
 std::vector<std::vector<DefinitionPatternElement>> canonicalPatternPaths(const std::vector<DefinitionPatternElement> &elements);
+std::vector<std::string> canonicalPatternSpellings(const std::vector<DefinitionPatternElement> &elements);
 
 bool hasSingleWordPatternSpelling(const std::vector<DefinitionPatternElement> &elements);
 

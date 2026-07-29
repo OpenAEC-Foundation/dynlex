@@ -147,7 +147,7 @@ std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &con
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
 
-	std::string targetTriple = llvm::sys::getDefaultTargetTriple();
+	llvm::Triple targetTriple(llvm::sys::getDefaultTargetTriple());
 	context.llvmModule->setTargetTriple(targetTriple);
 	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);
 	if (!target)

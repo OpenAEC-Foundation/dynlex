@@ -1,5 +1,6 @@
-(() => {
-  "use strict";
+import { initializeSiteNavigation } from "../site-navigation.js";
+
+initializeSiteNavigation();
 
   function toBase64Url(text) {
     const bytes = new TextEncoder().encode(text);
@@ -68,9 +69,8 @@
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", attachCodeActions, { once: true });
-  } else {
-    attachCodeActions();
-  }
-})();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", attachCodeActions, { once: true });
+} else {
+  attachCodeActions();
+}

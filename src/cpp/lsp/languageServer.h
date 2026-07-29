@@ -31,6 +31,10 @@ class LanguageServer {
 	// Enable raw JSON-RPC tracing to stderr or a file path.
 	bool enableTrace(const std::string &path = "");
 
+	// Process one decoded JSON-RPC message. Embedders use this to share the
+	// normal protocol dispatcher without running a blocking transport loop.
+	void processMessage(const Json &message);
+
   protected:
 	// Override these in derived classes for language-specific behavior
 
@@ -75,6 +79,9 @@ class LanguageServer {
 
 	// Called for DynLex request returning instantiation choices for a document.
 	virtual Json onInstantiationsInDocument(const TextDocumentIdentifier &params);
+
+	// Called for DynLex request returning an already-loaded document.
+	virtual std::optional<std::string> onReadDocument(const TextDocumentIdentifier &params);
 
 	// Called for DynLex notification selecting an instantiation choice.
 	virtual void onSelectInstantiation(const Json &params);
