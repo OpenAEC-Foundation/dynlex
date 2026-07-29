@@ -1,16 +1,16 @@
 import regex.dl
 
-print "abc123" matches regular expression "^[a-z]+[0-9]+$" as line
-print "abc" matches regular expression "^(cat|dog)$" as line
-print "dog" matches regular expression "^(cat|dog)$" as line
-print "color" matches regular expression "^colou?r$" as line
-print "colour" matches regular expression "^colou?r$" as line
-print "abbbc" matches regular expression "^ab*c$" as line
-print "xx abbbc yy" contains a match for regular expression "ab+c" as line
-print "123" matches regular expression "^[^a-z]+$" as line
-print "a.c" matches regular expression "^a\\.c$" as line
-print "user_42" matches regular expression "^\\w+$" as line
-print "42" matches regular expression "^\\d+$" as line
-print " 	" matches regular expression "^\\s+$" as line
-print "A" matches regular expression "^\\D$" as line
-print "5" matches regular expression "^[\\d]$" as line
+print ("abc123" matches regular expression "^[a-z]+[0-9]+$") as line
+print ("abc" matches regular expression "^(cat|dog)$") as line
+print ("dog" matches regular expression "^(cat|dog)$") as line
+print ("color" matches regular expression "^colou?r$") as line
+print ("colour" matches regular expression "^colou?r$") as line
+print ("abbbc" matches regular expression "^ab*c$") as line
+print ("xx abbbc yy" contains a match for regular expression "ab+c") as line
+print ("123" matches regular expression "^[^a-z]+$") as line
+print ("a.c" matches regular expression "^a\\.c$") as line
+print ("user_42" matches regular expression "^\\w+$") as line
+print ("42" matches regular expression "^\\d+$") as line
+print (" 	" matches regular expression "^\\s+$") as line
+print ("A" matches regular expression "^\\D$") as line
+print ("5" matches regular expression "^[\\d]$") as line

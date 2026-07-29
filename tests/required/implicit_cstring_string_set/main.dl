@@ -1,0 +1,12 @@
+import lib/std.dl
+import lib/set.dl
+
+set names to an empty set of string
+add "repo-cleaner" to names
+add "dynlex" to names
+add "repo-cleaner" to names
+
+print the size of names as line
+print (names contains the string form of "repo-cleaner") as line
+
+free set names

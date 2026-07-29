@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function through first value:
+    replacement:
+        through second value
+
+function through second value:
+    replacement:
+        through third value
+
+function through third value:
+    replacement:
+        value
+
+print (through first 7) as line

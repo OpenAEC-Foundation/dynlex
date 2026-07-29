@@ -4,6 +4,8 @@ dynlex options:
     open section: ":"
     section: "section"
     function: "function"
+    convert: "convert"
+    implicitly: "implicitly"
     class:
         name: "class"
         members: "members"
@@ -69,6 +71,9 @@ dynlex options:
         store value not runtime: "the assigned value '{value}' has no runtime value"
         function has no deduced return type: "Function '{function}' has no deduced return type"
         function has missing return path: "Function '{function}' does not return a value on every reachable path"
+        conversion requires one parameter: "A conversion must contain exactly one parameter and no other pattern text"
+        implicit modifier requires conversion: "The '{modifier}' modifier can only be used with '{conversion}'"
+        ambiguous conversion: "More than one conversion from {from_type} to {to_type} is equally specific"
         multiple reachable return types: "Function has multiple reachable return types: {first_type} and {second_type}"
         program return value invalid: "Program return value must be convertible to a 32 bit integer, got {value_type}"
         incompatible return type:

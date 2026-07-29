@@ -16,81 +16,33 @@
 #include <unordered_set>
 #include <vector>
 
-static Expression *resolveThroughBindings(Expression *expr, const BindingFrameStack &bindingFrameStack) {
-	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
-}
-
-static Expression *resolveThroughBindingsDeep(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
-	InferenceContext *inferenceContext = nullptr
-);
-
 static Expression *lookupInferenceFlexExpansion(InferenceContext *inferenceContext, Expression *expression);
 
 static thread_local ParseContext *activeTypeResolutionParseContext = nullptr;
 
-static void materializeFlexBindingsInCallerScope(BindingFrame &bindings, const BindingFrameStack &callerBindingFrameStack) {
-	for (auto &[name, argumentExpression] : bindings.bindings) {
-		(void)name;
-		Expression *resolvedArgumentExpression = resolveThroughBindings(argumentExpression, callerBindingFrameStack);
-		argumentExpression = resolvedArgumentExpression ? resolvedArgumentExpression : argumentExpression;
-	}
-	for (auto &[parameterDefinition, argumentExpression] : bindings.parameterBindings) {
-		(void)parameterDefinition;
-		Expression *resolvedArgumentExpression = resolveThroughBindings(argumentExpression, callerBindingFrameStack);
-		argumentExpression = resolvedArgumentExpression ? resolvedArgumentExpression : argumentExpression;
-	}
+static std::optional<FlexBindingExpansion>
+selectInferenceFlexBindingExpansion(InferenceContext *inferenceContext, Expression *expression) {
+	Expression *bodyExpression = lookupInferenceFlexExpansion(inferenceContext, expression);
+	if (!bodyExpression)
+		return std::nullopt;
+	return FlexBindingExpansion{expression->selectedPatternDefinition, bodyExpression};
 }
 
-// Follow bindings and flex expansions that inference has already finalized.
-// Outputs the final active bindings so callers can inspect the selected body
-// without performing another overload selection or expansion.
-static Expression *resolveThroughBindingsDeepImpl(
-	Expression *expr, BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
-	std::unordered_set<Expression *> &visited, InferenceContext *inferenceContext
+template <typename StopFn>
+static ResolvedBindingLayers resolveInferenceBindingLayers(
+	Expression *expression, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext, StopFn &&stop
 ) {
-	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
-		BindingFrameStack callerScope;
-		Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerScope);
-		if (!boundExpression)
-			break;
-		expr = boundExpression;
-		bindingFrameStack = std::move(callerScope);
-	}
-	outBindingFrameStack = bindingFrameStack;
-	if (!expr)
-		return expr;
-	if (visited.contains(expr))
-		return expr;
-	visited.insert(expr);
-	BindingFrame innerBindings;
-	Expression *bodyExpr = lookupInferenceFlexExpansion(inferenceContext, expr);
-	if (bodyExpr) {
-		PatternDefinition *definition = expr->selectedPatternDefinition;
-		if (!definition || !definition->section || !definition->section->isFlex)
-			crashCompilerBug("inferred flex expansion has no selected flex definition");
-		collectPatternCallBindings(expr, definition, innerBindings);
-	}
-	if (bodyExpr) {
-		materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
-		bindingFrameStack.pushFrame(std::move(innerBindings));
-		Expression *resolved =
-			resolveThroughBindingsDeepImpl(bodyExpr, bindingFrameStack, outBindingFrameStack, visited, inferenceContext);
-		bindingFrameStack.popFrame();
-		visited.erase(expr);
-		return resolved;
-	}
-	visited.erase(expr);
-	return expr;
+	return resolveThroughBindingLayers(expression, bindingFrameStack, [&](Expression *currentExpression) {
+		return selectInferenceFlexBindingExpansion(inferenceContext, currentExpression);
+	}, std::forward<StopFn>(stop));
 }
 
-static Expression *resolveThroughBindingsDeep(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
-	InferenceContext *inferenceContext
+static ResolvedBindingLayers resolveInferenceBindingLayers(
+	Expression *expression, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext
 ) {
-	BindingFrameStack localBindingFrameStack = bindingFrameStack;
-	std::unordered_set<Expression *> visited;
-	return resolveThroughBindingsDeepImpl(expr, localBindingFrameStack, outBindingFrameStack, visited, inferenceContext);
+	return resolveInferenceBindingLayers(expression, bindingFrameStack, inferenceContext, [](Expression *) {
+		return false;
+	});
 }
 
 // Convenience: resolve an expression through bindings, then return its type.

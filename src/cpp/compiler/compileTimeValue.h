@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 struct Expression;
 struct ParseContext;
@@ -20,38 +21,25 @@ std::optional<DataType> buildInfoValueType(std::string_view key);
 CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_view key);
 std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName);
 std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::string_view shaderStageName);
-Expression *resolveCompileTimeBinding(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
-);
 CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr);
 CompileTimeValue getExpressionCompileTimeValue(const Expression *expr);
 void setExpressionCompileTimeValue(Expression *expr, const CompileTimeValue &value);
+
+template <typename ResolveBindingLayersFn, typename LookupValueFn>
+CompileTimeValue resolveStoredCompileTimeValueWith(
+	Expression *expression, ResolveBindingLayersFn resolveBindingLayers, LookupValueFn lookupValue
+) {
+	requireCompilerInvariant(expression != nullptr, "compile-time value resolution received null expression");
+	CompileTimeValue knownValue;
+	ResolvedBindingLayers resolved = resolveBindingLayers([&](Expression *currentExpression) {
+		knownValue = lookupValue(currentExpression);
+		return isCompileTimeKnown(knownValue);
+	});
+	if (isCompileTimeKnown(knownValue))
+		return knownValue;
+	return resolved.expression ? resolveImmediateCompileTimeValue(resolved.expression) : CompileTimeValue{};
+}
+
+bool narrowCompileTimeInteger(const CompileTimeValue &value, int &outValue);
 CompileTimeValue resolveStoredCompileTimeValue(Expression *expr, const BindingFrameStack &bindingFrameStack = {});
 bool resolveStoredCompileTimeInteger(Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue);
-
-template <typename ReadKnownValueFn>
-CompileTimeValue resolveCompileTimeValueFromKnownState(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, ReadKnownValueFn &&readKnownValue
-) {
-	Expression *currentExpression = expr;
-	BindingFrameStack currentBindingFrameStack = bindingFrameStack;
-	constexpr size_t maxResolutionDepth = 256;
-	for (size_t depth = 0; currentExpression && depth < maxResolutionDepth; depth++) {
-		CompileTimeValue storedValue = readKnownValue(currentExpression);
-		if (isCompileTimeKnown(storedValue))
-			return storedValue;
-		BindingFrameStack resolvedBindingFrameStack;
-		Expression *resolvedExpression =
-			resolveCompileTimeBinding(currentExpression, currentBindingFrameStack, &resolvedBindingFrameStack);
-		if (resolvedExpression && resolvedExpression != currentExpression) {
-			currentExpression = resolvedExpression;
-			currentBindingFrameStack = std::move(resolvedBindingFrameStack);
-			continue;
-		}
-		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
-		if (isCompileTimeKnown(immediateValue))
-			return immediateValue;
-		break;
-	}
-	return {};
-}

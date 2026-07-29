@@ -471,6 +471,8 @@ struct InferenceContext {
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {
 		if (!expression)
 			return {};
+		if (expression->inferredConversion)
+			return lookupExpressionValue(expression->inferredConversion);
 		if (expression->kind == Expression::Kind::Variable && expression->variable) {
 			VariableReference *key = normalizeReference(expression->variable);
 			const KnownConstantStorage &knownConstants = currentVariableValues.read();
@@ -494,6 +496,8 @@ struct InferenceContext {
 	MinimumSignedIntegerMagnitudeEffects lookupExpressionMinimumIntegerEffects(Expression *expression) const {
 		if (!expression)
 			return {};
+		if (expression->inferredConversion)
+			return lookupExpressionMinimumIntegerEffects(expression->inferredConversion);
 		if (trial) {
 			auto trialIt = trialExpressionValues.find(expression);
 			if (trialIt != trialExpressionValues.end())

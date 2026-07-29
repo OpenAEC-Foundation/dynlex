@@ -1,0 +1,1 @@
+tests/required/implicit_modifier_requires_conversion/main.dl:1-26: Error: The 'implicitly' modifier can only be used with 'convert'

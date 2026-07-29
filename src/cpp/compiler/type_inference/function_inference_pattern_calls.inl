@@ -4,6 +4,326 @@ struct PatternCallResolution {
 	std::vector<DataType> argumentTypes;
 };
 
+static bool inferPatternCall(
+	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
+);
+
+struct ConversionCandidate {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+	int specificity = -1;
+	DataType outcomeType;
+};
+
+struct ConversionLookup {
+	std::optional<ConversionCandidate> selected;
+	std::vector<ConversionCandidate> ambiguous;
+};
+
+struct ConversionOutcome {
+	DataType type;
+	bool compileTimeKnown = false;
+};
+
+static Expression *
+createConversionCall(InferenceContext &context, Expression *source, PatternDefinition *definition, size_t pathIndex) {
+	requireCompilerInvariant(source != nullptr, "conversion call requires a source expression");
+	requireCompilerInvariant(
+		definition && definition->section && definition->section->isConversion,
+		"conversion call requires a conversion definition"
+	);
+	requireCompilerInvariant(
+		pathIndex < definition->indexedNodePaths.size() && definition->indexedNodePaths[pathIndex].size() == 1,
+		"conversion definition does not have one indexed parameter"
+	);
+
+	auto match = std::make_unique<PatternMatch>();
+	match->nodesPassed = definition->indexedNodePaths[pathIndex];
+	match->matchedEndNode = match->nodesPassed.back();
+	match->matchingDefinitions = {definition};
+	match->lineStartPos = static_cast<size_t>(std::max(0, source->range.start()));
+	match->lineEndPos = static_cast<size_t>(std::max(0, source->range.end()));
+	PatternMatch *matchPointer = match.get();
+	context.parseContext.ownedSyntheticPatternMatches.push_back(std::move(match));
+
+	auto *call = new Expression();
+	context.parseContext.ownedClonedExpressions.push_back(call);
+	call->kind = Expression::Kind::PatternCall;
+	call->range = source->range;
+	call->patternMatch = matchPointer;
+	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, true);
+	context.setExpressionEvaluation(
+		sourceClone,
+		{
+			.value = context.lookupExpressionValue(source),
+			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(source),
+		}
+	);
+	call->arguments.push_back(sourceClone);
+	return call;
+}
+
+static std::optional<ConversionOutcome> probeConversionOutcome(
+	Expression *source, const BindingFrameStack &bindingFrameStack, InferenceContext &context,
+	const ConversionCandidate &candidate
+) {
+	InferenceContext::TrialJournal journal;
+	InferenceContext trialContext(context.parseContext, true);
+	trialContext.currentInstantiation = context.currentInstantiation;
+	trialContext.inheritSectionExecutionState(context);
+	trialContext.currentVariableValues = context.currentVariableValues;
+	trialContext.currentAddressState = context.currentAddressState;
+	trialContext.currentSubject = context.currentSubject;
+	trialContext.inheritedTrialExpressionValues =
+		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
+	trialContext.trialJournal = &journal;
+	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
+	trialContext.detectGroupingAmbiguity = false;
+
+	Expression *call = createConversionCall(trialContext, source, candidate.definition, candidate.pathIndex);
+	bool inferred = inferPatternCall(call, trialContext, bindingFrameStack, true) && trialContext.typesValid;
+	std::optional<ConversionOutcome> result;
+	if (inferred && call->type.isDeduced() && call->type.kind != DataType::Kind::Void)
+		result = ConversionOutcome{call->type, isCompileTimeKnown(trialContext.lookupExpressionValue(call))};
+	rollbackTrialJournal(journal);
+	return result;
+}
+
+static ConversionLookup findUserConversion(
+	Expression *source, const TypeConstraint &targetConstraint, bool implicitOnly, InferenceContext &context,
+	const BindingFrameStack &bindingFrameStack
+) {
+	if (!source || source->inferredConversion || !source->type.isDeduced() || !targetConstraint.isResolved()) {
+		return {};
+	}
+	PatternTreeNode *root = context.parseContext.patternTrees[(int)SectionType::Conversion];
+	if (!root || !root->argumentChild || !source->range.line || !source->range.line->sourceFile)
+		return {};
+
+	const DataType sourceType = source->type;
+	bool compileTimeKnown = sourceType.isMetaType() || isCompileTimeKnown(context.lookupExpressionValue(source));
+	std::vector<ConversionCandidate> matches;
+	for (PatternDefinition *definition : root->argumentChild->matchingDefinitions) {
+		if (!definition || !definition->section || !definition->section->isConversion)
+			continue;
+		if (implicitOnly && !definition->section->isImplicitConversion)
+			continue;
+		if (!isPatternDefinitionVisibleFromSource(*definition, *source->range.line->sourceFile))
+			continue;
+
+		PatternOverloadSelection sourceSelection =
+			selectOverload({definition}, {source}, definition->indexedNodePaths.front(), {sourceType}, {compileTimeKnown});
+		if (!sourceSelection)
+			continue;
+		const DefinitionPatternElement *parameter = nullptr;
+		forEachPatternParameterName(
+			definition, sourceSelection.pathIndex,
+			[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+			parameter = matchedPatternParameterElement(definition, name, startPos);
+		}
+		);
+		requireCompilerInvariant(parameter != nullptr, "conversion path has no parameter element");
+		ConversionCandidate candidate{
+			definition,
+			sourceSelection.pathIndex,
+			parameter->resolvedTypeConstraint.isResolved() ? parameter->resolvedTypeConstraint.structuralSpecificity() : 0,
+			{}
+		};
+		std::optional<ConversionOutcome> outcome = probeConversionOutcome(source, bindingFrameStack, context, candidate);
+		if (outcome && targetConstraint.accepts(outcome->type, outcome->compileTimeKnown)) {
+			candidate.outcomeType = outcome->type;
+			matches.push_back(candidate);
+		}
+	}
+	if (matches.empty())
+		return {};
+
+	int bestSpecificity = std::ranges::max(matches, {}, &ConversionCandidate::specificity).specificity;
+	std::vector<ConversionCandidate> best;
+	for (const ConversionCandidate &candidate : matches) {
+		if (candidate.specificity == bestSpecificity)
+			best.push_back(candidate);
+	}
+	if (best.size() == 1) {
+		ConversionLookup result;
+		result.selected = best.front();
+		return result;
+	}
+	ConversionLookup result;
+	result.ambiguous = std::move(best);
+	return result;
+}
+
+static void reportAmbiguousUserConversion(
+	Expression *source, const std::string &targetDescription, const std::vector<ConversionCandidate> &candidates,
+	InferenceContext &context
+) {
+	requireCompilerInvariant(source != nullptr && candidates.size() > 1, "invalid ambiguous conversion diagnostic");
+	std::string detail = renderConfiguredMessage(
+		syntaxConfigForRange(context.parseContext, source->range), "ambiguous conversion", "message",
+		{{"from_type", typeToUserName(source->type, context.parseContext)}, {"to_type", targetDescription}}
+	);
+	context.setTypeFailure(detail);
+	Diagnostic diagnostic = buildFailureDetailDiagnostic(source->range, detail);
+	for (const ConversionCandidate &candidate : candidates)
+		diagnostic.relatedInfo.push_back({"Conversion is defined here", candidate.definition->range});
+	context.fail(std::move(diagnostic), 1);
+}
+
+static bool tryApplyUserConversion(
+	Expression *source, const DataType &targetType, bool implicitOnly, InferenceContext &context,
+	const BindingFrameStack &bindingFrameStack, bool requireCompileTimeResult
+) {
+	if (!source)
+		return false;
+	if (source->inferredConversion)
+		return source->inferredConversion->type == targetType;
+	if (source->type == targetType)
+		return true;
+	TypeConstraint targetConstraint = TypeConstraint::fromValueType(targetType);
+	targetConstraint.requiresCompileTimeValue = requireCompileTimeResult;
+	ConversionLookup lookup = findUserConversion(source, targetConstraint, implicitOnly, context, bindingFrameStack);
+	if (!lookup.ambiguous.empty()) {
+		reportAmbiguousUserConversion(source, typeToUserName(targetType, context.parseContext), lookup.ambiguous, context);
+		return false;
+	}
+	if (!lookup.selected)
+		return false;
+	Expression *call = createConversionCall(context, source, lookup.selected->definition, lookup.selected->pathIndex);
+	if (!inferPatternCall(call, context, bindingFrameStack, true) || !context.typesValid)
+		return false;
+	requireCompilerInvariant(
+		lookup.selected->outcomeType == targetType, "selected conversion outcome differs from its target type"
+	);
+	requireCompilerInvariant(call->type == targetType, "committed conversion outcome differs from its successful probe");
+	source->inferredConversion = call;
+	context.setExpressionEvaluation(
+		source,
+		{
+			.value = context.lookupExpressionValue(call),
+			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(call),
+		}
+	);
+	return true;
+}
+
+struct ImplicitPatternOverload {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+	std::vector<std::optional<DataType>> conversionTargets;
+	std::vector<bool> conversionRequiresCompileTime;
+	int specificity = 0;
+	size_t conversionCount = 0;
+};
+
+struct DeferredConversionAmbiguity {
+	Expression *source{};
+	std::string targetDescription;
+	std::vector<ConversionCandidate> candidates;
+};
+
+static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConversions(
+	const std::vector<PatternDefinition *> &definitions, const std::vector<PatternTreeNode *> &nodesPassed,
+	const std::vector<Expression *> &arguments, const std::vector<DataType> &argumentTypes,
+	const std::vector<bool> &argumentCompileTimeKnown, InferenceContext &context, const BindingFrameStack &bindingFrameStack
+) {
+	std::vector<ImplicitPatternOverload> candidates;
+	std::optional<DeferredConversionAmbiguity> deferredAmbiguity;
+	for (PatternDefinition *definition : definitions) {
+		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, definition)) {
+			ImplicitPatternOverload candidate;
+			candidate.definition = definition;
+			candidate.pathIndex = pathIndex;
+			candidate.conversionTargets.resize(arguments.size());
+			candidate.conversionRequiresCompileTime.resize(arguments.size());
+			bool possible = true;
+			std::optional<DeferredConversionAmbiguity> candidateAmbiguity;
+			size_t argumentIndex = 0;
+			forEachPatternParameterName(
+				definition, pathIndex,
+				[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+				if (argumentIndex >= argumentTypes.size()) {
+					possible = false;
+					argumentIndex++;
+					return;
+				}
+				if (!possible) {
+					argumentIndex++;
+					return;
+				}
+				const DefinitionPatternElement *parameter = matchedPatternParameterElement(definition, parameterName, startPos);
+				requireCompilerInvariant(parameter != nullptr, "overload parameter has no definition element");
+				const DataType &argumentType = argumentTypes[argumentIndex];
+				bool compileTimeKnown =
+					argumentIndex < argumentCompileTimeKnown.size() && argumentCompileTimeKnown[argumentIndex];
+				if (parameter->resolvedTypeConstraint.isResolved() &&
+					parameter->resolvedTypeConstraint.accepts(argumentType, compileTimeKnown)) {
+					candidate.specificity += parameter->resolvedTypeConstraint.structuralSpecificity();
+					argumentIndex++;
+					return;
+				}
+				ConversionLookup lookup = findUserConversion(
+					arguments[argumentIndex], parameter->resolvedTypeConstraint, true, context, bindingFrameStack
+				);
+				if (!lookup.selected) {
+					if (!lookup.ambiguous.empty() && !candidateAmbiguity) {
+						candidateAmbiguity = DeferredConversionAmbiguity{
+							arguments[argumentIndex], parameter->resolvedTypeConstraint.toString(), std::move(lookup.ambiguous)
+						};
+					} else if (lookup.ambiguous.empty()) {
+						possible = false;
+					}
+					argumentIndex++;
+					return;
+				}
+				candidate.conversionTargets[argumentIndex] = lookup.selected->outcomeType;
+				candidate.conversionRequiresCompileTime[argumentIndex] =
+					parameter->resolvedTypeConstraint.requiresCompileTimeValue;
+				candidate.conversionCount++;
+				candidate.specificity += parameter->resolvedTypeConstraint.structuralSpecificity();
+				argumentIndex++;
+			}
+			);
+			if (argumentIndex != argumentTypes.size())
+				possible = false;
+			if (possible && candidateAmbiguity) {
+				if (!deferredAmbiguity)
+					deferredAmbiguity = std::move(candidateAmbiguity);
+			} else if (possible && candidate.conversionCount > 0) {
+				candidates.push_back(std::move(candidate));
+			}
+		}
+	}
+	if (candidates.empty()) {
+		if (deferredAmbiguity) {
+			reportAmbiguousUserConversion(
+				deferredAmbiguity->source, deferredAmbiguity->targetDescription, deferredAmbiguity->candidates, context
+			);
+		}
+		return std::nullopt;
+	}
+	std::ranges::sort(candidates, [](const ImplicitPatternOverload &left, const ImplicitPatternOverload &right) {
+		if (left.specificity != right.specificity)
+			return left.specificity > right.specificity;
+		if (left.conversionCount != right.conversionCount)
+			return left.conversionCount < right.conversionCount;
+		if (left.definition != right.definition)
+			return patternDefinitionComesBefore(left.definition, right.definition);
+		return left.pathIndex < right.pathIndex;
+	});
+	if (candidates.size() > 1 && candidates[0].specificity == candidates[1].specificity &&
+		candidates[0].conversionCount == candidates[1].conversionCount) {
+		std::string detail = "More than one overload is equally specific after implicit conversion";
+		context.setTypeFailure(detail);
+		Diagnostic diagnostic = buildFailureDetailDiagnostic(arguments.empty() ? Range() : arguments.front()->range, detail);
+		diagnostic.relatedInfo.push_back({"Candidate overload is defined here", candidates[0].definition->range});
+		diagnostic.relatedInfo.push_back({"Candidate overload is defined here", candidates[1].definition->range});
+		context.fail(std::move(diagnostic), 1);
+		return std::nullopt;
+	}
+	return candidates.front();
+}
+
 static std::optional<PatternCallResolution> resolvePatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
 ) {
@@ -45,6 +365,30 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	PatternOverloadSelection overload =
 		selectOverload(defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown);
 	if (!overload) {
+		std::optional<ImplicitPatternOverload> convertedOverload = selectOverloadUsingImplicitConversions(
+			defs, expr->patternMatch->nodesPassed, expr->arguments, argTypesForOverload, argCompileTimeKnown, context,
+			flexBindingFrameStack
+		);
+		if (convertedOverload) {
+			for (size_t argumentIndex = 0; argumentIndex < convertedOverload->conversionTargets.size(); argumentIndex++) {
+				if (!convertedOverload->conversionTargets[argumentIndex])
+					continue;
+				if (!tryApplyUserConversion(
+						expr->arguments[argumentIndex], *convertedOverload->conversionTargets[argumentIndex], true, context,
+						flexBindingFrameStack, convertedOverload->conversionRequiresCompileTime[argumentIndex]
+					)) {
+					return std::nullopt;
+				}
+				argTypesForOverload[argumentIndex] = effectiveInferredExpressionType(expr->arguments[argumentIndex]);
+				argCompileTimeKnown[argumentIndex] =
+					isCompileTimeKnown(context.lookupExpressionValue(expr->arguments[argumentIndex]));
+			}
+			overload = {convertedOverload->definition, convertedOverload->pathIndex};
+		}
+	}
+	if (!overload) {
+		if (!context.typesValid)
+			return std::nullopt;
 		std::string candidates;
 		std::unordered_set<std::string> uniqueCandidates;
 		for (PatternDefinition *candidate : defs) {
@@ -121,20 +465,8 @@ static void inferClassPatternCall(
 ) {
 	PatternDefinition *def = resolution.definition;
 	Section *matchedSection = def->section;
-	BindingFrame callBindings;
-	collectPatternCallBindings(expr, def, callBindings);
-	for (auto &[parameterName, argumentExpression] : callBindings.bindings) {
-		(void)parameterName;
-		if (Expression *resolvedArgument = resolveThroughBindings(argumentExpression, flexBindingFrameStack))
-			argumentExpression = resolvedArgument;
-	}
-	for (auto &[parameterDefinition, argumentExpression] : callBindings.parameterBindings) {
-		(void)parameterDefinition;
-		if (Expression *resolvedArgument = resolveThroughBindings(argumentExpression, flexBindingFrameStack))
-			argumentExpression = resolvedArgument;
-	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
-	pushBindingScope(callBindingFrameStack, std::move(callBindings));
+	pushPatternCallBindingScope(callBindingFrameStack, expr, def);
 	auto *classSec = static_cast<ClassSection *>(matchedSection);
 	expr->type = instantiateBoundClassType(context.parseContext, classSec->classDefinition, callBindingFrameStack, &context);
 	if (expr->type.kind == DataType::Kind::Type)
@@ -209,10 +541,7 @@ static void inferFlexPatternCall(
 		}
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
-	BindingFrame callBindings;
-	collectPatternCallBindings(expr, def, callBindings);
-	materializeFlexBindingsInCallerScope(callBindings, flexBindingFrameStack);
-	pushBindingScope(callBindingFrameStack, std::move(callBindings));
+	pushPatternCallBindingScope(callBindingFrameStack, expr, def);
 	std::shared_ptr<InstantiatedSectionBody> flexBody = context.parseContext.cloneSectionBody(matchedSection);
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();

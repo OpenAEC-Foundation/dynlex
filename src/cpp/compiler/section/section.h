@@ -158,6 +158,10 @@ struct Section {
 	bool isLocal = false;
 	// whether this function must be emitted through a stable callable wrapper
 	bool isExposed = false;
+	// Conversion definitions execute like functions but are indexed in a
+	// separate unary pattern tree so they cannot be called as source patterns.
+	bool isConversion = false;
+	bool isImplicitConversion = false;
 	// list of variable names declared as global in this function (from globals: section)
 	std::vector<std::string> globalVariables;
 	// precedence declarations: patterns that this definition evaluates before/after
