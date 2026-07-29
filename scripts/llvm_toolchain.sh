@@ -29,7 +29,15 @@ if [ -z "${DYNLEX_LLVM_REPOSITORY:-}" ] || [ -z "${DYNLEX_LLVM_REVISION:-}" ] ||
 	return 1 2>/dev/null || exit 1
 fi
 
-DYNLEX_LLVM_CACHE_DIR="${DYNLEX_LLVM_CACHE_DIR:-$DYNLEX_LLVM_PROJECT_DIR/.cache/llvm-toolchain}"
+DYNLEX_LLVM_PRIMARY_CHECKOUT_DIR="$DYNLEX_LLVM_PROJECT_DIR"
+if git -C "$DYNLEX_LLVM_PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+	if ! DYNLEX_LLVM_GIT_COMMON_DIR="$(git -C "$DYNLEX_LLVM_PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir)"; then
+		echo "Error: could not resolve the shared Git directory for the LLVM toolchain cache." >&2
+		return 1 2>/dev/null || exit 1
+	fi
+	DYNLEX_LLVM_PRIMARY_CHECKOUT_DIR="$(cd "$(dirname "$DYNLEX_LLVM_GIT_COMMON_DIR")" && pwd -P)"
+fi
+DYNLEX_LLVM_CACHE_DIR="${DYNLEX_LLVM_CACHE_DIR:-$DYNLEX_LLVM_PRIMARY_CHECKOUT_DIR/.cache/llvm-toolchain}"
 DYNLEX_LLVM_SOURCE_DIR="$DYNLEX_LLVM_CACHE_DIR/source"
 DYNLEX_LLVM_NATIVE_BUILD_DIR="$DYNLEX_LLVM_CACHE_DIR/native/build"
 DYNLEX_LLVM_NATIVE_INSTALL_DIR="$DYNLEX_LLVM_CACHE_DIR/native/install"

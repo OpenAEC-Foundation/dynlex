@@ -20,6 +20,16 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 - What patterns does each section have?
 - We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.
 
+Integer literals are parsed exactly rather than through floating-point storage.
+Magnitudes through `2^63` are retained so unary negation can form the signed
+64-bit minimum; larger magnitudes are rejected here. The boundary magnitude is
+rejected after inference unless ordinary intrinsic evaluation records that
+unary negation consumed it without another value operation using it. Those
+effects are committed with the inferred expression, so rejected overload and
+operand-grouping trials cannot affect the selected expression. Unreachable
+bodies remain semantically uninferred and therefore do not create boundary-use
+effects. Explicit floating-point literals remain 64-bit floating-point values.
+
 # Pattern Matching Stage
 
 Patterns are matched. Here we identify:
@@ -91,6 +101,11 @@ Type values retain both meanings when used in a signature: their constraint view
 view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` accepts every integer
 width as a constraint but denotes the default integer width as a standalone type value. Code generation consumes that recorded exact
 view; it does not reinterpret the constraint.
+
+An integer literal uses a 32-bit integer type when its exact value fits and a
+64-bit integer type otherwise. Its compile-time value remains an exact signed
+integer through inference and pure evaluation; it is never routed through a
+floating-point representation.
 
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.

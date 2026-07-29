@@ -108,6 +108,10 @@ static Expression *findVariableExpressionAtSource(Expression *expr, const std::s
 }
 
 static std::string formatCompileTimeValue(const CompileTimeValue &value) {
+	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return std::to_string(*integer);
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return "9223372036854775808";
 	if (const auto *number = std::get_if<double>(&value)) {
 		if (std::isfinite(*number)) {
 			double rounded = std::round(*number);

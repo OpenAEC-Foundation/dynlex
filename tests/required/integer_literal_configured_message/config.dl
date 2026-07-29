@@ -1,0 +1,3 @@
+dynlex options:
+    messages:
+        integer literal out of range: "Configured integer range error"

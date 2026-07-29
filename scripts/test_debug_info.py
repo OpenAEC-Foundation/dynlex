@@ -1,12 +1,33 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
 import platform
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+
+
+def resolve_native_llvm_install_directory() -> Path | None:
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            '. "$1"; printf "%s\\n" "$DYNLEX_LLVM_NATIVE_INSTALL_DIR"',
+            "bash",
+            str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        print(completed.stdout + completed.stderr, file=sys.stderr)
+        return None
+    return Path(completed.stdout.strip())
 
 
 def main() -> int:
@@ -22,9 +43,11 @@ def main() -> int:
         print(f"compiler not found: {compiler}", file=sys.stderr)
         return 2
 
-    repo_root = Path(__file__).resolve().parent.parent
-    llvm_cache = Path(os.environ.get("DYNLEX_LLVM_CACHE_DIR", repo_root / ".cache" / "llvm-toolchain"))
-    dwarf_verifier = llvm_cache / "native" / "install" / "bin" / "llvm-dwarfdump"
+    repo_root = SCRIPTS_DIR.parent
+    llvm_install_directory = resolve_native_llvm_install_directory()
+    if llvm_install_directory is None:
+        return 2
+    dwarf_verifier = llvm_install_directory / "bin" / "llvm-dwarfdump"
     if not dwarf_verifier.is_file():
         print(f"required pinned DWARF verifier not found: {dwarf_verifier}", file=sys.stderr)
         return 2
