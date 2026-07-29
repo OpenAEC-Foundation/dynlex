@@ -6,7 +6,7 @@ print precedence's succeeded as line
 print the length of the changes of precedence's edit as line
 set first_change to workspace change at index 0 in the changes of precedence's edit
 print first_change's kind as line
-print first_change's version_present as line
+print first_change's version present as line
 print first_change's version as line
 free workspace edit parse result precedence
 
@@ -20,7 +20,7 @@ free workspace edit parse result ordered
 set snippet_source to the string form of "{\"documentChanges\":[{\"textDocument\":{\"uri\":\"file:///workspace/alpha.txt\",\"version\":null},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"snippet\":{\"kind\":\"snippet\",\"value\":\"${1:alpha}\"}}]}]}"
 set snippet to parse workspace edit from snippet_source
 print snippet's succeeded as line
-print snippet's failed_change_present as line
-print snippet's failed_change as line
-print snippet's failure_reason as line
+print snippet's failed change present as line
+print snippet's failed change as line
+print snippet's failure reason as line
 free workspace edit parse result snippet

@@ -6,45 +6,52 @@ import lib/path.dl
 
 local function workspace resource snapshot is unchanged {a pointer to workspace resource snapshot:resource_value} using {a pointer to workspace edit context:state_value}:
     execute:
-        if workspace native path resource_value's original_path has a symbolic link ancestor using the path_style of state_value:
+        if workspace native path resource_value's original path has a symbolic link ancestor using the path style of state_value:
             return false
-        set status_value to inspect filesystem entry at resource_value's original_path
+        set status_value to the file system entry at resource_value's original path
         if not status_value's succeeded:
             return false
-        if status_value's found != resource_value's disk_exists:
+        if status_value's found != resource_value's disk exists:
             return false
         if status_value's found:
             set current_kind to 0
-            if status_value's regular_file:
+            if status_value's regular file:
                 set current_kind to the workspace regular file resource kind
             else if status_value's directory:
                 set current_kind to the workspace directory resource kind
             else:
                 return false
-            if current_kind != resource_value's disk_kind:
+            if current_kind != resource_value's disk kind:
                 return false
-            if status_value's modification_time != resource_value's disk_modification_time:
+            if status_value's modification time supported != resource_value's disk modification time supported:
                 return false
-            if status_value's regular_file:
-                set snapshot_path to resource_value's original_path
+            if status_value's modification time supported:
+                set current_modification_time to status_value's modification time
+                set snapshotted_modification_time to resource_value's disk modification time
+                if current_modification_time's seconds != snapshotted_modification_time's seconds:
+                    return false
+                if current_modification_time's nanoseconds != snapshotted_modification_time's nanoseconds:
+                    return false
+            if status_value's regular file:
+                set snapshot_path to resource_value's original path
                 read snapshot_path
                 if not it succeeded:
                     return false
-                if the contents of it != resource_value's disk_content:
+                if the contents of it != resource_value's disk content:
                     return false
-        set current_document to workspace open document with identity resource_value's original_identity in state_value
-        if resource_value's open_snapshot_present:
+        set current_document to workspace open document with identity resource_value's original identity in state_value
+        if resource_value's open snapshot present:
             if current_document = (0 as a pointer to workspace open document):
                 return false
-            if current_document != resource_value's open_document:
+            if current_document != resource_value's open document:
                 return false
-            if current_document's path != resource_value's open_path:
+            if current_document's path != resource_value's open path:
                 return false
-            if current_document's identity != resource_value's open_identity:
+            if current_document's identity != resource_value's open identity:
                 return false
-            if current_document's text != resource_value's open_text:
+            if current_document's text != resource_value's open text:
                 return false
-            if current_document's version != resource_value's open_version:
+            if current_document's version != resource_value's open version:
                 return false
         else:
             if current_document != (0 as a pointer to workspace open document):
@@ -57,7 +64,7 @@ local function revalidate workspace edit plan {a pointer to workspace edit plan:
         loop while resource_index < the length of the resources of plan_value:
             set resource_value to workspace resource snapshot at resource_index in the resources of plan_value
             if not workspace resource snapshot is unchanged resource_value using state_value:
-                return a failed workspace edit result reporting the string form of "Workspace resource changed before the edit was committed" at change resource_value's first_change_index
+                return a failed workspace edit result reporting the string form of "Workspace resource changed before the edit was committed" at change resource_value's first change index
             set resource_index to resource_index + 1
         return a successful workspace edit result
 
@@ -66,9 +73,9 @@ local function update workspace documents after rename {a pointer to planned wor
         set document_index to 0
         loop while document_index < the length of the documents of state_value:
             set document_value to workspace open document at index document_index in the documents of state_value
-            if workspace identity document_value's identity is equal to or below operation_value's old_identity:
-                set mapped_path to workspace mapped path from document_value's path rooted at operation_value's old_path to operation_value's new_path
-                set mapped_identity to workspace identity for native path mapped_path using the path_style of state_value
+            if workspace identity document_value's identity is equal to or below operation_value's old identity:
+                set mapped_path to workspace mapped path from document_value's path rooted at operation_value's old path to operation_value's new path
+                set mapped_identity to workspace identity for native path mapped_path using the path style of state_value
                 set mapped_uri to a file URI from native path mapped_path
                 if (not mapped_uri's succeeded) or (not mapped_uri's supported):
                     @intrinsic("call", "libc", "abort", void)
@@ -81,8 +88,8 @@ local function workspace commit failure for {a pointer to planned workspace oper
     execute:
         set reason to the string form of "Workspace edit mutation failed"
         if mutation_occurred:
-            return a partially applied workspace edit result reporting reason at change operation_value's protocol_index
-        return a failed workspace edit result reporting reason at change operation_value's protocol_index
+            return a partially applied workspace edit result reporting reason at change operation_value's protocol index
+        return a failed workspace edit result reporting reason at change operation_value's protocol index
 
 local function commit workspace edit plan {a pointer to workspace edit plan:plan_value} using {a pointer to workspace edit context:state_value}:
     execute:
@@ -92,9 +99,9 @@ local function commit workspace edit plan {a pointer to workspace edit plan:plan
             set operation_value to planned workspace operation at operation_index in the operations of plan_value
             if not operation_value's skip:
                 if operation_value's kind = the workspace text change kind:
-                    if operation_value's open_document != (0 as a pointer to workspace open document):
-                        set the text of operation_value's open_document to operation_value's text
-                        set the version of operation_value's open_document to (the version of operation_value's open_document) + 1
+                    if operation_value's open document != (0 as a pointer to workspace open document):
+                        set the text of operation_value's open document to operation_value's text
+                        set the version of operation_value's open document to (the version of operation_value's open document) + 1
                         set mutation_occurred to true
                     else:
                         set target_path to operation_value's path
@@ -105,10 +112,11 @@ local function commit workspace edit plan {a pointer to workspace edit plan:plan
                         set mutation_occurred to true
                 else if operation_value's kind = the workspace create change kind:
                     if operation_value's directory:
-                        set creation_result to create directory tree at operation_value's path
+                        create directory tree at operation_value's path
+                        set creation_result to it
                         if not creation_result's succeeded:
                             return workspace commit failure for operation_value after mutation mutation_occurred
-                        if not operation_value's overwrite_target:
+                        if not operation_value's overwrite target:
                             set mutation_occurred to true
                     else:
                         set target_path to operation_value's path
@@ -118,20 +126,22 @@ local function commit workspace edit plan {a pointer to workspace edit plan:plan
                             return workspace commit failure for operation_value after mutation mutation_occurred
                         set mutation_occurred to true
                 else if operation_value's kind = the workspace rename change kind:
-                    if operation_value's overwrite_target:
-                        set removal_result to remove filesystem tree at operation_value's new_path
+                    if operation_value's overwrite target:
+                        remove filesystem tree at operation_value's new path
+                        set removal_result to it
                         if not removal_result's succeeded:
                             return workspace commit failure for operation_value after mutation mutation_occurred
                         set mutation_occurred to true
-                    set source_path to operation_value's old_path
-                    set destination_path to operation_value's new_path
+                    set source_path to operation_value's old path
+                    set destination_path to operation_value's new path
                     rename source_path to destination_path
                     if not it succeeded:
                         return workspace commit failure for operation_value after mutation mutation_occurred
                     set mutation_occurred to true
                     update workspace documents after rename operation_value using state_value
                 else if operation_value's kind = the workspace delete change kind:
-                    set removal_result to remove filesystem tree at operation_value's path
+                    remove filesystem tree at operation_value's path
+                    set removal_result to it
                     if not removal_result's succeeded:
                         return workspace commit failure for operation_value after mutation mutation_occurred
                     set mutation_occurred to true
@@ -159,9 +169,9 @@ function apply workspace edit from {string:source} using {a pointer to workspace
     execute:
         set parse_result to parse workspace edit from source
         if not parse_result's succeeded:
-            set failure_reason to parse_result's failure_reason
-            set has_failed_change to parse_result's failed_change_present
-            set failed_change_value to parse_result's failed_change
+            set failure_reason to parse_result's failure reason
+            set has_failed_change to parse_result's failed change present
+            set failed_change_value to parse_result's failed change
             free workspace edit parse result parse_result
             if has_failed_change:
                 return a failed workspace edit result reporting failure_reason at change failed_change_value

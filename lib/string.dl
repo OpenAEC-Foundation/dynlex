@@ -267,7 +267,9 @@ function [the|] string form of {float:value}:
 
 function [the|] string form of {boolean:value}:
     execute:
-        return the string form of (value as a 64 bit integer)
+        if value:
+            return the string form of "true"
+        return the string form of "false"
 
 function [the|] string form of {string:value}:
     execute:

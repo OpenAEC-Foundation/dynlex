@@ -81,10 +81,10 @@ function workspace native path {string:absolute_path} has a symbolic link ancest
         set current_path to absolute_path
         set searching to true
         loop while searching:
-            set entry_status to inspect filesystem entry at current_path
+            set entry_status to the file system entry at current_path
             if not entry_status's succeeded:
                 return true
-            if entry_status's found and entry_status's symbolic_link:
+            if entry_status's found and entry_status's symbolic link:
                 return true
             set parent_result to the parent path of current_path using path_style
             if not parent_result's succeeded:
@@ -117,7 +117,7 @@ function normalize workspace file URI {string:input} inside native root {string:
             return a failed workspace URI reporting the string form of "File URI is outside the workspace"
         if workspace native path normalized's path has a symbolic link ancestor using style:
             return a failed workspace URI reporting the string form of "Workspace edit paths may not traverse symbolic links"
-        return a successful workspace URI with normalized's path, identity normalized's identity, relative path relative_result's value, and directory hint normalized's directory_hint
+        return a successful workspace URI with normalized's path, identity normalized's identity, relative path relative_result's value, and directory hint normalized's directory hint
 
 function normalize workspace file URI {cstring:input} inside native root {string:workspace_root}:
     execute:

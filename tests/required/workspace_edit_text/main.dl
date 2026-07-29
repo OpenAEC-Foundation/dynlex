@@ -4,7 +4,7 @@ function first text change from {cstring:source}:
     execute:
         set parsed to parse workspace edit from source
         if not parsed's succeeded:
-            print parsed's failure_reason as line
+            print parsed's failure reason as line
             @intrinsic("call", "libc", "abort", void)
         return parsed
 
@@ -29,7 +29,7 @@ set invalid_change to workspace change at index 0 in the changes of invalid's ed
 set invalid_source to the string form of "A😀B"
 set invalid_result to apply workspace text edits (the edits of invalid_change) to invalid_source using encoding the workspace utf16 position encoding
 print invalid_result's succeeded as line
-print invalid_result's failure_reason as line
+print invalid_result's failure reason as line
 free workspace edit parse result invalid
 
 set overlap to first text change from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"Y\"}]}}"
@@ -37,5 +37,5 @@ set overlap_change to workspace change at index 0 in the changes of overlap's ed
 set overlap_source to the string form of "abcd"
 set overlap_result to apply workspace text edits (the edits of overlap_change) to overlap_source using encoding the workspace utf16 position encoding
 print overlap_result's succeeded as line
-print overlap_result's failure_reason as line
+print overlap_result's failure reason as line
 free workspace edit parse result overlap

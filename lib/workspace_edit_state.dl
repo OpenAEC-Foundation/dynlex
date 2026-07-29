@@ -43,12 +43,12 @@ class:
     patterns:
         [a|] workspace edit context
     members:
-        root_path as string
-        path_style as path style
-        position_encoding as i32
-        annotations_enabled as boolean
+        root path as string
+        path style as path style
+        position encoding as i32
+        annotations enabled as boolean
         documents as a pointer to workspace open document collection
-        annotation_decisions as a pointer to workspace annotation decision collection
+        annotation decisions as a pointer to workspace annotation decision collection
 
 class:
     patterns:
@@ -56,29 +56,29 @@ class:
     members:
         succeeded as boolean
         context as a pointer to workspace edit context
-        failure_reason as string
+        failure reason as string
 
 class:
     patterns:
         [a|] workspace operation result
     members:
         succeeded as boolean
-        failure_reason as string
+        failure reason as string
 
 class:
     patterns:
         [a|] workspace edit result
     members:
         applied as boolean
-        failure_reason as string
-        failed_change_present as boolean
-        failed_change as i32
-        confirmation_required as boolean
-        annotation_id as string
-        annotation_label as string
-        annotation_description_present as boolean
-        annotation_description as string
-        may_have_applied_changes as boolean
+        failure reason as string
+        failed change present as boolean
+        failed change as i32
+        confirmation required as boolean
+        annotation id as string
+        annotation label as string
+        annotation description present as boolean
+        annotation description as string
+        may have applied changes as boolean
 
 local function a new workspace open document collection:
     execute:
@@ -167,8 +167,8 @@ local function workspace annotation decision at {integer:position} in {a pointer
 function workspace annotation decision named {string:requested_identifier} in {a pointer to workspace edit context:state_value}:
     execute:
         set position to 0
-        loop while position < the length of the annotation_decisions of state_value:
-            set decision_value to workspace annotation decision at position in the annotation_decisions of state_value
+        loop while position < the length of the annotation decisions of state_value:
+            set decision_value to workspace annotation decision at position in the annotation decisions of state_value
             if decision_value's identifier = requested_identifier:
                 return decision_value
             set position to position + 1
@@ -272,7 +272,7 @@ function a workspace edit confirmation result for {a pointer to workspace change
             true,
             annotation_value's identifier,
             annotation_value's label,
-            annotation_value's description_present,
+            annotation_value's description present,
             annotation_value's description,
             false
         )
@@ -314,7 +314,7 @@ function create workspace edit context rooted at {string:workspace_root}:
                 0 as a pointer to workspace edit context,
                 the string form of "Workspace root may not traverse symbolic links"
             )
-        set root_status to inspect filesystem entry at normalized_root's value
+        set root_status to the file system entry at normalized_root's value
         if not root_status's succeeded:
             return @intrinsic(
                 "construct",
@@ -358,12 +358,12 @@ function set workspace position encoding {integer:requested_encoding} in {a poin
             if requested_encoding != the workspace utf16 position encoding:
                 if requested_encoding != the workspace utf32 position encoding:
                     return a failed workspace operation reporting the string form of "Unsupported position encoding"
-        set the position_encoding of state_value to requested_encoding as i32
+        set the position encoding of state_value to requested_encoding as i32
         return a successful workspace operation
 
 function enable workspace change annotations in {a pointer to workspace edit context:state_value}:
     execute:
-        set the annotations_enabled of state_value to true
+        set the annotations enabled of state_value to true
 
 function record workspace annotation confirmation {string:requested_identifier} as {boolean:approval} in {a pointer to workspace edit context:state_value}:
     execute:
@@ -378,19 +378,19 @@ function record workspace annotation confirmation {string:requested_identifier} 
             approval
         )
         set decision_value to allocate 1 slots of initial_value
-        append workspace annotation decision decision_value to the annotation_decisions of state_value
+        append workspace annotation decision decision_value to the annotation decisions of state_value
 
 function open workspace document {string:uri_input} with text {string:contents} at version {integer:document_version} in {a pointer to workspace edit context:state_value}:
     execute:
-        set normalized to normalize workspace file URI uri_input inside native root the root_path of state_value
+        set normalized to normalize workspace file URI uri_input inside native root the root path of state_value
         if not normalized's succeeded:
-            return a failed workspace operation reporting normalized's failure_reason
+            return a failed workspace operation reporting normalized's failure reason
         if workspace open document with identity normalized's identity in state_value != (0 as a pointer to workspace open document):
             return a failed workspace operation reporting the string form of "Workspace document is already open"
-        set status_value to inspect filesystem entry at normalized's path
+        set status_value to the file system entry at normalized's path
         if not status_value's succeeded:
             return a failed workspace operation reporting the string form of "Workspace document could not be inspected"
-        if status_value's found and not status_value's regular_file:
+        if status_value's found and not status_value's regular file:
             return a failed workspace operation reporting the string form of "Workspace document must be a regular file"
         set indexed_lines to scan lines in contents
         set valid_text to the status of indexed_lines = the text position success status
@@ -427,7 +427,7 @@ function free workspace edit context {a pointer to workspace edit context:state_
         @intrinsic("call", "libc", "free", void, the items of document_values)
         @intrinsic("destroy at", document_values)
         @intrinsic("call", "libc", "free", void, document_values)
-        set decision_values to the annotation_decisions of state_value
+        set decision_values to the annotation decisions of state_value
         set decision_index to 0
         loop while decision_index < the length of decision_values:
             set decision_value to workspace annotation decision at decision_index in decision_values
