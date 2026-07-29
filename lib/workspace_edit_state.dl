@@ -1,0 +1,441 @@
+# Public WorkspaceEdit host state, open buffers, annotation decisions, and results.
+
+import lib/workspace_edit_types.dl
+import lib/workspace_edit_uri.dl
+import lib/path.dl
+import lib/filesystem.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        [a|] workspace open document
+    members:
+        uri as string
+        path as string
+        identity as string
+        text as string
+        version as i32
+
+class:
+    patterns:
+        [a|] workspace open document collection
+    members:
+        items as a pointer to a pointer to workspace open document
+        length as i32
+        capacity as i32
+
+class:
+    patterns:
+        [a|] workspace annotation decision
+    members:
+        identifier as string
+        approved as boolean
+
+class:
+    patterns:
+        [a|] workspace annotation decision collection
+    members:
+        items as a pointer to a pointer to workspace annotation decision
+        length as i32
+        capacity as i32
+
+class:
+    patterns:
+        [a|] workspace edit context
+    members:
+        root_path as string
+        path_style as path style
+        position_encoding as i32
+        annotations_enabled as boolean
+        documents as a pointer to workspace open document collection
+        annotation_decisions as a pointer to workspace annotation decision collection
+
+class:
+    patterns:
+        [a|] workspace context result
+    members:
+        succeeded as boolean
+        context as a pointer to workspace edit context
+        failure_reason as string
+
+class:
+    patterns:
+        [a|] workspace operation result
+    members:
+        succeeded as boolean
+        failure_reason as string
+
+class:
+    patterns:
+        [a|] workspace edit result
+    members:
+        applied as boolean
+        failure_reason as string
+        failed_change_present as boolean
+        failed_change as i32
+        confirmation_required as boolean
+        annotation_id as string
+        annotation_label as string
+        annotation_description_present as boolean
+        annotation_description as string
+        may_have_applied_changes as boolean
+
+local function a new workspace open document collection:
+    execute:
+        set initial_value to @intrinsic(
+            "construct",
+            a workspace open document collection,
+            0 as a pointer to a pointer to workspace open document,
+            0,
+            0
+        )
+        set result_value to allocate 1 slots of initial_value
+        return result_value
+
+local function append workspace open document {a pointer to workspace open document:value} to {a pointer to workspace open document collection:collection}:
+    execute:
+        if the length of collection = the capacity of collection:
+            set next_capacity to (the capacity of collection) * 2
+            if next_capacity < 4:
+                set next_capacity to 4
+            set resized to @intrinsic(
+                "call",
+                "libc",
+                "realloc",
+                a pointer to a pointer to workspace open document,
+                the items of collection,
+                next_capacity * the size of a pointer to workspace open document
+            )
+            set the items of collection to resized
+            set the capacity of collection to next_capacity
+        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
+        set the length of collection to (the length of collection) + 1
+
+function workspace open document at index {integer:position} in {a pointer to workspace open document collection:collection}:
+    execute:
+        if position < 0 or position >= the length of collection:
+            @intrinsic("call", "libc", "abort", void)
+        return item position of the items of collection
+
+function workspace open document with identity {string:requested_identity} in {a pointer to workspace edit context:state_value}:
+    execute:
+        set position to 0
+        loop while position < the length of the documents of state_value:
+            set document_value to workspace open document at index position in the documents of state_value
+            if document_value's identity = requested_identity:
+                return document_value
+            set position to position + 1
+        return 0 as a pointer to workspace open document
+
+local function a new workspace annotation decision collection:
+    execute:
+        set initial_value to @intrinsic(
+            "construct",
+            a workspace annotation decision collection,
+            0 as a pointer to a pointer to workspace annotation decision,
+            0,
+            0
+        )
+        set result_value to allocate 1 slots of initial_value
+        return result_value
+
+local function append workspace annotation decision {a pointer to workspace annotation decision:value} to {a pointer to workspace annotation decision collection:collection}:
+    execute:
+        if the length of collection = the capacity of collection:
+            set next_capacity to (the capacity of collection) * 2
+            if next_capacity < 4:
+                set next_capacity to 4
+            set resized to @intrinsic(
+                "call",
+                "libc",
+                "realloc",
+                a pointer to a pointer to workspace annotation decision,
+                the items of collection,
+                next_capacity * the size of a pointer to workspace annotation decision
+            )
+            set the items of collection to resized
+            set the capacity of collection to next_capacity
+        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
+        set the length of collection to (the length of collection) + 1
+
+local function workspace annotation decision at {integer:position} in {a pointer to workspace annotation decision collection:collection}:
+    execute:
+        if position < 0 or position >= the length of collection:
+            @intrinsic("call", "libc", "abort", void)
+        return item position of the items of collection
+
+function workspace annotation decision named {string:requested_identifier} in {a pointer to workspace edit context:state_value}:
+    execute:
+        set position to 0
+        loop while position < the length of the annotation_decisions of state_value:
+            set decision_value to workspace annotation decision at position in the annotation_decisions of state_value
+            if decision_value's identifier = requested_identifier:
+                return decision_value
+            set position to position + 1
+        return 0 as a pointer to workspace annotation decision
+
+function a successful workspace operation:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace operation result,
+            true,
+            an empty workspace edit text
+        )
+
+function a failed workspace operation reporting {string:reason}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace operation result,
+            false,
+            reason
+        )
+
+function a successful workspace edit result:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace edit result,
+            true,
+            an empty workspace edit text,
+            false,
+            0,
+            false,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            false,
+            an empty workspace edit text,
+            false
+        )
+
+function a failed workspace edit result reporting {string:reason}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace edit result,
+            false,
+            reason,
+            false,
+            0,
+            false,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            false,
+            an empty workspace edit text,
+            false
+        )
+
+function a failed workspace edit result reporting {string:reason} at change {integer:change_index}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace edit result,
+            false,
+            reason,
+            true,
+            change_index as i32,
+            false,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            false,
+            an empty workspace edit text,
+            false
+        )
+
+function a partially applied workspace edit result reporting {string:reason} at change {integer:change_index}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace edit result,
+            false,
+            reason,
+            true,
+            change_index as i32,
+            false,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            false,
+            an empty workspace edit text,
+            true
+        )
+
+function a workspace edit confirmation result for {a pointer to workspace change annotation:annotation_value} at change {integer:change_index}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a workspace edit result,
+            false,
+            an empty workspace edit text,
+            true,
+            change_index as i32,
+            true,
+            annotation_value's identifier,
+            annotation_value's label,
+            annotation_value's description_present,
+            annotation_value's description,
+            false
+        )
+
+function create workspace edit context rooted at {string:workspace_root}:
+    execute:
+        set native_style_result to the native path style
+        if (not native_style_result's succeeded) or (not native_style_result's supported):
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                the string form of "Native path style is unsupported"
+            )
+        set normalized_root to lexically normalize workspace_root using native_style_result's value
+        if not normalized_root's succeeded:
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                normalized_root's error message
+            )
+        set absolute_result to whether path normalized_root's value is absolute using native_style_result's value
+        if (not absolute_result's succeeded) or (not absolute_result's value):
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                the string form of "Workspace root must be absolute"
+            )
+        if workspace native path normalized_root's value has a symbolic link ancestor using native_style_result's value:
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                the string form of "Workspace root may not traverse symbolic links"
+            )
+        set root_status to inspect filesystem entry at normalized_root's value
+        if not root_status's succeeded:
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                the string form of "Workspace root could not be inspected"
+            )
+        if (not root_status's found) or (not root_status's directory):
+            return @intrinsic(
+                "construct",
+                a workspace context result,
+                false,
+                0 as a pointer to workspace edit context,
+                the string form of "Workspace root must be an existing directory"
+            )
+        set document_values to a new workspace open document collection
+        set decision_values to a new workspace annotation decision collection
+        set initial_value to @intrinsic(
+            "construct",
+            a workspace edit context,
+            normalized_root's value,
+            native_style_result's value,
+            the workspace utf16 position encoding,
+            false,
+            document_values,
+            decision_values
+        )
+        set state_value to allocate 1 slots of initial_value
+        return @intrinsic(
+            "construct",
+            a workspace context result,
+            true,
+            state_value,
+            an empty workspace edit text
+        )
+
+function set workspace position encoding {integer:requested_encoding} in {a pointer to workspace edit context:state_value}:
+    execute:
+        if requested_encoding != the workspace utf8 position encoding:
+            if requested_encoding != the workspace utf16 position encoding:
+                if requested_encoding != the workspace utf32 position encoding:
+                    return a failed workspace operation reporting the string form of "Unsupported position encoding"
+        set the position_encoding of state_value to requested_encoding as i32
+        return a successful workspace operation
+
+function enable workspace change annotations in {a pointer to workspace edit context:state_value}:
+    execute:
+        set the annotations_enabled of state_value to true
+
+function record workspace annotation confirmation {string:requested_identifier} as {boolean:approval} in {a pointer to workspace edit context:state_value}:
+    execute:
+        set existing to workspace annotation decision named requested_identifier in state_value
+        if existing != (0 as a pointer to workspace annotation decision):
+            set the approved of existing to approval
+            @intrinsic("return")
+        set initial_value to @intrinsic(
+            "construct",
+            a workspace annotation decision,
+            requested_identifier,
+            approval
+        )
+        set decision_value to allocate 1 slots of initial_value
+        append workspace annotation decision decision_value to the annotation_decisions of state_value
+
+function open workspace document {string:uri_input} with text {string:contents} at version {integer:document_version} in {a pointer to workspace edit context:state_value}:
+    execute:
+        set normalized to normalize workspace file URI uri_input inside native root the root_path of state_value
+        if not normalized's succeeded:
+            return a failed workspace operation reporting normalized's failure_reason
+        if workspace open document with identity normalized's identity in state_value != (0 as a pointer to workspace open document):
+            return a failed workspace operation reporting the string form of "Workspace document is already open"
+        set status_value to inspect filesystem entry at normalized's path
+        if not status_value's succeeded:
+            return a failed workspace operation reporting the string form of "Workspace document could not be inspected"
+        if status_value's found and not status_value's regular_file:
+            return a failed workspace operation reporting the string form of "Workspace document must be a regular file"
+        set indexed_lines to scan lines in contents
+        set valid_text to the status of indexed_lines = the text position success status
+        free line index result indexed_lines
+        if not valid_text:
+            return a failed workspace operation reporting the string form of "Workspace document text must be valid UTF-8"
+        set canonical_uri to a file URI from native path normalized's path
+        if (not canonical_uri's succeeded) or (not canonical_uri's supported):
+            return a failed workspace operation reporting the string form of "Workspace document URI could not be normalized"
+        set initial_value to @intrinsic(
+            "construct",
+            a workspace open document,
+            canonical_uri's value,
+            normalized's path,
+            normalized's identity,
+            contents,
+            document_version as i32
+        )
+        set document_value to allocate 1 slots of initial_value
+        append workspace open document document_value to the documents of state_value
+        return a successful workspace operation
+
+function free workspace edit context {a pointer to workspace edit context:state_value}:
+    execute:
+        if state_value = (0 as a pointer to workspace edit context):
+            @intrinsic("return")
+        set document_values to the documents of state_value
+        set document_index to 0
+        loop while document_index < the length of document_values:
+            set document_value to workspace open document at index document_index in document_values
+            @intrinsic("destroy at", document_value)
+            @intrinsic("call", "libc", "free", void, document_value)
+            set document_index to document_index + 1
+        @intrinsic("call", "libc", "free", void, the items of document_values)
+        @intrinsic("destroy at", document_values)
+        @intrinsic("call", "libc", "free", void, document_values)
+        set decision_values to the annotation_decisions of state_value
+        set decision_index to 0
+        loop while decision_index < the length of decision_values:
+            set decision_value to workspace annotation decision at decision_index in decision_values
+            @intrinsic("destroy at", decision_value)
+            @intrinsic("call", "libc", "free", void, decision_value)
+            set decision_index to decision_index + 1
+        @intrinsic("call", "libc", "free", void, the items of decision_values)
+        @intrinsic("destroy at", decision_values)
+        @intrinsic("call", "libc", "free", void, decision_values)
+        @intrinsic("destroy at", state_value)
+        @intrinsic("call", "libc", "free", void, state_value)

@@ -1,0 +1,8 @@
+1
+1
+1
+ABXYZcd
+0
+UTF-16 position is outside a code point boundary
+0
+Text edit ranges overlap
