@@ -1,8 +1,8 @@
-1
-1
-1
+true
+true
+true
 ABXYZcd
-0
+false
 UTF-16 position is outside a code point boundary
-0
+false
 Text edit ranges overlap

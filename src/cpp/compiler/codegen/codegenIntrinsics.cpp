@@ -596,10 +596,10 @@ CodegenResult generateIntrinsicCode(
 											   : builder.CreateICmpNE(left, right, "pne");
 		} else {
 			DataType promoted;
-			requireCompilerInvariant(
-				DataType::promoteArithmetic(leftType, rightType, promoted),
-				"comparison operands accepted by inference have no common codegen type"
-			);
+			bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
+			bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
+									   : DataType::promoteArithmetic(leftType, rightType, promoted);
+			requireCompilerInvariant(promotable, "comparison operands accepted by inference have no common codegen type");
 			left = ensureType(context, left, leftType, promoted);
 			right = ensureType(context, right, rightType, promoted);
 			if (promoted.kind == DataType::Kind::Float) {

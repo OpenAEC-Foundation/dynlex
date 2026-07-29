@@ -1,9 +1,9 @@
 Hello, DynLex!
 hello, dynlex!
 HELLO, DYNLEX!
-1
-1
-1
+true
+true
+true
 DynLex
 Hello, world!
 hahaha

@@ -273,11 +273,13 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 					DataType promoted;
 					DataType refinedPointerType;
+					bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
 					bool pointerEquality =
-						(kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-						rightType.isPointer() &&
+						equality && leftType.isPointer() && rightType.isPointer() &&
 						(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
-					if (pointerEquality || DataType::promoteArithmetic(leftType, rightType, promoted))
+					bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
+											   : DataType::promoteArithmetic(leftType, rightType, promoted);
+					if (pointerEquality || promotable)
 						return {DataType::Kind::Bool};
 				}
 				return {};

@@ -93,11 +93,13 @@ case Expression::Kind::IntrinsicCall: {
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				DataType promoted;
 				DataType refinedPointerType;
+				bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
 				bool pointerEquality =
-					(kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-					rightType.isPointer() &&
+					equality && leftType.isPointer() && rightType.isPointer() &&
 					(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
-				if (!pointerEquality && !DataType::promoteArithmetic(leftType, rightType, promoted)) {
+				bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
+										   : DataType::promoteArithmetic(leftType, rightType, promoted);
+				if (!pointerEquality && !promotable) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
 						{{"left_type", typeToUserName(leftType, context.parseContext)},

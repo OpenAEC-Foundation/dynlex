@@ -187,9 +187,8 @@ generateCompletedGroupingChoices(Expression *&candidateRoot, GroupingGenerationS
 		state.fixedGroupingRoots.erase(candidateRoot);
 }
 
-static bool canClaimGroupingSpan(
-	int start, int end, int rootIndex, Expression *rootExpression, const GroupingGenerationState &state
-) {
+static bool
+canClaimGroupingSpan(int start, int end, int rootIndex, Expression *rootExpression, const GroupingGenerationState &state) {
 	if (!expressionHasGroupingShape(rootExpression) || state.opaqueNodes.contains(rootExpression))
 		return false;
 	bool hasLeftEdge = startsWithArgument(rootExpression);

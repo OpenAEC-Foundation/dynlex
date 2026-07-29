@@ -1,12 +1,12 @@
+true
 1
 1
-1
-1
+true
 4
-1
+true
 file:///workspace/alpha.txt
 file:///workspace/beta.txt
-0
-1
+false
+true
 0
 Snippet edits are unsupported
