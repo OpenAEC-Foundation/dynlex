@@ -4,6 +4,7 @@ import {
   hoverMonacoText, navigate, replaceMonacoSource, requestedUrls, runtimeExceptions,
   screenshotDirectory, siteOrigin, sourceEditExpression, waitFor
 } from "./browser_test_driver.mjs";
+import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
 
 const shaderManifest = await fetch(`${siteOrigin}/shaders/manifest.json`).then((response) => {
   assert.equal(response.ok, true, "The live shader manifest must load");
@@ -64,6 +65,8 @@ const shaderState = await evaluate(`(() => {
     immersiveCssWidth: immersiveCanvas.clientWidth,
     immersiveCssHeight: immersiveCanvas.clientHeight,
     pixelRatio: window.devicePixelRatio || 1,
+    clipPath: getComputedStyle(immersiveLayer).clipPath,
+    filter: getComputedStyle(immersiveLayer).filter,
     sectionHeight: section.getBoundingClientRect().height,
     viewportHeight: window.innerHeight,
     activeShaderIndex: section.dataset.activeShaderIndex,
@@ -88,6 +91,8 @@ assert.equal(shaderState.layerState, "active");
 assert.equal(shaderState.scenePhase, "immersive");
 assert.equal(shaderState.cloudCoverage, "viewport");
 assert.equal(shaderState.fillsSection, true, "The first shader must fill the banner immediately");
+assert.equal(shaderState.clipPath, "none", "The active shader must not retain its reveal mask");
+assert.equal(shaderState.filter, "none", "The active shader must not retain its reveal filter");
 assert.equal(shaderState.laptopOpacity, 0, "The first shader must not replay the thought-cloud entrance");
 assert.ok(
   shaderState.immersiveWidth >= Math.round(shaderState.immersiveCssWidth * shaderState.pixelRatio),
@@ -118,44 +123,34 @@ const immersiveChrome = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
   const header = document.querySelector('[data-site-header]');
   const headline = section.querySelector('.shader-copy');
-  const path = section.querySelector('[data-thought-cloud-path]');
-  const geometry = section.querySelector('#thought-cloud-geometry');
-  const coveredCorners = [
-    [1 / 3, 1 / 3],
-    [2 / 3, 1 / 3],
-    [1 / 3, 2 / 3],
-    [2 / 3, 2 / 3]
-  ].every(([x, y]) => geometry.isPointInFill(new DOMPoint(x, y)));
   return {
-    cloudTransform: path.getAttribute('transform'),
     cloudCoverage: section.dataset.cloudCoverage,
     headerOpacity: getComputedStyle(header).opacity,
     headerVisibility: getComputedStyle(header).visibility,
     headerIsTopLayer: document.elementFromPoint(window.innerWidth / 2, 10)?.closest('[data-site-header]') === header,
-    headlineOpacity: Number(getComputedStyle(headline).opacity),
-    coveredCorners
+    headlineOpacity: Number(getComputedStyle(headline).opacity)
   };
 })()`);
-assert.equal(immersiveChrome.cloudTransform, "translate(-1 -1) scale(3 3)");
 assert.equal(immersiveChrome.cloudCoverage, "viewport");
-assert.equal(immersiveChrome.coveredCorners, true, "Every viewport corner must be inside the expanded cloud");
 assert.equal(immersiveChrome.headerOpacity, "1");
 assert.equal(immersiveChrome.headerVisibility, "visible");
 assert.equal(immersiveChrome.headerIsTopLayer, true, "The fixed site header must remain above the immersed shader");
 assert.ok(immersiveChrome.headlineOpacity >= 0.78, "The banner headline must remain visible over the shader");
-await evaluate("document.querySelector('[data-shader-next]').click()");
-await waitFor(
-  "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'",
-  "the preloaded shader to enter its pre-expansion state"
-);
 const preparedThought = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
+  section.querySelector('[data-shader-next]').click();
+  if (section.dataset.incomingShaderIndex !== '1') {
+    throw new Error('The preloaded shader did not enter its reveal state synchronously');
+  }
   const cloudRect = section.querySelector('.thought-assembly').getBoundingClientRect();
   const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
   const revealingRect = revealingLayer.getBoundingClientRect();
+  const revealingStyle = getComputedStyle(revealingLayer);
   return {
     layer: revealingLayer.dataset.shaderLayer,
     revision: Number(revealingLayer.querySelector('canvas').dataset.previewRevision),
+    clipPath: revealingStyle.clipPath,
+    filter: revealingStyle.filter,
     cloudRect: [cloudRect.left, cloudRect.top, cloudRect.width, cloudRect.height],
     revealingRect: [revealingRect.left, revealingRect.top, revealingRect.width, revealingRect.height],
     renderAreaMatchesCloud: (
@@ -177,6 +172,8 @@ assert.equal(
   true,
   `The shader render surface must begin at the thought-cloud bounds: ${JSON.stringify(preparedThought)}`
 );
+assert.match(preparedThought.clipPath, /thought-cloud-mask-[01]/);
+assert.notEqual(preparedThought.filter, "none", "The revealing thought cloud must retain its glow");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
     + " && Number(getComputedStyle(document.querySelector('.shader-laptop')).opacity) > 0.75",
@@ -233,43 +230,7 @@ assert.equal(
   "The expanding cloud must cover its connector circles"
 );
 await captureScreenshot("homepage-next-shader-code");
-await waitFor(
-  "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
-    + " && Number(document.querySelector('[data-live-shader-banner]').dataset.sceneProgress) >= 0.8",
-  "the next shader to appear inside its thought cloud"
-);
-const incomingShaderMoves = await evaluate(`(async () => {
-  const canvas = document.querySelector(
-    '[data-shader-layer="${overlappingThoughts.revealingLayerIndex}"] canvas'
-  );
-  const gl = canvas.getContext('webgl2');
-  const timeBuffer = gl.getIndexedParameter(
-    gl.UNIFORM_BUFFER_BINDING,
-    ${incomingTimeBinding}
-  );
-  if (!timeBuffer) throw new Error('The incoming shader time buffer is not bound');
-  const readTime = () => {
-    const value = new Float32Array(1);
-    gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
-    gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
-    return value[0];
-  };
-  const first = readTime();
-  await new Promise((resolve) => {
-    let frameCount = 0;
-    const waitForRenderedFrame = () => {
-      frameCount += 1;
-      if (frameCount === 4) {
-        resolve();
-      } else {
-        requestAnimationFrame(waitForRenderedFrame);
-      }
-    };
-    requestAnimationFrame(waitForRenderedFrame);
-  });
-  return readTime() > first;
-})()`);
-assert.equal(incomingShaderMoves, true, "The shader must animate while it is inside the thought cloud");
+await verifyOffscreenRevealReturn(incomingTimeBinding);
 await captureScreenshot("homepage-overlapping-thoughts");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
