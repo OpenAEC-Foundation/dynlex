@@ -1,0 +1,13 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function negative {integer:value}:
+    replacement:
+        @intrinsic("negate", value)
+
+function {integer:left} + {integer:right}:
+    replacement:
+        @intrinsic("add", left, right)
+
+@intrinsic("discard", negative 9223372036854775808 + 1)

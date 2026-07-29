@@ -1,0 +1,1 @@
+tests/required/integer_literal_out_of_range/main.dl:9-28: Error: Integer literal exceeds the signed 64-bit range

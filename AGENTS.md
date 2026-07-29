@@ -131,6 +131,10 @@ The script creates `.worktrees/<name>` and a same-named branch from `start-point
 ./build/dynlex --dap
 ```
 
+The normal build is optimized with debug information and invariants enabled.
+Use `./scripts/build.sh --debug` only when an unoptimized compiler is required
+for debugger stepping.
+
 Dependencies: C++23, `nlohmann_json` (system package on Unix, vcpkg on Windows),
 Clang 20+ as the bootstrap compiler, and the pinned LLVM 23 fork built by
 `scripts/build_llvm.sh`.

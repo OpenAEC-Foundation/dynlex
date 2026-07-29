@@ -86,6 +86,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
 	expr->compileTimeValue = {};
+	expr->minimumIntegerEffects = {};
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
@@ -130,6 +131,10 @@ static std::string renderResolvedExpression(Expression *expr) {
 		return (std::string)expr->range.subString;
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
+		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
+			return std::to_string(*integer);
+		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(expr->literalValue))
+			return "9223372036854775808";
 		if (const auto *number = std::get_if<double>(&expr->literalValue))
 			return std::to_string(*number);
 		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
@@ -697,8 +702,10 @@ class GroupingInferenceTransaction {
 			requireCompilerInvariant(savedTrialJournal, "nested grouping inference transaction has no parent journal");
 			savedTrialJournal->absorb(std::move(journal));
 		} else {
-			for (const auto &[expression, value] : context.trialExpressionValues)
-				setExpressionCompileTimeValue(expression, value);
+			for (const auto &[expression, evaluation] : context.trialExpressionValues) {
+				setExpressionCompileTimeValue(expression, evaluation.value);
+				expression->minimumIntegerEffects = evaluation.minimumIntegerEffects;
+			}
 			commitTrialCodeLineGroupings(context);
 			for (const auto &[definition, instantiation] : context.trialCallableInstantiations) {
 				requireCompilerInvariant(
@@ -748,7 +755,7 @@ class GroupingInferenceTransaction {
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
-	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeEvaluation> *savedInheritedTrialExpressionValues;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
 	bool active = true;

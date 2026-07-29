@@ -33,7 +33,6 @@
     overflow: hidden;
     opacity: 0;
     filter: drop-shadow(0 0 24px rgba(104, 213, 255, 0.74));
-    will-change: top, left, width, height, opacity;
 }
 
 .shader-immersion[data-shader-layer="0"] {
@@ -47,11 +46,14 @@
 .shader-immersion[data-layer-state="active"] {
     z-index: 0;
     opacity: 1;
+    clip-path: none;
+    filter: none;
 }
 
 .shader-immersion[data-layer-state="revealing"] {
     z-index: 3;
     opacity: var(--immersion-opacity);
+    will-change: top, left, width, height, opacity;
 }
 
 .shader-immersion[data-layer-state="dormant"] {

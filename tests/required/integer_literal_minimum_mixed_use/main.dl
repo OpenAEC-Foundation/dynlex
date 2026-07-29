@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function negative plus original value:
+    execute:
+        return (the negative of value) + value
+
+discard negative plus original 9223372036854775808

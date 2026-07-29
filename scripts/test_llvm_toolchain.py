@@ -15,6 +15,68 @@ PINNED_REVISION = "e5be62d86c56bdd295ad5993b1cb54f0aa4ae9ef"
 
 
 class LlvmToolchainTests(unittest.TestCase):
+    def test_linked_worktrees_share_the_primary_toolchain_cache(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-worktree-") as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            primary = temporary_root / "primary"
+            linked = temporary_root / "linked"
+            (primary / "scripts").mkdir(parents=True)
+            (primary / "metadata").mkdir()
+            (primary / "scripts" / "llvm_toolchain.sh").write_text(
+                (SCRIPTS_DIR / "llvm_toolchain.sh").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (primary / "metadata" / "LLVM_TOOLCHAIN").write_text(
+                (PROJECT_DIR / "metadata" / "LLVM_TOOLCHAIN").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            subprocess.run(["git", "init", str(primary)], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(primary), "add", "."], check=True, capture_output=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(primary),
+                    "-c",
+                    "user.name=DynLex Tests",
+                    "-c",
+                    "user.email=tests@dynlex.invalid",
+                    "commit",
+                    "-m",
+                    "fixture",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(primary), "worktree", "add", "--detach", str(linked), "HEAD"],
+                check=True,
+                capture_output=True,
+            )
+
+            environment = os.environ.copy()
+            environment.pop("DYNLEX_LLVM_CACHE_DIR", None)
+            resolved_caches = []
+            for checkout in (primary, linked):
+                completed = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        '. "$1"; printf "%s\\n" "$DYNLEX_LLVM_CACHE_DIR"',
+                        "bash",
+                        str(checkout / "scripts" / "llvm_toolchain.sh"),
+                    ],
+                    capture_output=True,
+                    env=environment,
+                    text=True,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                resolved_caches.append(Path(completed.stdout.strip()))
+
+            expected_cache = primary / ".cache" / "llvm-toolchain"
+            self.assertEqual(resolved_caches, [expected_cache, expected_cache])
+
     def test_toolchain_pin_and_cache_layout_have_one_source_of_truth(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-llvm-contract-") as temporary_directory:
             environment = os.environ.copy()
@@ -75,8 +137,20 @@ printf '%s\\n' \
         self.assertIn("for source_component in llvm cmake libc third-party", toolchain)
         self.assertNotIn("mapfile", toolchain)
         debug_test = (SCRIPTS_DIR / "test_debug_info.py").read_text(encoding="utf-8")
-        self.assertIn('os.environ.get("DYNLEX_LLVM_CACHE_DIR"', debug_test)
+        self.assertIn('SCRIPTS_DIR / "llvm_toolchain.sh"', debug_test)
+        self.assertIn('"$DYNLEX_LLVM_NATIVE_INSTALL_DIR"', debug_test)
+        self.assertNotIn('repo_root / ".cache" / "llvm-toolchain"', debug_test)
         self.assertNotIn("shutil.which", debug_test)
+
+    def test_normal_native_build_is_optimized_without_disabling_invariants(self) -> None:
+        native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
+        cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+
+        self.assertIn("BUILD_TYPE=Optimized", native_build)
+        self.assertIn("--debug) BUILD_TYPE=Debug", native_build)
+        self.assertIn('CMAKE_CXX_FLAGS_OPTIMIZED', cmake)
+        self.assertIn("-O2 -g", cmake)
+        self.assertNotRegex(cmake, r'CMAKE_CXX_FLAGS_OPTIMIZED[^\n]*NDEBUG')
 
     def test_codegen_uses_the_llvm_23_apis(self) -> None:
         codegen_directory = PROJECT_DIR / "src" / "cpp" / "compiler" / "codegen"
