@@ -1,8 +1,0 @@
-import lib/json_rpc_session.dl
-
-set connection to 0 as a pointer to json rpc connection
-set state to start a json rpc session with connection
-set parameters to a new json value of kind the json object kind
-set sent to send json rpc request "first" with parameters using state
-set identifier to sent's request id
-set response to await json rpc response for identifier using state

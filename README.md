@@ -19,7 +19,9 @@ A natural-language-like programming language that compiles to native code via LL
 Requires C++23, Clang 20 or newer, CMake, Ninja, `nlohmann_json`, Git, and GNU
 binutils on ELF systems. `scripts/build.sh` checks out and caches the exact LLVM
 23 fork recorded in `metadata/LLVM_TOOLCHAIN`; system LLVM installations are not
-used. Build that toolchain independently with:
+used. Linked Git worktrees automatically share the primary checkout's
+`.cache/llvm-toolchain` directory. Set `DYNLEX_LLVM_CACHE_DIR` to use an explicit
+cache location instead. Build that toolchain independently with:
 
 ```bash
 ./scripts/build_llvm.sh native
