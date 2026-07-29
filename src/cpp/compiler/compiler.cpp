@@ -39,6 +39,12 @@ static std::string currentResolutionRoot() {
 	return error ? std::string{} : current.lexically_normal().string();
 }
 
+static std::string importPathUnder(std::string_view root, std::string_view path) {
+	return (std::filesystem::path(pathutil::toFilesystemPath(root)) / std::filesystem::path(pathutil::toFilesystemPath(path)))
+		.lexically_normal()
+		.string();
+}
+
 // Search paths for library imports (e.g., "lib/std.dl")
 // Tries: the importing file's directory, the importing file's resolution root,
 // the working directory, then the source tree and installed locations.
@@ -49,9 +55,10 @@ static ResolvedImport resolveImportPath(
 	auto resolveCandidate = [fileSystem](const std::string &candidate, std::string &resolved) -> bool {
 		if (candidate.empty())
 			return false;
-		if (!fileSystem->getFile(candidate))
+		std::string normalized = std::filesystem::path(pathutil::toFilesystemPath(candidate)).lexically_normal().string();
+		if (!fileSystem->getFile(normalized))
 			return false;
-		resolved = candidate;
+		resolved = std::move(normalized);
 		return true;
 	};
 
@@ -60,7 +67,7 @@ static ResolvedImport resolveImportPath(
 	// Try relative to the importing file's directory first; the sibling stays
 	// within the importer's resolution root.
 	if (!importingFileDir.empty()) {
-		std::string relativePath = importingFileDir + "/" + path;
+		std::string relativePath = importPathUnder(importingFileDir, path);
 		if (resolveCandidate(relativePath, resolvedPath))
 			return {resolvedPath, importingFileRoot};
 	}
@@ -68,7 +75,7 @@ static ResolvedImport resolveImportPath(
 	// Try the importing file's resolution root, keeping the import graph on
 	// one consistent tree even when it differs from the working directory.
 	if (!importingFileRoot.empty()) {
-		std::string rootPath = importingFileRoot + "/" + path;
+		std::string rootPath = importPathUnder(importingFileRoot, path);
 		if (resolveCandidate(rootPath, resolvedPath))
 			return {resolvedPath, importingFileRoot};
 	}
@@ -84,33 +91,33 @@ static ResolvedImport resolveImportPath(
 #ifdef DYNLEX_WEB
 	// Browser mode uses a virtual root. Keep imports deterministic for in-memory and preloaded files.
 	if (!path.empty() && path[0] != '/') {
-		if (resolveCandidate("/" + path, resolvedPath))
+		if (resolveCandidate(importPathUnder("/", path), resolvedPath))
 			return {resolvedPath, "/"};
-		if (resolveCandidate("/workspace/" + path, resolvedPath))
+		if (resolveCandidate(importPathUnder("/workspace", path), resolvedPath))
 			return {resolvedPath, "/workspace"};
-		if (resolveCandidate("/lib/" + path, resolvedPath))
+		if (resolveCandidate(importPathUnder("/lib", path), resolvedPath))
 			return {resolvedPath, "/"};
 	}
 #endif
 
 	// Try relative to the project source directory (for development builds)
 	// These come before system paths so dev builds use the source tree's libraries
-	std::string devPath = std::string(PROJECT_SOURCE_DIR) + "/" + path;
+	std::string devPath = importPathUnder(PROJECT_SOURCE_DIR, path);
 	if (resolveCandidate(devPath, resolvedPath))
 		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
 
 	// Try project lib directory (e.g., "std.dl" → "<project>/lib/std.dl")
-	std::string devLibPath = std::string(PROJECT_SOURCE_DIR) + "/lib/" + path;
+	std::string devLibPath = importPathUnder(importPathUnder(PROJECT_SOURCE_DIR, "lib"), path);
 	if (resolveCandidate(devLibPath, resolvedPath))
 		return {resolvedPath, std::string(PROJECT_SOURCE_DIR)};
 
 	// Try installed system path
-	std::string systemPath = "/usr/share/dynlex/" + path;
+	std::string systemPath = importPathUnder("/usr/share/dynlex", path);
 	if (resolveCandidate(systemPath, resolvedPath))
 		return {resolvedPath, "/usr/share/dynlex"};
 
 	// Try installed library path (e.g., "std.dl" → "/usr/share/dynlex/lib/std.dl")
-	std::string systemLibPath = "/usr/share/dynlex/lib/" + path;
+	std::string systemLibPath = importPathUnder("/usr/share/dynlex/lib", path);
 	if (resolveCandidate(systemLibPath, resolvedPath))
 		return {resolvedPath, "/usr/share/dynlex"};
 
@@ -128,6 +135,10 @@ static void collectSectionsPreorder(Section *section, std::vector<Section *> &ou
 static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue &value) {
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
+	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return std::to_string(*integer);
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return "9223372036854775808";
 	if (const auto *number = std::get_if<double>(&value)) {
 		double integralPart = 0.0;
 		if (std::modf(*number, &integralPart) == 0.0)

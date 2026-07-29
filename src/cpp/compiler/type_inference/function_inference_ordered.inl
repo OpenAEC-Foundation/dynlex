@@ -49,13 +49,24 @@ static bool inferSectionFlexCallerBodyFrame(
 	pushSectionFlexCallerVariableBindings(
 		callerBindings, targetFrame.definitionSection, targetFrame.definitionBody, executionSection, bodySection
 	);
-	std::vector<std::pair<Section *, bool>> activeDefinitionStates;
-	activeDefinitionStates.reserve(context.activeFlexDefinitionStack.size());
-	for (Section *activeDefinition : context.activeFlexDefinitionStack) {
-		if (!activeDefinition)
-			continue;
-		activeDefinitionStates.push_back({activeDefinition, activeDefinition->inferring});
-		activeDefinition->inferring = false;
+	requireCompilerInvariant(
+		context.activeFlexDefinitionStack.size() == context.activeFlexExpansionKeys.size(),
+		"active flex definitions and expansion keys diverged before caller body inference"
+	);
+	auto targetDefinition =
+		std::find(context.activeFlexDefinitionStack.rbegin(), context.activeFlexDefinitionStack.rend(), definitionSection);
+	requireCompilerInvariant(
+		targetDefinition != context.activeFlexDefinitionStack.rend(), "section flex caller body has no active definition"
+	);
+	size_t targetExpansionKeyIndex =
+		context.activeFlexDefinitionStack.size() - 1 -
+		static_cast<size_t>(std::distance(context.activeFlexDefinitionStack.rbegin(), targetDefinition));
+	size_t activeExpansionKeyCount = context.activeFlexExpansionKeys.size();
+	std::vector<std::optional<FlexExpansionKey>> suspendedExpansionKeys;
+	suspendedExpansionKeys.reserve(activeExpansionKeyCount - targetExpansionKeyIndex);
+	for (size_t keyIndex = targetExpansionKeyIndex; keyIndex < activeExpansionKeyCount; keyIndex++) {
+		suspendedExpansionKeys.push_back(std::move(context.activeFlexExpansionKeys[keyIndex]));
+		context.activeFlexExpansionKeys[keyIndex].reset();
 	}
 	bool callerBodyFallsThrough = true;
 	bool inferred = inferSection(bodySection, instantiatedBody, nullptr, context, callerBindings, &callerBodyFallsThrough);
@@ -68,8 +79,13 @@ static bool inferSectionFlexCallerBodyFrame(
 	if (inferred && executeBodyCallSite)
 		executeBodyCallSite->sectionOutcome.kind =
 			callerBodyFallsThrough ? Expression::SectionOutcome::Kind::None : Expression::SectionOutcome::Kind::FunctionReturn;
-	for (const auto &[activeDefinition, wasInferring] : activeDefinitionStates)
-		activeDefinition->inferring = wasInferring;
+	requireCompilerInvariant(
+		context.activeFlexDefinitionStack.size() == activeExpansionKeyCount &&
+			context.activeFlexExpansionKeys.size() == activeExpansionKeyCount,
+		"caller body inference left an unbalanced active flex expansion"
+	);
+	for (size_t offset = 0; offset < suspendedExpansionKeys.size(); offset++)
+		context.activeFlexExpansionKeys[targetExpansionKeyIndex + offset] = std::move(suspendedExpansionKeys[offset]);
 	return inferred;
 }
 
@@ -93,6 +109,9 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 	size_t targetFrameIndex = static_cast<size_t>(targetFrame - context.sectionFlexBodyFrames.data());
 	return inferSectionFlexCallerBodyFrame(targetFrameIndex, executionSection, executeBodyExpression, context);
 }
+
+#include "function_inference_pattern_calls.inl"
+#include "intrinsics/shader_runtime_inference.inl"
 
 // Infer the type of an expression bottom-up.
 // Sets context.typesValid = false if types are invalid for this grouping.
@@ -155,23 +174,20 @@ static void inferOrderedExpression(
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		CompileTimeValue literalValue{};
-		if (std::holds_alternative<double>(expr->literalValue)) {
-			double value = std::get<double>(expr->literalValue);
-			std::string_view literalText = expr->range.subString;
-			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
-								   literalText.find('e') != std::string_view::npos ||
-								   literalText.find('E') != std::string_view::npos;
-			if (!explicitlyFloat && std::trunc(value) == value) {
-				expr->type = {DataType::Kind::Int, 4};
-			} else {
-				// Shader pipelines default explicit float literals to f32 to avoid
-				// introducing Float64 arithmetic from constants like 0.5 or 800.0.
-				expr->type = defaultFloatType(context.parseContext.options.emitSPIRV);
-			}
-			if (expr->type.kind == DataType::Kind::Bool)
-				literalValue = value != 0.0;
-			else
-				literalValue = value;
+		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*integer};
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
+		} else if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*minimumMagnitude};
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
+		} else if (const auto *floatingPoint = std::get_if<double>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*floatingPoint};
+			// Shader pipelines default explicit float literals to f32 to avoid
+			// introducing Float64 arithmetic from constants like 0.5 or 800.0.
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
 			expr->type = {DataType::Kind::Int, 1};
 			expr->type.pointerDepth = 1;
@@ -208,21 +224,23 @@ static void inferOrderedExpression(
 		if (expr->variable) {
 			std::string varName = expr->variable->name;
 			// Check flex bindings first
-			Expression *flexBinding = flexBindingFrameStack.lookup(expr->variable);
+			BindingFrameStack callerBindingFrameStack;
+			Expression *flexBinding =
+				flexBindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerBindingFrameStack);
 			if (flexBinding) {
-				CompileTimeValue boundValue = resolveStoredCompileTimeValue(flexBinding, flexBindingFrameStack, &context);
+				CompileTimeValue boundValue = resolveStoredCompileTimeValue(flexBinding, callerBindingFrameStack, &context);
 				bool requiresInference =
 					!flexBinding->type.isDeduced() || (flexBinding->type.isMetaType() && !isCompileTimeKnown(boundValue));
 				if (requiresInference && flexBinding != expr) {
 					bool preserveBindingGrouping =
 						context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding);
 					bool inferred = preserveBindingGrouping
-										? inferExpressionWithCurrentGrouping(flexBinding, context, flexBindingFrameStack)
-										: inferExpression(flexBinding, context, false, flexBindingFrameStack);
+										? inferExpressionWithCurrentGrouping(flexBinding, context, callerBindingFrameStack)
+										: inferExpression(flexBinding, context, false, callerBindingFrameStack);
 					if (!inferred)
 						return;
 				}
-				DataType boundType = ensureExpressionType(flexBinding, context, flexBindingFrameStack);
+				DataType boundType = ensureExpressionType(flexBinding, context, callerBindingFrameStack);
 				if (boundType.isDeduced())
 					expr->type = boundType;
 				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);

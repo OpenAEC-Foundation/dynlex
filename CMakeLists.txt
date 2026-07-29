@@ -17,8 +17,8 @@ include(GNUInstallDirs)
 
 # Homebrew Clang selects the macOS SDK through its driver configuration, but
 # CMake does not always include that configured sysroot in its detected implicit
-# header directories. LLVM's imported targets then re-export SDK headers used by
-# system libraries (FFI, LibEdit, zlib, and others) as explicit -isystem paths.
+# header directories. LLVM's imported targets can then re-export SDK headers
+# used by system libraries as explicit -isystem paths.
 # Mark the active SDK headers as implicit so CMake omits them from every target's
 # command line and preserves libc++'s wrapper-header ordering.
 if(APPLE)
@@ -98,79 +98,62 @@ if(TARGET nlohmann_json::nlohmann_json)
     endif()
 endif()
 
-set(DYNLEX_MIN_LLVM_VERSION 20)
-set(DYNLEX_LLVM_VERSION "" CACHE STRING "Preferred LLVM major version for DynLex")
-
-if(NOT LLVM_DIR)
-    if(DYNLEX_LLVM_VERSION)
-        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config-${DYNLEX_LLVM_VERSION} llvm-config)
-    else()
-        find_program(DYNLEX_LLVM_CONFIG NAMES llvm-config)
-    endif()
-
-    if(DYNLEX_LLVM_CONFIG)
-        execute_process(
-            COMMAND ${DYNLEX_LLVM_CONFIG} --version
-            OUTPUT_VARIABLE DYNLEX_LLVM_CONFIG_VERSION
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-
-        string(REGEX MATCH "^[0-9]+" DYNLEX_FOUND_LLVM_MAJOR "${DYNLEX_LLVM_CONFIG_VERSION}")
-        if(DYNLEX_LLVM_VERSION AND NOT DYNLEX_FOUND_LLVM_MAJOR STREQUAL DYNLEX_LLVM_VERSION)
-            message(FATAL_ERROR
-                "Requested LLVM ${DYNLEX_LLVM_VERSION}, but ${DYNLEX_LLVM_CONFIG} resolves to LLVM ${DYNLEX_FOUND_LLVM_MAJOR}"
-            )
-        endif()
-
-        execute_process(
-            COMMAND ${DYNLEX_LLVM_CONFIG} --cmakedir
-            OUTPUT_VARIABLE DYNLEX_LLVM_CMAKE_DIR
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-
-        if(EXISTS "${DYNLEX_LLVM_CMAKE_DIR}/LLVMConfig.cmake")
-            set(LLVM_DIR "${DYNLEX_LLVM_CMAKE_DIR}" CACHE PATH "LLVM CMake directory" FORCE)
-        endif()
-    endif()
+set(DYNLEX_LLVM_METADATA_FILE "${CMAKE_SOURCE_DIR}/metadata/LLVM_TOOLCHAIN")
+if(NOT EXISTS "${DYNLEX_LLVM_METADATA_FILE}")
+    message(FATAL_ERROR "Missing LLVM toolchain metadata at ${DYNLEX_LLVM_METADATA_FILE}")
 endif()
-
-if(WIN32 AND NOT TARGET ZLIB::ZLIB)
-    find_package(ZLIB QUIET)
-
-    if(NOT TARGET ZLIB::ZLIB)
-        set(DYNLEX_ZLIB_HINTS "")
-        if(LLVM_DIR)
-            get_filename_component(DYNLEX_LLVM_LIB_DIR "${LLVM_DIR}/../.." ABSOLUTE)
-            get_filename_component(DYNLEX_LLVM_ROOT_DIR "${DYNLEX_LLVM_LIB_DIR}/.." ABSOLUTE)
-            list(APPEND DYNLEX_ZLIB_HINTS "${DYNLEX_LLVM_LIB_DIR}" "${DYNLEX_LLVM_ROOT_DIR}/lib")
-        endif()
-
-        find_library(DYNLEX_ZLIB_LIBRARY
-            NAMES zlibstatic zlib libz z
-            HINTS ${DYNLEX_ZLIB_HINTS}
-        )
-        find_path(DYNLEX_ZLIB_INCLUDE_DIR
-            NAMES zlib.h
-            HINTS ${DYNLEX_ZLIB_HINTS} "${DYNLEX_LLVM_ROOT_DIR}/include"
-        )
-
-        if(DYNLEX_ZLIB_LIBRARY)
-            add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
-            set_target_properties(ZLIB::ZLIB PROPERTIES IMPORTED_LOCATION "${DYNLEX_ZLIB_LIBRARY}")
-            if(DYNLEX_ZLIB_INCLUDE_DIR)
-                set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${DYNLEX_ZLIB_INCLUDE_DIR}")
-            endif()
-            message(STATUS "Using fallback ZLIB::ZLIB target: ${DYNLEX_ZLIB_LIBRARY}")
-        endif()
+file(STRINGS "${DYNLEX_LLVM_METADATA_FILE}" DYNLEX_LLVM_METADATA)
+foreach(DYNLEX_LLVM_METADATA_LINE IN LISTS DYNLEX_LLVM_METADATA)
+    if(NOT DYNLEX_LLVM_METADATA_LINE MATCHES "^([a-z]+) (.+)$")
+        message(FATAL_ERROR "Invalid LLVM toolchain metadata: ${DYNLEX_LLVM_METADATA_LINE}")
     endif()
-endif()
+    string(TOUPPER "${CMAKE_MATCH_1}" DYNLEX_LLVM_METADATA_KEY)
+    set("DYNLEX_LLVM_${DYNLEX_LLVM_METADATA_KEY}" "${CMAKE_MATCH_2}")
+endforeach()
+foreach(DYNLEX_LLVM_REQUIRED_FIELD IN ITEMS REPOSITORY REVISION MAJOR BOOTSTRAP SCHEMA)
+    if(NOT DEFINED "DYNLEX_LLVM_${DYNLEX_LLVM_REQUIRED_FIELD}")
+        message(FATAL_ERROR "LLVM toolchain metadata is missing ${DYNLEX_LLVM_REQUIRED_FIELD}")
+    endif()
+endforeach()
+set(DYNLEX_REQUIRED_LLVM_VERSION "${DYNLEX_LLVM_MAJOR}")
 
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-if(LLVM_PACKAGE_VERSION VERSION_LESS "${DYNLEX_MIN_LLVM_VERSION}.0.0")
-    message(FATAL_ERROR "DynLex requires LLVM ${DYNLEX_MIN_LLVM_VERSION} or newer")
+if(NOT LLVM_PACKAGE_VERSION VERSION_EQUAL "${DYNLEX_REQUIRED_LLVM_VERSION}.0.0git")
+    message(FATAL_ERROR "DynLex requires the pinned LLVM ${DYNLEX_REQUIRED_LLVM_VERSION} development toolchain")
+endif()
+
+get_filename_component(DYNLEX_LLVM_INSTALL_LIB_DIR "${LLVM_DIR}/../.." ABSOLUTE)
+get_filename_component(DYNLEX_LLVM_INSTALL_DIR "${DYNLEX_LLVM_INSTALL_LIB_DIR}/.." ABSOLUTE)
+set(DYNLEX_LLVM_TOOLCHAIN_MARKER "${DYNLEX_LLVM_INSTALL_DIR}/.dynlex-llvm-toolchain")
+if(NOT EXISTS "${DYNLEX_LLVM_TOOLCHAIN_MARKER}")
+    message(FATAL_ERROR "LLVM toolchain is missing its DynLex revision marker; run scripts/build_llvm.sh")
+endif()
+file(READ "${DYNLEX_LLVM_TOOLCHAIN_MARKER}" DYNLEX_LLVM_TOOLCHAIN_ID)
+string(STRIP "${DYNLEX_LLVM_TOOLCHAIN_ID}" DYNLEX_LLVM_TOOLCHAIN_ID)
+if(EMSCRIPTEN)
+    set(DYNLEX_LLVM_REQUIRED_PROFILE web)
+else()
+    set(DYNLEX_LLVM_REQUIRED_PROFILE native)
+endif()
+set(DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID
+    "${DYNLEX_LLVM_REVISION}:${DYNLEX_LLVM_SCHEMA}:${DYNLEX_LLVM_REQUIRED_PROFILE}"
+)
+if(NOT DYNLEX_LLVM_TOOLCHAIN_ID STREQUAL DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID)
+    message(FATAL_ERROR "LLVM toolchain does not match the pinned DynLex ${DYNLEX_LLVM_REQUIRED_PROFILE} profile")
+endif()
+set(DYNLEX_LLVM_VCS_HEADER "${DYNLEX_LLVM_INSTALL_DIR}/include/llvm/Support/VCSRevision.h")
+if(NOT EXISTS "${DYNLEX_LLVM_VCS_HEADER}")
+    message(FATAL_ERROR "LLVM toolchain is missing its embedded source revision")
+endif()
+file(READ "${DYNLEX_LLVM_VCS_HEADER}" DYNLEX_LLVM_VCS_ID)
+set(DYNLEX_EXPECTED_LLVM_VCS_ID
+    "#define LLVM_REVISION R\"(${DYNLEX_LLVM_REVISION})\"\n#define LLVM_REPOSITORY R\"(${DYNLEX_LLVM_REPOSITORY})\"\n"
+)
+if(NOT DYNLEX_LLVM_VCS_ID STREQUAL DYNLEX_EXPECTED_LLVM_VCS_ID)
+    message(FATAL_ERROR "LLVM toolchain was not built from the pinned DynLex fork")
 endif()
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
@@ -184,6 +167,23 @@ set (CMAKE_VERBOSE_MAKEFILE 0) # 1 should be used for debugging
 set (CMAKE_SUPPRESS_REGENERATION TRUE) # Suppresses ZERO_CHECK
 set(CMAKE_CXX_STANDARD 23)
 option(DYNLEX_WEB "Build browser compiler target (Emscripten)" OFF)
+
+# The normal compiler is optimized but keeps complete debug information and
+# assertions. This is intentionally distinct from RelWithDebInfo, whose
+# platform defaults define NDEBUG.
+if(MSVC)
+    set(CMAKE_C_FLAGS_OPTIMIZED "/O2 /Zi" CACHE STRING "Flags for optimized DynLex C builds" FORCE)
+    set(CMAKE_CXX_FLAGS_OPTIMIZED "/O2 /Zi" CACHE STRING "Flags for optimized DynLex C++ builds" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS_OPTIMIZED "/DEBUG" CACHE STRING "Linker flags for optimized DynLex builds" FORCE)
+else()
+    set(CMAKE_C_FLAGS_OPTIMIZED "-O2 -g" CACHE STRING "Flags for optimized DynLex C builds" FORCE)
+    set(CMAKE_CXX_FLAGS_OPTIMIZED "-O2 -g" CACHE STRING "Flags for optimized DynLex C++ builds" FORCE)
+endif()
+if(CMAKE_CONFIGURATION_TYPES)
+    list(APPEND CMAKE_CONFIGURATION_TYPES Optimized)
+    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING "Available build configurations" FORCE)
+endif()
 
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
@@ -233,6 +233,8 @@ file (GLOB_RECURSE PROJECT_SOURCES src/cpp/*.cpp
                                    src/cpp/*.cxx
                                    src/cpp/*.cc
                                    src/cpp/*.c)
+file (GLOB_RECURSE DYNLEX_LIBRARY_SOURCES CONFIGURE_DEPENDS
+                                      "${CMAKE_SOURCE_DIR}/lib/*.dl")
 file (GLOB         PROJECT_CONFIGS CMakeLists.txt
                                    README.md
                                   .gitignore)
@@ -252,23 +254,10 @@ add_definitions (-DGLFW_INCvLUDE_NONE
 #target_include_directories(${PROJECT_NAME}
 #PRIVATE  ${Stb_INCLUDE_DIR}
 #)
-# LLVM packages declare whether their components should be consumed through
-# the monolithic LLVM shared library or as individual static archives.  Use
-# llvm_config so that declaration is respected and any component omitted from
-# a partial shared library is still linked explicitly.
+# The pinned DynLex LLVM distribution contains static component libraries.
 function(dynlex_link_llvm target)
-    if(LLVM_LINK_LLVM_DYLIB)
-        if(NOT TARGET LLVM)
-            message(FATAL_ERROR
-                "LLVM_LINK_LLVM_DYLIB is enabled, but the LLVM package does not provide its shared LLVM target"
-            )
-        endif()
-        message(STATUS "Linking ${target} against the shared LLVM library")
-        llvm_config(${target} USE_SHARED ${ARGN})
-    else()
-        message(STATUS "Linking ${target} against LLVM component libraries")
-        llvm_config(${target} ${ARGN})
-    endif()
+    message(STATUS "Linking ${target} against LLVM component libraries")
+    llvm_config(${target} ${ARGN})
 endfunction()
 
 set(DYNLEX_LLVM_COMMON_COMPONENTS
@@ -282,8 +271,8 @@ set(DYNLEX_LLVM_COMMON_COMPONENTS
     WebAssemblyUtils
 )
 
-# LLVM 20+ includes the SPIR-V and WebAssembly backends as official targets.
-# Native builds additionally need the host and SPIR-V backends.
+# The pinned LLVM 23 fork includes the SPIR-V and WebAssembly backends.
+# Native builds additionally need the host backend.
 set(DYNLEX_LLVM_NATIVE_COMPONENTS
     ${DYNLEX_LLVM_COMMON_COMPONENTS}
     native
@@ -312,6 +301,7 @@ if(NOT EMSCRIPTEN)
     if(WIN32)
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimeWindows.c
+            src/runtime/filesystemTransactionWindows.c
             src/runtime/hostRuntimeWindows.c
             src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
@@ -319,6 +309,7 @@ if(NOT EMSCRIPTEN)
     else()
         list(APPEND DYNLEX_RUNTIME_SOURCES
             src/runtime/filesystemRuntimePosix.c
+            src/runtime/filesystemTransactionPosix.c
             src/runtime/hostRuntimePosix.c
             src/runtime/processRuntimePosix.c
         )
@@ -347,7 +338,7 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
     dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
     if(WIN32)
-        target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 shell32 ole32)
     endif()
     set_target_properties (${PROJECT_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -362,7 +353,7 @@ if(NOT EMSCRIPTEN)
     # address-bearing skeleton records for the linker.
     if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${PROJECT_NAME} PRIVATE
-            "$<$<CONFIG:Debug>:-gsplit-dwarf>"
+            "$<$<OR:$<CONFIG:Debug>,$<CONFIG:Optimized>>:-gsplit-dwarf>"
         )
     endif()
 
@@ -380,13 +371,30 @@ if(DYNLEX_WEB)
         message(FATAL_ERROR "DYNLEX_WEB requires the Emscripten toolchain. Configure with emcmake.")
     endif()
 
+    include(FetchContent)
+    set(SPIRV_CROSS_CLI OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_CPP OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_GLSL ON CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_MSL OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_C_API OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_REFLECT OFF CACHE BOOL "" FORCE)
+    set(SPIRV_CROSS_ENABLE_UTIL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        spirv_cross
+        URL https://github.com/KhronosGroup/SPIRV-Cross/archive/a0fba56c34a6700f1724bf9b751da5b488a3775c.tar.gz
+        URL_HASH SHA256=1e79592b0a498ffb854f7d71e0d5811fcedb87a25201644bbf5dbba438e01264
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(spirv_cross)
+
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/dap/.*\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/tcpTransport\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/stdioTransport\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/codegen/native\\.cpp$")
-    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/codegen/spirv\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/pexlit/rendering/.*\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/pexlit/safeInclude/implementations\\.cpp$")
 
@@ -395,13 +403,15 @@ if(DYNLEX_WEB)
         OUTPUT_NAME "dynlex_web"
         SUFFIX ".js"
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+        LINK_DEPENDS "${DYNLEX_LIBRARY_SOURCES}"
     )
     target_compile_definitions(dynlex_web PRIVATE DYNLEX_WEB=1 DYNLEX_VERSION="${PROJECT_VERSION}")
-    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json)
-    dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS})
+    target_compile_options(dynlex_web PRIVATE "-fexceptions")
+    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json spirv-cross-core spirv-cross-glsl)
+    dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS} SPIRV)
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS
-        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_compiler_log_json','_dynlex_web_get_lsp_hover_json','_dynlex_web_get_lsp_definition_json','_dynlex_web_get_lsp_semantic_tokens_json']"
+        "['_dynlex_web_init','_dynlex_web_set_main_source','_dynlex_web_compile_and_emit_wasm','_dynlex_web_compile_and_emit_shader_glsl','_dynlex_web_get_diagnostics_json','_dynlex_web_get_output_wasm_ptr','_dynlex_web_get_output_wasm_len','_dynlex_web_get_output_wasm_base64','_dynlex_web_get_output_shader_glsl','_dynlex_web_get_shader_uniforms_json','_dynlex_web_get_compiler_log_json','_dynlex_web_lsp_exchange_json']"
     )
     set(DYNLEX_WEB_EXPORTED_RUNTIME_METHODS "['ccall','cwrap','UTF8ToString']")
     file(GLOB_RECURSE DYNLEX_WEB_EMBEDDED_LIBRARY_FILES
@@ -411,6 +421,7 @@ if(DYNLEX_WEB)
     )
     set_property(TARGET dynlex_web APPEND PROPERTY LINK_DEPENDS ${DYNLEX_WEB_EMBEDDED_LIBRARY_FILES})
     target_link_options(dynlex_web PRIVATE
+        "-fexceptions"
         "-sWASM=1"
         "-sALLOW_MEMORY_GROWTH=1"
         "-sSTACK_SIZE=8388608"
@@ -436,28 +447,8 @@ if(TARGET dynlex_runtime)
 endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
 if(WIN32 AND TARGET ${PROJECT_NAME})
-    # Bundle runtime DLLs (LLVM/MSVC deps) so the MSI installation is self-contained.
+    # Bundle every DLL reported by the final link graph so the installation is self-contained.
     install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-    set(DYNLEX_LLVM_BIN_HINTS "")
-    if(DEFINED LLVM_TOOLS_BINARY_DIR AND LLVM_TOOLS_BINARY_DIR)
-        list(APPEND DYNLEX_LLVM_BIN_HINTS "${LLVM_TOOLS_BINARY_DIR}")
-    endif()
-    if(DEFINED LLVM_DIR AND LLVM_DIR)
-        get_filename_component(DYNLEX_LLVM_LIB_DIR_FOR_DLLS "${LLVM_DIR}/../.." ABSOLUTE)
-        get_filename_component(DYNLEX_LLVM_ROOT_DIR_FOR_DLLS "${DYNLEX_LLVM_LIB_DIR_FOR_DLLS}/.." ABSOLUTE)
-        list(APPEND DYNLEX_LLVM_BIN_HINTS "${DYNLEX_LLVM_ROOT_DIR_FOR_DLLS}/bin")
-    endif()
-
-    foreach(DYNLEX_REQUIRED_DLL IN ITEMS libc++.dll zlib1.dll)
-        unset(DYNLEX_REQUIRED_DLL_PATH CACHE)
-        find_file(DYNLEX_REQUIRED_DLL_PATH NAMES "${DYNLEX_REQUIRED_DLL}" HINTS ${DYNLEX_LLVM_BIN_HINTS})
-        if(DYNLEX_REQUIRED_DLL_PATH)
-            install(FILES "${DYNLEX_REQUIRED_DLL_PATH}" DESTINATION ${CMAKE_INSTALL_BINDIR})
-        else()
-            message(WARNING "Could not locate required runtime DLL '${DYNLEX_REQUIRED_DLL}' for packaging.")
-        endif()
-    endforeach()
 endif()
 
 #
@@ -476,7 +467,6 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "DynLex — a natural-language-like progra
 set(CPACK_PACKAGE_CONTACT "DynLex maintainers <maintainers@dynlex.org>")
 set(CPACK_PACKAGE_VENDOR "DynLex")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/johnheikens/DynLex")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libstdc++6, zlib1g, libzstd1")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)

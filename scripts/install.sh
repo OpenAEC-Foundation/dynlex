@@ -2,19 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/llvm_version.sh"
+. "$SCRIPT_DIR/llvm_toolchain.sh"
 
-LLVM_VERSION="$(dynlex_install_llvm_version)"
+CLANG_VERSION="$DYNLEX_LLVM_BOOTSTRAP_CLANG_VERSION"
 
-if [ "${1:-}" = "--web" ]; then
-    if [ "$#" -ne 1 ]; then
-        echo "Usage: $0 [--web]" >&2
-        exit 2
-    fi
-    exec "$SCRIPT_DIR/install_web_toolchain.sh"
-fi
 if [ "$#" -ne 0 ]; then
-    echo "Usage: $0 [--web]" >&2
+    echo "Usage: $0" >&2
     exit 2
 fi
 
@@ -39,15 +32,11 @@ install_linux_deps() {
         require_sudo
         sudo apt-get update
         sudo apt-get install -y \
-            "clang-$LLVM_VERSION" \
-            "clangd-$LLVM_VERSION" \
-            "clang-format-$LLVM_VERSION" \
-            "clang-tidy-$LLVM_VERSION" \
-            "llvm-$LLVM_VERSION" \
-            "llvm-$LLVM_VERSION-dev" \
+            "clang-$CLANG_VERSION" \
+            "clangd-$CLANG_VERSION" \
+            "clang-format-$CLANG_VERSION" \
+            "clang-tidy-$CLANG_VERSION" \
             binutils \
-            libcurl4-openssl-dev \
-            libedit-dev \
             libfreetype-dev \
             libgl-dev \
             libglfw3-dev \
@@ -68,8 +57,6 @@ install_linux_deps() {
         sudo dnf install -y \
             clang \
             clang-tools-extra \
-            llvm \
-            llvm-devel \
             binutils \
             freetype-devel \
             glfw-devel \
@@ -93,7 +80,6 @@ install_linux_deps() {
             freetype2 \
             glfw \
             libglvnd \
-            llvm \
             binutils \
             nlohmann-json \
             ccache \
@@ -113,8 +99,6 @@ install_linux_deps() {
         sudo zypper --non-interactive install \
             clang \
             clang-tools \
-            llvm \
-            llvm-devel \
             binutils \
             freetype2-devel \
             libglfw-devel \
@@ -142,8 +126,8 @@ install_macos_deps() {
     fi
 
     brew update
-    if brew info llvm@20 >/dev/null 2>&1; then
-        BREW_LLVM_FORMULA="llvm@20"
+    if brew info "llvm@$CLANG_VERSION" >/dev/null 2>&1; then
+        BREW_LLVM_FORMULA="llvm@$CLANG_VERSION"
     else
         BREW_LLVM_FORMULA="llvm"
     fi
@@ -181,13 +165,10 @@ install_macos_deps() {
 
     BREW_LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
     export LIBRARY_PATH="$BREW_LIBRARY_PATH"
-    BREW_LLVM_VERSION="$("$BREW_LLVM_PREFIX/bin/llvm-config" --version | cut -d. -f1)"
     if [ -n "${GITHUB_PATH:-}" ]; then
         printf '%s\n' "$BREW_LLVM_PREFIX/bin" >> "$GITHUB_PATH"
     fi
     if [ -n "${GITHUB_ENV:-}" ]; then
-        printf 'LLVM_DIR=%s\n' "$BREW_LLVM_PREFIX/lib/cmake/llvm" >> "$GITHUB_ENV"
-        printf 'DYNLEX_LLVM_VERSION=%s\n' "$BREW_LLVM_VERSION" >> "$GITHUB_ENV"
         printf 'LIBRARY_PATH=%s\n' "$BREW_LIBRARY_PATH" >> "$GITHUB_ENV"
     fi
 
@@ -201,7 +182,7 @@ install_macos_deps() {
 
 main() {
     echo "Installing DynLex build dependencies..."
-    echo "LLVM minimum version: $LLVM_VERSION"
+    echo "Bootstrap Clang version: $CLANG_VERSION"
 
     case "$(uname -s)" in
     Linux)

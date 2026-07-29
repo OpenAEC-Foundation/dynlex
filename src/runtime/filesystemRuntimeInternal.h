@@ -22,6 +22,11 @@ enum {
 bool dynlex_filesystem_utf8_is_valid(const char *data, size_t length);
 char *dynlex_filesystem_copy_path(const char *path, size_t length);
 
+#ifdef _WIN32
+char *dynlex_platform_filesystem_utf8_text(const wchar_t *text, size_t *length);
+wchar_t *dynlex_platform_filesystem_wide_path(const char *path, size_t length);
+#endif
+
 FILE *dynlex_platform_filesystem_open_file(const char *path, size_t path_length, int32_t mode);
 void dynlex_platform_filesystem_directory_destroy(void *directory);
 int dynlex_platform_filesystem_create_temporary_directory(char **path, size_t *length);

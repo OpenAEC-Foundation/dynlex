@@ -1,0 +1,42 @@
+import lib/std.dl
+
+function branch value for condition:
+    execute:
+        set answer to 1
+        if condition:
+            set answer to 2
+        else:
+            set answer to 3
+        return answer
+
+function value after one loop:
+    execute:
+        set keep_going to true
+        set result to 0
+        loop while keep_going:
+            set result to 1
+            set keep_going to false
+        return result
+
+class:
+    patterns:
+        state pointer holder
+    members:
+        target
+
+function write value through holder:
+    execute:
+        @intrinsic("store at", @intrinsic("property", holder, "target"), value)
+
+print branch value for true as line
+print branch value for false as line
+print value after one loop as line
+
+set target to 0
+set holder to @intrinsic("construct", state pointer holder, @intrinsic("address of", target))
+write 7 through holder
+print target as line
+
+set externally_written to 0
+discard @intrinsic("variadic call", "libc", "sscanf", i32, 2, "17", "%d", @intrinsic("address of", externally_written))
+print externally_written as line

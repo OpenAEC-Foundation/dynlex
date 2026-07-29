@@ -1,0 +1,359 @@
+.live-shader-section {
+    --immersion-opacity: 0;
+    --laptop-opacity: 1;
+    --laptop-code-opacity: 1;
+    --shader-copy-opacity: 1;
+    --thought-tail-opacity: 0;
+    position: relative;
+    z-index: 2;
+    min-height: max(720px, 100svh);
+    overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(circle at 82% 38%, rgba(65, 120, 255, 0.13), transparent 28%),
+        radial-gradient(circle at 34% 75%, rgba(176, 255, 48, 0.05), transparent 28%),
+        #030508;
+}
+
+.shader-clip-definitions {
+    position: absolute;
+}
+
+.shader-immersion,
+.shader-immersion canvas {
+    position: absolute;
+}
+
+.shader-immersion {
+    top: 0;
+    left: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    opacity: 0;
+    filter: drop-shadow(0 0 24px rgba(104, 213, 255, 0.74));
+}
+
+.shader-immersion[data-shader-layer="0"] {
+    clip-path: url("#thought-cloud-mask-0");
+}
+
+.shader-immersion[data-shader-layer="1"] {
+    clip-path: url("#thought-cloud-mask-1");
+}
+
+.shader-immersion[data-layer-state="active"] {
+    z-index: 0;
+    opacity: 1;
+    clip-path: none;
+    filter: none;
+}
+
+.shader-immersion[data-layer-state="revealing"] {
+    z-index: 3;
+    opacity: var(--immersion-opacity);
+    will-change: top, left, width, height, opacity;
+}
+
+.shader-immersion[data-layer-state="dormant"] {
+    z-index: 0;
+    opacity: 0;
+}
+
+.shader-immersion::after {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background: radial-gradient(circle at 67% 37%, transparent 42%, rgba(134, 219, 255, 0.18) 100%);
+    content: "";
+    pointer-events: none;
+}
+
+.shader-immersion canvas {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.shader-origin {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.shader-laptop {
+    position: absolute;
+    z-index: 1;
+    bottom: clamp(120px, 16vh, 175px);
+    left: clamp(24px, 8vw, 150px);
+    width: clamp(430px, 49vw, 750px);
+    opacity: var(--laptop-opacity);
+    filter: drop-shadow(0 36px 48px rgba(0, 0, 0, 0.6));
+    transform: perspective(1000px) rotateX(2deg) rotateY(5deg) translate3d(0, calc(var(--shader-progress) * 26px), 0);
+    transform-origin: center bottom;
+    will-change: opacity, transform;
+}
+
+.shader-laptop-lid {
+    height: clamp(255px, 31vw, 410px);
+    overflow: hidden;
+    border: 2px solid #3b4549;
+    border-radius: 18px 18px 9px 9px;
+    background:
+        linear-gradient(112deg, rgba(29, 52, 49, 0.16), transparent 42%),
+        #030706;
+    box-shadow:
+        inset 0 0 0 7px #111718,
+        inset 0 0 50px rgba(36, 249, 198, 0.05),
+        0 0 80px rgba(56, 191, 255, 0.08);
+}
+
+.shader-laptop-bar {
+    display: flex;
+    height: 37px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 19px;
+    border-bottom: 1px solid rgba(177, 198, 197, 0.12);
+    color: #9aa9a7;
+    font: 500 0.58rem/1 var(--mono);
+    letter-spacing: 0.08em;
+}
+
+.shader-laptop-bar i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--acid);
+    box-shadow: 0 0 14px var(--acid);
+}
+
+.shader-laptop-bar strong {
+    margin-left: auto;
+    color: var(--sky);
+    font-weight: 500;
+    letter-spacing: 0.16em;
+}
+
+.shader-laptop pre {
+    height: calc(100% - 37px);
+    margin: 0;
+    overflow: hidden;
+    padding: 23px 30px 34px;
+    color: #e4eee8;
+    font: 500 clamp(0.64rem, 0.82vw, 0.84rem)/1.58 var(--mono);
+    opacity: var(--laptop-code-opacity);
+    text-shadow: 0 0 12px rgba(226, 255, 244, 0.12);
+    white-space: pre;
+    scrollbar-width: none;
+    will-change: opacity;
+}
+
+.shader-laptop pre::-webkit-scrollbar {
+    display: none;
+}
+
+.shader-code-token-comment { color: #8ba59d; font-style: italic; }
+.shader-code-token-keyword,
+.shader-code-token-section { color: #ff927f; }
+.shader-code-token-function,
+.shader-code-token-patterndefinition { color: #7be2ff; }
+.shader-code-token-variable { color: #edf8f1; }
+.shader-code-token-number { color: #d5ff63; }
+.shader-code-token-string { color: #ffe191; }
+.shader-code-token-intrinsic,
+.shader-code-token-type { color: #d1aaff; }
+
+.shader-laptop-base {
+    position: relative;
+    width: calc(100% + 52px);
+    height: 30px;
+    margin-left: -26px;
+    border: 1px solid #3a4243;
+    border-radius: 3px 3px 17px 17px;
+    background: linear-gradient(#242b2c, #0a0e0e 65%);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.72);
+}
+
+.shader-laptop-base span {
+    display: block;
+    width: 19%;
+    height: 6px;
+    margin: 0 auto;
+    border: 1px solid #343d3e;
+    border-top: 0;
+    border-radius: 0 0 7px 7px;
+}
+
+.thought-assembly {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.thought-tail {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    opacity: var(--thought-tail-opacity);
+    will-change: opacity;
+}
+
+.thought-tail-dot {
+    position: absolute;
+    display: block;
+    border: 2px solid rgba(130, 219, 255, 0.8);
+    border-radius: 50%;
+    background: #071019;
+    box-shadow: inset 0 0 16px rgba(83, 188, 255, 0.3), 0 0 16px rgba(83, 188, 255, 0.42);
+    transform: translate(-50%, -50%);
+    will-change: top, left;
+}
+
+.thought-tail-dot:nth-child(1) {
+    top: var(--tail-cloud-y, 50%);
+    left: var(--tail-cloud-x, 65%);
+    width: clamp(42px, 4vw, 62px);
+    aspect-ratio: 1;
+}
+
+.thought-tail-dot:nth-child(2) {
+    top: var(--tail-middle-y, 58%);
+    left: var(--tail-middle-x, 55%);
+    width: clamp(28px, 2.8vw, 43px);
+    aspect-ratio: 1;
+}
+
+.thought-tail-dot:nth-child(3) {
+    top: var(--tail-origin-y, 64%);
+    left: var(--tail-origin-x, 45%);
+    width: clamp(17px, 1.7vw, 27px);
+    aspect-ratio: 1;
+}
+
+.live-shader-section::after {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(3, 4, 9, 0.16) 0%, transparent 38%, rgba(3, 4, 8, 0.7) 100%),
+        linear-gradient(90deg, rgba(3, 4, 8, 0.52) 0%, transparent 58%);
+    content: "";
+    pointer-events: none;
+}
+
+.shader-atmosphere {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    border: 1px solid rgba(133, 218, 255, 0.06);
+    box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.38);
+    pointer-events: none;
+}
+
+.shader-copy {
+    position: absolute;
+    z-index: 5;
+    top: clamp(100px, 15vh, 165px);
+    right: 0;
+    left: 0;
+    opacity: var(--shader-copy-opacity);
+    pointer-events: none;
+}
+
+.shader-copy > p {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 24px;
+    color: rgba(249, 247, 240, 0.68);
+    font: 500 0.62rem/1 var(--mono);
+    letter-spacing: 0.14em;
+}
+
+.shader-copy > p > span {
+    width: 28px;
+    height: 1px;
+    background: var(--sky);
+    box-shadow: 0 0 12px var(--sky);
+}
+
+.shader-copy h1 {
+    margin: 0;
+    color: var(--white);
+    font-size: clamp(4.8rem, 10vw, 11rem);
+    font-weight: 600;
+    letter-spacing: -0.09em;
+    line-height: 0.78;
+    text-shadow: 0 5px 45px rgba(3, 4, 8, 0.45);
+}
+
+.shader-copy h1 em {
+    color: var(--sky);
+    font-style: normal;
+}
+
+.shader-readout {
+    position: absolute;
+    z-index: 6;
+    right: 0;
+    bottom: clamp(35px, 7vh, 75px);
+    left: 0;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 40px;
+}
+
+.shader-readout > span {
+    max-width: 390px;
+    color: rgba(249, 247, 240, 0.76);
+    font-size: 0.76rem;
+    line-height: 1.65;
+}
+
+.shader-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.shader-actions > button,
+.shader-actions > a,
+.shader-actions > strong {
+    min-width: 82px;
+    padding: 11px 13px;
+    border: 1px solid rgba(249, 247, 240, 0.26);
+    background: rgba(8, 10, 9, 0.55);
+    color: rgba(249, 247, 240, 0.82);
+    font: 500 0.61rem/1 var(--mono);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-decoration: none;
+    backdrop-filter: blur(10px);
+}
+
+.shader-actions > button { cursor: pointer; }
+.shader-actions > button,
+.shader-actions > a {
+    transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.shader-actions > button:hover,
+.shader-actions > button:focus-visible,
+.shader-actions > a:hover,
+.shader-actions > a:focus-visible {
+    border-color: var(--sky);
+    background: rgba(8, 10, 9, 0.78);
+    color: var(--sky);
+}
+
+.shader-actions > strong {
+    min-width: 210px;
+    border: 1px solid rgba(199, 255, 56, 0.62);
+    color: var(--acid);
+}

@@ -1,0 +1,577 @@
+# DynLex native filesystem snapshot and transaction primitives
+
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] file system timestamp
+    members:
+        seconds as i64
+        nanoseconds as i32
+
+class:
+    patterns:
+        [a|] file identity
+    members:
+        supported as boolean
+        available as boolean
+        representation as string
+
+class:
+    patterns:
+        [a|] file system entry
+    members:
+        supported as boolean
+        succeeded as boolean
+        found as boolean
+        regular file as boolean
+        directory as boolean
+        symbolic link as boolean
+        other as boolean
+        mode supported as boolean
+        mode as i64
+        Windows attributes supported as boolean
+        Windows attributes as i64
+        restorable Windows attributes as i64
+        access time supported as boolean
+        access time as a file system timestamp
+        modification time supported as boolean
+        modification time as a file system timestamp
+        creation time supported as boolean
+        creation time as a file system timestamp
+        identity as a file identity
+        error message as a string
+
+class:
+    patterns:
+        [a|] file system staging file
+    members:
+        handle as pointer
+        supported as boolean
+        succeeded as boolean
+        path as string
+        commit outcome known as boolean
+        committed as boolean
+        durable as boolean
+        cleanup succeeded as boolean
+        error message as a string
+    retain:
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_retain", void, handle)
+        set path_owner to the owner of the path of @intrinsic("lifecycle value")
+        if path_owner != @intrinsic("cast", 0, a pointer to integer):
+            set path_references to @intrinsic("dereference", path_owner)
+            @intrinsic("store at", path_owner, path_references + 1)
+        set error_owner to the owner of the error message of @intrinsic("lifecycle value")
+        if error_owner != @intrinsic("cast", 0, a pointer to integer):
+            set error_references to @intrinsic("dereference", error_owner)
+            @intrinsic("store at", error_owner, error_references + 1)
+    release:
+        set error_owner to the owner of the error message of @intrinsic("lifecycle value")
+        if error_owner != @intrinsic("cast", 0, a pointer to integer):
+            set error_references to @intrinsic("dereference", error_owner)
+            if error_references = 1:
+                @intrinsic("call", "libc", "free", void, error_owner)
+            else:
+                @intrinsic("store at", error_owner, error_references - 1)
+        set path_owner to the owner of the path of @intrinsic("lifecycle value")
+        if path_owner != @intrinsic("cast", 0, a pointer to integer):
+            set path_references to @intrinsic("dereference", path_owner)
+            if path_references = 1:
+                @intrinsic("call", "libc", "free", void, path_owner)
+            else:
+                @intrinsic("store at", path_owner, path_references - 1)
+        set handle to the handle of @intrinsic("lifecycle value")
+        if handle != @intrinsic("cast", 0, a pointer to byte):
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", void, handle)
+
+local class:
+    patterns:
+        [a|] native filesystem path
+    members:
+        data as pointer to byte
+        length as a word sized integer
+        storage as string
+        valid as boolean
+
+local function an empty native filesystem error message:
+    execute:
+        return the string form of ""
+
+local function [the|] current native filesystem error message:
+    execute:
+        set message_length to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_error_message",
+            a word sized integer,
+            @intrinsic("cast", 0, a pointer to byte),
+            @intrinsic("cast", 0, a word sized integer)
+        )
+        set error_text to a new string buffer with length message_length as an integer
+        if message_length > @intrinsic("cast", 0, a word sized integer):
+            discard @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_filesystem_error_message",
+                a word sized integer,
+                the data of error_text,
+                message_length + 1
+            )
+        return error_text
+
+local function an invalid native filesystem path:
+    execute:
+        set storage to @intrinsic(
+            "construct",
+            a string,
+            @intrinsic("cast", 0, a pointer to byte),
+            0,
+            @intrinsic("cast", 0, a pointer to integer)
+        )
+        return @intrinsic(
+            "construct",
+            a native filesystem path,
+            @intrinsic("cast", 0, a pointer to byte),
+            @intrinsic("cast", 0, a word sized integer),
+            storage,
+            false
+        )
+
+local function a native filesystem path for {cstring:input}:
+    execute:
+        if input = @intrinsic("cast", 0, a pointer to byte):
+            return an invalid native filesystem path
+        set storage to @intrinsic(
+            "construct",
+            a string,
+            @intrinsic("cast", 0, a pointer to byte),
+            0,
+            @intrinsic("cast", 0, a pointer to integer)
+        )
+        return @intrinsic(
+            "construct",
+            a native filesystem path,
+            input,
+            @intrinsic("cast", the length of input, a word sized integer),
+            storage,
+            true
+        )
+
+local function a native filesystem path for {string:input}:
+    execute:
+        if not input is valid:
+            return an invalid native filesystem path
+        if input's length = 0:
+            return an invalid native filesystem path
+        set zero_byte to @intrinsic(
+            "call",
+            "libc",
+            "memchr",
+            a pointer to byte,
+            the data of input,
+            0,
+            @intrinsic("cast", input's length, a word sized integer)
+        )
+        if zero_byte != @intrinsic("cast", 0, a pointer to byte):
+            return an invalid native filesystem path
+        set storage to a new string buffer with length input's length
+        discard @intrinsic(
+            "call",
+            "libc",
+            "memcpy",
+            a pointer to byte,
+            the data of storage,
+            the data of input,
+            @intrinsic("cast", input's length, a word sized integer)
+        )
+        return @intrinsic(
+            "construct",
+            a native filesystem path,
+            the data of storage,
+            @intrinsic("cast", storage's length, a word sized integer),
+            storage,
+            true
+        )
+
+local function an empty file system timestamp:
+    replacement:
+        @intrinsic("construct", a file system timestamp, 0 as a 64 bit integer, 0)
+
+local function a failed file system entry with support state {boolean:support} reporting {string:message}:
+    execute:
+        set empty_time to an empty file system timestamp
+        set identity to @intrinsic("construct", a file identity, false, false, the string form of "")
+        return @intrinsic(
+            "construct",
+            a file system entry,
+            support,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            0 as a 64 bit integer,
+            false,
+            0 as a 64 bit integer,
+            0 as a 64 bit integer,
+            false,
+            empty_time,
+            false,
+            empty_time,
+            false,
+            empty_time,
+            identity,
+            message
+        )
+
+function {file identity:left} identifies the same file as {file identity:right}:
+    execute:
+        if not left's supported:
+            return false
+        if not right's supported:
+            return false
+        if not left's available:
+            return false
+        if not right's available:
+            return false
+        return left's representation = right's representation
+
+function [the|] file system entry at {any:path}:
+    execute:
+        set prepared_path to a native filesystem path for path
+        if not prepared_path's valid:
+            set message to the string form of "Invalid filesystem path"
+            return a failed file system entry with support state true reporting message
+
+        set kind to 0
+        set mode_supported to 0
+        set mode to 0 as a 64 bit integer
+        set windows_attributes_supported to 0
+        set windows_attributes to 0 as a 64 bit integer
+        set restorable_windows_attributes to 0 as a 64 bit integer
+        set access_time_supported to 0
+        set access_seconds to 0 as a 64 bit integer
+        set access_nanoseconds to 0
+        set modification_time_supported to 0
+        set modification_seconds to 0 as a 64 bit integer
+        set modification_nanoseconds to 0
+        set creation_time_supported to 0
+        set creation_seconds to 0 as a 64 bit integer
+        set creation_nanoseconds to 0
+        set identity_supported to 0
+        set identity_length to @intrinsic("cast", 0, a word sized integer)
+        set identity_buffer to a new string buffer with length 26
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_entry",
+            an integer,
+            prepared_path's data,
+            prepared_path's length,
+            the address of kind,
+            the address of mode_supported,
+            the address of mode,
+            the address of windows_attributes_supported,
+            the address of windows_attributes,
+            the address of restorable_windows_attributes,
+            the address of access_time_supported,
+            the address of access_seconds,
+            the address of access_nanoseconds,
+            the address of modification_time_supported,
+            the address of modification_seconds,
+            the address of modification_nanoseconds,
+            the address of creation_time_supported,
+            the address of creation_seconds,
+            the address of creation_nanoseconds,
+            the address of identity_supported,
+            the data of identity_buffer,
+            @intrinsic("cast", identity_buffer's length, a word sized integer),
+            the address of identity_length
+        )
+        if outcome < 0:
+            return a failed file system entry with support state true reporting the current native filesystem error message
+
+        set access_time to @intrinsic("construct", a file system timestamp, access_seconds, access_nanoseconds)
+        set modification_time to @intrinsic(
+            "construct",
+            a file system timestamp,
+            modification_seconds,
+            modification_nanoseconds
+        )
+        set creation_time to @intrinsic("construct", a file system timestamp, creation_seconds, creation_nanoseconds)
+        set identity_representation to the string form of ""
+        if identity_length > @intrinsic("cast", 0, a word sized integer):
+            set identity_representation to the substring of identity_buffer from 0 with length identity_length as an integer
+        set identity to @intrinsic(
+            "construct",
+            a file identity,
+            identity_supported != 0,
+            identity_length > @intrinsic("cast", 0, a word sized integer),
+            identity_representation
+        )
+        return @intrinsic(
+            "construct",
+            a file system entry,
+            true,
+            true,
+            outcome = 1,
+            kind = 1,
+            kind = 2,
+            kind = 3,
+            kind = 4,
+            mode_supported != 0,
+            mode,
+            windows_attributes_supported != 0,
+            windows_attributes,
+            restorable_windows_attributes,
+            access_time_supported != 0,
+            access_time,
+            modification_time_supported != 0,
+            modification_time,
+            creation_time_supported != 0,
+            creation_time,
+            identity,
+            an empty native filesystem error message
+        )
+
+local function a failed staging file with support state {boolean:support} reporting {string:message}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a file system staging file,
+            @intrinsic("cast", 0, a pointer to byte),
+            support,
+            false,
+            the string form of "",
+            false,
+            false,
+            false,
+            false,
+            message
+        )
+
+local function a staging file outcome based on {file system staging file:staging} supported if {boolean:support} succeeded if {boolean:success} cleaned up if {boolean:cleanup} reporting {string:message}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a file system staging file,
+            staging's handle,
+            support,
+            success,
+            staging's path,
+            staging's commit outcome known,
+            staging's committed,
+            staging's durable,
+            cleanup,
+            message
+        )
+
+local function the result of creating a staging file beside target:
+    execute:
+        set prepared_target to a native filesystem path for target
+        if not prepared_target's valid:
+            set message to the string form of "Invalid filesystem path"
+            return a failed staging file with support state true reporting message
+        set supported to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_transactions_supported",
+            an integer
+        ) != 0
+        if not supported:
+            set message to the string form of "Native filesystem transactions are unsupported on this target"
+            return a failed staging file with support state false reporting message
+        set handle to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_create",
+            a pointer to byte,
+            prepared_target's data,
+            prepared_target's length
+        )
+        if handle = @intrinsic("cast", 0, a pointer to byte):
+            return a failed staging file with support state true reporting the current native filesystem error message
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_retain", void, handle)
+        set path_length to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_path_length",
+            a word sized integer,
+            handle
+        )
+        set staging_path to a new string buffer with length path_length as an integer
+        set copied to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_copy_path",
+            an integer,
+            handle,
+            the data of staging_path,
+            path_length + 1
+        )
+        if copied != 0:
+            set message to the current native filesystem error message
+            @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", void, handle)
+            return a failed staging file with support state true reporting message
+        set staging_file to @intrinsic(
+            "construct",
+            a file system staging file,
+            handle,
+            true,
+            true,
+            staging_path,
+            false,
+            false,
+            false,
+            false,
+            an empty native filesystem error message
+        )
+        @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", void, handle)
+        return staging_file
+
+flex function create a staging file beside target:
+    replacement:
+        set the subject to the result of creating a staging file beside target
+
+local function the result of writing {string:contents} to {file system staging file:staging}:
+    execute:
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if (staging's cleanup succeeded) reporting staging's error message
+        if not contents is valid:
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the string form of "Invalid file contents"
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_write",
+            an integer,
+            staging's handle,
+            the data of contents,
+            @intrinsic("cast", contents's length, a word sized integer)
+        )
+        if outcome != 0:
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (staging's cleanup succeeded) reporting an empty native filesystem error message
+
+flex function write {string:contents} to {file system staging file:staging}:
+    replacement:
+        set the subject to the result of writing contents to staging
+
+local function the result of restoring metadata from {file system entry:snapshot} to {file system staging file:staging}:
+    execute:
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if (staging's cleanup succeeded) reporting staging's error message
+        if (not snapshot's succeeded) or (not snapshot's found):
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the string form of "Metadata snapshot does not describe an existing filesystem entry"
+        set access_time to snapshot's access time
+        set modification_time to snapshot's modification time
+        set creation_time to snapshot's creation time
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_restore_metadata",
+            an integer,
+            staging's handle,
+            snapshot's mode supported,
+            snapshot's mode,
+            snapshot's Windows attributes supported,
+            snapshot's restorable Windows attributes,
+            snapshot's access time supported,
+            access_time's seconds,
+            access_time's nanoseconds,
+            snapshot's modification time supported,
+            modification_time's seconds,
+            modification_time's nanoseconds,
+            snapshot's creation time supported,
+            creation_time's seconds,
+            creation_time's nanoseconds
+        )
+        if outcome = -2:
+            return a staging file outcome based on staging supported if false succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
+        if outcome != 0:
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (staging's cleanup succeeded) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (staging's cleanup succeeded) reporting an empty native filesystem error message
+
+flex function restore metadata from {file system entry:snapshot} to {file system staging file:staging}:
+    replacement:
+        set the subject to the result of restoring metadata from snapshot to staging
+
+local function the result of cancelling {file system staging file:staging}:
+    execute:
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return a staging file outcome based on staging supported if (staging's supported) succeeded if false cleaned up if false reporting staging's error message
+        set cleanup_succeeded to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_cancel",
+            an integer,
+            staging's handle,
+            the address of cleanup_succeeded
+        )
+        if outcome != 0:
+            return a staging file outcome based on staging supported if true succeeded if false cleaned up if (cleanup_succeeded != 0) reporting the current native filesystem error message
+        return a staging file outcome based on staging supported if true succeeded if true cleaned up if (cleanup_succeeded != 0) reporting an empty native filesystem error message
+
+flex function cancel {file system staging file:staging}:
+    replacement:
+        set the subject to the result of cancelling staging
+
+local function the result of committing {file system staging file:staging} allowing overwrite {boolean:overwrite} and requiring durability {boolean:require_durability}:
+    execute:
+        if staging's handle = @intrinsic("cast", 0, a pointer to byte):
+            return @intrinsic(
+                "construct",
+                a file system staging file,
+                staging's handle,
+                staging's supported,
+                false,
+                staging's path,
+                true,
+                false,
+                false,
+                false,
+                staging's error message
+            )
+        set outcome_known to 1
+        set committed to 0
+        set durable to 0
+        set cleanup_succeeded to 0
+        set outcome to @intrinsic(
+            "call",
+            "dynlex_runtime",
+            "dynlex_filesystem_staging_commit",
+            an integer,
+            staging's handle,
+            overwrite,
+            require_durability,
+            the address of outcome_known,
+            the address of committed,
+            the address of durable,
+            the address of cleanup_succeeded
+        )
+        set supported to outcome != -2
+        set succeeded to outcome = 0
+        set message to an empty native filesystem error message
+        if not succeeded:
+            set message to the current native filesystem error message
+        return @intrinsic(
+            "construct",
+            a file system staging file,
+            staging's handle,
+            supported,
+            succeeded,
+            staging's path,
+            outcome_known != 0,
+            committed != 0,
+            durable != 0,
+            cleanup_succeeded != 0,
+            message
+        )
+
+flex function commit {file system staging file:staging} allowing overwrite {boolean:overwrite} and requiring durability {boolean:require_durability}:
+    replacement:
+        set the subject to the result of committing staging allowing overwrite overwrite and requiring durability require_durability

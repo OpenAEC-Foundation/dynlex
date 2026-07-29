@@ -17,6 +17,8 @@ case Expression::Kind::IntrinsicCall: {
 		if (!context.typesValid)
 			break;
 	}
+	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
+		break;
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
@@ -953,6 +955,6 @@ case Expression::Kind::IntrinsicCall: {
 	}
 	if (context.typesValid)
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 	break;
 }

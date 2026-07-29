@@ -1,46 +1,99 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/icons/dynlex-icon.svg" />
-    <title>DynLex Web Compiler</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b0d0c">
+    <meta name="description" content="A fast browser workspace for DynLex experiments and working output.">
+    <link rel="icon" type="image/svg+xml" href="/icons/dynlex-icon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>DynLex IDE</title>
   </head>
   <body>
+    <a class="skip-link" href="#editor">Skip to editor</a>
     <div id="app">
       <header class="app-header">
-        <div class="header-copy">
-          <h1>DynLex Browser Compiler</h1>
-          <p>Compiler runs in browser WASM. Edit <code>/workspace/main.dl</code>, compile live, run latest successful output.</p>
+        <a class="ide-brand" href="/" aria-label="Back to DynLex home">
+          <img class="ide-logo" src="/icons/dynlex-icon.svg" alt="">
+          <span class="ide-brand-name">DynLex</span>
+          <span class="ide-brand-place">IDE</span>
+        </a>
+
+        <div class="workspace-context" aria-label="Current file">
+          <span data-workspace-kind>SKETCH</span>
+          <strong data-current-file>main.dl</strong>
         </div>
+
         <div class="header-actions">
-          <button id="compile-button" type="button">Compile</button>
-          <button id="run-button" type="button" disabled>Run</button>
-          <button id="theme-button" type="button">Dark mode</button>
-          <span id="status-pill">Initializing</span>
+          <span id="status-pill"><i aria-hidden="true"></i><span id="status-text">Initializing</span></span>
+          <button id="theme-button" class="icon-action" type="button" aria-label="Switch color theme">Theme</button>
+          <button id="run-button" class="run-action" type="button" disabled><span data-run-label>Run</span> <span aria-hidden="true" data-run-icon>▶</span></button>
         </div>
       </header>
+
       <main class="workspace">
-        <section class="editor-panel">
-          <div class="panel-title">main.dl</div>
+        <aside class="project-panel" aria-label="Project files">
+          <div class="file-group">
+            <div class="project-title"><span data-workspace-kind>PLAYGROUND</span><strong>Files</strong></div>
+            <div id="project-files" class="project-files" role="list"></div>
+          </div>
+
+          <a class="docs-link" href="/wiki/index.html">Browse the docs <span aria-hidden="true">↗</span></a>
+        </aside>
+
+        <section class="editor-panel" aria-label="Source editor">
+          <div class="panel-title">
+            <div class="breadcrumbs"><span>workspace</span><i aria-hidden="true">/</i><strong data-current-file>main.dl</strong></div>
+            <span class="live-note"><i aria-hidden="true"></i> LIVE</span>
+          </div>
           <div id="editor"></div>
         </section>
-        <section class="side-panels">
-          <section class="panel">
-            <h2>Diagnostics</h2>
-            <div id="diagnostics-empty" class="empty">No diagnostics.</div>
+
+        <aside class="tool-panel" aria-label="Problems and output">
+          <div class="tool-tabs" role="tablist" aria-label="Workspace information">
+            <button id="tool-tab-feedback" type="button" role="tab" aria-selected="true" aria-controls="tool-panel-feedback" data-tool-tab="feedback">Problems <span id="diagnostics-count">0</span></button>
+            <button id="tool-tab-output" type="button" role="tab" aria-selected="false" aria-controls="tool-panel-output" data-tool-tab="output" tabindex="-1">Output</button>
+            <button id="tool-tab-activity" type="button" role="tab" aria-selected="false" aria-controls="tool-panel-activity" data-tool-tab="activity" tabindex="-1">Activity</button>
+          </div>
+
+          <section class="panel" id="tool-panel-feedback" role="tabpanel" aria-labelledby="tool-tab-feedback" data-tool-panel="feedback">
+            <div class="panel-heading">
+              <div><span data-current-file>main.dl</span><h2>Problems</h2></div>
+            </div>
+            <div id="diagnostics-empty" class="empty">
+              <span aria-hidden="true">✓</span>
+              <strong>No problems.</strong>
+            </div>
             <ul id="diagnostics-list"></ul>
           </section>
-          <section class="panel">
-            <h2>Compiler Log</h2>
+
+          <section class="panel output-panel" id="tool-panel-output" role="tabpanel" aria-labelledby="tool-tab-output" data-tool-panel="output" hidden>
+            <div class="panel-heading">
+              <div><span data-output-kicker>LATEST RUN</span><h2 data-output-title>Output</h2></div>
+            </div>
+            <pre id="runtime-output">(no output yet)</pre>
+            <div class="shader-preview-shell" id="shader-preview-shell" hidden>
+              <canvas id="shader-preview" aria-label="Live shader preview"></canvas>
+              <span><i aria-hidden="true"></i> LIVE SHADER</span>
+            </div>
+          </section>
+
+          <section class="panel" id="tool-panel-activity" role="tabpanel" aria-labelledby="tool-tab-activity" data-tool-panel="activity" hidden>
+            <div class="panel-heading">
+              <div><span>SESSION</span><h2>Activity</h2></div>
+            </div>
             <pre id="compiler-log"></pre>
           </section>
-          <section class="panel">
-            <h2>Program Output</h2>
-            <pre id="runtime-output"></pre>
-          </section>
-        </section>
+        </aside>
       </main>
+
+      <footer class="workspace-footer">
+        <span><i aria-hidden="true"></i> DynLex workspace</span>
+        <span>Ctrl / Cmd + Enter</span>
+        <span>Spaces: 4</span>
+      </footer>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

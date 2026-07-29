@@ -49,7 +49,14 @@ static Expression *resolveThroughBindingsDeepImpl(
 	Expression *expr, BindingFrameStack &bindingFrameStack, BindingFrameStack &outBindingFrameStack,
 	std::unordered_set<Expression *> &visited, InferenceContext *inferenceContext
 ) {
-	expr = resolveThroughBindings(expr, bindingFrameStack);
+	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
+		BindingFrameStack callerScope;
+		Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerScope);
+		if (!boundExpression)
+			break;
+		expr = boundExpression;
+		bindingFrameStack = std::move(callerScope);
+	}
 	outBindingFrameStack = bindingFrameStack;
 	if (!expr)
 		return expr;

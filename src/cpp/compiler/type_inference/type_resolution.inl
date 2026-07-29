@@ -3,6 +3,8 @@
 #include "addressProvenance.h"
 #include "compiler.h"
 #include "const_evaluation.inl"
+#include "knownConstantState.h"
+#include "numericLiteral.h"
 #include <limits>
 #include <tuple>
 
@@ -12,28 +14,10 @@ static bool
 refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType);
 
 static std::optional<DataType> parseNumericTokenType(std::string_view token, bool emitSPIRV) {
-	if (token.empty())
+	NumericLiteralParseResult parsed = parseNumericLiteral(token);
+	if (!parsed)
 		return std::nullopt;
-	bool sawDigit = false;
-	bool sawDot = false;
-	for (char c : token) {
-		if (c >= '0' && c <= '9') {
-			sawDigit = true;
-			continue;
-		}
-		if (c == '.') {
-			if (sawDot)
-				return std::nullopt;
-			sawDot = true;
-			continue;
-		}
-		return std::nullopt;
-	}
-	if (!sawDigit)
-		return std::nullopt;
-	if (sawDot)
-		return defaultFloatType(emitSPIRV);
-	return DataType{DataType::Kind::Int, 4};
+	return numericLiteralType(parsed.value, emitSPIRV);
 }
 
 static Expression *prepareCompileTimeTypeReferenceExpression(
@@ -89,12 +73,10 @@ static bool readInferredTypeReferenceValue(Expression *expression, InferenceCont
 	return false;
 }
 
-static std::unordered_map<VariableReference *, CompileTimeValue>
-snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext);
+static KnownConstantState snapshotKnownConstantsForClassInstantiation(InferenceContext *inferenceContext);
 static AddressInferenceState snapshotAddressStateForClassInstantiation(InferenceContext *inferenceContext);
-static void restoreKnownConstantsForClassInstantiation(
-	InferenceContext *inferenceContext, std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants
-);
+static void
+restoreKnownConstantsForClassInstantiation(InferenceContext *inferenceContext, KnownConstantState savedKnownConstants);
 static void
 restoreAddressStateForClassInstantiation(InferenceContext *inferenceContext, AddressInferenceState savedAddressState);
 static void
@@ -189,16 +171,13 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		~ActiveTypeResolutionGuard() { popActiveTypeResolutionKey(typeResolutionKey); }
 	} activeGuard(std::move(typeResolutionKey));
 	if (resolved->kind == Expression::Kind::Literal) {
-		if (std::holds_alternative<double>(resolved->literalValue)) {
-			double value = std::get<double>(resolved->literalValue);
-			std::string_view literalText = resolved->range.subString;
-			bool explicitlyFloat = literalText.find('.') != std::string_view::npos ||
-								   literalText.find('e') != std::string_view::npos ||
-								   literalText.find('E') != std::string_view::npos;
-			if (!explicitlyFloat && std::trunc(value) == value)
-				return {DataType::Kind::Int, 4};
-			return defaultFloatType(activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV);
-		}
+		bool emitSPIRV = activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV;
+		if (const auto *integer = std::get_if<std::int64_t>(&resolved->literalValue))
+			return numericLiteralType(NumericLiteralValue{*integer}, emitSPIRV);
+		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&resolved->literalValue))
+			return numericLiteralType(NumericLiteralValue{*minimumMagnitude}, emitSPIRV);
+		if (const auto *floatingPoint = std::get_if<double>(&resolved->literalValue))
+			return numericLiteralType(NumericLiteralValue{*floatingPoint}, emitSPIRV);
 		if (std::holds_alternative<std::string>(resolved->literalValue)) {
 			DataType strType{DataType::Kind::Int, 1};
 			strType.pointerDepth = 1;
@@ -438,7 +417,7 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return resolveKnownExpressionType(selectedBranch, effectiveBindingFrameStack);
 		} else if (kind == IntrinsicKind::Array) {
 			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
-			if (auto *size = std::get_if<double>(&sizeExpr->literalValue)) {
+			if (auto *size = std::get_if<std::int64_t>(&sizeExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
 				typeRef.referencedKind = DataType::Kind::Array;
@@ -454,12 +433,10 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			}
 		} else if (kind == IntrinsicKind::Vector) {
 			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
-			auto *size = std::get_if<double>(&sizeExpr->literalValue);
-			if (!size)
+			auto *size = std::get_if<std::int64_t>(&sizeExpr->literalValue);
+			if (!size || *size < 1 || *size > std::numeric_limits<int>::max())
 				return {};
 			int vectorSize = static_cast<int>(*size);
-			if (*size != static_cast<double>(vectorSize) || vectorSize < 1)
-				return {};
 			DataType typeRef;
 			typeRef.kind = DataType::Kind::Type;
 			typeRef.referencedKind = DataType::Kind::Vector;
@@ -479,14 +456,14 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		} else if (kind == IntrinsicKind::Matrix) {
 			Expression *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
 			Expression *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
-			auto *rowsValue = std::get_if<double>(&rowsExpr->literalValue);
-			auto *columnsValue = std::get_if<double>(&columnsExpr->literalValue);
+			auto *rowsValue = std::get_if<std::int64_t>(&rowsExpr->literalValue);
+			auto *columnsValue = std::get_if<std::int64_t>(&columnsExpr->literalValue);
 			if (!rowsValue || !columnsValue)
+				return {};
+			if (*rowsValue > std::numeric_limits<int>::max() || *columnsValue > std::numeric_limits<int>::max())
 				return {};
 			int rows = static_cast<int>(*rowsValue);
 			int columns = static_cast<int>(*columnsValue);
-			if (*rowsValue != static_cast<double>(rows) || *columnsValue != static_cast<double>(columns))
-				return {};
 			if (rows < 1 || columns < 1)
 				return {};
 			DataType typeRef;

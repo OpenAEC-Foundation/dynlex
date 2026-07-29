@@ -6,26 +6,13 @@
     <link rel="icon" type="image/svg+xml" href="../icons/dynlex-icon.svg">
     <title>DynLex Wiki - Terms</title>
     <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="stylesheet" href="wiki.css">
 </head>
-<body>
-    <nav class="nav">
-        <a href="../index.html" class="nav-btn">Home</a>
-        <a href="../ide/index.html" class="nav-btn">IDE</a>
-        <a href="index.html" class="nav-btn">Wiki Home</a>
-        <a href="core-rules.html" class="nav-btn">Core Rules</a>
-        <a href="getting-started.html" class="nav-btn">Getting Started</a>
-        <a href="sections/index.html" class="nav-btn">Sections</a>
-        <a href="terms.html" class="nav-btn primary">Terms</a>
-    </nav>
-
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
-
-    <main class="wiki-shell">
+<body class="docs-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header" data-site-header></header>
+    <main class="wiki-shell" id="main-content">
         <header class="wiki-header">
             <h1>DynLex Terms</h1>
             <p>
@@ -33,7 +20,7 @@
             </p>
         </header>
 
-        <section class="glass-card tldr-card">
+        <section class="tldr-card">
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>A <code>pattern</code> is the sentence shape DynLex understands.</li>
@@ -44,7 +31,7 @@
         </section>
 
         <section class="terms-grid">
-            <article class="glass-card term-card" id="pattern">
+            <article class="term-card" id="pattern">
                 <h2>Pattern</h2>
                 <p>
                     A pattern is the shape of a line of DynLex code. For example, <code>print message</code> is a
@@ -52,7 +39,7 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="parameter">
+            <article class="term-card" id="parameter">
                 <h2>Parameter</h2>
                 <p>
                     A parameter is a named slot in a pattern. In <code>function square value:</code>, the word
@@ -64,7 +51,7 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="argument">
+            <article class="term-card" id="argument">
                 <h2>Argument</h2>
                 <p>
                     An argument is the real value you put into a parameter slot. In <code>square 5</code>, the
@@ -72,7 +59,7 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="condition">
+            <article class="term-card" id="condition">
                 <h2>Condition</h2>
                 <p>
                     A condition is a piece of code that answers yes or no. DynLex uses conditions in places like
@@ -80,14 +67,14 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="section">
+            <article class="term-card" id="section">
                 <h2>Section</h2>
                 <p>
                     A section is a grouped block. Lines that are indented one level deeper belong to that section.
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="function">
+            <article class="term-card" id="function">
                 <h2>Function</h2>
                 <p>
                     A function is a named piece of behavior. You define it with <code>function</code> and call it
@@ -95,14 +82,14 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="variable">
+            <article class="term-card" id="variable">
                 <h2>Variable</h2>
                 <p>
                     A variable stores a value so you can use that value again later.
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="flex">
+            <article class="term-card" id="flex">
                 <h2>Flex</h2>
                 <p>
                     A flex is a function that uses a <code>replacement:</code> section. It replaces one piece of
@@ -110,14 +97,14 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="class">
+            <article class="term-card" id="class">
                 <h2>Class</h2>
                 <p>
                     A class is a data shape with named members such as <code>x</code> and <code>y</code>.
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="type">
+            <article class="term-card" id="type">
                 <h2>Type</h2>
                 <p>
                     A type tells DynLex what kind of value something is, such as an integer, a float, a string, or
@@ -125,7 +112,7 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="import">
+            <article class="term-card" id="import">
                 <h2>Import</h2>
                 <p>
                     An import brings code from another file into the current file. You write it with
@@ -133,7 +120,7 @@
                 </p>
             </article>
 
-            <article class="glass-card term-card" id="intrinsic">
+            <article class="term-card" id="intrinsic">
                 <h2>Intrinsic</h2>
                 <p>
                     An intrinsic is a built-in low-level operation. Most everyday DynLex code should use normal
@@ -142,6 +129,6 @@
             </article>
         </section>
     </main>
-    <script src="wiki-actions.js"></script>
+    <script type="module" src="wiki-actions.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 #include "expression_invocation_identity.h"
+#include "knownConstantState.h"
 
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged) {
 	if (!current.isDeduced() || !next.isDeduced())
@@ -196,15 +197,16 @@ struct InferenceContext {
 	};
 
 	struct GroupingTrialJournal {
-		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeValue>;
+		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeEvaluation>;
 		using CodeLineGroupingMap = std::unordered_map<CodeLine *, TrialCodeLineGrouping>;
 		using CallableInstantiationMap = std::unordered_map<PatternDefinition *, Instantiation *>;
+		template <typename Map, typename Key> using SeenWrites = std::unordered_map<Map *, std::unordered_set<Key *>>;
 
 		struct ExpressionValueUndo {
 			ExpressionValueMap *map;
 			Expression *expression;
 			bool existed;
-			CompileTimeValue value;
+			CompileTimeEvaluation evaluation;
 		};
 
 		struct CodeLineGroupingUndo {
@@ -222,24 +224,28 @@ struct InferenceContext {
 		};
 
 		std::vector<ExpressionValueUndo> expressionValueUndo;
+		SeenWrites<ExpressionValueMap, Expression> seenExpressionValueWrites;
 		std::vector<CodeLineGroupingUndo> codeLineGroupingUndo;
+		SeenWrites<CodeLineGroupingMap, CodeLine> seenCodeLineGroupingWrites;
 		std::vector<CallableInstantiationUndo> callableInstantiationUndo;
+		SeenWrites<CallableInstantiationMap, PatternDefinition> seenCallableInstantiationWrites;
+
+		template <typename Map, typename Key>
+		static bool recordFirstWrite(SeenWrites<Map, Key> &seenWrites, Map *map, Key *key) {
+			return seenWrites[map].insert(key).second;
+		}
 
 		void recordExpressionValueWrite(ExpressionValueMap &map, Expression *expression) {
-			if (std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &undo) {
-				return undo.map == &map && undo.expression == expression;
-			}))
+			if (!recordFirstWrite(seenExpressionValueWrites, &map, expression))
 				return;
 			auto existing = map.find(expression);
 			expressionValueUndo.push_back(
-				{&map, expression, existing != map.end(), existing != map.end() ? existing->second : CompileTimeValue{}}
+				{&map, expression, existing != map.end(), existing != map.end() ? existing->second : CompileTimeEvaluation{}}
 			);
 		}
 
 		void recordCodeLineGroupingWrite(CodeLineGroupingMap &map, CodeLine *line) {
-			if (std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &undo) {
-				return undo.map == &map && undo.line == line;
-			}))
+			if (!recordFirstWrite(seenCodeLineGroupingWrites, &map, line))
 				return;
 			auto existing = map.find(line);
 			codeLineGroupingUndo.push_back(
@@ -248,9 +254,7 @@ struct InferenceContext {
 		}
 
 		void recordCallableInstantiationWrite(CallableInstantiationMap &map, PatternDefinition *definition) {
-			if (std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &undo) {
-				return undo.map == &map && undo.definition == definition;
-			}))
+			if (!recordFirstWrite(seenCallableInstantiationWrites, &map, definition))
 				return;
 			auto existing = map.find(definition);
 			callableInstantiationUndo.push_back(
@@ -260,21 +264,15 @@ struct InferenceContext {
 
 		void absorb(GroupingTrialJournal &&nested) {
 			for (ExpressionValueUndo &undo : nested.expressionValueUndo) {
-				if (!std::ranges::any_of(expressionValueUndo, [&](const ExpressionValueUndo &existing) {
-					return existing.map == undo.map && existing.expression == undo.expression;
-				}))
+				if (recordFirstWrite(seenExpressionValueWrites, undo.map, undo.expression))
 					expressionValueUndo.push_back(std::move(undo));
 			}
 			for (CodeLineGroupingUndo &undo : nested.codeLineGroupingUndo) {
-				if (!std::ranges::any_of(codeLineGroupingUndo, [&](const CodeLineGroupingUndo &existing) {
-					return existing.map == undo.map && existing.line == undo.line;
-				}))
+				if (recordFirstWrite(seenCodeLineGroupingWrites, undo.map, undo.line))
 					codeLineGroupingUndo.push_back(std::move(undo));
 			}
 			for (CallableInstantiationUndo &undo : nested.callableInstantiationUndo) {
-				if (!std::ranges::any_of(callableInstantiationUndo, [&](const CallableInstantiationUndo &existing) {
-					return existing.map == undo.map && existing.definition == undo.definition;
-				}))
+				if (recordFirstWrite(seenCallableInstantiationWrites, undo.map, undo.definition))
 					callableInstantiationUndo.push_back(std::move(undo));
 			}
 		}
@@ -294,7 +292,7 @@ struct InferenceContext {
 			}
 			for (auto undo = expressionValueUndo.rbegin(); undo != expressionValueUndo.rend(); ++undo) {
 				if (undo->existed)
-					(*undo->map)[undo->expression] = std::move(undo->value);
+					(*undo->map)[undo->expression] = std::move(undo->evaluation);
 				else
 					undo->map->erase(undo->expression);
 			}
@@ -313,11 +311,12 @@ struct InferenceContext {
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
+	std::vector<std::optional<FlexExpansionKey>> activeFlexExpansionKeys;
 	std::vector<Expression *> activeFlexCallStack;
 	std::vector<Section *> flexCallSiteSectionStack;
 	// Flow-sensitive variable values. A monostate entry explicitly records that
 	// a previously evaluated variable is unknown in the current execution state.
-	std::unordered_map<VariableReference *, CompileTimeValue> currentVariableValues;
+	KnownConstantState currentVariableValues;
 	// Flow-sensitive provenance for pointer variables whose runtime value may
 	// address local or global variables tracked by constant inference.
 	AddressInferenceState currentAddressState;
@@ -343,8 +342,8 @@ struct InferenceContext {
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 	std::vector<Expression *> expressionStack;
-	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
-	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
+	std::unordered_map<Expression *, CompileTimeEvaluation> trialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeEvaluation> *inheritedTrialExpressionValues{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
 	std::unordered_map<PatternDefinition *, Instantiation *> trialCallableInstantiations;
 
@@ -355,6 +354,7 @@ struct InferenceContext {
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;
 		sectionFlexBodyFrames = other.sectionFlexBodyFrames;
 		activeFlexDefinitionStack = other.activeFlexDefinitionStack;
+		activeFlexExpansionKeys = other.activeFlexExpansionKeys;
 		activeFlexCallStack = other.activeFlexCallStack;
 		flexCallSiteSectionStack = other.flexCallSiteSectionStack;
 	}
@@ -429,11 +429,12 @@ struct InferenceContext {
 		}
 	}
 
-	void fail(Diagnostic diagnostic, int priority = 1) {
+	void fail(Diagnostic diagnostic, int priority = 1, bool includeInferenceTrace = true) {
 		typesValid = false;
 		if (hasTypeFailureDiagnostic && typeFailurePriority >= priority)
 			return;
-		appendCurrentInferenceTrace(diagnostic);
+		if (includeInferenceTrace)
+			appendCurrentInferenceTrace(diagnostic);
 		typeFailureDiagnostic = std::move(diagnostic);
 		typeFailurePriority = priority;
 		hasTypeFailureDiagnostic = true;
@@ -472,36 +473,59 @@ struct InferenceContext {
 			return {};
 		if (expression->kind == Expression::Kind::Variable && expression->variable) {
 			VariableReference *key = normalizeReference(expression->variable);
-			auto currentValue = currentVariableValues.find(key);
-			if (currentValue != currentVariableValues.end())
+			const KnownConstantStorage &knownConstants = currentVariableValues.read();
+			auto currentValue = knownConstants.find(key);
+			if (currentValue != knownConstants.end())
 				return currentValue->second;
 		}
 		if (trial) {
 			auto trialIt = trialExpressionValues.find(expression);
 			if (trialIt != trialExpressionValues.end())
-				return trialIt->second;
+				return trialIt->second.value;
 			if (inheritedTrialExpressionValues) {
 				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
 				if (inheritedIt != inheritedTrialExpressionValues->end())
-					return inheritedIt->second;
+					return inheritedIt->second.value;
 			}
 		}
 		return getExpressionCompileTimeValue(expression);
 	}
 
-	void setExpressionValue(Expression *expression, const CompileTimeValue &value) {
+	MinimumSignedIntegerMagnitudeEffects lookupExpressionMinimumIntegerEffects(Expression *expression) const {
+		if (!expression)
+			return {};
+		if (trial) {
+			auto trialIt = trialExpressionValues.find(expression);
+			if (trialIt != trialExpressionValues.end())
+				return trialIt->second.minimumIntegerEffects;
+			if (inheritedTrialExpressionValues) {
+				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
+				if (inheritedIt != inheritedTrialExpressionValues->end())
+					return inheritedIt->second.minimumIntegerEffects;
+			}
+		}
+		return expression->minimumIntegerEffects;
+	}
+
+	void setExpressionEvaluation(Expression *expression, CompileTimeEvaluation evaluation) {
 		if (!expression)
 			return;
 		if (trial) {
 			if (groupingTrialJournal)
 				groupingTrialJournal->recordExpressionValueWrite(trialExpressionValues, expression);
-			if (isCompileTimeKnown(value))
-				trialExpressionValues[expression] = value;
-			else
+			if (isCompileTimeKnown(evaluation.value) || !evaluation.minimumIntegerEffects.consumedByNegation.empty() ||
+				!evaluation.minimumIntegerEffects.rejectedUses.empty()) {
+				trialExpressionValues[expression] = std::move(evaluation);
+			} else
 				trialExpressionValues.erase(expression);
 			return;
 		}
-		setExpressionCompileTimeValue(expression, value);
+		setExpressionCompileTimeValue(expression, evaluation.value);
+		expression->minimumIntegerEffects = std::move(evaluation.minimumIntegerEffects);
+	}
+
+	void setExpressionValue(Expression *expression, const CompileTimeValue &value) {
+		setExpressionEvaluation(expression, {.value = value, .minimumIntegerEffects = {}});
 	}
 
 	Expression *lookupFlexExpansion(Expression *expression) const {
@@ -512,30 +536,32 @@ struct InferenceContext {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return {};
-		auto it = currentVariableValues.find(key);
-		return it != currentVariableValues.end() ? it->second : CompileTimeValue{};
+		const KnownConstantStorage &knownConstants = currentVariableValues.read();
+		auto it = knownConstants.find(key);
+		return it != knownConstants.end() ? it->second : CompileTimeValue{};
 	}
 
 	void setKnownConstant(VariableReference *reference, const CompileTimeValue &value) {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return;
-		currentVariableValues[key] = value;
+		currentVariableValues.write()[key] = value;
 	}
 
 	AddressProvenance lookupAddressProvenance(VariableReference *reference) const {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return {.mayTargets = {}, .unknown = true};
-		auto it = currentAddressState->variables.find(key);
-		return it != currentAddressState->variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
+		const VariableAddressProvenance &variables = currentAddressState.read().variables;
+		auto it = variables.find(key);
+		return it != variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 	}
 
 	void setAddressProvenance(VariableReference *reference, AddressProvenance provenance) {
 		VariableReference *key = normalizeReference(reference);
 		if (!key)
 			return;
-		currentAddressState->variables[key] = std::move(provenance);
+		currentAddressState.write().variables[key] = std::move(provenance);
 	}
 
 	void noteWrittenGlobalReference(VariableReference *reference) {

@@ -3,6 +3,7 @@
 #include "expression.h"
 #include "functionSection.h"
 #include "intrinsicInfo.h"
+#include "numericLiteral.h"
 #include "parseContext.h"
 #include "patternTreeNode.h"
 #include "sectionSection.h"
@@ -564,14 +565,43 @@ Expression *Section::detectPatternsRecursively(
 		numMatches.emplace_back(intStart, pos, std::string(patternSnapshot.substr(intStart, pos - intStart)));
 	}
 	std::vector<Expression *> numExprs;
-	for (auto it = numMatches.rbegin(); it != numMatches.rend(); ++it) {
-		auto &[pos, endPos, numStr] = *it;
+	std::vector<NumericLiteralValue> numericValues;
+	numericValues.reserve(numMatches.size());
+	for (const auto &[pos, endPos, numStr] : numMatches) {
+		NumericLiteralParseResult parsed = parseNumericLiteral(numStr);
+		if (!parsed) {
+			Range literalRange =
+				relativeRange.subRange(reference->pattern.getLinePos(pos), reference->pattern.getLinePos(endPos));
+			std::string_view diagnosticKey;
+			switch (parsed.error) {
+			case NumericLiteralParseError::IntegerOutOfRange:
+				diagnosticKey = "integer literal out of range";
+				break;
+			case NumericLiteralParseError::FloatingPointOutOfRange:
+				diagnosticKey = "floating point literal out of range";
+				break;
+			case NumericLiteralParseError::Invalid:
+				diagnosticKey = "invalid numeric literal";
+				break;
+			case NumericLiteralParseError::None:
+				crashCompilerBug("successful numeric literal parse reported failure");
+			}
+			context.diagnostics.push_back(Diagnostic(context, Diagnostic::Level::Error, diagnosticKey, literalRange));
+			return nullptr;
+		}
+		numericValues.push_back(parsed.value);
+	}
+	for (size_t reverseIndex = numMatches.size(); reverseIndex > 0; reverseIndex--) {
+		auto &[pos, endPos, numStr] = numMatches[reverseIndex - 1];
+		(void)numStr;
 		Expression *numExpr = new Expression();
 		size_t lineStart = reference->pattern.getLinePos(pos);
 		size_t lineEnd = reference->pattern.getLinePos(endPos);
 		numExpr->range = relativeRange.subRange(lineStart, lineEnd);
 		numExpr->kind = Expression::Kind::Literal;
-		numExpr->literalValue = std::stod(numStr);
+		std::visit([&](auto value) {
+			numExpr->literalValue = value;
+		}, numericValues[reverseIndex - 1]);
 		numExprs.push_back(numExpr);
 		reference->pattern.replacePattern(pos, endPos);
 	}

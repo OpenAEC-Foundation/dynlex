@@ -1,9 +1,16 @@
 #pragma once
 #include "patternElement.h"
 #include "sectionType.h"
+#include <string_view>
 #include <unordered_map>
 
 struct PatternDefinition;
+struct PatternLiteralHash {
+	using is_transparent = void; // NOLINT(readability-identifier-naming)
+
+	size_t operator()(std::string_view value) const noexcept { return std::hash<std::string_view>{}(value); }
+};
+
 struct PatternDefinitionOccurrence {
 	size_t startPos;
 	std::string parameterName;
@@ -12,10 +19,12 @@ struct PatternDefinitionOccurrence {
 };
 
 struct PatternTreeNode : public PatternElement {
+	// Incremented whenever active definitions at this endpoint change.
+	size_t endpointRevision = 0;
 	// the pattern definitions that end at this node (multiple when overloaded via type constraints)
 	std::vector<PatternDefinition *> matchingDefinitions;
 	// these child nodes branch off based on their pattern strings
-	std::unordered_map<std::string, PatternTreeNode *> literalChildren{};
+	std::unordered_map<std::string, PatternTreeNode *, PatternLiteralHash, std::equal_to<>> literalChildren{};
 	// this child node accepts a variable or the result of an expression
 	PatternTreeNode *argumentChild{};
 	// this child node captures a single word as a string literal ({word:name} syntax)

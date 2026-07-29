@@ -3,7 +3,8 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "sectionType.h"
-#include <memory>
+#include <deque>
+#include <limits>
 #include <string>
 #include <unordered_set>
 struct ParseContext;
@@ -11,6 +12,30 @@ struct PatternReference;
 struct MatchProgress;
 struct MatchParentAlternatives;
 struct MatchStorage;
+struct MatchStep;
+
+inline constexpr size_t noMatchSequenceNode = std::numeric_limits<size_t>::max();
+
+template <typename T> struct MatchSequenceNode {
+	T value;
+	size_t previous = noMatchSequenceNode;
+};
+
+template <typename T> struct MatchSequence {
+	size_t last = noMatchSequenceNode;
+	size_t count = 0;
+
+	size_t size() const { return count; }
+};
+
+struct MatchState {
+	MatchSequence<PatternTreeNode *> nodesPassed;
+	MatchSequence<VariableMatch> discoveredVariables;
+	MatchSequence<WordMatch> discoveredWords;
+	MatchSequence<AcceptedLiteralMatch> acceptedLiterals;
+	MatchSequence<const PatternMatch *> subMatches;
+	MatchSequence<MatchedArgument> orderedArguments;
+};
 
 struct MatchControlState {
 	const PatternTreeNode *rootNode{};
@@ -28,6 +53,9 @@ struct MatchControlState {
 
 	bool operator==(const MatchControlState &other) const = default;
 };
+
+void collectMatchDependencies(const MatchControlState &state, MatchDependencies &dependencies);
+void normalizeMatchDependencies(MatchDependencies &dependencies);
 
 struct MatchControlStateHash {
 	size_t operator()(const MatchControlState &state) const;
@@ -60,7 +88,7 @@ struct CompletedMatchStateHash {
 
 struct CompletedMatchProgress {
 	PatternTreeNode *currentNode{};
-	PatternMatch match{};
+	const PatternMatch *match{};
 	size_t sourceElementIndex{};
 	size_t sourceArgumentIndex{};
 	size_t patternStartPos{};
@@ -92,7 +120,7 @@ struct MatchProgress {
 	ParseContext *context{};
 	PatternTreeNode *rootNode{};
 	PatternTreeNode *currentNode{};
-	PatternMatch match{};
+	MatchState match;
 	PatternReference *patternReference{};
 	SectionType type{};
 	MatchOptions options{};
@@ -103,25 +131,47 @@ struct MatchProgress {
 	size_t sourceArgumentIndex{};
 	size_t matchedArgumentIndex{};
 
-	bool isComplete() const;
-	bool isSubmatchComplete() const;
-	std::vector<MatchProgress> step(MatchStorage &storage);
+	bool isComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
+	bool isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
+	MatchStep step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions);
 	MatchControlState controlState() const;
 	MatchContinuationState continuationState() const;
 	bool canStartSubmatch() const;
 	bool canBeSubmatch() const;
 	std::vector<PatternDefinition *> visibleDefinitions() const;
-	CompletedMatchProgress completedSubmatch() const;
-	MatchProgress resumeParent(const MatchProgress &parentProgress) const;
-	static MatchProgress resumeParent(const MatchProgress &parentProgress, const CompletedMatchProgress &submatch);
-	void addMatchData(PatternMatch &match) const;
+	CompletedMatchProgress
+	completedSubmatch(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) const;
+	static MatchProgress
+	resumeParent(MatchStorage &storage, const MatchProgress &parentProgress, const CompletedMatchProgress &submatch);
+	PatternMatch
+	materializeMatch(const MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	std::string toString() const;
 };
 
+struct MatchStep {
+	std::vector<MatchProgress> nextMatches;
+	CompletedMatchProgress completedSubmatch;
+	bool hasCompletedSubmatch = false;
+};
+
 struct MatchStorage {
-	std::vector<std::unique_ptr<MatchParentAlternatives>> parentAlternatives;
-	std::vector<std::unique_ptr<MatchProgress>> parentProgresses;
+	std::deque<MatchParentAlternatives> parentAlternatives;
+	std::deque<MatchProgress> parentProgresses;
+	std::deque<PatternMatch> completedMatches;
+	std::vector<MatchSequenceNode<PatternTreeNode *>> matchedNodes;
+	std::vector<MatchSequenceNode<VariableMatch>> matchedVariables;
+	std::vector<MatchSequenceNode<WordMatch>> matchedWords;
+	std::vector<MatchSequenceNode<AcceptedLiteralMatch>> acceptedLiterals;
+	std::vector<MatchSequenceNode<const PatternMatch *>> subMatches;
+	std::vector<MatchSequenceNode<MatchedArgument>> orderedArguments;
 
 	MatchParentAlternatives *createParentAlternatives();
 	const MatchProgress *storeParent(MatchProgress progress);
+	const PatternMatch *storeCompletedMatch(PatternMatch match);
+	void append(MatchSequence<PatternTreeNode *> &sequence, PatternTreeNode *value);
+	void append(MatchSequence<VariableMatch> &sequence, VariableMatch value);
+	void append(MatchSequence<WordMatch> &sequence, WordMatch value);
+	void append(MatchSequence<AcceptedLiteralMatch> &sequence, AcceptedLiteralMatch value);
+	void append(MatchSequence<const PatternMatch *> &sequence, const PatternMatch *value);
+	void append(MatchSequence<MatchedArgument> &sequence, MatchedArgument value);
 };

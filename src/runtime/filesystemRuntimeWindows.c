@@ -21,7 +21,7 @@ typedef struct {
 	size_t current_name_length;
 } DynlexWindowsDirectory;
 
-static wchar_t *wide_path(const char *path, size_t length) {
+wchar_t *dynlex_platform_filesystem_wide_path(const char *path, size_t length) {
 	if (!dynlex_filesystem_utf8_is_valid(path, length)) {
 		dynlex_runtime_set_error("Filesystem paths must be nonempty UTF-8 text without zero bytes");
 		return NULL;
@@ -54,7 +54,7 @@ static wchar_t *wide_path(const char *path, size_t length) {
 	return result;
 }
 
-static char *utf8_text(const wchar_t *text, size_t *length) {
+char *dynlex_platform_filesystem_utf8_text(const wchar_t *text, size_t *length) {
 	size_t wide_length = wcslen(text);
 	if (wide_length > INT_MAX) {
 		dynlex_runtime_set_error("Windows filesystem name exceeds the conversion limit");
@@ -148,7 +148,7 @@ static int path_entry_kind(const wchar_t *path, DWORD attributes, int32_t *kind)
 }
 
 FILE *dynlex_platform_filesystem_open_file(const char *path, size_t path_length, int32_t mode) {
-	wchar_t *prepared = wide_path(path, path_length);
+	wchar_t *prepared = dynlex_platform_filesystem_wide_path(path, path_length);
 	if (prepared == NULL)
 		return NULL;
 	trim_trailing_separators(prepared);
@@ -175,7 +175,7 @@ int dynlex_filesystem_status(const char *path, size_t path_length, int32_t *kind
 		dynlex_runtime_set_error("Invalid filesystem status outputs");
 		return -1;
 	}
-	wchar_t *prepared = wide_path(path, path_length);
+	wchar_t *prepared = dynlex_platform_filesystem_wide_path(path, path_length);
 	if (prepared == NULL)
 		return -1;
 	trim_trailing_separators(prepared);
@@ -201,7 +201,7 @@ int dynlex_filesystem_status(const char *path, size_t path_length, int32_t *kind
 }
 
 static wchar_t *directory_pattern(const char *path, size_t path_length) {
-	wchar_t *prepared = wide_path(path, path_length);
+	wchar_t *prepared = dynlex_platform_filesystem_wide_path(path, path_length);
 	if (prepared == NULL)
 		return NULL;
 	trim_trailing_separators(prepared);
@@ -277,7 +277,7 @@ int dynlex_filesystem_directory_next(DynlexWindowsDirectory *directory, int32_t 
 		if (wcscmp(directory->current.cFileName, L".") == 0 || wcscmp(directory->current.cFileName, L"..") == 0)
 			continue;
 		size_t length = 0;
-		char *name = utf8_text(directory->current.cFileName, &length);
+		char *name = dynlex_platform_filesystem_utf8_text(directory->current.cFileName, &length);
 		if (name == NULL)
 			return -1;
 		free(directory->current_name);
@@ -332,7 +332,7 @@ static int ensure_directory(const wchar_t *path) {
 
 int dynlex_filesystem_create_directories(const char *path, size_t path_length) {
 	dynlex_runtime_clear_error();
-	wchar_t *prepared = wide_path(path, path_length);
+	wchar_t *prepared = dynlex_platform_filesystem_wide_path(path, path_length);
 	if (prepared == NULL)
 		return -1;
 	trim_trailing_separators(prepared);
@@ -438,7 +438,7 @@ static int remove_tree_wide(const wchar_t *path) {
 }
 
 int dynlex_platform_filesystem_remove_tree(const char *path, size_t path_length) {
-	wchar_t *prepared = wide_path(path, path_length);
+	wchar_t *prepared = dynlex_platform_filesystem_wide_path(path, path_length);
 	if (prepared == NULL)
 		return -1;
 	trim_trailing_separators(prepared);
@@ -454,10 +454,10 @@ int dynlex_filesystem_remove_tree(const char *path, size_t path_length) {
 
 int dynlex_filesystem_rename(const char *source, size_t source_length, const char *destination, size_t destination_length) {
 	dynlex_runtime_clear_error();
-	wchar_t *prepared_source = wide_path(source, source_length);
+	wchar_t *prepared_source = dynlex_platform_filesystem_wide_path(source, source_length);
 	if (prepared_source == NULL)
 		return -1;
-	wchar_t *prepared_destination = wide_path(destination, destination_length);
+	wchar_t *prepared_destination = dynlex_platform_filesystem_wide_path(destination, destination_length);
 	if (prepared_destination == NULL) {
 		free(prepared_source);
 		return -1;
@@ -543,7 +543,7 @@ int dynlex_platform_filesystem_create_temporary_directory(char **path, size_t *l
 		}
 		if (CreateDirectoryW(candidate, NULL)) {
 			free(base);
-			*path = utf8_text(candidate, length);
+			*path = dynlex_platform_filesystem_utf8_text(candidate, length);
 			if (*path != NULL) {
 				free(candidate);
 				return 0;

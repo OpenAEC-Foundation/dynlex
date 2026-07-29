@@ -1,0 +1,19 @@
+import lib/std.dl
+
+function selected overload for {cstring:value}:
+    execute:
+        return 1
+
+function selected overload for {any:value}:
+    execute:
+        return 2
+
+set integer_pointer to 0 as a pointer to integer
+set other_integer_pointer to 0 as a pointer to integer
+set cstring_selection to selected overload for "text"
+set integer_pointer_selection to selected overload for integer_pointer
+set pointers_are_equal to integer_pointer = other_integer_pointer
+
+print cstring_selection as line
+print integer_pointer_selection as line
+print pointers_are_equal as line

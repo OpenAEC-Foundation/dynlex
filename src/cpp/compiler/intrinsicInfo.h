@@ -71,6 +71,8 @@ enum class IntrinsicPurityKind {
 	X(DefaultCase, "default case", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(ShaderOutput, "shader output", 5, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                           \
+	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
+	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)    \
 	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Pure)                       \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
@@ -246,6 +248,12 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 }
 
 constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }
+
+constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput ||
+		   kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform ||
+		   kind == IntrinsicKind::ShaderOutput;
+}
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Return));

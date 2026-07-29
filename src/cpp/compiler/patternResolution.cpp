@@ -163,47 +163,65 @@ static void generateClassPropertyPatterns(ParseContext &context) {
 	}
 }
 
-static std::tuple<int, int, int, std::string> definitionSortKey(const PatternDefinition *def) {
-	if (!def)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-	if (!def->range.line)
-		return {INT_MAX - 1, def->range.start(), def->range.end(), def->toString()};
-	return {def->range.line->mergedLineIndex, def->range.start(), def->range.end(), def->toString()};
-}
+static void populateClassPatternNames(Section *section) {
+	requireCompilerInvariant(section && section->type == SectionType::Class, "class pattern names require a class section");
+	auto *classSection = static_cast<ClassSection *>(section);
+	requireCompilerInvariant(classSection->classDefinition, "class section is missing its definition");
 
-static bool definitionComesBefore(const PatternDefinition *a, const PatternDefinition *b) {
-	return definitionSortKey(a) < definitionSortKey(b);
-}
-
-static std::tuple<int, int, int, std::string> sectionSortKey(const Section *section) {
-	if (!section)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-
-	int mergedLineIndex = INT_MAX - 1;
-	int sourceLineIndex = INT_MAX - 1;
-	std::string sectionText = section->toString();
-	if (section->openingLine) {
-		mergedLineIndex = section->openingLine->mergedLineIndex;
-		sourceLineIndex = section->openingLine->sourceFileLineIndex;
-		sectionText = std::string(section->openingLine->patternText);
+	std::vector<std::string> names;
+	for (PatternDefinition *definition : classSection->patternDefinitions) {
+		requireCompilerInvariant(definition, "class section contains a null pattern definition");
+		for (std::string spelling : canonicalPatternSpellings(definition->patternElements)) {
+			if (std::find(names.begin(), names.end(), spelling) == names.end())
+				names.push_back(std::move(spelling));
+		}
 	}
-
-	return {mergedLineIndex, sourceLineIndex, static_cast<int>(section->type), sectionText};
+	requireCompilerInvariant(!names.empty(), "resolved class has no pattern names");
+	std::ranges::sort(names, [](const std::string &left, const std::string &right) {
+		if (left.size() != right.size())
+			return left.size() < right.size();
+		return left < right;
+	});
+	classSection->classDefinition->patternNames = std::move(names);
 }
 
-static bool sectionComesBefore(const Section *a, const Section *b) { return sectionSortKey(a) < sectionSortKey(b); }
-
-static std::tuple<int, int, int, std::string> referenceSortKey(const PatternReference *reference) {
-	if (!reference)
-		return {INT_MAX, INT_MAX, INT_MAX, ""};
-	const Range &r = reference->range();
-	if (!r.line)
-		return {INT_MAX - 1, r.start(), r.end(), reference->pattern.text};
-	return {r.line->mergedLineIndex, r.start(), r.end(), reference->pattern.text};
+static bool sectionComesBefore(const Section *left, const Section *right) {
+	auto locationKey = [](const Section *section) {
+		if (!section)
+			return std::tuple{INT_MAX, INT_MAX, INT_MAX};
+		int mergedLineIndex = section->openingLine ? section->openingLine->mergedLineIndex : INT_MAX - 1;
+		int sourceLineIndex = section->openingLine ? section->openingLine->sourceFileLineIndex : INT_MAX - 1;
+		return std::tuple{mergedLineIndex, sourceLineIndex, static_cast<int>(section->type)};
+	};
+	auto leftLocation = locationKey(left);
+	auto rightLocation = locationKey(right);
+	if (leftLocation != rightLocation)
+		return leftLocation < rightLocation;
+	auto text = [](const Section *section) {
+		if (!section)
+			return std::string{};
+		if (section->openingLine)
+			return std::string(section->openingLine->patternText);
+		return section->toString();
+	};
+	return text(left) < text(right);
 }
 
-static bool referenceComesBefore(const PatternReference *a, const PatternReference *b) {
-	return referenceSortKey(a) < referenceSortKey(b);
+static bool referenceComesBefore(const PatternReference *left, const PatternReference *right) {
+	auto locationKey = [](const PatternReference *reference) {
+		if (!reference)
+			return std::tuple{INT_MAX, INT_MAX, INT_MAX};
+		const Range &range = reference->range();
+		int lineIndex = range.line ? range.line->mergedLineIndex : INT_MAX - 1;
+		return std::tuple{lineIndex, range.start(), range.end()};
+	};
+	auto leftLocation = locationKey(left);
+	auto rightLocation = locationKey(right);
+	if (leftLocation != rightLocation)
+		return leftLocation < rightLocation;
+	std::string leftText = left ? left->pattern.text : "";
+	std::string rightText = right ? right->pattern.text : "";
+	return leftText < rightText;
 }
 
 static bool resolutionTraceEnabled() {
@@ -447,13 +465,13 @@ struct DefinitionConflict {
 };
 
 static bool definitionConflictComesBefore(const DefinitionConflict &left, const DefinitionConflict &right) {
-	if (definitionComesBefore(left.primary, right.primary))
+	if (patternDefinitionComesBefore(left.primary, right.primary))
 		return true;
-	if (definitionComesBefore(right.primary, left.primary))
+	if (patternDefinitionComesBefore(right.primary, left.primary))
 		return false;
-	if (definitionComesBefore(left.related, right.related))
+	if (patternDefinitionComesBefore(left.related, right.related))
 		return true;
-	if (definitionComesBefore(right.related, left.related))
+	if (patternDefinitionComesBefore(right.related, left.related))
 		return false;
 	return false;
 }
@@ -479,7 +497,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 			collectDefinitions(child);
 	};
 	collectDefinitions(context.mainSection);
-	std::sort(definitions.begin(), definitions.end(), definitionComesBefore);
+	std::sort(definitions.begin(), definitions.end(), patternDefinitionComesBefore);
 
 	std::vector<DefinitionConflict> conflicts;
 	std::unordered_set<std::pair<PatternDefinition *, PatternDefinition *>, DefinitionPairHash> seenDuplicatePairs;
@@ -495,7 +513,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				if (!patternDefinitionsShareVisibilityScope(*definition, *other))
 					continue;
 
-				PatternDefinition *earlierDefinition = definitionComesBefore(definition, other) ? definition : other;
+				PatternDefinition *earlierDefinition = patternDefinitionComesBefore(definition, other) ? definition : other;
 				PatternDefinition *laterDefinition = earlierDefinition == definition ? other : definition;
 				if (!seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
 					continue;
@@ -691,19 +709,6 @@ struct AlternativePatternSuggestion {
 	bool isMultiWord = false;
 };
 
-static bool forEachPatternSpelling(
-	const std::vector<DefinitionPatternElement> &elements, const std::function<bool(const std::string &)> &visitor
-) {
-	for (const auto &path : canonicalPatternPaths(elements)) {
-		std::string spelling;
-		for (const DefinitionPatternElement &element : path)
-			spelling += element.text;
-		if (visitor(spelling))
-			return true;
-	}
-	return false;
-}
-
 static bool isSingleWordPatternSpelling(const std::string &spelling) {
 	std::vector<PatternElement> elements = getPatternElements(spelling);
 	int wordCount = 0;
@@ -755,7 +760,7 @@ static std::vector<PatternDefinition *> collectAlternativeSearchOrder(PatternMat
 		orderedDefinitions.push_back(matchedDefinition);
 	for (Section *section : orderedSections) {
 		std::vector<PatternDefinition *> sectionDefinitions = section->patternDefinitions;
-		std::sort(sectionDefinitions.begin(), sectionDefinitions.end(), definitionComesBefore);
+		std::sort(sectionDefinitions.begin(), sectionDefinitions.end(), patternDefinitionComesBefore);
 		for (PatternDefinition *definition : sectionDefinitions) {
 			if (!definition)
 				continue;
@@ -770,25 +775,17 @@ static std::vector<PatternDefinition *> collectAlternativeSearchOrder(PatternMat
 static AlternativePatternSuggestion
 findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *match, const std::string &originalToken) {
 	for (PatternDefinition *definition : collectAlternativeSearchOrder(match)) {
-		AlternativePatternSuggestion suggestion;
-		bool found = forEachPatternSpelling(definition->patternElements, [&](const std::string &candidateSpelling) {
+		for (const std::string &candidateSpelling : canonicalPatternSpellings(definition->patternElements)) {
 			if (candidateSpelling.empty() || candidateSpelling == originalToken)
-				return false;
+				continue;
 
 			bool isMultiWord = !isSingleWordPatternSpelling(candidateSpelling);
-			if (isMultiWord) {
-				suggestion = {definition, candidateSpelling, true};
-				return true;
-			}
+			if (isMultiWord)
+				return {definition, candidateSpelling, true};
 
-			if (!findEnclosingParameterCandidate(reference, candidateSpelling)) {
-				suggestion = {definition, candidateSpelling, false};
-				return true;
-			}
-			return false;
-		});
-		if (found)
-			return suggestion;
+			if (!findEnclosingParameterCandidate(reference, candidateSpelling))
+				return {definition, candidateSpelling, false};
+		}
 	}
 	return {};
 }

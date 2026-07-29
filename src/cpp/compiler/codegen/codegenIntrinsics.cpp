@@ -5,23 +5,24 @@
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
 #include "sectionFlexBody.h"
+#include "spirv.h"
 #include "type.h"
 #include "variable.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 
-// Helper to extract string literal from an expression
-std::string getStringLiteral(Expression *expr) {
-	if (expr && expr->kind == Expression::Kind::Literal) {
-		if (auto *str = std::get_if<std::string>(&expr->literalValue))
-			return *str;
-	}
-	return "";
+std::string getCompileTimeString(ParseContext &context, Expression *expr) {
+	requireCompilerInvariant(expr != nullptr, "compile-time string codegen received a null expression");
+	CompileTimeValue value = resolveStoredCompileTimeValue(expr, context.flexBindingFrames);
+	const auto *text = std::get_if<std::string>(&value);
+	requireCompilerInvariant(text != nullptr, "compile-time string argument reached codegen without its inferred value");
+	return *text;
 }
 
 // Diagnostics for intrinsics inside flex replacement bodies should point at
@@ -89,7 +90,7 @@ static CodegenResult buildRuntimeSelect(ParseContext &context, const std::vector
 		return generatedTrue;
 	llvm::Value *trueValue = generatedTrue.value;
 	llvm::BasicBlock *trueEndBlock = builder.GetInsertBlock();
-	if (!trueEndBlock->getTerminator()) {
+	if (!trueEndBlock->hasTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
 			DataType trueType = finalizedExpressionType(context, args[2]);
 			trueValue = ensureType(context, trueValue, trueType, resultType);
@@ -107,7 +108,7 @@ static CodegenResult buildRuntimeSelect(ParseContext &context, const std::vector
 		return generatedFalse;
 	llvm::Value *falseValue = generatedFalse.value;
 	llvm::BasicBlock *falseEndBlock = builder.GetInsertBlock();
-	if (!falseEndBlock->getTerminator()) {
+	if (!falseEndBlock->hasTerminator()) {
 		if (resultType.kind != DataType::Kind::Void) {
 			DataType falseType = finalizedExpressionType(context, args[3]);
 			falseValue = ensureType(context, falseValue, falseType, resultType);
@@ -446,7 +447,8 @@ CodegenResult generateIntrinsicCode(
 			registerManagedStorage(context, storage, valueType, ownerSection);
 			if (!managedExpressionResultIsOwned(context, args[1]) && !retainManagedValue(context, valueType, value))
 				return CodegenResult::failure();
-			initializeManagedStorage(context, storage, valueType, value);
+			if (!storeManagedValue(context, storage, valueType, value))
+				return CodegenResult::failure();
 		} else {
 			builder.CreateStore(value, storage);
 		}

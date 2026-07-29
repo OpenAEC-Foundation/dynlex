@@ -1,5 +1,10 @@
 static bool isWholeNumberLiteral(Expression *expr) {
-	if (!expr || expr->kind != Expression::Kind::Literal || !std::holds_alternative<double>(expr->literalValue))
+	if (!expr || expr->kind != Expression::Kind::Literal)
+		return false;
+	if (std::holds_alternative<std::int64_t>(expr->literalValue) ||
+		std::holds_alternative<MinimumSignedIntegerMagnitude>(expr->literalValue))
+		return true;
+	if (!std::holds_alternative<double>(expr->literalValue))
 		return false;
 	std::string_view literalText = expr->range.subString;
 	if (literalText.find('.') != std::string_view::npos || literalText.find('e') != std::string_view::npos ||
@@ -172,6 +177,10 @@ static std::string encodeTypeConstraintForCacheKey(const TypeConstraint &constra
 static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &value) {
 	if (std::holds_alternative<std::monostate>(value))
 		return "?";
+	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return "i" + std::to_string(*integer);
+	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return "i9223372036854775808";
 	if (const auto *number = std::get_if<double>(&value))
 		return "d" + std::to_string(std::bit_cast<uint64_t>(*number));
 	if (const auto *text = std::get_if<std::string>(&value))

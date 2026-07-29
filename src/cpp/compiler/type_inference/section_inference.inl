@@ -2,6 +2,7 @@
 
 #include "operand_reordering.inl"
 #include "section_inference_helpers.inl"
+#include <unordered_set>
 
 static bool inferSectionLineRange(
 	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
@@ -54,7 +55,7 @@ static bool inferSectionLineRange(
 	}
 
 	bool loopSection = stabilizeLoop && sectionOutcomeIsLoop(openingExpression);
-	std::unordered_map<VariableReference *, CompileTimeValue> constantsAtLoopEntry;
+	KnownConstantState constantsAtLoopEntry;
 	AddressInferenceState addressesAtLoopEntry;
 	InferenceContext::SubjectState subjectAtLoopEntry;
 	if (loopSection) {
@@ -172,7 +173,7 @@ static bool inferSectionLineRange(
 				selectedBranch = defaultBranch;
 		}
 
-		std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> fallthroughConstantStates;
+		std::vector<KnownConstantState> fallthroughConstantStates;
 		std::vector<AddressInferenceState> fallthroughAddressStates;
 		std::vector<InferenceContext::SubjectState> fallthroughSubjectStates;
 		auto inferBranch = [&](const SwitchBranch &branch) {
@@ -239,10 +240,10 @@ static bool inferSectionLineRange(
 			std::optional<size_t> selectedBranch;
 			bool branchKnown = true;
 			bool fallthroughReachable = true;
-			std::unordered_map<VariableReference *, CompileTimeValue> fallthroughConstants = context.currentVariableValues;
+			KnownConstantState fallthroughConstants = context.currentVariableValues;
 			AddressInferenceState fallthroughAddresses = context.currentAddressState;
 			InferenceContext::SubjectState fallthroughSubject = context.currentSubject;
-			std::vector<std::unordered_map<VariableReference *, CompileTimeValue>> branchConstantStates;
+			std::vector<KnownConstantState> branchConstantStates;
 			std::vector<AddressInferenceState> branchAddressStates;
 			std::vector<InferenceContext::SubjectState> branchSubjectStates;
 			for (size_t k = i;; k++) {
@@ -836,6 +837,70 @@ bool inferTypes(ParseContext &parseContext) {
 			validateReturnTypes(child);
 	};
 	validateReturnTypes(parseContext.mainSection);
+
+	MinimumSignedIntegerMagnitudeEffects minimumIntegerEffects;
+	std::vector<std::pair<std::shared_ptr<const MinimumSignedIntegerMagnitudeIdentity>, Range>> minimumIntegerLiterals;
+	std::unordered_set<Expression *> visitedMinimumIntegerExpressions;
+	auto collectMinimumIntegerInformation = [&](Expression *root) {
+		if (!root || !root->executionFallsThrough.has_value())
+			return;
+		visitExpressionTree(root, [&](Expression *expression) {
+			if (!visitedMinimumIntegerExpressions.insert(expression).second)
+				return false;
+			mergeMinimumSignedIntegerMagnitudeEffects(minimumIntegerEffects, expression->minimumIntegerEffects);
+			if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expression->literalValue)) {
+				requireCompilerInvariant(minimumMagnitude->identity != nullptr, "minimum integer magnitude has no identity");
+				minimumIntegerLiterals.push_back({minimumMagnitude->identity, expression->range});
+			}
+			return false;
+		});
+	};
+	std::function<void(Section *)> collectDirectSectionMinimumIntegers = [&](Section *section) {
+		if (!section || !section->patternDefinitions.empty())
+			return;
+		for (CodeLine *line : section->codeLines)
+			if (line)
+				collectMinimumIntegerInformation(line->expression);
+		for (Section *child : section->children)
+			collectDirectSectionMinimumIntegers(child);
+	};
+	std::function<void(const InstantiatedSectionBody *)> collectInstantiatedBodyMinimumIntegers =
+		[&](const InstantiatedSectionBody *body) {
+		if (!body)
+			return;
+		for (Expression *expression : body->lineExpressions)
+			collectMinimumIntegerInformation(expression);
+		for (const auto &childBody : body->childBodies)
+			collectInstantiatedBodyMinimumIntegers(childBody.get());
+	};
+	std::function<void(Section *)> collectInstantiationMinimumIntegers = [&](Section *section) {
+		if (!section)
+			return;
+		for (const auto &[key, instantiation] : section->instantiations) {
+			(void)key;
+			if (instantiation.valid && !instantiation.needsReinfer)
+				collectInstantiatedBodyMinimumIntegers(instantiation.body.get());
+		}
+		for (Section *child : section->children)
+			collectInstantiationMinimumIntegers(child);
+	};
+	collectDirectSectionMinimumIntegers(parseContext.mainSection);
+	collectInstantiationMinimumIntegers(parseContext.mainSection);
+
+	std::vector<std::shared_ptr<const MinimumSignedIntegerMagnitudeIdentity>> reportedMinimumIntegers;
+	for (const auto &[identity, range] : minimumIntegerLiterals) {
+		bool consumed = containsMinimumSignedIntegerMagnitudeIdentity(minimumIntegerEffects.consumedByNegation, identity);
+		bool rejected = containsMinimumSignedIntegerMagnitudeIdentity(minimumIntegerEffects.rejectedUses, identity);
+		if (consumed && !rejected)
+			continue;
+		if (containsMinimumSignedIntegerMagnitudeIdentity(reportedMinimumIntegers, identity))
+			continue;
+		reportedMinimumIntegers.push_back(identity);
+		parseContext.diagnostics.push_back(
+			Diagnostic(parseContext, Diagnostic::Level::Error, "integer literal out of range", range)
+		);
+		valid = false;
+	}
 
 	return valid;
 }

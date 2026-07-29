@@ -86,6 +86,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
 	expr->compileTimeValue = {};
+	expr->minimumIntegerEffects = {};
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
@@ -130,6 +131,10 @@ static std::string renderResolvedExpression(Expression *expr) {
 		return (std::string)expr->range.subString;
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
+		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
+			return std::to_string(*integer);
+		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(expr->literalValue))
+			return "9223372036854775808";
 		if (const auto *number = std::get_if<double>(&expr->literalValue))
 			return std::to_string(*number);
 		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
@@ -286,8 +291,7 @@ static void considerGroupingFailure(GroupingFailure *currentBest, Diagnostic dia
 static void captureGroupingSnapshot(Expression *expr, GroupingSnapshot &snapshot, ExpressionNodeSet &visited) {
 	if (!expr || !visited.insert(expr).second)
 		return;
-	snapshot.argumentsByExpression[expr] = expr->arguments;
-	snapshot.explicitGroupByExpression[expr] = expr->isExplicitGroup;
+	snapshot.nodes.emplace(expr, GroupingSnapshot::NodeState{expr->arguments, expr->isExplicitGroup});
 	for (Expression *arg : expr->arguments)
 		captureGroupingSnapshot(arg, snapshot, visited);
 }
@@ -307,10 +311,10 @@ static bool expressionNodeSetsEqual(const ExpressionNodeSet &left, const Express
 }
 
 static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
-	for (const auto &[expression, arguments] : snapshot.argumentsByExpression)
-		expression->arguments = arguments;
-	for (const auto &[expression, explicitGroup] : snapshot.explicitGroupByExpression)
-		expression->isExplicitGroup = explicitGroup;
+	for (const auto &[expression, state] : snapshot.nodes) {
+		expression->arguments = state.arguments;
+		expression->isExplicitGroup = state.explicitGroup;
+	}
 }
 
 static bool expressionHasGroupingShape(Expression *expression) {
@@ -341,8 +345,8 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 
 static const std::vector<Expression *> &snapshotArguments(const GroupingSnapshot &snapshot, Expression *expression) {
 	static const std::vector<Expression *> emptyArguments;
-	auto it = snapshot.argumentsByExpression.find(expression);
-	return it != snapshot.argumentsByExpression.end() ? it->second : emptyArguments;
+	auto it = snapshot.nodes.find(expression);
+	return it != snapshot.nodes.end() ? it->second.arguments : emptyArguments;
 }
 
 static bool snapshotsHaveSameLocalOrdering(
@@ -426,14 +430,16 @@ static GroupingSnapshot groupingForReusableInstance(const GroupingSnapshot &temp
 		return instance->second;
 	};
 	instanceGrouping.root = findInstance(templateGrouping.root);
-	for (const auto &[templateExpression, templateArguments] : templateGrouping.argumentsByExpression) {
-		auto &instanceArguments = instanceGrouping.argumentsByExpression[findInstance(templateExpression)];
-		instanceArguments.reserve(templateArguments.size());
-		for (Expression *templateArgument : templateArguments)
+	for (const auto &[templateExpression, templateState] : templateGrouping.nodes) {
+		std::vector<Expression *> instanceArguments;
+		instanceArguments.reserve(templateState.arguments.size());
+		for (Expression *templateArgument : templateState.arguments)
 			instanceArguments.push_back(findInstance(templateArgument));
+		instanceGrouping.nodes.emplace(
+			findInstance(templateExpression),
+			GroupingSnapshot::NodeState{std::move(instanceArguments), templateState.explicitGroup}
+		);
 	}
-	for (const auto &[templateExpression, explicitGroup] : templateGrouping.explicitGroupByExpression)
-		instanceGrouping.explicitGroupByExpression[findInstance(templateExpression)] = explicitGroup;
 	return instanceGrouping;
 }
 
@@ -480,14 +486,15 @@ static GroupingSnapshot reusableTemplateGrouping(const GroupingSnapshot &instanc
 		return expression && expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
 	};
 	templateGrouping.root = templateExpression(instanceGrouping.root);
-	for (const auto &[expression, arguments] : instanceGrouping.argumentsByExpression) {
-		auto &templateArguments = templateGrouping.argumentsByExpression[templateExpression(expression)];
-		templateArguments.reserve(arguments.size());
-		for (Expression *argument : arguments)
+	for (const auto &[expression, state] : instanceGrouping.nodes) {
+		std::vector<Expression *> templateArguments;
+		templateArguments.reserve(state.arguments.size());
+		for (Expression *argument : state.arguments)
 			templateArguments.push_back(templateExpression(argument));
+		templateGrouping.nodes.emplace(
+			templateExpression(expression), GroupingSnapshot::NodeState{std::move(templateArguments), state.explicitGroup}
+		);
 	}
-	for (const auto &[expression, isExplicitGroup] : instanceGrouping.explicitGroupByExpression)
-		templateGrouping.explicitGroupByExpression[templateExpression(expression)] = isExplicitGroup;
 	return templateGrouping;
 }
 
@@ -624,7 +631,7 @@ class GroupingInferenceTransaction {
 		  savedCurrentInstantiatedSectionBody(context.currentInstantiatedSectionBody),
 		  savedSectionFlexBodyFrames(context.sectionFlexBodyFrames),
 		  savedActiveFlexDefinitionStack(context.activeFlexDefinitionStack),
-		  savedActiveFlexCallStack(context.activeFlexCallStack),
+		  savedActiveFlexExpansionKeys(context.activeFlexExpansionKeys), savedActiveFlexCallStack(context.activeFlexCallStack),
 		  savedFlexCallSiteSectionStack(context.flexCallSiteSectionStack), savedKnownConstants(context.currentVariableValues),
 		  savedAddressState(context.currentAddressState), savedSubject(context.currentSubject),
 		  savedTypesValid(context.typesValid), savedSuppressDiagnostics(context.suppressDiagnostics),
@@ -695,8 +702,10 @@ class GroupingInferenceTransaction {
 			requireCompilerInvariant(savedTrialJournal, "nested grouping inference transaction has no parent journal");
 			savedTrialJournal->absorb(std::move(journal));
 		} else {
-			for (const auto &[expression, value] : context.trialExpressionValues)
-				setExpressionCompileTimeValue(expression, value);
+			for (const auto &[expression, evaluation] : context.trialExpressionValues) {
+				setExpressionCompileTimeValue(expression, evaluation.value);
+				expression->minimumIntegerEffects = evaluation.minimumIntegerEffects;
+			}
 			commitTrialCodeLineGroupings(context);
 			for (const auto &[definition, instantiation] : context.trialCallableInstantiations) {
 				requireCompilerInvariant(
@@ -724,9 +733,10 @@ class GroupingInferenceTransaction {
 	InstantiatedSectionBody *savedCurrentInstantiatedSectionBody;
 	std::vector<InferenceContext::SectionFlexBodyInferenceFrame> savedSectionFlexBodyFrames;
 	std::vector<Section *> savedActiveFlexDefinitionStack;
+	std::vector<std::optional<FlexExpansionKey>> savedActiveFlexExpansionKeys;
 	std::vector<Expression *> savedActiveFlexCallStack;
 	std::vector<Section *> savedFlexCallSiteSectionStack;
-	std::unordered_map<VariableReference *, CompileTimeValue> savedKnownConstants;
+	KnownConstantState savedKnownConstants;
 	AddressInferenceState savedAddressState;
 	InferenceContext::SubjectState savedSubject;
 	bool savedTypesValid;
@@ -745,7 +755,7 @@ class GroupingInferenceTransaction {
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
-	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeEvaluation> *savedInheritedTrialExpressionValues;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
 	bool active = true;
@@ -766,6 +776,7 @@ class GroupingInferenceTransaction {
 		context.currentInstantiatedSectionBody = savedCurrentInstantiatedSectionBody;
 		context.sectionFlexBodyFrames = std::move(savedSectionFlexBodyFrames);
 		context.activeFlexDefinitionStack = std::move(savedActiveFlexDefinitionStack);
+		context.activeFlexExpansionKeys = std::move(savedActiveFlexExpansionKeys);
 		context.activeFlexCallStack = std::move(savedActiveFlexCallStack);
 		context.flexCallSiteSectionStack = std::move(savedFlexCallSiteSectionStack);
 		context.currentVariableValues = std::move(savedKnownConstants);

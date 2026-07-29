@@ -384,6 +384,7 @@ inline void from_json(const Json &j, CodeActionParams &p) {
 struct InitializeParams {
 	std::optional<int> processId;
 	std::optional<std::string> rootUri;
+	std::optional<Json> initializationOptions;
 };
 
 inline void from_json(const Json &j, InitializeParams &p) {
@@ -392,6 +393,9 @@ inline void from_json(const Json &j, InitializeParams &p) {
 	}
 	if (j.contains("rootUri") && !j.at("rootUri").is_null()) {
 		p.rootUri = j.at("rootUri").get<std::string>();
+	}
+	if (j.contains("initializationOptions") && !j.at("initializationOptions").is_null()) {
+		p.initializationOptions = j.at("initializationOptions");
 	}
 }
 

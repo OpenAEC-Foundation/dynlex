@@ -3,6 +3,7 @@ import lib/path.dl
 
 set executable to the running executable path
 set directory to the running executable directory
+set cache_directory to the user cache directory
 set platform to whether the host platform is Windows
 set native_style_result to the native path style
 set native_style to native_style_result's value
@@ -11,12 +12,15 @@ print executable's succeeded as line
 print executable's supported as line
 print directory's succeeded as line
 print directory's supported as line
+print cache_directory's succeeded as line
+print cache_directory's supported as line
 print platform's succeeded as line
 print platform's supported as line
 print native_style_result's succeeded as line
 print native_style_result's supported as line
 print ((executable's error message) = "") as line
 print ((directory's error message) = "") as line
+print ((cache_directory's error message) = "") as line
 print ((platform's error message) = "") as line
 print ((native_style_result's error message) = "") as line
 
@@ -25,6 +29,7 @@ set directory_filename to the filename of directory's value using native_style
 set resolved_executable to resolve path executable's value against base directory's value using native_style
 set executable_absolute to whether path executable's value is absolute using native_style
 set directory_absolute to whether path directory's value is absolute using native_style
+set cache_directory_absolute to whether path cache_directory's value is absolute using native_style
 
 set expected_filename to "main.exe" if platform's value, else "main.out"
 print (executable_filename's succeeded and (executable_filename's value = expected_filename)) as line
@@ -32,3 +37,4 @@ print (directory_filename's succeeded and (directory_filename's value = "host_ca
 print (resolved_executable's succeeded and (resolved_executable's value = executable's value)) as line
 print (executable_absolute's succeeded and executable_absolute's value) as line
 print (directory_absolute's succeeded and directory_absolute's value) as line
+print (cache_directory_absolute's succeeded and cache_directory_absolute's value) as line

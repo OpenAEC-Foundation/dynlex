@@ -2,17 +2,6 @@ bool initializeTargetLayout(ParseContext &context) {
 	requireCompilerInvariant(!context.llvmContext && !context.llvmModule, "target layout was initialized twice");
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
-#ifdef DYNLEX_WEB
-	std::string targetError;
-	std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, targetError);
-	if (!targetMachine) {
-		context.addDiagnostic(
-			Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", targetError)
-		);
-		return false;
-	}
-	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
-#else
 	if (context.options.emitSPIRV) {
 		std::string error;
 		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
@@ -34,6 +23,17 @@ bool initializeTargetLayout(ParseContext &context) {
 		}
 		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
 	} else {
+#ifdef DYNLEX_WEB
+		std::string error;
+		std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, error);
+		if (!targetMachine) {
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", error)
+			);
+			return false;
+		}
+		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+#else
 		std::string error;
 		std::unique_ptr<llvm::TargetMachine> targetMachine = createNativeTargetMachine(context, error);
 		if (!targetMachine) {
@@ -43,8 +43,8 @@ bool initializeTargetLayout(ParseContext &context) {
 			return false;
 		}
 		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
-	}
 #endif
+	}
 	return true;
 }
 
@@ -89,22 +89,24 @@ bool generateCode(ParseContext &context) {
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
 	llvm::GlobalVariable *shaderOutputGlobal = nullptr;
 	if (context.options.emitSPIRV) {
+		constexpr unsigned spirvInputAddressSpace = 7;
+		constexpr unsigned spirvOutputAddressSpace = 8;
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
 
-		// Input global (address space 1 = SPIR-V Input storage class)
+		// Input global (address space 7 = SPIR-V Input storage class)
 		std::string inputName = isVertex ? "in_Position" : "gl_FragCoord";
 		shaderInputGlobal = new llvm::GlobalVariable(
 			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, inputName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, 1
+			llvm::GlobalValue::NotThreadLocal, spirvInputAddressSpace
 		);
 		shaderInputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
 
-		// Output global (address space 2 = SPIR-V Output storage class)
+		// Output global (address space 8 = SPIR-V Output storage class)
 		std::string outputName = isVertex ? "gl_Position" : "gl_FragColor";
 		shaderOutputGlobal = new llvm::GlobalVariable(
 			*context.llvmModule, vec4Ty, false, llvm::GlobalValue::ExternalLinkage, nullptr, outputName, nullptr,
-			llvm::GlobalValue::NotThreadLocal, 2
+			llvm::GlobalValue::NotThreadLocal, spirvOutputAddressSpace
 		);
 		shaderOutputGlobal->setInitializer(llvm::Constant::getNullValue(vec4Ty));
 
@@ -181,7 +183,7 @@ bool generateCode(ParseContext &context) {
 	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
 
-	if (!builder.GetInsertBlock()->getTerminator()) {
+	if (!builder.GetInsertBlock()->hasTerminator()) {
 		if (!context.options.emitSPIRV)
 			builder.CreateStore(builder.getInt32(0), context.mainReturnStorage);
 		builder.CreateBr(context.mainCleanupBlock);
@@ -260,23 +262,17 @@ bool generateCode(ParseContext &context) {
 		mpm.run(*context.llvmModule, mam);
 	}
 
-	// Output
-#ifdef DYNLEX_WEB
-	if (!context.options.emitWASM) {
-		context.addDiagnostic(
-			Diagnostic(context, Diagnostic::Level::Error, "web build only supports --emit-wasm output mode", Range())
-		);
-		return false;
-	}
-	if (!emitWASMModule(context))
-		return false;
-#else
 	if (context.options.emitSPIRV) {
 		if (!emitSPIRVModule(context))
 			return false;
 	} else if (context.options.emitWASM) {
 		if (!emitWASMModule(context))
 			return false;
+#ifdef DYNLEX_WEB
+	} else {
+		crashCompilerBug("web code generation reached an unsupported output mode");
+	}
+#else
 	} else if (context.options.emitLLVM) {
 		std::string outputPath = context.options.outputPath;
 		if (outputPath.empty())

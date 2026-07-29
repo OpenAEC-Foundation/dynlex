@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include "copyOnWrite.h"
 #include <unordered_map>
 #include <unordered_set>
 
@@ -24,22 +24,13 @@ struct AddressInferenceStorage {
 };
 
 struct AddressInferenceState {
-	AddressInferenceState() : storage(std::make_unique<AddressInferenceStorage>()) {}
-	AddressInferenceState(const AddressInferenceState &other)
-		: storage(std::make_unique<AddressInferenceStorage>(*other.storage)) {}
-	AddressInferenceState(AddressInferenceState &&) noexcept = default;
-	AddressInferenceState &operator=(const AddressInferenceState &other) {
-		if (this != &other)
-			*storage = *other.storage;
-		return *this;
-	}
-	AddressInferenceState &operator=(AddressInferenceState &&) noexcept = default;
+	AddressInferenceState() = default;
 
-	AddressInferenceStorage *operator->() { return storage.get(); }
-	const AddressInferenceStorage *operator->() const { return storage.get(); }
+	const AddressInferenceStorage &read() const { return value.read(); }
+	AddressInferenceStorage &write() { return value.write(); }
 
-	bool operator==(const AddressInferenceState &other) const { return *storage == *other.storage; }
+	bool operator==(const AddressInferenceState &) const = default;
 
   private:
-	std::unique_ptr<AddressInferenceStorage> storage;
+	CopyOnWrite<AddressInferenceStorage> value;
 };

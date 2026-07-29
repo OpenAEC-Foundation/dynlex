@@ -13,9 +13,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include <cmath>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <unordered_set>
 
 namespace {
@@ -51,10 +51,10 @@ static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outT
 	std::optional<int> numericByteSize;
 	if (intrinsicExpr->arguments.size() > 2) {
 		Expression *bitsExpr = intrinsicExpr->arguments[2];
-		auto *bits = std::get_if<double>(&bitsExpr->literalValue);
-		if (!bits || *bits <= 0 || std::fmod(*bits, 8.0) != 0.0)
+		auto *bits = std::get_if<std::int64_t>(&bitsExpr->literalValue);
+		if (!bits || *bits <= 0 || *bits % 8 != 0 || *bits / 8 > std::numeric_limits<int>::max())
 			return false;
-		numericByteSize = static_cast<int>(*bits) / 8;
+		numericByteSize = static_cast<int>(*bits / 8);
 	}
 	std::optional<DataType> typeReference = makeBuiltinTypeReference(*kindStr, emitSPIRV, numericByteSize);
 	if (!typeReference)
@@ -69,15 +69,33 @@ void ParseContext::printDiagnostics() {
 	}
 }
 
-PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options) {
+PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
+	requireCompilerInvariant(
+		!dependencies || !options.acceptLiterals,
+		"failed match dependency tracking does not support literal-acceptance ordering"
+	);
 	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
 	std::unordered_map<MatchControlState, MatchParentAlternatives *, MatchControlStateHash> memoizedStates;
+	auto recordDependencies = [&]() {
+		if (!dependencies)
+			return;
+		dependencies->clear();
+		for (const auto &entry : memoizedStates) {
+			const MatchControlState &state = entry.first;
+			collectMatchDependencies(state, *dependencies);
+		}
+		if (!queue.empty())
+			collectMatchDependencies(queue.back().controlState(), *dependencies);
+		normalizeMatchDependencies(*dependencies);
+	};
 	size_t steps = 0;
 	while (queue.size()) {
-		if (options.maxSteps > 0 && steps >= options.maxSteps)
+		if (options.maxSteps > 0 && steps >= options.maxSteps) {
+			recordDependencies();
 			return nullptr;
+		}
 		MatchProgress &currentProgress = queue.back();
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
 		if (!inserted) {
@@ -94,7 +112,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
 					for (auto completion = canonicalParents->completedSubmatches.rbegin();
 						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
-						resumedProgresses.push_back(MatchProgress::resumeParent(**addedParent, *completion));
+						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **addedParent, *completion));
 					}
 				}
 			}
@@ -106,15 +124,21 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			continue;
 		}
 		steps++;
-		std::vector<MatchProgress> nextSteps = currentProgress.step(storage);
-		if (currentProgress.isSubmatchComplete())
-			currentProgress.parents->addCompletion(currentProgress.completedSubmatch());
-		if (currentProgress.isComplete()) {
-			return new PatternMatch(currentProgress.match);
+		std::vector<PatternDefinition *> visibleDefinitions = currentProgress.visibleDefinitions();
+		MatchStep matchStep = currentProgress.step(storage, visibleDefinitions);
+		if (currentProgress.isSubmatchComplete(visibleDefinitions)) {
+			requireCompilerInvariant(matchStep.hasCompletedSubmatch, "completed matcher state did not produce submatch data");
+			currentProgress.parents->addCompletion(std::move(matchStep.completedSubmatch));
 		}
+		if (currentProgress.isComplete(visibleDefinitions))
+			return new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions));
 		queue.pop_back();
-		queue.insert(queue.end(), std::make_move_iterator(nextSteps.begin()), std::make_move_iterator(nextSteps.end()));
+		queue.insert(
+			queue.end(), std::make_move_iterator(matchStep.nextMatches.begin()),
+			std::make_move_iterator(matchStep.nextMatches.end())
+		);
 	}
+	recordDependencies();
 	return nullptr;
 }
 
@@ -132,6 +156,14 @@ void ParseContext::registerShaderUniformName(const std::string &uniformName, Cod
 
 	if (std::find(shaderUniformNames.begin(), shaderUniformNames.end(), uniformName) == shaderUniformNames.end())
 		shaderUniformNames.push_back(uniformName);
+}
+
+void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
+	if (interpolantName.empty())
+		return;
+	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
+		shaderInterpolantNames.end())
+		shaderInterpolantNames.push_back(interpolantName);
 }
 
 void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
@@ -214,6 +246,8 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
+	clone->minimumIntegerEffects =
+		preserveInferenceMetadata ? expression->minimumIntegerEffects : MinimumSignedIntegerMagnitudeEffects{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
 		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata));

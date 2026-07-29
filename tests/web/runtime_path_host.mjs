@@ -4,10 +4,11 @@ import {
   buildRuntimeImports,
   createRuntimeFilesystem,
   isSupportedRuntimeImport
-} from "../../src/web/ide/src/worker/runtimeImports.js";
+} from "../../src/web/ide/public/compiler/runtimeImports.js";
 
 const importNames = [
   "dynlex_host_error_message",
+  "dynlex_host_user_cache_directory",
   "dynlex_host_executable_directory",
   "dynlex_host_executable_path",
   "dynlex_host_platform_is_windows",
@@ -183,6 +184,10 @@ assert.equal(new DataView(memory.buffer).getUint32(8020, true), 0);
 assert.equal(new DataView(memory.buffer).getInt32(8024, true), 0);
 assert.match(errorMessage("dynlex_host_error_message"), /browser/i);
 assert.equal(env.dynlex_host_executable_directory(0, 0, 8020, 8024), 0);
+assert.equal(env.dynlex_host_user_cache_directory(0, 0, 8020, 8024), 0);
+assert.equal(new DataView(memory.buffer).getUint32(8020, true), 0);
+assert.equal(new DataView(memory.buffer).getInt32(8024, true), 0);
+assert.match(errorMessage("dynlex_host_error_message"), /browser/i);
 
 const view = new DataView(memory.buffer);
 view.setUint32(8030, 99, true);
