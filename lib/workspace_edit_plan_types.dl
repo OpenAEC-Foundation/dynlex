@@ -7,29 +7,30 @@ class:
         [a|] workspace resource snapshot
     members:
         active as boolean
-        original_path as string
-        original_identity as string
+        original path as string
+        original identity as string
         path as string
         identity as string
-        relative_path as string
-        first_change_index as i32
-        disk_exists as boolean
-        disk_kind as i32
-        disk_content as string
-        disk_modification_time as i64
-        filesystem_exists as boolean
-        filesystem_kind as i32
+        relative path as string
+        first change index as i32
+        disk exists as boolean
+        disk kind as i32
+        disk content as string
+        disk modification time supported as boolean
+        disk modification time as a file system timestamp
+        filesystem exists as boolean
+        filesystem kind as i32
         exists as boolean
         kind as i32
         content as string
-        descendants_scanned as boolean
-        open_document as a pointer to workspace open document
-        open_snapshot_present as boolean
-        open_path as string
-        open_identity as string
-        open_text as string
-        open_version as i32
-        virtual_version as i32
+        descendants scanned as boolean
+        open document as a pointer to workspace open document
+        open snapshot present as boolean
+        open path as string
+        open identity as string
+        open text as string
+        open version as i32
+        virtual version as i32
 
 class:
     patterns:
@@ -43,16 +44,16 @@ class:
     patterns:
         [a|] normalized workspace change
     members:
-        source_change as a pointer to workspace edit change
+        source change as a pointer to workspace edit change
         path as string
         identity as string
-        relative_path as string
-        old_path as string
-        old_identity as string
-        old_relative_path as string
-        new_path as string
-        new_identity as string
-        new_relative_path as string
+        relative path as string
+        old path as string
+        old identity as string
+        old relative path as string
+        new path as string
+        new identity as string
+        new relative path as string
 
 class:
     patterns:
@@ -66,19 +67,19 @@ class:
     patterns:
         [a|] planned workspace operation
     members:
-        protocol_index as i32
+        protocol index as i32
         kind as i32
         skip as boolean
         path as string
         identity as string
-        old_path as string
-        old_identity as string
-        new_path as string
-        new_identity as string
+        old path as string
+        old identity as string
+        new path as string
+        new identity as string
         text as string
         directory as boolean
-        overwrite_target as boolean
-        open_document as a pointer to workspace open document
+        overwrite target as boolean
+        open document as a pointer to workspace open document
 
 class:
     patterns:
@@ -95,7 +96,7 @@ class:
         valid as boolean
         outcome as workspace edit result
         resources as a pointer to workspace resource snapshot collection
-        normalized_changes as a pointer to normalized workspace change collection
+        normalized changes as a pointer to normalized workspace change collection
         operations as a pointer to planned workspace operation collection
 
 function the workspace regular file resource kind:
@@ -253,7 +254,7 @@ function free workspace edit plan {a pointer to workspace edit plan:plan_value}:
         @intrinsic("call", "libc", "free", void, the items of resource_values)
         @intrinsic("destroy at", resource_values)
         @intrinsic("call", "libc", "free", void, resource_values)
-        set normalized_values to the normalized_changes of plan_value
+        set normalized_values to the normalized changes of plan_value
         set normalized_index to 0
         loop while normalized_index < the length of normalized_values:
             set normalized_value to normalized workspace change at normalized_index in normalized_values

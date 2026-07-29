@@ -10,11 +10,11 @@ local class:
         [a|] workspace edit parser state
     members:
         failed as boolean
-        failure_reason as string
-        failed_change_present as boolean
-        failed_change as i32
-        current_change_present as boolean
-        current_change as i32
+        failure reason as string
+        failed change present as boolean
+        failed change as i32
+        current change present as boolean
+        current change as i32
 
 local class:
     patterns:
@@ -112,10 +112,10 @@ local function record workspace edit parse failure {string:reason} using {a poin
     execute:
         if not the failed of state:
             set the failed of state to true
-            set the failure_reason of state to reason
-            if the current_change_present of state:
-                set the failed_change_present of state to true
-                set the failed_change of state to the current_change of state
+            set the failure reason of state to reason
+            if the current change present of state:
+                set the failed change present of state to true
+                set the failed change of state to the current change of state
 
 local function workspace json member {string:name} of {a pointer to json value:object}:
     execute:
@@ -400,9 +400,9 @@ local function parse workspace annotations from {a pointer to json value:root} i
 local function finish workspace edit parse {a pointer to parsed workspace edit:parsed_value} using {a pointer to workspace edit parser state:state}:
     execute:
         if the failed of state:
-            set reason to the failure_reason of state
-            set failed_change_present to the failed_change_present of state
-            set failed_change to the failed_change of state
+            set reason to the failure reason of state
+            set failed_change_present to the failed change present of state
+            set failed_change to the failed change of state
             free parsed workspace edit parsed_value
             if failed_change_present:
                 return a failed workspace edit parse reporting reason at change failed_change
@@ -433,8 +433,8 @@ function parse workspace edit from {string:source}:
             if require workspace json array document_changes reporting the string form of "documentChanges must be an array" using state:
                 set change_index to 0
                 loop while change_index < the length of document_changes and not the failed of state:
-                    set the current_change_present of state to true
-                    set the current_change of state to change_index
+                    set the current change present of state to true
+                    set the current change of state to change_index
                     set change to parse workspace document change (json value at index change_index in document_changes) using state
                     if change != (0 as a pointer to workspace edit change):
                         append change to workspace changes (the changes of parsed_workspace)
@@ -445,8 +445,8 @@ function parse workspace edit from {string:source}:
                 set uri_names to workspace URI names from changes changes_value
                 set change_index to 0
                 loop while change_index < the length of uri_names and not the failed of state:
-                    set the current_change_present of state to true
-                    set the current_change of state to change_index
+                    set the current change present of state to true
+                    set the current change of state to change_index
                     set uri to workspace URI name at change_index in uri_names
                     set parsed_edits to parse workspace text edits (json member named uri in changes_value) using state
                     if not the failed of state:
@@ -458,7 +458,7 @@ function parse workspace edit from {string:source}:
         else:
             record workspace edit parse failure the string form of "Workspace edit must contain changes or documentChanges" using state
 
-        set the current_change_present of state to false
+        set the current change present of state to false
         if not the failed of state:
             parse workspace annotations from root into parsed_workspace using state
         set result to finish workspace edit parse parsed_workspace using state
