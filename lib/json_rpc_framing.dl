@@ -1,0 +1,603 @@
+# JSON-RPC 2.0 framing, JSON validation, and wire limits.
+
+import lib/json.dl
+import lib/list.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        [a|] json rpc limits
+    members:
+        maximum_header_length as i32
+        maximum_payload_length as i32
+        maximum_buffered_output_length as i32
+        maximum_queue_length as i32
+        maximum_standard_error_length as i32
+        graceful_close_timeout_milliseconds as i32
+        termination_timeout_milliseconds as i32
+
+class:
+    patterns:
+        [a|] json rpc operation
+    members:
+        succeeded as boolean
+        status as i32
+        error_message as string
+
+class:
+    patterns:
+        [a|] json rpc receive result
+    members:
+        succeeded as boolean
+        status as i32
+        message as a pointer to json value
+        error_message as string
+
+class:
+    patterns:
+        [a|] json rpc frame header result
+    members:
+        succeeded as boolean
+        complete as boolean
+        status as i32
+        header_length as i32
+        payload_length as i32
+        error_message as string
+
+function [the|] json rpc success status:
+    replacement:
+        0
+
+function [the|] json rpc end of stream status:
+    replacement:
+        1
+
+function [the|] json rpc io error status:
+    replacement:
+        2
+
+function [the|] json rpc malformed frame status:
+    replacement:
+        3
+
+function [the|] json rpc invalid utf8 status:
+    replacement:
+        4
+
+function [the|] json rpc invalid json status:
+    replacement:
+        5
+
+function [the|] json rpc limit exceeded status:
+    replacement:
+        6
+
+function [the|] json rpc invalid message status:
+    replacement:
+        7
+
+function [the|] json rpc child exit error status:
+    replacement:
+        8
+
+function [the|] json rpc timeout status:
+    replacement:
+        9
+
+function {json rpc operation:operation}'s error message:
+    replacement:
+        @intrinsic("property", operation, "error_message")
+
+function {json rpc receive result:result}'s error message:
+    replacement:
+        @intrinsic("property", result, "error_message")
+
+function [the|] default json rpc limits:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc limits,
+            8192,
+            16777216,
+            33554432,
+            1024,
+            65536,
+            1000,
+            1000
+        )
+
+function an empty json rpc error:
+    replacement:
+        the string form of ""
+
+function a successful json rpc operation:
+    replacement:
+        @intrinsic("construct", a json rpc operation, true, the json rpc success status, an empty json rpc error)
+
+function a failed json rpc operation with status {integer:error_status} reporting {string:message}:
+    replacement:
+        @intrinsic("construct", a json rpc operation, false, error_status, message)
+
+function a failed json rpc operation with status {integer:error_status} reporting {cstring:message}:
+    execute:
+        return a failed json rpc operation with status error_status reporting the string form of message
+
+function a failed json rpc receive with status {integer:error_status} reporting {string:message}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc receive result,
+            false,
+            error_status,
+            0 as a pointer to json value,
+            message
+        )
+
+function a failed json rpc receive with status {integer:error_status} reporting {cstring:message}:
+    execute:
+        return a failed json rpc receive with status error_status reporting the string form of message
+
+function a successful json rpc receive containing {a pointer to json value:value}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc receive result,
+            true,
+            the json rpc success status,
+            value,
+            an empty json rpc error
+        )
+
+function validate {json rpc limits:limits} as json rpc limits:
+    execute:
+        if limits's maximum_header_length < 16:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC header limit must be at least 16 bytes"
+        if limits's maximum_payload_length < 1:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC payload limit must be positive"
+        if limits's maximum_buffered_output_length < limits's maximum_header_length:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC buffer limit must not be smaller than the header limit"
+        if limits's maximum_queue_length < 1:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC queue limit must be positive"
+        if limits's maximum_standard_error_length < 0:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC standard error limit must not be negative"
+        if limits's graceful_close_timeout_milliseconds < 0:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC graceful close timeout must not be negative"
+        if limits's termination_timeout_milliseconds < 0:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "The JSON-RPC termination timeout must not be negative"
+        return a successful json rpc operation
+
+local function ascii character input folded to lowercase:
+    execute:
+        if input >= 65 and input <= 90:
+            return input + 32
+        return input as i32
+
+local function {string:actual_text} equals ascii text {cstring:expected}:
+    execute:
+        if the length of actual_text != the length of expected:
+            return false
+        set cursor to 0
+        loop while cursor < the length of actual_text:
+            set actual_character to ascii character character cursor of actual_text folded to lowercase
+            set expected_character to ascii character character cursor of expected folded to lowercase
+            if actual_character != expected_character:
+                return false
+            set cursor to cursor + 1
+        return true
+
+local function character value is valid in a json rpc header name:
+    execute:
+        if value >= 48 and value <= 57:
+            return true
+        if value >= 65 and value <= 90:
+            return true
+        if value >= 97 and value <= 122:
+            return true
+        if value = 33 or ((value = 35) or ((value = 36) or ((value = 37) or (value = 38)))):
+            return true
+        if value = 39 or ((value = 42) or ((value = 43) or ((value = 45) or (value = 46)))):
+            return true
+        if value = 94 or ((value = 95) or ((value = 96) or ((value = 124) or (value = 126)))):
+            return true
+        return false
+
+local function json rpc header name is valid in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        if start >= limit:
+            return false
+        set cursor to start
+        loop while cursor < limit:
+            set value to (character cursor of input as i32) bitwise and 255
+            if not character value is valid in a json rpc header name:
+                return false
+            set cursor to cursor + 1
+        return true
+
+local function next json rpc colon in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to start
+        loop while cursor < limit:
+            if character cursor of input = 58:
+                return cursor
+            set cursor to cursor + 1
+        return 0 - 1
+
+local function next json rpc semicolon in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to start
+        loop while cursor < limit:
+            set current_character to character cursor of input
+            if current_character = 59:
+                return cursor
+            set cursor to cursor + 1
+        return 0 - 1
+
+local function next json rpc equals sign in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to start
+        loop while cursor < limit:
+            set current_character to character cursor of input
+            if current_character = 61:
+                return cursor
+            set cursor to cursor + 1
+        return 0 - 1
+
+local function next json rpc crlf in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to start
+        loop while cursor + 1 < limit:
+            if character cursor of input = 13 and character cursor + 1 of input = 10:
+                return cursor
+            set cursor to cursor + 1
+        return 0 - 1
+
+local function json rpc header separator in {string:input}:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of input:
+            set value to (character cursor of input as i32) bitwise and 255
+            if value = 10:
+                if cursor = 0 or character cursor - 1 of input != 13:
+                    return 0 - 2
+            else if value = 13:
+                if cursor + 1 >= the length of input:
+                    return 0 - 1
+                if character cursor + 1 of input != 10:
+                    return 0 - 2
+                if cursor + 3 < the length of input:
+                    if character cursor + 2 of input = 13 and character cursor + 3 of input = 10:
+                        return cursor
+                set cursor to cursor + 1
+            else if value > 126 or ((value < 32) and (value != 9)):
+                return 0 - 2
+            set cursor to cursor + 1
+        return 0 - 1
+
+local function trim json rpc whitespace in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to start
+        loop while (cursor < limit) and ((character cursor of input = 32) or (character cursor of input = 9)):
+            set cursor to cursor + 1
+        return cursor
+
+local function trim trailing json rpc whitespace in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set cursor to limit
+        set trimming to true
+        loop while (trimming) and (cursor > start):
+            set last_position to cursor - 1
+            set last_character to character last_position of input
+            if last_character = 32 or last_character = 9:
+                set cursor to last_position
+            else:
+                set trimming to false
+        return cursor
+
+local function invalid json rpc frame header with status {integer:error_status} reporting {string:message}:
+    replacement:
+        @intrinsic("construct", a json rpc frame header result, false, false, error_status, 0, 0, message)
+
+local function invalid json rpc frame header with status {integer:error_status} reporting {cstring:message}:
+    execute:
+        return invalid json rpc frame header with status error_status reporting the string form of message
+
+local function incomplete json rpc frame header:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc frame header result,
+            true,
+            false,
+            the json rpc success status,
+            0,
+            0,
+            an empty json rpc error
+        )
+
+local function complete json rpc frame header of length {integer:header_length} with payload length {integer:payload_length}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a json rpc frame header result,
+            true,
+            true,
+            the json rpc success status,
+            header_length,
+            payload_length,
+            an empty json rpc error
+        )
+
+local function parse json rpc decimal in {string:input} from {integer:start} before {integer:limit} with maximum {integer:maximum_value}:
+    execute:
+        set number_start to trim json rpc whitespace in input from start before limit
+        set number_limit to trim trailing json rpc whitespace in input from number_start before limit
+        if number_start = number_limit:
+            return 0 - 1
+        set result to 0
+        set cursor to number_start
+        loop while cursor < number_limit:
+            set digit to character cursor of input
+            if digit < 48 or digit > 57:
+                return 0 - 1
+            set numeric_digit to digit - 48
+            set maximum_prefix to maximum_value / 10
+            set maximum_digit to maximum_value mod 10
+            if (result > maximum_prefix) or ((result = maximum_prefix) and (numeric_digit > maximum_digit)):
+                return 0 - 2
+            set result to result * 10 + numeric_digit
+            set cursor to cursor + 1
+        return result
+
+local function content type segment in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set segment_start to trim json rpc whitespace in input from start before limit
+        set segment_limit to trim trailing json rpc whitespace in input from segment_start before limit
+        set segment_length to segment_limit - segment_start
+        return the substring of input from segment_start with length segment_length
+
+local function json rpc content type is utf8 in {string:input} from {integer:start} before {integer:limit}:
+    execute:
+        set separator to next json rpc semicolon in input from start before limit
+        if separator < 0:
+            set separator to limit
+        set media_type to content type segment in input from start before separator
+        if not media_type equals ascii text "application/vscode-jsonrpc":
+            return false
+        if separator = limit:
+            return true
+        set parameter_start to @intrinsic("add", separator, 1)
+        set parameter_end to next json rpc semicolon in input from parameter_start before limit
+        if parameter_end >= 0:
+            return false
+        set parameter_end to limit
+        set equals_position to next json rpc equals sign in input from parameter_start before parameter_end
+        if equals_position < 0:
+            return false
+        set parameter_name to content type segment in input from parameter_start before equals_position
+        if not parameter_name equals ascii text "charset":
+            return false
+        set charset_start to @intrinsic("add", equals_position, 1)
+        set charset to content type segment in input from charset_start before parameter_end
+        if the length of charset >= 2:
+            set first_character to character 0 of charset
+            set last_position to the length of charset - 1
+            set last_character to character last_position of charset
+            if (first_character = 34) and (last_character = 34):
+                set unquoted_length to the length of charset - 2
+                set charset to the substring of charset from 1 with length unquoted_length
+        return (charset equals ascii text "utf-8") or (charset equals ascii text "utf8")
+
+function inspect json rpc frame header in {string:input} with {json rpc limits:limits}:
+    execute:
+        set separator to json rpc header separator in input
+        if separator = (0 - 2):
+            return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC headers must use CRLF and contain no control characters"
+        if separator < 0:
+            if the length of input >= limits's maximum_header_length:
+                return invalid json rpc frame header with status the json rpc limit exceeded status reporting "JSON-RPC header exceeds its configured limit"
+            return incomplete json rpc frame header
+        set header_length to separator + 4
+        if header_length > limits's maximum_header_length:
+            return invalid json rpc frame header with status the json rpc limit exceeded status reporting "JSON-RPC header exceeds its configured limit"
+        if separator = 0:
+            return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC header is empty"
+        set found_length to false
+        set found_type to false
+        set payload_length to 0
+        set line_start to 0
+        set header_fields_limit to separator + 2
+        loop while line_start < separator:
+            set line_end to next json rpc crlf in input from line_start before header_fields_limit
+            if line_end <= line_start:
+                return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC header contains an empty or unterminated field"
+            set colon to next json rpc colon in input from line_start before line_end
+            if colon < 0 or (not json rpc header name is valid in input from line_start before colon):
+                return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC header field name is invalid"
+            set name to the substring of input from line_start with length colon - line_start
+            if name equals ascii text "content-length":
+                if found_length:
+                    return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC frame contains duplicate Content-Length fields"
+                set maximum_payload_length to limits's maximum_payload_length
+                set field_value_start to colon + 1
+                set parsed_length to parse json rpc decimal in input from field_value_start before line_end with maximum maximum_payload_length
+                if parsed_length = (0 - 2):
+                    return invalid json rpc frame header with status the json rpc limit exceeded status reporting "JSON-RPC payload exceeds its configured limit"
+                if parsed_length < 0:
+                    return invalid json rpc frame header with status the json rpc malformed frame status reporting "Content-Length must be a nonnegative decimal byte count"
+                set found_length to true
+                set payload_length to parsed_length
+            else if name equals ascii text "content-type":
+                if found_type:
+                    return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC frame contains duplicate Content-Type fields"
+                set field_value_start to colon + 1
+                if not json rpc content type is utf8 in input from field_value_start before line_end:
+                    return invalid json rpc frame header with status the json rpc malformed frame status reporting "Content-Type must specify application/vscode-jsonrpc with UTF-8"
+                set found_type to true
+            set line_start to line_end + 2
+        if not found_length:
+            return invalid json rpc frame header with status the json rpc malformed frame status reporting "JSON-RPC frame is missing Content-Length"
+        return complete json rpc frame header of length header_length with payload length payload_length
+
+local function json rpc method name is reserved in {string:method_text}:
+    execute:
+        if the length of method_text < 4:
+            return false
+        set first_matches to character 0 of method_text = 114
+        set second_matches to character 1 of method_text = 112
+        set third_matches to character 2 of method_text = 99
+        set fourth_matches to character 3 of method_text = 46
+        return first_matches and (second_matches and (third_matches and fourth_matches))
+
+function json rpc number {a pointer to json value:value} is an integer identifier:
+    execute:
+        if the kind of value != the json number kind:
+            return false
+        set text to the text of value
+        if the length of text = 0:
+            return false
+        set cursor to 0
+        if character 0 of text = 45:
+            set cursor to 1
+        if cursor >= the length of text:
+            return false
+        if character cursor of text = 48:
+            return cursor + 1 = the length of text
+        if character cursor of text < 49 or character cursor of text > 57:
+            return false
+        set cursor to cursor + 1
+        loop while cursor < the length of text:
+            if character cursor of text < 48 or character cursor of text > 57:
+                return false
+            set cursor to cursor + 1
+        return true
+
+function json rpc identifier {a pointer to json value:value} is valid:
+    execute:
+        if value is json null:
+            return true
+        if the kind of value = the json text kind:
+            return the text of value is valid utf8
+        return json rpc number value is an integer identifier
+
+local function validate json rpc json node {a pointer to json value:value} at depth {integer:current_depth} seen in {a pointer to list:visited}:
+    execute:
+        if value = (0 as a pointer to json value):
+            return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains a null child pointer"
+        if current_depth > 128:
+            return a failed json rpc operation with status the json rpc limit exceeded status reporting "JSON output nesting exceeds 128 levels"
+        if visited contains value:
+            return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains a cycle or shared child"
+        append value to visited
+        set kind to the kind of value
+        if kind < the json null kind or kind > the json object kind:
+            return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains an invalid value kind"
+        if kind = the json text kind:
+            if not the text of value is valid utf8:
+                return a failed json rpc operation with status the json rpc invalid utf8 status reporting "JSON output contains invalid UTF-8 text"
+        if kind = the json number kind:
+            set parsed_number to parse the text of value as json
+            if not json parsing succeeded for parsed_number:
+                free json result parsed_number
+                return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains an invalid number"
+            set parsed_value to the value of parsed_number
+            set number_is_valid to the kind of parsed_value = the json number kind
+            free json result parsed_number
+            if not number_is_valid:
+                return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains an invalid number"
+        if kind = the json array kind or kind = the json object kind:
+            if the length of value < 0 or the length of value > value's capacity:
+                return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output has invalid collection bounds"
+            set cursor to 0
+            loop while cursor < the length of value:
+                if kind = the json object kind:
+                    set name to item cursor of the names of value
+                    if not name is valid utf8:
+                        return a failed json rpc operation with status the json rpc invalid utf8 status reporting "JSON output contains an invalid UTF-8 member name"
+                    set previous to 0
+                    loop while previous < cursor:
+                        if item previous of the names of value = name:
+                            return a failed json rpc operation with status the json rpc invalid json status reporting "JSON output contains duplicate object member names"
+                        set previous to previous + 1
+                set child_node to item cursor of the items of value
+                set child_depth to current_depth + 1
+                set child_result to validate json rpc json node child_node at depth child_depth seen in visited
+                if not child_result's succeeded:
+                    return child_result
+                set cursor to cursor + 1
+        return a successful json rpc operation
+
+function validate json rpc json value {a pointer to json value:node}:
+    execute:
+        set seen to an empty list of a pointer to json value
+        set validation to validate json rpc json node node at depth 0 seen in seen
+        free list seen
+        return validation
+
+local function validate json rpc error object {a pointer to json value:error_value}:
+    execute:
+        if not error_value is a json object:
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error must be an object"
+        if not error_value has json member named "code":
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error is missing code"
+        if not error_value has json member named "message":
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error is missing message"
+        set code to json member named "code" in error_value
+        set message to json member named "message" in error_value
+        if not json rpc number code is an integer identifier:
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error code must be an integer"
+        if the kind of message != the json text kind:
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC error message must be text"
+        return a successful json rpc operation
+
+function validate json rpc message {a pointer to json value:envelope_node}:
+    execute:
+        set json_validation to validate json rpc json value envelope_node
+        if not json_validation's succeeded:
+            return json_validation
+        if not envelope_node is a json object:
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC batches and non-object messages are unsupported"
+        if not envelope_node has json member named "jsonrpc":
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC message is missing jsonrpc"
+        set version to json member named "jsonrpc" in envelope_node
+        set expected_version to the string form of "2.0"
+        if (the kind of version != the json text kind) or (not (the text of version = expected_version)):
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC version must be exactly 2.0"
+        set has_method to envelope_node has json member named "method"
+        set has_result to envelope_node has json member named "result"
+        set has_error to envelope_node has json member named "error"
+        if has_method:
+            if has_result or has_error:
+                return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC request must not contain result or error"
+            set method to json member named "method" in envelope_node
+            if the kind of method != the json text kind:
+                return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC method must be text"
+            set method_text to the text of method
+            if json rpc method name is reserved in method_text:
+                return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC method names beginning with rpc. are reserved"
+            if envelope_node has json member named "params":
+                set parameters to json member named "params" in envelope_node
+                set parameters_are_structured to parameters is a json object or parameters is a json array
+                if (not parameters_are_structured) and (not parameters is json null):
+                    return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC params must be an object, array, or null"
+            if envelope_node has json member named "id":
+                if not json rpc identifier json member named "id" in envelope_node is valid:
+                    return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC request ID must be an integer, string, or null"
+            return a successful json rpc operation
+        if not envelope_node has json member named "id":
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC response is missing id"
+        if not json rpc identifier json member named "id" in envelope_node is valid:
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC response ID must be an integer, string, or null"
+        if (has_result and has_error) or ((not has_result) and (not has_error)):
+            return a failed json rpc operation with status the json rpc invalid message status reporting "JSON-RPC response must contain exactly one of result or error"
+        if has_error:
+            return validate json rpc error object json member named "error" in envelope_node
+        return a successful json rpc operation
+
+function validate outbound json rpc message {a pointer to json value:envelope_node}:
+    execute:
+        return validate json rpc message envelope_node
+
+function free json rpc receive result {json rpc receive result:outcome}:
+    execute:
+        if outcome's message != (0 as a pointer to json value):
+            free json value outcome's message

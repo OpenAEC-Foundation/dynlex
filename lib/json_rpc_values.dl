@@ -1,0 +1,64 @@
+# JSON-RPC JSON value constructors and lossless copying.
+
+import lib/json_rpc_framing.dl
+
+function a new json rpc text for {any:input}:
+    execute:
+        set node to a new json value of kind the json text kind
+        set the text of node to the string form of input
+        return node
+
+function a new json rpc boolean for {boolean:input}:
+    execute:
+        set node to a new json value of kind the json boolean kind
+        set the boolean of node to input
+        return node
+
+function a new json rpc null:
+    replacement:
+        a new json value of kind the json null kind
+
+function a new json rpc integer from {string:lexeme}:
+    execute:
+        set parsed to parse lexeme as json
+        if not json parsing succeeded for parsed:
+            free json result parsed
+            @intrinsic("call", "libc", "abort", void)
+        set node to the value of parsed
+        if not json rpc number node is an integer identifier:
+            free json result parsed
+            @intrinsic("call", "libc", "abort", void)
+        return node
+
+function a new json rpc integer from {cstring:lexeme}:
+    execute:
+        return a new json rpc integer from the string form of lexeme
+
+function a new json rpc integer for {integer:input}:
+    execute:
+        set lexeme to the string form of input
+        return a new json rpc integer from lexeme
+
+function duplicate json rpc node {a pointer to json value:source}:
+    execute:
+        set validation to validate json rpc json value source
+        if not validation's succeeded:
+            @intrinsic("call", "libc", "abort", void)
+        set encoded to the compact json form of source
+        set parsed to parse encoded as json
+        if not json parsing succeeded for parsed:
+            free json result parsed
+            @intrinsic("call", "libc", "abort", void)
+        return the value of parsed
+
+function add json rpc member {any:name} containing {a pointer to json value:node} to {a pointer to json value:parent}:
+    execute:
+        append json member the string form of name with node to parent
+
+function a new json rpc object:
+    replacement:
+        a new json value of kind the json object kind
+
+function a new json rpc array:
+    replacement:
+        a new json value of kind the json array kind

@@ -1,0 +1,41 @@
+import lib/workspace_edit.dl
+
+function first text change from {cstring:source}:
+    execute:
+        set parsed to parse workspace edit from source
+        if not parsed's succeeded:
+            print parsed's failure reason as line
+            @intrinsic("call", "libc", "abort", void)
+        return parsed
+
+set astral to first text change from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":1,\"character\":0},\"end\":{\"line\":1,\"character\":1}},\"newText\":\"D\"}]}}"
+set astral_change to workspace change at index 0 in the changes of astral's edit
+set astral_source to the string form of "A😀B\r\nC\n"
+set astral_result to apply workspace text edits (the edits of astral_change) to astral_source using encoding the workspace utf16 position encoding
+print astral_result's succeeded as line
+print (astral_result's text = "AXB\r\nD\n") as line
+free workspace edit parse result astral
+
+set ordered to first text change from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"A\"},{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"B\"},{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":1}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"Y\"},{\"range\":{\"start\":{\"line\":0,\"character\":2},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"Z\"}]}}"
+set ordered_change to workspace change at index 0 in the changes of ordered's edit
+set ordered_source to the string form of "abcd"
+set ordered_result to apply workspace text edits (the edits of ordered_change) to ordered_source using encoding the workspace utf16 position encoding
+print ordered_result's succeeded as line
+print ordered_result's text as line
+free workspace edit parse result ordered
+
+set invalid to first text change from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":2},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"X\"}]}}"
+set invalid_change to workspace change at index 0 in the changes of invalid's edit
+set invalid_source to the string form of "A😀B"
+set invalid_result to apply workspace text edits (the edits of invalid_change) to invalid_source using encoding the workspace utf16 position encoding
+print invalid_result's succeeded as line
+print invalid_result's failure reason as line
+free workspace edit parse result invalid
+
+set overlap to first text change from "{\"changes\":{\"file:///alpha.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":2}},\"newText\":\"X\"},{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{\"line\":0,\"character\":3}},\"newText\":\"Y\"}]}}"
+set overlap_change to workspace change at index 0 in the changes of overlap's edit
+set overlap_source to the string form of "abcd"
+set overlap_result to apply workspace text edits (the edits of overlap_change) to overlap_source using encoding the workspace utf16 position encoding
+print overlap_result's succeeded as line
+print overlap_result's failure reason as line
+free workspace edit parse result overlap

@@ -1,0 +1,19 @@
+import lib/workspace_edit.dl
+
+create a temporary directory
+set temporary to it
+if not temporary's succeeded:
+    @intrinsic("call", "libc", "abort", void)
+set context_result to create workspace edit context rooted at temporary's directory_path
+print context_result's succeeded as line
+if not context_result's succeeded:
+    @intrinsic("call", "libc", "abort", void)
+set state_value to context_result's context
+
+set empty_result to apply workspace edit from "{\"documentChanges\":[]}" using state_value
+print empty_result's applied as line
+
+free workspace edit context state_value
+remove filesystem tree at temporary's directory_path
+set cleanup to it
+print cleanup's succeeded as line

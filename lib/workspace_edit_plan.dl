@@ -1,0 +1,362 @@
+# Annotation authorization and sequential virtual WorkspaceEdit simulation.
+
+import lib/workspace_edit_snapshot.dl
+import lib/workspace_edit_text.dl
+import lib/path.dl
+import lib/text.dl
+
+local function workspace annotation named {string:requested_identifier} in {a pointer to parsed workspace edit:parsed_value}:
+    execute:
+        set position to 0
+        loop while position < the length of parsed_value's annotations:
+            set annotation_value to workspace annotation at index position in parsed_value's annotations
+            if annotation_value's identifier = requested_identifier:
+                return annotation_value
+            set position to position + 1
+        return 0 as a pointer to workspace change annotation
+
+local function authorize workspace annotation {string:requested_identifier} for change {integer:change_index} from {a pointer to parsed workspace edit:parsed_value} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set annotation_value to workspace annotation named requested_identifier in parsed_value
+        if annotation_value = (0 as a pointer to workspace change annotation):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace edit references an unknown change annotation" at change change_index)
+            @intrinsic("return")
+        if not the annotations enabled of state_value:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace change annotations require explicit opt-in" at change change_index)
+            @intrinsic("return")
+        if annotation_value's needs confirmation:
+            set decision_value to workspace annotation decision named requested_identifier in state_value
+            if decision_value = (0 as a pointer to workspace annotation decision):
+                invalidate workspace edit plan plan_value with (a workspace edit confirmation result for annotation_value at change change_index)
+                @intrinsic("return")
+            if not decision_value's approved:
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace change annotation was declined" at change change_index)
+
+local function authorize workspace annotations from {a pointer to parsed workspace edit:parsed_value} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set change_index to 0
+        loop while change_index < the length of parsed_value's changes and the valid of plan_value:
+            set source_value to workspace change at index change_index in parsed_value's changes
+            if source_value's annotation present:
+                authorize workspace annotation source_value's annotation id for change change_index from parsed_value using state_value in plan_value
+            set edit_index to 0
+            loop while edit_index < the length of source_value's edits and the valid of plan_value:
+                set edit_value to workspace text edit at index edit_index in source_value's edits
+                if edit_value's annotation present:
+                    authorize workspace annotation edit_value's annotation id for change change_index from parsed_value using state_value in plan_value
+                set edit_index to edit_index + 1
+            set change_index to change_index + 1
+
+local function workspace directory {string:directory_identity} is nonempty in {a pointer to workspace resource snapshot collection:resource_values}:
+    execute:
+        set position to 0
+        loop while position < the length of resource_values:
+            set candidate to workspace resource snapshot at position in resource_values
+            if candidate's active and candidate's filesystem exists:
+                if candidate's identity != directory_identity:
+                    if workspace identity candidate's identity is equal to or below directory_identity:
+                        return true
+            set position to position + 1
+        return false
+
+local function workspace directory {string:directory_identity} contains an open document in {a pointer to workspace resource snapshot collection:resource_values}:
+    execute:
+        set position to 0
+        loop while position < the length of resource_values:
+            set candidate to workspace resource snapshot at position in resource_values
+            if candidate's active:
+                if candidate's open document != (0 as a pointer to workspace open document):
+                    if workspace identity candidate's identity is equal to or below directory_identity:
+                        return true
+            set position to position + 1
+        return false
+
+local function workspace parent resource for {string:native_path} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set parent_result to the parent path of native_path using the path style of state_value
+        if not parent_result's succeeded:
+            return 0 as a pointer to workspace resource snapshot
+        set parent_identity to workspace identity for native path parent_result's value using the path style of state_value
+        return workspace resource with identity parent_identity in the resources of plan_value
+
+local function append workspace text operation at {integer:change_index} for {a pointer to workspace resource snapshot:resource_value} with {string:new_contents} to {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set initial_value to @intrinsic(
+            "construct",
+            a planned workspace operation,
+            change_index as i32,
+            the workspace text change kind,
+            false,
+            resource_value's path,
+            resource_value's identity,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            an empty workspace edit text,
+            new_contents,
+            false,
+            false,
+            resource_value's open document
+        )
+        set operation_value to allocate 1 slots of initial_value
+        append planned workspace operation operation_value to the operations of plan_value
+
+local function append workspace resource operation at {integer:change_index} of kind {integer:operation_kind} skipped {boolean:skip_value} for path {string:native_path} with identity {string:native_identity}, old path {string:old_path_value} with identity {string:old_identity_value}, new path {string:new_path_value} with identity {string:new_identity_value}, directory {boolean:directory_value}, and overwrite target {boolean:overwrite_value} to {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set initial_value to @intrinsic(
+            "construct",
+            a planned workspace operation,
+            change_index as i32,
+            operation_kind as i32,
+            skip_value,
+            native_path,
+            native_identity,
+            old_path_value,
+            old_identity_value,
+            new_path_value,
+            new_identity_value,
+            an empty workspace edit text,
+            directory_value,
+            overwrite_value,
+            0 as a pointer to workspace open document
+        )
+        set operation_value to allocate 1 slots of initial_value
+        append planned workspace operation operation_value to the operations of plan_value
+
+local function simulate workspace text change {a pointer to normalized workspace change:normalized_value} at {integer:change_index} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set source_value to normalized_value's source change
+        set resource_value to workspace resource with identity normalized_value's identity in the resources of plan_value
+        if resource_value = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Text edit resource was not snapshotted" at change change_index)
+            @intrinsic("return")
+        if not resource_value's exists:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Text edit target does not exist" at change change_index)
+            @intrinsic("return")
+        if resource_value's kind != the workspace regular file resource kind:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Text edit target must be a regular file" at change change_index)
+            @intrinsic("return")
+        if source_value's version present:
+            if resource_value's open document = (0 as a pointer to workspace open document):
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Versioned text edits require an open document" at change change_index)
+                @intrinsic("return")
+            if source_value's version != resource_value's virtual version:
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Text document version does not match" at change change_index)
+                @intrinsic("return")
+        set text_result to apply workspace text edits source_value's edits to resource_value's content using encoding the position encoding of state_value
+        if not text_result's succeeded:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting text_result's failure reason at change change_index)
+            @intrinsic("return")
+        set the content of resource_value to text_result's text
+        if the length of source_value's edits > 0:
+            if resource_value's open document != (0 as a pointer to workspace open document):
+                set the virtual version of resource_value to (the virtual version of resource_value) + 1
+            append workspace text operation at change_index for resource_value with text_result's text to plan_value
+
+local function simulate workspace create change {a pointer to normalized workspace change:normalized_value} at {integer:change_index} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set source_value to normalized_value's source change
+        if normalized_value's relative path = the string form of ".":
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace root cannot be created" at change change_index)
+            @intrinsic("return")
+        set resource_value to workspace resource with identity normalized_value's identity in the resources of plan_value
+        if resource_value = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create target was not snapshotted" at change change_index)
+            @intrinsic("return")
+        set requested_kind to the workspace regular file resource kind
+        if source_value's directory hint:
+            set requested_kind to the workspace directory resource kind
+        if resource_value's filesystem exists:
+            if source_value's overwrite:
+                if resource_value's filesystem kind != requested_kind:
+                    invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create overwrite target has a different resource type" at change change_index)
+                    @intrinsic("return")
+                if requested_kind = the workspace directory resource kind:
+                    if workspace directory resource_value's identity is nonempty in the resources of plan_value:
+                        invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create cannot overwrite a nonempty directory" at change change_index)
+                        @intrinsic("return")
+                else:
+                    set the content of resource_value to an empty workspace edit text
+                append workspace resource operation at change_index of kind the workspace create change kind skipped false for path resource_value's path with identity resource_value's identity, old path an empty workspace edit text with identity an empty workspace edit text, new path an empty workspace edit text with identity an empty workspace edit text, directory source_value's directory hint, and overwrite target true to plan_value
+                @intrinsic("return")
+            if source_value's ignore if exists:
+                append workspace resource operation at change_index of kind the workspace create change kind skipped true for path resource_value's path with identity resource_value's identity, old path an empty workspace edit text with identity an empty workspace edit text, new path an empty workspace edit text with identity an empty workspace edit text, directory source_value's directory hint, and overwrite target false to plan_value
+                @intrinsic("return")
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create target already exists" at change change_index)
+            @intrinsic("return")
+        if resource_value's open document != (0 as a pointer to workspace open document):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create target is open in a document buffer" at change change_index)
+            @intrinsic("return")
+        set parent_value to workspace parent resource for resource_value's path using state_value in plan_value
+        if parent_value = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create parent was not snapshotted" at change change_index)
+            @intrinsic("return")
+        if (not parent_value's filesystem exists) or (parent_value's filesystem kind != the workspace directory resource kind):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Create parent must be an existing directory" at change change_index)
+            @intrinsic("return")
+        set the filesystem exists of resource_value to true
+        set the filesystem kind of resource_value to requested_kind
+        set the exists of resource_value to true
+        set the kind of resource_value to requested_kind
+        set the content of resource_value to an empty workspace edit text
+        append workspace resource operation at change_index of kind the workspace create change kind skipped false for path resource_value's path with identity resource_value's identity, old path an empty workspace edit text with identity an empty workspace edit text, new path an empty workspace edit text with identity an empty workspace edit text, directory source_value's directory hint, and overwrite target false to plan_value
+
+function workspace mapped path from {string:source_path} rooted at {string:old_root} to {string:new_root}:
+    execute:
+        set suffix_length to the length of source_path - the length of old_root
+        if suffix_length < 0:
+            @intrinsic("call", "libc", "abort", void)
+        set suffix to the substring of source_path from the length of old_root with length suffix_length
+        return new_root + suffix
+
+local function simulate workspace rename change {a pointer to normalized workspace change:normalized_value} at {integer:change_index} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set source_value to normalized_value's source change
+        if normalized_value's old relative path = the string form of ".":
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace root cannot be renamed" at change change_index)
+            @intrinsic("return")
+        if normalized_value's old path = normalized_value's new path:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename source and target are the same path" at change change_index)
+            @intrinsic("return")
+        set old_resource to workspace resource with identity normalized_value's old identity in the resources of plan_value
+        if old_resource = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename source was not snapshotted" at change change_index)
+            @intrinsic("return")
+        if not old_resource's filesystem exists:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename source does not exist" at change change_index)
+            @intrinsic("return")
+        set case_only to normalized_value's old identity = normalized_value's new identity
+        if old_resource's filesystem kind = the workspace directory resource kind:
+            if (not case_only) and (workspace identity normalized_value's new identity is equal to or below normalized_value's old identity):
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Directory cannot be renamed into itself" at change change_index)
+                @intrinsic("return")
+        set new_resource to workspace resource with identity normalized_value's new identity in the resources of plan_value
+        if (not case_only) and new_resource != (0 as a pointer to workspace resource snapshot):
+            if new_resource's filesystem exists:
+                if source_value's overwrite:
+                    if new_resource's filesystem kind != old_resource's filesystem kind:
+                        invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename overwrite target has a different resource type" at change change_index)
+                        @intrinsic("return")
+                    if workspace directory new_resource's identity contains an open document in the resources of plan_value:
+                        invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target contains an open document" at change change_index)
+                        @intrinsic("return")
+                    if new_resource's filesystem kind = the workspace directory resource kind:
+                        if workspace directory new_resource's identity is nonempty in the resources of plan_value:
+                            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename cannot overwrite a nonempty directory" at change change_index)
+                            @intrinsic("return")
+                else if source_value's ignore if exists:
+                    append workspace resource operation at change_index of kind the workspace rename change kind skipped true for path an empty workspace edit text with identity an empty workspace edit text, old path normalized_value's old path with identity normalized_value's old identity, new path normalized_value's new path with identity normalized_value's new identity, directory (old_resource's filesystem kind = the workspace directory resource kind), and overwrite target false to plan_value
+                    @intrinsic("return")
+                else:
+                    invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target already exists" at change change_index)
+                    @intrinsic("return")
+            if new_resource's open document != (0 as a pointer to workspace open document):
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target is open in a document buffer" at change change_index)
+                @intrinsic("return")
+        set parent_value to workspace parent resource for normalized_value's new path using state_value in plan_value
+        if parent_value = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target parent was not snapshotted" at change change_index)
+            @intrinsic("return")
+        if (not parent_value's filesystem exists) or (parent_value's filesystem kind != the workspace directory resource kind):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target parent must be an existing directory" at change change_index)
+            @intrinsic("return")
+        set resource_index to 0
+        loop while resource_index < the length of the resources of plan_value and the valid of plan_value:
+            set candidate to workspace resource snapshot at resource_index in the resources of plan_value
+            if candidate's active:
+                if workspace identity candidate's identity is equal to or below normalized_value's old identity:
+                    set mapped_path to workspace mapped path from candidate's path rooted at normalized_value's old path to normalized_value's new path
+                    set mapped_identity to workspace identity for native path mapped_path using the path style of state_value
+                    set collision to workspace resource with identity mapped_identity in the resources of plan_value
+                    if collision != (0 as a pointer to workspace resource snapshot):
+                        if not (workspace identity collision's identity is equal to or below normalized_value's old identity):
+                            if collision's filesystem exists or collision's open document != (0 as a pointer to workspace open document):
+                                if not (source_value's overwrite and mapped_identity = normalized_value's new identity):
+                                    invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Rename target collides with another workspace resource" at change change_index)
+            set resource_index to resource_index + 1
+        if not the valid of plan_value:
+            @intrinsic("return")
+        if (not case_only) and new_resource != (0 as a pointer to workspace resource snapshot):
+            set the active of new_resource to false
+        set resource_index to 0
+        loop while resource_index < the length of the resources of plan_value:
+            set candidate to workspace resource snapshot at resource_index in the resources of plan_value
+            if candidate's active:
+                if workspace identity candidate's identity is equal to or below normalized_value's old identity:
+                    set mapped_path to workspace mapped path from candidate's path rooted at normalized_value's old path to normalized_value's new path
+                    set mapped_identity to workspace identity for native path mapped_path using the path style of state_value
+                    set mapped_relative to make path mapped_path relative to base the root path of state_value using the path style of state_value
+                    if not mapped_relative's succeeded:
+                        invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Renamed path could not be normalized" at change change_index)
+                    else:
+                        set the path of candidate to mapped_path
+                        set the identity of candidate to mapped_identity
+                        set the relative path of candidate to mapped_relative's value
+            set resource_index to resource_index + 1
+        if the valid of plan_value:
+            append workspace resource operation at change_index of kind the workspace rename change kind skipped false for path an empty workspace edit text with identity an empty workspace edit text, old path normalized_value's old path with identity normalized_value's old identity, new path normalized_value's new path with identity normalized_value's new identity, directory (old_resource's filesystem kind = the workspace directory resource kind), and overwrite target (source_value's overwrite and not case_only and new_resource != (0 as a pointer to workspace resource snapshot) and new_resource's filesystem exists) to plan_value
+
+local function simulate workspace delete change {a pointer to normalized workspace change:normalized_value} at {integer:change_index} using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set source_value to normalized_value's source change
+        if normalized_value's relative path = the string form of ".":
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Workspace root cannot be deleted" at change change_index)
+            @intrinsic("return")
+        set resource_value to workspace resource with identity normalized_value's identity in the resources of plan_value
+        if resource_value = (0 as a pointer to workspace resource snapshot):
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Delete target was not snapshotted" at change change_index)
+            @intrinsic("return")
+        if not resource_value's filesystem exists:
+            if source_value's ignore if not exists:
+                append workspace resource operation at change_index of kind the workspace delete change kind skipped true for path resource_value's path with identity resource_value's identity, old path an empty workspace edit text with identity an empty workspace edit text, new path an empty workspace edit text with identity an empty workspace edit text, directory false, and overwrite target false to plan_value
+                @intrinsic("return")
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Delete target does not exist" at change change_index)
+            @intrinsic("return")
+        if workspace directory resource_value's identity contains an open document in the resources of plan_value:
+            invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Delete target contains an open document" at change change_index)
+            @intrinsic("return")
+        set is_directory to resource_value's filesystem kind = the workspace directory resource kind
+        if is_directory and not source_value's recursive:
+            if workspace directory resource_value's identity is nonempty in the resources of plan_value:
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Deleting a nonempty directory requires recursive" at change change_index)
+                @intrinsic("return")
+        set resource_index to 0
+        loop while resource_index < the length of the resources of plan_value:
+            set candidate to workspace resource snapshot at resource_index in the resources of plan_value
+            if candidate's active:
+                if workspace identity candidate's identity is equal to or below resource_value's identity:
+                    set the filesystem exists of candidate to false
+                    set the exists of candidate to false
+                    set the content of candidate to an empty workspace edit text
+            set resource_index to resource_index + 1
+        append workspace resource operation at change_index of kind the workspace delete change kind skipped false for path resource_value's path with identity resource_value's identity, old path an empty workspace edit text with identity an empty workspace edit text, new path an empty workspace edit text with identity an empty workspace edit text, directory is_directory, and overwrite target false to plan_value
+
+local function simulate normalized workspace changes using {a pointer to workspace edit context:state_value} in {a pointer to workspace edit plan:plan_value}:
+    execute:
+        set change_index to 0
+        loop while change_index < the length of the normalized changes of plan_value and the valid of plan_value:
+            set normalized_value to normalized workspace change at change_index in the normalized changes of plan_value
+            set source_value to normalized_value's source change
+            if source_value's kind = the workspace text change kind:
+                simulate workspace text change normalized_value at change_index using state_value in plan_value
+            else if source_value's kind = the workspace create change kind:
+                simulate workspace create change normalized_value at change_index using state_value in plan_value
+            else if source_value's kind = the workspace rename change kind:
+                simulate workspace rename change normalized_value at change_index using state_value in plan_value
+            else if source_value's kind = the workspace delete change kind:
+                simulate workspace delete change normalized_value at change_index using state_value in plan_value
+            else:
+                invalidate workspace edit plan plan_value with (a failed workspace edit result reporting the string form of "Unknown workspace edit change kind" at change change_index)
+            set change_index to change_index + 1
+
+function build workspace edit plan from {a pointer to parsed workspace edit:parsed_value} using {a pointer to workspace edit context:state_value}:
+    execute:
+        set plan_value to a new valid workspace edit plan
+        authorize workspace annotations from parsed_value using state_value in plan_value
+        if the valid of plan_value:
+            normalize workspace changes from parsed_value using state_value into plan_value
+        if the valid of plan_value:
+            snapshot normalized workspace changes using state_value in plan_value
+        if the valid of plan_value:
+            simulate normalized workspace changes using state_value in plan_value
+        return plan_value

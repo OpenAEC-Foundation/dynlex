@@ -1,0 +1,18 @@
+true
+true
+true
+false
+File URI is outside the workspace
+true
+true
+false
+false
+true
+C:/Folder/A.txt
+c:/folder/a.txt
+true
+//server/share/a b
+0
+false
+Workspace edit paths may not traverse symbolic links
+true
