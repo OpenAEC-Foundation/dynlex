@@ -521,6 +521,9 @@ SyntaxConfig::Messages::Messages() {
 	set("missing body section", "message", "Code without body section");
 	set("unknown section", "message", "Unknown section: {section}");
 	set("unexpected class line", "message", "unexpected line in class definition");
+	set("integer literal out of range", "message", "Integer literal exceeds the signed 64-bit range");
+	set("floating point literal out of range", "message", "Floating-point literal exceeds the supported range");
+	set("invalid numeric literal", "message", "Invalid numeric literal");
 	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");
 	set("multiple reachable return types", "message",
 		"Function has multiple reachable return types: {first_type} and {second_type}");

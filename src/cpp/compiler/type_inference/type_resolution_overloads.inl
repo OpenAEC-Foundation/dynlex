@@ -197,7 +197,7 @@ struct InferenceContext {
 	};
 
 	struct GroupingTrialJournal {
-		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeValue>;
+		using ExpressionValueMap = std::unordered_map<Expression *, CompileTimeEvaluation>;
 		using CodeLineGroupingMap = std::unordered_map<CodeLine *, TrialCodeLineGrouping>;
 		using CallableInstantiationMap = std::unordered_map<PatternDefinition *, Instantiation *>;
 		template <typename Map, typename Key> using SeenWrites = std::unordered_map<Map *, std::unordered_set<Key *>>;
@@ -206,7 +206,7 @@ struct InferenceContext {
 			ExpressionValueMap *map;
 			Expression *expression;
 			bool existed;
-			CompileTimeValue value;
+			CompileTimeEvaluation evaluation;
 		};
 
 		struct CodeLineGroupingUndo {
@@ -240,7 +240,7 @@ struct InferenceContext {
 				return;
 			auto existing = map.find(expression);
 			expressionValueUndo.push_back(
-				{&map, expression, existing != map.end(), existing != map.end() ? existing->second : CompileTimeValue{}}
+				{&map, expression, existing != map.end(), existing != map.end() ? existing->second : CompileTimeEvaluation{}}
 			);
 		}
 
@@ -292,7 +292,7 @@ struct InferenceContext {
 			}
 			for (auto undo = expressionValueUndo.rbegin(); undo != expressionValueUndo.rend(); ++undo) {
 				if (undo->existed)
-					(*undo->map)[undo->expression] = std::move(undo->value);
+					(*undo->map)[undo->expression] = std::move(undo->evaluation);
 				else
 					undo->map->erase(undo->expression);
 			}
@@ -342,8 +342,8 @@ struct InferenceContext {
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
 	std::vector<Expression *> expressionStack;
-	std::unordered_map<Expression *, CompileTimeValue> trialExpressionValues;
-	const std::unordered_map<Expression *, CompileTimeValue> *inheritedTrialExpressionValues{};
+	std::unordered_map<Expression *, CompileTimeEvaluation> trialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeEvaluation> *inheritedTrialExpressionValues{};
 	std::unordered_map<CodeLine *, TrialCodeLineGrouping> trialCodeLineGroupings;
 	std::unordered_map<PatternDefinition *, Instantiation *> trialCallableInstantiations;
 
@@ -481,29 +481,51 @@ struct InferenceContext {
 		if (trial) {
 			auto trialIt = trialExpressionValues.find(expression);
 			if (trialIt != trialExpressionValues.end())
-				return trialIt->second;
+				return trialIt->second.value;
 			if (inheritedTrialExpressionValues) {
 				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
 				if (inheritedIt != inheritedTrialExpressionValues->end())
-					return inheritedIt->second;
+					return inheritedIt->second.value;
 			}
 		}
 		return getExpressionCompileTimeValue(expression);
 	}
 
-	void setExpressionValue(Expression *expression, const CompileTimeValue &value) {
+	MinimumSignedIntegerMagnitudeEffects lookupExpressionMinimumIntegerEffects(Expression *expression) const {
+		if (!expression)
+			return {};
+		if (trial) {
+			auto trialIt = trialExpressionValues.find(expression);
+			if (trialIt != trialExpressionValues.end())
+				return trialIt->second.minimumIntegerEffects;
+			if (inheritedTrialExpressionValues) {
+				auto inheritedIt = inheritedTrialExpressionValues->find(expression);
+				if (inheritedIt != inheritedTrialExpressionValues->end())
+					return inheritedIt->second.minimumIntegerEffects;
+			}
+		}
+		return expression->minimumIntegerEffects;
+	}
+
+	void setExpressionEvaluation(Expression *expression, CompileTimeEvaluation evaluation) {
 		if (!expression)
 			return;
 		if (trial) {
 			if (groupingTrialJournal)
 				groupingTrialJournal->recordExpressionValueWrite(trialExpressionValues, expression);
-			if (isCompileTimeKnown(value))
-				trialExpressionValues[expression] = value;
-			else
+			if (isCompileTimeKnown(evaluation.value) || !evaluation.minimumIntegerEffects.consumedByNegation.empty() ||
+				!evaluation.minimumIntegerEffects.rejectedUses.empty()) {
+				trialExpressionValues[expression] = std::move(evaluation);
+			} else
 				trialExpressionValues.erase(expression);
 			return;
 		}
-		setExpressionCompileTimeValue(expression, value);
+		setExpressionCompileTimeValue(expression, evaluation.value);
+		expression->minimumIntegerEffects = std::move(evaluation.minimumIntegerEffects);
+	}
+
+	void setExpressionValue(Expression *expression, const CompileTimeValue &value) {
+		setExpressionEvaluation(expression, {.value = value, .minimumIntegerEffects = {}});
 	}
 
 	Expression *lookupFlexExpansion(Expression *expression) const {

@@ -1,0 +1,26 @@
+import lib/std.dl
+
+function low prefix value:
+    after: $ + $
+    execute:
+        return -value
+
+function high prefix value:
+    before: $ + $
+    execute:
+        return -value
+
+function value low postfix:
+    after: $ + $
+    execute:
+        return -value
+
+function value high postfix:
+    before: $ + $
+    execute:
+        return -value
+
+print (low prefix 2 + 1) as line
+print (high prefix 2 + 1) as line
+print (1 + 2 low postfix) as line
+print (1 + 2 high postfix) as line

@@ -459,9 +459,9 @@ if (kind == IntrinsicKind::SizeOf) {
 
 if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs) {
 	CompileTimeValue value = resolveStoredCompileTimeValue(callExpr, context.flexBindingFrames);
-	if (auto *number = std::get_if<double>(&value)) {
+	if (auto *integer = std::get_if<std::int64_t>(&value)) {
 		llvm::Type *llvmType = getLLVMType(context, resultType);
-		return llvm::ConstantInt::get(llvmType, static_cast<std::int64_t>(*number), true);
+		return llvm::ConstantInt::get(llvmType, *integer, true);
 	}
 	if (auto *boolean = std::get_if<bool>(&value)) {
 		llvm::Type *llvmType = getLLVMType(context, resultType);
@@ -755,7 +755,7 @@ if (kind == IntrinsicKind::ExtractElement) {
 	llvm::Value *vec = nullptr;
 	if (!generateRuntimeValue(args[1], vec))
 		return CodegenResult::failure();
-	if (auto *idxLit = std::get_if<double>(&args[2]->literalValue)) {
+	if (auto *idxLit = std::get_if<std::int64_t>(&args[2]->literalValue)) {
 		return builder.CreateExtractElement(vec, getVectorLaneIndexValue(context, static_cast<unsigned>(*idxLit)), "elem");
 	}
 	llvm::Value *idx = nullptr;

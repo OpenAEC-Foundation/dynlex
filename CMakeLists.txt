@@ -168,6 +168,23 @@ set (CMAKE_SUPPRESS_REGENERATION TRUE) # Suppresses ZERO_CHECK
 set(CMAKE_CXX_STANDARD 23)
 option(DYNLEX_WEB "Build browser compiler target (Emscripten)" OFF)
 
+# The normal compiler is optimized but keeps complete debug information and
+# assertions. This is intentionally distinct from RelWithDebInfo, whose
+# platform defaults define NDEBUG.
+if(MSVC)
+    set(CMAKE_C_FLAGS_OPTIMIZED "/O2 /Zi" CACHE STRING "Flags for optimized DynLex C builds" FORCE)
+    set(CMAKE_CXX_FLAGS_OPTIMIZED "/O2 /Zi" CACHE STRING "Flags for optimized DynLex C++ builds" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS_OPTIMIZED "/DEBUG" CACHE STRING "Linker flags for optimized DynLex builds" FORCE)
+else()
+    set(CMAKE_C_FLAGS_OPTIMIZED "-O2 -g" CACHE STRING "Flags for optimized DynLex C builds" FORCE)
+    set(CMAKE_CXX_FLAGS_OPTIMIZED "-O2 -g" CACHE STRING "Flags for optimized DynLex C++ builds" FORCE)
+endif()
+if(CMAKE_CONFIGURATION_TYPES)
+    list(APPEND CMAKE_CONFIGURATION_TYPES Optimized)
+    list(REMOVE_DUPLICATES CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING "Available build configurations" FORCE)
+endif()
+
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
 else()
@@ -336,7 +353,7 @@ if(NOT EMSCRIPTEN)
     # address-bearing skeleton records for the linker.
     if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(${PROJECT_NAME} PRIVATE
-            "$<$<CONFIG:Debug>:-gsplit-dwarf>"
+            "$<$<OR:$<CONFIG:Debug>,$<CONFIG:Optimized>>:-gsplit-dwarf>"
         )
     endif()
 

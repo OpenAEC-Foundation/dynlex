@@ -9,12 +9,12 @@ print 10 - 2 * 3 as line
 print 2 + 3 + 4 as line
 print 2 * 3 * 4 as line
 
-# Prefix functions with operators: (f(a) + f(a)), not f(f(a) + a)
+# Low-precedence prefix functions consume following operators
 set a to 4.0
 set result to the square root of a + the square root of a
 print result as an integer as line
 
-# Later boundary arguments can still be claimed by surrounding operators
+# Multi-argument prefix functions apply their precedence to the right boundary
 set minimum_result to the minimum of 1.0 + 5.0 and 2.0 + 19.0
 set maximum_result to the maximum of 1.0 + 5.0 and 2.0 + 19.0
 print minimum_result as line

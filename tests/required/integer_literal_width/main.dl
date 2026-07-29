@@ -1,0 +1,12 @@
+import lib/std.dl
+
+function one less than {fixed integer:value}:
+    execute:
+        return value - 1
+
+print 2147483647 as line
+print 2147483648 as line
+print 9007199254740993 as line
+print 9223372036854775807 as line
+print one less than 9007199254740993 as line
+print one less than 9223372036854775807 as line
