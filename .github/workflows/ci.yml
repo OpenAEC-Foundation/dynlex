@@ -7,6 +7,26 @@ on:
   workflow_call:
 
 jobs:
+  extension-packages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Build and verify extension packages
+        working-directory: vscode-extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run package
+          sha256sum ../build/vscode-extension/*.vsix
+
   build-and-test-linux:
     runs-on: ubuntu-24.04
     env:

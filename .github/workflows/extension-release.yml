@@ -1,0 +1,116 @@
+name: Extension Release
+
+run-name: Extension ${{ inputs.version }} approved release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact extension version approved for publication
+        required: true
+        type: string
+
+concurrency:
+  group: extension-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish-vscode-marketplace:
+    runs-on: ubuntu-24.04
+    environment: extension-publishing
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Validate approved version and branch
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Extension releases must run from master, not $GITHUB_REF." >&2
+            exit 1
+          fi
+          PACKAGE_VERSION="$(node -p "require('./vscode-extension/package.json').version")"
+          if [[ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Approved version $REQUESTED_VERSION does not match package version $PACKAGE_VERSION." >&2
+            exit 1
+          fi
+
+      - name: Install, test, and lint
+        working-directory: vscode-extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+
+      - name: Build VS Code Marketplace package
+        working-directory: vscode-extension
+        run: npm run package -- --registry vscode-marketplace
+
+      - name: Publish only to Visual Studio Marketplace
+        working-directory: vscode-extension
+        run: |
+          PACKAGE_PATH="../build/vscode-extension/dynlex-language-${REQUESTED_VERSION}-vscode-marketplace.vsix"
+          sha256sum "$PACKAGE_PATH"
+          npx vsce publish --packagePath "$PACKAGE_PATH" --oidc
+
+  publish-open-vsx:
+    runs-on: ubuntu-24.04
+    environment: extension-publishing
+    permissions:
+      contents: read
+    env:
+      OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
+      REQUESTED_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Validate approved version and branch
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Extension releases must run from master, not $GITHUB_REF." >&2
+            exit 1
+          fi
+          PACKAGE_VERSION="$(node -p "require('./vscode-extension/package.json').version")"
+          if [[ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Approved version $REQUESTED_VERSION does not match package version $PACKAGE_VERSION." >&2
+            exit 1
+          fi
+
+      - name: Install, test, and lint
+        working-directory: vscode-extension
+        run: |
+          npm ci
+          npm test
+          npm run lint
+
+      - name: Build Open VSX package
+        working-directory: vscode-extension
+        run: npm run package -- --registry open-vsx
+
+      - name: Verify Open VSX authorization
+        working-directory: vscode-extension
+        run: npx ovsx verify-pat open-aec -p "$OPEN_VSX_TOKEN"
+
+      - name: Publish only to Open VSX
+        working-directory: vscode-extension
+        run: |
+          PACKAGE_PATH="../build/vscode-extension/dynlex-language-${REQUESTED_VERSION}-open-vsx.vsix"
+          sha256sum "$PACKAGE_PATH"
+          npx ovsx publish "$PACKAGE_PATH" -p "$OPEN_VSX_TOKEN"

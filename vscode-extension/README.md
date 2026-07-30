@@ -1,6 +1,7 @@
 # DynLex Language Support
 
-Language support for the DynLex programming language in Visual Studio Code.
+Language support for the DynLex programming language in Visual Studio Code,
+VSCodium, and other compatible editors.
 
 ## Features
 
@@ -11,9 +12,12 @@ Language support for the DynLex programming language in Visual Studio Code.
 
 ## Requirements
 
-- Visual Studio Code 1.91 or newer
+- Visual Studio Code 1.91 or newer, or a compatible editor
 - The `dynlex` compiler must be installed and accessible
 - By default, the extension prefers a workspace `build/dynlex`, then a bundled binary, then `dynlex` on `PATH`
+
+Install DynLex from [dynlex.com](https://dynlex.com/) before enabling the
+extension.
 
 ## Extension Settings
 
