@@ -1,1 +1,5 @@
-@intrinsic("discard", @intrinsic("select", @intrinsic("cast", @intrinsic("call", "libc", "rand", @intrinsic("type", "int", 32)), @intrinsic("type", "bool")), 1, "x"))
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+ignore @intrinsic("select", @intrinsic("cast", @intrinsic("call", "libc", "rand", @intrinsic("type", "int", 32)), @intrinsic("type", "bool")), 1, "x")

@@ -1,13 +1,13 @@
 import text.dl
 
 set empty to the string form of ""
-print empty trimmed as line
-print (empty starts with "") as line
-print (empty ends with "") as line
-print (the index of "" in empty starting at 0) as line
-print ("aaaa" with "aa" replaced by "b") as line
+print empty trimmed as a line
+print whether (empty starts with "") as a line
+print whether (empty ends with "") as a line
+print (the index of "" in empty starting at 0) as a line
+print ("aaaa" with "aa" replaced by "b") as a line
 
-set pieces to split ",a,,b," at ","
-print the length of pieces as line
-print (pieces joined with "-") as line
-free split text pieces
+set pieces to ",a,,b," split at ","
+print the length of pieces as a line
+print (pieces joined with "-") as a line
+free pieces

@@ -1,0 +1,2 @@
+tests/required/untyped_nothing_parameter/main.dl:1-22: Error: No overload matches call 'continue after finish' for argument types [nothing]. Available overloads: 'continue after action'
+  note: while inferring call 'continue after finish' with arguments [nothing] -> an unresolved value tests/required/untyped_nothing_parameter/main.dl:1-22

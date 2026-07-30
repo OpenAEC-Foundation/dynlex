@@ -48,11 +48,21 @@ bool isMathFunction(const std::string &name);
 std::vector<PatternDefinition *> findDefinitionsBySignature(
 	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
 );
-std::vector<PatternDefinition *> findCallableFunctionDefinitionsBySignature(
-	ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile
-);
+struct CallableFunctionMatch {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+};
+
+struct CallableFunctionParameter {
+	std::string name;
+	DataType type;
+	bool requiresCompileTimeValue = false;
+};
+
+std::vector<CallableFunctionMatch>
+findCallableFunctionsBySignature(ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile);
 void collectCallableFunctionParameters(
-	PatternDefinition *definition, std::vector<std::pair<std::string, DataType>> &outParameters
+	const CallableFunctionMatch &match, std::vector<CallableFunctionParameter> &outParameters
 );
 PatternDefinition *findDefinitionBySignature(
 	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
@@ -66,21 +76,48 @@ PatternDefinition *findDefinitionBySignature(
 struct PatternOverloadSelection {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
+	bool ambiguous = false;
 
 	explicit operator bool() const { return definition != nullptr; }
 };
 
+struct ResolvedPatternConstraint {
+	TypeConstraint constraint;
+	bool requiresCompileTimeValue = false;
+	bool acceptsUnresolvedType = false;
+	bool acceptsNothing = false;
+
+	TypeConstraint effectiveConstraint() const {
+		TypeConstraint result = constraint;
+		result.requiresCompileTimeValue = result.requiresCompileTimeValue || requiresCompileTimeValue;
+		return result;
+	}
+
+	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
+		if (argumentType.kind == DataType::Kind::Void && !acceptsNothing)
+			return false;
+		return effectiveConstraint().accepts(argumentType, compileTimeKnown);
+	}
+};
+
+using PatternConstraintResolver = std::function<std::optional<ResolvedPatternConstraint>(PatternDefinition *, size_t, size_t)>;
+
+ResolvedPatternConstraint
+resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex);
+std::optional<ResolvedPatternConstraint> resolveCompiledPatternConstraint(
+	PatternDefinition *definition, size_t pathIndex, size_t argumentIndex, const std::vector<DataType> &argumentTypes,
+	const std::vector<CompileTimeValue> &argumentValues
+);
 PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
-	const std::vector<bool> & /*argCompileTimeKnown*/
+	const std::vector<bool> &argCompileTimeKnown, const PatternConstraintResolver &resolveConstraint
 );
 const DefinitionPatternElement *
 matchedPatternParameterElement(PatternDefinition *definition, std::string_view parameterName, size_t startPos);
-bool patternParameterRequiresCompileTimeValue(const DefinitionPatternElement &parameterElement, const DataType &argType);
 std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	PatternDefinition *definition, const std::vector<std::pair<std::string, Expression *>> &paramBindings, size_t pathIndex,
-	const std::vector<DataType> &argTypes
+	const std::vector<DataType> &argTypes, const std::vector<TypeConstraint> &argumentConstraints
 );
 
 void appendPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingMap &bindings);

@@ -2,9 +2,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
 function one more than value:
     execute:
@@ -14,4 +14,4 @@ function two more than value:
     execute:
         return one more than one more than value
 
-discard @intrinsic("type", "int", two more than 6)
+ignore @intrinsic("type", "int", two more than 6)

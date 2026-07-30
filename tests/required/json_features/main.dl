@@ -1,16 +1,16 @@
 import json.dl
 
-set parsed to parse "{\"unicode\":\"A\\u00df\\u6771\\ud834\\udd1e\",\"raw\":\"é\",\"number\":-1.25e2,\"items\":[\"text\",false,null],\"nested\":{}}" as json
-print json parsing succeeded for parsed as line
+parse "{\"unicode\":\"A\\u00df\\u6771\\ud834\\udd1e\",\"raw\":\"é\",\"number\":-1.25e2,\"items\":[\"text\",false,null],\"nested\":{}}" as JSON and set parsed to it
+print whether parsed succeeded as a line
 set document to the value of parsed
-print json text named "unicode" in document as line
-print json text named "raw" in document as line
-print json number named "number" in document as line
-set items to json member named "items" in document
-print json text at index 0 in items as line
-print json boolean at index 1 in items as line
-print ((json value at index 2 in items) is json null) as line
-print (document has json member named "nested") as line
-print (document has json member named "missing") as line
-print the number of json members in document as line
-free json result parsed
+print the JSON text named "unicode" in document as a line
+print the JSON text named "raw" in document as a line
+print the JSON number named "number" in document as a line
+set items to the JSON member named "items" in document
+print the JSON text at index 0 in items as a line
+print the JSON boolean at index 1 in items as a line
+print whether (the JSON value at index 2 in items) is JSON null as a line
+print whether (document has JSON member named "nested") as a line
+print whether (document has JSON member named "missing") as a line
+print the number of JSON members in document as a line
+free parsed

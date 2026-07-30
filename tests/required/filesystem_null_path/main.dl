@@ -1,4 +1,4 @@
 import lib/filesystem.dl
 
-set null_path to 0 as a pointer to byte
-print null_path is readable as line
+set path to 0 as a pointer to a byte
+print whether path is readable as a line

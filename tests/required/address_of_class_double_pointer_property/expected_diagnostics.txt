@@ -1,1 +1,1 @@
-tests/required/address_of_class_double_pointer_property/main.dl:23-97: Error: address of requires an addressable value
+tests/required/address_of_class_double_pointer_property/main.dl:1-75: Error: address of requires an addressable value

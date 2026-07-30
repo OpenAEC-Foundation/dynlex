@@ -1,3 +1,7 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 function return value:
     replacement:
         @intrinsic("return", value)
@@ -14,13 +18,13 @@ function false:
     replacement:
         @intrinsic("cast", 0, a boolean)
 
-function [a|] pointer to pointedtype:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointedtype)
+        @intrinsic("add pointer depth", pointee)
 
-function value as destinationtype:
+function value as destination:
     replacement:
-        @intrinsic("cast", value, destinationtype)
+        @intrinsic("cast", value, destination)
 
 flex section if condition:
     replacement:
@@ -34,81 +38,81 @@ class:
 
 class:
     patterns:
-        [an|a|] owner
+        [an|] owner
     members:
-        cell as a pointer to cell
+        cell as a pointer to a cell
 
 class:
     patterns:
-        [an|a|] outcome
+        [an|] outcome
     members:
-        owner as a pointer to owner
+        owner as a pointer to an owner
 
 class:
     patterns:
-        [an|a|] envelope
+        [an|] envelope
     members:
         outcome
 
-function a concrete outcome containing {a pointer to owner:owned_pointer}:
+function a concrete outcome containing {a pointer to an owner:owned}:
     replacement:
-        @intrinsic("construct", an outcome, owned_pointer)
+        @intrinsic("construct", an outcome, owned)
 
 function an empty outcome:
     replacement:
-        @intrinsic("construct", an outcome, 0 as a pointer to owner)
+        @intrinsic("construct", an outcome, 0 as a pointer to an owner)
 
-function a concrete envelope containing {a pointer to owner:owned_pointer}:
+function a concrete envelope containing {a pointer to an owner:owned}:
     replacement:
-        @intrinsic("construct", an envelope, a concrete outcome containing owned_pointer)
+        @intrinsic("construct", an envelope, a concrete outcome containing owned)
 
 function an empty envelope:
     replacement:
         @intrinsic("construct", an envelope, an empty outcome)
 
-function choose outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the outcome for {a pointer to an owner:owned} when {boolean:condition}:
     execute:
         if condition:
-            return a concrete outcome containing owned_pointer
+            return a concrete outcome containing owned
         return an empty outcome
 
-function choose reversed outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the reversed outcome for {a pointer to an owner:owned} when {boolean:condition}:
     execute:
         if condition:
             return an empty outcome
-        return a concrete outcome containing owned_pointer
+        return a concrete outcome containing owned
 
-function select outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the selected outcome for {a pointer to an owner:owned} when {boolean:condition}:
     replacement:
-        @intrinsic("select", condition, a concrete outcome containing owned_pointer, an empty outcome)
+        @intrinsic("select", condition, a concrete outcome containing owned, an empty outcome)
 
-function select reversed outcome for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the reversed selected outcome for {a pointer to an owner:owned} when {boolean:condition}:
     replacement:
-        @intrinsic("select", condition, an empty outcome, a concrete outcome containing owned_pointer)
+        @intrinsic("select", condition, an empty outcome, a concrete outcome containing owned)
 
-function choose envelope for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the envelope for {a pointer to an owner:owned} when {boolean:condition}:
     execute:
         if condition:
             return an empty envelope
-        return a concrete envelope containing owned_pointer
+        return a concrete envelope containing owned
 
-function select outcome array for {a pointer to owner:owned_pointer} when {boolean:condition}:
+function the selected outcome array for {a pointer to an owner:owned} when {boolean:condition}:
     replacement:
-        @intrinsic("select", condition, [an empty outcome], [a concrete outcome containing owned_pointer])
+        @intrinsic("select", condition, [an empty outcome], [a concrete outcome containing owned])
 
-@intrinsic("store", cell_value, @intrinsic("construct", a cell, 41))
-@intrinsic("store", cell_pointer, @intrinsic("address of", cell_value))
-@intrinsic("store", owner_value, @intrinsic("construct", an owner, cell_pointer))
-@intrinsic("store", owner_pointer, @intrinsic("address of", owner_value))
-@intrinsic("discard", choose outcome for owner_pointer when true)
-@intrinsic("discard", choose outcome for owner_pointer when false)
-@intrinsic("discard", choose reversed outcome for owner_pointer when true)
-@intrinsic("discard", choose reversed outcome for owner_pointer when false)
-@intrinsic("discard", select outcome for owner_pointer when true)
-@intrinsic("discard", select outcome for owner_pointer when false)
-@intrinsic("discard", select reversed outcome for owner_pointer when true)
-@intrinsic("discard", select reversed outcome for owner_pointer when false)
-@intrinsic("discard", choose envelope for owner_pointer when true)
-@intrinsic("discard", choose envelope for owner_pointer when false)
-@intrinsic("discard", select outcome array for owner_pointer when true)
-@intrinsic("discard", select outcome array for owner_pointer when false)
+@intrinsic("store", value, @intrinsic("construct", a cell, 41))
+@intrinsic("store", pointer, @intrinsic("address of", value))
+@intrinsic("store", object, @intrinsic("construct", an owner, pointer))
+@intrinsic("store", reference, @intrinsic("address of", object))
+ignore the outcome for reference when true
+ignore the outcome for reference when false
+ignore the reversed outcome for reference when true
+ignore the reversed outcome for reference when false
+ignore the selected outcome for reference when true
+ignore the selected outcome for reference when false
+ignore the reversed selected outcome for reference when true
+ignore the reversed selected outcome for reference when false
+ignore the envelope for reference when true
+ignore the envelope for reference when false
+ignore the selected outcome array for reference when true
+ignore the selected outcome array for reference when false

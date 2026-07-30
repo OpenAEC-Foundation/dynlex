@@ -1,9 +1,13 @@
 import lib/std.dl
 
-set platform_is_cpu to 1 if the build target is cpu, else 0
-set shader_stage_is_empty to 1 if (not this is a fragment shader) and (not this is a vertex shader), else 0
-set word_size to 64 if the build word size = 64, else 32
+function this is not a {word:stage} shader:
+    replacement:
+        the inverse of @intrinsic("shader stage is", stage)
 
-print platform_is_cpu as line
-print shader_stage_is_empty as line
-print word_size as line
+set native to (1 if the build target is CPU, else 0)
+set ordinary to 1 if (this is not a fragment shader) and (this is not a vertex shader), else 0
+set width to (64 if the build word size = 64, else 32)
+
+print native as a line
+print ordinary as a line
+print width as a line

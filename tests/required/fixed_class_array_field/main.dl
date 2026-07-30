@@ -1,36 +1,40 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function fixed tofix:
+function fixed quantity:
     replacement:
-        @intrinsic("fix", tofix)
+        @intrinsic("fix", quantity)
 
-function array of {fixed integer:n} items:
+function [an|] array of {fixed integer:length} items:
     replacement:
-        @intrinsic("array", n)
+        @intrinsic("array", length)
 
 class:
     patterns:
-        box {fixed integer:n}
+        [a|] box with {fixed integer:length} items
     members:
-        values as array of n items
+        values as an array of length items
 
-function constructed box {fixed integer:n} from value:
+function a box with {fixed integer:length} items initialized from value:
     replacement:
-        @intrinsic("construct", box n, value)
+        @intrinsic("construct", a box with length items, value)
 
-function selected {fixed integer:n}:
+function the selected box with {fixed integer:length} items:
     execute:
-        return constructed box n from [1, 2]
+        return a box with length items initialized from [1, 2]
 
-set result to selected 2
-@intrinsic("discard", result)
+set result to the selected box with 2 items
+ignore result

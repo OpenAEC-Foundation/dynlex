@@ -490,6 +490,8 @@ void addKeywordCompletions(
 	const std::vector<std::pair<std::string, std::string>> keywordSuggestions = {
 		{syntax.importKeyword + " ", "import another file"},
 		{syntax.functionName + " ", "define a function"},
+		{syntax.conversionName + " ", "define an explicit conversion"},
+		{syntax.implicitName + " " + syntax.conversionName + " ", "define an implicit conversion"},
 		{syntax.sectionName + " ", "define a section"},
 		{syntax.className + " ", "define a class"},
 		{syntax.flexName + " " + syntax.functionName + " ", "define a flex"},

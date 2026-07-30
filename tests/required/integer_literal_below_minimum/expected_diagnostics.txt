@@ -1,1 +1,1 @@
-tests/required/integer_literal_below_minimum/main.dl:10-29: Error: Integer literal exceeds the signed 64-bit range
+tests/required/integer_literal_below_minimum/main.dl:9-28: Error: Integer literal exceeds the signed 64-bit range

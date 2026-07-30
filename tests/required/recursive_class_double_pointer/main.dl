@@ -1,20 +1,20 @@
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
-function i32:
+function [a|] thirty two bit integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-function value as destination_type:
+function value as destination:
     replacement:
-        @intrinsic("cast", value, destination_type)
+        @intrinsic("cast", value, destination)
 
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -22,9 +22,9 @@ class:
     patterns:
         [a|] recursive value
     members:
-        children as a pointer to a pointer to recursive value
-        length as i32
+        children as a pointer to a pointer to a recursive value
+        length as a thirty two bit integer
 
-set empty_children to 0 as a pointer to a pointer to recursive value
-set initial_value to @intrinsic("construct", a recursive value, empty_children, 0)
-discard the children of initial_value
+set empty to 0 as a pointer to a pointer to a recursive value
+set initial to @intrinsic("construct", a recursive value, empty, 0)
+ignore the children of initial

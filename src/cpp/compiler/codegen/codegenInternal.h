@@ -18,6 +18,7 @@ namespace lsp {
 struct SourceFile;
 }
 struct PatternDefinition;
+struct CallableFunctionMatch;
 
 struct CodegenResult {
 	llvm::Value *value = nullptr;
@@ -49,8 +50,9 @@ llvm::Value *
 createClassFieldPointer(ParseContext &context, const DataType &classType, int fieldIndex, llvm::Value *classPointer);
 llvm::Value *getVectorLaneIndexValue(ParseContext &context, unsigned index);
 llvm::Value *convertConditionToBool(ParseContext &context, llvm::Value *condValue, DataType condType, const std::string &name);
-Expression *resolveVariableBinding(ParseContext &context, Expression *expr);
-void resolveThroughFlexLayers(ParseContext &context, Expression *&expr);
+ResolvedBindingLayers resolveCodegenVariableBinding(ParseContext &context, Expression *expression);
+ResolvedBindingLayers
+resolveCodegenBindingLayers(ParseContext &context, Expression *expression, BindingFrameStack bindingFrameStack);
 DataType finalizedExpressionType(ParseContext &context, Expression *expr);
 PatternDefinition *finalizedPatternDefinition(ParseContext &context, Expression *expr);
 llvm::AllocaInst *createEntryAlloca(ParseContext &context, const std::string &name, DataType type);
@@ -72,18 +74,14 @@ bool releaseManagedStorageForSection(ParseContext &context, Section *ownerSectio
 bool releaseManagedStorageForReturn(ParseContext &context);
 bool releaseAllManagedStorage(ParseContext &context);
 
-// FlexScopeGuard: RAII guard that pops to caller's flex binding scope, restores on destruction.
-struct FlexScopeGuard {
+struct FlexBindingScope {
 	ParseContext &context;
 	BindingFrameStack savedBindingFrames;
-	bool active = false;
 
-	FlexScopeGuard(ParseContext &ctx) : context(ctx) {}
-	FlexScopeGuard(const FlexScopeGuard &) = delete;
-	FlexScopeGuard &operator=(const FlexScopeGuard &) = delete;
-
-	void popToCallerScope();
-	~FlexScopeGuard();
+	FlexBindingScope(ParseContext &context, BindingFrameStack bindingFrameStack);
+	FlexBindingScope(const FlexBindingScope &) = delete;
+	FlexBindingScope &operator=(const FlexBindingScope &) = delete;
+	~FlexBindingScope();
 };
 
 // Debug info helpers (codegenTypes.cpp)
@@ -104,7 +102,8 @@ bool generateSpecializedFunction(
 	Instantiation &instantiation
 );
 bool ensureCallableFunctionGenerated(
-	ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage, llvm::Function *&generatedFunction
+	ParseContext &context, const CallableFunctionMatch &match, Instantiation &instantiation, bool requireExternalLinkage,
+	llvm::Function *&generatedFunction
 );
 
 // Intrinsic code generation (codegenIntrinsics.cpp)

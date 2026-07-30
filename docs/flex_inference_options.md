@@ -6,7 +6,7 @@ Bring type inference for flexes back.
 
 ### `+`
 
-- Preserves caller-scope regrouping for expressions like `discard 1 as a 64 bit integer`.
+- Preserves caller-scope regrouping for expressions like `ignore 1 as a 64 bit integer`.
 - Avoids freezing the wrong grouping behind an opaque expanded flex root.
 - Works with the existing flex model where arguments remain syntax-level expressions instead of forced runtime values.
 - Does not require a full parameter-mode redesign before fixing the current compiler bugs.
@@ -50,8 +50,8 @@ Keep expanded flexes opaque, but allow regrouping inside selected flex arguments
 
 Example intent:
 
-- regroup inside `val` in `discard val`
-- regroup inside `val`, not `var`, in `set var to val`
+- regroup inside `value` in `ignore value`
+- regroup inside `value`, not `variable`, in `set variable to value`
 
 ### `+`
 

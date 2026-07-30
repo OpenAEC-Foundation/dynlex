@@ -2,67 +2,67 @@ import lib/json_rpc.dl
 
 function [the|] limited transport test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-function limited transport command with {cstring:standard_output} and {cstring:standard_error}:
+function the limited transport command with {C string:output} and {C string:error}:
     execute:
         set script to "import sys,time\nsys.stdout.buffer.write(bytes.fromhex(sys.argv[1]));sys.stdout.buffer.flush();sys.stderr.buffer.write(bytes.fromhex(sys.argv[2]));sys.stderr.buffer.flush();time.sleep(10)"
-        set process_command to a process command for the limited transport test interpreter
-        add "-u" as an argument to process_command
-        add "-c" as an argument to process_command
-        add script as an argument to process_command
-        add standard_output as an argument to process_command
-        add standard_error as an argument to process_command
-        return process_command
+        set result to a process command for the limited transport test interpreter
+        add "-u" as an argument to result
+        add "-c" as an argument to result
+        add script as an argument to result
+        add output as an argument to result
+        add error as an argument to result
+        return result
 
-function limited transport failure using {process command:command} with {json rpc limits:limits}:
+function limited transport fails using {process command:command} under {JSON-RPC limit configuration:limits}:
     execute:
-        set opened to open a json rpc connection using command with limits limits
-        if not opened's succeeded:
+        set opened to the result of opening a JSON-RPC connection using command under limits
+        if opened failed:
             return false
         set connection to opened's connection
-        set received to receive a json rpc message from connection
-        set passed to (received's status = the json rpc limit exceeded status)
-        set passed to passed and (connection's state = the json rpc broken state)
-        set closed to close json rpc connection connection
-        set passed to passed and closed's succeeded
-        free json rpc receive result received
-        free json rpc connection connection
+        set received to the next JSON-RPC message from connection
+        set passed to (received's status = the JSON-RPC limit exceeded status)
+        set passed to (passed and (connection's state = the JSON-RPC broken state))
+        set closed to the result of closing connection
+        set passed to (passed and closed succeeded)
+        free received
+        free connection
         return passed
 
-set header_limits to the default json rpc limits
-set header_limits's maximum_header_length to 16
-set header_limits's graceful_close_timeout_milliseconds to 10
-set header_limits's termination_timeout_milliseconds to 100
-set header_command to limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
-print limited transport failure using header_command with header_limits as line
+set limits to the default JSON-RPC limit configuration
+set limits's maximum header length to 16
+set limits's graceful close timeout to 10
+set limits's termination timeout to 100
+set command to the limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
+print limited transport fails using command under limits as a line
 
-set payload_limits to the default json rpc limits
-set payload_limits's maximum_payload_length to 1
-set payload_limits's graceful_close_timeout_milliseconds to 10
-set payload_limits's termination_timeout_milliseconds to 100
-set payload_command to limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
-print limited transport failure using payload_command with payload_limits as line
+set limits to the default JSON-RPC limit configuration
+set limits's maximum payload length to 1
+set limits's graceful close timeout to 10
+set limits's termination timeout to 100
+set command to the limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
+print limited transport fails using command under limits as a line
 
-set buffer_limits to the default json rpc limits
-set buffer_limits's maximum_header_length to 16
-set buffer_limits's maximum_buffered_output_length to 16
-set buffer_limits's graceful_close_timeout_milliseconds to 10
-set buffer_limits's termination_timeout_milliseconds to 100
-set buffer_command to limited transport command with "3132333435363738393031323334353637" and ""
-print limited transport failure using buffer_command with buffer_limits as line
+set limits to the default JSON-RPC limit configuration
+set limits's maximum header length to 16
+set limits's maximum buffered output length to 16
+set limits's graceful close timeout to 10
+set limits's termination timeout to 100
+set command to the limited transport command with "3132333435363738393031323334353637" and ""
+print limited transport fails using command under limits as a line
 
-set error_limits to the default json rpc limits
-set error_limits's maximum_standard_error_length to 4
-set error_limits's graceful_close_timeout_milliseconds to 10
-set error_limits's termination_timeout_milliseconds to 100
-set error_command to limited transport command with "" and "3132333435"
-set error_opened to open a json rpc connection using error_command with limits error_limits
-set error_connection to error_opened's connection
-set error_received to receive a json rpc message from error_connection
-print (error_received's status = the json rpc limit exceeded status) as line
-print (error_connection's standard_error = "1234") as line
-set error_closed to close json rpc connection error_connection
-print (error_closed's succeeded and error_closed's forced) as line
-free json rpc receive result error_received
-free json rpc connection error_connection
+set limits to the default JSON-RPC limit configuration
+set limits's maximum standard error length to 4
+set limits's graceful close timeout to 10
+set limits's termination timeout to 100
+set command to the limited transport command with "" and "3132333435"
+set opened to the result of opening a JSON-RPC connection using command under limits
+set connection to opened's connection
+set received to the next JSON-RPC message from connection
+print (received's status = the JSON-RPC limit exceeded status) as a line
+print (connection's standard error = "1234") as a line
+set closure to the result of closing connection
+print (closure succeeded and closure's force) as a line
+free received
+free connection

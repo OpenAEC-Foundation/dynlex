@@ -8,4 +8,4 @@ flex section around:
 
 set marker to 0
 around:
-    print marker as line
+    print marker as a line

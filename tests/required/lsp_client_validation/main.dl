@@ -1,172 +1,172 @@
 import lib/lsp.dl
 
-function [the|] lsp validation test interpreter:
+function the LSP validation test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-set invalid_encoding_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'positionEncoding':'utf-8'}}})"
-set invalid_encoding_command to a process command for the lsp validation test interpreter
-add "-u" as an argument to invalid_encoding_command
-add "-c" as an argument to invalid_encoding_command
-add invalid_encoding_script as an argument to invalid_encoding_command
+set incompatible to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'positionEncoding':'utf-8'}}})"
+set decoder to a process command for the LSP validation test interpreter
+add "-u" as an argument to decoder
+add "-c" as an argument to decoder
+add incompatible as an argument to decoder
 
-set invalid_encoding to start lsp client using invalid_encoding_command waiting up to 2000 milliseconds
-print (not invalid_encoding's succeeded) as line
-print (invalid_encoding's status = the lsp invalid response status) as line
-print (invalid_encoding's error message = "The LSP client supports only UTF-16 positions") as line
+set encoding to the result of starting an LSP client using decoder waiting up to 2000 milliseconds
+print whether encoding failed as a line
+print whether (encoding's status = the LSP invalid response status) as a line
+print whether (encoding's error message = "The LSP client supports only UTF-16 positions") as a line
 
-set full_sync_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':'),ensure_ascii=False).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['params']['rootUri'] is None;send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'textDocumentSync':1}}});assert read()['method']=='initialized'\nfirst=read();assert first['method']=='textDocument/didChange' and first['params']['textDocument']['version']==2;assert first['params']['contentChanges']==[{'text':'aXb\\nline2'}]\nsecond=read();assert second['method']=='textDocument/didChange' and second['params']['textDocument']['version']==3;assert second['params']['contentChanges']==[{'text':'final'}]\nsend({'jsonrpc':'2.0','method':'textDocument/publishDiagnostics','params':{'uri':'file:///full-sync.dl','diagnostics':[{'message':'missing range'}]}})\nshutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});assert read()['method']=='exit'"
-set full_sync_command to a process command for the lsp validation test interpreter
-add "-u" as an argument to full_sync_command
-add "-c" as an argument to full_sync_command
-add full_sync_script as an argument to full_sync_command
+set complete to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':'),ensure_ascii=False).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['params']['rootUri'] is None;send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'textDocumentSync':1}}});assert read()['method']=='initialized'\nfirst=read();assert first['method']=='textDocument/didChange' and first['params']['textDocument']['version']==2;assert first['params']['contentChanges']==[{'text':'aXb\\nline2'}]\nsecond=read();assert second['method']=='textDocument/didChange' and second['params']['textDocument']['version']==3;assert second['params']['contentChanges']==[{'text':'final'}]\nsend({'jsonrpc':'2.0','method':'textDocument/publishDiagnostics','params':{'uri':'file:///full-sync.dl','diagnostics':[{'message':'missing range'}]}})\nshutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});assert read()['method']=='exit'"
+set server to a process command for the LSP validation test interpreter
+add "-u" as an argument to server
+add "-c" as an argument to server
+add complete as an argument to server
 
-set started to start lsp client using full_sync_command waiting up to 2000 milliseconds
-print started's succeeded as line
+set started to the result of starting an LSP client using server waiting up to 2000 milliseconds
+print whether started succeeded as a line
 set client to started's client
-print (client's synchronization kind = the lsp full synchronization kind) as line
-print (not client's synchronization open and close) as line
-print (not client's synchronization save) as line
-print (not client's synchronization save includes text) as line
+print whether (client's synchronization's kind = the LSP full synchronization kind) as a line
+print whether client's synchronization does not send open and close notifications as a line
+print whether client's synchronization does not send save notifications as a line
+print whether client's synchronization does not include text in save notifications as a line
 
-set opened to open lsp document uri "file:///full-sync.dl" with language "dynlex" and text "a😀b\nline2" using client
-print opened's succeeded as line
-set duplicate_open to open lsp document uri "file:///full-sync.dl" with language "dynlex" and text "other" using client
-print (not duplicate_open's succeeded) as line
-print (duplicate_open's status = the lsp document error status) as line
+set opened to the result of opening LSP document "file:///full-sync.dl" written in "dynlex" with "a😀b\nline2" as its text using client
+print whether opened succeeded as a line
+set duplicate to the result of opening LSP document "file:///full-sync.dl" written in "dynlex" with "other" as its text using client
+print whether duplicate failed as a line
+print whether (duplicate's status = the LSP document error status) as a line
 
-set split_surrogate to edit lsp document uri "file:///full-sync.dl" from line 0 character 2 to line 0 character 3 with text "x" using client
-print (not split_surrogate's succeeded) as line
-print (split_surrogate's status = the lsp document error status) as line
-set outside_line to edit lsp document uri "file:///full-sync.dl" from line 9 character 0 to line 9 character 0 with text "x" using client
-print (not outside_line's succeeded) as line
-set reversed_range to edit lsp document uri "file:///full-sync.dl" from line 1 character 0 to line 0 character 0 with text "x" using client
-print (not reversed_range's succeeded) as line
+set surrogate to the result of editing LSP document uri "file:///full-sync.dl" from line 0 and character 2 to line 0 and character 3 with text "x" using client
+print whether surrogate failed as a line
+print whether (surrogate's status = the LSP document error status) as a line
+set outside to the result of editing LSP document uri "file:///full-sync.dl" from line 9 and character 0 to line 9 and character 0 with text "x" using client
+print whether outside failed as a line
+set reversed to the result of editing LSP document uri "file:///full-sync.dl" from line 1 and character 0 to line 0 and character 0 with text "x" using client
+print whether reversed failed as a line
 
-set unchanged to lsp document uri "file:///full-sync.dl" in client
-print (unchanged's version = 1) as line
-print (unchanged's text = "a😀b\nline2") as line
+set unchanged to the LSP document with uri "file:///full-sync.dl" in client
+print whether (unchanged's version = 1) as a line
+print whether (unchanged's text = "a😀b\nline2") as a line
 
-set edited to edit lsp document uri "file:///full-sync.dl" from line 0 character 1 to line 0 character 3 with text "X" using client
-print edited's succeeded as line
-set replaced to replace lsp document uri "file:///full-sync.dl" with text "final" using client
-print replaced's succeeded as line
-set saved to save lsp document uri "file:///full-sync.dl" using client
-print saved's succeeded as line
-set updated to lsp document uri "file:///full-sync.dl" in client
-print (updated's version = 3) as line
-print (updated's text = "final") as line
+set edited to the result of editing LSP document uri "file:///full-sync.dl" from line 0 and character 1 to line 0 and character 3 with text "X" using client
+print whether edited succeeded as a line
+set replaced to the result of replacing LSP document uri "file:///full-sync.dl" with text "final" using client
+print whether replaced succeeded as a line
+set saved to the result of saving LSP document uri "file:///full-sync.dl" using client
+print whether saved succeeded as a line
+set updated to the LSP document with uri "file:///full-sync.dl" in client
+print whether (updated's version = 3) as a line
+print whether (updated's text = "final") as a line
 
-set closed to close lsp document uri "file:///full-sync.dl" using client
-print closed's succeeded as line
-set missing_document to lsp document uri "file:///full-sync.dl" in client
-print (not missing_document's found) as line
-set duplicate_close to close lsp document uri "file:///full-sync.dl" using client
-print (not duplicate_close's succeeded) as line
-set missing_save to save lsp document uri "file:///full-sync.dl" using client
-print (not missing_save's succeeded) as line
-print (missing_save's status = the lsp document error status) as line
+set closed to the result of closing LSP document uri "file:///full-sync.dl" using client
+print whether closed succeeded as a line
+set missing to the LSP document with uri "file:///full-sync.dl" in client
+print whether missing is missing as a line
+set repeated to the result of closing LSP document uri "file:///full-sync.dl" using client
+print whether repeated failed as a line
+set unsaved to the result of saving LSP document uri "file:///full-sync.dl" using client
+print whether unsaved failed as a line
+print whether (unsaved's status = the LSP document error status) as a line
 
-set negative_pump to pump one lsp message using client waiting up to (0 - 1) milliseconds
-print (not negative_pump's succeeded) as line
-print (negative_pump's status = the json rpc timeout status) as line
-set malformed_pump to pump one lsp message using client waiting up to 2000 milliseconds
-print (not malformed_pump's succeeded) as line
-print (malformed_pump's status = the lsp invalid response status) as line
-set malformed_notification to take next lsp notification from client
-print malformed_notification's succeeded as line
-print (json text named "method" in malformed_notification's message = "textDocument/publishDiagnostics") as line
-free json rpc queued message malformed_notification
+set negative to the result of pumping one LSP message using client waiting up to (0 - 1) milliseconds
+print whether negative failed as a line
+print whether (negative's status = the JSON-RPC timeout status) as a line
+set malformed to the result of pumping one LSP message using client waiting up to 2000 milliseconds
+print whether malformed failed as a line
+print whether (malformed's status = the LSP invalid response status) as a line
+set notification to the next LSP notification from client
+print whether notification succeeded as a line
+print whether (the JSON text named "method" in notification's message = "textDocument/publishDiagnostics") as a line
+free notification
 
-set stopped to shutdown lsp client client waiting up to 2000 milliseconds
-print stopped's succeeded as line
-print (client's lifecycle = the lsp stopped lifecycle) as line
-set stopped_notification to send lsp notification "custom/stopped" using client
-print (not stopped_notification's succeeded) as line
-print (stopped_notification's status = the lsp invalid state status) as line
-set stopped_request to send lsp request "custom/stopped" using client
-print (not stopped_request's succeeded) as line
-print (stopped_request's status = the lsp invalid state status) as line
-set stopped_pump to pump one lsp message using client
-print (not stopped_pump's succeeded) as line
-set stopped_again to shutdown lsp client client waiting up to 2000 milliseconds
-print (not stopped_again's succeeded) as line
-free lsp client client
+set stopped to the result of shutting down client waiting up to 2000 milliseconds
+print whether stopped succeeded as a line
+print whether (client's lifecycle = the LSP stopped lifecycle) as a line
+set message to the result of sending an LSP notification "custom/stopped" using client
+print whether message failed as a line
+print whether (message's status = the LSP invalid state status) as a line
+set request to the result of sending an LSP request "custom/stopped" using client
+print whether request failed as a line
+print whether (request's status = the LSP invalid state status) as a line
+set pumped to the result of pumping one LSP message using client
+print whether pumped failed as a line
+set again to the result of shutting down client waiting up to 2000 milliseconds
+print whether again failed as a line
+free client
 
-set stalled_shutdown_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});assert read()['method']=='initialized';assert read()['method']=='shutdown';sys.stdin.buffer.read()"
-set stalled_shutdown_command to a process command for the lsp validation test interpreter
-add "-u" as an argument to stalled_shutdown_command
-add "-c" as an argument to stalled_shutdown_command
-add stalled_shutdown_script as an argument to stalled_shutdown_command
+set stalling to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});assert read()['method']=='initialized';assert read()['method']=='shutdown';sys.stdin.buffer.read()"
+set staller to a process command for the LSP validation test interpreter
+add "-u" as an argument to staller
+add "-c" as an argument to staller
+add stalling as an argument to staller
 
-set stalled_start to start lsp client using stalled_shutdown_command waiting up to 2000 milliseconds
-print stalled_start's succeeded as line
-set stalled_client to stalled_start's client
-set stalled_shutdown to shutdown lsp client stalled_client waiting up to 20 milliseconds
-print (not stalled_shutdown's succeeded) as line
-print (stalled_shutdown's status = the json rpc timeout status) as line
-print (stalled_client's lifecycle = the lsp shutdown lifecycle) as line
-set shutdown_notification to send lsp notification "custom/after-shutdown" using stalled_client
-print (not shutdown_notification's succeeded) as line
-set shutdown_request to send lsp request "custom/after-shutdown" using stalled_client
-print (not shutdown_request's succeeded) as line
-set shutdown_open to open lsp document uri "file:///after-shutdown.dl" with language "dynlex" and text "" using stalled_client
-print (not shutdown_open's succeeded) as line
-set shutdown_pump to pump one lsp message using stalled_client
-print (not shutdown_pump's succeeded) as line
-set shutdown_server_request to a new json rpc object
-add json rpc member "jsonrpc" containing a new json rpc text for "2.0" to shutdown_server_request
-add json rpc member "id" containing a new json rpc integer for 1 to shutdown_server_request
-add json rpc member "method" containing a new json rpc text for "custom/server-request" to shutdown_server_request
-set shutdown_rejection to reject lsp server request shutdown_server_request as method not found using stalled_client
-print (not shutdown_rejection's succeeded) as line
-free json value shutdown_server_request
-set shutdown_again to shutdown lsp client stalled_client waiting up to 20 milliseconds
-print (not shutdown_again's succeeded) as line
-free lsp client stalled_client
+set stall to the result of starting an LSP client using staller waiting up to 2000 milliseconds
+print whether stall succeeded as a line
+set blocked to stall's client
+set timeout to the result of shutting down blocked waiting up to 20 milliseconds
+print whether timeout failed as a line
+print whether (timeout's status = the JSON-RPC timeout status) as a line
+print whether (blocked's lifecycle = the LSP shutdown lifecycle) as a line
+set after to the result of sending an LSP notification "custom/after-shutdown" using blocked
+print whether after failed as a line
+set requested to the result of sending an LSP request "custom/after-shutdown" using blocked
+print whether requested failed as a line
+set opening to the result of opening LSP document "file:///after-shutdown.dl" written in "dynlex" with "" as its text using blocked
+print whether opening failed as a line
+set pumped to the result of pumping one LSP message using blocked
+print whether pumped failed as a line
+set incoming to a new JSON-RPC object
+add JSON-RPC member "jsonrpc" containing a new JSON-RPC text for "2.0" to incoming
+add JSON-RPC member "id" containing a new JSON-RPC integer for 1 to incoming
+add JSON-RPC member "method" containing a new JSON-RPC text for "custom/server-request" to incoming
+set rejected to the result of rejecting incoming from the LSP server as method not found using blocked
+print whether rejected failed as a line
+free incoming
+set again to the result of shutting down blocked waiting up to 20 milliseconds
+print whether again failed as a line
+free blocked
 
-set unused_command to a process command for the lsp validation test interpreter
-set negative_start to start lsp client using unused_command waiting up to (0 - 1) milliseconds
-print (not negative_start's succeeded) as line
-print (negative_start's status = the json rpc timeout status) as line
+set unused to a process command for the LSP validation test interpreter
+set invalid to the result of starting an LSP client using unused waiting up to (0 - 1) milliseconds
+print whether invalid failed as a line
+print whether (invalid's status = the JSON-RPC timeout status) as a line
 
-set invalid_capabilities_node to a new json rpc null
-set invalid_capabilities to start lsp client using unused_command with capabilities invalid_capabilities_node waiting up to 20 milliseconds
-free json value invalid_capabilities_node
-print (not invalid_capabilities's succeeded) as line
-print (invalid_capabilities's status = the json rpc invalid message status) as line
+set node to a new JSON-RPC null
+set unsupported to the result of starting an LSP client using unused with node waiting up to 20 milliseconds
+free node
+print whether unsupported failed as a line
+print whether (unsupported's status = the JSON-RPC invalid message status) as a line
 
-set stalled_startup_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\nread();sys.stdin.buffer.read()"
-set stalled_startup_command to a process command for the lsp validation test interpreter
-add "-u" as an argument to stalled_startup_command
-add "-c" as an argument to stalled_startup_command
-add stalled_startup_script as an argument to stalled_startup_command
-set stalled_startup to start lsp client using stalled_startup_command waiting up to 20 milliseconds
-print (not stalled_startup's succeeded) as line
-print (stalled_startup's status = the json rpc timeout status) as line
+set waiting to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\nread();sys.stdin.buffer.read()"
+set waiter to a process command for the LSP validation test interpreter
+add "-u" as an argument to waiter
+add "-c" as an argument to waiter
+add waiting as an argument to waiter
+set startup to the result of starting an LSP client using waiter waiting up to 20 milliseconds
+print whether startup failed as a line
+print whether (startup's status = the JSON-RPC timeout status) as a line
 
-set queue_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p)\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});sys.stdout.buffer.flush();assert read()['method']=='initialized'\nfor i in range(1025): send({'jsonrpc':'2.0','method':'custom/queued','params':{'index':i}})\nsys.stdout.buffer.flush();shutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});sys.stdout.buffer.flush();assert read()['method']=='exit'"
-set queue_command to a process command for the lsp validation test interpreter
-add "-u" as an argument to queue_command
-add "-c" as an argument to queue_command
-add queue_script as an argument to queue_command
-set queue_start to start lsp client using queue_command waiting up to 2000 milliseconds
-print queue_start's succeeded as line
-set queue_client to queue_start's client
-set queue_fill_succeeded to true
-set queue_cursor to 0
-loop while queue_cursor < 1024:
-    set queue_pump to pump one lsp message using queue_client waiting up to 2000 milliseconds
-    if not queue_pump's succeeded:
-        set queue_fill_succeeded to false
-    set queue_cursor to queue_cursor + 1
-print queue_fill_succeeded as line
-set queue_overflow to pump one lsp message using queue_client waiting up to 2000 milliseconds
-print (not queue_overflow's succeeded) as line
-print (queue_overflow's status = the json rpc limit exceeded status) as line
-set first_queued to take next lsp notification from queue_client
-print first_queued's succeeded as line
-free json rpc queued message first_queued
-set queue_shutdown to shutdown lsp client queue_client waiting up to 2000 milliseconds
-print queue_shutdown's succeeded as line
-free lsp client queue_client
+set flooding to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p)\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});sys.stdout.buffer.flush();assert read()['method']=='initialized'\nfor i in range(1025): send({'jsonrpc':'2.0','method':'custom/queued','params':{'index':i}})\nsys.stdout.buffer.flush();shutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});sys.stdout.buffer.flush();assert read()['method']=='exit'"
+set flooder to a process command for the LSP validation test interpreter
+add "-u" as an argument to flooder
+add "-c" as an argument to flooder
+add flooding as an argument to flooder
+set inundated to the result of starting an LSP client using flooder waiting up to 2000 milliseconds
+print whether inundated succeeded as a line
+set receiver to inundated's client
+set filled to true
+set cursor to 0
+loop while cursor < 1024:
+    set pumped to the result of pumping one LSP message using receiver waiting up to 2000 milliseconds
+    if pumped failed:
+        set filled to false
+    set cursor to (cursor + 1)
+print filled as a line
+set overflow to the result of pumping one LSP message using receiver waiting up to 2000 milliseconds
+print whether overflow failed as a line
+print whether (overflow's status = the JSON-RPC limit exceeded status) as a line
+set first to the next LSP notification from receiver
+print whether first succeeded as a line
+free first
+set stopped to the result of shutting down receiver waiting up to 2000 milliseconds
+print whether stopped succeeded as a line
+free receiver

@@ -63,6 +63,33 @@ std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeVal
 	return std::nullopt;
 }
 
+bool readTypeConstraintValue(
+	const CompileTimeValue &value, const DataType &expressionType, TypeConstraint &outConstraint, DataType &outParameterType
+) {
+	outParameterType = {};
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value)) {
+		if (!constraint->isResolved())
+			return false;
+		outConstraint = *constraint;
+		outParameterType = constraint->exactValueType().value_or(DataType{});
+		return true;
+	}
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value)) {
+		if (!typeReference->constraint.isResolved())
+			return false;
+		outConstraint = typeReference->constraint;
+		if (typeReference->type.kind == DataType::Kind::Type)
+			outParameterType = typeReference->type.toReferencedType();
+		return true;
+	}
+	if (expressionType.kind == DataType::Kind::Type && expressionType.referencedKind != DataType::Kind::Unresolved) {
+		outConstraint = TypeConstraint::fromTypeReference(expressionType);
+		outParameterType = expressionType.toReferencedType();
+		return true;
+	}
+	return false;
+}
+
 static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token) {
 	NumericLiteralParseResult parsed = parseNumericLiteral(token);
 	if (!parsed)
@@ -131,64 +158,26 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 	return {};
 }
 
-Expression *resolveCompileTimeBinding(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack
-) {
-	if (outBindingFrameStack)
-		*outBindingFrameStack = bindingFrameStack;
-	if (expr && expr->kind == Expression::Kind::Pending && expr->patternReference) {
-		auto &elements = expr->patternReference->patternElements;
-		if (elements.empty())
-			elements = getPatternElements(expr->patternReference->pattern.text);
-		if (elements.size() == 1 &&
-			(elements[0].type == PatternElement::Type::Variable || elements[0].type == PatternElement::Type::VariableLike)) {
-			BindingFrameStack callerScope;
-			if (Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(elements[0].text, expr, callerScope)) {
-				if (outBindingFrameStack)
-					*outBindingFrameStack = std::move(callerScope);
-				return boundExpression;
-			}
-		}
-	}
-	if (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
-		BindingFrameStack callerScope;
-		if (Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerScope)) {
-			if (outBindingFrameStack)
-				*outBindingFrameStack = std::move(callerScope);
-			return boundExpression;
-		}
-	}
-	if (expr && expr->inferredFlexExpansion) {
-		PatternDefinition *definition = expr->selectedPatternDefinition;
-		requireCompilerInvariant(definition, "inferred flex expansion is missing its selected definition");
-		if (definition && definition->section && definition->section->isFlex) {
-			BindingFrame innerBindings;
-			collectPatternCallBindings(expr, definition, innerBindings);
-			if (outBindingFrameStack) {
-				*outBindingFrameStack = bindingFrameStack;
-				pushBindingScope(*outBindingFrameStack, std::move(innerBindings));
-			}
-		}
-		return expr->inferredFlexExpansion;
-	}
-	return expr;
-}
-
 CompileTimeValue resolveStoredCompileTimeValue(Expression *expr, const BindingFrameStack &bindingFrameStack) {
-	return resolveCompileTimeValueFromKnownState(expr, bindingFrameStack, [&](Expression *currentExpression) {
-		return getExpressionCompileTimeValue(currentExpression);
-	});
+	return resolveStoredCompileTimeValueWith(expr, [&](auto &&stop) {
+		return resolveThroughBindingLayers(
+			expr, bindingFrameStack, selectedFlexBindingExpansion, std::forward<decltype(stop)>(stop)
+		);
+	}, getExpressionCompileTimeValue);
 }
 
-bool resolveStoredCompileTimeInteger(Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue) {
-	std::optional<std::int64_t> integerValue =
-		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(expr, bindingFrameStack));
+bool narrowCompileTimeInteger(const CompileTimeValue &value, int &outValue) {
+	std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
 	if (!integerValue.has_value() || *integerValue < std::numeric_limits<int>::min() ||
 		*integerValue > std::numeric_limits<int>::max()) {
 		return false;
 	}
 	outValue = static_cast<int>(*integerValue);
 	return true;
+}
+
+bool resolveStoredCompileTimeInteger(Expression *expr, const BindingFrameStack &bindingFrameStack, int &outValue) {
+	return narrowCompileTimeInteger(resolveStoredCompileTimeValue(expr, bindingFrameStack), outValue);
 }
 
 static std::string_view currentBuildTargetName(const ParseContext &context) {

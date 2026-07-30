@@ -1,26 +1,26 @@
 import lib/std.dl
 
-function low prefix value:
+function the loose opposite of value:
     after: $ + $
     execute:
         return -value
 
-function high prefix value:
+function the tight opposite of value:
     before: $ + $
     execute:
         return -value
 
-function value low postfix:
+function value loosely inverted:
     after: $ + $
     execute:
         return -value
 
-function value high postfix:
+function value tightly inverted:
     before: $ + $
     execute:
         return -value
 
-print (low prefix 2 + 1) as line
-print (high prefix 2 + 1) as line
-print (1 + 2 low postfix) as line
-print (1 + 2 high postfix) as line
+print (the loose opposite of 2 + 1) as a line
+print (the tight opposite of 2 + 1) as a line
+print (1 + 2 loosely inverted) as a line
+print (1 + 2 tightly inverted) as a line

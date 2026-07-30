@@ -73,8 +73,9 @@ struct Expression {
 	// alternatives can share one structural trie path while carrying different
 	// parameter constraints or names.
 	std::optional<size_t> selectedPatternPathIndex;
-	// For the function intrinsic: the exact callable definition selected during inference.
+	// For the function intrinsic: the exact callable definition and authored path selected during inference.
 	PatternDefinition *selectedCallableDefinition{};
+	std::optional<size_t> selectedCallablePathIndex;
 	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.
 	Expression *subjectSetter{};
 	// For non-flex PatternCalls: the exact monomorphized callee selected during
@@ -85,6 +86,10 @@ struct Expression {
 	// expression. Section-flex inference consumes its recorded outcome while
 	// structural codegen traverses the complete replacement section.
 	Expression *inferredFlexExpansion{};
+	// Expected-type inference can lower this expression through a user-defined
+	// unary conversion. The lowered call owns a clone of the source expression,
+	// which avoids a cycle back through this metadata.
+	Expression *inferredConversion{};
 	// Section flexes own the complete call-site-specific replacement structure.
 	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
 	// Control-flow intrinsics produce section outcomes during ordinary inference.
@@ -141,7 +146,6 @@ struct Expression {
 	bool groupingStartsWithArgument = false;
 	bool groupingEndsWithArgument = false;
 	// Precedence of the source pattern that expanded into this expression root.
-	int groupingPrecedence = 0;
 };
 
 template <typename Visitor>

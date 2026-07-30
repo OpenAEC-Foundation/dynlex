@@ -1,13 +1,17 @@
-function integer:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
 	replacement:
 		@intrinsic("type", "int")
 
-function fixed tofix:
+function fixed quantity:
 	replacement:
-		@intrinsic("fix", tofix)
+		@intrinsic("fix", quantity)
 
-function emit [fixed {fixed integer:value}|plain]:
+function the number selected from [a fixed value of {fixed integer:number}|a plain value of number]:
 	execute:
-		@intrinsic("return", value)
+		@intrinsic("return", number)
 
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\n", emit fixed 81))
+ignore @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\n", the number selected from a fixed value of 81)

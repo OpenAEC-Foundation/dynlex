@@ -1,7 +1,7 @@
 # LEXI-8 assembler
 #
 # A natural-language CHIP-8 assembler embedded in DynLex. Every statement
-# below is an ordinary DynLex pattern that appends bytecode to the ROM.
+# below is an ordinary DynLex pattern that appends bytecode to the program.
 # Labels may be referenced before they are defined; `resolve all labels`
 # patches every recorded forward reference afterwards.
 
@@ -10,287 +10,328 @@ import lib/array.dl
 
 # --- Assembler state ---
 
-set rom_bytes to allocate 3584 slots of an integer
-set rom_cursor to 0
-set label_names to allocate 128 slots of "unnamed"
-set label_addresses to allocate 128 slots of an integer
-set label_count to 0
-set fixup_offsets to allocate 512 slots of an integer
-set fixup_names to allocate 512 slots of "unnamed"
-set fixup_count to 0
+class:
+	patterns:
+		[an|] assembled program
+	members:
+		bytes, cursor
 
-# CHIP-8 programs are loaded at address 512, so byte n of the ROM lives there.
-function [the|] current assembly address:
-	globals: rom_cursor
-	execute:
-		return 512 + rom_cursor
+class:
+	patterns:
+		[a|] label table
+	members:
+		names, addresses, count
 
-function [the|] assembled rom size:
-	globals: rom_cursor
-	execute:
-		return rom_cursor
+class:
+	patterns:
+		[a|] fixup table
+	members:
+		offsets, names, count
 
-function [the|] assembled rom byte at offset:
-	globals: rom_bytes
-	execute:
-		return item offset of rom_bytes
+class:
+	patterns:
+		[an|] assembly state
+	members:
+		program, labels, fixups
 
-function restart the assembler:
-	globals: rom_cursor, label_count, fixup_count
+function an assembled program with {a pointer to an integer:bytes} and cursor {integer:cursor}:
+	replacement:
+		@intrinsic("construct", an assembled program, bytes, cursor)
+
+function a label table using {a pointer to a C string:names} and {a pointer to an integer:addresses} with count {integer:count}:
+	replacement:
+		@intrinsic("construct", a label table, names, addresses, count)
+
+function a fixup table using {a pointer to an integer:offsets} and {a pointer to a C string:names} with count {integer:count}:
+	replacement:
+		@intrinsic("construct", a fixup table, offsets, names, count)
+
+function an assembly state with {assembled program:program}, {label table:labels} and {fixup table:fixups}:
+	replacement:
+		@intrinsic("construct", an assembly state, program, labels, fixups)
+
+allocate 3584 slots of an integer and set bytes to it
+allocate 128 slots of "unnamed" and set names to it
+allocate 128 slots of an integer and set addresses to it
+allocate 512 slots of an integer and set offsets to it
+allocate 512 slots of "unnamed" and set symbols to it
+set program to an assembled program with bytes and cursor 0
+set labels to a label table using names and addresses with count 0
+set fixups to a fixup table using offsets and symbols with count 0
+set assembler to an assembly state with program, labels and fixups
+
+# CHIP-8 programs are loaded at address 512, so byte n lives there.
+function the current assembly address:
+	globals: assembler
 	execute:
-		set rom_cursor to 0
-		set label_count to 0
-		set fixup_count to 0
+		return 512 + assembler's program's cursor
+
+function the assembled program size:
+	globals: assembler
+	execute:
+		return assembler's program's cursor
+
+function the assembled program byte at {integer:offset}:
+	globals: assembler
+	execute:
+		return the item at offset in assembler's program's bytes
+
+function reset the assembly state:
+	globals: assembler
+	execute:
+		set assembler's program's cursor to 0
+		set assembler's labels's count to 0
+		set assembler's fixups's count to 0
 
 # --- Byte emission ---
 
-function emit rom byte value:
-	globals: rom_bytes, rom_cursor
+function emit a program byte {integer:value}:
+	globals: assembler
 	execute:
-		store value & 255 into rom_bytes at rom_cursor
-		increment rom_cursor
+		store (value bitwise and 255) into assembler's program's bytes at assembler's program's cursor
+		increment assembler's program's cursor
 
-function emit opcode hi then lo:
+function emit an opcode with high byte {integer:high} and low byte {integer:low}:
 	execute:
-		emit rom byte hi
-		emit rom byte lo
+		emit a program byte high
+		emit a program byte low
 
 # --- Labels and fixups ---
 
-function label name:
-	globals: label_names, label_addresses, label_count
+function label {C string:name}:
+	globals: assembler
 	execute:
-		store name into label_names at label_count
-		store the current assembly address into label_addresses at label_count
-		increment label_count
+		store name into assembler's labels's names at assembler's labels's count
+		store the current assembly address into assembler's labels's addresses at assembler's labels's count
+		increment assembler's labels's count
 
-function find label name:
-	globals: label_names, label_addresses, label_count
+function the address of label {C string:name}:
+	globals: assembler
 	execute:
-		set i to 0
-		loop while i < label_count:
-			if item i of label_names = name:
-				return item i of label_addresses
-			increment i
+		set index to 0
+		loop while index < assembler's labels's count:
+			if the item at index in assembler's labels's names = name:
+				return the item at index in assembler's labels's addresses
+			increment index
 		return the negative of 1
 
 # Emits `top nnn` with nnn unknown; records the spot so `resolve all labels`
 # can patch the 12 bit address in later.
-function emit opcode top addressing name:
-	globals: rom_cursor, fixup_offsets, fixup_names, fixup_count
+function emit an opcode with top nibble {integer:top} addressing label {C string:name}:
+	globals: assembler
 	execute:
-		store rom_cursor into fixup_offsets at fixup_count
-		store name into fixup_names at fixup_count
-		increment fixup_count
-		emit opcode (top << 4) then 0
+		store assembler's program's cursor into assembler's fixups's offsets at assembler's fixups's count
+		store name into assembler's fixups's names at assembler's fixups's count
+		increment assembler's fixups's count
+		emit an opcode with high byte (top shifted left by 4) and low byte 0
 
 function resolve [all|] labels:
-	globals: rom_bytes, fixup_offsets, fixup_names, fixup_count
+	globals: assembler
 	execute:
-		set f to 0
-		loop while f < fixup_count:
-			set name to item f of fixup_names
-			set target to find label name
+		set index to 0
+		loop while index < assembler's fixups's count:
+			set name to the item at index in assembler's fixups's names
+			set target to the address of label name
 			if target < 0:
-				print "assembler error: unknown label" as line
-				print name as line
-				@intrinsic("call", "libc", "exit", void, 1)
-			set offset to item f of fixup_offsets
-			store (item offset of rom_bytes) | ((target >> 8) & 15) into rom_bytes at offset
-			store target & 255 into rom_bytes at offset + 1
-			increment f
+				print "assembler error: unknown label" as a line
+				print name as a line
+				@intrinsic("call", "libc", "exit", nothing, 1)
+			set offset to the item at index in assembler's fixups's offsets
+			store ((the item at offset in assembler's program's bytes) bitwise or ((target shifted right by 8) bitwise and 15)) into assembler's program's bytes at offset
+			store (target bitwise and 255) into assembler's program's bytes at offset + 1
+			increment index
 
 # --- Instruction statements ---
-# Registers are written `v 0` through `v 15`; expressions are allowed,
-# so games can name their registers with ordinary DynLex variables.
+# Register numbers run from 0 through 15; expressions are allowed, so games
+# can name their register roles with ordinary DynLex variables.
 
 # 00E0
 function clear the display:
 	execute:
-		emit opcode 0 then 224
+		emit an opcode with high byte 0 and low byte 224
 
 # 00EE
-function end [the|] routine:
+function end the routine:
 	execute:
-		emit opcode 0 then 238
+		emit an opcode with high byte 0 and low byte 238
 
 # 1nnn
-function jump to name:
+function jump to label {C string:name}:
 	execute:
-		emit opcode 1 addressing name
+		emit an opcode with top nibble 1 addressing label name
 
 # 2nnn
-function run routine name:
+function run the routine named {C string:name}:
 	execute:
-		emit opcode 2 addressing name
+		emit an opcode with top nibble 2 addressing label name
 
 # 3xnn
-function skip when v x is nn:
+function skip when register {integer:target} equals {integer:value}:
 	execute:
-		emit opcode 48 | x then nn
+		emit an opcode with high byte (48 bitwise or target) and low byte value
 
 # 4xnn
-function skip when v x is not nn:
+function skip when register {integer:target} differs from {integer:value}:
 	execute:
-		emit opcode 64 | x then nn
+		emit an opcode with high byte (64 bitwise or target) and low byte value
 
 # 5xy0
-function skip when v x matches v y:
+function skip when register {integer:target} matches register {integer:source}:
 	execute:
-		emit opcode 80 | x then y << 4
+		emit an opcode with high byte (80 bitwise or target) and low byte (source shifted left by 4)
 
 # 9xy0
-function skip when v x differs from v y:
+function skip when register {integer:target} differs from register {integer:source}:
 	execute:
-		emit opcode 144 | x then y << 4
+		emit an opcode with high byte (144 bitwise or target) and low byte (source shifted left by 4)
 
 # 6xnn
-function load nn into v x:
+function load value {integer:value} into register {integer:target}:
 	execute:
-		emit opcode 96 | x then nn
+		emit an opcode with high byte (96 bitwise or target) and low byte value
 
 # 7xnn (adds modulo 256, so 254 means "subtract 2")
-function raise v x by nn:
+function raise register {integer:target} by {integer:value}:
 	execute:
-		emit opcode 112 | x then nn
+		emit an opcode with high byte (112 bitwise or target) and low byte value
 
 # 8xy0
-function copy v y into v x:
+function copy register {integer:source} into register {integer:target}:
 	execute:
-		emit opcode 128 | x then y << 4
+		emit an opcode with high byte (128 bitwise or target) and low byte (source shifted left by 4)
 
 # 8xy1
-function or v x with v y:
+function combine register {integer:target} with register {integer:source} using bitwise or:
 	execute:
-		emit opcode 128 | x then (y << 4) | 1
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 1)
 
 # 8xy2
-function and v x with v y:
+function combine register {integer:target} with register {integer:source} using bitwise and:
 	execute:
-		emit opcode 128 | x then (y << 4) | 2
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 2)
 
 # 8xy3
-function xor v x with v y:
+function combine register {integer:target} with register {integer:source} using bitwise xor:
 	execute:
-		emit opcode 128 | x then (y << 4) | 3
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 3)
 
-# 8xy4 (carry lands in v 15)
-function add v y into v x:
+# 8xy4 (carry lands in register 15)
+function add register {integer:source} into register {integer:target}:
 	execute:
-		emit opcode 128 | x then (y << 4) | 4
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 4)
 
-# 8xy5 (borrow flag lands in v 15)
-function subtract v y from v x:
+# 8xy5 (borrow flag lands in register 15)
+function subtract register {integer:source} from register {integer:target}:
 	execute:
-		emit opcode 128 | x then (y << 4) | 5
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 5)
 
 # 8xy6
-function shift v x right:
+function shift register {integer:target} right:
 	execute:
-		emit opcode 128 | x then (x << 4) | 6
+		emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 6)
 
 # 8xy7
-function replace v x with v y minus it:
+function replace register {integer:target} with register {integer:source} minus it:
 	execute:
-		emit opcode 128 | x then (y << 4) | 7
+		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 7)
 
 # 8xyE
-function shift v x left:
+function shift register {integer:target} left:
 	execute:
-		emit opcode 128 | x then (x << 4) | 14
+		emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 14)
 
 # Annn
-function point index at name:
+function point index at label {C string:name}:
 	execute:
-		emit opcode 10 addressing name
+		emit an opcode with top nibble 10 addressing label name
 
 # Bnnn
-function jump to name plus v 0:
+function jump to label {C string:name} plus register zero:
 	execute:
-		emit opcode 11 addressing name
+		emit an opcode with top nibble 11 addressing label name
 
 # Cxnn
-function randomize v x masked nn:
+function randomize register {integer:target} masked by {integer:value}:
 	execute:
-		emit opcode 192 | x then nn
+		emit an opcode with high byte (192 bitwise or target) and low byte value
 
 # Dxyn
-function draw n [row|rows] at v x and v y:
+function draw {integer:count} [row|rows] at horizontal register {integer:horizontal} and vertical register {integer:vertical}:
 	execute:
-		emit opcode 208 | x then (y << 4) | n
+		emit an opcode with high byte (208 bitwise or horizontal) and low byte ((vertical shifted left by 4) bitwise or count)
 
 # Ex9E
-function skip when key v x is down:
+function skip when key in register {integer:target} is down:
 	execute:
-		emit opcode 224 | x then 158
+		emit an opcode with high byte (224 bitwise or target) and low byte 158
 
 # ExA1
-function skip when key v x is up:
+function skip when key in register {integer:target} is up:
 	execute:
-		emit opcode 224 | x then 161
+		emit an opcode with high byte (224 bitwise or target) and low byte 161
 
 # Fx07
-function load [the|] delay [timer|] into v x:
+function load the delay into register {integer:target}:
 	execute:
-		emit opcode 240 | x then 7
+		emit an opcode with high byte (240 bitwise or target) and low byte 7
 
 # Fx0A
-function await [a|] key into v x:
+function wait for a key and store it in register {integer:target}:
 	execute:
-		emit opcode 240 | x then 10
+		emit an opcode with high byte (240 bitwise or target) and low byte 10
 
 # Fx15
-function start [the|] delay [timer|] from v x:
+function start the delay from register {integer:source}:
 	execute:
-		emit opcode 240 | x then 21
+		emit an opcode with high byte (240 bitwise or source) and low byte 21
 
 # Fx18
-function start [the|] sound [timer|] from v x:
+function start the sound from register {integer:source}:
 	execute:
-		emit opcode 240 | x then 24
+		emit an opcode with high byte (240 bitwise or source) and low byte 24
 
 # Fx1E
-function add v x into [the|] index:
+function add register {integer:source} to the index:
 	execute:
-		emit opcode 240 | x then 30
+		emit an opcode with high byte (240 bitwise or source) and low byte 30
 
 # Fx29
-function point index at [the|] digit [sprite|] [of|] v x:
+function point the index at the digit sprite in register {integer:source}:
 	execute:
-		emit opcode 240 | x then 41
+		emit an opcode with high byte (240 bitwise or source) and low byte 41
 
 # Fx33
-function store [the|] decimal digits of v x:
+function store the decimal digits of register {integer:source}:
 	execute:
-		emit opcode 240 | x then 51
+		emit an opcode with high byte (240 bitwise or source) and low byte 51
 
-# Fx55 (stores v 0 up to and including v x)
-function save all registers through v x:
+# Fx55 (stores register 0 through the selected final register)
+function save all registers through register {integer:last}:
 	execute:
-		emit opcode 240 | x then 85
+		emit an opcode with high byte (240 bitwise or last) and low byte 85
 
-# Fx65 (loads v 0 up to and including v x)
-function restore all registers through v x:
+# Fx65 (loads register 0 through the selected final register)
+function restore all registers through register {integer:last}:
 	execute:
-		emit opcode 240 | x then 101
+		emit an opcode with high byte (240 bitwise or last) and low byte 101
 
 # --- Data statements ---
 
-function data byte value:
+function emit a data byte {integer:value}:
 	execute:
-		emit rom byte value
+		emit a program byte value
 
 # Sprite art: an 8 character picture row, `X` for a lit pixel.
-function data row picture:
+function emit a data row {C string:picture}:
 	execute:
 		set value to 0
-		set i to 0
-		loop while i < 8:
-			set glyph to (item i of picture) as an integer
+		set index to 0
+		loop while index < 8:
+			set glyph to (the character at index in picture) as an integer
 			if glyph = 0:
-				set i to 8
+				set index to 8
 			else:
 				if glyph = 88:
-					set value to value | (128 >> i)
-				increment i
-		emit rom byte value
+					set value to value bitwise or (128 shifted right by index)
+				increment index
+		emit a program byte value

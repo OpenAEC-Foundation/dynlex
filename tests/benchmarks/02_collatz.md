@@ -17,7 +17,7 @@ All outputs: `131434272` (correct)
 ## Analysis
 
 - **DynLex vs Python**: 12-51x faster depending on optimization
-- **DynLex O3 vs C++ O3**: 1.3x slower (due to function call overhead for `set var to val` pattern)
+- **DynLex O3 vs C++ O3**: 1.3x slower (due to function call overhead for `set variable to value` pattern)
 - **DynLex O0 vs C++ O0**: 2.9x slower (function calls not yet inlined)
 
 The gap between DynLex and C++ will narrow as more patterns become flexes (inlined at compile time).
@@ -26,18 +26,18 @@ The gap between DynLex and C++ will narrow as more patterns become flexes (inlin
 
 ### DynLex (collatz.dl)
 
-```
+```dynlex
 flex function return value:
     replacement:
         @intrinsic("return", value)
 
-flex function set var to val:
+flex function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function print msg as line:
-    execute:
-        @intrinsic("call", "libc", "printf", "%ld\n", msg)
+function print message as a line:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message))
 
 function left < right:
     execute:
@@ -63,7 +63,7 @@ flex function left / right:
     replacement:
         @intrinsic("divide", left, right)
 
-flex function left mod right:
+flex function the remainder of left divided by right:
     replacement:
         @intrinsic("modulo", left, right)
 
@@ -75,22 +75,21 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-set total_steps to 0
-set n to 1
+set steps to 0
+set number to 1
 
-loop while n < 1000000:
-    set num to n
-    loop while num > 1:
-        set total_steps to total_steps + 1
-        set remainder to num mod 2
+loop while number < 1000000:
+    set current to number
+    loop while current > 1:
+        set steps to steps + 1
+        set remainder to the remainder of current divided by 2
         if remainder equals 0:
-            set num to num / 2
+            set current to current / 2
         if remainder > 0:
-            set temp to num * 3
-            set num to temp + 1
-    set n to n + 1
+            set current to current * 3 + 1
+    set number to number + 1
 
-print total_steps as line
+print steps as a line
 ```
 
 ### C++ (collatz.cpp)
@@ -147,8 +146,3 @@ time ./collatz_cpp
 # Python
 time python3 collatz.py
 ```
-
-## Notes
-
-- The DynLex code uses `set temp to num * 3` then `set num to temp + 1` due to a current function precedence parsing issue with `num * 3 + 1`
-- The `set var to val` pattern is not yet a flex, causing function call overhead; making it a flex would improve performance

@@ -2,13 +2,13 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 function left [is less than or equal to|<=] right:
     execute:
@@ -26,11 +26,11 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function factorial of n:
+function the factorial of number:
     execute:
-        if n <= 1:
+        if number <= 1:
             return 1
-        set m to n - 1
-        return n * factorial of m
+        set predecessor to (number - 1)
+        return number * the factorial of predecessor
 
-discard @intrinsic("array", factorial of 8)
+ignore @intrinsic("array", the factorial of 8)

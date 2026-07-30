@@ -1,1 +1,1 @@
-tests/required/lvalue_address_failure_flex/main.dl:22-27: Error: address of requires an addressable value
+tests/required/lvalue_address_failure_flex/main.dl:8-27: Error: address of requires an addressable value

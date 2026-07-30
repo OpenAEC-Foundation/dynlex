@@ -1,3 +1,3 @@
 import lib/std.dl
 
-set fn to the function named "definitely missing function"
+set reference to the function named "definitely missing function"

@@ -5,6 +5,8 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Section;
 	if (str == "function")
 		return SectionType::Function;
+	if (str == "conversion")
+		return SectionType::Conversion;
 	if (str == "class")
 		return SectionType::Class;
 	if (str == "patterns")
@@ -38,6 +40,8 @@ std::string sectionTypeToString(SectionType type) {
 		return "section";
 	case SectionType::Function:
 		return "function";
+	case SectionType::Conversion:
+		return "conversion";
 	case SectionType::Class:
 		return "class";
 	case SectionType::Pattern:

@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function value from a guaranteed loop:
+function the value from a guaranteed loop:
     execute:
         set unrelated to 0
         loop while true:
@@ -16,10 +16,10 @@ function value after an unreachable loop:
 function value after a skipped falling loop:
     execute:
         loop while false:
-            discard 0
+            ignore 0
         return 3
 
-function value from a maybe returning loop condition:
+function the value from a maybe returning loop condition:
     execute:
         loop while condition:
             return 4
@@ -28,12 +28,12 @@ function value from a maybe returning loop condition:
 function value after a maybe falling loop condition:
     execute:
         loop while condition:
-            discard 0
+            ignore 0
         return 6
 
-print value from a guaranteed loop as line
-print value after an unreachable loop as line
-print value after a skipped falling loop as line
-print value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1) as line
-print value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as line
-print value after a maybe falling loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as line
+print the value from a guaranteed loop as a line
+print value after an unreachable loop as a line
+print value after a skipped falling loop as a line
+print the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1) as a line
+print the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as a line
+print value after a maybe falling loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as a line

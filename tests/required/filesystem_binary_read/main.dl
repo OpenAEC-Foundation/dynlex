@@ -1,11 +1,14 @@
 import lib/filesystem.dl
 
 set path to "tests/required/filesystem_binary_read/content.tmp"
-delete path
-set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "wb")
-@intrinsic("discard", @intrinsic("variadic call", "libc", "fprintf", an integer, 2, stream, "A%cB", 0))
-@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
+delete the filesystem entry at path
+set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "wb")
+ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, stream, "A%cB", 0)
+ignore @intrinsic("call", "libc", "fclose", an integer, stream)
 
-read path
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n%d\n%d\n%d\n", the length of the contents of it, @intrinsic("cast", character 0 of the contents of it, an integer), @intrinsic("cast", character 1 of the contents of it, an integer), @intrinsic("cast", character 2 of the contents of it, an integer)))
-delete path
+read the file at path and set reading to it
+print (the length of reading's contents) as a line
+print (the character at 0 in reading's contents) as an integer as a line
+print (the character at 1 in reading's contents) as an integer as a line
+print (the character at 2 in reading's contents) as an integer as a line
+delete the filesystem entry at path

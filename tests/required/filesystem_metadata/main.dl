@@ -1,34 +1,28 @@
 import lib/filesystem.dl
 
-set directory_path to "tests/required/filesystem_metadata/directory.tmp"
-set file_path to "tests/required/filesystem_metadata/directory.tmp/file.tmp"
-set missing_path to "tests/required/filesystem_metadata/missing.tmp"
+set directory to "tests/required/filesystem_metadata/directory.tmp"
+set file to "tests/required/filesystem_metadata/directory.tmp/file.tmp"
+set missing to "tests/required/filesystem_metadata/missing.tmp"
 
-delete file_path
-delete directory_path
+delete the filesystem entry at file
+delete the filesystem entry at directory
 
-create directory at directory_path and print if it succeeded
-print "" as line
-print (the length of (the error message of it)) as line
-print directory_path is a regular file as line
-print directory_path is readable as line
+create a directory at directory and print whether it succeeded as a line
+print (the length of (the error message of it)) as a line
+print whether directory is a regular file as a line
+print whether directory is readable as a line
 
-write the string form of "metadata" to file_path and print if it succeeded
-print "" as line
-print (the length of (the error message of it)) as line
-print file_path is a regular file as line
-set file_entry to the file system entry at file_path
-print (file_entry's modification time)'s seconds > 0 as line
+write the string form of "metadata" to the file at file and print whether it succeeded as a line
+print (the length of (the error message of it)) as a line
+print whether file is a regular file as a line
+set entry to the file system entry at file
+print whether (entry's modification time)'s seconds > 0 as a line
 
-read missing_path and print if it succeeded
-print "" as line
-print (the length of the error message of it) > 0 as line
+read the file at missing and print whether it succeeded as a line
+print whether (the length of the error message of it) > 0 as a line
 
-create directory at directory_path and print if it succeeded
-print "" as line
-print (the length of the error message of it) > 0 as line
+create a directory at directory and print whether it succeeded as a line
+print whether (the length of the error message of it) > 0 as a line
 
-delete file_path and print if it succeeded
-print "" as line
-delete directory_path and print if it succeeded
-print "" as line
+delete the filesystem entry at file and print whether it succeeded as a line
+delete the filesystem entry at directory and print whether it succeeded as a line

@@ -2,7 +2,7 @@
 #
 # A complete CHIP-8 virtual machine written in DynLex: 4096 bytes of memory,
 # sixteen 8 bit registers, a call stack, delay and sound timers, a sixteen key
-# pad and a 64 x 32 XOR-drawn display with collision reporting in v 15.
+# pad and a 64 x 32 XOR-drawn display with collision reporting in register 15.
 
 import lib/std.dl
 import lib/array.dl
@@ -11,312 +11,332 @@ import tests/games/lexi8/assembler.dl
 
 # --- Machine state ---
 
-set chip_memory to allocate 4096 slots of an integer
-set chip_v to allocate 16 slots of an integer
-set chip_stack to allocate 16 slots of an integer
-set chip_display to allocate 2048 slots of an integer
-set chip_keys to allocate 16 slots of an integer
-set chip_pc to 512
-set chip_index to 0
-set chip_sp to 0
-set chip_delay to 0
-set chip_sound to 0
-set chip_halted to 0
-set chip_font_cursor to 0
-set chip_cycles to 0
+class:
+	patterns:
+		[a|] chip machine
+	members:
+		memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles
+
+class:
+	patterns:
+		[a|] pixel position
+	members:
+		x, y
+
+function a pixel position at x {integer:x} and y {integer:y}:
+	replacement:
+		@intrinsic("construct", a pixel position, x, y)
+
+function a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles}:
+	replacement:
+		@intrinsic("construct", a chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
+
+allocate 4096 slots of an integer and set memory to it
+allocate 16 slots of an integer and set registers to it
+allocate 16 slots of an integer and set stack to it
+allocate 2048 slots of an integer and set display to it
+allocate 16 slots of an integer and set keys to it
+set console to a chip machine using memory, registers, stack, display and keys, starting at program 512 with index 0, stack depth 0, delay 0, sound 0, status 0, glyph position 0 and cycle count 0
 
 # --- Built in hexadecimal font (5 bytes per glyph, stored at address 0) ---
 
-function install font byte value:
-	globals: chip_memory, chip_font_cursor
+function install a font byte {integer:value}:
+	globals: console
 	execute:
-		store value into chip_memory at chip_font_cursor
-		increment chip_font_cursor
+		store value into console's memory at console's glyph
+		increment console's glyph
 
-function install glyph a then b then c then d then e:
+function install a glyph {integer:first} then {integer:second} then {integer:third} then {integer:fourth} then {integer:fifth}:
 	execute:
-		install font byte a
-		install font byte b
-		install font byte c
-		install font byte d
-		install font byte e
+		install a font byte first
+		install a font byte second
+		install a font byte third
+		install a font byte fourth
+		install a font byte fifth
 
 function install the machine font:
-	globals: chip_font_cursor
+	globals: console
 	execute:
-		set chip_font_cursor to 0
-		install glyph 240 then 144 then 144 then 144 then 240
-		install glyph 32 then 96 then 32 then 32 then 112
-		install glyph 240 then 16 then 240 then 128 then 240
-		install glyph 240 then 16 then 240 then 16 then 240
-		install glyph 144 then 144 then 240 then 16 then 16
-		install glyph 240 then 128 then 240 then 16 then 240
-		install glyph 240 then 128 then 240 then 144 then 240
-		install glyph 240 then 16 then 32 then 64 then 64
-		install glyph 240 then 144 then 240 then 144 then 240
-		install glyph 240 then 144 then 240 then 16 then 240
-		install glyph 240 then 144 then 240 then 144 then 144
-		install glyph 224 then 144 then 224 then 144 then 224
-		install glyph 240 then 128 then 128 then 128 then 240
-		install glyph 224 then 144 then 144 then 144 then 224
-		install glyph 240 then 128 then 240 then 128 then 240
-		install glyph 240 then 128 then 240 then 128 then 128
+		set console's glyph to 0
+		install a glyph 240 then 144 then 144 then 144 then 240
+		install a glyph 32 then 96 then 32 then 32 then 112
+		install a glyph 240 then 16 then 240 then 128 then 240
+		install a glyph 240 then 16 then 240 then 16 then 240
+		install a glyph 144 then 144 then 240 then 16 then 16
+		install a glyph 240 then 128 then 240 then 16 then 240
+		install a glyph 240 then 128 then 240 then 144 then 240
+		install a glyph 240 then 16 then 32 then 64 then 64
+		install a glyph 240 then 144 then 240 then 144 then 240
+		install a glyph 240 then 144 then 240 then 16 then 240
+		install a glyph 240 then 144 then 240 then 144 then 144
+		install a glyph 224 then 144 then 224 then 144 then 224
+		install a glyph 240 then 128 then 128 then 128 then 240
+		install a glyph 224 then 144 then 144 then 144 then 224
+		install a glyph 240 then 128 then 240 then 128 then 240
+		install a glyph 240 then 128 then 240 then 128 then 128
 
 # --- Lifecycle ---
 
 function initialize the machine:
-	globals: chip_memory, chip_v, chip_stack, chip_display, chip_keys, chip_pc, chip_index, chip_sp, chip_delay, chip_sound, chip_halted, chip_cycles
+	globals: console
 	execute:
-		set i to 0
-		loop while i < 4096:
-			store 0 into chip_memory at i
-			increment i
-		set i to 0
-		loop while i < 2048:
-			store 0 into chip_display at i
-			increment i
-		set i to 0
-		loop while i < 16:
-			store 0 into chip_v at i
-			store 0 into chip_stack at i
-			store 0 into chip_keys at i
-			increment i
-		set chip_pc to 512
-		set chip_index to 0
-		set chip_sp to 0
-		set chip_delay to 0
-		set chip_sound to 0
-		set chip_halted to 0
-		set chip_cycles to 0
+		set index to 0
+		loop while index < 4096:
+			store 0 into console's memory at index
+			increment index
+		set index to 0
+		loop while index < 2048:
+			store 0 into console's display at index
+			increment index
+		set index to 0
+		loop while index < 16:
+			store 0 into console's registers at index
+			store 0 into console's stack at index
+			store 0 into console's keys at index
+			increment index
+		set console's program to 512
+		set console's index to 0
+		set console's depth to 0
+		set console's delay to 0
+		set console's sound to 0
+		set console's status to 0
+		set console's cycles to 0
 		install the machine font
 
-function load the assembled rom into the machine:
-	globals: chip_memory
+function load the assembled program into the machine:
+	globals: console
 	execute:
-		set i to 0
-		loop while i < the assembled rom size:
-			store the assembled rom byte at i into chip_memory at 512 + i
-			increment i
+		set index to 0
+		loop while index < the assembled program size:
+			store the assembled program byte at index into console's memory at 512 + index
+			increment index
 
-# --- Observation (used by the renderer, the HUD and the tests) ---
+# --- Observation (used by the renderer, the status area and the tests) ---
 
-function [the|] machine pixel at x and y:
-	globals: chip_display
+function the machine pixel at {integer:column}, {integer:row}:
+	globals: console
 	execute:
-		return item y * 64 + x of chip_display
+		return the item at (row * 64 + column) in console's display
 
-function [the|] machine register r:
-	globals: chip_v
+function the machine register {integer:number}:
+	globals: console
 	execute:
-		return item r of chip_v
+		return the item at number in console's registers
 
-function [the|] machine program counter:
-	globals: chip_pc
+function the machine program counter:
+	globals: console
 	execute:
-		return chip_pc
+		return console's program
 
-function [the|] machine cycle count:
-	globals: chip_cycles
+function the machine cycle count:
+	globals: console
 	execute:
-		return chip_cycles
+		return console's cycles
 
-function [the|] machine is halted:
-	globals: chip_halted
+function the machine is halted:
+	globals: console
 	execute:
-		return chip_halted = 1
+		return console's status = 1
 
-function [the|] count of lit machine pixels:
-	globals: chip_display
+function the machine is running:
+	globals: console
+	execute:
+		return console's status = 0
+
+function the count of lit machine pixels:
+	globals: console
 	execute:
 		set total to 0
-		set i to 0
-		loop while i < 2048:
-			set total to total + item i of chip_display
-			increment i
+		set index to 0
+		loop while index < 2048:
+			set total to (total + the item at index in console's display)
+			increment index
 		return total
 
 # --- Input and timers ---
 
-function set machine key k to state:
-	globals: chip_keys
+function set machine key {integer:number} to {integer:state}:
+	globals: console
 	execute:
-		store state into chip_keys at k & 15
+		store state into console's keys at (number bitwise and 15)
 
 function tick the machine timers:
-	globals: chip_delay, chip_sound
+	globals: console
 	execute:
-		if chip_delay > 0:
-			decrement chip_delay
-		if chip_sound > 0:
-			decrement chip_sound
+		if console's delay > 0:
+			decrement console's delay
+		if console's sound > 0:
+			decrement console's sound
 
 # --- Faults ---
 
-function report machine fault for opcode:
-	globals: chip_halted
+function report a machine fault for {integer:opcode}:
+	globals: console
 	execute:
-		print "LEXI-8 machine fault: unknown opcode" as line
-		print opcode as line
-		set chip_halted to 1
+		print "LEXI-8 machine fault: unknown opcode" as a line
+		print opcode as a line
+		set console's status to 1
+
+function draw a machine sprite at {pixel position:origin} with {integer:count} [row|rows]:
+	globals: console
+	execute:
+		store 0 into console's registers at 15
+		set row to 0
+		loop while row < count:
+			set pixel to a pixel position at x origin's x and y (origin's y + row)
+			if pixel's y < 32:
+				set bitmap to the item at (console's index + row) in console's memory
+				set column to 0
+				loop while column < 8:
+					if ((bitmap shifted right by (7 - column)) bitwise and 1) = 1:
+						set pixel's x to (origin's x + column)
+						if pixel's x < 64:
+							set cell to (pixel's y * 64 + pixel's x)
+							if the item at cell in console's display = 1:
+								store 1 into console's registers at 15
+							store ((the item at cell in console's display) bitwise xor 1) into console's display at cell
+					increment column
+			increment row
 
 # --- The interpreter ---
 
 function step the machine:
-	globals: chip_memory, chip_v, chip_stack, chip_display, chip_keys, chip_pc, chip_index, chip_sp, chip_delay, chip_sound, chip_halted, chip_cycles
+	globals: console
 	execute:
-		if chip_halted = 1:
-			return 0
-		set hi to item chip_pc of chip_memory
-		set lo to item chip_pc + 1 of chip_memory
-		set opcode to (hi << 8) | lo
-		set x to hi & 15
-		set y to lo >> 4
-		set n to lo & 15
-		set nn to lo
-		set nnn to opcode & 4095
-		set chip_pc to chip_pc + 2
-		increment chip_cycles
-		match based on hi >> 4:
-			case 0:
-				if nn = 224:
-					set i to 0
-					loop while i < 2048:
-						store 0 into chip_display at i
-						increment i
-				else if nn = 238:
-					decrement chip_sp
-					set chip_pc to item chip_sp of chip_stack
-				else:
-					report machine fault for opcode
-			case 1:
-				set chip_pc to nnn
-			case 2:
-				store chip_pc into chip_stack at chip_sp
-				increment chip_sp
-				set chip_pc to nnn
-			case 3:
-				if item x of chip_v = nn:
-					set chip_pc to chip_pc + 2
-			case 4:
-				if item x of chip_v != nn:
-					set chip_pc to chip_pc + 2
-			case 5:
-				if item x of chip_v = item y of chip_v:
-					set chip_pc to chip_pc + 2
-			case 6:
-				store nn into chip_v at x
-			case 7:
-				store (item x of chip_v + nn) & 255 into chip_v at x
-			case 8:
-				set vx to item x of chip_v
-				set vy to item y of chip_v
-				if n = 0:
-					store vy into chip_v at x
-				else if n = 1:
-					store vx | vy into chip_v at x
-				else if n = 2:
-					store vx & vy into chip_v at x
-				else if n = 3:
-					store vx ^ vy into chip_v at x
-				else if n = 4:
-					store (vx + vy) & 255 into chip_v at x
-					store (vx + vy) >> 8 into chip_v at 15
-				else if n = 5:
-					store (vx - vy) & 255 into chip_v at x
-					store (256 + vx - vy) >> 8 into chip_v at 15
-				else if n = 6:
-					store vx >> 1 into chip_v at x
-					store vx & 1 into chip_v at 15
-				else if n = 7:
-					store (vy - vx) & 255 into chip_v at x
-					store (256 + vy - vx) >> 8 into chip_v at 15
-				else if n = 14:
-					store (vx << 1) & 255 into chip_v at x
-					store (vx >> 7) & 1 into chip_v at 15
-				else:
-					report machine fault for opcode
-			case 9:
-				if item x of chip_v != item y of chip_v:
-					set chip_pc to chip_pc + 2
-			case 10:
-				set chip_index to nnn
-			case 11:
-				set chip_pc to (nnn + item 0 of chip_v) & 4095
-			case 12:
-				store (a random number) & nn into chip_v at x
-			case 13:
-				set start_x to (item x of chip_v) & 63
-				set start_y to (item y of chip_v) & 31
-				store 0 into chip_v at 15
-				set row to 0
-				loop while row < n:
-					set py to start_y + row
-					if py < 32:
-						set sprite_byte to item chip_index + row of chip_memory
-						set col to 0
-						loop while col < 8:
-							if ((sprite_byte >> (7 - col)) & 1) = 1:
-								set px to start_x + col
-								if px < 64:
-									set cell to py * 64 + px
-									if item cell of chip_display = 1:
-										store 1 into chip_v at 15
-									store (item cell of chip_display) ^ 1 into chip_display at cell
-							increment col
-					increment row
-			case 14:
-				if nn = 158:
-					if item ((item x of chip_v) & 15) of chip_keys = 1:
-						set chip_pc to chip_pc + 2
-				else if nn = 161:
-					if item ((item x of chip_v) & 15) of chip_keys = 0:
-						set chip_pc to chip_pc + 2
-				else:
-					report machine fault for opcode
-			case 15:
-				if nn = 7:
-					store chip_delay into chip_v at x
-				else if nn = 10:
-					set pressed to the negative of 1
-					set k to 0
-					loop while k < 16:
-						if item k of chip_keys = 1:
-							set pressed to k
-						increment k
-					if pressed < 0:
-						set chip_pc to chip_pc - 2
+		if the machine is running:
+			set high to the item at console's program in console's memory
+			set low to the item at (console's program + 1) in console's memory
+			set opcode to (high shifted left by 8) bitwise or low
+			set target to high bitwise and 15
+			set source to low shifted right by 4
+			set operation to low bitwise and 15
+			set operand to low
+			set address to opcode bitwise and 4095
+			set console's program to (console's program + 2)
+			increment console's cycles
+			match based on high shifted right by 4:
+				case 0:
+					if operand = 224:
+						set index to 0
+						loop while index < 2048:
+							store 0 into console's display at index
+							increment index
+					else if operand = 238:
+						decrement console's depth
+						set console's program to the item at console's depth in console's stack
 					else:
-						store pressed into chip_v at x
-				else if nn = 21:
-					set chip_delay to item x of chip_v
-				else if nn = 24:
-					set chip_sound to item x of chip_v
-				else if nn = 30:
-					set chip_index to (chip_index + item x of chip_v) & 4095
-				else if nn = 41:
-					set chip_index to ((item x of chip_v) & 15) * 5
-				else if nn = 51:
-					set vx to item x of chip_v
-					store vx / 100 into chip_memory at chip_index
-					store (vx / 10) mod 10 into chip_memory at chip_index + 1
-					store vx mod 10 into chip_memory at chip_index + 2
-				else if nn = 85:
-					set i to 0
-					loop while i <= x:
-						store item i of chip_v into chip_memory at chip_index + i
-						increment i
-				else if nn = 101:
-					set i to 0
-					loop while i <= x:
-						store item chip_index + i of chip_memory into chip_v at i
-						increment i
-				else:
-					report machine fault for opcode
-		return 1
+						report a machine fault for opcode
+				case 1:
+					set console's program to address
+				case 2:
+					store console's program into console's stack at console's depth
+					increment console's depth
+					set console's program to address
+				case 3:
+					if the item at target in console's registers = operand:
+						set console's program to (console's program + 2)
+				case 4:
+					if the item at target in console's registers != operand:
+						set console's program to (console's program + 2)
+				case 5:
+					if the item at target in console's registers = the item at source in console's registers:
+						set console's program to (console's program + 2)
+				case 6:
+					store operand into console's registers at target
+				case 7:
+					store (((the item at target in console's registers) + operand) bitwise and 255) into console's registers at target
+				case 8:
+					set left to the item at target in console's registers
+					set right to the item at source in console's registers
+					if operation = 0:
+						store right into console's registers at target
+					else if operation = 1:
+						store (left bitwise or right) into console's registers at target
+					else if operation = 2:
+						store (left bitwise and right) into console's registers at target
+					else if operation = 3:
+						store (left bitwise xor right) into console's registers at target
+					else if operation = 4:
+						store ((left + right) bitwise and 255) into console's registers at target
+						store ((left + right) shifted right by 8) into console's registers at 15
+					else if operation = 5:
+						store ((left - right) bitwise and 255) into console's registers at target
+						store ((256 + left - right) shifted right by 8) into console's registers at 15
+					else if operation = 6:
+						store (left shifted right by 1) into console's registers at target
+						store (left bitwise and 1) into console's registers at 15
+					else if operation = 7:
+						store ((right - left) bitwise and 255) into console's registers at target
+						store ((256 + right - left) shifted right by 8) into console's registers at 15
+					else if operation = 14:
+						store ((left shifted left by 1) bitwise and 255) into console's registers at target
+						store ((left shifted right by 7) bitwise and 1) into console's registers at 15
+					else:
+						report a machine fault for opcode
+				case 9:
+					if the item at target in console's registers != the item at source in console's registers:
+						set console's program to (console's program + 2)
+				case 10:
+					set console's index to address
+				case 11:
+					set console's program to (address + (the item at 0 in console's registers)) bitwise and 4095
+				case 12:
+					store ((a random number) bitwise and operand) into console's registers at target
+				case 13:
+					set origin to a pixel position at x ((the item at target in console's registers) bitwise and 63) and y ((the item at source in console's registers) bitwise and 31)
+					draw a machine sprite at origin with operation rows
+				case 14:
+					if operand = 158:
+						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 1:
+							set console's program to (console's program + 2)
+					else if operand = 161:
+						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 0:
+							set console's program to (console's program + 2)
+					else:
+						report a machine fault for opcode
+				case 15:
+					if operand = 7:
+						store console's delay into console's registers at target
+					else if operand = 10:
+						set pressed to the negative of 1
+						set key to 0
+						loop while key < 16:
+							if the item at key in console's keys = 1:
+								set pressed to key
+							increment key
+						if pressed < 0:
+							set console's program to (console's program - 2)
+						else:
+							store pressed into console's registers at target
+					else if operand = 21:
+						set console's delay to the item at target in console's registers
+					else if operand = 24:
+						set console's sound to the item at target in console's registers
+					else if operand = 30:
+						set console's index to (console's index + (the item at target in console's registers)) bitwise and 4095
+					else if operand = 41:
+						set console's index to (((the item at target in console's registers) bitwise and 15) * 5)
+					else if operand = 51:
+						set left to the item at target in console's registers
+						store left / 100 into console's memory at console's index
+						store the remainder of (left / 10) divided by 10 into console's memory at console's index + 1
+						store the remainder of left divided by 10 into console's memory at console's index + 2
+					else if operand = 85:
+						set index to 0
+						loop while index <= target:
+							store the item at index in console's registers into console's memory at console's index + index
+							increment index
+					else if operand = 101:
+						set index to 0
+						loop while index <= target:
+							store the item at (console's index + index) in console's memory into console's registers at index
+							increment index
+					else:
+						report a machine fault for opcode
 
-function step the machine count [time|times]:
+function step the machine {integer:count} [time|times]:
 	execute:
-		set i to 0
-		loop while i < count:
-			discard step the machine
-			increment i
+		set index to 0
+		loop while index < count:
+			step the machine
+			increment index

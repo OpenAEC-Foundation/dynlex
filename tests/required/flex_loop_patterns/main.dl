@@ -4,10 +4,10 @@ set total to 0
 
 flex section repeat count:
     replacement:
-        set i to 0
-        loop while i < count
+        set iteration to 0
+        loop while iteration < count
         execute the body
-        add 1 to i
+        add 1 to iteration
 
 repeat 4:
     add 2 to total

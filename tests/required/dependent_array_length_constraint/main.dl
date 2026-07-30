@@ -1,0 +1,49 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function an array:
+    replacement:
+        @intrinsic("array")
+
+function [an|] array of {fixed integer:length} items:
+    replacement:
+        @intrinsic("array", length)
+
+flex function [an|] array as long as value:
+    replacement:
+        @intrinsic("array", @intrinsic("type extent", value, 0))
+
+function the arrays {an array:left} and {an array as long as left:right} have equal length:
+    replacement:
+        1
+
+function the arrays left and right have equal length:
+    execute:
+        ignore left
+        ignore right
+        return 0
+
+ignore @intrinsic(
+    "variadic call",
+    "libc",
+    "printf",
+    an integer,
+    1,
+    "%d %d %d\n",
+    the arrays [1, 2] and [3.0, 4.0] have equal length,
+    the arrays [1, 2] and [3, 4, 5] have equal length,
+    @intrinsic("type extent", [6, 7, 8, 9], 0)
+)

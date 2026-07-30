@@ -1,0 +1,20 @@
+function set destination to source:
+    replacement:
+        @intrinsic("store", destination, source)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        a box
+    members:
+        payload as an integer
+
+implicitly convert {integer:number}:
+    replacement:
+        @intrinsic("construct", a box, number)
+
+set value to @intrinsic("construct", a box, 1)
+set value to 2

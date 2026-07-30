@@ -1,5 +1,5 @@
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-discard @intrinsic("address of", 1)
+ignore @intrinsic("address of", 1)

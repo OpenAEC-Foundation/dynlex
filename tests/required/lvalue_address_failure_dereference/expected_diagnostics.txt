@@ -1,1 +1,1 @@
-tests/required/lvalue_address_failure_dereference/main.dl:49-76: Error: address of requires an addressable value
+tests/required/lvalue_address_failure_dereference/main.dl:1-62: Error: address of requires an addressable value

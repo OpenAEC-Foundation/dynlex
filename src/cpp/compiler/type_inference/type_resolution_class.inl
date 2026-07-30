@@ -3,19 +3,7 @@ static DataType toTypeReference(const DataType &valueType) {
 		return {};
 	if (valueType.kind == DataType::Kind::Type)
 		return valueType;
-	DataType concreteValueType = valueType;
-	DataType typeReference;
-	typeReference.kind = DataType::Kind::Type;
-	typeReference.referencedKind = concreteValueType.kind;
-	typeReference.numericSize = concreteValueType.numericSize;
-	typeReference.pointerDepth = concreteValueType.pointerDepth;
-	typeReference.classDefinition = concreteValueType.classDefinition;
-	typeReference.classInstIndex = concreteValueType.classInstIndex;
-	typeReference.arraySize = concreteValueType.arraySize;
-	typeReference.matrixRowCount = concreteValueType.matrixRowCount;
-	if (concreteValueType.arrayElementType)
-		typeReference.arrayElementType = std::make_shared<DataType>(*concreteValueType.arrayElementType);
-	return typeReference;
+	return valueType.asTypeReference();
 }
 
 static bool resolveCompileTimeTypeReference(
@@ -194,21 +182,8 @@ static bool resolveCompileTimeTypeReference(
 			return false;
 
 		if (!def->section->isFlex && def->section->type == SectionType::Class) {
-			BindingFrame callBindings;
-			collectPatternCallBindings(resolved, def, callBindings);
-			for (auto &[name, boundExpr] : callBindings.bindings) {
-				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
-				if (resolvedExpr)
-					boundExpr = resolvedExpr;
-			}
-			for (auto &[parameterDefinition, boundExpr] : callBindings.parameterBindings) {
-				(void)parameterDefinition;
-				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
-				if (resolvedExpr)
-					boundExpr = resolvedExpr;
-			}
 			BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
-			callBindingFrameStack.pushFrame(std::move(callBindings));
+			pushPatternCallBindingScope(callBindingFrameStack, resolved, def);
 			outTypeRef = instantiateBoundClassType(
 				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack,
 				inferenceContext, constructionArgumentTypes
@@ -225,22 +200,6 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef = resolvedReturnTypeRef;
 			return true;
 		}
-
-		BindingFrame innerBindings;
-		Expression *bodyExpr = nullptr;
-		Expression *inferredFlexExpansion = lookupInferenceFlexExpansion(inferenceContext, resolved);
-		if (inferredFlexExpansion) {
-			collectPatternCallBindings(resolved, def, innerBindings);
-			bodyExpr = inferredFlexExpansion;
-		}
-		if (!bodyExpr)
-			return false;
-		BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
-		materializeFlexBindingsInCallerScope(innerBindings, callBindingFrameStack);
-		callBindingFrameStack.pushFrame(std::move(innerBindings));
-		return resolveCompileTimeTypeReference(
-			parseContext, bodyExpr, callBindingFrameStack, outTypeRef, inferenceContext, constructionArgumentTypes
-		);
 	}
 	return false;
 }
@@ -353,8 +312,10 @@ static DataType instantiateBoundClassType(
 					return {};
 				fieldType.typeExpression = typeExpression;
 				DataType inferredTypeRef;
-				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef))
+				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef)) {
+					recordUnknownTypeConstraintFailure(inferenceContext, parseContext, fieldType.typeExpression->range);
 					return {};
+				}
 				fieldType = inferredTypeRef.toReferencedType();
 			} else {
 				DataType resolvedTypeRef;

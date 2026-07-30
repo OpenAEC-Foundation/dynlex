@@ -1,0 +1,5 @@
+class:
+    patterns:
+        [a|] sample
+    members:
+        first as (, second as )

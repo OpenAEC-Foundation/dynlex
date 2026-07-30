@@ -347,6 +347,17 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
 
+    add_executable(
+        dynlex_class_layout_test EXCLUDE_FROM_ALL
+        tests/cpp/classLayoutTest.cpp
+        src/cpp/compiler/classLayout.cpp
+    )
+    target_include_directories(dynlex_class_layout_test PRIVATE src/cpp)
+    dynlex_link_llvm(dynlex_class_layout_test core support)
+    set_target_properties(dynlex_class_layout_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+
     # MinGW stores full DWARF in every COFF object for a normal Debug build.
     # Keeping that data in the objects makes LLD spend an unbounded amount of
     # time producing the final PE image.  Split DWARF preserves the complete

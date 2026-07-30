@@ -1,0 +1,17 @@
+function [a|] value:
+    replacement:
+        @intrinsic("type", "any")
+
+function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+
+function finish:
+    replacement:
+        @intrinsic("discard", 1)
+
+function consume {a value:item}:
+    replacement:
+        @intrinsic("discard", item)
+
+consume finish

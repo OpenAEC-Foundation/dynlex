@@ -1,35 +1,35 @@
-function set var to val:
+function set variable to value:
 	replacement:
-		@intrinsic("store", var, val)
+		@intrinsic("store", variable, value)
 
-function discard val:
+function ignore value:
 	replacement:
-		@intrinsic("discard", val)
+		@intrinsic("discard", value)
 
-function [an|a|] integer:
+function [an|] integer:
 	replacement:
 		@intrinsic("type", "int")
 
-function fixed tofix:
+function fixed quantity:
 	replacement:
-		@intrinsic("fix", tofix)
+		@intrinsic("fix", quantity)
 
-function say msg:
+function say message:
 	execute:
-		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", msg)
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", message)
 
-function value as [a|an|] {fixed integer:bits} bit integer:
+function value as [a|] {fixed integer:bits} bit integer:
 	replacement:
 		@intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function print msg:
+function print message:
 	execute:
-		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", msg as a 64 bit integer)
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
 
-function customadder:
+function run the custom adder:
 	execute:
 		say "custom adder:"
 		set result to @intrinsic("add", 1, 2)
 		print result
 
-customadder
+run the custom adder

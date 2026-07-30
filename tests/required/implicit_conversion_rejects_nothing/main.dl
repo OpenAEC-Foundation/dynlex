@@ -1,0 +1,27 @@
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] value:
+    replacement:
+        @intrinsic("type", "any")
+
+class:
+    patterns:
+        [a|] number box
+    members:
+        number as an integer
+
+implicitly convert {integer:number}:
+    replacement:
+        @intrinsic("construct", a number box, number)
+
+function finish:
+    replacement:
+        @intrinsic("discard", 1)
+
+function consume {a value:first} and {a number box:second}:
+    replacement:
+        @intrinsic("discard", second)
+
+consume finish and 1

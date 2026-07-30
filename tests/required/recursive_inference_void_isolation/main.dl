@@ -1,59 +1,63 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 flex section if condition:
 	replacement:
 		@intrinsic("if", condition)
 
-function standalone helper:
+function record a standalone event:
 	execute:
 		@intrinsic("discard", 0)
 
-function direct before:
+function perform the direct prelude:
 	execute:
 		@intrinsic("discard", 0)
 
-function direct after:
+function perform the direct epilogue:
 	execute:
 		@intrinsic("discard", 0)
 
-function direct value:
+function the direct recursive result for value:
 	execute:
-		direct before
+		perform the direct prelude
 		if @intrinsic("greater than", value, 0):
-			@intrinsic("store", ignored, direct @intrinsic("subtract", value, 1))
-		direct after
+			@intrinsic("store", ignored, the direct recursive result for @intrinsic("subtract", value, 1))
+		perform the direct epilogue
 		@intrinsic("return", value)
 
-function mutual first before:
+function perform the first mutual prelude:
 	execute:
 		@intrinsic("discard", 0)
 
-function mutual first after:
+function perform the first mutual epilogue:
 	execute:
 		@intrinsic("discard", 0)
 
-function mutual second before:
+function perform the second mutual prelude:
 	execute:
 		@intrinsic("discard", 0)
 
-function mutual second after:
+function perform the second mutual epilogue:
 	execute:
 		@intrinsic("discard", 0)
 
-function mutual first value:
+function the first mutual recursive result for value:
 	execute:
-		mutual first before
+		perform the first mutual prelude
 		if @intrinsic("greater than", value, 0):
-			@intrinsic("store", ignored, mutual second @intrinsic("subtract", value, 1))
-		mutual first after
+			@intrinsic("store", ignored, the second mutual recursive result for @intrinsic("subtract", value, 1))
+		perform the first mutual epilogue
 		@intrinsic("return", value)
 
-function mutual second value:
+function the second mutual recursive result for value:
 	execute:
-		mutual second before
+		perform the second mutual prelude
 		if @intrinsic("greater than", value, 0):
-			@intrinsic("store", ignored, mutual first @intrinsic("subtract", value, 1))
-		mutual second after
+			@intrinsic("store", ignored, the first mutual recursive result for @intrinsic("subtract", value, 1))
+		perform the second mutual epilogue
 		@intrinsic("return", value)
 
-standalone helper
-@intrinsic("discard", direct 2)
-@intrinsic("discard", mutual first 2)
+record a standalone event
+ignore the direct recursive result for 2
+ignore the first mutual recursive result for 2

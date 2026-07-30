@@ -15,53 +15,51 @@ import lib/graphics.dl
 set window to a new window with width 800 and height 600
 
 # Load vertex shader (shared by all programs)
-set vert to a vertex shader from "tests/games/passthrough.spv"
+set vertex to a vertex shader from "tests/games/passthrough.spv"
 
 # Load all fragment shaders
-set frag0 to a fragment shader from "tests/games/mandelbrot.spv"
-set frag1 to a fragment shader from "tests/games/plasma.spv"
-set frag2 to a fragment shader from "tests/games/julia.spv"
-set frag3 to a fragment shader from "tests/games/rings.spv"
+set fragments to [
+    a fragment shader from "tests/games/mandelbrot.spv",
+    a fragment shader from "tests/games/plasma.spv",
+    a fragment shader from "tests/games/julia.spv",
+    a fragment shader from "tests/games/rings.spv"
+]
 
 # Create shader programs
-set prog0 to a shader program with vertex vert and fragment frag0
-set prog1 to a shader program with vertex vert and fragment frag1
-set prog2 to a shader program with vertex vert and fragment frag2
-set prog3 to a shader program with vertex vert and fragment frag3
+set programs to [
+    a shader program combining vertex and (the item at 0 in fragments),
+    a shader program combining vertex and (the item at 1 in fragments),
+    a shader program combining vertex and (the item at 2 in fragments),
+    a shader program combining vertex and (the item at 3 in fragments)
+]
 
-set time_ubo to a uniform buffer
-bind uniform buffer time_ubo to 0
+set timer to a new uniform buffer
+bind timer to binding 0
 
 set current to 0
-set was_pressed to 0
-use shader program prog0
+set ready to true
+use (the item at 0 in programs) as the shader program
 
-while not the window should close:
+while the window remains open:
     set key to the pressed key of window
     if key > 0:
         if key < 5:
-            if was_pressed = 0:
-                set current to current + 1
+            if ready:
+                set current to (current + 1)
                 if current > 3:
                     set current to 0
-                if current = 0:
-                    use shader program prog0
-                if current = 1:
-                    use shader program prog1
-                if current = 2:
-                    use shader program prog2
-                if current = 3:
-                    use shader program prog3
-                set was_pressed to 1
+                use (the item at current in programs) as the shader program
+                set ready to false
     if key = 0:
-        set was_pressed to 0
+        set ready to true
 
     # Pass time uniform via UBO (required for SPIR-V shaders)
-    set t to the time since start
-    update uniform buffer time_ubo with t
+    set time to the time since start
+    update timer with time
 
     clear the screen
     draw a fullscreen quad
     display the frame of window
 
+delete timer
 close the window

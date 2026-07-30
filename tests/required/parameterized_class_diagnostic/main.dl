@@ -1,0 +1,36 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [an|] array of {fixed integer:length} items:
+    replacement:
+        @intrinsic("array", length)
+
+class:
+    patterns:
+        [a|] box with {fixed integer:length} items
+    members:
+        values as an array of length items
+
+function a box with {fixed integer:length} items initialized from value:
+    replacement:
+        @intrinsic("construct", a box with length items, value)
+
+function consume {integer:value}:
+    replacement:
+        @intrinsic("discard", value)
+
+set result to a box with 2 items initialized from [1, 2]
+consume result

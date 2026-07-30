@@ -4,11 +4,11 @@ class:
     patterns:
         [an|] invalid managed value
     members:
-        number as integer
+        number as an integer
     retain:
         return 1
     release:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")
 
 set value to @intrinsic("construct", an invalid managed value, 1)
-discard value
+ignore value

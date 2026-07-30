@@ -1,0 +1,41 @@
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function a value:
+    replacement:
+        @intrinsic("type", "any")
+
+function fixed:
+    replacement:
+        @intrinsic("fix", a value)
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [a|] {fixed integer:bits} bit value:
+    replacement:
+        @intrinsic("type", "any", bits)
+
+function [a|] number:
+    replacement:
+        @intrinsic("number")
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function the selection for {a number:value}:
+    execute:
+        return 1
+
+function the selection for {a 32 bit value:value}:
+    execute:
+        return 2
+
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the selection for 7)

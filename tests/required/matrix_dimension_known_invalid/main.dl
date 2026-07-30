@@ -1,3 +1,3 @@
 import lib/std.dl
 
-discard @intrinsic("matrix", 0, 4)
+ignore @intrinsic("matrix", 0, 4)

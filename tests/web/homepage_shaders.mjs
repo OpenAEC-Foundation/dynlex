@@ -46,138 +46,160 @@ const compilerSource = fs.readFileSync(path.join(toolDir, "compiler.mjs"), "utf8
 assert.match(compilerSource, /const semanticTokensBySource = new Map\(\)/);
 assert.match(compilerSource, /semanticTokensBySource\.get\(source\)/);
 for (const [index, source] of shaderSources.entries()) {
+  const sourceWithoutImports = source
+    .split("\n")
+    .filter((line) => !line.startsWith("import "))
+    .join("\n");
   assert.doesNotMatch(
     source,
     /\b(?:cell_x|cell_y|grid_x|grid_y|value noise|fractal noise)\b/i,
     `${shaderConfig.scenes[index].id} must not reconstruct a visible square lattice`
+  );
+  assert.doesNotMatch(
+    sourceWithoutImports,
+    /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/,
+    `${shaderConfig.scenes[index].id} must use plain-English identifiers`
   );
 }
 assert.doesNotMatch(sharedSource, /function (?:value|fractal) noise\b/i);
 assert.doesNotMatch(sharedSource, /\bcell_[xy]\b/i);
 assert.match(
   sharedSource,
-  /function simplex field at x y phase/,
+  /function the simplex field at \{a point:point\} during \{a value:phase\}/,
   "Shared shader art must provide a non-square procedural field"
 );
 
-const terrainSource = shaderSources[1];
-assert.match(terrainSource, /function terrain height at x z/);
+function withoutAssignmentGrouping(source) {
+  return source.split("\n").map((line) => {
+    const match = line.match(/^(\s*set .+? to )\((.*)\)$/);
+    if (!match) return line;
+    let depth = 1;
+    let quoted = false;
+    for (let index = 0; index < match[2].length; index += 1) {
+      const character = match[2][index];
+      if (character === "\"" && match[2][index - 1] !== "\\") quoted = !quoted;
+      if (quoted) continue;
+      if (character === "(") depth += 1;
+      if (character === ")") depth -= 1;
+      if (depth === 0) return line;
+    }
+    return depth === 1 ? match[1] + match[2] : line;
+  }).join("\n");
+}
+
+const terrainSource = withoutAssignmentGrouping(shaderSources[1]);
+assert.match(terrainSource, /function the terrain height at \{terrain coordinate:position\}/);
+assert.match(terrainSource, /position's x \* 0\.011/);
+assert.match(terrainSource, /position's z \* 0\.011/);
+assert.match(terrainSource, /set crest /);
+assert.match(terrainSource, /set ridge /);
+assert.match(terrainSource, /set erosion /);
 assert.match(terrainSource, /if this is a vertex shader/);
-assert.match(terrainSource, /set the shader interpolant named "terrain_position"/);
-assert.match(terrainSource, /set the shader interpolant named "terrain_normal"/);
-assert.match(terrainSource, /set the shader interpolant named "terrain_material"/);
-assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain_position"/);
-assert.match(terrainSource, /the shader interpolant [xyz] named "terrain_normal"/);
-assert.match(terrainSource, /the shader interpolant x named "terrain_material"/);
-assert.match(terrainSource, /the shader interpolant y named "terrain_material"/);
-assert.match(terrainSource, /set displaced_height to terrain height at world_x world_z/);
-assert.match(terrainSource, /set ray_distance to the vertex y/);
-assert.match(terrainSource, /function terrain maximum possible height:\s+execute:\s+return 12\.10/);
-assert.match(terrainSource, /function terrain camera altitude:\s+execute:\s+return \(terrain maximum possible height\) \+ 0\.70/);
+assert.match(terrainSource, /set the shader interpolant named "terrain position"/);
+assert.match(terrainSource, /set the shader interpolant named "terrain normal"/);
+assert.match(terrainSource, /set the shader interpolant named "terrain material"/);
+assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain position"/);
+assert.match(terrainSource, /the shader interpolant [xyzw] named "terrain normal"/);
+assert.match(terrainSource, /the shader interpolant [xyz] named "terrain material"/);
+assert.match(
+  terrainSource,
+  /function the maximum possible terrain height:\s+execute:\s+return 12\.10/
+);
+assert.match(
+  terrainSource,
+  /function the terrain camera at moment:[\s\S]*y \(\(the maximum possible terrain height\) \+ 0\.70\)/
+);
 assert.equal(
-  (terrainSource.match(/set camera_y to terrain camera altitude/g) ?? []).length,
+  (terrainSource.match(/set camera to the terrain camera at time/g) ?? []).length,
   2,
-  "Vertex and fragment water stages must share one fixed camera altitude"
+  "Vertex and fragment water stages must share the fixed-altitude camera"
 );
-assert.match(terrainSource, /set camera_pitch to 0\.155/);
-assert.match(terrainSource, /set base_vertical_distance to 0\.0 - camera_y/);
-assert.doesNotMatch(
+assert.match(terrainSource, /set pitch to 0\.155/);
+assert.match(terrainSource, /set vertical to 0\.0 - camera's y/);
+assert.match(terrainSource, /set slope to \(\(the vertex x\) \* aspect\) \* 0\.80/);
+assert.match(
   terrainSource,
-  /\bcamera_ground\b/,
-  "The camera and its sampling plane must not follow terrain elevation"
+  /set scale to the square root of \(1\.0 \+ \(\(slope \* cosine\) \* \(slope \* cosine\)\)\)/
 );
-assert.match(terrainSource, /set ray_slope to \(\(the vertex x\) \* aspect\) \* 0\.80/);
-assert.match(terrainSource, /set ray_forward_scale to the square root of \(1\.0 \+ \(\(ray_slope \* pitch_cosine\) \* \(ray_slope \* pitch_cosine\)\)\)/);
-assert.match(terrainSource, /set forward_distance to ray_distance \/ ray_forward_scale/);
-assert.match(terrainSource, /set base_view_depth to \(forward_distance \* pitch_cosine\) - \(base_vertical_distance \* pitch_sine\)/);
-assert.match(terrainSource, /set lateral_distance to ray_slope \* base_view_depth/);
-assert.match(terrainSource, /set the shader interpolant named "terrain_normal" to normal_x normal_y normal_z ray_distance/);
-assert.match(terrainSource, /set clip_z to view_z \* 1\.00078 - 0\.40016/);
-assert.match(terrainSource, /set water_fog to smooth transition from 232\.0 to 376\.0 at ray_distance/);
-assert.match(terrainSource, /set fog to smooth transition from 188\.0 to 376\.0 at ray_distance/);
-assert.doesNotMatch(
+assert.match(terrainSource, /set forward to distance \/ scale/);
+assert.match(terrainSource, /set depth to \(forward \* cosine\) - \(vertical \* sine\)/);
+assert.match(terrainSource, /set lateral to slope \* depth/);
+assert.match(
   terrainSource,
-  /\bview_distance\b/,
-  "Terrain distance semantics must not mix radial and forward distances"
+  /set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance/
 );
-assert.doesNotMatch(
+assert.match(
   terrainSource,
-  /\b(?:depth_fraction|near_spread)\b/,
-  "Terrain rows must represent radial distances and columns must remain fixed camera rays"
+  /set clip to a spatial coordinate with x \(lateral \/ \(aspect \* 0\.72\)\), y \(view's x \/ 0\.72\) and z \(\(view's y \* 1\.00078\) - 0\.40016\)/
 );
-assert.match(terrainSource, /set mountain_ridge /);
-assert.match(terrainSource, /set erosion_channels /);
-assert.match(terrainSource, /function water detail visibility at distance:\s+execute:\s+return 1\.0 - \(smooth transition from 48\.0 to 96\.0 at distance\)/);
-assert.match(terrainSource, /set normal_step to 0\.34/);
-assert.match(terrainSource, /set height_left to terrain height at \(world_x - normal_step\) world_z/);
-assert.match(terrainSource, /set height_right to terrain height at \(world_x \+ normal_step\) world_z/);
-assert.match(terrainSource, /set height_back to terrain height at world_x \(world_z - normal_step\)/);
-assert.match(terrainSource, /set height_front to terrain height at world_x \(world_z \+ normal_step\)/);
-assert.match(terrainSource, /set normal_x to height_left - height_right/);
-assert.match(terrainSource, /set normal_y to normal_step \* 2\.0/);
-assert.match(terrainSource, /set normal_z to height_back - height_front/);
-assert.doesNotMatch(
+assert.match(
   terrainSource,
-  /set normal_step to .*\bray_distance\b/,
-  "Terrain normals must use one centered world-space gradient at every LOD"
+  /function the water detail visibility at distance:\s+execute:\s+return 1\.0 - the smooth transition from 48\.0 to 96\.0 at distance/
 );
-assert.doesNotMatch(
+assert.match(terrainSource, /set stride to 0\.34/);
+assert.match(
   terrainSource,
-  /\bstrata\b/,
-  "Mountain materials must not paint contour bands over the smooth terrain normals"
+  /set west to the terrain height at \(a terrain coordinate with x \(world's x - stride\) and z world's z\)/
 );
-assert.match(terrainSource, /set exposed_rock /);
+assert.match(
+  terrainSource,
+  /set east to the terrain height at \(a terrain coordinate with x \(world's x \+ stride\) and z world's z\)/
+);
+assert.match(
+  terrainSource,
+  /set south to the terrain height at \(a terrain coordinate with x world's x and z \(world's z - stride\)\)/
+);
+assert.match(
+  terrainSource,
+  /set north to the terrain height at \(a terrain coordinate with x world's x and z \(world's z \+ stride\)\)/
+);
+assert.match(terrainSource, /set the x coordinate of normal to west - east/);
+assert.match(terrainSource, /set the y coordinate of normal to stride \* 2\.0/);
+assert.match(terrainSource, /set the z coordinate of normal to south - north/);
+assert.doesNotMatch(terrainSource, /set stride to .*\bdistance\b/,
+  "Terrain normals must use one centered world-space gradient at every LOD");
+assert.doesNotMatch(terrainSource, /\bstrata\b/,
+  "Mountain materials must not paint contour bands over the smooth terrain normals");
+assert.match(terrainSource, /set exposure /);
 assert.match(terrainSource, /set snow /);
-assert.match(terrainSource, /surface_vertex > 1\.5/);
-assert.match(terrainSource, /set water_level /);
-assert.match(terrainSource, /set water_geometry_visibility to water detail visibility at ray_distance/);
-assert.match(terrainSource, /set surface_variation to 0\.5 \+ \(\(\(water_wave_x \+ water_wave_z\) \* 0\.25\) \* water_geometry_visibility\)/);
-assert.match(terrainSource, /set surface_detail to 0\.5 \+ \(\(water_wave_cross \* 0\.5\) \* water_geometry_visibility\)/);
-assert.match(terrainSource, /set water_depth to water_level - \(terrain height at world_x world_z\)/);
-assert.match(terrainSource, /the shader interpolant z named "terrain_material"/);
+assert.match(terrainSource, /if surface > 1\.5/);
+assert.match(terrainSource, /set level to -0\.62/);
+assert.match(terrainSource, /set visibility to the water detail visibility at distance/);
 assert.match(
   terrainSource,
-  /set shallow_water to \(1\.0 - \(smooth transition from 0\.18 to 3\.8 at water_depth\)\) \* water_ripple_visibility/
+  /set variation to 0\.5 \+ \(\(\(wave's x \+ wave's y\) \* 0\.25\) \* visibility\)/
+);
+assert.match(terrainSource, /set detail to 0\.5 \+ \(\(wave's z \* 0\.5\) \* visibility\)/);
+assert.match(
+  terrainSource,
+  /set submersion to the maximum of \(level - the terrain height at world\) and 0\.0/
 );
 assert.match(
   terrainSource,
-  /set water_caustic_depth to \(1\.0 - \(smooth transition from 0\.05 to 0\.65 at water_depth\)\) \* water_ripple_visibility/
+  /set shallows to \(1\.0 - the smooth transition from 0\.18 to 3\.8 at material's z\) \* visibility/
 );
-assert.match(terrainSource, /set water_caustic /);
 assert.match(
   terrainSource,
-  /set water_ripple_visibility to water detail visibility at ray_distance/
+  /set depth to \(1\.0 - the smooth transition from 0\.05 to 0\.65 at material's z\) \* visibility/
 );
-assert.match(terrainSource, /set water_view_facing /);
-assert.match(terrainSource, /set fresnel_grazing to 1\.0 - water_view_facing/);
-assert.match(terrainSource, /set water_fresnel to 0\.020 \+/);
-assert.match(terrainSource, /set reflected_sky_height /);
+assert.match(terrainSource, /set caustic /);
+assert.match(terrainSource, /set facing /);
+assert.match(terrainSource, /set grazing to 1\.0 - facing/);
+assert.match(terrainSource, /set fresnel to 0\.020 \+/);
+assert.match(terrainSource, /set altitude /);
 assert.match(
   terrainSource,
-  /set reflected_sun_alignment to saturate \(\(\(reflected_x \* 0\.39\) \+ \(reflected_y \* 0\.32\)\) \+ \(reflected_z \* 0\.86\)\)/
+  /set alignment to \(\(\(reflection's x \* 0\.39\) \+ \(reflection's y \* 0\.32\)\) \+ \(reflection's z \* 0\.86\)\) saturated/
 );
-assert.match(terrainSource, /set water_sun_glow /);
-assert.match(terrainSource, /set water_sun_glint /);
-assert.doesNotMatch(
-  terrainSource,
-  /\bwater_half_[xyz]\b/,
-  "Water must evaluate the sun against the reflected view ray directly"
-);
-assert.doesNotMatch(
-  terrainSource,
-  /\bwater_shimmer\b/,
-  "Water highlights must come from reflected light rather than a broad white threshold"
-);
+assert.match(terrainSource, /set glow to glint/);
+assert.match(terrainSource, /set glint to glint \* \(0\.35 \+ \(fresnel \* 0\.65\)\)/);
 assert.match(terrainSource, /simplex field at/);
-assert.doesNotMatch(
-  terrainSource,
-  /\b(?:signed flow|ridged field) at\b/,
-  "Terrain must not be assembled from periodic wave ridges"
-);
-assert.doesNotMatch(terrainSource, /\b(?:march_step|terrain_hit|hit_distance|refinement|ray_step)\b/);
+assert.doesNotMatch(terrainSource, /\b(?:signed flow|ridged field) at\b/,
+  "Terrain must not be assembled from periodic wave ridges");
+assert.doesNotMatch(terrainSource, /\b(?:terrain hit|hit distance|refinement)\b/);
 assert.doesNotMatch(terrainSource, /\briver\b/i);
 
-const nanoSource = shaderSources[2];
+const nanoSource = withoutAssignmentGrouping(shaderSources[2]);
 assert.equal(
   (nanoSource.match(/set moment to the minimum of time and 10\.40/g) ?? []).length,
   2,
@@ -190,180 +212,147 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   nanoSource,
-  /\bcrystal(?: distance|_visibility|_light)\b/i,
+  /\bcrystal\b/i,
   "The nano sequence must move directly between the motorcycle and Vitruvian figure"
 );
 for (const threeDimensionalDetail of [
-  "motorcycle_yaw",
-  "motorcycle_wheel_spin",
-  "wheel_point",
-  "packed_x",
-  "target_quantized_x",
-  "motorcycle_quantized_x",
-  "motorcycle_local_x",
-  "motorcycle_ndc_x",
-  "target_ndc_x",
+  "set packed to a spatial coordinate",
+  "set target to a spatial coordinate",
+  "set quantized to a spatial coordinate",
+  "set point to a spatial coordinate",
+  "set local to a spatial coordinate",
+  "set turned to a spatial coordinate",
+  "set world to a spatial coordinate",
+  "set motorcycle to a planar coordinate",
+  "set projection to a planar coordinate",
   "this is a vertex shader",
   "shader render pass",
-  "persistent point"
+  "persistent point population"
 ]) {
-  assert.match(
-    nanoSource,
-    new RegExp(threeDimensionalDetail.replaceAll(" ", "\\s+")),
-    `Nano choreography must define ${threeDimensionalDetail.replaceAll("_", " ")}`
+  assert.ok(
+    nanoSource.includes(threeDimensionalDetail),
+    `Nano choreography must define ${threeDimensionalDetail}`
   );
 }
-assert.doesNotMatch(
-  nanoSource,
-  /motorcycle distance at x y z|while ray_step|surface_drones|surface_hit|hologram_glow|motorcycle_part|shell_center_x|frame_start_x|rider_center_x/,
-  "The motorcycle must come from paired geometry points, not a raymarch or runtime geometry generator"
-);
-const pointLight = Object.fromEntries(
-  ["red", "green", "blue"].map((channel) => {
-    const match = nanoSource.match(
-      new RegExp(`set point_${channel} to ([\\d.]+) \\+ [^\\n]+ \\* ([\\d.]+)`)
-    );
-    assert.ok(match, `Vitruvian ${channel} point-light channel must be explicit`);
-    return [channel, Number(match[1]) + Number(match[2])];
-  })
-);
-assert.ok(pointLight.red >= 0.25, "Vitruvian red points must remain visible");
-assert.ok(pointLight.green >= 0.4, "Vitruvian green points must remain visible");
-assert.ok(pointLight.blue >= 0.75, "Vitruvian blue points must remain visible");
 assert.match(
   nanoSource,
-  /set relative_point_size to 0\.00104 \* \(0\.96 \+ render_pass \* 0\.04\)/,
+  /set size to 0\.00104 \* \(0\.96 \+ \(pass \* 0\.04\)\)/,
+  "Volumetric points must keep a resolution-independent physical footprint"
+);
+assert.match(
+  nanoSource,
+  /set extent to a planar coordinate with x \(size \* scale\) and y size/,
+  "Point width must compensate for the viewport aspect ratio"
+);
+assert.doesNotMatch(
+  nanoSource,
+  /motorcycle distance|ray march|surface drones|surface hit|hologram glow|motorcycle part/,
+  "The motorcycle must come from paired geometry points, not a raymarch or runtime geometry generator"
+);
+assert.match(
+  nanoSource,
+  /set color to a radiant color with red \(\(0\.08 \+ \(wave \* 0\.28\)\) \+ \(warmth \* 0\.38\)\), green \(\(0\.30 \+ \(scan \* 0\.24\)\) \+ \(warmth \* 0\.12\)\) and blue \(\(0\.66 \+ \(wave \* 0\.30\)\) - \(warmth \* 0\.18\)\)/,
+  "Vitruvian points must remain visibly blue-green"
+);
+assert.match(
+  nanoSource,
+  /set size to 0\.00104 \* \(0\.96 \+ \(pass \* 0\.04\)\)/,
   "Every volumetric point must use the same viewport-relative footprint"
 );
 assert.match(
   nanoSource,
-  /set point_size_x to relative_point_size \* viewport_horizontal_scale/,
+  /set extent to a planar coordinate with x \(size \* scale\) and y size/,
   "Point width must compensate for viewport aspect ratio"
-);
-assert.match(
-  nanoSource,
-  /set point_size_y to relative_point_size/,
-  "Point height must remain a fixed fraction of viewport height"
 );
 assert.doesNotMatch(
   nanoSource,
-  /point_size to [^\n]*\/ width/,
+  /set size to [^\n]*\/ frame's x/,
   "Point size must not remain fixed in physical framebuffer pixels"
 );
 assert.match(
   nanoSource,
-  /set triangle_corner to encoded_triangle_corner - \(wheel_point \* 4\.0\)/,
+  /set triangle to encoding - \(wheel \* 4\.0\)/,
   "Geometry must decode the wheel flag without changing the triangle corner"
 );
 assert.doesNotMatch(
   nanoSource,
-  /\b(?:point_group|build_wave)\b/,
+  /\b(?:point group|build wave)\b/,
   "The figure must not use region-specific weights or a build-wave visibility mask"
 );
-for (const swarmMotion of [
-  "drone_delay",
-  "assembly_progress",
-  "flight_arc",
-  "assembled_ndc_x",
-  "assembled_ndc_y"
-]) {
-  assert.match(
-    nanoSource,
-    new RegExp(`\\b${swarmMotion}\\b`),
-    `The motorcycle drones must define ${swarmMotion.replaceAll("_", " ")}`
-  );
-}
 assert.match(
   nanoSource,
-  /set assembly_progress to smooth transition from \(4\.45 \+ drone_delay\) to \(6\.65 \+ drone_delay\) at moment/,
+  /set assembly to the smooth transition from \(4\.45 \+ delay\) to \(6\.65 \+ delay\) at moment/,
   "Each drone must receive a long, stable, staggered flight window"
 );
 assert.match(
   nanoSource,
-  /set assembled_ndc_x to motorcycle_ndc_x \+ \(target_ndc_x - motorcycle_ndc_x\) \* assembly_progress \+ flight_x/,
+  /set assembled to a planar coordinate with x \(\(motorcycle's x \+ \(\(projection's x - motorcycle's x\) \* assembly\)\) \+ flight's x\) and y \(\(motorcycle's y \+ \(\(projection's y - motorcycle's y\) \* assembly\)\) \+ flight's y\)/,
   "The same points must fly directly from motorcycle positions into their final model positions"
 );
 assert.match(
   nanoSource,
-  /set flight_arc to \(the sine of \(assembly_progress \* 3\.14159265\)\)/,
+  /set arc to \(the sine of \(assembly \* 3\.14159265\)\) \* \(0\.10 \+ \(variation \* 0\.24\)\)/,
   "Curved flight must converge exactly at both endpoint shapes"
 );
 assert.match(
   nanoSource,
-  /set drone_seed_a to \(\(the sine of \(\(\(point_x \* 3\.13\) \+ \(point_y \* 2\.71\)\) \+ \(point_z \* 4\.19\)\)\) \* 0\.5\) \+ 0\.5/,
+  /set seed to \(\(the sine of \(\(\(point's x \* 3\.13\) \+ \(point's y \* 2\.71\)\) \+ \(point's z \* 4\.19\)\)\) \* 0\.5\) \+ 0\.5/,
   "Neighboring drones must follow a continuous flock field instead of random-looking paths"
 );
 assert.doesNotMatch(
   nanoSource,
-  /\b(?:swarm_x|swarm_y|swarm_z)\b/,
+  /\bswarm\b/,
   "The transition must not pass through an unrelated synthetic cloud"
-);
-assert.doesNotMatch(
-  nanoSource,
-  /\bfigure_offset_x\b/,
-  "The Vitruvian figure must not receive a horizontal viewport offset"
 );
 assert.match(
   nanoSource,
-  /set target_ndc_x to \(\(target_turned_x \* 1\.66\) \* viewport_horizontal_scale\) \/ target_depth/,
+  /set projection to a planar coordinate with x \(\(\(turned's x \* 1\.66\) \* scale\) \/ destination\) and y \(\(\(point's y \* 1\.86\) - 0\.04\) \/ destination\)/,
   "The Vitruvian target must remain centered in its perspective projection"
 );
 assert.match(
   nanoSource,
-  /set motorcycle_yaw to 1\.30 \+ \(motorcycle_progress \* 0\.04\)/,
+  /set yaw to 1\.30 \+ \(progress \* 0\.04\)/,
   "The motorcycle front must lead its movement toward the camera"
 );
 assert.match(
   nanoSource,
-  /set motorcycle_ndc_x to \(\(motorcycle_world_x \* 1\.72\) \* viewport_horizontal_scale\) \/ motorcycle_depth/,
+  /set motorcycle to a planar coordinate with x \(\(\(world's x \* 1\.72\) \* scale\) \/ depth\) and y \(\(world's y \* 1\.72\) \/ depth\)/,
   "The motorcycle must use a perspective divide after its world transform"
 );
-assert.match(nanoSource, /set viewport_horizontal_scale to 1\.0 \/ aspect/);
-assert.match(nanoSource, /set flight_x to \(\(\(the cosine of flight_phase\) \* flight_arc\) \+ flight_sweep\) \* viewport_horizontal_scale/);
+assert.match(nanoSource, /set scale to 1\.0 \/ aspect/);
+assert.match(
+  nanoSource,
+  /set flight to a planar coordinate with x \(\(\(\(the cosine of phase\) \* arc\) \+ sweep\) \* scale\) and y \(\(\(the sine of phase\) \* arc\) \* 0\.72\)/
+);
 assert.doesNotMatch(nanoSource, /the maximum of aspect and 1\.0/, "Portrait projection must not squash the drone scene horizontally");
 assert.match(
   nanoSource,
-  /set clip_x to \(assembled_ndc_x \+ corner_x\) \* depth/,
+  /set clip to a planar coordinate with x \(\(assembled's x \+ corner's x\) \* depth\) and y \(\(assembled's y \+ corner's y\) \* depth\)/,
   "Projected motorcycle points must return to homogeneous clip space"
 );
-for (const radiusMeasurement of [
-  "measurement_angle",
-  "radius_center_y",
-  "radius_end_x",
-  "radius_end_y",
-  "radius_line",
-  "radius_tick",
-  "circle_highlight"
-]) {
-  assert.match(
-    nanoSource,
-    new RegExp(`\\b${radiusMeasurement}\\b`),
-    `The Vitruvian measurement must define ${radiusMeasurement.replaceAll("_", " ")}`
-  );
-}
 assert.match(
   nanoSource,
-  /distance from point screen_x screen_y to segment 0\.0 radius_center_y radius_end_x radius_end_y/,
+  /set distance to the distance from screen to segment from center to ending/,
   "The measurement line must extend from the model center to the circle"
 );
 assert.match(
   nanoSource,
-  /set radius_end_x to circle_turned_x \* 1\.66 \/ circle_depth/,
+  /set ending to a planar coordinate with x \(\(turned's x \* 1\.66\) \/ depth\) and y \(\(\(source's y \* 1\.86\) - 0\.04\) \/ depth\)/,
   "The radius endpoint must use the same perspective projection as the circle"
 );
 assert.match(
   nanoSource,
-  /set measurement_visibility to smooth transition from 7\.55 to 8\.10 at moment/,
+  /set visibility to the smooth transition from 7\.55 to 8\.10 at moment/,
   "The measurement must remain visible for the completed one-shot composition"
 );
 assert.match(
   nanoSource,
-  /set measurement_angle to \(time - 7\.55\) \* 1\.32/,
+  /set angle to \(time - 7\.55\) \* 1\.32/,
   "The measurement must keep rotating after the one-shot choreography clock stops"
 );
 assert.doesNotMatch(
   nanoSource,
-  /set measurement_angle to \(moment -/,
+  /set angle to \(moment -/,
   "The measurement angle must not use the clamped choreography clock"
 );
 assert.doesNotMatch(
@@ -373,17 +362,16 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   nanoSource,
-  /distance from point bike_x bike_y to segment|distance from point human_x human_y to segment/,
+  /distance from point bike|distance from point human/,
   "The motorcycle and Vitruvian figure must not be 2D line drawings"
 );
 for (const sharedThreeDimensionalPrimitive of [
-  "function distance from three dimensional point x y z to capsule",
-  "function ellipsoid distance at x y z",
-  "function torus distance at x y z"
+  "function the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius",
+  "function the ellipsoid distance from {a point:point} with radii {a point:radii}",
+  "function the torus distance from {a point:point} with major radius"
 ]) {
-  assert.match(
-    sharedSource,
-    new RegExp(sharedThreeDimensionalPrimitive.replaceAll(" ", "\\s+")),
+  assert.ok(
+    sharedSource.includes(sharedThreeDimensionalPrimitive),
     `Shared shader art must provide ${sharedThreeDimensionalPrimitive}`
   );
 }

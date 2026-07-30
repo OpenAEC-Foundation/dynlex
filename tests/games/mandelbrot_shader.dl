@@ -1,39 +1,38 @@
-import lib/shader.dl
+import tests/games/shader_values.dl
 
 # Animated Mandelbrot fragment shader — zooms into the fractal
 # DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
-set px to the fragment x coordinate
-set py to the fragment y coordinate
-set t to the shader time
+set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set time to the shader time
 
 # Animated zoom: oscillate zoom level with time
-set zoom_sin to the sine of (t * 0.3)
-set zoom to 1.0 + 2.0 * zoom_sin * zoom_sin
-set zoom to zoom * zoom * zoom
+set wave to the sine of (time * 0.3)
+set zoom to (1.0 + ((2.0 * wave) * wave))
+set zoom to ((zoom * zoom) * zoom)
 
 # Zoom target: Seahorse Valley area (-0.745, 0.186)
-set center_x to 0.0 - 0.745
-set center_y to 0.186
+set center to a complex number with real (0.0 - 0.745) and imaginary 0.186
 
 # Map pixel to complex plane centered on zoom target
-set cx to center_x + (px / 800.0 * 3.0 - 1.5) / zoom
-set cy to center_y + (py / 600.0 * 3.0 - 1.5) / zoom
+set coordinate to a complex number with real (center's real part + (pixel's x / 800.0 * 3.0 - 1.5) / zoom) and imaginary (center's imaginary part + (pixel's y / 600.0 * 3.0 - 1.5) / zoom)
 
-set zx to 0.0
-set zy to 0.0
+set orbit to a complex number with real 0.0 and imaginary 0.0
 set iteration to 0
-set max_iterations to 100
+set limit to 100
+set magnitude to ((orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part))
 
-while iteration < max_iterations and zx * zx + zy * zy < 4.0:
-    set tmp to zx * zx - zy * zy + cx
-    set zy to 2.0 * zx * zy + cy
-    set zx to tmp
-    set iteration to iteration + 1
+while iteration < limit and magnitude < 4.0:
+    set next to (((orbit's real part * orbit's real part) - (orbit's imaginary part * orbit's imaginary part)) + coordinate's real part)
+    set the imaginary part of orbit to (((2.0 * orbit's real part) * orbit's imaginary part) + coordinate's imaginary part)
+    set the real part of orbit to next
+    set iteration to (iteration + 1)
+    set magnitude to ((orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part))
 
 # Color based on iteration count
-set tf to iteration as a float / max_iterations as a float
-if iteration = max_iterations:
-    set the fragment color to 0.0 0.0 0.0 1.0
+set progress to ((iteration as a floating-point number) / (limit as a floating-point number))
+if iteration = limit:
+    set the fragment color with a red channel of 0.0, a green channel of 0.0, a blue channel of 0.0 and an alpha channel of 1.0
 else:
-    set the fragment color to tf 0.5 * tf 1.0 - tf 1.0
+    set color to a light color with red progress, green (0.5 * progress), blue (1.0 - progress) and alpha 1.0
+    set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of color's alpha

@@ -1,4 +1,4 @@
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -6,24 +6,24 @@ function floating:
     replacement:
         @intrinsic("type", "float")
 
-function fixed tofix:
+function fixed quantity:
     replacement:
-        @intrinsic("fix", tofix)
+        @intrinsic("fix", quantity)
 
-function accept {wrapped type of 32:value}:
+function accept {the wrapped type of 32:value}:
     execute:
         @intrinsic("discard", value)
 
-function wrapped type of value:
+function the wrapped type of value:
     replacement:
-        type of value
+        the type of value
 
-function type of {fixed floating:value}:
+function the type of {fixed floating:value}:
     replacement:
         @intrinsic("discard", value)
         @intrinsic("type", "float", 32)
 
-function type of {fixed integer:value}:
+function the type of {fixed integer:value}:
     replacement:
         @intrinsic("discard", value)
         @intrinsic("type", "int", 32)

@@ -10,10 +10,6 @@ function left = right:
     replacement:
         @intrinsic("equal", left, right)
 
-function not value:
-    replacement:
-        @intrinsic("not", value)
-
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
@@ -36,7 +32,7 @@ class:
 
 flex function ensure {list:values} using sample:
     replacement:
-        set new_capacity to the capacity of values + sample
+        set capacity to (the capacity of values + sample)
 
 flex function append item to {list:values}:
     replacement:
@@ -50,12 +46,16 @@ function {wrapper:items} contains item:
     execute:
         return the values of items contains item
 
+function {wrapper:items} does not contain item:
+    execute:
+        return @intrinsic("not", items contains item)
+
 flex function add item to {wrapper:items}:
     replacement:
-        if not items contains item:
-            set updated_values to the values of items
-            append item to updated_values
-            set the values of items to updated_values
+        if items does not contain item:
+            set updated to the values of items
+            append item to updated
+            set the values of items to updated
 
 set values to @intrinsic("construct", a list, 7)
 set items to @intrinsic("construct", a wrapper, values)

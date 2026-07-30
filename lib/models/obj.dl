@@ -1,756 +1,687 @@
 # DynLex OBJ Model Library
 #
-# Scope:
-# - Loads Wavefront OBJ files with vertex positions, UVs, materials and texture bindings
-# - Supports triangulated `f v/t` faces
-# - Loads `map_Kd` textures from PPM P6 files
+# Loads Wavefront OBJ files with vertex positions, texture coordinates,
+# materials, and PPM P6 texture bindings.
 
 import lib/std.dl
 
 class:
     patterns:
-        [an|a|] obj vertex
+        [an|] OBJ color
     members:
-        x as a float
-        y as a float
-        z as a float
-        has_color as i32
-        color_r as a float
-        color_g as a float
-        color_b as a float
+        red as a floating-point number
+        green as a floating-point number
+        blue as a floating-point number
 
 class:
     patterns:
-        [an|a|] obj texcoord
+        [an|] OBJ vertex
     members:
-        u as a float
-        v as a float
+        x as a floating-point number
+        y as a floating-point number
+        z as a floating-point number
+        color presence as an integer
+        color as an OBJ color
 
 class:
     patterns:
-        [an|a|] obj triangle
+        [an|] OBJ texture coordinate
     members:
-        a as i32
-        b as i32
-        c as i32
-        ta as i32
-        tb as i32
-        tc as i32
-        material as i32
+        u as a floating-point number
+        v as a floating-point number
 
 class:
     patterns:
-        [an|a|] obj material
+        [an|] OBJ face reference
     members:
-        name as a pointer to byte
-        color_r as a float
-        color_g as a float
-        color_b as a float
-        texture_path as a pointer to byte
-        texture_id as i32
+        vertex as an integer
+        texture coordinate as an integer
+        normal as an integer
 
 class:
     patterns:
-        [an|a|] obj material set
+        [an|] OBJ triangle
     members:
-        materials as a pointer to obj material
-        material_count as i32
+        first as an OBJ face reference
+        second as an OBJ face reference
+        third as an OBJ face reference
+        material as an integer
 
 class:
     patterns:
-        [an|a|] obj mesh
+        [an|] OBJ material
+    members:
+        name as a pointer to a byte
+        color as an OBJ color
+        texture path as a pointer to a byte
+        texture as an integer
+
+class:
+    patterns:
+        [an|] OBJ material set
+    members:
+        materials as a pointer to an OBJ material
+        count as an integer
+
+class:
+    patterns:
+        [an|] OBJ mesh quantities
+    members:
+        vertices as an integer
+        texture coordinates as an integer
+        triangles as an integer
+        materials as an integer
+
+class:
+    patterns:
+        [an|] OBJ mesh
         [a|] model mesh
     members:
-        vertices as a pointer to obj vertex
-        vertex_count as i32
-        texcoords as a pointer to obj texcoord
-        texcoord_count as i32
-        triangles as a pointer to obj triangle
-        triangle_count as i32
-        materials as a pointer to obj material
-        material_count as i32
+        vertices as a pointer to an OBJ vertex
+        vertex count as an integer
+        texture coordinates as a pointer to an OBJ texture coordinate
+        texture coordinate count as an integer
+        triangles as a pointer to an OBJ triangle
+        triangle count as an integer
+        materials as a pointer to an OBJ material
+        material count as an integer
 
-function a new obj vertex from x y z:
+function a new OBJ color from {a value:red}, {a value:green} and {a value:blue}:
     replacement:
-        @intrinsic("construct", an obj vertex, x, y, z, 0, 0.0, 0.0, 0.0)
+        @intrinsic("construct", an OBJ color, red, green, blue)
 
-function a new obj colored vertex from x y z and color r g b:
+function a grayscale OBJ color with brightness {a value:brightness}:
     replacement:
-        @intrinsic("construct", an obj vertex, x, y, z, 1, r, g, b)
+        @intrinsic("construct", an OBJ color, brightness, brightness, brightness)
 
-function a new obj texcoord from u v:
+function a new OBJ vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
     replacement:
-        @intrinsic("construct", an obj texcoord, u, v)
+        @intrinsic("construct", an OBJ vertex, horizontal, vertical, depth, 0, (a new OBJ color from 0.0, 0.0 and 0.0))
 
-function a new obj triangle from a b c and uv indices ta tb tc in material material_index:
+function a new colored OBJ vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} in {OBJ color:color}:
     replacement:
-        @intrinsic("construct", an obj triangle, a, b, c, ta, tb, tc, material_index)
+        @intrinsic("construct", an OBJ vertex, horizontal, vertical, depth, 1, color)
 
-function a new obj material with name material_name and color r g b and texture path texture_name and texture id texture_id:
+function a new OBJ texture coordinate with u {a value:horizontal} and v {a value:vertical}:
     replacement:
-        @intrinsic("construct", an obj material, material_name, r, g, b, texture_name, texture_id)
+        @intrinsic("construct", an OBJ texture coordinate, horizontal, vertical)
 
-function a new obj material set with materials material_ptr and count material_total:
+function a new OBJ face reference with vertex {a value:vertex}, texture coordinate {a value:texture} and normal {a value:normal}:
     replacement:
-        @intrinsic("construct", an obj material set, material_ptr, material_total)
+        @intrinsic("construct", an OBJ face reference, vertex, texture, normal)
 
-function a new obj mesh with vertices verts count vertex_total and texcoords tex count tex_total and triangles tris count triangle_total and materials material_ptr count material_total:
+function a new OBJ triangle from {OBJ face reference:first}, {OBJ face reference:second} and {OBJ face reference:third} in material {a value:material}:
     replacement:
-        @intrinsic("construct", an obj mesh, verts, vertex_total, tex, tex_total, tris, triangle_total, material_ptr, material_total)
+        @intrinsic("construct", an OBJ triangle, first, second, third, material)
 
-function an empty obj material set:
+function a new OBJ material named {a value:name} with {OBJ color:color}, texture path {a value:path} and texture {a value:texture}:
+    replacement:
+        @intrinsic("construct", an OBJ material, name, color, path, texture)
+
+function a new OBJ material set containing {a value:materials} totalling {a value:count}:
+    replacement:
+        @intrinsic("construct", an OBJ material set, materials, count)
+
+function a new OBJ mesh quantities with vertices {a value:vertices}, texture coordinates {a value:coordinates}, triangles {a value:triangles} and materials {a value:materials}:
+    replacement:
+        @intrinsic("construct", an OBJ mesh quantities, vertices, coordinates, triangles, materials)
+
+function a new OBJ mesh backed by {a value:vertices}, {a value:coordinates}, {a value:triangles} and {a value:materials}, sized according to {OBJ mesh quantities:quantities}:
+    replacement:
+        @intrinsic("construct", an OBJ mesh, vertices, quantities's vertices, coordinates, quantities's texture coordinates, triangles, quantities's triangles, materials, quantities's materials)
+
+function an empty OBJ material set:
     execute:
-        return a new obj material set with materials (0 as a pointer to obj material) and count 0
+        return a new OBJ material set containing (0 as a pointer to an OBJ material) totalling 0
 
-function an empty obj mesh:
+function an empty OBJ mesh:
     execute:
-        return a new obj mesh with vertices (0 as a pointer to obj vertex) count 0 and texcoords (0 as a pointer to obj texcoord) count 0 and triangles (0 as a pointer to obj triangle) count 0 and materials (0 as a pointer to obj material) count 0
+        set quantities to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
+        return a new OBJ mesh backed by (0 as a pointer to an OBJ vertex), (0 as a pointer to an OBJ texture coordinate), (0 as a pointer to an OBJ triangle) and (0 as a pointer to an OBJ material), sized according to quantities
 
-function a duplicated obj cstring from source:
+function a duplicated OBJ C string from source:
     execute:
-        if source = 0 as a pointer to byte:
-            return 0 as a pointer to byte
+        if source = 0 as a pointer to a byte:
+            return 0 as a pointer to a byte
 
-        set source_length to @intrinsic("call", "libc", "strlen", a word sized integer, source)
-        set copy to @intrinsic("call", "libc", "malloc", a pointer to byte, source_length + 1)
-        if copy = 0 as a pointer to byte:
-            return 0 as a pointer to byte
+        set length to @intrinsic("call", "libc", "strlen", a word sized integer, source)
+        set copy to @intrinsic("call", "libc", "malloc", a pointer to a byte, length + 1)
+        if copy = 0 as a pointer to a byte:
+            return 0 as a pointer to a byte
 
-        discard @intrinsic("call", "libc", "memcpy", a pointer to byte, copy, source, source_length + 1)
+        ignore @intrinsic("call", "libc", "memcpy", a pointer to a byte, copy, source, length + 1)
         return copy
 
-function a loaded obj texture from ppm path:
+function a loaded OBJ texture from PPM file at path:
     execute:
-        set file to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "rb")
-        if file = 0 as a pointer to byte:
+        set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if stream = 0 as a pointer to a byte:
             return 0
 
         set width to 0
         set height to 0
-        set max_value to 0
-
-        set header_read to @intrinsic("variadic call", "libc", "fscanf", an integer, 2, file, "P6 %d %d %d", address of width, address of height, address of max_value)
-        if (header_read != 3) or ((width <= 0) or ((height <= 0) or (max_value != 255))):
-            discard @intrinsic("call", "libc", "fclose", an integer, file)
+        set maximum to 0
+        set fields to @intrinsic("variadic call", "libc", "fscanf", an integer, 2, stream, "P6 %d %d %d", the address of width, the address of height, the address of maximum)
+        if (fields != 3) or ((width <= 0) or ((height <= 0) or (maximum != 255))):
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
             return 0
 
-        discard @intrinsic("call", "libc", "fgetc", an integer, file)
+        ignore @intrinsic("call", "libc", "fgetc", an integer, stream)
 
-        set pixel_count to width * height
-        multiply pixel_count by 3
-        set pixels to @intrinsic("call", "libc", "malloc", a pointer to byte, pixel_count as a word sized integer)
-        if pixels = 0 as a pointer to byte:
-            discard @intrinsic("call", "libc", "fclose", an integer, file)
+        set count to (width * height)
+        multiply count by 3
+        set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
+        if pixels = 0 as a pointer to a byte:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
             return 0
 
-        set bytes_read to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, pixel_count as a word sized integer, file)
-        discard @intrinsic("call", "libc", "fclose", an integer, file)
+        set received to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, count as a word sized integer, stream)
+        ignore @intrinsic("call", "libc", "fclose", an integer, stream)
 
-        set expected_byte_count to pixel_count as a word sized integer
-        if bytes_read != expected_byte_count:
-            @intrinsic("call", "libc", "free", void, pixels)
+        if received != count as a word sized integer:
+            @intrinsic("call", "libc", "free", nothing, pixels)
             return 0
 
-        set texture_id to 0 as a 32 bit integer
-        @intrinsic("call", "GL", "glGenTextures", void, 1, address of texture_id)
-        @intrinsic("call", "GL", "glBindTexture", void, 3553, texture_id)
-        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10241, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10240, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10242, 10497)
-        @intrinsic("call", "GL", "glTexParameteri", void, 3553, 10243, 10497)
-        @intrinsic("call", "GL", "glTexImage2D", void, 3553, 0, 6407, width, height, 0, 6407, 5121, pixels)
+        set identifier to 0 as an integer
+        @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of identifier)
+        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, identifier)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 10497)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 10497)
+        @intrinsic("call", "GL", "glTexImage2D", nothing, 3553, 0, 6407, width, height, 0, 6407, 5121, pixels)
 
-        @intrinsic("call", "libc", "free", void, pixels)
-        return texture_id as an integer
+        @intrinsic("call", "libc", "free", nothing, pixels)
+        return identifier as an integer
 
-function the index of obj material named material_name in materials count material_count:
+function the index of OBJ material named {a value:name} in {a value:materials} with count {a value:count}:
     execute:
-        set material_lookup_i to 0
-        while material_lookup_i < material_count:
-            set material_entry to item material_lookup_i of materials
-            if @intrinsic("call", "libc", "strcmp", an integer, material_entry's name, material_name) = 0:
-                return material_lookup_i
-            increment material_lookup_i
+        set cursor to 0
+        while cursor < count:
+            set entry to the item at cursor in materials
+            if @intrinsic("call", "libc", "strcmp", an integer, entry's name, name) = 0:
+                return cursor
+            increment cursor
         return -1
 
-function a loaded obj material set from mtl_path:
+function a loaded OBJ material set from path:
     execute:
-        if mtl_path = 0 as a pointer to byte:
-            return an empty obj material set
+        if path = 0 as a pointer to a byte:
+            return an empty OBJ material set
 
-        set file to @intrinsic("call", "libc", "fopen", a pointer to byte, mtl_path, "rb")
-        if file = 0 as a pointer to byte:
-            return an empty obj material set
+        set file to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if file = 0 as a pointer to a byte:
+            return an empty OBJ material set
 
-        set material_capacity to 16
-        set material_count to 0
-        set materials to @intrinsic("call", "libc", "malloc", a pointer to obj material, (material_capacity * the size of an obj material) as a word sized integer)
-        if materials = 0 as a pointer to obj material:
-            discard @intrinsic("call", "libc", "fclose", an integer, file)
-            return an empty obj material set
+        set capacity to 16
+        set count to 0
+        set materials to @intrinsic("call", "libc", "malloc", a pointer to an OBJ material, (capacity * the size of an OBJ material) as a word sized integer)
+        if materials = 0 as a pointer to an OBJ material:
+            ignore @intrinsic("call", "libc", "fclose", an integer, file)
+            return an empty OBJ material set
 
-        set line to @intrinsic("call", "libc", "malloc", a pointer to byte, 4096 as a word sized integer)
-        set material_name_buffer to @intrinsic("call", "libc", "malloc", a pointer to byte, 512 as a word sized integer)
-        set texture_name_buffer to @intrinsic("call", "libc", "malloc", a pointer to byte, 2048 as a word sized integer)
+        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
+        set name to @intrinsic("call", "libc", "malloc", a pointer to a byte, 512 as a word sized integer)
+        set texture to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2048 as a word sized integer)
 
-        if (line = 0 as a pointer to byte) or ((material_name_buffer = 0 as a pointer to byte) or (texture_name_buffer = 0 as a pointer to byte)):
-            if line != 0 as a pointer to byte:
-                @intrinsic("call", "libc", "free", void, line)
-            if material_name_buffer != 0 as a pointer to byte:
-                @intrinsic("call", "libc", "free", void, material_name_buffer)
-            if texture_name_buffer != 0 as a pointer to byte:
-                @intrinsic("call", "libc", "free", void, texture_name_buffer)
-            @intrinsic("call", "libc", "free", void, materials)
-            discard @intrinsic("call", "libc", "fclose", an integer, file)
-            return an empty obj material set
+        if (line = 0 as a pointer to a byte) or ((name = 0 as a pointer to a byte) or (texture = 0 as a pointer to a byte)):
+            if line != 0 as a pointer to a byte:
+                @intrinsic("call", "libc", "free", nothing, line)
+            if name != 0 as a pointer to a byte:
+                @intrinsic("call", "libc", "free", nothing, name)
+            if texture != 0 as a pointer to a byte:
+                @intrinsic("call", "libc", "free", nothing, texture)
+            @intrinsic("call", "libc", "free", nothing, materials)
+            ignore @intrinsic("call", "libc", "fclose", an integer, file)
+            return an empty OBJ material set
 
-        set current_material to -1
-        set kd_r to 0.8
-        set kd_g to 0.8
-        set kd_b to 0.8
+        set current to -1
+        set red to 0.8
+        set green to 0.8
+        set blue to 0.8
 
-        set has_line to @intrinsic("call", "libc", "fgets", a pointer to byte, line, 4096, file)
-        while has_line != 0 as a pointer to byte:
-            if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "newmtl %511s", material_name_buffer) = 1:
-                if material_count >= material_capacity:
-                    multiply material_capacity by 2
-                    set materials to @intrinsic("call", "libc", "realloc", a pointer to obj material, materials, (material_capacity * the size of an obj material) as a word sized integer)
+        set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
+        while status != 0 as a pointer to a byte:
+            if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "newmtl %511s", name) = 1:
+                if count >= capacity:
+                    multiply capacity by 2
+                    set materials to @intrinsic("call", "libc", "realloc", a pointer to an OBJ material, materials, (capacity * the size of an OBJ material) as a word sized integer)
 
-                set new_name to a duplicated obj cstring from material_name_buffer
-                set new_material to a new obj material with name new_name and color 0.8 0.8 0.8 and texture path (0 as a pointer to byte) and texture id 0
-                store new_material into materials at material_count
-                set current_material to material_count
-                increment material_count
+                set copy to a duplicated OBJ C string from name
+                set entry to a new OBJ material named copy with (a new OBJ color from 0.8, 0.8 and 0.8), texture path (0 as a pointer to a byte) and texture 0
+                store entry into materials at count
+                set current to count
+                increment count
             else:
-                if (current_material >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "Kd %lf %lf %lf", address of kd_r, address of kd_g, address of kd_b) = 3):
-                    set existing to item current_material of materials
-                    set updated to a new obj material with name existing's name and color kd_r kd_g kd_b and texture path existing's texture_path and texture id existing's texture_id
-                    store updated into materials at current_material
+                if (current >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "Kd %lf %lf %lf", the address of red, the address of green, the address of blue) = 3):
+                    set existing to the item at current in materials
+                    set color to a new OBJ color from red, green and blue
+                    set updated to a new OBJ material named existing's name with color, texture path existing's texture path and texture existing's texture
+                    store updated into materials at current
                 else:
-                    if (current_material >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "map_Kd %2047s", texture_name_buffer) = 1):
-                        set existing to item current_material of materials
-                        set new_texture_path to a duplicated obj cstring from texture_name_buffer
-                        set new_texture_id to a loaded obj texture from ppm new_texture_path
+                    if (current >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "map_Kd %2047s", texture) = 1):
+                        set existing to the item at current in materials
+                        set reference to a duplicated OBJ C string from texture
+                        set identifier to a loaded OBJ texture from PPM file at reference
 
-                        if existing's texture_path != 0 as a pointer to byte:
-                            @intrinsic("call", "libc", "free", void, existing's texture_path)
+                        if existing's texture path != 0 as a pointer to a byte:
+                            @intrinsic("call", "libc", "free", nothing, existing's texture path)
 
-                        set updated to a new obj material with name existing's name and color existing's color_r existing's color_g existing's color_b and texture path new_texture_path and texture id new_texture_id
-                        store updated into materials at current_material
+                        set updated to a new OBJ material named existing's name with existing's color, texture path reference and texture identifier
+                        store updated into materials at current
 
-            set has_line to @intrinsic("call", "libc", "fgets", a pointer to byte, line, 4096, file)
+            set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
 
-        discard @intrinsic("call", "libc", "fclose", an integer, file)
-        @intrinsic("call", "libc", "free", void, line)
-        @intrinsic("call", "libc", "free", void, material_name_buffer)
-        @intrinsic("call", "libc", "free", void, texture_name_buffer)
+        ignore @intrinsic("call", "libc", "fclose", an integer, file)
+        @intrinsic("call", "libc", "free", nothing, line)
+        @intrinsic("call", "libc", "free", nothing, name)
+        @intrinsic("call", "libc", "free", nothing, texture)
 
-        if material_count = 0:
-            @intrinsic("call", "libc", "free", void, materials)
-            set materials to (0 as a pointer to obj material)
+        if count = 0:
+            @intrinsic("call", "libc", "free", nothing, materials)
+            set materials to (0 as a pointer to an OBJ material)
         else:
-            set materials to @intrinsic("call", "libc", "realloc", a pointer to obj material, materials, (material_count * the size of an obj material) as a word sized integer)
+            set materials to @intrinsic("call", "libc", "realloc", a pointer to an OBJ material, materials, (count * the size of an OBJ material) as a word sized integer)
 
-        return a new obj material set with materials materials and count material_count
+        return a new OBJ material set containing materials totalling count
 
-function a loaded obj mesh from path:
+function the zero-based OBJ index from {a value:index}:
     execute:
-        set scan_file to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "rb")
-        if scan_file = 0 as a pointer to byte:
-            return an empty obj mesh
+        if index > 0:
+            return index - 1
+        return index
 
-        set scan_line to @intrinsic("call", "libc", "malloc", a pointer to byte, 4096 as a word sized integer)
-        set mtllib_buffer to @intrinsic("call", "libc", "malloc", a pointer to byte, 2048 as a word sized integer)
-        set mtl_path to (0 as a pointer to byte)
+function {OBJ face reference:reference} converted to zero-based OBJ indices:
+    execute:
+        return a new OBJ face reference with vertex the zero-based OBJ index from reference's vertex, texture coordinate the zero-based OBJ index from reference's texture coordinate and normal the zero-based OBJ index from reference's normal
 
-        if (scan_line != 0 as a pointer to byte) and (mtllib_buffer != 0 as a pointer to byte):
-            set has_scan_line to @intrinsic("call", "libc", "fgets", a pointer to byte, scan_line, 4096, scan_file)
-            while has_scan_line != 0 as a pointer to byte:
-                if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, scan_line, "mtllib %2047s", mtllib_buffer) = 1:
-                    if mtl_path != 0 as a pointer to byte:
-                        @intrinsic("call", "libc", "free", void, mtl_path)
-                    set mtl_path to a duplicated obj cstring from mtllib_buffer
+function a loaded OBJ mesh from path:
+    execute:
+        set scanner to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if scanner = 0 as a pointer to a byte:
+            return an empty OBJ mesh
 
-                set has_scan_line to @intrinsic("call", "libc", "fgets", a pointer to byte, scan_line, 4096, scan_file)
+        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
+        set library to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2048 as a word sized integer)
+        set reference to 0 as a pointer to a byte
 
-        discard @intrinsic("call", "libc", "fclose", an integer, scan_file)
+        if (line != 0 as a pointer to a byte) and (library != 0 as a pointer to a byte):
+            set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
+            while status != 0 as a pointer to a byte:
+                if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "mtllib %2047s", library) = 1:
+                    if reference != 0 as a pointer to a byte:
+                        @intrinsic("call", "libc", "free", nothing, reference)
+                    set reference to a duplicated OBJ C string from library
+                set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
 
-        if scan_line != 0 as a pointer to byte:
-            @intrinsic("call", "libc", "free", void, scan_line)
-        if mtllib_buffer != 0 as a pointer to byte:
-            @intrinsic("call", "libc", "free", void, mtllib_buffer)
+        ignore @intrinsic("call", "libc", "fclose", an integer, scanner)
+        if line != 0 as a pointer to a byte:
+            @intrinsic("call", "libc", "free", nothing, line)
+        if library != 0 as a pointer to a byte:
+            @intrinsic("call", "libc", "free", nothing, library)
 
-        set loaded_materials to a loaded obj material set from mtl_path
-        if mtl_path != 0 as a pointer to byte:
-            @intrinsic("call", "libc", "free", void, mtl_path)
+        set catalogue to a loaded OBJ material set from reference
+        if reference != 0 as a pointer to a byte:
+            @intrinsic("call", "libc", "free", nothing, reference)
 
-        set materials to loaded_materials's materials
-        set material_count to loaded_materials's material_count
+        set materials to catalogue's materials
+        set total to catalogue's count
 
-        set file to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "rb")
-        if file = 0 as a pointer to byte:
-            if materials != 0 as a pointer to obj material:
-                @intrinsic("call", "libc", "free", void, materials)
-            return an empty obj mesh
+        set file to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if file = 0 as a pointer to a byte:
+            if materials != 0 as a pointer to an OBJ material:
+                @intrinsic("call", "libc", "free", nothing, materials)
+            return an empty OBJ mesh
 
-        set vertex_capacity to 1024
-        set texcoord_capacity to 1024
-        set triangle_capacity to 2048
+        set capacity to a new OBJ mesh quantities with vertices 1024, texture coordinates 1024, triangles 2048 and materials 0
+        set count to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
 
-        set vertex_count to 0
-        set texcoord_count to 0
-        set triangle_count to 0
+        set vertices to @intrinsic("call", "libc", "malloc", a pointer to an OBJ vertex, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
+        set coordinates to @intrinsic("call", "libc", "malloc", a pointer to an OBJ texture coordinate, (capacity's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
+        set triangles to @intrinsic("call", "libc", "malloc", a pointer to an OBJ triangle, (capacity's triangles * the size of an OBJ triangle) as a word sized integer)
 
-        set vertices to @intrinsic("call", "libc", "malloc", a pointer to obj vertex, (vertex_capacity * the size of an obj vertex) as a word sized integer)
-        set texcoords to @intrinsic("call", "libc", "malloc", a pointer to obj texcoord, (texcoord_capacity * the size of an obj texcoord) as a word sized integer)
-        set triangles to @intrinsic("call", "libc", "malloc", a pointer to obj triangle, (triangle_capacity * the size of an obj triangle) as a word sized integer)
+        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
+        set name to @intrinsic("call", "libc", "malloc", a pointer to a byte, 512 as a word sized integer)
+        set current to -1
 
-        set line to @intrinsic("call", "libc", "malloc", a pointer to byte, 4096 as a word sized integer)
-        set usemtl_name to @intrinsic("call", "libc", "malloc", a pointer to byte, 512 as a word sized integer)
+        set horizontal to 0.0
+        set vertical to 0.0
+        set depth to 0.0
+        set red to 0.0
+        set green to 0.0
+        set blue to 0.0
+        set longitude to 0.0
+        set latitude to 0.0
+        set first to a new OBJ face reference with vertex 0, texture coordinate 0 and normal 0
+        set second to a new OBJ face reference with vertex 0, texture coordinate 0 and normal 0
+        set third to a new OBJ face reference with vertex 0, texture coordinate 0 and normal 0
 
-        set current_material to -1
-
-        set vx to 0.0
-        set vy to 0.0
-        set vz to 0.0
-        set vr to 0.0
-        set vg to 0.0
-        set vb to 0.0
-
-        set tu to 0.0
-        set tv to 0.0
-
-        set ia to 0
-        set ib to 0
-        set ic to 0
-        set ita to 0
-        set itb to 0
-        set itc to 0
-        set ina to 0
-        set inb to 0
-        set inc to 0
-
-        set has_line to @intrinsic("call", "libc", "fgets", a pointer to byte, line, 4096, file)
-        while has_line != 0 as a pointer to byte:
-            if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf %lf %lf %lf", address of vx, address of vy, address of vz, address of vr, address of vg, address of vb) = 6:
-                if vertex_count >= vertex_capacity:
-                    multiply vertex_capacity by 2
-                    set vertices to @intrinsic("call", "libc", "realloc", a pointer to obj vertex, vertices, (vertex_capacity * the size of an obj vertex) as a word sized integer)
-
-                store a new obj colored vertex from vx vy vz and color vr vg vb into vertices at vertex_count
-                increment vertex_count
+        set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
+        while status != 0 as a pointer to a byte:
+            if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth, the address of red, the address of green, the address of blue) = 6:
+                if count's vertices >= capacity's vertices:
+                    multiply capacity's vertices by 2
+                    set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
+                store a new colored OBJ vertex at x horizontal, y vertical and z depth in (a new OBJ color from red, green and blue) into vertices at count's vertices
+                increment count's vertices
             else:
-                if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf", address of vx, address of vy, address of vz) = 3:
-                    if vertex_count >= vertex_capacity:
-                        multiply vertex_capacity by 2
-                        set vertices to @intrinsic("call", "libc", "realloc", a pointer to obj vertex, vertices, (vertex_capacity * the size of an obj vertex) as a word sized integer)
-
-                    store a new obj vertex from vx vy vz into vertices at vertex_count
-                    increment vertex_count
+                if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth) = 3:
+                    if count's vertices >= capacity's vertices:
+                        multiply capacity's vertices by 2
+                        set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
+                    store a new OBJ vertex at x horizontal, y vertical and z depth into vertices at count's vertices
+                    increment count's vertices
                 else:
-                    if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "vt %lf %lf", address of tu, address of tv) = 2:
-                        if texcoord_count >= texcoord_capacity:
-                            multiply texcoord_capacity by 2
-                            set texcoords to @intrinsic("call", "libc", "realloc", a pointer to obj texcoord, texcoords, (texcoord_capacity * the size of an obj texcoord) as a word sized integer)
-
-                        store a new obj texcoord from tu tv into texcoords at texcoord_count
-                        increment texcoord_count
+                    if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "vt %lf %lf", the address of longitude, the address of latitude) = 2:
+                        if count's texture coordinates >= capacity's texture coordinates:
+                            multiply capacity's texture coordinates by 2
+                            set coordinates to @intrinsic("call", "libc", "realloc", a pointer to an OBJ texture coordinate, coordinates, (capacity's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
+                        store a new OBJ texture coordinate with u longitude and v latitude into coordinates at count's texture coordinates
+                        increment count's texture coordinates
                     else:
-                        if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "usemtl %511s", usemtl_name) = 1:
-                            set current_material to the index of obj material named usemtl_name in materials count material_count
+                        if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "usemtl %511s", name) = 1:
+                            set current to the index of OBJ material named name in materials with count total
                         else:
-                            set face_with_uv_and_normal to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d/%d/%d %d/%d/%d %d/%d/%d", address of ia, address of ita, address of ina, address of ib, address of itb, address of inb, address of ic, address of itc, address of inc)
-                            if face_with_uv_and_normal = 9:
-                                if ia > 0:
-                                    decrement ia
-                                if ib > 0:
-                                    decrement ib
-                                if ic > 0:
-                                    decrement ic
-                                if ita > 0:
-                                    decrement ita
-                                if itb > 0:
-                                    decrement itb
-                                if itc > 0:
-                                    decrement itc
+                            set matched to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d/%d/%d %d/%d/%d %d/%d/%d", the address of (first's vertex), the address of (first's texture coordinate), the address of (first's normal), the address of (second's vertex), the address of (second's texture coordinate), the address of (second's normal), the address of (third's vertex), the address of (third's texture coordinate), the address of (third's normal))
+                            if matched != 9:
+                                set first's normal to 0
+                                set second's normal to 0
+                                set third's normal to 0
+                                set matched to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d/%d %d/%d %d/%d", the address of (first's vertex), the address of (first's texture coordinate), the address of (second's vertex), the address of (second's texture coordinate), the address of (third's vertex), the address of (third's texture coordinate))
+                            if matched != 6 and matched != 9:
+                                set first's texture coordinate to -1
+                                set second's texture coordinate to -1
+                                set third's texture coordinate to -1
+                                set matched to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d//%d %d//%d %d//%d", the address of (first's vertex), the address of (first's normal), the address of (second's vertex), the address of (second's normal), the address of (third's vertex), the address of (third's normal))
+                            if matched != 6 and matched != 9:
+                                set first's normal to 0
+                                set second's normal to 0
+                                set third's normal to 0
+                                set matched to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d %d %d", the address of (first's vertex), the address of (second's vertex), the address of (third's vertex))
 
-                                if triangle_count >= triangle_capacity:
-                                    multiply triangle_capacity by 2
-                                    set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, (triangle_capacity * the size of an obj triangle) as a word sized integer)
+                            if (matched = 3) or ((matched = 6) or (matched = 9)):
+                                set first to first converted to zero-based OBJ indices
+                                set second to second converted to zero-based OBJ indices
+                                set third to third converted to zero-based OBJ indices
+                                if count's triangles >= capacity's triangles:
+                                    multiply capacity's triangles by 2
+                                    set triangles to @intrinsic("call", "libc", "realloc", a pointer to an OBJ triangle, triangles, (capacity's triangles * the size of an OBJ triangle) as a word sized integer)
+                                store a new OBJ triangle from first, second and third in material current into triangles at count's triangles
+                                increment count's triangles
 
-                                store @intrinsic("construct", an obj triangle, ia, ib, ic, ita, itb, itc, current_material) into triangles at triangle_count
-                                increment triangle_count
-                            else:
-                                set face_with_uv to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d/%d %d/%d %d/%d", address of ia, address of ita, address of ib, address of itb, address of ic, address of itc)
-                                if face_with_uv = 6:
-                                    if ia > 0:
-                                        decrement ia
-                                    if ib > 0:
-                                        decrement ib
-                                    if ic > 0:
-                                        decrement ic
-                                    if ita > 0:
-                                        decrement ita
-                                    if itb > 0:
-                                        decrement itb
-                                    if itc > 0:
-                                        decrement itc
+            set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
 
-                                    if triangle_count >= triangle_capacity:
-                                        multiply triangle_capacity by 2
-                                        set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, (triangle_capacity * the size of an obj triangle) as a word sized integer)
+        ignore @intrinsic("call", "libc", "fclose", an integer, file)
+        @intrinsic("call", "libc", "free", nothing, line)
+        @intrinsic("call", "libc", "free", nothing, name)
 
-                                    store @intrinsic("construct", an obj triangle, ia, ib, ic, ita, itb, itc, current_material) into triangles at triangle_count
-                                    increment triangle_count
-                                else:
-                                    set face_with_normal to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d//%d %d//%d %d//%d", address of ia, address of ina, address of ib, address of inb, address of ic, address of inc)
-                                    if face_with_normal = 6:
-                                        if ia > 0:
-                                            decrement ia
-                                        if ib > 0:
-                                            decrement ib
-                                        if ic > 0:
-                                            decrement ic
-
-                                        if triangle_count >= triangle_capacity:
-                                            multiply triangle_capacity by 2
-                                            set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, (triangle_capacity * the size of an obj triangle) as a word sized integer)
-
-                                        store @intrinsic("construct", an obj triangle, ia, ib, ic, -1, -1, -1, current_material) into triangles at triangle_count
-                                        increment triangle_count
-                                    else:
-                                        set plain_face to @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "f %d %d %d", address of ia, address of ib, address of ic)
-                                        if plain_face = 3:
-                                            if ia > 0:
-                                                decrement ia
-                                            if ib > 0:
-                                                decrement ib
-                                            if ic > 0:
-                                                decrement ic
-
-                                            if triangle_count >= triangle_capacity:
-                                                multiply triangle_capacity by 2
-                                                set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, (triangle_capacity * the size of an obj triangle) as a word sized integer)
-
-                                            store @intrinsic("construct", an obj triangle, ia, ib, ic, -1, -1, -1, current_material) into triangles at triangle_count
-                                            increment triangle_count
-
-            set has_line to @intrinsic("call", "libc", "fgets", a pointer to byte, line, 4096, file)
-
-        discard @intrinsic("call", "libc", "fclose", an integer, file)
-
-        @intrinsic("call", "libc", "free", void, line)
-        @intrinsic("call", "libc", "free", void, usemtl_name)
-
-        if vertex_count = 0:
-            @intrinsic("call", "libc", "free", void, vertices)
-            set vertices to (0 as a pointer to obj vertex)
+        if count's vertices = 0:
+            @intrinsic("call", "libc", "free", nothing, vertices)
+            set vertices to 0 as a pointer to an OBJ vertex
         else:
-            set vertices to @intrinsic("call", "libc", "realloc", a pointer to obj vertex, vertices, (vertex_count * the size of an obj vertex) as a word sized integer)
+            set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (count's vertices * the size of an OBJ vertex) as a word sized integer)
 
-        if texcoord_count = 0:
-            @intrinsic("call", "libc", "free", void, texcoords)
-            set texcoords to (0 as a pointer to obj texcoord)
+        if count's texture coordinates = 0:
+            @intrinsic("call", "libc", "free", nothing, coordinates)
+            set coordinates to 0 as a pointer to an OBJ texture coordinate
         else:
-            set texcoords to @intrinsic("call", "libc", "realloc", a pointer to obj texcoord, texcoords, (texcoord_count * the size of an obj texcoord) as a word sized integer)
+            set coordinates to @intrinsic("call", "libc", "realloc", a pointer to an OBJ texture coordinate, coordinates, (count's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
 
-        if triangle_count = 0:
-            @intrinsic("call", "libc", "free", void, triangles)
-            set triangles to (0 as a pointer to obj triangle)
+        if count's triangles = 0:
+            @intrinsic("call", "libc", "free", nothing, triangles)
+            set triangles to 0 as a pointer to an OBJ triangle
         else:
-            set triangles to @intrinsic("call", "libc", "realloc", a pointer to obj triangle, triangles, (triangle_count * the size of an obj triangle) as a word sized integer)
+            set triangles to @intrinsic("call", "libc", "realloc", a pointer to an OBJ triangle, triangles, (count's triangles * the size of an OBJ triangle) as a word sized integer)
 
-        return a new obj mesh with vertices vertices count vertex_count and texcoords texcoords count texcoord_count and triangles triangles count triangle_count and materials materials count material_count
+        set count's materials to total
+        return a new OBJ mesh backed by vertices, coordinates, triangles and materials, sized according to count
 
-function a clamped obj color channel from value:
+function the clamped OBJ color channel from value:
     execute:
-        set channel_value to value
-        if channel_value < 0.0:
-            set channel_value to 0.0
-        if channel_value > 1.0:
-            set channel_value to 1.0
-        return channel_value
+        set result to value
+        if result < 0.0:
+            set result to 0.0
+        if result > 1.0:
+            set result to 1.0
+        return result
 
-function a wrapped obj uv coordinate from value:
+function {OBJ color:color} clamped:
     execute:
-        set wrapped_value to value
-        while wrapped_value < 0.0:
-            add 1.0 to wrapped_value
-        while wrapped_value >= 1.0:
-            subtract 1.0 from wrapped_value
-        return wrapped_value
+        return a new OBJ color from (the clamped OBJ color channel from color's red), (the clamped OBJ color channel from color's green) and (the clamped OBJ color channel from color's blue)
 
-function draw obj mesh mesh at x y z with scale model_scale and color r g b:
+function {OBJ color:color} scaled by factor:
     execute:
-        draw obj mesh mesh at x y z with scale model_scale and color r g b and render mode 0
+        return a new OBJ color from ((color's red) * factor), ((color's green) * factor) and ((color's blue) * factor)
 
-function draw obj mesh mesh at x y z with scale model_scale and color r g b and render mode render_mode:
+function a normalized OBJ color from byte values {a value:red}, {a value:green} and {a value:blue}:
     execute:
-        if mesh's triangle_count > 0:
+        return a new OBJ color from (red / 255.0), (green / 255.0) and (blue / 255.0)
+
+function the wrapped OBJ texture coordinate from value:
+    execute:
+        set result to value
+        while result < 0.0:
+            add 1.0 to result
+        while result >= 1.0:
+            subtract 1.0 from result
+        return result
+
+function the diagnostic OBJ color of {OBJ texture coordinate:coordinate}:
+    execute:
+        set horizontal to the wrapped OBJ texture coordinate from coordinate's u
+        set vertical to the wrapped OBJ texture coordinate from coordinate's v
+        return a new OBJ color from horizontal, vertical and (1.0 - ((horizontal + vertical) / 2.0))
+
+function use {OBJ color:color} as the current OBJ color:
+    execute:
+        @intrinsic("call", "GL", "glColor3d", nothing, color's red, color's green, color's blue)
+
+function use {OBJ color:color} as the current byte color:
+    execute:
+        set red to (color's red * 255.0) as an integer
+        set green to (color's green * 255.0) as an integer
+        set blue to (color's blue * 255.0) as an integer
+        if red < 0:
+            set red to 0
+        if green < 0:
+            set green to 0
+        if blue < 0:
+            set blue to 0
+        if red > 255:
+            set red to 255
+        if green > 255:
+            set green to 255
+        if blue > 255:
+            set blue to 255
+        @intrinsic("call", "GL", "glColor3ub", nothing, red, green, blue)
+
+function draw {OBJ vertex:vertex}:
+    execute:
+        @intrinsic("call", "GL", "glVertex3d", nothing, vertex's x, vertex's y, vertex's z)
+
+function draw {OBJ vertex:vertex} with {OBJ texture coordinate:coordinate}:
+    execute:
+        @intrinsic("call", "GL", "glTexCoord2d", nothing, coordinate's u, coordinate's v)
+        draw vertex
+
+function draw {OBJ vertex:vertex} in {OBJ color:color}:
+    execute:
+        use color as the current OBJ color
+        draw vertex
+
+function {OBJ vertex:vertex} has a color:
+    execute:
+        return vertex's color presence != 0
+
+function draw {OBJ vertex:vertex} in its color or {OBJ color:fallback}:
+    execute:
+        if vertex has a color:
+            draw vertex in vertex's color clamped
+        else:
+            draw vertex in fallback
+
+function {OBJ triangle:triangle} has usable texture coordinates for {OBJ mesh:mesh}:
+    execute:
+        set first to triangle's first's texture coordinate
+        set second to triangle's second's texture coordinate
+        set third to triangle's third's texture coordinate
+        return (first >= 0) and ((second >= 0) and ((third >= 0) and ((first < mesh's texture coordinate count) and ((second < mesh's texture coordinate count) and (third < mesh's texture coordinate count)))))
+
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color}:
+    execute:
+        draw mesh at x horizontal, y vertical and z depth scaled by scale in color with 0 as its render mode
+
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color} with {a value:requested} as its render mode:
+    execute:
+        if mesh's triangle count > 0:
             set vertices to mesh's vertices
-            set texcoords to mesh's texcoords
+            set coordinates to mesh's texture coordinates
             set triangles to mesh's triangles
             set materials to mesh's materials
 
-            @intrinsic("call", "GL", "glPushMatrix", void)
-            @intrinsic("call", "GL", "glTranslated", void, x, y, z)
-            @intrinsic("call", "GL", "glScaled", void, model_scale, model_scale, model_scale)
+            @intrinsic("call", "GL", "glPushMatrix", nothing)
+            @intrinsic("call", "GL", "glTranslated", nothing, horizontal, vertical, depth)
+            @intrinsic("call", "GL", "glScaled", nothing, scale, scale, scale)
 
-            set render_mode_value to render_mode
-            if render_mode_value < 0:
-                set render_mode_value to 0
-            if render_mode_value > 2:
-                set render_mode_value to 2
+            set mode to requested
+            if mode < 0:
+                set mode to 0
+            if mode > 2:
+                set mode to 2
 
-            set base_red to r as a float
-            set base_green to g as a float
-            set base_blue to b as a float
-            divide base_red by 255.0
-            divide base_green by 255.0
-            divide base_blue by 255.0
-
-            set tri_index to 0
-            set active_material to -2147483647
-            set current_texture_id to 0
-            set fallback_red to base_red
-            set fallback_green to base_green
-            set fallback_blue to base_blue
+            set base to color
+            set index to 0
+            set active to -2147483647
+            set texture to 0
+            set fallback to base
             set drawing to false
 
-            while tri_index < mesh's triangle_count:
-                set tri to item tri_index of triangles
+            while index < mesh's triangle count:
+                set triangle to the item at index in triangles
 
-                if tri's material != active_material:
+                if triangle's material != active:
                     if drawing:
-                        @intrinsic("call", "GL", "glEnd", void)
+                        @intrinsic("call", "GL", "glEnd", nothing)
 
-                    set active_material to tri's material
-                    set current_texture_id to 0
-                    set fallback_red to base_red
-                    set fallback_green to base_green
-                    set fallback_blue to base_blue
+                    set active to triangle's material
+                    set texture to 0
+                    set fallback to base
 
-                    if (active_material >= 0) and (active_material < mesh's material_count):
-                        set material to item active_material of materials
-                        set fallback_red to a clamped obj color channel from material's color_r
-                        set fallback_green to a clamped obj color channel from material's color_g
-                        set fallback_blue to a clamped obj color channel from material's color_b
-                        set current_texture_id to material's texture_id
+                    if (active >= 0) and (active < mesh's material count):
+                        set material to the item at active in materials
+                        set fallback to (material's color clamped)
+                        set texture to material's texture
 
-                        if render_mode_value = 0:
-                            if current_texture_id > 0:
-                                @intrinsic("call", "GL", "glEnable", void, 3553)
-                                @intrinsic("call", "GL", "glBindTexture", void, 3553, current_texture_id as a 32 bit integer)
-                                @intrinsic("call", "GL", "glColor3ub", void, 255, 255, 255)
+                        if mode = 0:
+                            if texture > 0:
+                                @intrinsic("call", "GL", "glEnable", nothing, 3553)
+                                @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture as a 32 bit integer)
+                                @intrinsic("call", "GL", "glColor3ub", nothing, 255, 255, 255)
                             else:
-                                @intrinsic("call", "GL", "glDisable", void, 3553)
-                                set red_value to material's color_r * 255.0
-                                set green_value to material's color_g * 255.0
-                                set blue_value to material's color_b * 255.0
-                                set red to red_value as an integer
-                                set green to green_value as an integer
-                                set blue to blue_value as an integer
-
-                                if red < 0:
-                                    set red to 0
-                                if green < 0:
-                                    set green to 0
-                                if blue < 0:
-                                    set blue to 0
-
-                                if red > 255:
-                                    set red to 255
-                                if green > 255:
-                                    set green to 255
-                                if blue > 255:
-                                    set blue to 255
-
-                                @intrinsic("call", "GL", "glColor3ub", void, red, green, blue)
+                                @intrinsic("call", "GL", "glDisable", nothing, 3553)
+                                use material's color as the current byte color
                         else:
-                            @intrinsic("call", "GL", "glDisable", void, 3553)
-                            @intrinsic("call", "GL", "glColor3d", void, fallback_red, fallback_green, fallback_blue)
+                            @intrinsic("call", "GL", "glDisable", nothing, 3553)
+                            use fallback as the current OBJ color
                     else:
-                        @intrinsic("call", "GL", "glDisable", void, 3553)
-                        if render_mode_value = 0:
-                            @intrinsic("call", "GL", "glColor3ub", void, r, g, b)
+                        @intrinsic("call", "GL", "glDisable", nothing, 3553)
+                        if mode = 0:
+                            use base as the current byte color
                         else:
-                            @intrinsic("call", "GL", "glColor3d", void, fallback_red, fallback_green, fallback_blue)
+                            use fallback as the current OBJ color
 
-                    @intrinsic("call", "GL", "glBegin", void, 4)
+                    @intrinsic("call", "GL", "glBegin", nothing, 4)
                     set drawing to true
 
-                set ia to tri's a
-                set ib to tri's b
-                set ic to tri's c
+                set first to the item at (triangle's first's vertex) in vertices
+                set second to the item at (triangle's second's vertex) in vertices
+                set third to the item at (triangle's third's vertex) in vertices
 
-                set va to item ia of vertices
-                set vb to item ib of vertices
-                set vc to item ic of vertices
+                set edge to a new OBJ vertex at x ((second's x) - (first's x)), y ((second's y) - (first's y)) and z ((second's z) - (first's z))
+                set other to a new OBJ vertex at x ((third's x) - (first's x)), y ((third's y) - (first's y)) and z ((third's z) - (first's z))
+                set normal to a new OBJ vertex at x (((edge's y) * (other's z)) - ((edge's z) * (other's y))), y (((edge's z) * (other's x)) - ((edge's x) * (other's z))) and z (((edge's x) * (other's y)) - ((edge's y) * (other's x)))
 
-                set edge_ax to vb's x - va's x
-                set edge_ay to vb's y - va's y
-                set edge_az to vb's z - va's z
-                set edge_bx to vc's x - va's x
-                set edge_by to vc's y - va's y
-                set edge_bz to vc's z - va's z
+                set squared to (((normal's x) * (normal's x)) + (((normal's y) * (normal's y)) + ((normal's z) * (normal's z))))
+                set shade to 0.7
+                if squared > 0.000000000001:
+                    set magnitude to the square root of squared
+                    if magnitude > 0.000001:
+                        set shade to ((((normal's x) / magnitude) * 0.45) + ((((normal's y) / magnitude) * 0.85) + (((normal's z) / magnitude) * 0.30)))
+                if shade < 0.2:
+                    set shade to 0.2
+                if shade > 1.0:
+                    set shade to 1.0
 
-                set triangle_normal_x to (edge_ay * edge_bz) - (edge_az * edge_by)
-                set triangle_normal_y to (edge_az * edge_bx) - (edge_ax * edge_bz)
-                set triangle_normal_z to (edge_ax * edge_by) - (edge_ay * edge_bx)
-
-                set normal_length_squared to triangle_normal_x * triangle_normal_x
-                set normal_length_squared to normal_length_squared + (triangle_normal_y * triangle_normal_y)
-                set normal_length_squared to normal_length_squared + (triangle_normal_z * triangle_normal_z)
-
-                set shade_factor to 0.7
-                if normal_length_squared > 0.000000000001:
-                    set normal_length to the square root of normal_length_squared
-                    if normal_length > 0.000001:
-                        divide triangle_normal_x by normal_length
-                        divide triangle_normal_y by normal_length
-                        divide triangle_normal_z by normal_length
-
-                        set shade_factor to triangle_normal_x * 0.45
-                        set shade_factor to shade_factor + (triangle_normal_y * 0.85)
-                        set shade_factor to shade_factor + (triangle_normal_z * 0.30)
-
-                if shade_factor < 0.2:
-                    set shade_factor to 0.2
-                if shade_factor > 1.0:
-                    set shade_factor to 1.0
-
-                if render_mode_value = 0:
-                    if current_texture_id > 0:
-                        set shaded_red to shade_factor
-                        set shaded_green to shade_factor
-                        set shaded_blue to shade_factor
+                if mode = 0:
+                    if texture > 0:
+                        use a grayscale OBJ color with brightness shade as the current OBJ color
                     else:
-                        set shaded_red to fallback_red * shade_factor
-                        set shaded_green to fallback_green * shade_factor
-                        set shaded_blue to fallback_blue * shade_factor
-                    @intrinsic("call", "GL", "glColor3d", void, shaded_red, shaded_green, shaded_blue)
+                        use fallback scaled by shade as the current OBJ color
 
-                    if current_texture_id > 0:
-                        if ((tri's ta >= 0) and ((tri's tb >= 0) and (tri's tc >= 0))):
-                            if (tri's ta < mesh's texcoord_count) and ((tri's tb < mesh's texcoord_count) and (tri's tc < mesh's texcoord_count)):
-                                set tca to item tri's ta of texcoords
-                                set tcb to item tri's tb of texcoords
-                                set tcc to item tri's tc of texcoords
-                                @intrinsic("call", "GL", "glTexCoord2d", void, tca's u, tca's v)
-                                @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                                @intrinsic("call", "GL", "glTexCoord2d", void, tcb's u, tcb's v)
-                                @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                                @intrinsic("call", "GL", "glTexCoord2d", void, tcc's u, tcc's v)
-                                @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
-                            else:
-                                @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                                @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                                @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
-                        else:
-                            @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                            @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                            @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
+                    if texture > 0 and triangle has usable texture coordinates for mesh:
+                        set start to the item at (triangle's first's texture coordinate) in coordinates
+                        set middle to the item at (triangle's second's texture coordinate) in coordinates
+                        set end to the item at (triangle's third's texture coordinate) in coordinates
+                        draw first with start
+                        draw second with middle
+                        draw third with end
                     else:
-                        @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                        @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                        @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
+                        draw first
+                        draw second
+                        draw third
                 else:
-                    if render_mode_value = 1:
-                        if ((tri's ta >= 0) and ((tri's tb >= 0) and (tri's tc >= 0))):
-                            if (tri's ta < mesh's texcoord_count) and ((tri's tb < mesh's texcoord_count) and (tri's tc < mesh's texcoord_count)):
-                                set tca to item tri's ta of texcoords
-                                set tcb to item tri's tb of texcoords
-                                set tcc to item tri's tc of texcoords
-
-                                set uv_u_a to a wrapped obj uv coordinate from tca's u
-                                set uv_v_a to a wrapped obj uv coordinate from tca's v
-                                set uv_u_b to a wrapped obj uv coordinate from tcb's u
-                                set uv_v_b to a wrapped obj uv coordinate from tcb's v
-                                set uv_u_c to a wrapped obj uv coordinate from tcc's u
-                                set uv_v_c to a wrapped obj uv coordinate from tcc's v
-
-                                set uv_blue_a to 1.0 - ((uv_u_a + uv_v_a) / 2.0)
-                                set uv_blue_b to 1.0 - ((uv_u_b + uv_v_b) / 2.0)
-                                set uv_blue_c to 1.0 - ((uv_u_c + uv_v_c) / 2.0)
-
-                                @intrinsic("call", "GL", "glColor3d", void, uv_u_a, uv_v_a, uv_blue_a)
-                                @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                                @intrinsic("call", "GL", "glColor3d", void, uv_u_b, uv_v_b, uv_blue_b)
-                                @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                                @intrinsic("call", "GL", "glColor3d", void, uv_u_c, uv_v_c, uv_blue_c)
-                                @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
-                            else:
-                                @intrinsic("call", "GL", "glColor3d", void, 1.0, 0.0, 1.0)
-                                @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                                @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                                @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
+                    if mode = 1:
+                        if triangle has usable texture coordinates for mesh:
+                            set start to the item at (triangle's first's texture coordinate) in coordinates
+                            set middle to the item at (triangle's second's texture coordinate) in coordinates
+                            set end to the item at (triangle's third's texture coordinate) in coordinates
+                            draw first in the diagnostic OBJ color of start
+                            draw second in the diagnostic OBJ color of middle
+                            draw third in the diagnostic OBJ color of end
                         else:
-                            @intrinsic("call", "GL", "glColor3d", void, 1.0, 0.0, 1.0)
-                            @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
-                            @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-                            @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
+                            set missing to a new OBJ color from 1.0, 0.0 and 1.0
+                            draw first in missing
+                            draw second in missing
+                            draw third in missing
                     else:
-                        if va's has_color != 0:
-                            set vertex_red_a to a clamped obj color channel from va's color_r
-                            set vertex_green_a to a clamped obj color channel from va's color_g
-                            set vertex_blue_a to a clamped obj color channel from va's color_b
-                            @intrinsic("call", "GL", "glColor3d", void, vertex_red_a, vertex_green_a, vertex_blue_a)
-                        else:
-                            @intrinsic("call", "GL", "glColor3d", void, fallback_red, fallback_green, fallback_blue)
-                        @intrinsic("call", "GL", "glVertex3d", void, va's x, va's y, va's z)
+                        draw first in its color or fallback
+                        draw second in its color or fallback
+                        draw third in its color or fallback
 
-                        if vb's has_color != 0:
-                            set vertex_red_b to a clamped obj color channel from vb's color_r
-                            set vertex_green_b to a clamped obj color channel from vb's color_g
-                            set vertex_blue_b to a clamped obj color channel from vb's color_b
-                            @intrinsic("call", "GL", "glColor3d", void, vertex_red_b, vertex_green_b, vertex_blue_b)
-                        else:
-                            @intrinsic("call", "GL", "glColor3d", void, fallback_red, fallback_green, fallback_blue)
-                        @intrinsic("call", "GL", "glVertex3d", void, vb's x, vb's y, vb's z)
-
-                        if vc's has_color != 0:
-                            set vertex_red_c to a clamped obj color channel from vc's color_r
-                            set vertex_green_c to a clamped obj color channel from vc's color_g
-                            set vertex_blue_c to a clamped obj color channel from vc's color_b
-                            @intrinsic("call", "GL", "glColor3d", void, vertex_red_c, vertex_green_c, vertex_blue_c)
-                        else:
-                            @intrinsic("call", "GL", "glColor3d", void, fallback_red, fallback_green, fallback_blue)
-                        @intrinsic("call", "GL", "glVertex3d", void, vc's x, vc's y, vc's z)
-
-                increment tri_index
+                increment index
 
             if drawing:
-                @intrinsic("call", "GL", "glEnd", void)
+                @intrinsic("call", "GL", "glEnd", nothing)
 
-            @intrinsic("call", "GL", "glDisable", void, 3553)
-            @intrinsic("call", "GL", "glPopMatrix", void)
+            @intrinsic("call", "GL", "glDisable", nothing, 3553)
+            @intrinsic("call", "GL", "glPopMatrix", nothing)
 
-function free obj mesh mesh:
+function free {OBJ mesh:mesh}:
     execute:
-        if mesh's vertices != 0 as a pointer to obj vertex:
-            @intrinsic("call", "libc", "free", void, mesh's vertices)
+        if mesh's vertices != 0 as a pointer to an OBJ vertex:
+            @intrinsic("call", "libc", "free", nothing, mesh's vertices)
 
-        if mesh's texcoords != 0 as a pointer to obj texcoord:
-            @intrinsic("call", "libc", "free", void, mesh's texcoords)
+        if mesh's texture coordinates != 0 as a pointer to an OBJ texture coordinate:
+            @intrinsic("call", "libc", "free", nothing, mesh's texture coordinates)
 
-        if mesh's triangles != 0 as a pointer to obj triangle:
-            @intrinsic("call", "libc", "free", void, mesh's triangles)
+        if mesh's triangles != 0 as a pointer to an OBJ triangle:
+            @intrinsic("call", "libc", "free", nothing, mesh's triangles)
 
-        if mesh's materials != 0 as a pointer to obj material:
-            set material_index to 0
-            while material_index < mesh's material_count:
-                set material to item material_index of mesh's materials
+        if mesh's materials != 0 as a pointer to an OBJ material:
+            set cursor to 0
+            while cursor < mesh's material count:
+                set entry to the item at cursor in mesh's materials
 
-                if material's name != 0 as a pointer to byte:
-                    @intrinsic("call", "libc", "free", void, material's name)
+                if entry's name != 0 as a pointer to a byte:
+                    @intrinsic("call", "libc", "free", nothing, entry's name)
 
-                if material's texture_path != 0 as a pointer to byte:
-                    @intrinsic("call", "libc", "free", void, material's texture_path)
+                if entry's texture path != 0 as a pointer to a byte:
+                    @intrinsic("call", "libc", "free", nothing, entry's texture path)
 
-                if material's texture_id > 0:
-                    set texture_id to material's texture_id as a 32 bit integer
-                    @intrinsic("call", "GL", "glDeleteTextures", void, 1, address of texture_id)
+                if entry's texture > 0:
+                    set identifier to entry's texture as a 32 bit integer
+                    @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of identifier)
 
-                increment material_index
+                increment cursor
 
-            @intrinsic("call", "libc", "free", void, mesh's materials)
+            @intrinsic("call", "libc", "free", nothing, mesh's materials)

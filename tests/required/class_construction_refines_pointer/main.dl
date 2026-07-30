@@ -1,6 +1,6 @@
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
 function return value:
     replacement:
@@ -10,7 +10,7 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -22,18 +22,18 @@ class:
 
 class:
     patterns:
-        [a|] envelope
+        [an|] envelope
     members:
-        payload as a pointer to payload
+        payload as a pointer to a payload
 
-function make payload:
+function a payload pointer:
     execute:
-        set initial_value to @intrinsic("construct", a payload, 42)
-        return @intrinsic("address of", initial_value)
+        set initial to @intrinsic("construct", a payload, 42)
+        return @intrinsic("address of", initial)
 
-function wrap {a pointer to payload:value}:
+function the wrapping of {a pointer to a payload:value}:
     execute:
-        return @intrinsic("construct", a envelope, value)
+        return @intrinsic("construct", an envelope, value)
 
-set wrapped to wrap make payload
-discard the payload of wrapped
+set wrapped to the wrapping of a payload pointer
+ignore the payload of wrapped

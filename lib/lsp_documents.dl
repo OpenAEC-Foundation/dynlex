@@ -6,260 +6,267 @@ import lib/unicode.dl
 
 local class:
     patterns:
-        [an|a|] lsp offset result
+        [an|] LSP offset result
     members:
-        succeeded as boolean
-        position as i32
-        error_message as string
+        success as a boolean
+        position as a 32 bit integer
+        error message as a string
 
-local function an empty lsp document text:
+local function an empty LSP document text:
     replacement:
         the string form of ""
 
-local function lsp document index for {string:document_uri} in {a pointer to lsp client:state}:
+local function the LSP document index for {string:uri} in {a pointer to an LSP client:state}:
     execute:
         set documents to state's documents
         set cursor to 0
         loop while cursor < the length of documents:
-            set document_state to @intrinsic("cast", item cursor of documents, a pointer to lsp document)
-            if document_state's uri = document_uri:
+            set entry to @intrinsic("cast", the item at cursor in documents, a pointer to an LSP document)
+            if entry's uri = uri:
                 return cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return 0 - 1
 
-local function lsp document pointer at {integer:index} in {a pointer to lsp client:state}:
+local function the LSP document at {integer:index} in {a pointer to an LSP client:state}:
     execute:
         set documents to state's documents
-        return @intrinsic("cast", item index of documents, a pointer to lsp document)
+        return @intrinsic("cast", the item at index in documents, a pointer to an LSP document)
 
-function lsp document uri {any:document_uri} in {a pointer to lsp client:state}:
+function the LSP document with uri {a value:uri} in {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        set document_index to lsp document index for uri_text in state
-        if document_index < 0:
+        set address to the string form of uri
+        set index to the LSP document index for address in state
+        if index < 0:
             return @intrinsic(
                 "construct",
-                an lsp document result,
+                an LSP document result,
                 false,
-                uri_text,
-                an empty lsp document text,
-                an empty lsp document text,
+                address,
+                an empty LSP document text,
+                an empty LSP document text,
                 0
             )
-        set document_state to lsp document pointer at document_index in state
+        set entry to the LSP document at index in state
         return @intrinsic(
             "construct",
-            an lsp document result,
+            an LSP document result,
             true,
-            document_state's uri,
-            document_state's language_id,
-            document_state's text,
-            document_state's version
+            entry's uri,
+            entry's language,
+            entry's text,
+            entry's version
         )
 
-local function send lsp document change {a pointer to json value:change_node} for {a pointer to lsp document:document_state} at version {integer:document_version} using {a pointer to lsp client:state}:
+local function the result of sending {a pointer to a JSON value:change} for {a pointer to an LSP document:document} at {integer:version} using {a pointer to an LSP client:state}:
     execute:
-        set document_uri to document_state's uri
-        set parameters to lsp did change parameters for uri document_uri version document_version containing change_node
-        set session to state's rpc_session
-        set sent to send json rpc session notification "textDocument/didChange" with parameters using session
-        free json value parameters
+        set parameters to the LSP document change parameters for document's uri at version containing change
+        set session to state's session
+        set sent to the result of sending JSON-RPC session notification "textDocument/didChange" with parameters using session
+        free parameters
         return sent
 
-local function lsp replacement change for {string:original_text} with {string:replacement_text}:
+local function an LSP replacement change for {string:original} with {string:replacement}:
     execute:
-        set scanned to scan lines in original_text
-        set line_map to the line index of scanned
-        set final_line to (the number of lines in line_map) - 1
-        set start_result to line start for line final_line in line_map
-        set end_result to line content end for line final_line in line_map
-        set line_start to start_result's position
-        set line_end to end_result's position
-        set final_line_text to the substring of original_text from line_start with length line_end - line_start
-        set converted to utf8 byte offset the length of final_line_text to utf16 position in final_line_text
-        set final_character to converted's position
-        free line index line_map
-        return lsp ranged content change from line 0 character 0 to line final_line character final_character with text replacement_text
+        scan lines in original and set scanned to it
+        set lines to the line index of scanned
+        set last to ((the number of lines in lines) - 1)
+        set beginning to the start of line last in lines
+        set ending to the content end of line last in lines
+        set start to beginning's position
+        set end to ending's position
+        set tail to the substring of original from start spanning (end - start) bytes
+        set converted to the UTF-16 position of UTF-8 byte offset the length of tail in tail
+        set position to converted's position
+        free lines
+        return a ranged LSP content change from line 0 and character 0 to line last and character position containing replacement
 
-function open lsp document uri {any:document_uri} with language {any:language_id} and text {any:contents} using {a pointer to lsp client:state}:
+function the result of opening LSP document {a value:uri} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        set language_text to the string form of language_id
-        set document_text to the string form of contents
-        if state's lifecycle != the lsp running lifecycle:
-            return a failed json rpc operation with status the lsp invalid state status reporting "LSP client is not running"
-        if lsp document index for uri_text in state >= 0:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document is already open"
-        set uri_is_valid to uri_text is valid utf8
-        set language_is_valid to language_text is valid utf8
-        set text_is_valid to document_text is valid utf8
-        if (not uri_is_valid) or ((not language_is_valid) or (not text_is_valid)):
-            return a failed json rpc operation with status the json rpc invalid utf8 status reporting "LSP document fields must be valid UTF-8"
-        if state's synchronization_open_close:
-            set parameters to lsp did open parameters for uri uri_text language language_text version 1 text document_text
-            set session to state's rpc_session
-            set sent to send json rpc session notification "textDocument/didOpen" with parameters using session
-            free json value parameters
-            if not sent's succeeded:
+        set address to the string form of uri
+        set dialect to the string form of language
+        set body to the string form of contents
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+        if the LSP document index for address in state >= 0:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is already open"
+        set addressable to address is valid UTF-8
+        set recognizable to dialect is valid UTF-8
+        set readable to body is valid UTF-8
+        if (the inverse of addressable) or ((the inverse of recognizable) or (the inverse of readable)):
+            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document fields must be valid UTF-8"
+        if state's synchronization's open and close notifications:
+            set parameters to the LSP document opening parameters for URI address, language dialect, version 1 and text body
+            set session to state's session
+            set sent to the result of sending JSON-RPC session notification "textDocument/didOpen" with parameters using session
+            free parameters
+            if sent failed:
                 return sent
-        set initial_document to @intrinsic("construct", an lsp document, uri_text, language_text, document_text, 1)
-        set document_state to allocate 1 slots of initial_document
+        set initial to @intrinsic("construct", an LSP document, address, dialect, body, 1)
+        allocate one slot of initial and set entry to it
         set documents to state's documents
-        append document_state to documents
-        return a successful json rpc operation
+        append entry to documents
+        return a successful JSON-RPC operation
 
-function open lsp document at native path {any:native_path} with language {any:language_id} and text {any:contents} using {a pointer to lsp client:state}:
+function the result of opening an LSP document at native path {a value:path} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
     execute:
-        set path_text to the string form of native_path
-        set uri_result to a file URI from native path path_text
-        if not uri_result's succeeded:
-            return a failed json rpc operation with status the lsp document error status reporting uri_result's error message
-        return open lsp document uri uri_result's value with language language_id and text contents using state
+        set source to the string form of path
+        set converted to the file URI for source interpreted as a native path
+        if converted failed:
+            return a failed JSON-RPC operation with status the LSP document error status reporting converted's error message
+        return the result of opening LSP document converted's value written in language with contents as its text using state
 
-function replace lsp document uri {any:document_uri} with text {any:contents} using {a pointer to lsp client:state}:
+function the result of replacing LSP document uri {a value:uri} with text {a value:contents} using {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        set document_text to the string form of contents
-        if state's lifecycle != the lsp running lifecycle:
-            return a failed json rpc operation with status the lsp invalid state status reporting "LSP client is not running"
-        set document_index to lsp document index for uri_text in state
-        if document_index < 0:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document is not open"
-        if not document_text is valid utf8:
-            return a failed json rpc operation with status the json rpc invalid utf8 status reporting "LSP document text must be valid UTF-8"
-        set document_state to lsp document pointer at document_index in state
-        if document_state's version = 2147483647:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document version is exhausted"
-        set next_version to document_state's version + 1
-        if state's synchronization_kind = the lsp incremental synchronization kind:
-            set change_node to lsp replacement change for document_state's text with document_text
-            set sent to send lsp document change change_node for document_state at version next_version using state
-            if not sent's succeeded:
+        set address to the string form of uri
+        set body to the string form of contents
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+        set index to the LSP document index for address in state
+        if index < 0:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+        if body is invalid UTF-8:
+            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document text must be valid UTF-8"
+        set entry to the LSP document at index in state
+        if entry's version = 2147483647:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
+        set version to (entry's version + 1)
+        if state's synchronization's kind = the LSP incremental synchronization kind:
+            set change to an LSP replacement change for entry's text with body
+            set sent to the result of sending change for entry at version using state
+            if sent failed:
                 return sent
-        else if state's synchronization_kind = the lsp full synchronization kind:
-            set change_node to lsp full content change for text document_text
-            set sent to send lsp document change change_node for document_state at version next_version using state
-            if not sent's succeeded:
+        else if state's synchronization's kind = the LSP full synchronization kind:
+            set change to a full LSP content change containing body
+            set sent to the result of sending change for entry at version using state
+            if sent failed:
                 return sent
-        set document_state's text to document_text
-        set document_state's version to next_version
-        return a successful json rpc operation
+        set entry's text to body
+        set entry's version to version
+        return a successful JSON-RPC operation
 
-function save lsp document uri {any:document_uri} using {a pointer to lsp client:state}:
+function the result of saving LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        if state's lifecycle != the lsp running lifecycle:
-            return a failed json rpc operation with status the lsp invalid state status reporting "LSP client is not running"
-        set document_index to lsp document index for uri_text in state
-        if document_index < 0:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document is not open"
-        if not state's synchronization_save:
-            return a successful json rpc operation
-        set document_state to lsp document pointer at document_index in state
-        if state's synchronization_save_include_text:
-            set parameters to lsp did save parameters for uri document_state's uri with text document_state's text
+        set address to the string form of uri
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+        set index to the LSP document index for address in state
+        if index < 0:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+        if the inverse of state's synchronization's save notifications:
+            return a successful JSON-RPC operation
+        set entry to the LSP document at index in state
+        if state's synchronization's saved text inclusion:
+            set parameters to the LSP document saving parameters for entry's uri with text entry's text
         else:
-            set parameters to lsp did save parameters for uri document_state's uri
-        set session to state's rpc_session
-        set sent to send json rpc session notification "textDocument/didSave" with parameters using session
-        free json value parameters
+            set parameters to the LSP document saving parameters for entry's uri
+        set session to state's session
+        set sent to the result of sending JSON-RPC session notification "textDocument/didSave" with parameters using session
+        free parameters
         return sent
 
-local function a failed lsp offset reporting {string:error_text}:
+local function a failed LSP offset reporting {string:error}:
     replacement:
-        @intrinsic("construct", an lsp offset result, false, 0, error_text)
+        @intrinsic("construct", an LSP offset result, false, 0, error)
 
-local function a failed lsp offset reporting {cstring:error_text}:
+local function a failed LSP offset reporting {C string:error}:
     execute:
-        return a failed lsp offset reporting the string form of error_text
+        return a failed LSP offset reporting the string form of error
 
-local function a successful lsp offset at {integer:position}:
+local function a successful LSP offset at {integer:position}:
     replacement:
-        @intrinsic("construct", an lsp offset result, true, position, an empty lsp document text)
+        @intrinsic("construct", an LSP offset result, true, position, an empty LSP document text)
 
-local function byte offset for lsp line {integer:line_number} character {integer:character_number} in {string:contents}:
+local function {LSP offset result:outcome} succeeded:
+    replacement:
+        outcome's success
+
+local function {LSP offset result:outcome} failed:
+    replacement:
+        the inverse of outcome's success
+
+local function the byte offset for LSP line {integer:row} and character {integer:offset} in {string:contents}:
     execute:
-        if line_number < 0 or character_number < 0:
-            return a failed lsp offset reporting "LSP positions must not be negative"
-        set scanned to scan lines in contents
+        if row < 0 or offset < 0:
+            return a failed LSP offset reporting "LSP positions must not be negative"
+        scan lines in contents and set scanned to it
         if the status of scanned != the text position success status:
-            return a failed lsp offset reporting "LSP document text is not valid UTF-8"
-        set line_map to the line index of scanned
-        set start_result to line start for line line_number in line_map
-        set end_result to line content end for line line_number in line_map
-        if the status of start_result != the text position success status or the status of end_result != the text position success status:
-            free line index line_map
-            return a failed lsp offset reporting "LSP line is outside the document"
-        set line_start to start_result's position
-        set line_end to end_result's position
-        set line_text to the substring of contents from line_start with length line_end - line_start
-        set converted to utf16 position character_number to utf8 byte offset in line_text
-        free line index line_map
+            return a failed LSP offset reporting "LSP document text is not valid UTF-8"
+        set lines to the line index of scanned
+        set beginning to the start of line row in lines
+        set ending to the content end of line row in lines
+        if the status of beginning != the text position success status or the status of ending != the text position success status:
+            free lines
+            return a failed LSP offset reporting "LSP line is outside the document"
+        set start to beginning's position
+        set end to ending's position
+        set text to the substring of contents from start spanning (end - start) bytes
+        set converted to the UTF-8 byte offset of UTF-16 position offset in text
+        free lines
         if the status of converted != the text position success status:
-            return a failed lsp offset reporting "LSP character is outside the line or splits a UTF-16 surrogate pair"
-        return a successful lsp offset at line_start + converted's position
+            return a failed LSP offset reporting "LSP character is outside the line or splits a UTF-16 surrogate pair"
+        return a successful LSP offset at start + converted's position
 
-function edit lsp document uri {any:document_uri} from line {integer:start_line} character {integer:start_character} to line {integer:end_line} character {integer:end_character} with text {any:replacement_text} using {a pointer to lsp client:state}:
+function the result of editing LSP document uri {a value:uri} from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end} with text {a value:contents} using {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        set replacement to the string form of replacement_text
-        if state's lifecycle != the lsp running lifecycle:
-            return a failed json rpc operation with status the lsp invalid state status reporting "LSP client is not running"
-        set document_index to lsp document index for uri_text in state
-        if document_index < 0:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document is not open"
-        if not replacement is valid utf8:
-            return a failed json rpc operation with status the json rpc invalid utf8 status reporting "LSP replacement text must be valid UTF-8"
-        set document_state to lsp document pointer at document_index in state
-        set original_text to document_state's text
-        set start_result to byte offset for lsp line start_line character start_character in original_text
-        if not start_result's succeeded:
-            return a failed json rpc operation with status the lsp document error status reporting start_result's error_message
-        set end_result to byte offset for lsp line end_line character end_character in original_text
-        if not end_result's succeeded:
-            return a failed json rpc operation with status the lsp document error status reporting end_result's error_message
-        if start_result's position > end_result's position:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP edit range is reversed"
-        if document_state's version = 2147483647:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document version is exhausted"
-        set prefix to the substring of original_text from 0 with length start_result's position
-        set suffix_length to the length of original_text - end_result's position
-        set suffix to the substring of original_text from end_result's position with length suffix_length
-        set updated_text to prefix + replacement
-        set updated_text to updated_text + suffix
-        set next_version to document_state's version + 1
-        if state's synchronization_kind = the lsp incremental synchronization kind:
-            set change_node to lsp ranged content change from line start_line character start_character to line end_line character end_character with text replacement
-            set sent to send lsp document change change_node for document_state at version next_version using state
-            if not sent's succeeded:
+        set address to the string form of uri
+        set replacement to the string form of contents
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+        set index to the LSP document index for address in state
+        if index < 0:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+        if replacement is invalid UTF-8:
+            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP replacement text must be valid UTF-8"
+        set entry to the LSP document at index in state
+        set original to entry's text
+        set first to the byte offset for LSP line beginning and character start in original
+        if first failed:
+            return a failed JSON-RPC operation with status the LSP document error status reporting first's error message
+        set last to the byte offset for LSP line ending and character end in original
+        if last failed:
+            return a failed JSON-RPC operation with status the LSP document error status reporting last's error message
+        if first's position > last's position:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP edit range is reversed"
+        if entry's version = 2147483647:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
+        set prefix to the substring of original from 0 spanning first's position bytes
+        set length to ((the length of original) - last's position)
+        set suffix to the substring of original from last's position spanning length bytes
+        set updated to (prefix + replacement)
+        set updated to (updated + suffix)
+        set version to (entry's version + 1)
+        if state's synchronization's kind = the LSP incremental synchronization kind:
+            set change to a ranged LSP content change from line beginning and character start to line ending and character end containing replacement
+            set sent to the result of sending change for entry at version using state
+            if sent failed:
                 return sent
-        else if state's synchronization_kind = the lsp full synchronization kind:
-            set change_node to lsp full content change for text updated_text
-            set sent to send lsp document change change_node for document_state at version next_version using state
-            if not sent's succeeded:
+        else if state's synchronization's kind = the LSP full synchronization kind:
+            set change to a full LSP content change containing updated
+            set sent to the result of sending change for entry at version using state
+            if sent failed:
                 return sent
-        set document_state's text to updated_text
-        set document_state's version to next_version
-        return a successful json rpc operation
+        set entry's text to updated
+        set entry's version to version
+        return a successful JSON-RPC operation
 
-function close lsp document uri {any:document_uri} using {a pointer to lsp client:state}:
+function the result of closing LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
     execute:
-        set uri_text to the string form of document_uri
-        if state's lifecycle != the lsp running lifecycle:
-            return a failed json rpc operation with status the lsp invalid state status reporting "LSP client is not running"
-        set document_index to lsp document index for uri_text in state
-        if document_index < 0:
-            return a failed json rpc operation with status the lsp document error status reporting "LSP document is not open"
-        set document_state to lsp document pointer at document_index in state
-        if state's synchronization_open_close:
-            set parameters to lsp did close parameters for uri uri_text
-            set session to state's rpc_session
-            set sent to send json rpc session notification "textDocument/didClose" with parameters using session
-            free json value parameters
-            if not sent's succeeded:
+        set address to the string form of uri
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+        set index to the LSP document index for address in state
+        if index < 0:
+            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+        set entry to the LSP document at index in state
+        if state's synchronization's open and close notifications:
+            set parameters to the LSP document closing parameters for URI address
+            set session to state's session
+            set sent to the result of sending JSON-RPC session notification "textDocument/didClose" with parameters using session
+            free parameters
+            if sent failed:
                 return sent
         set documents to state's documents
-        remove item document_index from documents
-        @intrinsic("destroy at", document_state)
-        @intrinsic("call", "libc", "free", void, document_state)
-        return a successful json rpc operation
+        remove item index from documents
+        @intrinsic("destroy at", entry)
+        @intrinsic("call", "libc", "free", nothing, entry)
+        return a successful JSON-RPC operation

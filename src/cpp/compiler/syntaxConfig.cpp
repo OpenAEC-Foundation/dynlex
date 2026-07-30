@@ -283,6 +283,12 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "function") {
 		return assignNameValue(context, path, node, config.functionName);
 	}
+	if (node.key == "convert") {
+		return assignNameValue(context, path, node, config.conversionName);
+	}
+	if (node.key == "implicitly") {
+		return assignNameValue(context, path, node, config.implicitName);
+	}
 	if (node.key == "flex") {
 		return assignNameValue(context, path, node, config.flexName);
 	}
@@ -527,6 +533,10 @@ SyntaxConfig::Messages::Messages() {
 	set("function has missing return path", "message", "Function '{function}' does not return a value on every reachable path");
 	set("multiple reachable return types", "message",
 		"Function has multiple reachable return types: {first_type} and {second_type}");
+	set("conversion requires one parameter", "message",
+		"A conversion must contain exactly one parameter and no other pattern text");
+	set("implicit modifier requires conversion", "message", "The '{modifier}' modifier can only be used with '{conversion}'");
+	set("ambiguous conversion", "message", "More than one conversion from {from_type} to {to_type} is equally specific");
 	set("address of requires addressable value", "message", "address of requires an addressable value");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
 }

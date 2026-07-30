@@ -2,7 +2,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -10,12 +10,12 @@ function fixed value:
     replacement:
         @intrinsic("fix", value)
 
-function duplicate {integer:value}:
+function the duplicate of {integer:value}:
     execute:
         return value
 
-function duplicate {fixed integer:value}:
+function the duplicate of {fixed integer:value}:
     execute:
         return value
 
-duplicate 1
+the duplicate of 1

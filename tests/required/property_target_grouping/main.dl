@@ -1,0 +1,21 @@
+import lib/std.dl
+
+function grouped value:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        value
+
+class:
+    patterns:
+        [a|] box
+    members:
+        yaw
+        turning
+
+function a box facing {integer:yaw} and turning by {integer:turning}:
+    replacement:
+        @intrinsic("construct", a box, yaw, turning)
+
+set view to a box facing 1 and turning by 2
+add view's turning to view's yaw
+print view's yaw as a line

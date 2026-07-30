@@ -14,7 +14,7 @@ API; it does not invoke a shell or interpolate metacharacters:
 set command to a process command for "python3"
 add "-c" as an argument to command
 add "print('hello')" as an argument to command
-set result to run command
+run command and set result to it
 ```
 
 Commands inherit the current environment by default. They can replace or
@@ -38,41 +38,45 @@ and `PATH` entries are rejected because their meaning depends on ambient
 per-drive current-directory state; use a fully qualified or ordinarily
 relative path instead.
 
-`run command` closes the child's standard input, waits for it, and captures
-standard output and standard error separately. `run command using value`
+`run command` closes the child's standard input, waits for it, and sets the
+subject to a result which captures standard output and standard error
+separately. `run command using input`
 writes the complete string first; string lengths are preserved, including
 embedded zero bytes. A `process result` exposes:
 
-- `launched`: whether the operating system created the process;
-- `succeeded`: whether launch, pipe communication, and waiting succeeded
+- `result was launched`: whether the operating system created the process;
+- `result succeeded` and `result failed`: whether launch, pipe communication, and waiting succeeded
   (independent of the child's exit code);
-- `standard output` and `standard error`;
-- `exit code`, `terminated`, and `termination signal`;
-- `error message` for a launch or communication error.
+- `result's standard output` and `result's standard error`;
+- `result's exit code`, `result reports termination`, and
+  `result's termination signal`;
+- `result's error message` for a launch or communication error.
 
-Use `launch command` for a long-lived child. The returned managed `process`
-keeps its pipes and operating-system process handle alive:
+Use `launch command` for a long-lived child. The action sets the subject to a
+managed `process` which keeps its pipes and operating-system process handle
+alive:
 
 ```dynlex
-set child to launch command
-set sent to write the string form of "request\n" to child
-set response to read the standard output of child
-set errors to read available the standard error of child
-set closed to close the standard input of child
-set status to wait for child
+launch command and set child to it
+write the string form of "request\n" to the standard input of child and set writing to it
+read the standard output of child and set response to it
+read the available standard error of child and set errors to it
+close the standard input of child and set closure to it
+wait for child and set status to it
 ```
 
-Test `child launched` after launch. If it is false, `the starting error of
+Test `child was launched` after launch. If it is false, `the starting error of
 child` contains the command-configuration or operating-system launch error.
 
-Blocking reads wait for data or end-of-stream. `read available ...` only pumps
-currently available data. Both forms drain standard output and standard error
+Blocking reads wait for data or end-of-stream. `read the available ...` only
+pumps currently available data. Both forms drain standard output and standard error
 while waiting, and writes also drain both output pipes, so one full pipe cannot
-deadlock the other. Read results contain `contents`, `succeeded`, and
-`end of stream`; write results contain `byte count` and `succeeded`.
+deadlock the other. Read results provide `contents`, `succeeded`/`failed`, and
+`reached the end of stream`; write results provide `byte count` and
+`succeeded`/`failed`.
 
-`poll child` reports status without waiting. `wait for child` waits and drains
-both output pipes. Process ownership and waiting apply to the launched target,
+`poll child` sets the subject to its status without waiting. `wait for child`
+waits and drains both output pipes. Process ownership and waiting apply to the launched target,
 not descendants it creates. Once that target exits, DynLex captures bytes
 already buffered in its pipes and closes them; a descendant that inherited a
 pipe cannot keep `poll` or `wait` blocked. `terminate child` requests

@@ -72,13 +72,8 @@ static PureExpressionExecutionResult executePureFlexCall(
 		"pure flex execution encountered a selected call without its inferred replacement"
 	);
 
-	BindingFrame innerBindings;
-	collectPatternCallBindings(expr, definition, innerBindings);
 	BindingFrameStack expandedBindings = bindingFrameStack;
-	if (!innerBindings.empty()) {
-		materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
-		pushBindingScope(expandedBindings, std::move(innerBindings));
-	}
+	pushPatternCallBindingScope(expandedBindings, expr, definition);
 
 	Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 	ScopedPureFlexExecution flexScope(state, matchedSection, callSiteSection);

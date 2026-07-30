@@ -1,0 +1,21 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a number box
+    members:
+        payload as an integer
+
+implicitly convert {integer:number}:
+    replacement:
+        @intrinsic("construct", a number box, number)
+
+function the description of {integer:value}:
+    execute:
+        return 1
+
+function the description of {a number box:value}:
+    execute:
+        return 2
+
+print (the description of 9) as a line

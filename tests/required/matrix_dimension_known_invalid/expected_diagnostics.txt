@@ -1,3 +1,3 @@
-tests/required/matrix_dimension_known_invalid/main.dl:30-31: Error: Intrinsic 'matrix' argument 1 must be an integer greater than 0
-  note: while inferring intrinsic 'matrix' in 'discard @intrinsic("matrix", 0, 4)' with arguments [i8*, a 32 bit integer, a 32 bit integer] -> undeduced tests/required/matrix_dimension_known_invalid/main.dl:9-35
-  note: while inferring call 'discard @intrinsic("matrix", 0, 4)' with arguments [unresolved(?)] -> undeduced tests/required/matrix_dimension_known_invalid/main.dl:1-35
+tests/required/matrix_dimension_known_invalid/main.dl:29-30: Error: Intrinsic 'matrix' argument 1 must be an integer greater than 0
+  note: while inferring intrinsic 'matrix' in 'ignore @intrinsic("matrix", 0, 4)' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/matrix_dimension_known_invalid/main.dl:8-34
+  note: while inferring call 'ignore @intrinsic("matrix", 0, 4)' with arguments [an unresolved value] -> an unresolved value tests/required/matrix_dimension_known_invalid/main.dl:1-34

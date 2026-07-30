@@ -1,17 +1,17 @@
 import std.dl
 
-function [foo|foo]:
+function [a known value|a known value]:
     replacement:
         1
 
-function [take {word:left} alpha|take {word:right} beta]:
+function [the selection of {word:left} using alpha|the selection of {word:right} using beta]:
     execute:
         return 1
 
-function [recur|recur] argument marker:
+function [the recurrence of|the recurrence of] argument after marker:
     replacement:
         argument
-        recur marker marker
+        the recurrence of marker after marker
 
-print (take one alpha) as line
-print (take two beta) as line
+print (the selection of one using alpha) as a line
+print (the selection of two using beta) as a line

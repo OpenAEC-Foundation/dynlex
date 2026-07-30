@@ -54,6 +54,96 @@ export function decodeSemanticTokenRanges(sourceText, tokenData, legend) {
   return ranges;
 }
 
+export function rebaseSemanticTokensAfterLines(tokenData, removedLineCount) {
+  if (!Array.isArray(tokenData) || tokenData.length % 5 !== 0) {
+    throw new Error("Semantic-token data must contain groups of five integers");
+  }
+  if (!Number.isInteger(removedLineCount) || removedLineCount < 0) {
+    throw new Error("Removed semantic-token line count must be a non-negative integer");
+  }
+
+  const rebased = [];
+  let sourceLine = 0;
+  let sourceColumn = 0;
+  let outputLine = 0;
+  let outputColumn = 0;
+  let hasOutput = false;
+  for (let index = 0; index < tokenData.length; index += 5) {
+    const tuple = tokenData.slice(index, index + 5);
+    if (!tuple.every((value) => Number.isInteger(value) && value >= 0)) {
+      throw new Error("Semantic-token data contains an invalid integer");
+    }
+    const [deltaLine, deltaColumn, length, typeIndex, modifiers] = tuple;
+    if (deltaLine === 0) {
+      sourceColumn += deltaColumn;
+    } else {
+      sourceLine += deltaLine;
+      sourceColumn = deltaColumn;
+    }
+    if (sourceLine < removedLineCount) {
+      continue;
+    }
+
+    const line = sourceLine - removedLineCount;
+    const outputDeltaLine = hasOutput ? line - outputLine : line;
+    const outputDeltaColumn = outputDeltaLine === 0
+      ? sourceColumn - outputColumn
+      : sourceColumn;
+    if (outputDeltaLine < 0 || outputDeltaColumn < 0) {
+      throw new Error("Semantic tokens are not in source order");
+    }
+    rebased.push(outputDeltaLine, outputDeltaColumn, length, typeIndex, modifiers);
+    outputLine = line;
+    outputColumn = sourceColumn;
+    hasOutput = true;
+  }
+  return rebased;
+}
+
+export function rebaseLspDiagnosticsAfterLines(diagnostics, removedLineCount) {
+  if (!Array.isArray(diagnostics)) {
+    throw new TypeError("LSP diagnostics must be an array");
+  }
+  if (!Number.isInteger(removedLineCount) || removedLineCount < 0) {
+    throw new TypeError("Removed diagnostic line count must be a non-negative integer");
+  }
+
+  return diagnostics.map((diagnostic) => {
+    const start = diagnostic?.range?.start;
+    const end = diagnostic?.range?.end;
+    const positions = [start?.line, start?.character, end?.line, end?.character];
+    if (!positions.every((value) => Number.isInteger(value) && value >= 0)) {
+      throw new Error("LSP diagnostic has an invalid range");
+    }
+    if (
+      end.line < start.line
+      || (end.line === start.line && end.character < start.character)
+    ) {
+      throw new Error("LSP diagnostic range ends before it starts");
+    }
+    if (start.line < removedLineCount || end.line < removedLineCount) {
+      throw new Error("LSP diagnostic points into the removed prefix");
+    }
+    if (typeof diagnostic.message !== "string" || diagnostic.message.length === 0) {
+      throw new Error("LSP diagnostic has no message");
+    }
+
+    return {
+      ...diagnostic,
+      range: {
+        start: {
+          line: start.line - removedLineCount,
+          character: start.character
+        },
+        end: {
+          line: end.line - removedLineCount,
+          character: end.character
+        }
+      }
+    };
+  });
+}
+
 export function semanticTokenClassName(tokenType, prefix) {
   if (typeof prefix !== "string" || prefix.length === 0) {
     throw new Error("Semantic token class prefix is required");

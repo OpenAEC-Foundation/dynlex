@@ -129,10 +129,12 @@ static std::string formatCompileTimeValue(const CompileTimeValue &value) {
 		return "\"" + *text + "\"";
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-		return typeRef->type.toString();
+	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value)) {
+		return typeRef->type.kind == DataType::Kind::Type ? typeToUserName(typeRef->type.toReferencedType())
+														  : typeToUserName(typeRef->type);
+	}
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
-		return constraint->toString();
+		return typeToUserName(*constraint);
 	return "?";
 }
 
@@ -473,7 +475,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 			*context, ownerSection, ownedVariable->definition, variableName, selectionKey, selectedInstantiationBySelectionKey
 		);
 		bool hasKnownValue = value.has_value() && isCompileTimeKnown(*value);
-		std::string typeText = typeToUserPatternName(*context, ownedVariable->type);
+		std::string typeText = typeToUserName(ownedVariable->type);
 		if (typeText.empty() && !hasKnownValue)
 			continue;
 
@@ -557,7 +559,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 			bool hasKnownExpressionValue = expressionValue.has_value() && isCompileTimeKnown(*expressionValue);
 			if (hasKnownExpressionValue) {
 				Hover hover;
-				hover.contents = makeVariableHoverContents(typeToUserPatternName(*context, expr->type), expressionValue);
+				hover.contents = makeVariableHoverContents(typeToUserName(expr->type), expressionValue);
 				hover.range = convertRange(expr->range);
 				return hover;
 			}
@@ -599,9 +601,9 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 
 				std::string typeText;
 				if (ownedVariable)
-					typeText = typeToUserPatternName(*context, ownedVariable->type);
+					typeText = typeToUserName(ownedVariable->type);
 				else if (expr && expr->kind == Expression::Kind::Variable)
-					typeText = typeToUserPatternName(*context, expr->type);
+					typeText = typeToUserName(expr->type);
 
 				std::optional<CompileTimeValue> value = lookupHoverConstantValue(
 					*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
@@ -655,7 +657,7 @@ std::optional<Hover> DynLexServer::hoverInContext(ParseContext *context, const T
 
 	std::string typeText;
 	if (ownedVariable)
-		typeText = typeToUserPatternName(*context, ownedVariable->type);
+		typeText = typeToUserName(ownedVariable->type);
 
 	std::optional<CompileTimeValue> value = lookupHoverConstantValue(
 		*context, ownerSection, referenceAtHover, variableDefinition, variableName, selectionKey,
@@ -721,7 +723,7 @@ void DynLexServer::appendInstantiationsInContext(
 					continue;
 				seenSelectionKeys.insert(selectionKey);
 
-				Json options = buildInstantiationOptions(*context, ownerSection);
+				Json options = buildInstantiationOptions(ownerSection);
 				if (options.empty())
 					continue;
 
@@ -742,7 +744,7 @@ void DynLexServer::appendInstantiationsInContext(
 		}
 
 		if (!section->instantiations.empty()) {
-			Json options = buildInstantiationOptions(*context, section);
+			Json options = buildInstantiationOptions(section);
 			if (!options.empty()) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition || !definition->range.line || !definition->range.line->sourceFile)

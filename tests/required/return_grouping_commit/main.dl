@@ -2,7 +2,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -10,16 +10,16 @@ function left - right:
     execute:
         return @intrinsic("subtract", left, right)
 
-function value odded:
+function value adjusted:
     execute:
         return value
 
-function byte:
+function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-function test value:
+function the tested form of value:
     execute:
-        return value - 1 odded
+        return value - 1 adjusted
 
-discard @intrinsic("array", test 4, byte)
+ignore @intrinsic("array", the tested form of 4, a byte)

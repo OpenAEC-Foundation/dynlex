@@ -1,5 +1,5 @@
 import lib/filesystem.dl
 
-set string_path to the string form of "tests/required/filesystem_string_path_read/input.txt"
-read string_path
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", it succeeded))
+set path to the string form of "tests/required/filesystem_string_path_read/input.txt"
+read the file at path and set reading to it
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", reading succeeded)

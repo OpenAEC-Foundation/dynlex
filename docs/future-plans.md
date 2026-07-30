@@ -33,5 +33,3 @@ Features and design decisions planned for later implementation.
 - Could leverage debug symbols (DWARF) when available for even better results
 
 # Matching names in debugging, better printing and function evaluation
-# It function (refer to subject)
-# 

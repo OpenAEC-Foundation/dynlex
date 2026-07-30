@@ -1,0 +1,4 @@
+import lib/std.dl
+
+print (12 clamped between 0 and 10) as a line
+print ((0.0 - 2.5) clamped between (0.0 - 1.0) and 1.0) as a line

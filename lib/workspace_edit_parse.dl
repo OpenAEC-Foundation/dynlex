@@ -9,88 +9,92 @@ local class:
     patterns:
         [a|] workspace edit parser state
     members:
-        failed as boolean
-        failure reason as string
-        failed change present as boolean
-        failed change as i32
-        current change present as boolean
-        current change as i32
+        failure as a boolean
+        failure reason as a string
+        failed change presence as a boolean
+        failed change as a 32 bit integer
+        current change presence as a boolean
+        current change as a 32 bit integer
 
 local class:
     patterns:
-        [a|] workspace URI name collection
+        an ordered name collection
     members:
-        items as a pointer to string
-        length as i32
-        capacity as i32
+        items as a pointer to a string
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
-local function a new workspace URI name collection:
+local function {a pointer to a workspace edit parser state:state} has a current change:
+    replacement:
+        state's current change presence
+
+local function a new ordered name collection:
     execute:
-        set initial_value to @intrinsic(
+        set initial to @intrinsic(
             "construct",
-            a workspace URI name collection,
-            0 as a pointer to string,
+            an ordered name collection,
+            0 as a pointer to a string,
             0,
             0
         )
-        set result to allocate 1 slots of initial_value
+        allocate one slot of initial and set result to it
         return result
 
-local function append workspace URI name {string:value} to {a pointer to workspace URI name collection:collection}:
+local function append ordered name {string:value} to {a pointer to an ordered name collection:collection}:
     execute:
         if the length of collection = the capacity of collection:
-            set next_capacity to (the capacity of collection) * 2
-            if next_capacity < 4:
-                set next_capacity to 4
+            set growth to ((the capacity of collection) * 2)
+            if growth < 4:
+                set growth to 4
             set resized to @intrinsic(
                 "call",
                 "libc",
                 "realloc",
-                a pointer to string,
+                a pointer to a string,
                 the items of collection,
-                next_capacity * the size of a string
+                growth * the size of a string
             )
             set the items of collection to resized
-            set the capacity of collection to next_capacity
+            set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to (the length of collection) + 1
+        set the length of collection to ((the length of collection) + 1)
 
-local function workspace URI name at {integer:position} in {a pointer to workspace URI name collection:collection}:
+local function the ordered name at {integer:position} in {a pointer to an ordered name collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", void)
-        return item position of the items of collection
+            @intrinsic("call", "libc", "abort", nothing)
+        return the item at position in the items of collection
 
-local function free workspace URI names {a pointer to workspace URI name collection:collection}:
+local function free {a pointer to an ordered name collection:collection}:
     execute:
         set position to 0
         loop while position < the length of collection:
             @intrinsic("destroy at", (the items of collection) + position)
-            set position to position + 1
-        @intrinsic("call", "libc", "free", void, the items of collection)
+            set position to (position + 1)
+        @intrinsic("call", "libc", "free", nothing, the items of collection)
         @intrinsic("destroy at", collection)
-        @intrinsic("call", "libc", "free", void, collection)
+        @intrinsic("call", "libc", "free", nothing, collection)
 
-local function stable sort workspace URI names {a pointer to workspace URI name collection:collection}:
+local function stable sort ordered names {a pointer to an ordered name collection:collection}:
     execute:
-        set source_index to 1
-        loop while source_index < the length of collection:
-            set insertion_position to source_index
+        set cursor to 1
+        loop while cursor < the length of collection:
+            set position to cursor
             set searching to true
-            loop while searching and insertion_position > 0:
-                set left to workspace URI name at insertion_position - 1 in collection
-                set right to workspace URI name at insertion_position in collection
-                if bytewise compare right with left < 0:
-                    store right into the items of collection at insertion_position - 1
-                    store left into the items of collection at insertion_position
-                    set insertion_position to insertion_position - 1
+            loop while searching and position > 0:
+                set left to the ordered name at (position - 1) in collection
+                set right to the ordered name at position in collection
+                if the bytewise comparison of right with left < 0:
+                    store right into the items of collection at (position - 1)
+                    store left into the items of collection at position
+                    set position to (position - 1)
                 else:
                     set searching to false
-            set source_index to source_index + 1
+            set cursor to (cursor + 1)
 
 local function a new workspace edit parser state:
     execute:
-        set initial_value to @intrinsic(
+        set initial to @intrinsic(
             "construct",
             a workspace edit parser state,
             false,
@@ -100,165 +104,175 @@ local function a new workspace edit parser state:
             false,
             0
         )
-        set result to allocate 1 slots of initial_value
+        allocate one slot of initial and set result to it
         return result
 
-local function free workspace edit parser state {a pointer to workspace edit parser state:target}:
+local function free {a pointer to a workspace edit parser state:target}:
     execute:
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", void, target)
+        @intrinsic("call", "libc", "free", nothing, target)
 
-local function record workspace edit parse failure {string:reason} using {a pointer to workspace edit parser state:state}:
+local function record workspace edit parse failure {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if not the failed of state:
-            set the failed of state to true
+        if the inverse of the failure of state:
+            set the failure of state to true
             set the failure reason of state to reason
-            if the current change present of state:
-                set the failed change present of state to true
+            if state has a current change:
+                set state's failed change presence to true
                 set the failed change of state to the current change of state
 
-local function workspace json member {string:name} of {a pointer to json value:object}:
+local function the workspace JSON member {string:name} of {a pointer to a JSON value:object}:
     execute:
-        if the kind of object != the json object kind:
-            return 0 as a pointer to json value
-        if not object has json member named name:
-            return 0 as a pointer to json value
-        return json member named name in object
+        if the kind of object != the JSON object kind:
+            return 0 as a pointer to a JSON value
+        if object lacks JSON member named name:
+            return 0 as a pointer to a JSON value
+        return the JSON member named name in object
 
-local function require workspace json object {a pointer to json value:candidate} reporting {string:reason} using {a pointer to workspace edit parser state:state}:
+local function {a pointer to a JSON value:candidate} satisfies the workspace JSON object requirement reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if candidate = (0 as a pointer to json value):
+        if candidate = (0 as a pointer to a JSON value):
             record workspace edit parse failure reason using state
             return false
-        if the kind of candidate != the json object kind:
+        if the kind of candidate != the JSON object kind:
             record workspace edit parse failure reason using state
             return false
         return true
 
-local function require workspace json array {a pointer to json value:value} reporting {string:reason} using {a pointer to workspace edit parser state:state}:
+local function {a pointer to a JSON value:value} satisfies the workspace JSON array requirement reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if value = (0 as a pointer to json value):
+        if value = (0 as a pointer to a JSON value):
             record workspace edit parse failure reason using state
             return false
-        if the kind of value != the json array kind:
+        if the kind of value != the JSON array kind:
             record workspace edit parse failure reason using state
             return false
         return true
 
-local function workspace json text {string:name} from {a pointer to json value:object} reporting {string:reason} using {a pointer to workspace edit parser state:state}:
+local function {a pointer to a JSON value:candidate} violates the workspace JSON object requirement reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        set value to workspace json member name of object
-        if value = (0 as a pointer to json value):
+        return (candidate satisfies the workspace JSON object requirement reporting reason using state) = false
+
+local function {a pointer to a JSON value:value} violates the workspace JSON array requirement reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
+    execute:
+        return (value satisfies the workspace JSON array requirement reporting reason using state) = false
+
+local function the workspace JSON text {string:name} from {a pointer to a JSON value:object} reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
+    execute:
+        set value to the workspace JSON member name of object
+        if value = (0 as a pointer to a JSON value):
             record workspace edit parse failure reason using state
             return an empty workspace edit text
-        if the kind of value != the json text kind:
+        if the kind of value != the JSON text kind:
             record workspace edit parse failure reason using state
             return an empty workspace edit text
         return the text of value
 
-local function workspace json integer {string:name} from {a pointer to json value:object} reporting {string:reason} using {a pointer to workspace edit parser state:state}:
+local function the workspace JSON integer {string:name} from {a pointer to a JSON value:object} reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        set value to workspace json member name of object
-        if value = (0 as a pointer to json value):
+        set value to the workspace JSON member name of object
+        if value = (0 as a pointer to a JSON value):
             record workspace edit parse failure reason using state
             return 0
-        if the kind of value != the json number kind:
+        if the kind of value != the JSON number kind:
             record workspace edit parse failure reason using state
             return 0
-        set numeric_value to the number of value
-        set integer_value to numeric_value as a 64 bit integer
-        if (integer_value as f64) != numeric_value:
+        set number to the number of value
+        set whole to number as a 64 bit integer
+        if (whole as a 64 bit floating-point number) != number:
             record workspace edit parse failure reason using state
             return 0
-        if integer_value < (0 - 2147483648) or integer_value > 2147483647:
+        if whole < (0 - 2147483648) or whole > 2147483647:
             record workspace edit parse failure reason using state
             return 0
-        return integer_value as i32
+        return whole as a 32 bit integer
 
-local function workspace json optional boolean {string:name} from {a pointer to json value:object} reporting {string:reason} using {a pointer to workspace edit parser state:state}:
+local function the optional workspace JSON boolean {string:name} from {a pointer to a JSON value:object} reporting {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:
-        set value to workspace json member name of object
-        if value = (0 as a pointer to json value):
+        set value to the workspace JSON member name of object
+        if value = (0 as a pointer to a JSON value):
             return false
-        if the kind of value != the json boolean kind:
+        if the kind of value != the JSON boolean kind:
             record workspace edit parse failure reason using state
             return false
         return the boolean of value
 
-local function parse workspace position {a pointer to json value:value} using {a pointer to workspace edit parser state:state}:
+local function the workspace position parsed from {a pointer to a JSON value:value} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if not require workspace json object value reporting the string form of "Text edit position must be an object" using state:
+        if value violates the workspace JSON object requirement reporting the string form of "Text edit position must be an object" using state:
             return @intrinsic("construct", a workspace edit position, 0, 0)
-        set line to workspace json integer the string form of "line" from value reporting the string form of "Text edit line must be an integer" using state
-        set character to workspace json integer the string form of "character" from value reporting the string form of "Text edit character must be an integer" using state
+        set line to the workspace JSON integer the string form of "line" from value reporting the string form of "Text edit line must be an integer" using state
+        set character to the workspace JSON integer the string form of "character" from value reporting the string form of "Text edit character must be an integer" using state
         return @intrinsic("construct", a workspace edit position, line, character)
 
-local function parse workspace text edit {a pointer to json value:value} using {a pointer to workspace edit parser state:state}:
+local function the workspace text edit parsed from {a pointer to a JSON value:value} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if not require workspace json object value reporting the string form of "Text edit must be an object" using state:
-            return 0 as a pointer to workspace text edit
-        if value has json member named "snippet" or value has json member named "insertTextFormat":
+        if value violates the workspace JSON object requirement reporting the string form of "Text edit must be an object" using state:
+            return 0 as a pointer to a workspace text edit
+        if (value has JSON member named "snippet") or (value has JSON member named "insertTextFormat"):
             record workspace edit parse failure the string form of "Snippet edits are unsupported" using state
-            return 0 as a pointer to workspace text edit
-        set range_value to workspace json member the string form of "range" of value
-        if not require workspace json object range_value reporting the string form of "Text edit range must be an object" using state:
-            return 0 as a pointer to workspace text edit
-        set start to parse workspace position (workspace json member the string form of "start" of range_value) using state
-        set finish to parse workspace position (workspace json member the string form of "end" of range_value) using state
-        set new_text to workspace json text the string form of "newText" from value reporting the string form of "Text edit newText must be text" using state
-        set annotation_present to value has json member named "annotationId"
-        set annotation_id to an empty workspace edit text
-        if annotation_present:
-            set annotation_id to workspace json text the string form of "annotationId" from value reporting the string form of "Text edit annotationId must be text" using state
-        if the failed of state:
-            return 0 as a pointer to workspace text edit
-        set initial_value to @intrinsic(
+            return 0 as a pointer to a workspace text edit
+        set range to the workspace JSON member the string form of "range" of value
+        if range violates the workspace JSON object requirement reporting the string form of "Text edit range must be an object" using state:
+            return 0 as a pointer to a workspace text edit
+        set start to the workspace position parsed from (the workspace JSON member the string form of "start" of range) using state
+        set finish to the workspace position parsed from (the workspace JSON member the string form of "end" of range) using state
+        set contents to the workspace JSON text the string form of "newText" from value reporting the string form of "Text edit newText must be text" using state
+        set annotated to (value has JSON member named "annotationId")
+        set annotation to an empty workspace edit text
+        if annotated:
+            set annotation to the workspace JSON text the string form of "annotationId" from value reporting the string form of "Text edit annotationId must be text" using state
+        if the failure of state:
+            return 0 as a pointer to a workspace text edit
+        set initial to @intrinsic(
             "construct",
             a workspace text edit,
             start,
             finish,
-            new_text,
-            annotation_present,
-            annotation_id
+            contents,
+            annotated,
+            annotation
         )
-        set result to allocate 1 slots of initial_value
+        allocate one slot of initial and set result to it
         return result
 
-local function parse workspace text edits {a pointer to json value:value} using {a pointer to workspace edit parser state:state}:
+local function the workspace text edits parsed from {a pointer to a JSON value:value} using {a pointer to a workspace edit parser state:state}:
     execute:
-        set parsed_edits to a new workspace text edit collection
-        if not require workspace json array value reporting the string form of "Text document edits must be an array" using state:
-            return parsed_edits
-        set edit_index to 0
-        loop while edit_index < the length of value and not the failed of state:
-            set parsed_edit to parse workspace text edit (json value at index edit_index in value) using state
-            if parsed_edit != (0 as a pointer to workspace text edit):
-                append parsed_edit to workspace text edits parsed_edits
-            set edit_index to edit_index + 1
-        return parsed_edits
+        set collection to a new workspace text edit collection
+        if value violates the workspace JSON array requirement reporting the string form of "Text document edits must be an array" using state:
+            return collection
+        set position to 0
+        loop while position < the length of value and the inverse of the failure of state:
+            set edit to the workspace text edit parsed from (the JSON value at index position in value) using state
+            if edit != (0 as a pointer to a workspace text edit):
+                append edit to workspace text edits collection
+            set position to (position + 1)
+        return collection
 
-local function workspace URI names from changes {a pointer to json value:object_value}:
+local function the ordered names in {a pointer to a JSON value:object}:
     execute:
-        set uri_names to a new workspace URI name collection
-        set name_index to 0
-        loop while name_index < the length of object_value:
-            append workspace URI name (item name_index of the names of object_value) to uri_names
-            set name_index to name_index + 1
-        stable sort workspace URI names uri_names
-        return uri_names
+        set collection to a new ordered name collection
+        set position to 0
+        set members to object's members
+        loop while position < the length of object:
+            set member to the item at position in members
+            append ordered name member's name to collection
+            set position to (position + 1)
+        stable sort ordered names collection
+        return collection
 
-local function a workspace text change for {string:resource_uri} with {a pointer to workspace text edit collection:edit_values} and optional version {integer:document_version} present {boolean:has_version}:
+local function a workspace text change for {string:uri} with {a pointer to a workspace text edit collection:edits}, versioned at {integer:version} if {boolean:versioned}:
     execute:
-        set initial_value to @intrinsic(
+        set initial to @intrinsic(
             "construct",
             a workspace edit change,
             the workspace text change kind,
-            resource_uri,
+            uri,
             an empty workspace edit text,
             an empty workspace edit text,
-            has_version,
-            document_version as i32,
-            edit_values,
+            versioned,
+            version as a 32 bit integer,
+            edits,
             false,
             false,
             false,
@@ -267,205 +281,207 @@ local function a workspace text change for {string:resource_uri} with {a pointer
             false,
             an empty workspace edit text
         )
-        set result to allocate 1 slots of initial_value
+        allocate one slot of initial and set result to it
         return result
 
-local function parse workspace document text change {a pointer to json value:value} using {a pointer to workspace edit parser state:state}:
+local function the workspace document text change parsed from {a pointer to a JSON value:value} using {a pointer to a workspace edit parser state:state}:
     execute:
-        set document_value to workspace json member the string form of "textDocument" of value
-        if not require workspace json object document_value reporting the string form of "textDocument must be an object" using state:
-            return 0 as a pointer to workspace edit change
-        set uri to workspace json text the string form of "uri" from document_value reporting the string form of "textDocument uri must be text" using state
-        if not document_value has json member named "version":
+        set metadata to the workspace JSON member the string form of "textDocument" of value
+        if metadata violates the workspace JSON object requirement reporting the string form of "textDocument must be an object" using state:
+            return 0 as a pointer to a workspace edit change
+        set uri to the workspace JSON text the string form of "uri" from metadata reporting the string form of "textDocument uri must be text" using state
+        if metadata lacks JSON member named "version":
             record workspace edit parse failure the string form of "textDocument version is required" using state
-            return 0 as a pointer to workspace edit change
-        set version_value to workspace json member the string form of "version" of document_value
-        set version_present to the kind of version_value != the json null kind
+            return 0 as a pointer to a workspace edit change
+        set descriptor to the workspace JSON member the string form of "version" of metadata
+        set versioned to (the kind of descriptor != the JSON null kind)
         set version to 0
-        if version_present:
-            set version to workspace json integer the string form of "version" from document_value reporting the string form of "textDocument version must be an integer or null" using state
-        set parsed_edits to parse workspace text edits (workspace json member the string form of "edits" of value) using state
-        if the failed of state:
-            free workspace text edit collection parsed_edits
-            return 0 as a pointer to workspace edit change
-        return a workspace text change for uri with parsed_edits and optional version version present version_present
+        if versioned:
+            set version to the workspace JSON integer the string form of "version" from metadata reporting the string form of "textDocument version must be an integer or null" using state
+        set edits to the workspace text edits parsed from (the workspace JSON member the string form of "edits" of value) using state
+        if the failure of state:
+            free edits
+            return 0 as a pointer to a workspace edit change
+        return a workspace text change for uri with edits, versioned at version if versioned
 
-local function workspace URI has directory hint {string:resource_uri}:
+local function {string:uri} has a workspace directory hint:
     execute:
-        return the length of resource_uri > 0 and character (the length of resource_uri - 1) of resource_uri = 47
+        return (the length of uri > 0) and (the character at (the length of uri - 1) in uri = 47)
 
-local function parse workspace resource change {a pointer to json value:value} of kind {string:operation_kind} using {a pointer to workspace edit parser state:state}:
+local function the workspace resource change parsed from {a pointer to a JSON value:value} with kind {string:operation} using {a pointer to a workspace edit parser state:state}:
     execute:
         set uri to an empty workspace edit text
-        set old_uri to an empty workspace edit text
-        set new_uri to an empty workspace edit text
-        set change_kind to 0
-        if operation_kind = "create":
-            set change_kind to the workspace create change kind
-            set uri to workspace json text the string form of "uri" from value reporting the string form of "Create uri must be text" using state
-        else if operation_kind = "rename":
-            set change_kind to the workspace rename change kind
-            set old_uri to workspace json text the string form of "oldUri" from value reporting the string form of "Rename oldUri must be text" using state
-            set new_uri to workspace json text the string form of "newUri" from value reporting the string form of "Rename newUri must be text" using state
-        else if operation_kind = "delete":
-            set change_kind to the workspace delete change kind
-            set uri to workspace json text the string form of "uri" from value reporting the string form of "Delete uri must be text" using state
+        set origin to an empty workspace edit text
+        set destination to an empty workspace edit text
+        set category to 0
+        if operation = "create":
+            set category to the workspace create change kind
+            set uri to the workspace JSON text the string form of "uri" from value reporting the string form of "Create uri must be text" using state
+        else if operation = "rename":
+            set category to the workspace rename change kind
+            set origin to the workspace JSON text the string form of "oldUri" from value reporting the string form of "Rename oldUri must be text" using state
+            set destination to the workspace JSON text the string form of "newUri" from value reporting the string form of "Rename newUri must be text" using state
+        else if operation = "delete":
+            set category to the workspace delete change kind
+            set uri to the workspace JSON text the string form of "uri" from value reporting the string form of "Delete uri must be text" using state
         else:
             record workspace edit parse failure the string form of "Unknown workspace resource operation" using state
-            return 0 as a pointer to workspace edit change
+            return 0 as a pointer to a workspace edit change
 
         set overwrite to false
-        set ignore_if_exists to false
+        set existing to false
         set recursive to false
-        set ignore_if_not_exists to false
-        if value has json member named "options":
-            set options to workspace json member the string form of "options" of value
-            if require workspace json object options reporting the string form of "Resource operation options must be an object" using state:
-                set overwrite to workspace json optional boolean the string form of "overwrite" from options reporting the string form of "overwrite must be boolean" using state
-                set ignore_if_exists to workspace json optional boolean the string form of "ignoreIfExists" from options reporting the string form of "ignoreIfExists must be boolean" using state
-                set recursive to workspace json optional boolean the string form of "recursive" from options reporting the string form of "recursive must be boolean" using state
-                set ignore_if_not_exists to workspace json optional boolean the string form of "ignoreIfNotExists" from options reporting the string form of "ignoreIfNotExists must be boolean" using state
-        set annotation_present to value has json member named "annotationId"
-        set annotation_id to an empty workspace edit text
-        if annotation_present:
-            set annotation_id to workspace json text the string form of "annotationId" from value reporting the string form of "Resource annotationId must be text" using state
-        if the failed of state:
-            return 0 as a pointer to workspace edit change
-        set hinted_uri to uri
-        if change_kind = the workspace rename change kind:
-            set hinted_uri to new_uri
+        set missing to false
+        if value has JSON member named "options":
+            set options to the workspace JSON member the string form of "options" of value
+            if options satisfies the workspace JSON object requirement reporting the string form of "Resource operation options must be an object" using state:
+                set overwrite to the optional workspace JSON boolean the string form of "overwrite" from options reporting the string form of "overwrite must be boolean" using state
+                set existing to the optional workspace JSON boolean the string form of "ignoreIfExists" from options reporting the string form of "ignoreIfExists must be boolean" using state
+                set recursive to the optional workspace JSON boolean the string form of "recursive" from options reporting the string form of "recursive must be boolean" using state
+                set missing to the optional workspace JSON boolean the string form of "ignoreIfNotExists" from options reporting the string form of "ignoreIfNotExists must be boolean" using state
+        set annotated to (value has JSON member named "annotationId")
+        set annotation to an empty workspace edit text
+        if annotated:
+            set annotation to the workspace JSON text the string form of "annotationId" from value reporting the string form of "Resource annotationId must be text" using state
+        if the failure of state:
+            return 0 as a pointer to a workspace edit change
+        set hint to uri
+        if category = the workspace rename change kind:
+            set hint to destination
         set edits to a new workspace text edit collection
-        set initial_value to @intrinsic(
+        set initial to @intrinsic(
             "construct",
             a workspace edit change,
-            change_kind,
+            category,
             uri,
-            old_uri,
-            new_uri,
+            origin,
+            destination,
             false,
             0,
             edits,
             overwrite,
-            ignore_if_exists,
+            existing,
             recursive,
-            ignore_if_not_exists,
-            workspace URI has directory hint hinted_uri,
-            annotation_present,
-            annotation_id
+            missing,
+            hint has a workspace directory hint,
+            annotated,
+            annotation
         )
-        set result to allocate 1 slots of initial_value
+        allocate one slot of initial and set result to it
         return result
 
-local function parse workspace document change {a pointer to json value:value} using {a pointer to workspace edit parser state:state}:
+local function the workspace document change parsed from {a pointer to a JSON value:value} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if not require workspace json object value reporting the string form of "documentChanges entry must be an object" using state:
-            return 0 as a pointer to workspace edit change
-        if value has json member named "kind":
-            set operation_kind to workspace json text the string form of "kind" from value reporting the string form of "Resource operation kind must be text" using state
-            return parse workspace resource change value of kind operation_kind using state
-        return parse workspace document text change value using state
+        if value violates the workspace JSON object requirement reporting the string form of "documentChanges entry must be an object" using state:
+            return 0 as a pointer to a workspace edit change
+        if value has JSON member named "kind":
+            set operation to the workspace JSON text the string form of "kind" from value reporting the string form of "Resource operation kind must be text" using state
+            return the workspace resource change parsed from value with kind operation using state
+        return the workspace document text change parsed from value using state
 
-local function parse workspace annotations from {a pointer to json value:root} into {a pointer to parsed workspace edit:edit} using {a pointer to workspace edit parser state:state}:
+local function parse workspace annotations from {a pointer to a JSON value:root} into {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if not root has json member named "changeAnnotations":
+        if root lacks JSON member named "changeAnnotations":
             @intrinsic("return")
-        set annotations_value to workspace json member the string form of "changeAnnotations" of root
-        if not require workspace json object annotations_value reporting the string form of "changeAnnotations must be an object" using state:
+        set collection to the workspace JSON member the string form of "changeAnnotations" of root
+        if collection violates the workspace JSON object requirement reporting the string form of "changeAnnotations must be an object" using state:
             @intrinsic("return")
-        set annotation_index to 0
-        loop while annotation_index < the length of annotations_value and not the failed of state:
-            set identifier to item annotation_index of the names of annotations_value
-            set value to item annotation_index of the items of annotations_value
-            if require workspace json object value reporting the string form of "Change annotation must be an object" using state:
-                set label to workspace json text the string form of "label" from value reporting the string form of "Change annotation label must be text" using state
-                set needs_confirmation to workspace json optional boolean the string form of "needsConfirmation" from value reporting the string form of "needsConfirmation must be boolean" using state
-                set description_present to value has json member named "description"
+        set position to 0
+        set members to collection's members
+        loop while position < the length of collection and the inverse of the failure of state:
+            set member to the item at position in members
+            set identifier to member's name
+            set value to member's value
+            if value satisfies the workspace JSON object requirement reporting the string form of "Change annotation must be an object" using state:
+                set label to the workspace JSON text the string form of "label" from value reporting the string form of "Change annotation label must be text" using state
+                set confirmation to the optional workspace JSON boolean the string form of "needsConfirmation" from value reporting the string form of "needsConfirmation must be boolean" using state
+                set described to (value has JSON member named "description")
                 set description to an empty workspace edit text
-                if description_present:
-                    set description to workspace json text the string form of "description" from value reporting the string form of "Change annotation description must be text" using state
-                if not the failed of state:
-                    set initial_value to @intrinsic(
+                if described:
+                    set description to the workspace JSON text the string form of "description" from value reporting the string form of "Change annotation description must be text" using state
+                if the inverse of the failure of state:
+                    set initial to @intrinsic(
                         "construct",
                         a workspace change annotation,
                         identifier,
                         label,
-                        needs_confirmation,
-                        description_present,
+                        confirmation,
+                        described,
                         description
                     )
-                    set annotation to allocate 1 slots of initial_value
+                    allocate one slot of initial and set annotation to it
                     append annotation to workspace annotations (the annotations of edit)
-            set annotation_index to annotation_index + 1
+            set position to (position + 1)
 
-local function finish workspace edit parse {a pointer to parsed workspace edit:parsed_value} using {a pointer to workspace edit parser state:state}:
+local function the completed workspace edit parse for {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit parser state:state}:
     execute:
-        if the failed of state:
+        if the failure of state:
             set reason to the failure reason of state
-            set failed_change_present to the failed change present of state
-            set failed_change to the failed change of state
-            free parsed workspace edit parsed_value
-            if failed_change_present:
-                return a failed workspace edit parse reporting reason at change failed_change
+            set indexed to state's failed change presence
+            set failure to the failed change of state
+            free edit
+            if indexed:
+                return a failed workspace edit parse reporting reason at change failure
             return a failed workspace edit parse reporting reason
-        return a successful workspace edit parse containing parsed_value
+        return a successful workspace edit parse containing edit
 
-function parse workspace edit from {string:source}:
+function the result of parsing {string:source} as a workspace edit:
     execute:
-        set json_result to parse source as json
-        if not json parsing succeeded for json_result:
-            set result to a failed workspace edit parse reporting the string form of "Workspace edit is not valid JSON"
-            free json result json_result
-            return result
-        set root to the value of json_result
+        parse source as JSON and set parsed to it
+        if parsed failed:
+            set outcome to a failed workspace edit parse reporting the string form of "Workspace edit is not valid JSON"
+            free parsed
+            return outcome
+        set root to the value of parsed
         set state to a new workspace edit parser state
-        if not require workspace json object root reporting the string form of "Workspace edit must be an object" using state:
-            set parsed_workspace to a new parsed workspace edit using document changes false
-            set result to finish workspace edit parse parsed_workspace using state
-            free workspace edit parser state state
-            free json result json_result
-            return result
+        if root violates the workspace JSON object requirement reporting the string form of "Workspace edit must be an object" using state:
+            set composition to a new parsed workspace edit using document changes false
+            set outcome to the completed workspace edit parse for composition using state
+            free state
+            free parsed
+            return outcome
 
-        set has_document_changes to root has json member named "documentChanges"
-        set has_changes to root has json member named "changes"
-        set parsed_workspace to a new parsed workspace edit using document changes has_document_changes
-        if has_document_changes:
-            set document_changes to workspace json member the string form of "documentChanges" of root
-            if require workspace json array document_changes reporting the string form of "documentChanges must be an array" using state:
-                set change_index to 0
-                loop while change_index < the length of document_changes and not the failed of state:
-                    set the current change present of state to true
-                    set the current change of state to change_index
-                    set change to parse workspace document change (json value at index change_index in document_changes) using state
-                    if change != (0 as a pointer to workspace edit change):
-                        append change to workspace changes (the changes of parsed_workspace)
-                    set change_index to change_index + 1
-        else if has_changes:
-            set changes_value to workspace json member the string form of "changes" of root
-            if require workspace json object changes_value reporting the string form of "changes must be an object" using state:
-                set uri_names to workspace URI names from changes changes_value
-                set change_index to 0
-                loop while change_index < the length of uri_names and not the failed of state:
-                    set the current change present of state to true
-                    set the current change of state to change_index
-                    set uri to workspace URI name at change_index in uri_names
-                    set parsed_edits to parse workspace text edits (json member named uri in changes_value) using state
-                    if not the failed of state:
-                        append (a workspace text change for uri with parsed_edits and optional version 0 present false) to workspace changes (the changes of parsed_workspace)
+        set ordered to (root has JSON member named "documentChanges")
+        set grouped to (root has JSON member named "changes")
+        set composition to a new parsed workspace edit using document changes ordered
+        if ordered:
+            set changes to the workspace JSON member the string form of "documentChanges" of root
+            if changes satisfies the workspace JSON array requirement reporting the string form of "documentChanges must be an array" using state:
+                set position to 0
+                loop while position < the length of changes and the inverse of the failure of state:
+                    set state's current change presence to true
+                    set the current change of state to position
+                    set change to the workspace document change parsed from (the JSON value at index position in changes) using state
+                    if change != (0 as a pointer to a workspace edit change):
+                        append change to workspace changes (the changes of composition)
+                    set position to (position + 1)
+        else if grouped:
+            set changes to the workspace JSON member the string form of "changes" of root
+            if changes satisfies the workspace JSON object requirement reporting the string form of "changes must be an object" using state:
+                set names to the ordered names in changes
+                set position to 0
+                loop while position < the length of names and the inverse of the failure of state:
+                    set state's current change presence to true
+                    set the current change of state to position
+                    set uri to the ordered name at position in names
+                    set edits to the workspace text edits parsed from (the JSON member named uri in changes) using state
+                    if the inverse of the failure of state:
+                        append (a workspace text change for uri with edits, versioned at 0 if false) to workspace changes (the changes of composition)
                     else:
-                        free workspace text edit collection parsed_edits
-                    set change_index to change_index + 1
-                free workspace URI names uri_names
+                        free edits
+                    set position to (position + 1)
+                free names
         else:
             record workspace edit parse failure the string form of "Workspace edit must contain changes or documentChanges" using state
 
-        set the current change present of state to false
-        if not the failed of state:
-            parse workspace annotations from root into parsed_workspace using state
-        set result to finish workspace edit parse parsed_workspace using state
-        free workspace edit parser state state
-        free json result json_result
-        return result
+        set state's current change presence to false
+        if the inverse of the failure of state:
+            parse workspace annotations from root into composition using state
+        set outcome to the completed workspace edit parse for composition using state
+        free state
+        free parsed
+        return outcome
 
-function parse workspace edit from {cstring:source}:
+function the result of parsing {C string:source} as a workspace edit:
     execute:
-        return parse workspace edit from the string form of source
+        return the result of parsing the string form of source as a workspace edit

@@ -1,26 +1,26 @@
 import lib/workspace_edit.dl
 
-set precedence_source to the string form of "{\"changes\":{\"file:///workspace/ignored.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"ignored\"}]},\"documentChanges\":[{\"textDocument\":{\"uri\":\"file:///workspace/alpha.txt\",\"version\":4},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"alpha\"}]}]}"
-set precedence to parse workspace edit from precedence_source
-print precedence's succeeded as line
-print the length of the changes of precedence's edit as line
-set first_change to workspace change at index 0 in the changes of precedence's edit
-print first_change's kind as line
-print first_change's version present as line
-print first_change's version as line
-free workspace edit parse result precedence
+set source to the string form of "{\"changes\":{\"file:///workspace/ignored.txt\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"ignored\"}]},\"documentChanges\":[{\"textDocument\":{\"uri\":\"file:///workspace/alpha.txt\",\"version\":4},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"newText\":\"alpha\"}]}]}"
+set precedence to the result of parsing source as a workspace edit
+print whether precedence succeeded as a line
+print the length of the changes of precedence's edit as a line
+set first to the workspace change at index 0 in the changes of precedence's edit
+print first's kind as a line
+print first's version presence as a line
+print first's version as a line
+free precedence
 
-set ordered_source to the string form of "{\"changes\":{\"file:///workspace/beta.txt\":[],\"file:///workspace/alpha.txt\":[]}}"
-set ordered to parse workspace edit from ordered_source
-print ordered's succeeded as line
-print (workspace change at index 0 in the changes of ordered's edit)'s uri as line
-print (workspace change at index 1 in the changes of ordered's edit)'s uri as line
-free workspace edit parse result ordered
+set source to the string form of "{\"changes\":{\"file:///workspace/beta.txt\":[],\"file:///workspace/alpha.txt\":[]}}"
+set ordered to the result of parsing source as a workspace edit
+print whether ordered succeeded as a line
+print (the workspace change at index 0 in the changes of ordered's edit)'s uri as a line
+print (the workspace change at index 1 in the changes of ordered's edit)'s uri as a line
+free ordered
 
-set snippet_source to the string form of "{\"documentChanges\":[{\"textDocument\":{\"uri\":\"file:///workspace/alpha.txt\",\"version\":null},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"snippet\":{\"kind\":\"snippet\",\"value\":\"${1:alpha}\"}}]}]}"
-set snippet to parse workspace edit from snippet_source
-print snippet's succeeded as line
-print snippet's failed change present as line
-print snippet's failed change as line
-print snippet's failure reason as line
-free workspace edit parse result snippet
+set source to the string form of "{\"documentChanges\":[{\"textDocument\":{\"uri\":\"file:///workspace/alpha.txt\",\"version\":null},\"edits\":[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":0,\"character\":0}},\"snippet\":{\"kind\":\"snippet\",\"value\":\"${1:alpha}\"}}]}]}"
+set snippet to the result of parsing source as a workspace edit
+print whether snippet succeeded as a line
+print snippet's failed change presence as a line
+print snippet's failed change as a line
+print snippet's failure reason as a line
+free snippet

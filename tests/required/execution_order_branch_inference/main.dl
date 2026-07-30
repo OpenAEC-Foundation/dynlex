@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function branch value for condition:
+function the branch value for condition:
     execute:
         set result to 1
         if condition:
@@ -11,5 +11,5 @@ function branch value for condition:
             set result to 4
         return result
 
-print branch value for true as line
-print branch value for false as line
+print the branch value for true as a line
+print the branch value for false as a line

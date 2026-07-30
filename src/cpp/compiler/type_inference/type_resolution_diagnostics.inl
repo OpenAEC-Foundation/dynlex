@@ -20,12 +20,12 @@ static std::string makeFloatLiteralReplacement(Expression *expr) {
 	return (std::string)expr->range.subString + ".0";
 }
 
-static std::string formatTypeList(const std::vector<DataType> &types, ParseContext &parseContext) {
+static std::string formatTypeList(const std::vector<DataType> &types) {
 	std::string out;
 	for (size_t i = 0; i < types.size(); i++) {
 		if (i > 0)
 			out += ", ";
-		out += typeToUserName(types[i], parseContext);
+		out += typeToUserName(types[i]);
 	}
 	return out;
 }
@@ -110,18 +110,18 @@ static Diagnostic buildFailureDetailDiagnostic(Range range, std::string detail, 
 	return diagnostic;
 }
 
-static std::string formatInferenceTraceType(const DataType &type, ParseContext &parseContext) {
+static std::string formatInferenceTraceType(const DataType &type) {
 	if (!type.isDeduced())
-		return "undeduced";
+		return typeToUserName(type);
 	if (type.kind == DataType::Kind::Type) {
 		DataType referencedType = type.toReferencedType();
 		if (referencedType.kind == DataType::Kind::Unresolved)
-			return "type";
-		return "type(" + typeToUserName(referencedType, parseContext) + ")";
+			return "a type";
+		return "a type referring to " + typeToUserName(referencedType);
 	}
 	if (type.kind == DataType::Kind::Constraint)
-		return "constraint";
-	return typeToUserName(type, parseContext);
+		return "a type constraint";
+	return typeToUserName(type);
 }
 
 static std::string encodeDataTypeForCacheKey(const DataType &type) {
@@ -200,7 +200,7 @@ static bool expressionParticipatesInInferenceTrace(Expression *expr) {
 	return expr->kind == Expression::Kind::PatternCall || expr->kind == Expression::Kind::IntrinsicCall;
 }
 
-static std::string describeInferenceTraceFrame(Expression *expr, ParseContext &parseContext) {
+static std::string describeInferenceTraceFrame(Expression *expr) {
 	if (!expr)
 		return "while inferring <expression>";
 
@@ -209,22 +209,25 @@ static std::string describeInferenceTraceFrame(Expression *expr, ParseContext &p
 		expressionText = "<expression>";
 
 	std::vector<DataType> argumentTypes;
-	argumentTypes.reserve(expr->arguments.size());
-	for (Expression *argument : expr->arguments)
+	size_t firstArgument = expr->kind == Expression::Kind::IntrinsicCall ? 1 : 0;
+	argumentTypes.reserve(expr->arguments.size() - std::min(firstArgument, expr->arguments.size()));
+	for (size_t index = firstArgument; index < expr->arguments.size(); index++) {
+		Expression *argument = expr->arguments[index];
 		argumentTypes.push_back(argument ? argument->type : DataType{});
-	std::string resultType = formatInferenceTraceType(expr->type, parseContext);
+	}
+	std::string resultType = formatInferenceTraceType(expr->type);
 
 	if (expr->kind == Expression::Kind::IntrinsicCall) {
 		std::string frame = "while inferring intrinsic '" + expr->intrinsicName + "' in '" + expressionText + "'";
 		if (!argumentTypes.empty())
-			frame += " with arguments [" + formatTypeList(argumentTypes, parseContext) + "]";
+			frame += " with arguments [" + formatTypeList(argumentTypes) + "]";
 		frame += " -> " + resultType;
 		return frame;
 	}
 
 	std::string frame = "while inferring call '" + expressionText + "'";
 	if (!argumentTypes.empty())
-		frame += " with arguments [" + formatTypeList(argumentTypes, parseContext) + "]";
+		frame += " with arguments [" + formatTypeList(argumentTypes) + "]";
 	frame += " -> " + resultType;
 	return frame;
 }

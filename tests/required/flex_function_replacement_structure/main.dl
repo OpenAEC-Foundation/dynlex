@@ -1,6 +1,10 @@
-flex function set var to value:
+function ignore value:
     replacement:
-        @intrinsic("store", var, value)
+        @intrinsic("discard", value)
+
+flex function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
 
 flex section if condition:
     replacement:
@@ -14,12 +18,12 @@ flex section else:
     replacement:
         @intrinsic("else")
 
-flex function clamp var between low and high:
+flex function clamp variable between low and high:
     replacement:
-        if @intrinsic("less than", var, low):
-            set var to low
-        if @intrinsic("greater than", var, high):
-            set var to high
+        if @intrinsic("less than", variable, low):
+            set variable to low
+        if @intrinsic("greater than", variable, high):
+            set variable to high
 
 flex function print the compile-time selected branch:
     replacement:
@@ -32,5 +36,5 @@ flex function print the compile-time selected branch:
 
 @intrinsic("store", value, 20)
 clamp value between 0 and 10
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", value))
+ignore @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", value)
 print the compile-time selected branch

@@ -1,0 +1,16 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a number box
+    members:
+        payload as an integer
+
+convert {integer:input}:
+    replacement:
+        @intrinsic("construct", a number box, input)
+
+set input to 23
+set wrapped to input as a number box
+print the payload of wrapped as a line
+print input as a line

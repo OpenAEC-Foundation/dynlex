@@ -2,9 +2,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 function left + right:
     execute:
@@ -31,8 +31,8 @@ flex section loop count times:
         set iteration to 0
         loop while iteration < count:
             execute body
-            set iteration to iteration + 1
+            set iteration to (iteration + 1)
 
 set value to 0
 loop 3 times:
-    set value to value + 1
+    set value to (value + 1)

@@ -1,5 +1,5 @@
 import main.dl
 
-function second:
+function relay the imported message:
 	execute:
-		first
+		print the imported message

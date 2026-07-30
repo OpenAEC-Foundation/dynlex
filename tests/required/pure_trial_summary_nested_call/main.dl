@@ -2,15 +2,15 @@ function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
-function value as destination_type:
+function value as destination:
     execute:
-        return @intrinsic("cast", value, destination_type)
+        return @intrinsic("cast", value, destination)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -20,6 +20,6 @@ function return value:
 
 function an empty pointer:
     execute:
-        return 0 as a pointer to byte
+        return 0 as a pointer to a byte
 
-discard an empty pointer
+ignore an empty pointer

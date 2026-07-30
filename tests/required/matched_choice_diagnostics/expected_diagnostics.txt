@@ -1,2 +1,2 @@
 tests/required/matched_choice_diagnostics/main.dl:22-30: Error: This pattern couldn't be resolved
-  note: 'foo' isn't a parameter because it is not used: tests/required/matched_choice_diagnostics/main.dl:11-14
+  note: 'entry' isn't a parameter because it is not used: tests/required/matched_choice_diagnostics/main.dl:11-16

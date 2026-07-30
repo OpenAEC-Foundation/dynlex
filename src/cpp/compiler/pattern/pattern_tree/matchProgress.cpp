@@ -55,6 +55,20 @@ remainingPatternElement(const PatternReference *reference, size_t elementIndex, 
 	return {true, element.type, text};
 }
 
+static std::optional<std::string> numericSourceSpelling(const PatternReference *reference, size_t sourceArgumentIndex) {
+	if (!reference || !reference->expression || sourceArgumentIndex >= reference->expression->arguments.size())
+		return std::nullopt;
+	const Expression *argument = reference->expression->arguments[sourceArgumentIndex];
+	if (!argument || argument->kind != Expression::Kind::Literal)
+		return std::nullopt;
+	const bool numeric = std::holds_alternative<std::int64_t>(argument->literalValue) ||
+						 std::holds_alternative<MinimumSignedIntegerMagnitude>(argument->literalValue) ||
+						 std::holds_alternative<double>(argument->literalValue);
+	if (!numeric || !argument->range.line)
+		return std::nullopt;
+	return std::string(argument->range.subString);
+}
+
 template <typename T>
 static std::vector<T> materializeSequence(const MatchSequence<T> &sequence, const std::vector<MatchSequenceNode<T>> &storage) {
 	std::vector<T> result;
@@ -105,8 +119,13 @@ void collectMatchDependencies(const MatchControlState &state, MatchDependencies 
 		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.currentNode, 0, {}});
 	if (element.type == PatternElement::Type::VariableLike && !state.currentNode->wordChild)
 		dependencies.push_back({MatchDependency::Kind::WordChild, state.currentNode, 0, {}});
-	if (element.type == PatternElement::Type::Variable)
+	if (element.type == PatternElement::Type::Variable) {
+		if (std::optional<std::string> numericSpelling =
+				numericSourceSpelling(state.patternReference, state.sourceArgumentIndex);
+			numericSpelling && !state.currentNode->literalChildren.contains(*numericSpelling))
+			dependencies.push_back({MatchDependency::Kind::LiteralChild, state.currentNode, 0, *numericSpelling});
 		return;
+	}
 
 	auto fullLiteral = state.currentNode->literalChildren.find(element.text);
 	if (fullLiteral == state.currentNode->literalChildren.end())
@@ -428,6 +447,21 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			elemStep.sourceCharIndex = 0;
 			elemStep.patternPos += elementText.size();
 			nextMatches.push_back(std::move(elemStep));
+		}
+		if (elementType == PatternElement::Type::Variable) {
+			std::optional<std::string> numericSpelling = numericSourceSpelling(patternReference, sourceArgumentIndex);
+			if (numericSpelling) {
+				auto numericLiteralMatch = currentNode->literalChildren.find(*numericSpelling);
+				if (numericLiteralMatch != currentNode->literalChildren.end()) {
+					MatchProgress numericLiteralStep = *this;
+					numericLiteralStep.currentNode = numericLiteralMatch->second;
+					storage.append(numericLiteralStep.match.nodesPassed, numericLiteralStep.currentNode);
+					numericLiteralStep.sourceElementIndex++;
+					numericLiteralStep.sourceArgumentIndex++;
+					numericLiteralStep.patternPos += elementText.size();
+					nextMatches.push_back(std::move(numericLiteralStep));
+				}
+			}
 		}
 	}
 	return result;

@@ -90,6 +90,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
+	expr->selectedCallablePathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
 	expr->sectionOutcome = {};
@@ -99,6 +100,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->sectionBodyFallsThrough = true;
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
+	expr->inferredConversion = nullptr;
 	expr->inferredFlexBody.reset();
 	for (Expression *arg : expr->arguments)
 		resetExpressionTypes(arg, visited);
@@ -602,22 +604,30 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 	return false;
 }
 
-static int expressionPrecedence(Expression *expression) {
-	if (expression->kind != Expression::Kind::PatternCall)
-		return expression->groupingPrecedence;
-	if (!expression->patternMatch || !expression->patternMatch->matchedEndNode ||
-		expression->patternMatch->matchingDefinitions.empty())
-		return 0;
-	int precedence = 0;
-	for (PatternDefinition *def : expression->patternMatch->matchingDefinitions) {
-		if (!def || countMatchedParameters(expression, def) != (int)expression->arguments.size())
-			continue;
-		if (def->precedence <= 0)
-			continue;
-		if (precedence == 0 || def->precedence < precedence)
-			precedence = def->precedence;
+static std::vector<PatternDefinition *> expressionPrecedenceDefinitions(Expression *expression) {
+	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
+		!expression->patternMatch->matchedEndNode)
+		return {};
+	std::vector<PatternDefinition *> definitions;
+	for (PatternDefinition *definition : expression->patternMatch->matchingDefinitions) {
+		if (definition && countMatchedParameters(expression, definition) == static_cast<int>(expression->arguments.size()))
+			definitions.push_back(definition);
 	}
-	return precedence;
+	return definitions;
+}
+
+static bool expressionMustEvaluateBefore(Expression *left, Expression *right) {
+	std::vector<PatternDefinition *> leftDefinitions = expressionPrecedenceDefinitions(left);
+	std::vector<PatternDefinition *> rightDefinitions = expressionPrecedenceDefinitions(right);
+	if (leftDefinitions.empty() || rightDefinitions.empty())
+		return false;
+	for (PatternDefinition *leftDefinition : leftDefinitions) {
+		for (PatternDefinition *rightDefinition : rightDefinitions) {
+			if (!leftDefinition->precedenceSuccessors.contains(rightDefinition))
+				return false;
+		}
+	}
+	return true;
 }
 
 class GroupingInferenceTransaction {
@@ -837,7 +847,7 @@ static bool validateGroupingInTrial(
 	if (trialSucceeded && requireVoidResult) {
 		if (standaloneExpressionHasNonVoidResult(expr, context, transaction->dependsOnRecursiveDependency())) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
-								 "' must return nothing; use discard if you want to ignore a value";
+								 "' must return nothing; use ignore if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
 			context.fail(std::move(diagnostic), 0);
 			considerGroupingFailure(trialFailure, context.typeFailureDiagnostic, 0);

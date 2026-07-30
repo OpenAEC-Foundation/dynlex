@@ -1,2 +1,2 @@
-var is less than 4
-var is 3
+variable is less than 4
+variable is 3

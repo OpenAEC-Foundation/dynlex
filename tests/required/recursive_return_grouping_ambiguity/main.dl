@@ -1,3 +1,7 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 function return value:
     replacement:
         @intrinsic("return", value)
@@ -10,16 +14,16 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function n is even inverted:
+function number has even parity under inversion:
     execute:
-        if @intrinsic("not equal", n, 0):
-            return n - 1 is odd inverted
+        if @intrinsic("not equal", number, 0):
+            return number - 1 has odd parity under inversion
         return 1
 
-function n is odd inverted:
+function number has odd parity under inversion:
     execute:
-        if @intrinsic("not equal", n, 0):
-            return n - 1 is even inverted
+        if @intrinsic("not equal", number, 0):
+            return number - 1 has even parity under inversion
         return 0
 
-@intrinsic("discard", 4 is even inverted)
+ignore 4 has even parity under inversion

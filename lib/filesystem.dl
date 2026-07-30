@@ -2,3 +2,20 @@
 
 import lib/filesystem_io.dl
 import lib/filesystem_native.dl
+
+function path is a regular file:
+    execute:
+        set entry to the file system entry at path
+        return (entry lookup succeeded and entry was found) and entry is a regular file
+
+function path is readable:
+    execute:
+        set entry to the file system entry at path
+        if entry lookup failed:
+            return false
+        if entry was absent:
+            return false
+        if entry is not a regular file:
+            return false
+        open the file at path for streaming reads and set stream to it
+        return stream succeeded

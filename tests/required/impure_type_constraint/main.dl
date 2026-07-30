@@ -1,11 +1,11 @@
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
 function bad type:
     replacement:
-        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "side effect"))
-        integer
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", an integer, "side effect"))
+        an integer
 
 function accept {bad type:value}:
     execute:

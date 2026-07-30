@@ -1,3 +1,7 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
@@ -9,7 +13,7 @@ flex section spin:
 flex section forward body directly:
     replacement:
         @intrinsic("execute body")
-        @intrinsic("discard", missing_direct_tail)
+        @intrinsic("discard", remainder)
 
 flex section forward reusable target:
     replacement:
@@ -27,12 +31,12 @@ flex function relay body again:
 flex section forward body wrapped:
     replacement:
         relay body
-        @intrinsic("discard", missing_wrapped_tail)
+        @intrinsic("discard", continuation)
 
 flex section forward body nested:
     replacement:
         relay body again
-        @intrinsic("discard", missing_nested_tail)
+        @intrinsic("discard", conclusion)
 
 @intrinsic("store", marker, 0)
 @intrinsic("store", condition, @intrinsic("equal", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0), 1))
@@ -60,4 +64,4 @@ if condition:
 forward reusable marker:
     @intrinsic("discard", 0)
 
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", marker))
+ignore @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", marker)

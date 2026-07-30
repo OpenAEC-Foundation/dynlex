@@ -1,9 +1,8 @@
 #include "membersSection.h"
 #include "classSection.h"
-#include "expression.h"
 #include "paddingSection.h"
 #include "parseContext.h"
-#include "patternReference.h"
+#include "pattern/patternReference.h"
 #include "syntaxConfig.h"
 
 // Parse a single field declaration, handling optional "name as type" syntax
@@ -23,15 +22,17 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 			ParseContext::SourceTokenKind::Keyword
 		);
 
-		// Create a class pattern reference for the type text
 		Range typeRange(fieldRange.line, typeStr);
-		Expression *typeExpr = new Expression();
-		typeExpr->range = typeRange;
-		typeExpr->kind = Expression::Kind::Pending;
-		PatternReference *ref = new PatternReference(typeExpr, SectionType::Function);
-		typeExpr->patternReference = ref;
-		Section *referenceOwner = fieldRange.line && fieldRange.line->section ? fieldRange.line->section : section;
-		referenceOwner->addPatternReference(ref);
+		requireCompilerInvariant(
+			fieldRange.line && fieldRange.line->section && fieldRange.line->section->type == SectionType::Members,
+			"class member type expression has no members section"
+		);
+		Section *referenceOwner = fieldRange.line->section;
+		Expression *typeExpr = referenceOwner->detectPatterns(context, typeRange, SectionType::Function);
+		if (!typeExpr)
+			return false;
+		requireCompilerInvariant(typeExpr->patternReference, "class member type expression has no root pattern reference");
+		typeExpr->patternReference->purpose = PatternReference::Purpose::TypeConstraint;
 
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;

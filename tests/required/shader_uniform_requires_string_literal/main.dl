@@ -1,5 +1,5 @@
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-discard @intrinsic("shader uniform", 1)
+ignore @intrinsic("shader uniform", 1)

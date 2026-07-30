@@ -1,0 +1,20 @@
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+class:
+    patterns:
+        [a|] UTF-8 result
+    members:
+        code as an integer
+
+set result to @intrinsic("construct", a UTF-8 result, 8)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", result's code)

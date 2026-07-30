@@ -1,4 +1,4 @@
-tests/required/grouping_address_provenance_rollback/main.dl:9-31: Warning: Expression 'return value - 1 odded' has multiple valid operand groupings. Using 'return ((value - 1) odded)' instead of 'return (value - (1 odded))'.
-  note: while inferring call 'return value - 1 odded' with arguments [a 64 bit float] -> nothing tests/required/grouping_address_provenance_rollback/main.dl:9-31
-  note: while inferring call 'discard test 4' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_address_provenance_rollback/main.dl:9-15
-  note: while inferring call 'discard test 4' with arguments [unresolved(?)] -> undeduced tests/required/grouping_address_provenance_rollback/main.dl:1-15
+tests/required/grouping_address_provenance_rollback/main.dl:9-44: Warning: Expression 'return value - 1 adjusted to be odd' has multiple valid operand groupings. Using 'return ((value - 1) adjusted to be odd)' instead of 'return (value - (1 adjusted to be odd))'.
+  note: while inferring call 'return value - 1 adjusted to be odd' with arguments [a 64-bit floating-point number] -> nothing tests/required/grouping_address_provenance_rollback/main.dl:9-44
+  note: while inferring call 'ignore 4 tested' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_address_provenance_rollback/main.dl:8-16
+  note: while inferring call 'ignore 4 tested' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_address_provenance_rollback/main.dl:1-16

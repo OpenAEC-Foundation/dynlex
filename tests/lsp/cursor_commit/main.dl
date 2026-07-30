@@ -1,2 +1,6 @@
-@intrinsic("discard", 1)
-@intrinsic("discard", 2)
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+ignore 1
+ignore 2

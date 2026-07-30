@@ -1,18 +1,22 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
 function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function fixed tofix:
+function fixed quantity:
     replacement:
-        @intrinsic("fix", tofix)
+        @intrinsic("fix", quantity)
 
 function left is right:
     replacement:
@@ -26,10 +30,10 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function selected {fixed integer:n} x {fixed integer:m}:
+function the selection for {fixed integer:height} rows and {fixed integer:width} columns:
     execute:
-        if n is 4 and m is 4:
+        if height is 4 and width is 4:
             return 7
 
-set result to selected 4 x 4
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", result))
+set result to the selection for 4 rows and 4 columns
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", result)

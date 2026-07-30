@@ -1,4 +1,4 @@
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -12,4 +12,4 @@ function mixed return:
             @intrinsic("return")
         @intrinsic("return", 1)
 
-discard mixed return
+ignore mixed return

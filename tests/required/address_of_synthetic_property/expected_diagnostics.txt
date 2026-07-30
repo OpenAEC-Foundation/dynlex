@@ -1,1 +1,1 @@
-tests/required/address_of_synthetic_property/main.dl:23-87: Error: address of requires an addressable value
+tests/required/address_of_synthetic_property/main.dl:1-72: Error: address of requires an addressable value

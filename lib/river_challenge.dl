@@ -1,0 +1,214 @@
+# Wolf, sheep, and hay river-crossing challenge vocabulary.
+
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] river passenger
+    members:
+        identifier as a 32 bit integer
+
+local class:
+    patterns:
+        [a|] river crossing
+    members:
+        farmer side as an integer
+        cargo as a 32 bit integer
+        sheep side as an integer
+        wolf side as an integer
+        hay side as an integer
+        activity as a boolean
+
+function [the|] sheep:
+    replacement:
+        @intrinsic("construct", a river passenger, 1 as a 32 bit integer)
+
+function [the|] wolf:
+    replacement:
+        @intrinsic("construct", a river passenger, 2 as a 32 bit integer)
+
+function [the|] hay:
+    replacement:
+        @intrinsic("construct", a river passenger, 3 as a 32 bit integer)
+
+local function [a|] new river crossing:
+    replacement:
+        @intrinsic("construct", a river crossing, 0, 0 as a 32 bit integer, 0, 0, 0, true)
+
+set challenge to a new river crossing
+
+local function stop the river crossing with message:
+    globals:
+        challenge
+    execute:
+        print message as a line
+        set challenge's activity to false
+
+local function ensure {river passenger:passenger} is valid:
+    execute:
+        if (passenger's identifier < 1) or (passenger's identifier > 3):
+            @intrinsic("call", "libc", "abort", nothing)
+
+local function [the|] river side of {river passenger:passenger}:
+    globals:
+        challenge
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            return challenge's sheep side
+        else if passenger's identifier = 2:
+            return challenge's wolf side
+        else:
+            return challenge's hay side
+
+local function place {river passenger:passenger} on the river side numbered {integer:side}:
+    globals:
+        challenge
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            set challenge's sheep side to side
+        else if passenger's identifier = 2:
+            set challenge's wolf side to side
+        else:
+            set challenge's hay side to side
+
+local function report that {river passenger:passenger} is being loaded:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            print "RIVER|COMMAND|LOAD|SHEEP" as a line
+        else if passenger's identifier = 2:
+            print "RIVER|COMMAND|LOAD|WOLF" as a line
+        else:
+            print "RIVER|COMMAND|LOAD|HAY" as a line
+
+local function report that {river passenger:passenger} was loaded:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            print "RIVER|ACTION|LOAD|SHEEP" as a line
+        else if passenger's identifier = 2:
+            print "RIVER|ACTION|LOAD|WOLF" as a line
+        else:
+            print "RIVER|ACTION|LOAD|HAY" as a line
+
+local function report that {river passenger:passenger} is being unloaded:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            print "RIVER|COMMAND|UNLOAD|SHEEP" as a line
+        else if passenger's identifier = 2:
+            print "RIVER|COMMAND|UNLOAD|WOLF" as a line
+        else:
+            print "RIVER|COMMAND|UNLOAD|HAY" as a line
+
+local function report that {river passenger:passenger} was unloaded:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            print "RIVER|ACTION|UNLOAD|SHEEP" as a line
+        else if passenger's identifier = 2:
+            print "RIVER|ACTION|UNLOAD|WOLF" as a line
+        else:
+            print "RIVER|ACTION|UNLOAD|HAY" as a line
+
+local function stop because {river passenger:passenger} is missing:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            stop the river crossing with "RIVER|ERROR|there is no sheep to pick up"
+        else if passenger's identifier = 2:
+            stop the river crossing with "RIVER|ERROR|there is no wolf to pick up"
+        else:
+            stop the river crossing with "RIVER|ERROR|there is no hay to pick up"
+
+local function stop because {river passenger:passenger} is not aboard:
+    execute:
+        ensure passenger is valid
+        if passenger's identifier = 1:
+            stop the river crossing with "RIVER|ERROR|the sheep is not in the boat"
+        else if passenger's identifier = 2:
+            stop the river crossing with "RIVER|ERROR|the wolf is not in the boat"
+        else:
+            stop the river crossing with "RIVER|ERROR|the hay is not in the boat"
+
+local function check the river crossing:
+    globals:
+        challenge
+    execute:
+        if challenge's activity:
+            if (challenge's wolf side = challenge's sheep side) and ((challenge's wolf side != -1) and (challenge's farmer side != challenge's wolf side)):
+                print "RIVER|DANGER|WOLF|SHEEP" as a line
+                stop the river crossing with "RIVER|ERROR|the wolf ate the sheep"
+            else if (challenge's sheep side = challenge's hay side) and ((challenge's sheep side != -1) and (challenge's farmer side != challenge's sheep side)):
+                print "RIVER|DANGER|SHEEP|HAY" as a line
+                stop the river crossing with "RIVER|ERROR|the sheep ate the hay"
+            else if (challenge's sheep side = 1) and ((challenge's wolf side = 1) and (challenge's hay side = 1)):
+                print "RIVER|SUCCESS" as a line
+                set challenge's activity to false
+
+function:
+    patterns:
+        get {river passenger:passenger} in [the|] boat
+        get {river passenger:passenger} in
+        put {river passenger:passenger} in [the|] boat
+        load {river passenger:passenger}
+        take {river passenger:passenger} aboard
+    globals:
+        challenge
+    execute:
+        if challenge's activity:
+            report that passenger is being loaded
+            if challenge's cargo != 0:
+                stop the river crossing with "RIVER|ERROR|the boat is already carrying something"
+            else if the river side of passenger != challenge's farmer side:
+                stop because passenger is missing
+            else:
+                set challenge's cargo to passenger's identifier
+                place passenger on the river side numbered -1
+                report that passenger was loaded
+
+function:
+    patterns:
+        get {river passenger:passenger} out of [the|] boat
+        get {river passenger:passenger} out
+        put {river passenger:passenger} out
+        unload {river passenger:passenger}
+        let {river passenger:passenger} out
+    globals:
+        challenge
+    execute:
+        if challenge's activity:
+            report that passenger is being unloaded
+            if challenge's cargo != passenger's identifier:
+                stop because passenger is not aboard
+            else:
+                set challenge's cargo to 0 as a 32 bit integer
+                place passenger on the river side numbered challenge's farmer side
+                report that passenger was unloaded
+                check the river crossing
+
+function:
+    patterns:
+        row to the other side
+        row to the other bank
+        row across the river
+        row across the water
+        cross to the other side
+        cross the river
+        cross the water
+        row back
+        cross back
+    globals:
+        challenge
+    execute:
+        if challenge's activity:
+            print "RIVER|COMMAND|CROSS" as a line
+            if challenge's farmer side = 0:
+                set challenge's farmer side to 1
+                print "RIVER|ACTION|CROSS|FAR" as a line
+            else:
+                set challenge's farmer side to 0
+                print "RIVER|ACTION|CROSS|HOME" as a line
+            check the river crossing

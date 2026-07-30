@@ -1,0 +1,14 @@
+import lib/river_challenge.dl
+
+# Reach a safe state where the farmer tries to collect hay from the wrong bank.
+get the sheep in the boat
+row to the other side
+get the sheep out
+row to the other side
+get the hay in the boat
+row to the other side
+get the hay out
+get the sheep in the boat
+row to the other side
+get the sheep out
+get the hay in the boat

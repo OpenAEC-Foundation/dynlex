@@ -2,11 +2,11 @@ import lib/std.dl
 
 class:
     patterns:
-        record
+        [a|] record
     members:
-        value as integer
+        value as an integer
 
-set container to @intrinsic("construct", record, 1)
-set value_address to the address of the value of container
-@intrinsic("store at", value_address, 5)
-print the value of container as line
+set container to @intrinsic("construct", a record, 1)
+set address to the address of the value of container
+@intrinsic("store at", address, 5)
+print the value of container as a line

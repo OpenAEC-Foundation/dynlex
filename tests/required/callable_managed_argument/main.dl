@@ -4,24 +4,24 @@ class:
     patterns:
         [a|] callable tracked value
     members:
-        references as pointer to integer
-        number as integer
+        references as a pointer to an integer
+        number as an integer
     retain:
         set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
     release:
-        set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1
+        set count to (@intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1)
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
         if count = 0:
-            @intrinsic("call", "libc", "free", void, the references of @intrinsic("lifecycle value"))
+            @intrinsic("call", "libc", "free", nothing, the references of @intrinsic("lifecycle value"))
 
 function a new callable tracked value numbered number:
     execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
         return @intrinsic("construct", a callable tracked value, references, number)
 
 exposed function replace {callable tracked value:value}:
     execute:
         set value to a new callable tracked value numbered 2
 
-discard the function named "replace $"
+ignore the function named "replace $"

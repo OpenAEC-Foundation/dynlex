@@ -2,62 +2,62 @@ import lib/path.dl
 
 function check {path result:result} against expected:
     execute:
-        print (result's succeeded and (result's value = expected)) as line
+        print whether (result succeeded) and (result's value = expected) as a line
 
 function check truth {path truth result:result}:
     execute:
-        print (result's succeeded and result's value) as line
+        print ((result succeeded) and result's value) as a line
 
 function check falsehood {path truth result:result}:
     execute:
-        print (result's succeeded and (not result's value)) as line
+        print ((result succeeded) and (the inverse of result's value)) as a line
 
 function check path failure {path result:result}:
     execute:
-        print ((not result's succeeded) and (not (result's error message = ""))) as line
+        print whether (result failed) and (result's error message is not empty) as a line
 
-set posix to the POSIX path style
+set style to the POSIX path style
 set windows to the Windows path style
 
-check (lexically normalize "" using posix) against "."
-check (lexically normalize "/alpha//beta/./../gamma/" using posix) against "/alpha/gamma"
-check (lexically normalize "//server///share/../x" using posix) against "//server/x"
-check (lexically normalize "///server///x" using posix) against "/server/x"
-check (lexically normalize "../../a/../b" using posix) against "../../b"
-check (join "/alpha/beta" with "../gamma" using posix) against "/alpha/gamma"
-check (join "/alpha" with "/replacement" using posix) against "/replacement"
-check (the parent path of "/alpha/beta.txt" using posix) against "/alpha"
-check (the parent path of "file.txt" using posix) against "."
-check (the filename of "/alpha/beta.txt" using posix) against "beta.txt"
-check (the base name of "/alpha/beta.txt" using posix) against "beta.txt"
-check (the stem of ".profile" using posix) against ".profile"
-check (the suffix of ".profile" using posix) against ""
-check (the stem of "archive.tar.gz" using posix) against "archive.tar"
-check (the suffix of "archive.tar.gz" using posix) against ".gz"
-check (the extension of "archive.tar.gz" using posix) against ".gz"
-check (the stem of ".." using posix) against ".."
-check (the suffix of ".." using posix) against ""
-check (the parent path of "/" using posix) against "/"
-check (the filename of "/" using posix) against ""
-check (the parent path of "." using posix) against "."
-check (the filename of "." using posix) against "."
-check (the stem of "." using posix) against "."
-check (the parent path of "a/.." using posix) against "a"
-check (the filename of "a/.." using posix) against ".."
-check (the parent path of "/a/.." using posix) against "/a"
-check (the filename of "/a/.." using posix) against ".."
-check (resolve path "../asset" against base "/opt/app/bin" using posix) against "/opt/app/asset"
-check (resolve path "/replacement" against base "/opt/app/bin" using posix) against "/replacement"
-check (make path "/opt/app/share/data" relative to base "/opt/app/bin" using posix) against "../share/data"
-check (make path "/opt/app/bin" relative to base "/opt/app/bin" using posix) against "."
-check truth (whether path "/" is absolute using posix)
-check truth (whether path "//host/share" is absolute using posix)
-check falsehood (whether path "relative/path" is absolute using posix)
+check ("" lexically normalized using style) against "."
+check ("/alpha//beta/./../gamma/" lexically normalized using style) against "/alpha/gamma"
+check ("//server///share/../x" lexically normalized using style) against "//server/x"
+check ("///server///x" lexically normalized using style) against "/server/x"
+check ("../../a/../b" lexically normalized using style) against "../../b"
+check ("/alpha/beta" joined with "../gamma" using style) against "/alpha/gamma"
+check ("/alpha" joined with "/replacement" using style) against "/replacement"
+check (the parent path of "/alpha/beta.txt" using style) against "/alpha"
+check (the parent path of "file.txt" using style) against "."
+check (the filename of "/alpha/beta.txt" using style) against "beta.txt"
+check (the base name of "/alpha/beta.txt" using style) against "beta.txt"
+check (the stem of ".profile" using style) against ".profile"
+check (the suffix of ".profile" using style) against ""
+check (the stem of "archive.tar.gz" using style) against "archive.tar"
+check (the suffix of "archive.tar.gz" using style) against ".gz"
+check (the extension of "archive.tar.gz" using style) against ".gz"
+check (the stem of ".." using style) against ".."
+check (the suffix of ".." using style) against ""
+check (the parent path of "/" using style) against "/"
+check (the filename of "/" using style) against ""
+check (the parent path of "." using style) against "."
+check (the filename of "." using style) against "."
+check (the stem of "." using style) against "."
+check (the parent path of "a/.." using style) against "a"
+check (the filename of "a/.." using style) against ".."
+check (the parent path of "/a/.." using style) against "/a"
+check (the filename of "/a/.." using style) against ".."
+check (the path obtained by resolving "../asset" against "/opt/app/bin" using style) against "/opt/app/asset"
+check (the path obtained by resolving "/replacement" against "/opt/app/bin" using style) against "/replacement"
+check (the path from "/opt/app/share/data" relative to "/opt/app/bin" using style) against "../share/data"
+check (the path from "/opt/app/bin" relative to "/opt/app/bin" using style) against "."
+check truth (whether "/" is an absolute path using style)
+check truth (whether "//host/share" is an absolute path using style)
+check falsehood (whether "relative/path" is an absolute path using style)
 
-check (lexically normalize "C:\\alpha\\.\\beta\\..\\file.txt" using windows) against "C:/alpha/file.txt"
-check (lexically normalize "\\\\server\\share\\folder\\..\\file" using windows) against "//server/share/file"
-check (lexically normalize "C:foo\\..\\bar" using windows) against "C:bar"
-check (join "C:/alpha/beta" with "../gamma" using windows) against "C:/alpha/gamma"
+check ("C:\\alpha\\.\\beta\\..\\file.txt" lexically normalized using windows) against "C:/alpha/file.txt"
+check ("\\\\server\\share\\folder\\..\\file" lexically normalized using windows) against "//server/share/file"
+check ("C:foo\\..\\bar" lexically normalized using windows) against "C:bar"
+check ("C:/alpha/beta" joined with "../gamma" using windows) against "C:/alpha/gamma"
 check (the parent path of "C:/alpha/file.txt" using windows) against "C:/alpha"
 check (the parent path of "C:/" using windows) against "C:/"
 check (the filename of "C:/alpha/file.txt" using windows) against "file.txt"
@@ -68,16 +68,16 @@ check (the parent path of "C:foo/.." using windows) against "C:foo"
 check (the filename of "C:foo/.." using windows) against ".."
 check (the stem of "C:/alpha/archive.tar.gz" using windows) against "archive.tar"
 check (the suffix of "C:/alpha/archive.tar.gz" using windows) against ".gz"
-check (resolve path "..\\asset" against base "C:\\opt\\app\\bin" using windows) against "C:/opt/app/asset"
-check (resolve path "C:asset" against base "c:/opt/app/bin" using windows) against "C:/opt/app/bin/asset"
-check (resolve path "\\asset" against base "C:/opt/app/bin" using windows) against "C:/asset"
-check (make path "C:/opt/app" relative to base "c:/opt/app/bin" using windows) against ".."
-check (make path "//server/share/a/b" relative to base "//SERVER/share/a/c" using windows) against "../b"
-check (make path "C:/OPT/App/File.txt" relative to base "c:/opt/app" using windows) against "File.txt"
-check truth (whether path "C:/alpha" is absolute using windows)
-check truth (whether path "\\\\server\\share\\alpha" is absolute using windows)
-check truth (whether path "\\rooted" is absolute using windows)
-check falsehood (whether path "C:relative" is absolute using windows)
-check falsehood (whether path "relative" is absolute using windows)
-check path failure (lexically normalize "\\\\?\\C:\\device" using windows)
-check path failure (lexically normalize "\\\\server" using windows)
+check (the path obtained by resolving "..\\asset" against "C:\\opt\\app\\bin" using windows) against "C:/opt/app/asset"
+check (the path obtained by resolving "C:asset" against "c:/opt/app/bin" using windows) against "C:/opt/app/bin/asset"
+check (the path obtained by resolving "\\asset" against "C:/opt/app/bin" using windows) against "C:/asset"
+check (the path from "C:/opt/app" relative to "c:/opt/app/bin" using windows) against ".."
+check (the path from "//server/share/a/b" relative to "//SERVER/share/a/c" using windows) against "../b"
+check (the path from "C:/OPT/App/File.txt" relative to "c:/opt/app" using windows) against "File.txt"
+check truth (whether "C:/alpha" is an absolute path using windows)
+check truth (whether "\\\\server\\share\\alpha" is an absolute path using windows)
+check truth (whether "\\rooted" is an absolute path using windows)
+check falsehood (whether "C:relative" is an absolute path using windows)
+check falsehood (whether "relative" is an absolute path using windows)
+check path failure ("\\\\?\\C:\\device" lexically normalized using windows)
+check path failure ("\\\\server" lexically normalized using windows)

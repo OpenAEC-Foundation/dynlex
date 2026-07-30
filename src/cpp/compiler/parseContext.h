@@ -12,7 +12,6 @@
 #include <functional>
 #include <limits>
 #include <list>
-#include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -201,9 +200,6 @@ struct ParseContext {
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
-	// Precedence level assigned to function patterns not in the explicit precedence system.
-	// Default-level patterns should not propagate minRightPrecedence constraints.
-	int defaultPrecedenceLevel = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// Owns all VariableReference instances for this compilation.
@@ -212,11 +208,12 @@ struct ParseContext {
 	// Compilation-lifetime arena for every expression allocated by an instance or
 	// flex clone. Ownership is independent of mutable grouping-tree topology.
 	std::vector<Expression *> ownedClonedExpressions;
+	// Compiler-created conversion calls use matches that are not owned by a
+	// source PatternReference.
+	std::vector<std::unique_ptr<PatternMatch>> ownedSyntheticPatternMatches;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
-	// User-facing aliases for concrete types discovered from flex replacements like @intrinsic("type", ...).
-	std::map<DataType, std::string> typeAliasNames;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
 	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
 	SyntaxConfig builtinSyntax;
@@ -357,6 +354,82 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 		if (VariableReference *parameterDefinition = findPatternParameterDefinition(definition, parameterName))
 			bindingFrame.parameterBindings[parameterDefinition] = argumentExpression;
 	});
+}
+
+inline void
+pushPatternCallBindingScope(BindingFrameStack &bindingFrameStack, Expression *expression, PatternDefinition *definition) {
+	BindingFrame bindings;
+	collectPatternCallBindings(expression, definition, bindings);
+	pushBindingScope(bindingFrameStack, std::move(bindings));
+}
+
+inline ResolvedBindingLayers
+resolveExpressionBindingWithCallerScope(Expression *expression, const BindingFrameStack &bindingFrameStack) {
+	if (!expression)
+		return {nullptr, bindingFrameStack};
+	if (expression->kind == Expression::Kind::Pending && expression->patternReference) {
+		auto &elements = expression->patternReference->patternElements;
+		if (elements.empty())
+			elements = getPatternElements(expression->patternReference->pattern.text);
+		if (elements.size() == 1 &&
+			(elements[0].type == PatternElement::Type::Variable || elements[0].type == PatternElement::Type::VariableLike)) {
+			return resolveNamedBindingWithCallerScope(elements[0].text, expression, bindingFrameStack);
+		}
+	}
+	return resolveVariableBindingWithCallerScope(expression, bindingFrameStack);
+}
+
+struct FlexBindingExpansion {
+	PatternDefinition *definition{};
+	Expression *bodyExpression{};
+};
+
+inline std::optional<FlexBindingExpansion> selectedFlexBindingExpansion(Expression *expression) {
+	if (!expression || !expression->inferredFlexExpansion)
+		return std::nullopt;
+	return FlexBindingExpansion{expression->selectedPatternDefinition, expression->inferredFlexExpansion};
+}
+
+template <typename SelectFlexExpansionFn, typename StopFn>
+inline ResolvedBindingLayers resolveThroughBindingLayers(
+	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion, StopFn &&stop
+) {
+	std::unordered_set<Expression *> expandedFlexCalls;
+	while (expression && !stop(expression)) {
+		ResolvedBindingLayers bound = resolveExpressionBindingWithCallerScope(expression, bindingFrameStack);
+		if (bound.expression != expression) {
+			expression = bound.expression;
+			bindingFrameStack = std::move(bound.bindingFrameStack);
+			continue;
+		}
+
+		std::optional<FlexBindingExpansion> expansion = selectFlexExpansion(expression);
+		if (!expansion)
+			break;
+		requireCompilerInvariant(
+			expansion->definition && expansion->definition->section && expansion->definition->section->isFlex &&
+				expansion->bodyExpression,
+			"binding traversal received an invalid flex expansion"
+		);
+		requireCompilerInvariant(
+			expandedFlexCalls.insert(expression).second, "binding traversal encountered a cyclic flex expansion"
+		);
+		pushPatternCallBindingScope(bindingFrameStack, expression, expansion->definition);
+		expression = expansion->bodyExpression;
+	}
+	return {expression, std::move(bindingFrameStack)};
+}
+
+template <typename SelectFlexExpansionFn>
+inline ResolvedBindingLayers resolveThroughBindingLayers(
+	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
+) {
+	return resolveThroughBindingLayers(
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
+		[](Expression *) {
+		return false;
+	}
+	);
 }
 
 inline Expression *flexPatternBodyExpression(PatternDefinition *definition, bool *isOnlyExpression = nullptr) {

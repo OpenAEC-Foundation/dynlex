@@ -37,11 +37,13 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 
-static std::optional<AddressProvenance>
-inferLValueAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
-	BindingFrameStack resolvedBindingFrameStack;
-	Expression *resolvedExpression =
-		resolveThroughBindingsDeep(expression, bindingFrameStack, resolvedBindingFrameStack, &context);
+static std::optional<AddressProvenance> inferLValueAddressProvenance(
+	Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack,
+	bool recordAddressTaken = true
+) {
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
+	Expression *resolvedExpression = resolvedBinding.expression;
+	BindingFrameStack resolvedBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolvedExpression)
 		crashCompilerBug("lvalue address provenance inference lost its expression while resolving bindings");
 
@@ -49,7 +51,8 @@ inferLValueAddressProvenance(Expression *expression, InferenceContext &context, 
 		VariableReference *target = context.normalizeReference(resolvedExpression->variable);
 		if (!target)
 			return std::nullopt;
-		context.currentAddressState.write().addressTakenVariables.insert(target);
+		if (recordAddressTaken)
+			context.currentAddressState.write().addressTakenVariables.insert(target);
 		return AddressProvenance{.mayTargets = {target}};
 	}
 
@@ -81,7 +84,8 @@ inferLValueAddressProvenance(Expression *expression, InferenceContext &context, 
 	if (const auto *propertyName = std::get_if<std::string>(&fieldValue))
 		fieldName = *propertyName;
 	if (fieldName.empty()) {
-		Expression *fieldExpression = resolveThroughBindings(resolvedExpression->arguments[2], resolvedBindingFrameStack);
+		Expression *fieldExpression =
+			resolveInferenceBindingLayers(resolvedExpression->arguments[2], resolvedBindingFrameStack, &context).expression;
 		fieldName = extractFieldName(fieldExpression);
 	}
 	bool fieldExists = std::ranges::any_of(classType.classDefinition->fields, [&](const FieldDefinition &field) {
@@ -92,18 +96,22 @@ inferLValueAddressProvenance(Expression *expression, InferenceContext &context, 
 
 	if (ownerIsDirectClassPointer)
 		return inferAddressProvenance(ownerExpression, context, resolvedBindingFrameStack);
-	return inferLValueAddressProvenance(ownerExpression, context, resolvedBindingFrameStack);
+	return inferLValueAddressProvenance(ownerExpression, context, resolvedBindingFrameStack, recordAddressTaken);
 }
 
 static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	if (!expression)
 		crashCompilerBug("address provenance inference received a null expression");
-	BindingFrameStack resolvedBindingFrameStack;
-	Expression *resolvedExpression =
-		resolveThroughBindingsDeep(expression, bindingFrameStack, resolvedBindingFrameStack, &context);
+	if (expression->inferredConversion)
+		return inferAddressProvenance(expression->inferredConversion, context, bindingFrameStack);
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
+	Expression *resolvedExpression = resolvedBinding.expression;
+	BindingFrameStack resolvedBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolvedExpression)
 		crashCompilerBug("address provenance inference lost its expression while resolving bindings");
+	if (resolvedExpression->inferredConversion)
+		return inferAddressProvenance(resolvedExpression->inferredConversion, context, resolvedBindingFrameStack);
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable)
 		return context.lookupAddressProvenance(resolvedExpression->variable);
 	if (resolvedExpression->kind == Expression::Kind::Literal)
@@ -180,6 +188,18 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 		return provenance;
 	}
 	if ((kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract) && resolvedExpression->arguments.size() > 2) {
+		int arrayOperandIndex = decayingArrayOperandIndex(
+			arithmeticIntrinsicKind(resolvedExpression->intrinsicName), resolvedExpression->arguments[1]->type,
+			resolvedExpression->arguments[2]->type
+		);
+		if (arrayOperandIndex != 0) {
+			std::optional<AddressProvenance> arrayStorage = inferLValueAddressProvenance(
+				resolvedExpression->arguments[arrayOperandIndex], context, resolvedBindingFrameStack
+			);
+			if (!arrayStorage)
+				crashCompilerBug("inferred fixed-array decay lost its addressable array storage");
+			return *arrayStorage;
+		}
 		AddressProvenance provenance;
 		for (size_t argumentIndex = 1; argumentIndex <= 2; argumentIndex++) {
 			AddressProvenance argument =

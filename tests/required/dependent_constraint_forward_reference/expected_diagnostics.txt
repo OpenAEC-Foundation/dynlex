@@ -1,0 +1,1 @@
+tests/required/dependent_constraint_forward_reference/main.dl:19-44: Error: Type constraint 'an array as long as right' references later parameter 'right'

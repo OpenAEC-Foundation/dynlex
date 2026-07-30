@@ -1,17 +1,17 @@
 import lib/std.dl
 
-exposed function add one to {integer:value}:
+exposed function one more than {integer:value}:
     execute:
         return value + 1
 
-function subtract one from {integer:value}:
+function one less than {integer:value}:
     execute:
         return value - 1
 
-set exposed_fn to the function named "add one to $"
-set internal_fn to the function named "subtract one from $"
+set exposed to the function named "one more than $"
+set internal to the function named "one less than $"
 
-print ((exposed_fn as a 64 bit integer) > 0) as line
-print add one to 41 as line
-print ((internal_fn as a 64 bit integer) > 0) as line
-print subtract one from 41 as line
+print whether (exposed as a 64 bit integer) > 0 as a line
+print one more than 41 as a line
+print whether (internal as a 64 bit integer) > 0 as a line
+print one less than 41 as a line

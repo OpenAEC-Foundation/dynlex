@@ -2,27 +2,28 @@ import lib/array.dl
 import tests/games/geometry_dash/generator.dl
 import tests/games/geometry_dash/physics.dl
 
-set count to 24
-set levels to allocate count slots of an integer
-set jump_ms to allocate count slots of an integer
-set slide_ms to allocate count slots of an integer
+function report the simulation with {runner state:body}:
+	replacement:
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "DEBUG_SIM_BASELINE_OK highest_y=%ld\n", body's y as a 64 bit integer)
 
-fill plan levels jump_ms slide_ms with count count using seed 1337
+set plan to a route plan with 24 steps
+fill plan using seed 1337
 
-set y to the player ground y
-set highest_y to y
-set i to 0
-loop while i < count:
-	set velocity to 0.0
-	start a jump on velocity
-	set elapsed_ms to 0
-	set step_jump_ms to item i of jump_ms
-	loop while elapsed_ms < step_jump_ms:
-		apply gravity to y and velocity
-		if y < highest_y:
-			set highest_y to y
-		set elapsed_ms to elapsed_ms + the frame time in milliseconds
-	clamp y and velocity to the ground
-	set i to i + 1
+set body to a runner at height the player's ground height moving with velocity 0.0
+set highest to body's y
+set index to 0
+loop while index < plan's count:
+	set body's velocity to 0.0
+	start a jump for body
+	set elapsed to 0
+	set duration to the item at index in plan's jumps
+	loop while elapsed < duration:
+		apply gravity to body
+		if body's y < highest:
+			set highest to body's y
+		add the frame time in milliseconds to elapsed
+	clamp body to the ground
+	increment index
 
-discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "DEBUG_SIM_BASELINE_OK highest_y=%ld\n", highest_y as an integer as a 64 bit integer)
+set body's y to highest
+report the simulation with body

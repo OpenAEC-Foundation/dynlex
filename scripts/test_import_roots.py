@@ -26,7 +26,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="dynlex-import-roots-") as temporary_directory:
             root = Path(temporary_directory)
             main = root / "main.dl"
-            main.write_text('import std.dl\nprint "ok" as line\n', encoding="utf-8")
+            main.write_text('import std.dl\nprint "ok" as a line\n', encoding="utf-8")
 
             # A working directory whose lib/string.dl would break the build if
             # the standard library's nested `import lib/string.dl` fell back to

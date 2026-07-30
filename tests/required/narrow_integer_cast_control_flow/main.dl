@@ -9,4 +9,4 @@ function value after a narrow cast:
             return false
 
 set selected to value after a narrow cast
-print selected as line
+print selected as a line

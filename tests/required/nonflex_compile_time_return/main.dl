@@ -2,12 +2,12 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-function times left right:
+function the product of left and right:
     execute:
         return @intrinsic("multiply", left, right)
 
-discard @intrinsic("type", "int", times 4 4)
+ignore @intrinsic("type", "int", the product of 4 and 4)

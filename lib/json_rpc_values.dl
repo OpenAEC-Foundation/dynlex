@@ -2,63 +2,63 @@
 
 import lib/json_rpc_framing.dl
 
-function a new json rpc text for {any:input}:
+function a new JSON-RPC text for {a value:input}:
     execute:
-        set node to a new json value of kind the json text kind
+        set node to a new JSON value of kind the JSON text kind
         set the text of node to the string form of input
         return node
 
-function a new json rpc boolean for {boolean:input}:
+function a new JSON-RPC boolean for {boolean:input}:
     execute:
-        set node to a new json value of kind the json boolean kind
+        set node to a new JSON value of kind the JSON boolean kind
         set the boolean of node to input
         return node
 
-function a new json rpc null:
+function a new JSON-RPC null:
     replacement:
-        a new json value of kind the json null kind
+        a new JSON value of kind the JSON null kind
 
-function a new json rpc integer from {string:lexeme}:
+function a new JSON-RPC integer from {string:lexeme}:
     execute:
-        set parsed to parse lexeme as json
-        if not json parsing succeeded for parsed:
-            free json result parsed
-            @intrinsic("call", "libc", "abort", void)
+        parse lexeme as JSON and set parsed to it
+        if parsed failed:
+            free parsed
+            @intrinsic("call", "libc", "abort", nothing)
         set node to the value of parsed
-        if not json rpc number node is an integer identifier:
-            free json result parsed
-            @intrinsic("call", "libc", "abort", void)
+        if JSON-RPC number node is not an integer identifier:
+            free parsed
+            @intrinsic("call", "libc", "abort", nothing)
         return node
 
-function a new json rpc integer from {cstring:lexeme}:
+function a new JSON-RPC integer from {C string:lexeme}:
     execute:
-        return a new json rpc integer from the string form of lexeme
+        return a new JSON-RPC integer from the string form of lexeme
 
-function a new json rpc integer for {integer:input}:
+function a new JSON-RPC integer for {integer:input}:
     execute:
         set lexeme to the string form of input
-        return a new json rpc integer from lexeme
+        return a new JSON-RPC integer from lexeme
 
-function duplicate json rpc node {a pointer to json value:source}:
+function a copy of JSON-RPC node {a pointer to a JSON value:source}:
     execute:
-        set validation to validate json rpc json value source
-        if not validation's succeeded:
-            @intrinsic("call", "libc", "abort", void)
-        set encoded to the compact json form of source
-        set parsed to parse encoded as json
-        if not json parsing succeeded for parsed:
-            free json result parsed
-            @intrinsic("call", "libc", "abort", void)
+        set validation to the validation of JSON-RPC value source
+        if validation failed:
+            @intrinsic("call", "libc", "abort", nothing)
+        set encoded to the compact JSON form of source
+        parse encoded as JSON and set parsed to it
+        if parsed failed:
+            free parsed
+            @intrinsic("call", "libc", "abort", nothing)
         return the value of parsed
 
-function add json rpc member {any:name} containing {a pointer to json value:node} to {a pointer to json value:parent}:
+function add JSON-RPC member {a value:name} containing {a pointer to a JSON value:node} to {a pointer to a JSON value:parent}:
     execute:
-        append json member the string form of name with node to parent
+        add a JSON member named the string form of name with value node to parent
 
-function a new json rpc object:
+function a new JSON-RPC object:
     replacement:
-        a new json value of kind the json object kind
+        a new JSON value of kind the JSON object kind
 
-function a new json rpc array:
+function a new JSON-RPC array:
     replacement:
-        a new json value of kind the json array kind
+        a new JSON value of kind the JSON array kind

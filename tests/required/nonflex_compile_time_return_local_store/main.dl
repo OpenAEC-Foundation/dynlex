@@ -2,22 +2,22 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-function sum left and right:
+function the sum of left and right:
     execute:
         set total to left
-        set total to total + right
+        set total to (total + right)
         return total
 
-discard @intrinsic("type", "int", sum 4 and 4)
+ignore @intrinsic("type", "int", the sum of 4 and 4)

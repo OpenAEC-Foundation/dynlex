@@ -1,3 +1,3 @@
 tests/required/ownerless_function_reference_recursive_nonconvergent/main.dl:10-45: Error: Recursive type inference did not converge for function 'recursive reference {integer:value}'
-  note: while inferring call 'set recursive_function to the function named "recursive reference $"' with arguments [i8*] -> undeduced tests/required/ownerless_function_reference_recursive_nonconvergent/main.dl:27-69
-  note: while inferring call 'set recursive_function to the function named "recursive reference $"' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/ownerless_function_reference_recursive_nonconvergent/main.dl:1-69
+  note: while inferring call 'set reference to the function named "recursive reference $"' with arguments [a pointer to a byte] -> an unresolved value tests/required/ownerless_function_reference_recursive_nonconvergent/main.dl:18-60
+  note: while inferring call 'set reference to the function named "recursive reference $"' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/ownerless_function_reference_recursive_nonconvergent/main.dl:1-60

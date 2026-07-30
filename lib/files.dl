@@ -2,9 +2,9 @@
 
 import lib/std.dl
 
-function move {cstring:source} to {cstring:destination}:
+function move {C string:source} to {C string:destination}:
     execute:
         set result to @intrinsic("call", "libc", "rename", an integer, source, destination)
         if result != 0:
-            @intrinsic("call", "libc", "perror", void, source)
-            @intrinsic("call", "libc", "exit", void, 1)
+            @intrinsic("call", "libc", "perror", nothing, source)
+            @intrinsic("call", "libc", "exit", nothing, 1)

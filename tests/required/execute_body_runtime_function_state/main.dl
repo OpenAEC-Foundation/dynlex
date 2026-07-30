@@ -6,13 +6,13 @@ flex section around:
         execute the body
         set marker to 2
 
-function observed at runtime:
+function the value observed at runtime:
     execute:
-        discard @intrinsic("call", "libc", "rand", an integer)
+        ignore @intrinsic("call", "libc", "rand", an integer)
         set marker to 0
         set captured to 0
         around:
             set captured to marker
         return captured
 
-print observed at runtime as line
+print the value observed at runtime as a line

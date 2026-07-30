@@ -2,39 +2,39 @@ import lib/std.dl
 
 class:
 	patterns:
-		[a|] cpu {fixed integer:n} x {fixed integer:m} matrix
+		[a|] CPU {fixed integer:rows} by {fixed integer:columns} matrix
 	members:
-		values as an array of n * m items
+		values as an array of rows * columns items
 
-function a gpu {fixed integer:n} x {fixed integer:m} matrix:
+function a GPU {fixed integer:rows} by {fixed integer:columns} matrix:
 	replacement:
-		@intrinsic("matrix", n, m)
+		@intrinsic("matrix", rows, columns)
 
-function a {fixed integer:n} x {fixed integer:m} matrix:
+function a {fixed integer:rows} by {fixed integer:columns} matrix:
 	replacement:
-		a gpu n x m matrix if the build target is gpu, else a cpu n x m matrix
+		a GPU rows by columns matrix if the build target is GPU, else a CPU rows by columns matrix
 
-function a new {fixed integer:n} x {fixed integer:m} matrix from value:
+function a new {fixed integer:rows} by {fixed integer:columns} matrix from value:
 	replacement:
-		@intrinsic("construct", a n x m matrix, value)
+		@intrinsic("construct", a rows by columns matrix, value)
 
-function [a|an|] identity {fixed integer:n} x {fixed integer:m} matrix:
+function an identity {fixed integer:rows} by {fixed integer:columns} matrix:
 	execute:
-		if n is 4 and m is 4:
-			return a new n x m matrix from [
+		if rows is 4 and columns is 4:
+			return a new rows by columns matrix from [
 				1.0, 0.0, 0.0, 0.0, 
 				0.0, 1.0, 0.0, 0.0, 
 				0.0, 0.0, 1.0, 0.0, 
 				0.0, 0.0, 0.0, 1.0
 			]
-		else if n is 3 and m is 3:
-			return a new n x n matrix from [
+		else if rows is 3 and columns is 3:
+			return a new rows by columns matrix from [
 				1.0, 0.0, 0.0, 
 				0.0, 1.0, 0.0, 
 				0.0, 0.0, 1.0
 			]
-		else if n is 2 and m is 2:
-			return a new n x n matrix from [
+		else if rows is 2 and columns is 2:
+			return a new rows by columns matrix from [
 				1.0, 0.0, 
 				0.0, 1.0
 			]

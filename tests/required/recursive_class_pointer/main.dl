@@ -1,24 +1,24 @@
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function value as destination_type:
+function value as destination:
     replacement:
-        @intrinsic("cast", value, destination_type)
+        @intrinsic("cast", value, destination)
 
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [the|] address of variable:
+function the address of variable:
     replacement:
         @intrinsic("address of", variable)
 
-function [the|] value at pointer:
+function the value at pointer:
     replacement:
         @intrinsic("dereference", pointer)
 
@@ -26,9 +26,9 @@ class:
     patterns:
         [a|] node
     members:
-        next as a pointer to node
+        next as a pointer to a node
 
-discard 0 as a pointer to node
-set child to @intrinsic("construct", node, 0 as a pointer to node)
-set child_pointer to the address of child
-discard the value at child_pointer
+ignore 0 as a pointer to a node
+set descendant to @intrinsic("construct", a node, 0 as a pointer to a node)
+set child to the address of descendant
+ignore the value at child

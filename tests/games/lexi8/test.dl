@@ -1,6 +1,6 @@
 # LEXI-8 headless test
 #
-# Assembles the Breakout ROM, runs the machine without a window and prints
+# Assembles the Breakout program, runs the machine without a window and prints
 # deterministic snapshots of the emulated state (the random generator is
 # seeded with a fixed value). One frame is 32 machine cycles plus one 60 Hz
 # timer tick, matching the pace of the graphical front end.
@@ -10,7 +10,7 @@ import lib/random.dl
 import tests/games/lexi8/chip8.dl
 import tests/games/lexi8/breakout.dl
 
-function run count [frame|frames]:
+function run {integer:count} [frame|frames]:
 	execute:
 		set elapsed to 0
 		loop while elapsed < count:
@@ -18,58 +18,58 @@ function run count [frame|frames]:
 			tick the machine timers
 			increment elapsed
 
-seed random with 20260713
-build the breakout rom
+seed the random number generator with 20260713
+build the breakout program
 
-print "rom size" as line
-print the assembled rom size as line
-print "first opcode" as line
-print (the assembled rom byte at 0) as line
-print (the assembled rom byte at 1) as line
+print "program size" as a line
+print the assembled program size as a line
+print "first opcode" as a line
+print (the assembled program byte at 0) as a line
+print (the assembled program byte at 1) as a line
 
 initialize the machine
-load the assembled rom into the machine
+load the assembled program into the machine
 
 # Boot: clear, draw 64 bricks, the paddle and the ball, then block on pacing.
 run 20 frames
-print "pixels after boot" as line
-print the count of lit machine pixels as line
-print "bricks, lives, score after boot" as line
-print (the machine register 9) as line
-print (the machine register 10) as line
-print (the machine register 8) as line
+print "pixels after boot" as a line
+print the count of lit machine pixels as a line
+print "bricks, lives, score after boot" as a line
+print (the machine register 9) as a line
+print (the machine register 10) as a line
+print (the machine register 8) as a line
 
 # Hold key 6: the paddle must slide right until it reaches the wall at 58.
 set machine key 6 to 1
 run 60 frames
 set machine key 6 to 0
-print "paddle after holding right" as line
-print (the machine register 3) as line
+print "paddle after holding right" as a line
+print (the machine register 3) as a line
 
 # Hold key 4 for ten frames: five game ticks back to the left.
 set machine key 4 to 1
 run 10 frames
 set machine key 4 to 0
-print "paddle after tapping left" as line
-print (the machine register 3) as line
+print "paddle after tapping left" as a line
+print (the machine register 3) as a line
 
 # Let the game play itself for a while with the paddle parked.
 run 1800 frames
-print "score, bricks, lives after 1890 frames" as line
-print (the machine register 8) as line
-print (the machine register 9) as line
-print (the machine register 10) as line
-print "score plus bricks" as line
-print (the machine register 8) + (the machine register 9) as line
+print "score, bricks, lives after 1890 frames" as a line
+print (the machine register 8) as a line
+print (the machine register 9) as a line
+print (the machine register 10) as a line
+print "score plus bricks" as a line
+print (the machine register 8) + (the machine register 9) as a line
 
 # Much later the parked paddle has lost all three balls: the machine must be
 # showing the game over screen (letters and score digits), still not halted.
 run 6000 frames
-print "lives at the end" as line
-print (the machine register 10) as line
-print "pixels at the end" as line
-print the count of lit machine pixels as line
-print "halted" as line
-print the machine is halted as line
-print "cycles" as line
-print the machine cycle count as line
+print "lives at the end" as a line
+print (the machine register 10) as a line
+print "pixels at the end" as a line
+print the count of lit machine pixels as a line
+print "halted" as a line
+print the machine is halted as a line
+print "cycles" as a line
+print the machine cycle count as a line

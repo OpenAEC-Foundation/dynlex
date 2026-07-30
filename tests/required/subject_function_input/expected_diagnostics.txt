@@ -1,6 +1,6 @@
 lib/std.dl:9-30: Error: no subject has been set
-  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' with arguments [i8*] -> undeduced lib/std.dl:9-30
-  note: while inferring call 'discard it' -> undeduced tests/required/subject_function_input/main.dl:17-19
-  note: while inferring call 'discard it' with arguments [unresolved(?)] -> undeduced tests/required/subject_function_input/main.dl:9-19
-  note: while inferring call 'consume a private subject' -> undeduced tests/required/subject_function_input/main.dl:9-34
-  note: while inferring call 'call with a caller subject' -> undeduced tests/required/subject_function_input/main.dl:1-27
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/std.dl:9-30
+  note: while inferring call 'ignore it' -> an unresolved value tests/required/subject_function_input/main.dl:16-18
+  note: while inferring call 'ignore it' with arguments [an unresolved value] -> an unresolved value tests/required/subject_function_input/main.dl:9-18
+  note: while inferring call 'consume a private subject' -> an unresolved value tests/required/subject_function_input/main.dl:9-34
+  note: while inferring call 'call with a caller subject' -> an unresolved value tests/required/subject_function_input/main.dl:1-27

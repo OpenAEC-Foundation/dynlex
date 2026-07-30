@@ -98,11 +98,11 @@ monaco.editor.defineTheme("dynlex-dark", {
 
 const defaultSource = `import lib/std.dl
 
-function square value:
+function value squared:
     execute:
         return value * value
 
-print square 8 as line
+print 8 squared as a line
 `;
 
 const queryParams = new URLSearchParams(window.location.search);

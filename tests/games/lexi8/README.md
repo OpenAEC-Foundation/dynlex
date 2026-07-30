@@ -4,13 +4,15 @@ A complete fantasy-console stack, four languages deep, written entirely in
 DynLex:
 
 1. **`assembler.dl`** — a natural-language CHIP-8 assembler. Every mnemonic is
-   an ordinary DynLex pattern that emits bytecode: `load 28 into v 3`,
-   `skip when key v 0 is down`, `jump to "main loop"`. Labels resolve forward
+   an ordinary DynLex pattern that emits bytecode:
+   `load value 28 into register 3`,
+   `skip when key in register 0 is down`, `jump to label "main loop"`.
+   Labels resolve forward
    and backward through a fixup table, and sprites are authored as pictures:
 
    ```text
    label "paddle sprite"
-   data row "XXXXXX.."
+   emit a data row "XXXXXX.."
    ```
 
 2. **`breakout.dl`** — a full Breakout game written in that assembly dialect:
@@ -22,7 +24,8 @@ DynLex:
 3. **`chip8.dl`** — the console itself: a complete CHIP-8 virtual machine
    with 4096 bytes of memory, sixteen registers, a call stack, delay and
    sound timers, a sixteen key pad and XOR sprite drawing with collision
-   detection in `v 15`. Unknown opcodes halt the machine with a fault report.
+   detection in register 15. Unknown opcodes halt the machine with a fault
+   report.
 
 4. **`main.dl`** — the CRT. Every emulated pixel becomes an amber phosphor
    dot with a glow halo that keeps fading for a few frames after it turns

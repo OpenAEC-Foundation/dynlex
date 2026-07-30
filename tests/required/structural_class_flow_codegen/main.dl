@@ -1,16 +1,16 @@
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
-function value as destination_type:
+function value as destination:
     replacement:
-        @intrinsic("cast", value, destination_type)
+        @intrinsic("cast", value, destination)
 
 function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -30,16 +30,16 @@ class:
     members:
         items
 
-function build:
+function a built node:
     execute:
-        set provisional_pointer to 0 as a pointer to node
-        set provisional_storage to @intrinsic("construct", a storage, provisional_pointer)
-        set node_value to @intrinsic("construct", a node, provisional_storage)
-        set result to @intrinsic("address of", node_value)
-        set concrete_pointer to 0 as a pointer to node
-        set concrete_storage to @intrinsic("construct", a storage, concrete_pointer)
-        @intrinsic("store", @intrinsic("property", result, "items"), concrete_storage)
-        discard @intrinsic("not equal", result, 0 as a pointer to node)
+        set tentative to 0 as a pointer to a node
+        set temporary to @intrinsic("construct", a storage, tentative)
+        set subject to @intrinsic("construct", a node, temporary)
+        set result to @intrinsic("address of", subject)
+        set concrete to 0 as a pointer to a node
+        set finalized to @intrinsic("construct", a storage, concrete)
+        @intrinsic("store", @intrinsic("property", result, "items"), finalized)
+        ignore @intrinsic("not equal", result, 0 as a pointer to a node)
         return result
 
-discard build
+ignore a built node

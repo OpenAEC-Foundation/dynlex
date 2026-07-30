@@ -1,11 +1,11 @@
-function turn the item off for user:
+function the shutdown code for item and user:
     replacement:
         @intrinsic("add", item, user)
 
-function shut down the lights:
+function the lights shutdown code:
     replacement:
-        turn the lights off for 4
+        the shutdown code for lights and 4
 
-function turn the lights off for user:
+function the shutdown code for lights and user:
     replacement:
-        turn the dummy off for user
+        the shutdown code for placeholder and user

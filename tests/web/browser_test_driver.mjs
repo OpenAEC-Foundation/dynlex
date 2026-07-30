@@ -141,6 +141,51 @@ export async function replaceMonacoSource(sourceText) {
   await dispatchKey("v", "KeyV", 86, 2);
 }
 
+export async function clickElement(selector) {
+  const point = await evaluate(`new Promise((resolve, reject) => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!element) {
+      reject(new Error(${JSON.stringify(`Element is missing: ${selector}`)}));
+      return;
+    }
+    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const bounds = element.getBoundingClientRect();
+      const point = {
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2
+      };
+      if (
+        point.x < 0
+        || point.y < 0
+        || point.x > window.innerWidth
+        || point.y > window.innerHeight
+      ) {
+        reject(new Error(
+          ${JSON.stringify(`Element is outside the viewport: ${selector}`)}
+          + " " + JSON.stringify({ bounds, point, viewport: [innerWidth, innerHeight] })
+        ));
+        return;
+      }
+      resolve(point);
+    }));
+  })`);
+  await command("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    button: "left",
+    clickCount: 1,
+    x: point.x,
+    y: point.y
+  });
+  await command("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    button: "left",
+    clickCount: 1,
+    x: point.x,
+    y: point.y
+  });
+}
+
 export async function findMonacoText(text) {
   await evaluate(`(() => {
     const input = document.querySelector('.monaco-editor textarea.inputarea');

@@ -1,1 +1,1 @@
-tests/required/memoized_pattern_matching/main.dl:1-51: Error: This pattern couldn't be resolved
+tests/required/memoized_pattern_matching/main.dl:13-64: Error: This pattern couldn't be resolved

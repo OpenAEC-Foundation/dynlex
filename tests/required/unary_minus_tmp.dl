@@ -1,8 +1,8 @@
 import lib/std.dl
 
-set a to -1
-set b to 3-2
-set c to 3*-2
-print a
-print b
-print c
+set negative to -1
+set difference to 3-2
+set product to 3*-2
+print negative
+print difference
+print product

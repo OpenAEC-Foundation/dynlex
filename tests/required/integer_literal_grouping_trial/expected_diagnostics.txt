@@ -1,3 +1,2 @@
-tests/required/integer_literal_grouping_trial/main.dl:22-55: Warning: Expression ' negative 9223372036854775808 + 1' has multiple valid operand groupings. Using '(negative 9223372036854775808) + 1' instead of 'negative (9223372036854775808 + 1)'.
-  note: while inferring call ' negative 9223372036854775808 + 1' with arguments [a 64 bit integer, a 32 bit integer] -> a 64 bit integer tests/required/integer_literal_grouping_trial/main.dl:22-55
-  note: while inferring intrinsic 'discard' in '@intrinsic("discard", negative 9223372036854775808 + 1)' with arguments [i8*, a 64 bit integer] -> undeduced tests/required/integer_literal_grouping_trial/main.dl:1-56
+tests/required/integer_literal_grouping_trial/main.dl:1-40: Warning: Expression 'ignore negative 9223372036854775808 + 1' has multiple valid operand groupings. Using 'ignore ((negative 9223372036854775808) + 1)' instead of 'ignore (negative (9223372036854775808 + 1))'.
+  note: while inferring call 'ignore negative 9223372036854775808 + 1' with arguments [a 64-bit integer] -> nothing tests/required/integer_literal_grouping_trial/main.dl:1-40

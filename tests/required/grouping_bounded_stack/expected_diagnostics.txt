@@ -1,17 +1,17 @@
-tests/required/grouping_bounded_stack/main.dl:16-54: Error: Bitwise operator 'bitwise and' requires integer operands, got 'a 32 bit integer' and 'a 64 bit float'
-  note: while inferring intrinsic 'bitwise and' in 'return @intrinsic("bitwise and", left, right)' with arguments [i8*, a 32 bit integer, a 64 bit float] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-54
-  note: while inferring call 'return @intrinsic("bitwise and", left, right)' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-54
-  note: while inferring call 'return value + 2 + 3 + 4 + 5 & 1.5' with arguments [a 32 bit integer, a 64 bit float] -> undeduced tests/required/grouping_bounded_stack/main.dl:36-43
-  note: while inferring call 'return value + 2 + 3 + 4 + 5 & 1.5' with arguments [nothing, unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-43
-  note: while inferring call 'return trigger value' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-29
-  note: while inferring call 'return trigger value' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-29
-  note: while inferring call 'return trigger two value' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-33
-  note: while inferring call 'return trigger two value' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-33
-  note: while inferring call 'return trigger three value' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-35
-  note: while inferring call 'return trigger three value' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-35
-  note: while inferring call 'return trigger four value' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-34
-  note: while inferring call 'return trigger four value' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-34
-  note: while inferring call 'return trigger five value' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:16-34
-  note: while inferring call 'return trigger five value' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-34
-  note: while inferring call 'discard trigger six 1' with arguments [a 32 bit integer] -> undeduced tests/required/grouping_bounded_stack/main.dl:9-22
-  note: while inferring call 'discard trigger six 1' with arguments [unresolved(?)] -> undeduced tests/required/grouping_bounded_stack/main.dl:1-22
+tests/required/grouping_bounded_stack/main.dl:16-54: Error: Bitwise operator 'bitwise and' requires integer operands, got 'a 32-bit integer' and 'a 64-bit floating-point number'
+  note: while inferring intrinsic 'bitwise and' in 'return @intrinsic("bitwise and", left, right)' with arguments [a 32-bit integer, a 64-bit floating-point number] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-54
+  note: while inferring call 'return @intrinsic("bitwise and", left, right)' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-54
+  note: while inferring call 'return value + 2 + 3 + 4 + 5 & 1.5' with arguments [a 32-bit integer, a 64-bit floating-point number] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:36-43
+  note: while inferring call 'return value + 2 + 3 + 4 + 5 & 1.5' with arguments [nothing, an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-43
+  note: while inferring call 'return the result after one step from value' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-52
+  note: while inferring call 'return the result after one step from value' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-52
+  note: while inferring call 'return the result after two steps from value' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-53
+  note: while inferring call 'return the result after two steps from value' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-53
+  note: while inferring call 'return the result after three steps from value' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-55
+  note: while inferring call 'return the result after three steps from value' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-55
+  note: while inferring call 'return the result after four steps from value' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-54
+  note: while inferring call 'return the result after four steps from value' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-54
+  note: while inferring call 'return the result after five steps from value' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:16-54
+  note: while inferring call 'return the result after five steps from value' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:9-54
+  note: while inferring call 'ignore the result after six steps from 1' with arguments [a 32-bit integer] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:8-41
+  note: while inferring call 'ignore the result after six steps from 1' with arguments [an unresolved value] -> an unresolved value tests/required/grouping_bounded_stack/main.dl:1-41

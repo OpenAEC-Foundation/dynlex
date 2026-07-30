@@ -12,7 +12,7 @@ export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
         return;
       }
       observer.disconnect();
-      document.querySelector('#sketches').scrollIntoView({ behavior: 'instant' });
+      document.querySelector('#challenges').scrollIntoView({ behavior: 'instant' });
       requestAnimationFrame(() => resolve(section.dataset.sceneProgress));
     });
     observer.observe(section, {
@@ -58,7 +58,22 @@ export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
     };
     const first = readTime();
     window.scrollTo({ top: 0, behavior: 'instant' });
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve, reject) => {
+      let remainingFrames = 30;
+      const observeFrame = () => {
+        if (readTime() > first) {
+          resolve();
+          return;
+        }
+        remainingFrames -= 1;
+        if (remainingFrames === 0) {
+          reject(new Error('The revealing shader did not resume within 30 frames'));
+          return;
+        }
+        requestAnimationFrame(observeFrame);
+      };
+      requestAnimationFrame(observeFrame);
+    });
     const currentActiveLayer = section.querySelector('[data-layer-state="active"]');
     const currentRevealingLayer = section.querySelector('[data-layer-state="revealing"]');
     if (!currentRevealingLayer) {

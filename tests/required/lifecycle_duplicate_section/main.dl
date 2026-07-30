@@ -4,10 +4,10 @@ class:
     patterns:
         [a|] duplicate managed value
     members:
-        number as integer
+        number as an integer
     retain:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")
     retain:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")
     release:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")

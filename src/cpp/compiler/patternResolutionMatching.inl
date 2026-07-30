@@ -150,6 +150,34 @@ static bool patternMatchUsesDefinition(const PatternMatch &match, const PatternD
 
 using FailedMatchDependencies = std::unordered_map<PatternReference *, MatchDependencies>;
 
+static SectionType definitionPatternTreeType(const Section *section) {
+	requireCompilerInvariant(section != nullptr, "pattern definition has no owning section");
+	if (section->isConversion)
+		return SectionType::Conversion;
+	if (section->type == SectionType::Class)
+		return SectionType::Function;
+	return section->type;
+}
+
+static bool prepareConversionPattern(ParseContext &context, PatternDefinition &definition) {
+	Section *section = definition.section;
+	if (!section || !section->isConversion)
+		return true;
+	if (definition.patternElements.size() == 1) {
+		DefinitionPatternElement &element = definition.patternElements.front();
+		if (element.type == PatternElement::Type::VariableLike) {
+			element.type = PatternElement::Type::Variable;
+			return true;
+		}
+		if (element.type == PatternElement::Type::Variable)
+			return true;
+	}
+	context.diagnostics.push_back(
+		Diagnostic(context, Diagnostic::Level::Error, "conversion requires one parameter", definition.range)
+	);
+	return false;
+}
+
 static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 	return std::ranges::any_of(dependencies, [](const MatchDependency &dependency) {
 		switch (dependency.kind) {
@@ -312,6 +340,10 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			}
 			unresolvedDefinition->patternElements = std::move(parsedElements);
+			if (!prepareConversionPattern(context, *unresolvedDefinition)) {
+				hadPatternParseError = true;
+				continue;
+			}
 			unResolvedSection->indexExplicitParameters(*unresolvedDefinition);
 		}
 	}
@@ -490,7 +522,7 @@ bool resolvePatterns(ParseContext &context) {
 						}
 					});
 					if (definition->resolved) {
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -502,7 +534,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -602,7 +634,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -624,15 +656,19 @@ bool resolvePatterns(ParseContext &context) {
 				));
 			}
 		}
-		for (PatternReference *reference : bodyReferences) {
-			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
+		auto emitReferenceDiagnostic = [&](PatternReference *reference) {
+			Diagnostic diagnostic =
+				reference->purpose == PatternReference::Purpose::TypeConstraint
+					? unknownTypeConstraintDiagnostic(context, reference->range(), reference->range().subString)
+					: Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
 			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
 			context.diagnostics.push_back(std::move(diagnostic));
+		};
+		for (PatternReference *reference : bodyReferences) {
+			emitReferenceDiagnostic(reference);
 		}
 		for (PatternReference *reference : globalReferences) {
-			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
-			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
-			context.diagnostics.push_back(std::move(diagnostic));
+			emitReferenceDiagnostic(reference);
 		}
 	};
 
@@ -664,13 +700,11 @@ bool resolvePatterns(ParseContext &context) {
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
 	{
-		// Resolve before:/after: signature strings to pattern definitions in the function trie
-		auto resolveSignature = [&](const std::string &signature, PatternDefinition *from) -> PatternDefinition * {
+		auto resolveSignature = [&](const std::string &signature, PatternDefinition *from) {
 			const lsp::SourceFile *sourceFile = from->range.line ? from->range.line->sourceFile : nullptr;
-			return findDefinitionBySignature(context, SectionType::Function, signature, sourceFile);
+			return findDefinitionsBySignature(context, SectionType::Function, signature, sourceFile);
 		};
 
-		// Collect precedence edges: higher → lower (higher prec = evaluated first)
 		struct PrecedenceEdge {
 			PatternDefinition *higher;
 			PatternDefinition *lower;
@@ -678,10 +712,8 @@ bool resolvePatterns(ParseContext &context) {
 		std::vector<PrecedenceEdge> edges;
 		std::unordered_set<PatternDefinition *> involvedDefs;
 
-		// Virtual sentinel for "default" precedence — function patterns without explicit
-		// precedence get this level, which is below all operators that declare "before: default".
+		// "default" is a virtual node between patterns declared before and after it.
 		PatternDefinition defaultSentinel(Range(), nullptr);
-		bool hasDefaultPrecedence = false;
 
 		std::function<bool(Section *)> collectPrecedence = [&](Section *section) -> bool {
 			if (!section->beforePatterns.empty() || !section->afterPatterns.empty()) {
@@ -691,40 +723,42 @@ bool resolvePatterns(ParseContext &context) {
 					// before: B means "this definition evaluates before B" = higher precedence
 					for (const std::string &beforeStr : section->beforePatterns) {
 						if (beforeStr == "default") {
-							hasDefaultPrecedence = true;
 							involvedDefs.insert(&defaultSentinel);
 							edges.push_back({def, &defaultSentinel});
 							continue;
 						}
-						PatternDefinition *target = resolveSignature(beforeStr, def);
-						if (!target) {
+						std::vector<PatternDefinition *> targets = resolveSignature(beforeStr, def);
+						if (targets.empty()) {
 							context.diagnostics.push_back(Diagnostic(
 								context, Diagnostic::Level::Error, "precedence target not found", def->range, "target",
 								beforeStr
 							));
 							return false;
 						}
-						involvedDefs.insert(target);
-						edges.push_back({def, target});
+						for (PatternDefinition *target : targets) {
+							involvedDefs.insert(target);
+							edges.push_back({def, target});
+						}
 					}
 
 					// after: A means "this definition evaluates after A" = lower precedence
 					for (const std::string &afterStr : section->afterPatterns) {
 						if (afterStr == "default") {
-							hasDefaultPrecedence = true;
 							involvedDefs.insert(&defaultSentinel);
 							edges.push_back({&defaultSentinel, def});
 							continue;
 						}
-						PatternDefinition *target = resolveSignature(afterStr, def);
-						if (!target) {
+						std::vector<PatternDefinition *> targets = resolveSignature(afterStr, def);
+						if (targets.empty()) {
 							context.diagnostics.push_back(Diagnostic(
 								context, Diagnostic::Level::Error, "precedence target not found", def->range, "target", afterStr
 							));
 							return false;
 						}
-						involvedDefs.insert(target);
-						edges.push_back({target, def});
+						for (PatternDefinition *target : targets) {
+							involvedDefs.insert(target);
+							edges.push_back({target, def});
+						}
 					}
 				}
 			}
@@ -751,8 +785,27 @@ bool resolvePatterns(ParseContext &context) {
 		};
 		placeGeneratedPropertyAccessors(context.mainSection);
 
+		auto patternFamily = [&](PatternDefinition *definition) {
+			return definition == &defaultSentinel ? std::vector<PatternDefinition *>{definition}
+												  : connectedPatternFamily(definition);
+		};
+		std::set<std::pair<PatternDefinition *, PatternDefinition *>> familyEdges;
+		for (const PrecedenceEdge &edge : edges) {
+			for (PatternDefinition *higher : patternFamily(edge.higher)) {
+				for (PatternDefinition *lower : patternFamily(edge.lower)) {
+					familyEdges.insert({higher, lower});
+					involvedDefs.insert(higher);
+					involvedDefs.insert(lower);
+				}
+			}
+		}
+		edges.clear();
+		edges.reserve(familyEdges.size());
+		for (const auto &[higher, lower] : familyEdges)
+			edges.push_back({higher, lower});
+
 		if (!involvedDefs.empty()) {
-			// Topological sort (Kahn's algorithm) to assign precedence levels
+			// Topological sort (Kahn's algorithm) validates the expanded syntax-family graph.
 			std::unordered_map<PatternDefinition *, std::vector<PatternDefinition *>> adjList;
 			std::unordered_map<PatternDefinition *, int> inDegree;
 			for (PatternDefinition *def : involvedDefs)
@@ -771,16 +824,13 @@ bool resolvePatterns(ParseContext &context) {
 			}
 			std::sort(zeroInDegree.begin(), zeroInDegree.end(), patternDefinitionComesBefore);
 
-			// BFS wave-based topological sort: nodes in the same wave get the same precedence level.
-			// This ensures operators like * and / (no edge between them) share the same level,
-			// enforcing left-to-right associativity for same-precedence operators.
+			// Validate the authored partial order without collapsing unrelated
+			// definitions into numeric tiers.
 			size_t processedCount = 0;
-			int currentLevel = (int)involvedDefs.size();
 			std::vector<PatternDefinition *> currentWave = zeroInDegree;
 			while (!currentWave.empty()) {
 				std::vector<PatternDefinition *> nextWave;
 				for (PatternDefinition *def : currentWave) {
-					def->precedence = currentLevel;
 					processedCount++;
 					for (PatternDefinition *lower : adjList[def]) {
 						if (--inDegree[lower] == 0)
@@ -790,7 +840,6 @@ bool resolvePatterns(ParseContext &context) {
 				std::sort(nextWave.begin(), nextWave.end(), patternDefinitionComesBefore);
 				nextWave.erase(std::unique(nextWave.begin(), nextWave.end()), nextWave.end());
 				currentWave = std::move(nextWave);
-				currentLevel--;
 			}
 
 			if (processedCount != involvedDefs.size()) {
@@ -800,15 +849,30 @@ bool resolvePatterns(ParseContext &context) {
 				return false;
 			}
 
-			// Store default precedence level for use in pattern matching.
-			// Patterns that want lowest precedence (math functions) declare "after: default".
-			// Patterns without explicit precedence stay at 0 (bypass precedence checks).
-			if (hasDefaultPrecedence && defaultSentinel.precedence > 0) {
-				context.defaultPrecedenceLevel = defaultSentinel.precedence;
+			for (PatternDefinition *definition : involvedDefs) {
+				if (definition != &defaultSentinel)
+					definition->precedenceSuccessors.clear();
+			}
+			for (PatternDefinition *definition : involvedDefs) {
+				if (definition == &defaultSentinel)
+					continue;
+				std::vector<PatternDefinition *> pending(adjList[definition].begin(), adjList[definition].end());
+				std::unordered_set<PatternDefinition *> visited;
+				while (!pending.empty()) {
+					PatternDefinition *successor = pending.back();
+					pending.pop_back();
+					if (!visited.insert(successor).second)
+						continue;
+					if (successor != &defaultSentinel)
+						definition->precedenceSuccessors.insert(successor);
+					auto adjacent = adjList.find(successor);
+					if (adjacent != adjList.end())
+						pending.insert(pending.end(), adjacent->second.begin(), adjacent->second.end());
+				}
 			}
 
 			// Precedence re-matching is NOT done here — operand reordering in type inference
-			// handles grouping selection using def->precedence values.
+			// handles grouping selection using the resolved partial order.
 		}
 	}
 

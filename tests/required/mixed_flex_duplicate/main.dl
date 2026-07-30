@@ -1,4 +1,4 @@
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 

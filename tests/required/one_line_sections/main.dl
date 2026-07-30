@@ -19,5 +19,5 @@ class:
 
 set total to 0
 increase total by square 2
-print total as line
-if 1 = 1: print total as line
+print total as a line
+if 1 = 1: print total as a line

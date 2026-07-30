@@ -2,19 +2,19 @@
 
 import lib/list.dl
 
-function lowercase ascii character from value:
+function the lowercase ASCII character corresponding to value:
     execute:
         if value >= 65 and value <= 90:
             return (value + 32) as a byte
         return value
 
-function uppercase ascii character from value:
+function the uppercase ASCII character corresponding to value:
     execute:
         if value >= 97 and value <= 122:
             return (value - 32) as a byte
         return value
 
-function [the|] index of {any:fragment} in {any:text} starting at {integer:start}:
+function the index of {a value:fragment} in {a value:text} starting at {integer:start}:
     execute:
         if start < 0 or start > the length of text:
             return 0 - 1
@@ -24,10 +24,10 @@ function [the|] index of {any:fragment} in {any:text} starting at {integer:start
         loop while cursor + the length of fragment <= the length of text:
             if text has fragment at offset cursor:
                 return cursor
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return 0 - 1
 
-function [the|] index of {any:fragment} in {any:text}:
+function the index of {a value:fragment} in {a value:text}:
     execute:
         return the index of fragment in text starting at 0
 
@@ -35,11 +35,11 @@ function {string:text} starts with {string:prefix}:
     execute:
         return text has prefix at offset 0
 
-function {string:text} starts with {cstring:prefix}:
+function {string:text} starts with {C string:prefix}:
     execute:
         return text starts with the string form of prefix
 
-function {cstring:text} starts with {cstring:prefix}:
+function {C string:text} starts with {C string:prefix}:
     execute:
         return the string form of text starts with the string form of prefix
 
@@ -47,11 +47,11 @@ function {string:text} ends with {string:suffix}:
     execute:
         return text has suffix at offset the length of text - the length of suffix
 
-function {string:text} ends with {cstring:suffix}:
+function {string:text} ends with {C string:suffix}:
     execute:
         return text ends with the string form of suffix
 
-function {cstring:text} ends with {cstring:suffix}:
+function {C string:text} ends with {C string:suffix}:
     execute:
         return the string form of text ends with the string form of suffix
 
@@ -59,158 +59,154 @@ function {string:text} contains {string:fragment}:
     execute:
         return the index of fragment in text >= 0
 
-function {string:text} contains {cstring:fragment}:
+function {string:text} contains {C string:fragment}:
     execute:
         return the index of fragment in text >= 0
 
-function {cstring:text} contains {cstring:fragment}:
+function {C string:text} contains {C string:fragment}:
     execute:
         return the string form of text contains the string form of fragment
 
-function [the|] lowercase form of {string:text}:
+function the lowercase form of {string:text}:
     execute:
-        set result to a new string buffer with length the length of text
+        set result to a new string buffer containing (the length of text) bytes
         set cursor to 0
         loop while cursor < the length of text:
-            store lowercase ascii character from character cursor of text into the data of result at cursor
-            set cursor to cursor + 1
+            store the lowercase ASCII character corresponding to the character at cursor in text into the data of result at cursor
+            set cursor to (cursor + 1)
         return result
 
-function [the|] lowercase form of {cstring:text}:
+function the lowercase form of {C string:text}:
     execute:
         return the lowercase form of the string form of text
 
-function [the|] uppercase form of {string:text}:
+function the uppercase form of {string:text}:
     execute:
-        set result to a new string buffer with length the length of text
+        set result to a new string buffer containing (the length of text) bytes
         set cursor to 0
         loop while cursor < the length of text:
-            store uppercase ascii character from character cursor of text into the data of result at cursor
-            set cursor to cursor + 1
+            store the uppercase ASCII character corresponding to the character at cursor in text into the data of result at cursor
+            set cursor to (cursor + 1)
         return result
 
-function [the|] uppercase form of {cstring:text}:
+function the uppercase form of {C string:text}:
     execute:
         return the uppercase form of the string form of text
 
 function {string:text} trimmed:
     execute:
         set start to 0
-        loop while start < the length of text and character (character start of text) is ascii whitespace:
-            set start to start + 1
+        loop while start < the length of text and the character at start in text is an ASCII whitespace character:
+            set start to (start + 1)
         set finish to the length of text
-        loop while finish > start and character (character (finish - 1) of text) is ascii whitespace:
-            set finish to finish - 1
-        return the substring of text from start with length (finish - start)
+        loop while finish > start and the character at (finish - 1) in text is an ASCII whitespace character:
+            set finish to (finish - 1)
+        return the substring of text from start spanning (finish - start) bytes
 
-function {cstring:text} trimmed:
+function {C string:text} trimmed:
     execute:
         return the string form of text trimmed
 
-function {string:text} with {string:old_text} replaced by {string:new_text}:
+function {string:text} with {string:original} replaced by {string:replacement}:
     execute:
-        if the length of old_text = 0:
-            @intrinsic("call", "libc", "abort", void)
+        if the length of original = 0:
+            @intrinsic("call", "libc", "abort", nothing)
         set occurrences to 0
-        set read_position to 0
-        loop while read_position + the length of old_text <= the length of text:
-            if text has old_text at offset read_position:
-                set occurrences to occurrences + 1
-                set read_position to read_position + the length of old_text
+        set reader to 0
+        loop while reader + the length of original <= the length of text:
+            if text has original at offset reader:
+                set occurrences to (occurrences + 1)
+                set reader to (reader + the length of original)
             else:
-                set read_position to read_position + 1
-        set result_length to the length of text + occurrences * (the length of new_text - the length of old_text)
-        set result to a new string buffer with length result_length
-        set read_position to 0
-        set write_position to 0
-        loop while read_position < the length of text:
-            if read_position + the length of old_text <= the length of text and text has old_text at offset read_position:
-                set replacement_position to 0
-                loop while replacement_position < the length of new_text:
-                    store character replacement_position of new_text into the data of result at write_position
-                    set replacement_position to replacement_position + 1
-                    set write_position to write_position + 1
-                set read_position to read_position + the length of old_text
+                set reader to (reader + 1)
+        set length to (the length of text + occurrences * (the length of replacement - the length of original))
+        set result to a new string buffer containing length bytes
+        set reader to 0
+        set writer to 0
+        loop while reader < the length of text:
+            if reader + the length of original <= the length of text and text has original at offset reader:
+                set cursor to 0
+                loop while cursor < the length of replacement:
+                    store the character at cursor in replacement into the data of result at writer
+                    set cursor to (cursor + 1)
+                    set writer to (writer + 1)
+                set reader to (reader + the length of original)
             else:
-                store character read_position of text into the data of result at write_position
-                set read_position to read_position + 1
-                set write_position to write_position + 1
+                store the character at reader in text into the data of result at writer
+                set reader to (reader + 1)
+                set writer to (writer + 1)
         return result
 
-function {string:text} with {cstring:old_text} replaced by {cstring:new_text}:
+function {string:text} with {C string:original} replaced by {C string:replacement}:
     execute:
-        return text with the string form of old_text replaced by the string form of new_text
+        return text with the string form of original replaced by the string form of replacement
 
-function {cstring:text} with {cstring:old_text} replaced by {cstring:new_text}:
+function {C string:text} with {C string:original} replaced by {C string:replacement}:
     execute:
-        return the string form of text with the string form of old_text replaced by the string form of new_text
+        return (the string form of text) with (the string form of original) replaced by (the string form of replacement)
 
 function {string:text} repeated {integer:count} times:
     execute:
         if count < 0:
-            @intrinsic("call", "libc", "abort", void)
-        set result to a new string buffer with length the length of text * count
+            @intrinsic("call", "libc", "abort", nothing)
+        set result to a new string buffer containing (the length of text * count) bytes
         set repetition to 0
         loop while repetition < count:
             copy text into (the data of result) at offset (repetition * the length of text)
-            set repetition to repetition + 1
+            set repetition to (repetition + 1)
         return result
 
-function {cstring:text} repeated {integer:count} times:
+function {C string:text} repeated {integer:count} times:
     execute:
         return (the string form of text) repeated count times
 
-function split {string:text} at {string:separator}:
+function {string:text} split at {string:separator}:
     execute:
         if the length of separator = 0:
-            @intrinsic("call", "libc", "abort", void)
+            @intrinsic("call", "libc", "abort", nothing)
         set pieces to an empty list of string
-        set piece_start to 0
+        set start to 0
         set cursor to 0
         loop while cursor + the length of separator <= the length of text:
             if text has separator at offset cursor:
-                append the substring of text from piece_start with length cursor - piece_start to pieces
-                set cursor to cursor + the length of separator
-                set piece_start to cursor
+                append the substring of text from start spanning (cursor - start) bytes to pieces
+                set cursor to (cursor + the length of separator)
+                set start to cursor
             else:
-                set cursor to cursor + 1
-        append the substring of text from piece_start with length the length of text - piece_start to pieces
+                set cursor to (cursor + 1)
+        append the substring of text from start spanning (the length of text - start) bytes to pieces
         return pieces
 
-function split {string:text} at {cstring:separator}:
+function {string:text} split at {C string:separator}:
     execute:
-        return split text at the string form of separator
+        return text split at the string form of separator
 
-function split {cstring:text} at {cstring:separator}:
+function {C string:text} split at {C string:separator}:
     execute:
-        return split the string form of text at the string form of separator
+        return the string form of text split at the string form of separator
 
-function {a pointer to list:parts} joined with {string:separator}:
+function {a pointer to a list:parts} joined with {string:separator}:
     execute:
-        set result_length to 0
+        set length to 0
         set cursor to 0
         loop while cursor < the length of parts:
-            set result_length to result_length + the length of item cursor of parts
+            set length to (length + the length of the item at cursor in parts)
             if cursor > 0:
-                set result_length to result_length + the length of separator
-            set cursor to cursor + 1
-        set result to a new string buffer with length result_length
-        set write_position to 0
+                set length to (length + the length of separator)
+            set cursor to (cursor + 1)
+        set result to a new string buffer containing length bytes
+        set writer to 0
         set cursor to 0
         loop while cursor < the length of parts:
             if cursor > 0:
-                copy separator into (the data of result) at offset write_position
-                set write_position to write_position + the length of separator
-            set part to item cursor of parts
-            copy part into (the data of result) at offset write_position
-            set write_position to write_position + the length of part
-            set cursor to cursor + 1
+                copy separator into (the data of result) at offset writer
+                set writer to (writer + the length of separator)
+            set part to the item at cursor in parts
+            copy part into (the data of result) at offset writer
+            set writer to (writer + the length of part)
+            set cursor to (cursor + 1)
         return result
 
-function {a pointer to list:parts} joined with {cstring:separator}:
+function {a pointer to a list:parts} joined with {C string:separator}:
     execute:
         return parts joined with the string form of separator
-
-function free split text {a pointer to list:parts}:
-    execute:
-        free list parts

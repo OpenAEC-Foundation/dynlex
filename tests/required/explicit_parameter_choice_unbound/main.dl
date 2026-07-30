@@ -1,8 +1,8 @@
-function boolean:
+function [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 

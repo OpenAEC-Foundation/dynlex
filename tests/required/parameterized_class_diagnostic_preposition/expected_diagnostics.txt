@@ -1,0 +1,2 @@
+tests/required/parameterized_class_diagnostic_preposition/main.dl:1-15: Error: No overload matches call 'consume result' for argument types [a record owned by …]. Available overloads: 'consume {integer:value}'
+  note: while inferring call 'consume result' with arguments [a record owned by …] -> an unresolved value tests/required/parameterized_class_diagnostic_preposition/main.dl:1-15
