@@ -12,6 +12,7 @@ test('registry packages have distinct, explicit extension identities', async () 
     const {
         artifactFileName,
         buildRegistryManifest,
+        parseProductionDependencyDirectories,
         registryPackages,
         selectRegistryPackages,
     } = await import(packagingModuleUrl);
@@ -51,5 +52,35 @@ test('registry packages have distinct, explicit extension identities', async () 
     assert.throws(
         () => selectRegistryPackages('unknown-registry'),
         /Unknown extension registry 'unknown-registry'/,
+    );
+
+    const extensionDirectory = path.resolve('/workspace/vscode-extension');
+    assert.deepEqual(
+        parseProductionDependencyDirectories(
+            [
+                extensionDirectory,
+                path.join(extensionDirectory, 'node_modules/example'),
+                path.join(
+                    extensionDirectory,
+                    'node_modules/example/node_modules/nested',
+                ),
+                '',
+            ].join('\n'),
+            extensionDirectory,
+        ),
+        [
+            path.join(extensionDirectory, 'node_modules/example'),
+            path.join(
+                extensionDirectory,
+                'node_modules/example/node_modules/nested',
+            ),
+        ],
+    );
+    assert.throws(
+        () => parseProductionDependencyDirectories(
+            `${extensionDirectory}\n/workspace/unrelated`,
+            extensionDirectory,
+        ),
+        /outside the extension's node_modules directory/,
     );
 });
