@@ -416,8 +416,7 @@ if (kind == IntrinsicKind::Function) {
 	PatternDefinition *definition = callExpr->selectedCallableDefinition;
 	requireCompilerInvariant(definition, "function intrinsic reached codegen without its inferred callable definition");
 	requireCompilerInvariant(
-		callExpr->selectedCallablePathIndex.has_value(),
-		"function intrinsic reached codegen without its inferred callable path"
+		callExpr->selectedCallablePathIndex.has_value(), "function intrinsic reached codegen without its inferred callable path"
 	);
 	requireCompilerInvariant(callExpr->selectedInstantiation, "function intrinsic reached codegen without its instantiation");
 	llvm::Function *callableFunction = nullptr;
@@ -721,19 +720,15 @@ if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpol
 		llvm::Value *green = nullptr;
 		llvm::Value *blue = nullptr;
 		llvm::Value *alpha = nullptr;
-		if (!generateRuntimeValue(args[firstValueIndex], red) ||
-			!generateRuntimeValue(args[firstValueIndex + 1], green) ||
-			!generateRuntimeValue(args[firstValueIndex + 2], blue) ||
-			!generateRuntimeValue(args[firstValueIndex + 3], alpha))
+		if (!generateRuntimeValue(args[firstValueIndex], red) || !generateRuntimeValue(args[firstValueIndex + 1], green) ||
+			!generateRuntimeValue(args[firstValueIndex + 2], blue) || !generateRuntimeValue(args[firstValueIndex + 3], alpha))
 			return CodegenResult::failure();
 
 		DataType floatType = {DataType::Kind::Float, 4};
 		red = ensureType(context, red, finalizedExpressionType(context, args[firstValueIndex]), floatType);
-		green =
-			ensureType(context, green, finalizedExpressionType(context, args[firstValueIndex + 1]), floatType);
+		green = ensureType(context, green, finalizedExpressionType(context, args[firstValueIndex + 1]), floatType);
 		blue = ensureType(context, blue, finalizedExpressionType(context, args[firstValueIndex + 2]), floatType);
-		alpha =
-			ensureType(context, alpha, finalizedExpressionType(context, args[firstValueIndex + 3]), floatType);
+		alpha = ensureType(context, alpha, finalizedExpressionType(context, args[firstValueIndex + 3]), floatType);
 
 		color = llvm::Constant::getNullValue(vec4Ty);
 		color = builder.CreateInsertElement(color, alpha, getVectorLaneIndexValue(context, 3), "color_a");
@@ -794,9 +789,8 @@ if (kind == IntrinsicKind::ExtractElement) {
 	);
 	llvm::AllocaInst *storage = createEntryAlloca(context, "aggregate_extract", aggregateType);
 	builder.CreateStore(aggregate, storage);
-	llvm::Value *address = builder.CreateInBoundsGEP(
-		getLLVMType(context, aggregateType), storage, {builder.getInt32(0), idx}, "element_address"
-	);
+	llvm::Value *address =
+		builder.CreateInBoundsGEP(getLLVMType(context, aggregateType), storage, {builder.getInt32(0), idx}, "element_address");
 	return builder.CreateAlignedLoad(
 		getLLVMType(context, *aggregateType.arrayElementType), address,
 		getLLVMABIAlignment(context, *aggregateType.arrayElementType), "elem"

@@ -23,12 +23,15 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 }
 
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
-	Expression *destinationSourceExpr = resolveThroughBindings(expr->arguments[1], flexBindingFrameStack);
-	BindingFrameStack destinationBindingFrameStack;
-	Expression *destinationExpr =
-		resolveThroughBindingsDeep(expr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
-	BindingFrameStack valueBindingFrameStack;
-	Expression *valueExpr = resolveThroughBindingsDeep(expr->arguments[2], flexBindingFrameStack, valueBindingFrameStack);
+	Expression *destinationSourceExpr =
+		resolveExpressionBindingWithCallerScope(expr->arguments[1], flexBindingFrameStack).expression;
+	ResolvedBindingLayers resolvedDestination =
+		resolveInferenceBindingLayers(expr->arguments[1], flexBindingFrameStack, &context);
+	Expression *destinationExpr = resolvedDestination.expression;
+	BindingFrameStack destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
+	ResolvedBindingLayers resolvedValue = resolveInferenceBindingLayers(expr->arguments[2], flexBindingFrameStack, &context);
+	Expression *valueExpr = resolvedValue.expression;
+	BindingFrameStack valueBindingFrameStack = std::move(resolvedValue.bindingFrameStack);
 	ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 	bool valueDependsOnInProgressInstantiation = valueObservation.observed();
@@ -71,6 +74,11 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		}
 
 		DataType mergedVariableType = valueType;
+		if (variable->type.isDeduced() && !mergeVariableAssignmentType(variable->type, valueType, mergedVariableType) &&
+			tryApplyUserConversion(valueExpr, variable->type, true, context, valueBindingFrameStack)) {
+			valueType = effectiveInferredExpressionType(valueExpr);
+			mergedVariableType = valueType;
+		}
 		if (!variable->type.isDeduced() || mergeVariableAssignmentType(variable->type, valueType, mergedVariableType)) {
 			if (context.trial && context.trialJournal)
 				context.trialJournal->recordVariableWrite(variable);
@@ -109,29 +117,27 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		return;
 	}
 
-	BindingFrameStack resolvedBindingFrameStack = flexBindingFrameStack;
-	destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-		pushBindingScope(resolvedBindingFrameStack, frame);
-	});
-	BindingFrameStack ignoredBindingFrameStack;
-	Expression *ownerExpr =
-		resolveThroughBindingsDeep(destinationExpr->arguments[1], resolvedBindingFrameStack, ignoredBindingFrameStack);
+	ResolvedBindingLayers resolvedOwner =
+		resolveInferenceBindingLayers(destinationExpr->arguments[1], destinationBindingFrameStack, &context);
+	Expression *ownerExpr = resolvedOwner.expression;
+	BindingFrameStack ownerBindingFrameStack = std::move(resolvedOwner.bindingFrameStack);
 	DataType instanceType =
-		ownerExpr ? ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, resolvedBindingFrameStack) : DataType{};
+		ownerExpr ? ensureExpressionTypeWithCurrentGrouping(ownerExpr, context, ownerBindingFrameStack) : DataType{};
 	if (instanceType.kind != DataType::Kind::Class || !instanceType.classDefinition || instanceType.classInstIndex < 0) {
 		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
 	}
 	std::optional<AddressProvenance> ownerLValueProvenance;
 	if (!instanceType.isPointer()) {
-		ownerLValueProvenance = inferLValueAddressProvenance(ownerExpr, context, resolvedBindingFrameStack, false);
+		ownerLValueProvenance = inferLValueAddressProvenance(ownerExpr, context, ownerBindingFrameStack, false);
 		if (!ownerLValueProvenance) {
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
 		}
 	}
 
-	Expression *propertyExpr = resolveThroughBindings(destinationExpr->arguments[2], resolvedBindingFrameStack);
+	Expression *propertyExpr =
+		resolveInferenceBindingLayers(destinationExpr->arguments[2], destinationBindingFrameStack, &context).expression;
 	std::string fieldName;
 	if (auto *str = std::get_if<std::string>(&propertyExpr->literalValue))
 		fieldName = *str;
@@ -141,10 +147,11 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	}
 
 	ClassDefinition *classDefinition = instanceType.classDefinition;
-	AddressProvenance assignedProvenance = inferAddressProvenance(valueExpr, context, valueBindingFrameStack);
+	AddressProvenance assignedProvenance;
 	auto updateOwnerAddressProvenance = [&]() {
+		assignedProvenance = inferAddressProvenance(valueExpr, context, valueBindingFrameStack);
 		AddressProvenance ownerStorage = instanceType.isPointer()
-											 ? inferAddressProvenance(ownerExpr, context, resolvedBindingFrameStack)
+											 ? inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack)
 											 : *ownerLValueProvenance;
 		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerStorage);
 		if (ownerStorage.unknown)
@@ -163,22 +170,29 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		if (currentFieldType.isDeduced()) {
 			DataType mergedFieldType;
 			if (!mergeVariableAssignmentType(currentFieldType, valueType, mergedFieldType)) {
-				std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
-												  ? std::string(destinationSourceExpr->range.subString)
-												  : fieldName;
-				context.setTypeFailure(renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
-					"variable type change", "message",
-					{{"name", destinationName},
-					 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
-					 {"to_type", typeToUserName(valueType, context.parseContext)}}
-				));
-				if (!context.trial) {
-					context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
-						destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext
+				if (tryApplyUserConversion(valueExpr, currentFieldType, true, context, valueBindingFrameStack)) {
+					valueType = effectiveInferredExpressionType(valueExpr);
+					mergedFieldType = valueType;
+				} else {
+					if (!context.typesValid)
+						return;
+					std::string destinationName = destinationSourceExpr && !destinationSourceExpr->range.subString.empty()
+													  ? std::string(destinationSourceExpr->range.subString)
+													  : fieldName;
+					context.setTypeFailure(renderConfiguredMessage(
+						syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
+						"variable type change", "message",
+						{{"name", destinationName},
+						 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
+						 {"to_type", typeToUserName(valueType, context.parseContext)}}
 					));
+					if (!context.trial) {
+						context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(
+							destinationName, currentFieldType, {}, {}, valueExpr, valueType, context.parseContext
+						));
+					}
+					return;
 				}
-				return;
 			}
 			if (mergedFieldType == currentFieldType) {
 				updateOwnerAddressProvenance();

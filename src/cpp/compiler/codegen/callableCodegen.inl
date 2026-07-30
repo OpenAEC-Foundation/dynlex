@@ -21,20 +21,16 @@ bool ensureCallableFunctionGenerated(
 	collectCallableFunctionParameters(match, parameters);
 	Instantiation *instantiationPointer = &instantiation;
 	const std::vector<DataType> &argumentTypes = instantiationPointer->argumentTypes;
-	requireCompilerInvariant(
-		parameters.size() == argumentTypes.size(), "callable parameter count changed after inference"
-	);
+	requireCompilerInvariant(parameters.size() == argumentTypes.size(), "callable parameter count changed after inference");
 
 	std::vector<std::pair<std::string, Expression *>> parameterBindings;
 	parameterBindings.reserve(parameters.size());
 	for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
 		requireCompilerInvariant(
-			parameters[parameterIndex].type == argumentTypes[parameterIndex],
-			"callable parameter type changed after inference"
+			parameters[parameterIndex].type == argumentTypes[parameterIndex], "callable parameter type changed after inference"
 		);
 		requireCompilerInvariant(
-			!parameters[parameterIndex].requiresCompileTimeValue,
-			"fixed callable parameter reached code generation"
+			!parameters[parameterIndex].requiresCompileTimeValue, "fixed callable parameter reached code generation"
 		);
 		parameterBindings.push_back({parameters[parameterIndex].name, nullptr});
 	}
@@ -44,12 +40,8 @@ bool ensureCallableFunctionGenerated(
 		!generateSpecializedFunction(context, section, parameterBindings, *instantiationPointer))
 		return false;
 	requireCompilerInvariant(instantiationPointer->valid, "invalid callable instantiation reached codegen");
-	requireCompilerInvariant(
-		!instantiationPointer->needsReinfer, "unfinished callable instantiation reached codegen"
-	);
-	requireCompilerInvariant(
-		instantiationPointer->returnType.isDeduced(), "callable without a return type reached codegen"
-	);
+	requireCompilerInvariant(!instantiationPointer->needsReinfer, "unfinished callable instantiation reached codegen");
+	requireCompilerInvariant(instantiationPointer->returnType.isDeduced(), "callable without a return type reached codegen");
 	if (instantiationPointer->llvmCallableFunction) {
 		if (requireExternalLinkage)
 			instantiationPointer->llvmCallableFunction->setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -90,8 +82,7 @@ bool ensureCallableFunctionGenerated(
 	bool succeeded = true;
 	for (llvm::Argument &argument : callableFunction->args()) {
 		const DataType &argumentType = argumentTypes[argumentIndex];
-		llvm::AllocaInst *parameterStorage =
-			createEntryAlloca(context, parameters[argumentIndex].name, argumentType);
+		llvm::AllocaInst *parameterStorage = createEntryAlloca(context, parameters[argumentIndex].name, argumentType);
 		if (typeHasManagedLifecycle(argumentType)) {
 			if (!retainManagedValue(context, argumentType, &argument)) {
 				succeeded = false;

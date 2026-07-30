@@ -42,67 +42,21 @@ static CompileTimeValue lookupCompileTimeExpressionValue(Expression *expression,
 	return getExpressionCompileTimeValue(expression);
 }
 
-static Expression *resolveCompileTimeBindingForInference(
-	Expression *expression, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack,
-	InferenceContext *inferenceContext
-) {
-	Expression *resolvedExpression = resolveCompileTimeBinding(expression, bindingFrameStack, outBindingFrameStack);
-	if (!inferenceContext || !inferenceContext->trial || !expression || resolvedExpression != expression)
-		return resolvedExpression;
-	if (expression->kind != Expression::Kind::PatternCall)
-		return resolvedExpression;
-	Expression *trialFlexExpansion = inferenceContext->lookupFlexExpansion(expression);
-	if (!trialFlexExpansion)
-		return resolvedExpression;
-	PatternDefinition *selectedPatternDefinition = expression->selectedPatternDefinition;
-	if (!selectedPatternDefinition)
-		crashCompilerBug("trial flex expansion has no selected definition");
-	if (!selectedPatternDefinition || !selectedPatternDefinition->section || !selectedPatternDefinition->section->isFlex ||
-		selectedPatternDefinition->section->type != SectionType::Function) {
-		return resolvedExpression;
-	}
-	BindingFrame innerBindings;
-	collectPatternCallBindings(expression, selectedPatternDefinition, innerBindings);
-	materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
-	if (outBindingFrameStack) {
-		*outBindingFrameStack = bindingFrameStack;
-		pushBindingScope(*outBindingFrameStack, std::move(innerBindings));
-	}
-	return trialFlexExpansion;
-}
-
 static CompileTimeValue resolveStoredCompileTimeValue(
 	Expression *expression, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext
 ) {
-	if (!expression)
-		crashCompilerBug("compile-time value resolution received null expression");
-	Expression *currentExpression = expression;
-	BindingFrameStack currentBindingFrameStack = bindingFrameStack;
-	constexpr size_t maxResolutionDepth = 256;
-	for (size_t depth = 0; currentExpression && depth < maxResolutionDepth; depth++) {
-		CompileTimeValue storedValue = lookupCompileTimeExpressionValue(currentExpression, inferenceContext);
-		if (isCompileTimeKnown(storedValue))
-			return storedValue;
-		if (inferenceContext && currentExpression->kind == Expression::Kind::Variable && currentExpression->variable) {
-			CompileTimeValue knownValue = inferenceContext->lookupKnownConstant(currentExpression->variable);
-			if (isCompileTimeKnown(knownValue))
-				return knownValue;
-		}
-		BindingFrameStack resolvedBindingFrameStack;
-		Expression *resolvedExpression = resolveCompileTimeBindingForInference(
-			currentExpression, currentBindingFrameStack, &resolvedBindingFrameStack, inferenceContext
+	return resolveStoredCompileTimeValueWith(expression, [&](auto &&stop) {
+		return resolveInferenceBindingLayers(
+			expression, bindingFrameStack, inferenceContext, std::forward<decltype(stop)>(stop)
 		);
-		if (resolvedExpression && resolvedExpression != currentExpression) {
-			currentExpression = resolvedExpression;
-			currentBindingFrameStack = std::move(resolvedBindingFrameStack);
-			continue;
+	}, [&](Expression *currentExpression) {
+		CompileTimeValue knownValue = lookupCompileTimeExpressionValue(currentExpression, inferenceContext);
+		if (!isCompileTimeKnown(knownValue) && inferenceContext && currentExpression->kind == Expression::Kind::Variable &&
+			currentExpression->variable) {
+			knownValue = inferenceContext->lookupKnownConstant(currentExpression->variable);
 		}
-		CompileTimeValue immediateValue = resolveImmediateCompileTimeValue(currentExpression);
-		if (isCompileTimeKnown(immediateValue))
-			return immediateValue;
-		break;
-	}
-	return {};
+		return knownValue;
+	});
 }
 
 static bool isStructurallyCompileTimeConstant(
@@ -111,11 +65,10 @@ static bool isStructurallyCompileTimeConstant(
 ) {
 	if (!expression)
 		crashCompilerBug("compile-time constant classification received null expression");
-	BindingFrameStack resolvedBindingFrameStack;
-	Expression *resolvedExpression =
-		resolveCompileTimeBindingForInference(expression, bindingFrameStack, &resolvedBindingFrameStack, &context);
+	ResolvedBindingLayers resolved = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
+	Expression *resolvedExpression = resolved.expression;
 	if (resolvedExpression && resolvedExpression != expression)
-		return isStructurallyCompileTimeConstant(resolvedExpression, resolvedBindingFrameStack, context, visiting);
+		return isStructurallyCompileTimeConstant(resolvedExpression, resolved.bindingFrameStack, context, visiting);
 	if (isCompileTimeKnown(resolveImmediateCompileTimeValue(expression)))
 		return true;
 	if (expression->kind == Expression::Kind::Variable && expression->variable) {
@@ -147,14 +100,7 @@ static bool isStructurallyCompileTimeConstant(
 static bool resolveStoredCompileTimeInteger(
 	Expression *expression, const BindingFrameStack &bindingFrameStack, int &outValue, InferenceContext *inferenceContext
 ) {
-	std::optional<std::int64_t> integerValue =
-		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(expression, bindingFrameStack, inferenceContext));
-	if (!integerValue.has_value() || *integerValue < std::numeric_limits<int>::min() ||
-		*integerValue > std::numeric_limits<int>::max()) {
-		return false;
-	}
-	outValue = static_cast<int>(*integerValue);
-	return true;
+	return narrowCompileTimeInteger(resolveStoredCompileTimeValue(expression, bindingFrameStack, inferenceContext), outValue);
 }
 
 struct ScopedDiagnosticSuppression {

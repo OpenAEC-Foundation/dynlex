@@ -47,9 +47,7 @@ bool patternDefinitionComesBefore(const PatternDefinition *left, const PatternDe
 	return leftText < rightText;
 }
 
-Range patternElementTypeConstraintRange(
-	const PatternDefinition &definition, const DefinitionPatternElement &element
-) {
+Range patternElementTypeConstraintRange(const PatternDefinition &definition, const DefinitionPatternElement &element) {
 	requireCompilerInvariant(
 		definition.range.line && !element.typeConstraintName.empty(),
 		"type-constraint range requires a source definition and constraint"

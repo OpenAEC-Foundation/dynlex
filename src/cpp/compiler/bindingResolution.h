@@ -3,7 +3,6 @@
 #include "compilerUtils.h"
 #include "expression.h"
 #include "variableReference.h"
-#include <stack>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -33,6 +32,20 @@ struct BindingFrameStack {
   private:
 	std::vector<BindingFrame> frames;
 
+	template <typename FindBindingFn>
+	Expression *lookupWithCallerScopeImpl(
+		const Expression *ignoredExpression, BindingFrameStack &callerScope, FindBindingFn findBinding
+	) const {
+		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
+			Expression *boundExpression = findBinding(frames[frameIndex - 1]);
+			if (!boundExpression || boundExpression == ignoredExpression)
+				continue;
+			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
+			return boundExpression;
+		}
+		return nullptr;
+	}
+
   public:
 	void pushFrame(BindingMap frameBindings) { frames.emplace_back(std::move(frameBindings)); }
 	void pushFrame(BindingFrame frame) { frames.push_back(std::move(frame)); }
@@ -44,7 +57,6 @@ struct BindingFrameStack {
 
 	bool empty() const { return frames.empty(); }
 	size_t depth() const { return frames.size(); }
-	bool hasParentScope() const { return frames.size() > 1; }
 
 	BindingFrame &topFrame() {
 		requireCompilerInvariant(!frames.empty(), "Cannot access top frame of empty binding frame stack");
@@ -56,96 +68,25 @@ struct BindingFrameStack {
 		return frames.back();
 	}
 
-	BindingMap &topBindings() {
-		requireCompilerInvariant(!frames.empty(), "Cannot access top bindings of empty binding frame stack");
-		return frames.back().bindings;
-	}
-
-	const BindingMap &topBindings() const {
-		requireCompilerInvariant(!frames.empty(), "Cannot access top bindings of empty binding frame stack");
-		return frames.back().bindings;
-	}
-
-	void replaceTopBindings(BindingMap frameBindings) {
-		requireCompilerInvariant(!frames.empty(), "Cannot replace top bindings of empty binding frame stack");
-		frames.back().bindings = std::move(frameBindings);
-	}
-
-	Expression *lookup(VariableReference *bindingReference) const {
-		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
-		if (!bindingKey)
-			return nullptr;
-		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
-			auto bindingIt = frameIt->parameterBindings.find(bindingKey);
-			if (bindingIt != frameIt->parameterBindings.end())
-				return bindingIt->second;
-		}
-		return nullptr;
-	}
-
-	Expression *lookup(const std::string &bindingName) const {
-		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
-			auto bindingIt = frameIt->bindings.find(bindingName);
-			if (bindingIt != frameIt->bindings.end())
-				return bindingIt->second;
-		}
-		return nullptr;
-	}
-
-	Expression *lookupSkippingExpression(VariableReference *bindingReference, const Expression *ignoredExpression) const {
-		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
-		if (!bindingKey)
-			return nullptr;
-		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
-			auto bindingIt = frameIt->parameterBindings.find(bindingKey);
-			if (bindingIt == frameIt->parameterBindings.end())
-				continue;
-			if (bindingIt->second == ignoredExpression)
-				continue;
-			return bindingIt->second;
-		}
-		return nullptr;
-	}
-
-	Expression *lookupSkippingExpression(const std::string &bindingName, const Expression *ignoredExpression) const {
-		for (auto frameIt = frames.rbegin(); frameIt != frames.rend(); ++frameIt) {
-			auto bindingIt = frameIt->bindings.find(bindingName);
-			if (bindingIt == frameIt->bindings.end())
-				continue;
-			if (bindingIt->second == ignoredExpression)
-				continue;
-			return bindingIt->second;
-		}
-		return nullptr;
-	}
-
 	Expression *lookupWithCallerScope(
 		VariableReference *bindingReference, const Expression *ignoredExpression, BindingFrameStack &callerScope
 	) const {
 		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
 		if (!bindingKey)
 			return nullptr;
-		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
-			auto binding = frames[frameIndex - 1].parameterBindings.find(bindingKey);
-			if (binding == frames[frameIndex - 1].parameterBindings.end() || binding->second == ignoredExpression)
-				continue;
-			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
-			return binding->second;
-		}
-		return nullptr;
+		return lookupWithCallerScopeImpl(ignoredExpression, callerScope, [&](const BindingFrame &frame) -> Expression * {
+			auto binding = frame.parameterBindings.find(bindingKey);
+			return binding == frame.parameterBindings.end() ? nullptr : binding->second;
+		});
 	}
 
 	Expression *lookupWithCallerScope(
 		const std::string &bindingName, const Expression *ignoredExpression, BindingFrameStack &callerScope
 	) const {
-		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
-			auto binding = frames[frameIndex - 1].bindings.find(bindingName);
-			if (binding == frames[frameIndex - 1].bindings.end() || binding->second == ignoredExpression)
-				continue;
-			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
-			return binding->second;
-		}
-		return nullptr;
+		return lookupWithCallerScopeImpl(ignoredExpression, callerScope, [&](const BindingFrame &frame) -> Expression * {
+			auto binding = frame.bindings.find(bindingName);
+			return binding == frame.bindings.end() ? nullptr : binding->second;
+		});
 	}
 
 	template <typename Visitor> void forEachFrame(Visitor &&visitor) const {
@@ -160,13 +101,6 @@ struct BindingFrameStack {
 		}
 		return false;
 	}
-};
-
-struct BindingScopeTrail {
-	std::stack<BindingFrame> poppedFrames;
-
-	void record(BindingFrame frame) { poppedFrames.push(std::move(frame)); }
-	bool empty() const { return poppedFrames.empty(); }
 };
 
 inline BindingFrameStack makeBindingFrameStack(const BindingMap &bindings) {
@@ -205,31 +139,15 @@ resolveVariableBindingChain(Expression *expr, const BindingMap &bindings, size_t
 	return expr;
 }
 
-inline Expression *resolveVariableBindingAcrossFrames(
-	Expression *expr, const BindingFrameStack &bindingFrameStack, size_t maxBindingResolutionDepth = 256
-) {
-	(void)maxBindingResolutionDepth;
-	if (!expr || expr->kind != Expression::Kind::Variable || !expr->variable)
-		return expr;
-	Expression *boundExpression = bindingFrameStack.lookupSkippingExpression(expr->variable, expr);
-	if (!boundExpression)
-		return expr;
-	return boundExpression;
-}
-
-inline bool popBindingScope(BindingFrameStack &bindingFrameStack, BindingScopeTrail *scopeTrail = nullptr) {
+inline bool popBindingScope(BindingFrameStack &bindingFrameStack) {
 	if (bindingFrameStack.depth() <= 1)
 		return false;
-	if (scopeTrail)
-		scopeTrail->record(bindingFrameStack.topFrame());
 	bindingFrameStack.popFrame();
 	return true;
 }
 
-inline void popBindingScopeOrFail(
-	BindingFrameStack &bindingFrameStack, const char *failureMessage, BindingScopeTrail *scopeTrail = nullptr
-) {
-	if (popBindingScope(bindingFrameStack, scopeTrail))
+inline void popBindingScopeOrFail(BindingFrameStack &bindingFrameStack, const char *failureMessage) {
+	if (popBindingScope(bindingFrameStack))
 		return;
 	crashCompilerBug(failureMessage);
 }
@@ -242,49 +160,34 @@ inline void pushBindingScope(BindingFrameStack &bindingFrameStack, BindingFrame 
 	bindingFrameStack.pushFrame(std::move(nextFrame));
 }
 
-inline void pushClearedBindingScope(BindingFrameStack &bindingFrameStack) { bindingFrameStack.pushFrame(BindingFrame{}); }
+struct ResolvedBindingLayers {
+	Expression *expression{};
+	BindingFrameStack bindingFrameStack;
+};
 
-inline void restoreBindingScopes(BindingFrameStack &bindingFrameStack, BindingScopeTrail &scopeTrail) {
-	while (!scopeTrail.poppedFrames.empty()) {
-		bindingFrameStack.pushFrame(std::move(scopeTrail.poppedFrames.top()));
-		scopeTrail.poppedFrames.pop();
-	}
+inline ResolvedBindingLayers resolveBindingReferenceWithCallerScope(
+	VariableReference *bindingReference, Expression *ignoredExpression, const BindingFrameStack &bindingFrameStack
+) {
+	if (!bindingReference)
+		return {ignoredExpression, bindingFrameStack};
+	BindingFrameStack callerScope;
+	Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(bindingReference, ignoredExpression, callerScope);
+	return boundExpression ? ResolvedBindingLayers{boundExpression, std::move(callerScope)}
+						   : ResolvedBindingLayers{ignoredExpression, bindingFrameStack};
 }
 
-inline Expression *resolveVariableBindingAcrossScopes(
-	Expression *expr, BindingFrameStack &bindingFrameStack, BindingScopeTrail *scopeTrail = nullptr
-) {
-	while (expr && expr->kind == Expression::Kind::Variable && expr->variable) {
-		Expression *resolvedExpression = resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
-		if (resolvedExpression == expr)
-			return expr;
-		expr = resolvedExpression;
-		popBindingScopeOrFail(bindingFrameStack, "Variable binding crossed scope without a parent binding frame", scopeTrail);
-	}
-	return expr;
+inline ResolvedBindingLayers
+resolveVariableBindingWithCallerScope(Expression *expression, const BindingFrameStack &bindingFrameStack) {
+	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable)
+		return {expression, bindingFrameStack};
+	return resolveBindingReferenceWithCallerScope(expression->variable, expression, bindingFrameStack);
 }
 
-template <typename ExpandFlexPatternCallFn>
-inline void resolveThroughBindingLayers(
-	Expression *&expr, BindingFrameStack &bindingFrameStack, ExpandFlexPatternCallFn &&expandFlexPatternCall
+inline ResolvedBindingLayers resolveNamedBindingWithCallerScope(
+	const std::string &name, Expression *expression, const BindingFrameStack &bindingFrameStack
 ) {
-	while (expr) {
-		if (expr->kind == Expression::Kind::Variable && expr->variable) {
-			Expression *resolvedExpression = resolveVariableBindingAcrossScopes(expr, bindingFrameStack);
-			if (resolvedExpression != expr) {
-				expr = resolvedExpression;
-				continue;
-			}
-		}
-
-		BindingFrame innerBindings;
-		Expression *bodyExpression = expandFlexPatternCall(expr, innerBindings);
-		if (bodyExpression) {
-			pushBindingScope(bindingFrameStack, std::move(innerBindings));
-			expr = bodyExpression;
-			continue;
-		}
-
-		break;
-	}
+	BindingFrameStack callerScope;
+	Expression *boundExpression = bindingFrameStack.lookupWithCallerScope(name, expression, callerScope);
+	return boundExpression ? ResolvedBindingLayers{boundExpression, std::move(callerScope)}
+						   : ResolvedBindingLayers{expression, bindingFrameStack};
 }

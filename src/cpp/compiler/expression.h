@@ -86,6 +86,10 @@ struct Expression {
 	// expression. Section-flex inference consumes its recorded outcome while
 	// structural codegen traverses the complete replacement section.
 	Expression *inferredFlexExpansion{};
+	// Expected-type inference can lower this expression through a user-defined
+	// unary conversion. The lowered call owns a clone of the source expression,
+	// which avoids a cycle back through this metadata.
+	Expression *inferredConversion{};
 	// Section flexes own the complete call-site-specific replacement structure.
 	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
 	// Control-flow intrinsics produce section outcomes during ordinary inference.

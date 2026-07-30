@@ -98,8 +98,8 @@ struct TypeConstraint {
 		if (resolved != other.resolved || kind != other.kind || numericSize != other.numericSize ||
 			pointerDepth != other.pointerDepth || arraySize != other.arraySize || matrixRows != other.matrixRows ||
 			matrixColumns != other.matrixColumns || requiresNumeric != other.requiresNumeric ||
-			constrainsClassDefinition != other.constrainsClassDefinition ||
-			classDefinition != other.classDefinition || classInstantiationIndex != other.classInstantiationIndex ||
+			constrainsClassDefinition != other.constrainsClassDefinition || classDefinition != other.classDefinition ||
+			classInstantiationIndex != other.classInstantiationIndex ||
 			requiresCompileTimeValue != other.requiresCompileTimeValue ||
 			static_cast<bool>(elementConstraint) != static_cast<bool>(other.elementConstraint))
 			return false;
@@ -107,8 +107,8 @@ struct TypeConstraint {
 	}
 
 	bool isStructurallyUnconstrained() const {
-		return !kind && !numericSize && !pointerDepth && !arraySize && !matrixRows && !matrixColumns &&
-			   !requiresNumeric && !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
+		return !kind && !numericSize && !pointerDepth && !arraySize && !matrixRows && !matrixColumns && !requiresNumeric &&
+			   !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
 	}
 
 	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
@@ -158,11 +158,9 @@ struct TypeConstraint {
 			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns))
 			return false;
 		auto constrainsNonNumericKind = [](const TypeConstraint &constraint) {
-			return constraint.kind && *constraint.kind != DataType::Kind::Int &&
-				   *constraint.kind != DataType::Kind::Float;
+			return constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::Float;
 		};
-		if ((requiresNumeric && constrainsNonNumericKind(other)) ||
-			(other.requiresNumeric && constrainsNonNumericKind(*this)))
+		if ((requiresNumeric && constrainsNonNumericKind(other)) || (other.requiresNumeric && constrainsNonNumericKind(*this)))
 			return false;
 		if (constrainsClassDefinition && other.constrainsClassDefinition && classDefinition != other.classDefinition)
 			return false;
@@ -197,12 +195,10 @@ struct TypeConstraint {
 			!containsField(matrixRows, other.matrixRows) || !containsField(matrixColumns, other.matrixColumns) ||
 			(requiresCompileTimeValue && !other.requiresCompileTimeValue))
 			return false;
-		if (requiresNumeric &&
-			!other.requiresNumeric &&
+		if (requiresNumeric && !other.requiresNumeric &&
 			(!other.kind || (*other.kind != DataType::Kind::Int && *other.kind != DataType::Kind::Float)))
 			return false;
-		if (constrainsClassDefinition &&
-			(!other.constrainsClassDefinition || classDefinition != other.classDefinition))
+		if (constrainsClassDefinition && (!other.constrainsClassDefinition || classDefinition != other.classDefinition))
 			return false;
 		if (classInstantiationIndex) {
 			if (!other.classInstantiationIndex)
@@ -219,8 +215,7 @@ struct TypeConstraint {
 				!ClassDefinition::typeStructurallyRefines(providedClassType, requiredClassType))
 				return false;
 		}
-		if (elementConstraint &&
-			(!other.elementConstraint || !elementConstraint->contains(*other.elementConstraint)))
+		if (elementConstraint && (!other.elementConstraint || !elementConstraint->contains(*other.elementConstraint)))
 			return false;
 		return true;
 	}
@@ -307,9 +302,9 @@ struct TypeConstraint {
 		return resolved == other.resolved && kind == other.kind && numericSize == other.numericSize &&
 			   pointerDepth == other.pointerDepth && arraySize == other.arraySize && matrixRows == other.matrixRows &&
 			   matrixColumns == other.matrixColumns && requiresNumeric == other.requiresNumeric &&
-			   constrainsClassDefinition == other.constrainsClassDefinition &&
-			   classDefinition == other.classDefinition && classInstantiationIndex == other.classInstantiationIndex &&
-			   sameElement && (!includeCompileTimeRequirement || requiresCompileTimeValue == other.requiresCompileTimeValue);
+			   constrainsClassDefinition == other.constrainsClassDefinition && classDefinition == other.classDefinition &&
+			   classInstantiationIndex == other.classInstantiationIndex && sameElement &&
+			   (!includeCompileTimeRequirement || requiresCompileTimeValue == other.requiresCompileTimeValue);
 	}
 
 	bool operator==(const TypeConstraint &other) const { return samePayload(other, true); }

@@ -6,6 +6,8 @@ enum class SectionType {
 	Custom,
 	Section,
 	Function,
+	// compiler-only pattern tree for unary conversion definitions
+	Conversion,
 	// a section defining a class.
 	Class,
 	// a section with patterns, always a child section of the main sections.

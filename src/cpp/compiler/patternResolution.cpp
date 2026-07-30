@@ -382,9 +382,8 @@ struct PatternDomainAutomaton {
 		return states.size() - 1;
 	}
 
-	void addSequence(
-		const std::vector<PatternElement> &elements, const PatternPathSignature &signature, size_t start, size_t end
-	) {
+	void
+	addSequence(const std::vector<PatternElement> &elements, const PatternPathSignature &signature, size_t start, size_t end) {
 		if (elements.empty()) {
 			states[start].epsilonTargets.push_back(end);
 			return;
@@ -394,8 +393,7 @@ struct PatternDomainAutomaton {
 		for (size_t i = 0; i < elements.size(); i++) {
 			size_t next = i + 1 == elements.size() ? end : addState();
 			Transition transition{next, elements[i]};
-			if (elements[i].type == PatternElement::Type::Variable ||
-				elements[i].type == PatternElement::Type::Word) {
+			if (elements[i].type == PatternElement::Type::Variable || elements[i].type == PatternElement::Type::Word) {
 				requireCompilerInvariant(
 					parameterIndex < signature.parameters.size(),
 					"compiled signature has fewer parameters than its pattern path"
@@ -408,8 +406,7 @@ struct PatternDomainAutomaton {
 			current = next;
 		}
 		requireCompilerInvariant(
-			parameterIndex == signature.parameters.size(),
-			"compiled signature has more parameters than its pattern path"
+			parameterIndex == signature.parameters.size(), "compiled signature has more parameters than its pattern path"
 		);
 	}
 };
@@ -431,9 +428,8 @@ struct PatternDomainSearchStateHash {
 	}
 };
 
-static bool patternTransitionsOverlap(
-	const PatternDomainAutomaton::Transition &left, const PatternDomainAutomaton::Transition &right
-) {
+static bool
+patternTransitionsOverlap(const PatternDomainAutomaton::Transition &left, const PatternDomainAutomaton::Transition &right) {
 	if (left.element.type != right.element.type)
 		return false;
 	if (left.element.type == PatternElement::Type::Variable)
@@ -537,6 +533,8 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				requireCompilerInvariant(other->section != nullptr, "pattern tree endpoint definitions must have sections");
 				if (other == definition)
 					continue;
+				if (definition->section->isConversion && other->section->isConversion)
+					continue;
 				if (!patternDefinitionsShareVisibilityScope(*definition, *other))
 					continue;
 
@@ -547,8 +545,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				bool flexSectionOverload = earlierDefinition->section->type == SectionType::Section &&
 										   laterDefinition->section->type == SectionType::Section &&
 										   (earlierDefinition->section->isFlex || laterDefinition->section->isFlex);
-				if (flexSectionOverload ||
-					definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
+				if (flexSectionOverload || definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
 					conflicts.push_back({laterDefinition, earlierDefinition});
 			}
 		}

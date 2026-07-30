@@ -41,9 +41,9 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 	Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack,
 	bool recordAddressTaken = true
 ) {
-	BindingFrameStack resolvedBindingFrameStack;
-	Expression *resolvedExpression =
-		resolveThroughBindingsDeep(expression, bindingFrameStack, resolvedBindingFrameStack, &context);
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
+	Expression *resolvedExpression = resolvedBinding.expression;
+	BindingFrameStack resolvedBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolvedExpression)
 		crashCompilerBug("lvalue address provenance inference lost its expression while resolving bindings");
 
@@ -84,7 +84,8 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 	if (const auto *propertyName = std::get_if<std::string>(&fieldValue))
 		fieldName = *propertyName;
 	if (fieldName.empty()) {
-		Expression *fieldExpression = resolveThroughBindings(resolvedExpression->arguments[2], resolvedBindingFrameStack);
+		Expression *fieldExpression =
+			resolveInferenceBindingLayers(resolvedExpression->arguments[2], resolvedBindingFrameStack, &context).expression;
 		fieldName = extractFieldName(fieldExpression);
 	}
 	bool fieldExists = std::ranges::any_of(classType.classDefinition->fields, [&](const FieldDefinition &field) {
@@ -102,11 +103,15 @@ static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	if (!expression)
 		crashCompilerBug("address provenance inference received a null expression");
-	BindingFrameStack resolvedBindingFrameStack;
-	Expression *resolvedExpression =
-		resolveThroughBindingsDeep(expression, bindingFrameStack, resolvedBindingFrameStack, &context);
+	if (expression->inferredConversion)
+		return inferAddressProvenance(expression->inferredConversion, context, bindingFrameStack);
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
+	Expression *resolvedExpression = resolvedBinding.expression;
+	BindingFrameStack resolvedBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolvedExpression)
 		crashCompilerBug("address provenance inference lost its expression while resolving bindings");
+	if (resolvedExpression->inferredConversion)
+		return inferAddressProvenance(resolvedExpression->inferredConversion, context, resolvedBindingFrameStack);
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable)
 		return context.lookupAddressProvenance(resolvedExpression->variable);
 	if (resolvedExpression->kind == Expression::Kind::Literal)

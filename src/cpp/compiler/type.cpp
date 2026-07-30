@@ -1,6 +1,6 @@
 #include "type.h"
-#include "classLayout.h"
 #include "classDefinition.h"
+#include "classLayout.h"
 #include "compilerUtils.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -189,9 +189,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 				llvmFields.push_back(fieldType);
 				fieldAlignments.push_back(fieldAlignment);
 			}
-			LLVMClassLayout layout = layoutLLVMClass(
-				ctx, dataLayout, *inst.llvmStructType, llvmFields, fieldAlignments, classDefinition->alignment
-			);
+			LLVMClassLayout layout =
+				layoutLLVMClass(ctx, dataLayout, *inst.llvmStructType, llvmFields, fieldAlignments, classDefinition->alignment);
 			inst.llvmFieldIndices = std::move(layout.fieldIndices);
 			inst.llvmABIAlignment = layout.abiAlignment;
 		}

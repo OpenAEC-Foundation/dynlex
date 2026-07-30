@@ -22,12 +22,10 @@ if (kind == IntrinsicKind::ShaderInput) {
 		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 	}
 } else if (kind == IntrinsicKind::PromoteArithmeticType) {
-	std::optional<TypeReferenceValue> leftReference = getCompileTimeTypeReferenceValue(
-		resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context)
-	);
-	std::optional<TypeReferenceValue> rightReference = getCompileTimeTypeReferenceValue(
-		resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
-	);
+	std::optional<TypeReferenceValue> leftReference =
+		getCompileTimeTypeReferenceValue(resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context));
+	std::optional<TypeReferenceValue> rightReference =
+		getCompileTimeTypeReferenceValue(resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context));
 	if (!leftReference || !rightReference) {
 		failIntrinsicArgumentRequirement(!leftReference ? 1 : 2, "a compile-time type reference");
 	} else {
@@ -63,9 +61,8 @@ if (kind == IntrinsicKind::ShaderInput) {
 				{{"index_type", typeToUserName(indexType, context.parseContext)}}
 			);
 		} else {
-			std::optional<std::int64_t> index = getCompileTimeIntegerValue(
-				resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
-			);
+			std::optional<std::int64_t> index =
+				getCompileTimeIntegerValue(resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context));
 			if (index && (*index < 0 || *index >= aggregateType.arraySize)) {
 				setConfiguredTypeFailure(
 					expr->range, "element extraction index out of bounds", "message",

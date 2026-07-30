@@ -194,21 +194,8 @@ static bool resolveCompileTimeTypeReference(
 			return false;
 
 		if (!def->section->isFlex && def->section->type == SectionType::Class) {
-			BindingFrame callBindings;
-			collectPatternCallBindings(resolved, def, callBindings);
-			for (auto &[name, boundExpr] : callBindings.bindings) {
-				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
-				if (resolvedExpr)
-					boundExpr = resolvedExpr;
-			}
-			for (auto &[parameterDefinition, boundExpr] : callBindings.parameterBindings) {
-				(void)parameterDefinition;
-				Expression *resolvedExpr = resolveThroughBindings(boundExpr, effectiveBindingFrameStack);
-				if (resolvedExpr)
-					boundExpr = resolvedExpr;
-			}
 			BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
-			callBindingFrameStack.pushFrame(std::move(callBindings));
+			pushPatternCallBindingScope(callBindingFrameStack, resolved, def);
 			outTypeRef = instantiateBoundClassType(
 				parseContext, static_cast<ClassSection *>(def->section)->classDefinition, callBindingFrameStack,
 				inferenceContext, constructionArgumentTypes
@@ -225,22 +212,6 @@ static bool resolveCompileTimeTypeReference(
 			outTypeRef = resolvedReturnTypeRef;
 			return true;
 		}
-
-		BindingFrame innerBindings;
-		Expression *bodyExpr = nullptr;
-		Expression *inferredFlexExpansion = lookupInferenceFlexExpansion(inferenceContext, resolved);
-		if (inferredFlexExpansion) {
-			collectPatternCallBindings(resolved, def, innerBindings);
-			bodyExpr = inferredFlexExpansion;
-		}
-		if (!bodyExpr)
-			return false;
-		BindingFrameStack callBindingFrameStack = effectiveBindingFrameStack;
-		materializeFlexBindingsInCallerScope(innerBindings, callBindingFrameStack);
-		callBindingFrameStack.pushFrame(std::move(innerBindings));
-		return resolveCompileTimeTypeReference(
-			parseContext, bodyExpr, callBindingFrameStack, outTypeRef, inferenceContext, constructionArgumentTypes
-		);
 	}
 	return false;
 }

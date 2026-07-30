@@ -137,22 +137,16 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 bool managedExpressionResultIsOwned(ParseContext &context, Expression *expression) {
 	if (!expression || !typeHasManagedLifecycle(finalizedExpressionType(context, expression)))
 		return false;
-	Expression *resolved = resolveVariableBinding(context, expression);
-	if (resolved && resolved != expression)
-		return managedExpressionResultIsOwned(context, resolved);
+	if (expression->inferredConversion)
+		return managedExpressionResultIsOwned(context, expression->inferredConversion);
+	ResolvedBindingLayers resolved = resolveCodegenBindingLayers(context, expression, context.flexBindingFrames);
+	if (resolved.expression && resolved.expression != expression) {
+		FlexBindingScope scope(context, std::move(resolved.bindingFrameStack));
+		return managedExpressionResultIsOwned(context, resolved.expression);
+	}
 	if (expression->kind == Expression::Kind::IntrinsicCall) {
 		IntrinsicKind kind = intrinsicKind(expression->intrinsicName);
 		return kind != IntrinsicKind::LifecycleValue && kind != IntrinsicKind::Dereference;
-	}
-	if (expression->kind == Expression::Kind::PatternCall) {
-		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
-		if (definition && definition->section && definition->section->isFlex) {
-			requireCompilerInvariant(
-				expression->inferredFlexExpansion != nullptr,
-				"managed flex result reached codegen without its inferred expansion"
-			);
-			return managedExpressionResultIsOwned(context, expression->inferredFlexExpansion);
-		}
 	}
 	return true;
 }

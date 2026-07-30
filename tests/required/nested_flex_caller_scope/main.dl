@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function the result after the first passage of source:
+    replacement:
+        the result after the second passage of source
+
+function the result after the second passage of source:
+    replacement:
+        the result after the third passage of source
+
+function the result after the third passage of source:
+    replacement:
+        source
+
+print (the result after the first passage of 7) as line

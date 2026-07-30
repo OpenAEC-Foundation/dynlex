@@ -143,7 +143,7 @@ function {string:text} with {C string:original} replaced by {C string:replacemen
 
 function {C string:text} with {C string:original} replaced by {C string:replacement}:
     execute:
-        return the string form of text with the string form of original replaced by the string form of replacement
+        return (the string form of text) with (the string form of original) replaced by (the string form of replacement)
 
 function {string:text} repeated {integer:count} times:
     execute:

@@ -47,7 +47,7 @@ function the last item of {a pointer to a list:values}:
             stop because a list index is out of bounds
         return the item at ((the length of values) - 1) in values
 
-function ensure enough capacity in {a pointer to a list:values} for count items like sample:
+function ensure enough capacity in {a pointer to a list:values} for count items:
     execute:
         if count > the capacity of values:
             set limit to the capacity of values
@@ -55,13 +55,20 @@ function ensure enough capacity in {a pointer to a list:values} for count items 
                 set limit to 4
             loop while limit < count:
                 set limit to (limit * 2)
-            set data to @intrinsic("call", "libc", "realloc", a pointer to the type of sample, the data of values, limit * the size of the type of sample)
+            set data to @intrinsic(
+                "call",
+                "libc",
+                "realloc",
+                a pointer to the type of the item at 0 in the data of values,
+                the data of values,
+                limit * the size of the type of the item at 0 in the data of values
+            )
             set the data of values to data
             set the capacity of values to limit
 
 function append item to {a pointer to a list:values}:
     execute:
-        ensure enough capacity in values for (the length of values) + 1 items like item
+        ensure enough capacity in values for (the length of values) + 1 items
         @intrinsic("initialize at", (the data of values) + (the length of values), item)
         set the length of values to ((the length of values) + 1)
 
@@ -69,7 +76,7 @@ function insert item into {a pointer to a list:values} at index {integer:positio
     execute:
         if position < 0 or position > the length of values:
             stop because a list index is out of bounds
-        ensure enough capacity in values for (the length of values) + 1 items like item
+        ensure enough capacity in values for (the length of values) + 1 items
         set cursor to the length of values
         if cursor > position:
             @intrinsic("initialize at", (the data of values) + cursor, the item at cursor - 1 in the data of values)

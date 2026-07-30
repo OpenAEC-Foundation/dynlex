@@ -122,6 +122,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	bool isFlex = false;
 	bool isLocal = false;
 	bool isExposed = false;
+	bool isImplicit = false;
 
 	// Parse keywords until we hit a section type keyword (function, section)
 	while (!remaining.empty()) {
@@ -135,8 +136,15 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 			isLocal = true;
 		} else if (current == syntax.exposedName) {
 			isExposed = true;
+		} else if (current == syntax.implicitName) {
+			isImplicit = true;
 		} else if (current == syntax.functionName) {
 			newSection = new FunctionSection(this);
+			break;
+		} else if (current == syntax.conversionName) {
+			newSection = new FunctionSection(this);
+			newSection->isConversion = true;
+			newSection->isImplicitConversion = isImplicit;
 			break;
 		} else if (current == syntax.sectionName) {
 			newSection = new SectionSection(this);
@@ -154,9 +162,19 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 		newSection->isFlex = isFlex;
 		newSection->isLocal = isLocal;
 		newSection->isExposed = isExposed;
+		if (isImplicit && !newSection->isConversion) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "implicit modifier requires conversion", Range(line, line->patternText),
+				"modifier", syntax.implicitName, "conversion", syntax.conversionName
+			));
+		}
 		// Remaining contains the pattern after the section type keyword
 		if (!remaining.empty()) {
 			newSection->patternDefinitions.push_back(new PatternDefinition(Range(line, remaining), newSection));
+		} else if (newSection->isConversion) {
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "conversion requires one parameter", Range(line, line->patternText)
+			));
 		}
 	}
 	if (!newSection) {

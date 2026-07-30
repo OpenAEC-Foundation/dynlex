@@ -54,9 +54,7 @@ LLVMClassLayout layoutLLVMClass(
 	result.allocationSize = llvm::alignTo(naturalAllocationSize, result.abiAlignment);
 	if (result.allocationSize != naturalAllocationSize) {
 		requireCompilerInvariant(result.allocationSize > offset, "class tail padding does not follow its fields");
-		llvmFields.push_back(
-			llvm::ArrayType::get(llvm::Type::getInt8Ty(context), result.allocationSize - offset)
-		);
+		llvmFields.push_back(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), result.allocationSize - offset));
 	}
 	structType.setBody(llvmFields);
 

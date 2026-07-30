@@ -59,9 +59,8 @@ struct CallableFunctionParameter {
 	bool requiresCompileTimeValue = false;
 };
 
-std::vector<CallableFunctionMatch> findCallableFunctionsBySignature(
-	ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile
-);
+std::vector<CallableFunctionMatch>
+findCallableFunctionsBySignature(ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile);
 void collectCallableFunctionParameters(
 	const CallableFunctionMatch &match, std::vector<CallableFunctionParameter> &outParameters
 );
@@ -90,8 +89,7 @@ struct ResolvedPatternConstraint {
 	bool acceptsNothing = false;
 };
 
-using PatternConstraintResolver =
-	std::function<std::optional<ResolvedPatternConstraint>(PatternDefinition *, size_t, size_t)>;
+using PatternConstraintResolver = std::function<std::optional<ResolvedPatternConstraint>(PatternDefinition *, size_t, size_t)>;
 
 PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,

@@ -223,6 +223,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
+	clone->inferredConversion = nullptr;
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
 	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : Expression::SectionOutcome{};
 	clone->executionFallsThrough = preserveInferenceMetadata ? expression->executionFallsThrough : std::nullopt;
@@ -243,8 +244,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->selectedPatternPathIndex = preserveInferenceMetadata ? expression->selectedPatternPathIndex : std::nullopt;
 	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
-	clone->selectedCallablePathIndex =
-		preserveInferenceMetadata ? expression->selectedCallablePathIndex : std::nullopt;
+	clone->selectedCallablePathIndex = preserveInferenceMetadata ? expression->selectedCallablePathIndex : std::nullopt;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};

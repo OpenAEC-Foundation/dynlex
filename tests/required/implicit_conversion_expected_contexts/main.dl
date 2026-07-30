@@ -1,0 +1,34 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a number box
+    members:
+        payload as integer
+
+class:
+    patterns:
+        a box holder
+    members:
+        held as a number box
+
+implicitly convert {integer:number}:
+    replacement:
+        @intrinsic("construct", a number box, number)
+
+function the boxed value chosen using {boolean:first}:
+    execute:
+        if first:
+            return @intrinsic("construct", a number box, 31)
+        return 47
+
+set variable to @intrinsic("construct", a number box, 1)
+set variable to 2
+print the payload of variable as line
+
+set holder to @intrinsic("construct", a box holder, @intrinsic("construct", a number box, 3))
+set the held of holder to 4
+print the payload of the held of holder as line
+
+set returned to the boxed value chosen using false
+print the payload of returned as line

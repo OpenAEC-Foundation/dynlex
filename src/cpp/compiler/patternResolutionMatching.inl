@@ -150,6 +150,34 @@ static bool patternMatchUsesDefinition(const PatternMatch &match, const PatternD
 
 using FailedMatchDependencies = std::unordered_map<PatternReference *, MatchDependencies>;
 
+static SectionType definitionPatternTreeType(const Section *section) {
+	requireCompilerInvariant(section != nullptr, "pattern definition has no owning section");
+	if (section->isConversion)
+		return SectionType::Conversion;
+	if (section->type == SectionType::Class)
+		return SectionType::Function;
+	return section->type;
+}
+
+static bool prepareConversionPattern(ParseContext &context, PatternDefinition &definition) {
+	Section *section = definition.section;
+	if (!section || !section->isConversion)
+		return true;
+	if (definition.patternElements.size() == 1) {
+		DefinitionPatternElement &element = definition.patternElements.front();
+		if (element.type == PatternElement::Type::VariableLike) {
+			element.type = PatternElement::Type::Variable;
+			return true;
+		}
+		if (element.type == PatternElement::Type::Variable)
+			return true;
+	}
+	context.diagnostics.push_back(
+		Diagnostic(context, Diagnostic::Level::Error, "conversion requires one parameter", definition.range)
+	);
+	return false;
+}
+
 static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 	return std::ranges::any_of(dependencies, [](const MatchDependency &dependency) {
 		switch (dependency.kind) {
@@ -312,6 +340,10 @@ bool resolvePatterns(ParseContext &context) {
 				continue;
 			}
 			unresolvedDefinition->patternElements = std::move(parsedElements);
+			if (!prepareConversionPattern(context, *unresolvedDefinition)) {
+				hadPatternParseError = true;
+				continue;
+			}
 			unResolvedSection->indexExplicitParameters(*unresolvedDefinition);
 		}
 	}
@@ -490,7 +522,7 @@ bool resolvePatterns(ParseContext &context) {
 						}
 					});
 					if (definition->resolved) {
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -502,7 +534,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}
@@ -602,7 +634,7 @@ bool resolvePatterns(ParseContext &context) {
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = section->type == SectionType::Class ? SectionType::Function : section->type;
+						SectionType treeType = definitionPatternTreeType(section);
 						addDefinitionToTree(definition, treeType);
 					}
 				}

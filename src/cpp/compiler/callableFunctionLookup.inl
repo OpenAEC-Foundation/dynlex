@@ -42,17 +42,15 @@ std::vector<PatternDefinition *> findDefinitionsBySignature(
 	ParseContext &context, SectionType sectionType, std::string_view signature, const lsp::SourceFile *sourceFile
 ) {
 	std::vector<PatternDefinition *> definitions;
-	for (const CallableFunctionMatch &match :
-		 findDefinitionPathsBySignature(context, sectionType, signature, sourceFile)) {
+	for (const CallableFunctionMatch &match : findDefinitionPathsBySignature(context, sectionType, signature, sourceFile)) {
 		if (std::find(definitions.begin(), definitions.end(), match.definition) == definitions.end())
 			definitions.push_back(match.definition);
 	}
 	return definitions;
 }
 
-std::vector<CallableFunctionMatch> findCallableFunctionsBySignature(
-	ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile
-) {
+std::vector<CallableFunctionMatch>
+findCallableFunctionsBySignature(ParseContext &context, std::string_view signature, const lsp::SourceFile *sourceFile) {
 	std::vector<CallableFunctionMatch> matches;
 	for (const CallableFunctionMatch &match :
 		 findDefinitionPathsBySignature(context, SectionType::Function, signature, sourceFile)) {
@@ -77,25 +75,20 @@ void collectCallableFunctionParameters(
 	outParameters.clear();
 	requireCompilerInvariant(match.definition != nullptr, "callable parameter collection requires a definition");
 	requireCompilerInvariant(
-		match.pathIndex < match.definition->indexedPaths.size() &&
-			match.pathIndex < match.definition->signaturePaths.size(),
+		match.pathIndex < match.definition->indexedPaths.size() && match.pathIndex < match.definition->signaturePaths.size(),
 		"callable parameter collection requires an exact compiled signature path"
 	);
 	const auto &signatures = match.definition->signaturePaths[match.pathIndex].parameters;
 	size_t parameterIndex = 0;
-	forEachPatternParameterName(
-		match.definition, match.pathIndex,
-		[&](const std::string &name, PatternTreeNode *, size_t) {
-			requireCompilerInvariant(
-				parameterIndex < signatures.size(), "callable path has more parameters than its compiled signature"
-			);
-			const PatternParameterSignature &signature = signatures[parameterIndex++];
-			outParameters.push_back(
-				{name, concretizeCallableParameterType(signature.staticParameterType),
-				 signature.requiresCompileTimeValue}
-			);
-		}
-	);
+	forEachPatternParameterName(match.definition, match.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
+		requireCompilerInvariant(
+			parameterIndex < signatures.size(), "callable path has more parameters than its compiled signature"
+		);
+		const PatternParameterSignature &signature = signatures[parameterIndex++];
+		outParameters.push_back(
+			{name, concretizeCallableParameterType(signature.staticParameterType), signature.requiresCompileTimeValue}
+		);
+	});
 	requireCompilerInvariant(
 		parameterIndex == signatures.size(), "callable path has fewer parameters than its compiled signature"
 	);

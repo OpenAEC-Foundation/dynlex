@@ -24,17 +24,17 @@ static Expression *prepareCompileTimeTypeReferenceExpression(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &effectiveBindingFrameStack,
 	InferenceContext *inferenceContext
 ) {
-	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack, inferenceContext);
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expr, bindingFrameStack, inferenceContext);
+	Expression *resolved = resolvedBinding.expression;
+	effectiveBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolved)
 		return nullptr;
 	if (!expandPendingTypeReferenceExpression(resolved, resolved->range.line ? resolved->range.line->section : nullptr))
 		return resolved;
-	BindingFrameStack reboundBindingFrameStack;
-	Expression *rebound =
-		resolveThroughBindingsDeep(resolved, effectiveBindingFrameStack, reboundBindingFrameStack, inferenceContext);
-	if (rebound) {
-		effectiveBindingFrameStack = std::move(reboundBindingFrameStack);
-		return rebound;
+	ResolvedBindingLayers rebound = resolveInferenceBindingLayers(resolved, effectiveBindingFrameStack, inferenceContext);
+	if (rebound.expression) {
+		effectiveBindingFrameStack = std::move(rebound.bindingFrameStack);
+		return rebound.expression;
 	}
 	return resolved;
 }
@@ -144,14 +144,14 @@ static bool tryResolveCastResultType(const DataType &fromType, const DataType &t
 
 static DataType
 resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext) {
+	if (expr && expr->inferredConversion)
+		return resolveKnownExpressionType(expr->inferredConversion, bindingFrameStack, inferenceContext);
 	if (expr && expr->kind == Expression::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
 		return expr->type;
 	}
-	Expression *directResolved = resolveThroughBindings(expr, bindingFrameStack);
-	if (directResolved && directResolved != expr && directResolved->type.isDeduced())
-		return directResolved->type;
-	BindingFrameStack effectiveBindingFrameStack;
-	Expression *resolved = resolveThroughBindingsDeep(expr, bindingFrameStack, effectiveBindingFrameStack, inferenceContext);
+	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expr, bindingFrameStack, inferenceContext);
+	Expression *resolved = resolvedBinding.expression;
+	BindingFrameStack effectiveBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolved)
 		return {};
 	bool dependsOnBindings = resolved != expr || effectiveBindingFrameStack.hasBindings();
@@ -220,8 +220,6 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 	}
 	if (resolved->kind == Expression::Kind::TypedPlaceholder && resolved->type.isDeduced())
 		return resolved->type;
-	PatternDefinition *selectedPatternDefinition =
-		resolved->kind == Expression::Kind::PatternCall ? resolved->selectedPatternDefinition : nullptr;
 	if (resolved->kind == Expression::Kind::IntrinsicCall) {
 		const IntrinsicInfo *info = findIntrinsic(resolved->intrinsicName);
 		IntrinsicKind kind = intrinsicKind(resolved->intrinsicName);
@@ -312,7 +310,9 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					fieldName = *propertyName;
 			}
 			if (fieldName.empty()) {
-				Expression *propExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+				Expression *propExpr =
+					resolveInferenceBindingLayers(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext)
+						.expression;
 				fieldName = extractFieldName(propExpr);
 			}
 			DataType builtInPropertyType = resolveBuiltInPropertyType(instType, fieldName);
@@ -418,16 +418,19 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				typeArgType.referencedKind != DataType::Kind::Unresolved)
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
-			Expression *keyExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *keyExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			if (auto *key = std::get_if<std::string>(&keyExpr->literalValue))
 				if (std::optional<DataType> infoType = buildInfoValueType(*key))
 					return *infoType;
 		} else if (kind == IntrinsicKind::TargetIs) {
-			Expression *targetExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *targetExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			if (std::holds_alternative<std::string>(targetExpr->literalValue))
 				return {DataType::Kind::Bool};
 		} else if (kind == IntrinsicKind::ShaderStageIs) {
-			Expression *shaderStageExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *shaderStageExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			if (std::holds_alternative<std::string>(shaderStageExpr->literalValue))
 				return {DataType::Kind::Bool};
 		} else if (kind == IntrinsicKind::Select && activeTypeResolutionParseContext) {
@@ -438,7 +441,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		} else if (kind == IntrinsicKind::Array) {
 			if (resolved->arguments.size() == 1)
 				return {DataType::Kind::Constraint};
-			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *sizeExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			if (auto *size = std::get_if<std::int64_t>(&sizeExpr->literalValue)) {
 				DataType typeRef;
 				typeRef.kind = DataType::Kind::Type;
@@ -454,7 +458,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return typeRef;
 			}
 		} else if (kind == IntrinsicKind::Vector) {
-			Expression *sizeExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
+			Expression *sizeExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			auto *size = std::get_if<std::int64_t>(&sizeExpr->literalValue);
 			if (!size || *size < 1 || *size > std::numeric_limits<int>::max())
 				return {};
@@ -476,8 +481,10 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			}
 			return typeRef;
 		} else if (kind == IntrinsicKind::Matrix) {
-			Expression *rowsExpr = resolveThroughBindings(resolved->arguments[1], effectiveBindingFrameStack);
-			Expression *columnsExpr = resolveThroughBindings(resolved->arguments[2], effectiveBindingFrameStack);
+			Expression *rowsExpr =
+				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
+			Expression *columnsExpr =
+				resolveInferenceBindingLayers(resolved->arguments[2], effectiveBindingFrameStack, inferenceContext).expression;
 			auto *rowsValue = std::get_if<std::int64_t>(&rowsExpr->literalValue);
 			auto *columnsValue = std::get_if<std::int64_t>(&columnsExpr->literalValue);
 			if (!rowsValue || !columnsValue)
@@ -584,19 +591,6 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		}
 		if (kind == IntrinsicKind::Subject && resolved->subjectSetter && resolved->subjectSetter->arguments.size() > 1)
 			return resolveKnownExpressionType(resolved->subjectSetter->arguments[1], effectiveBindingFrameStack);
-	}
-	BindingFrame innerBindings;
-	Expression *bodyExpr = resolved->inferredFlexExpansion;
-	if (bodyExpr) {
-		if (!selectedPatternDefinition || !selectedPatternDefinition->section || !selectedPatternDefinition->section->isFlex)
-			crashCompilerBug("inferred flex expansion has no selected flex definition");
-		collectPatternCallBindings(resolved, selectedPatternDefinition, innerBindings);
-	}
-	if (bodyExpr) {
-		BindingFrameStack mergedBindingFrameStack = bindingFrameStack;
-		materializeFlexBindingsInCallerScope(innerBindings, bindingFrameStack);
-		pushBindingScope(mergedBindingFrameStack, std::move(innerBindings));
-		return resolveKnownExpressionType(bodyExpr, mergedBindingFrameStack);
 	}
 	return resolved->type;
 }

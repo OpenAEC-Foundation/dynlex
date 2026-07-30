@@ -9,9 +9,7 @@ void appendDependency(std::vector<ConstraintDependency> &dependencies, Constrain
 		dependencies.push_back(dependency);
 }
 
-std::optional<std::int64_t> checkedBinary(
-	ConstraintIntegerTerm::Kind kind, std::int64_t left, std::int64_t right
-) {
+std::optional<std::int64_t> checkedBinary(ConstraintIntegerTerm::Kind kind, std::int64_t left, std::int64_t right) {
 	switch (kind) {
 	case ConstraintIntegerTerm::Kind::Add:
 		if ((right > 0 && left > std::numeric_limits<std::int64_t>::max() - right) ||
@@ -73,8 +71,7 @@ void overlayConstraint(TypeConstraint &destination, const TypeConstraint &source
 		destination.classInstantiationIndex = source.classInstantiationIndex;
 	if (source.elementConstraint)
 		destination.elementConstraint = std::make_shared<TypeConstraint>(*source.elementConstraint);
-	destination.requiresCompileTimeValue =
-		destination.requiresCompileTimeValue || source.requiresCompileTimeValue;
+	destination.requiresCompileTimeValue = destination.requiresCompileTimeValue || source.requiresCompileTimeValue;
 }
 
 std::optional<TypeConstraint>
@@ -91,8 +88,8 @@ projectType(const ConstraintTypeProjection &projection, const std::vector<DataTy
 }
 
 bool assignMaterializedInteger(
-	std::optional<int> &target, const std::optional<ConstraintIntegerTerm> &term,
-	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
+	std::optional<int> &target, const std::optional<ConstraintIntegerTerm> &term, const std::vector<DataType> &argumentTypes,
+	const std::vector<CompileTimeValue> &argumentValues
 ) {
 	if (!term)
 		return true;

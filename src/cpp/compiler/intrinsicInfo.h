@@ -75,7 +75,7 @@ enum class IntrinsicPurityKind {
 	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
-	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                       \
+	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                        \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
 	X(AddressOf, "address of", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                              \
 	X(Dereference, "dereference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                           \
@@ -89,7 +89,7 @@ enum class IntrinsicPurityKind {
 	X(ElementType, "element type", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                            \
 	X(PromoteArithmeticType, "promote arithmetic type", 3, IntrinsicReturnKind::Custom, 1, 2, IntrinsicPurityKind::Pure)       \
 	X(Number, "number", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
-	X(TypeExtent, "type extent", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                             \
+	X(TypeExtent, "type extent", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                              \
 	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                      \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                \
 	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                  \

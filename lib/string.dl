@@ -303,9 +303,13 @@ function the string form of {C string:value}:
     execute:
         return a new string from value containing (the length of value) bytes
 
+implicitly convert {C string:value}:
+    execute:
+        return the string form of value
+
 # --- Line suffix ---
 
-function value as a line:
+function value as [a|] line:
     execute:
         set result to the string form of value
         set newline to a new string from "\n" containing 1 byte
@@ -329,7 +333,7 @@ function print whether condition:
     execute:
         print condition
 
-function print whether condition as a line:
+function print whether condition as [a|] line:
     execute:
         print condition as a line
 

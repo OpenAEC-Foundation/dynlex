@@ -1,0 +1,27 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function value as destination:
+    execute:
+        return @intrinsic("cast", value, destination)
+
+function [an|a|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        a box
+    members:
+        payload as integer
+
+convert {integer:number}:
+    replacement:
+        @intrinsic("construct", a box, number)
+
+ignore 7 as a box

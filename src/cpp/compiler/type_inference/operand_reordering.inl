@@ -100,6 +100,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->sectionBodyFallsThrough = true;
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
+	expr->inferredConversion = nullptr;
 	expr->inferredFlexBody.reset();
 	for (Expression *arg : expr->arguments)
 		resetExpressionTypes(arg, visited);

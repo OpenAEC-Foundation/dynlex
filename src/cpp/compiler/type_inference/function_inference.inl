@@ -16,6 +16,19 @@ static void resetExpressionTypes(Expression *expr);
 #include <bit>
 #include <memory>
 
+static DataType effectiveInferredExpressionType(Expression *expression) {
+	if (!expression)
+		return {};
+	if (expression->inferredConversion)
+		return expression->inferredConversion->type;
+	return expression->type;
+}
+
+static bool tryApplyUserConversion(
+	Expression *source, const DataType &targetType, bool implicitOnly, InferenceContext &context,
+	const BindingFrameStack &bindingFrameStack, bool requireCompileTimeResult = false
+);
+
 static void resetSectionExpressionTypes(Section *section, InstantiatedSectionBody *body = nullptr, size_t startLineIndex = 0);
 static void recomputeRanges(Expression *expr);
 static bool startsWithArgument(Expression *expression);
@@ -225,9 +238,10 @@ static InstantiationPurity classifyPropertyIntrinsicPurity(
 ) {
 	if (!propertyExpr || propertyExpr->arguments.size() <= 1)
 		crashCompilerBug("property purity classification encountered malformed intrinsic arguments");
-	BindingFrameStack ownerBindingFrameStack;
-	Expression *ownerExpr =
-		resolveThroughBindingsDeep(propertyExpr->arguments[1], flexBindingFrameStack, ownerBindingFrameStack);
+	ResolvedBindingLayers resolvedOwner =
+		resolveInferenceBindingLayers(propertyExpr->arguments[1], flexBindingFrameStack, &context);
+	Expression *ownerExpr = resolvedOwner.expression;
+	BindingFrameStack ownerBindingFrameStack = std::move(resolvedOwner.bindingFrameStack);
 	if (!ownerExpr)
 		return InstantiationPurity::Impure;
 	DataType ownerType = ownerExpr->type;
@@ -253,9 +267,10 @@ static InstantiationPurity
 classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	if (!storeExpr || storeExpr->arguments.size() <= 1)
 		crashCompilerBug("store purity classification encountered malformed intrinsic arguments");
-	BindingFrameStack destinationBindingFrameStack;
-	Expression *destinationExpr =
-		resolveThroughBindingsDeep(storeExpr->arguments[1], flexBindingFrameStack, destinationBindingFrameStack);
+	ResolvedBindingLayers resolvedDestination =
+		resolveInferenceBindingLayers(storeExpr->arguments[1], flexBindingFrameStack, &context);
+	Expression *destinationExpr = resolvedDestination.expression;
+	BindingFrameStack destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
 	if (!destinationExpr)
 		return InstantiationPurity::Impure;
 	if (destinationExpr->kind == Expression::Kind::Variable) {
@@ -268,11 +283,7 @@ classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, c
 	}
 	if (destinationExpr->kind == Expression::Kind::IntrinsicCall &&
 		intrinsicKind(destinationExpr->intrinsicName) == IntrinsicKind::Property) {
-		BindingFrameStack resolvedBindingFrameStack = flexBindingFrameStack;
-		destinationBindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-			pushBindingScope(resolvedBindingFrameStack, frame);
-		});
-		return classifyPropertyIntrinsicPurity(destinationExpr, context, resolvedBindingFrameStack, true);
+		return classifyPropertyIntrinsicPurity(destinationExpr, context, destinationBindingFrameStack, true);
 	}
 	return InstantiationPurity::Impure;
 }
@@ -825,9 +836,10 @@ static DataType requestKnownOrInferExpressionType(
 	Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack, bool preserveCurrentGrouping
 ) {
 	auto readKnownType = [&](Expression *expression) -> DataType {
-		if (!expression || !expression->type.isDeduced())
+		DataType type = effectiveInferredExpressionType(expression);
+		if (!type.isDeduced())
 			return {};
-		return expression->type;
+		return type;
 	};
 	DataType type = readKnownType(expr);
 	if (type.isDeduced())

@@ -113,10 +113,9 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return numericValue ? CompileTimeValue(*numericValue) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix || kind == IntrinsicKind::TypeOf ||
-		kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType ||
-		kind == IntrinsicKind::Number || kind == IntrinsicKind::TypeExtent ||
-		kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix ||
-		kind == IntrinsicKind::AddPointerDepth) {
+		kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType || kind == IntrinsicKind::Number ||
+		kind == IntrinsicKind::TypeExtent || kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector ||
+		kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth) {
 		return readStoredValue(expr);
 	}
 
@@ -391,19 +390,10 @@ struct PureExecutionFrame {
 static Expression *resolvePureExecutionBinding(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack *outBindingFrameStack = nullptr
 ) {
+	ResolvedBindingLayers resolved = resolveExpressionBindingWithCallerScope(expr, bindingFrameStack);
 	if (outBindingFrameStack)
-		*outBindingFrameStack = bindingFrameStack;
-	if (expr && expr->kind == Expression::Kind::Pending && expr->patternReference) {
-		auto &elements = expr->patternReference->patternElements;
-		if (elements.empty())
-			elements = getPatternElements(expr->patternReference->pattern.text);
-		if (elements.size() == 1 &&
-			(elements[0].type == PatternElement::Type::Variable || elements[0].type == PatternElement::Type::VariableLike)) {
-			if (Expression *boundExpression = bindingFrameStack.lookup(elements[0].text))
-				return boundExpression;
-		}
-	}
-	return resolveVariableBindingAcrossFrames(expr, bindingFrameStack);
+		*outBindingFrameStack = std::move(resolved.bindingFrameStack);
+	return resolved.expression;
 }
 
 static PatternDefinition *selectedDefinitionForPureExecution(Expression *expr, const Instantiation *) {
@@ -579,6 +569,8 @@ static PureExpressionExecutionResult evaluatePureExpression(
 ) {
 	if (!expr)
 		return {};
+	if (expr->inferredConversion)
+		return evaluatePureExpression(expr->inferredConversion, state, frame, bindingFrameStack);
 	BindingFrameStack resolvedBindingFrameStack;
 	Expression *resolvedExpression = resolvePureExecutionBinding(expr, bindingFrameStack, &resolvedBindingFrameStack);
 	if (resolvedExpression && resolvedExpression != expr)
@@ -940,10 +932,10 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 	if (!expr || !expr->variable)
 		return {};
 	CompileTimeValue computedValue{};
-	BindingFrameStack callerBindingFrameStack;
-	Expression *boundExpression = flexBindingFrameStack.lookupWithCallerScope(expr->variable, expr, callerBindingFrameStack);
+	ResolvedBindingLayers resolved = resolveVariableBindingWithCallerScope(expr, flexBindingFrameStack);
+	Expression *boundExpression = resolved.expression;
 	if (boundExpression && boundExpression != expr) {
-		computedValue = resolveStoredCompileTimeValue(boundExpression, callerBindingFrameStack, &context);
+		computedValue = resolveStoredCompileTimeValue(boundExpression, resolved.bindingFrameStack, &context);
 		if (isCompileTimeKnown(computedValue)) {
 			context.setExpressionValue(boundExpression, computedValue);
 		}

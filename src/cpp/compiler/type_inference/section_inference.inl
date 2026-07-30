@@ -36,11 +36,14 @@ static bool inferSectionLineRange(
 		for (auto &[name, boundVar] : section->variables) {
 			if (!boundVar)
 				continue;
-			Expression *boundExpr = bindingFrameStack.lookup(boundVar->definition);
+			ResolvedBindingLayers resolvedBinding =
+				resolveBindingReferenceWithCallerScope(boundVar->definition, nullptr, bindingFrameStack);
+			Expression *boundExpr = resolvedBinding.expression;
 			if (!boundExpr)
 				continue;
 			Expression *boundExprForType = boundExpr;
-			DataType boundType = ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, bindingFrameStack);
+			DataType boundType =
+				ensureExpressionTypeWithCurrentGrouping(boundExprForType, context, resolvedBinding.bindingFrameStack);
 			if (!boundType.isDeduced())
 				continue;
 			if (context.trial && context.trialJournal)
@@ -48,7 +51,9 @@ static bool inferSectionLineRange(
 			commitVariableTypeFromValue(boundVar, boundExpr, boundType);
 			CompileTimeValue boundValue = context.lookupExpressionValue(boundExpr);
 			context.setKnownConstant(boundVar->definition, boundValue);
-			context.setAddressProvenance(boundVar->definition, inferAddressProvenance(boundExpr, context, bindingFrameStack));
+			context.setAddressProvenance(
+				boundVar->definition, inferAddressProvenance(boundExpr, context, resolvedBinding.bindingFrameStack)
+			);
 		}
 	} else if (initializeSection) {
 		seedNonFlexSectionParameterState(section, context);
@@ -574,10 +579,8 @@ static bool collectPatternTypeConstraintWorkItems(
 				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isResolved())
 					continue;
 				Range constraintRange = patternElementTypeConstraintRange(*definition, element);
-				Expression *expression =
-					createTypeConstraintExpression(parseContext, definition->section, constraintRange);
-				if (expression &&
-					!classifyPatternTypeConstraintDependencies(parseContext, *definition, element, expression)) {
+				Expression *expression = createTypeConstraintExpression(parseContext, definition->section, constraintRange);
+				if (expression && !classifyPatternTypeConstraintDependencies(parseContext, *definition, element, expression)) {
 					destroyTypeConstraintExpression(expression);
 					definitionValid = false;
 					return;
@@ -609,15 +612,11 @@ static void materializeExplicitPatternParameterDefinitions(ParseContext &parseCo
 		for (PatternDefinition *definition : section->patternDefinitions) {
 			for (const auto &path : definition->indexedPaths) {
 				for (const PatternElement &element : path) {
-					if ((element.type != PatternElement::Type::Variable &&
-						 element.type != PatternElement::Type::Word) ||
+					if ((element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word) ||
 						!materializedNames.insert(element.text).second)
 						continue;
 					int sourceStart = definition->range.start() + static_cast<int>(element.startPos);
-					Range sourceRange(
-						definition->range.line, sourceStart,
-						sourceStart + static_cast<int>(element.text.size())
-					);
+					Range sourceRange(definition->range.line, sourceStart, sourceStart + static_cast<int>(element.text.size()));
 					requireCompilerInvariant(
 						section->resolvePatternParameterBinding(parseContext, element.text, sourceRange),
 						"indexed explicit pattern parameter has no binding definition"
@@ -800,8 +799,7 @@ bool inferTypes(ParseContext &parseContext) {
 		if (!section)
 			return true;
 		if (section->isExposed) {
-			if (section->patternDefinitions.size() != 1 ||
-				section->patternDefinitions.front()->indexedPaths.size() != 1) {
+			if (section->patternDefinitions.size() != 1 || section->patternDefinitions.front()->indexedPaths.size() != 1) {
 				context.setTypeFailure("exposed function requires exactly one pattern path");
 				return false;
 			}

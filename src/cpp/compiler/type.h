@@ -148,8 +148,7 @@ struct DataType {
 		return *arrayElementType;
 	}
 	bool hasAggregateElementType() const {
-		return pointerDepth == 0 &&
-			   (kind == Kind::Array || kind == Kind::Vector || kind == Kind::Matrix) &&
+		return pointerDepth == 0 && (kind == Kind::Array || kind == Kind::Vector || kind == Kind::Matrix) &&
 			   static_cast<bool>(arrayElementType);
 	}
 	DataType aggregateElementType() const {
@@ -218,14 +217,11 @@ struct DataType {
 		if (concreteToType.kind == Kind::Vector && concreteToType.pointerDepth == 0 && concreteToType.arrayElementType &&
 			concreteFromType.isNumeric())
 			return supportsRuntimeConversion(concreteFromType, *concreteToType.arrayElementType);
-		bool fromIsSequentialAggregate =
-			(concreteFromType.kind == Kind::Array || concreteFromType.kind == Kind::Vector) &&
-			concreteFromType.pointerDepth == 0 && concreteFromType.arrayElementType;
-		bool toIsSequentialAggregate =
-			(concreteToType.kind == Kind::Array || concreteToType.kind == Kind::Vector) &&
-			concreteToType.pointerDepth == 0 && concreteToType.arrayElementType;
-		if (fromIsSequentialAggregate && toIsSequentialAggregate &&
-			concreteFromType.arraySize == concreteToType.arraySize)
+		bool fromIsSequentialAggregate = (concreteFromType.kind == Kind::Array || concreteFromType.kind == Kind::Vector) &&
+										 concreteFromType.pointerDepth == 0 && concreteFromType.arrayElementType;
+		bool toIsSequentialAggregate = (concreteToType.kind == Kind::Array || concreteToType.kind == Kind::Vector) &&
+									   concreteToType.pointerDepth == 0 && concreteToType.arrayElementType;
+		if (fromIsSequentialAggregate && toIsSequentialAggregate && concreteFromType.arraySize == concreteToType.arraySize)
 			return supportsRuntimeConversion(*concreteFromType.arrayElementType, *concreteToType.arrayElementType);
 
 		return false;

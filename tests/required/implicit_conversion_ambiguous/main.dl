@@ -1,0 +1,21 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a number box
+    members:
+        payload as integer
+
+implicitly convert {integer:first}:
+    replacement:
+        @intrinsic("construct", a number box, first)
+
+implicitly convert {integer:second}:
+    replacement:
+        @intrinsic("construct", a number box, second)
+
+function the payload unwrapped from {a number box:boxed}:
+    execute:
+        return the payload of boxed
+
+print (the payload unwrapped from 8) as line

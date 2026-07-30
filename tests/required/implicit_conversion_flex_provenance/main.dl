@@ -1,0 +1,21 @@
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] float:
+    replacement:
+        @intrinsic("type", "float")
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+implicitly convert {integer:value}:
+    replacement:
+        2.0
+
+function the required floating value from {a float:value}:
+    replacement:
+        value
+
+ignore (the required floating value from 1)

@@ -106,8 +106,11 @@ case Expression::Kind::IntrinsicCall: {
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {
 				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
-				Expression *sourceReturnValueExpression =
-					returnValueExpression ? resolveThroughBindings(returnValueExpression, flexBindingFrameStack) : nullptr;
+				ResolvedBindingLayers resolvedReturnValue =
+					returnValueExpression
+						? resolveExpressionBindingWithCallerScope(returnValueExpression, flexBindingFrameStack)
+						: ResolvedBindingLayers{nullptr, flexBindingFrameStack};
+				Expression *sourceReturnValueExpression = resolvedReturnValue.expression;
 				ScopedRecursiveInferenceObservation returnValueObservation(context, context.currentInstantiation);
 				DataType retType = returnValueExpression
 									   ? ensureExpressionType(returnValueExpression, context, flexBindingFrameStack)
@@ -121,7 +124,9 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				if (context.currentInstantiation) {
-					if (!reconcileFunctionReturnType(context, expr, sourceReturnValueExpression, retType))
+					if (!reconcileFunctionReturnType(
+							context, expr, sourceReturnValueExpression, retType, resolvedReturnValue.bindingFrameStack
+						))
 						break;
 				} else if (retType.kind != DataType::Kind::Void) {
 					Range returnRange =
@@ -203,12 +208,18 @@ case Expression::Kind::IntrinsicCall: {
 				if (!context.typesValid)
 					break;
 				if (!isVariableAssignmentCompatible(elementType, valueType)) {
-					setConfiguredTypeFailure(
-						expr->range, "store at value incompatible", "message",
-						{{"value_type", typeToUserName(valueType, context.parseContext)},
-						 {"element_type", typeToUserName(elementType, context.parseContext)}}
-					);
-					break;
+					if (tryApplyUserConversion(expr->arguments[2], elementType, true, context, flexBindingFrameStack)) {
+						valueType = effectiveInferredExpressionType(expr->arguments[2]);
+					} else {
+						if (!context.typesValid)
+							break;
+						setConfiguredTypeFailure(
+							expr->range, "store at value incompatible", "message",
+							{{"value_type", typeToUserName(valueType, context.parseContext)},
+							 {"element_type", typeToUserName(elementType, context.parseContext)}}
+						);
+						break;
+					}
 				}
 				applyStoreThroughAddress(
 					context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), expr->arguments[2],
@@ -252,7 +263,7 @@ case Expression::Kind::IntrinsicCall: {
 			expr->type = {DataType::Kind::Float, 4};
 			break;
 		case IntrinsicReturnKind::Custom:
-			#include "intrinsics/aggregate_inference.inl"
+#include "intrinsics/aggregate_inference.inl"
 			if (kind == IntrinsicKind::ShaderInterpolantInput) {
 				expr->type = {DataType::Kind::Vector};
 				expr->type.arraySize = 4;
@@ -430,17 +441,30 @@ case Expression::Kind::IntrinsicCall: {
 					failCompileTimeOnlyIntrinsicArgument(2, "a compile-time type reference");
 					break;
 				}
-				if (!isValidCastRuntimeType(valueType)) {
-					setConfiguredTypeFailure(
-						expr->range, "invalid cast source type", "message",
-						{{"source_type", typeToUserName(valueType, context.parseContext)}}
-					);
-					break;
-				}
 				DataType castResultType;
-				if (typeArgType.kind == DataType::Kind::Type &&
-					!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
-					DataType requestedType = typeArgType.toReferencedType();
+				DataType requestedType = typeArgType.toReferencedType();
+				if (!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
+					if (tryApplyUserConversion(expr->arguments[1], requestedType, false, context, flexBindingFrameStack)) {
+						expr->inferredConversion = expr->arguments[1]->inferredConversion;
+						expr->type = requestedType;
+						context.setExpressionEvaluation(
+							expr,
+							{
+								.value = context.lookupExpressionValue(expr->arguments[1]),
+								.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(expr->arguments[1]),
+							}
+						);
+						break;
+					}
+					if (!context.typesValid)
+						break;
+					if (!isValidCastRuntimeType(valueType)) {
+						setConfiguredTypeFailure(
+							expr->range, "invalid cast source type", "message",
+							{{"source_type", typeToUserName(valueType, context.parseContext)}}
+						);
+						break;
+					}
 					setConfiguredTypeFailure(
 						expr->range, "unsupported cast", "message",
 						{{"from_type", typeToUserName(valueType, context.parseContext)},
@@ -506,9 +530,7 @@ case Expression::Kind::IntrinsicCall: {
 			} else if (kind == IntrinsicKind::TypeExtent) {
 				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				int dimension = 0;
-				if (!resolveStoredCompileTimeInteger(
-						expr->arguments[2], flexBindingFrameStack, dimension, &context
-					)) {
+				if (!resolveStoredCompileTimeInteger(expr->arguments[2], flexBindingFrameStack, dimension, &context)) {
 					failIntrinsicArgumentRequirement(2, "a compile-time integer");
 					break;
 				}
@@ -642,13 +664,10 @@ case Expression::Kind::IntrinsicCall: {
 				}
 				std::optional<int> arraySize;
 				size_t elementArgumentIndex = 0;
-				DataType firstArgumentType =
-					ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				DataType firstArgumentType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (firstArgumentType.isInteger()) {
 					int resolvedSize = 0;
-					if (!resolveStoredCompileTimeInteger(
-							expr->arguments[1], flexBindingFrameStack, resolvedSize, &context
-						) ||
+					if (!resolveStoredCompileTimeInteger(expr->arguments[1], flexBindingFrameStack, resolvedSize, &context) ||
 						resolvedSize < 0) {
 						failIntrinsicArgumentRequirement(1, "a non-negative compile-time integer");
 						break;
@@ -669,9 +688,8 @@ case Expression::Kind::IntrinsicCall: {
 				if (elementArgumentIndex != 0) {
 					DataType elementReferenceType =
 						ensureExpressionType(expr->arguments[elementArgumentIndex], context, flexBindingFrameStack);
-					CompileTimeValue elementValue = resolveStoredCompileTimeValue(
-						expr->arguments[elementArgumentIndex], flexBindingFrameStack, &context
-					);
+					CompileTimeValue elementValue =
+						resolveStoredCompileTimeValue(expr->arguments[elementArgumentIndex], flexBindingFrameStack, &context);
 					elementConstraint = getCompileTimeConstraintValue(elementValue);
 					if (!elementConstraint) {
 						failCompileTimeOnlyIntrinsicArgument(

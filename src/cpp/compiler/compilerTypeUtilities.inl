@@ -73,9 +73,7 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	const std::vector<DataType> &argTypes, const std::vector<TypeConstraint> &argumentConstraints
 ) {
 	requireCompilerInvariant(paramBindings.size() == argTypes.size(), "pattern parameter bindings and types diverged");
-	requireCompilerInvariant(
-		argumentConstraints.size() == argTypes.size(), "pattern parameter constraints and types diverged"
-	);
+	requireCompilerInvariant(argumentConstraints.size() == argTypes.size(), "pattern parameter constraints and types diverged");
 	std::unordered_set<std::string> requiredParameters;
 	size_t bindingIndex = 0;
 	forEachPatternParameterName(
@@ -132,17 +130,14 @@ PatternOverloadSelection selectOverload(
 				} else {
 					if (pathIndex < candidate->signaturePaths.size() &&
 						argIdx < candidate->signaturePaths[pathIndex].parameters.size()) {
-						const PatternParameterSignature &signature =
-							candidate->signaturePaths[pathIndex].parameters[argIdx];
+						const PatternParameterSignature &signature = candidate->signaturePaths[pathIndex].parameters[argIdx];
 						std::optional<TypeConstraint> materialized = signature.constraint.materialize({}, {});
 						if (materialized) {
-							bool acceptsNothing =
-								signature.hasExplicitTypeConstraint &&
-								materialized->accepts(DataType{DataType::Kind::Void}, false);
+							bool acceptsNothing = signature.hasExplicitTypeConstraint &&
+												  materialized->accepts(DataType{DataType::Kind::Void}, false);
 							resolvedConstraint = ResolvedPatternConstraint{
 								std::move(*materialized), signature.constraint.structuralSpecificity(),
-								signature.requiresCompileTimeValue, signature.acceptsUnresolvedType,
-								acceptsNothing
+								signature.requiresCompileTimeValue, signature.acceptsUnresolvedType, acceptsNothing
 							};
 						}
 					} else {
@@ -154,9 +149,7 @@ PatternOverloadSelection selectOverload(
 							!parameterElement->resolvedTypeConstraint.isResolved(),
 							!parameterElement->typeConstraintName.empty() &&
 								parameterElement->resolvedTypeConstraint.isResolved() &&
-								parameterElement->resolvedTypeConstraint.accepts(
-									DataType{DataType::Kind::Void}, false
-								)
+								parameterElement->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false)
 						};
 					}
 				}
@@ -170,8 +163,8 @@ PatternOverloadSelection selectOverload(
 					parameterConstraint.requiresCompileTimeValue || resolvedConstraint->requiresCompileTimeValue;
 				const DataType &argType = argTypes[argIdx];
 				if (!argType.isDeduced()) {
-					bool acceptsUnset = candidate->section && candidate->section->isFlex &&
-										resolvedConstraint->acceptsUnresolvedType;
+					bool acceptsUnset =
+						candidate->section && candidate->section->isFlex && resolvedConstraint->acceptsUnresolvedType;
 					if (!acceptsUnset)
 						constraintFailed = true;
 					candidateConstraints.push_back(std::move(parameterConstraint));
