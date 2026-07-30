@@ -1,6 +1,6 @@
 name: Extension Release
 
-run-name: Extension ${{ inputs.version }} approved release
+run-name: Extension ${{ inputs.version }} approved ${{ inputs.registry }} release
 
 on:
   workflow_dispatch:
@@ -9,6 +9,15 @@ on:
         description: Exact extension version approved for publication
         required: true
         type: string
+      registry:
+        description: Registry to publish
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - vscode-marketplace
+          - open-vsx
 
 concurrency:
   group: extension-release-${{ inputs.version }}
@@ -16,17 +25,21 @@ concurrency:
 
 jobs:
   publish-vscode-marketplace:
+    if: ${{ inputs.registry == 'both' || inputs.registry == 'vscode-marketplace' }}
     runs-on: ubuntu-24.04
     environment: extension-publishing
     permissions:
       contents: read
       id-token: write
     env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       REQUESTED_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -56,14 +69,39 @@ jobs:
         working-directory: vscode-extension
         run: npm run package -- --registry vscode-marketplace
 
+      - name: Authenticate managed publishing identity
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify Visual Studio Marketplace authorization
+        working-directory: vscode-extension
+        run: |
+          MARKETPLACE_IDENTITY_ID="$(
+            az rest \
+              --url https://app.vssps.visualstudio.com/_apis/profile/profiles/me \
+              --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+              --query id \
+              --output tsv
+          )"
+          if [[ -z "$MARKETPLACE_IDENTITY_ID" ]]; then
+            echo "Azure DevOps did not return an identity ID." >&2
+            exit 1
+          fi
+          echo "Visual Studio Marketplace managed identity: $MARKETPLACE_IDENTITY_ID"
+          npx vsce verify-pat impertio --azure-credential
+
       - name: Publish only to Visual Studio Marketplace
         working-directory: vscode-extension
         run: |
           PACKAGE_PATH="../build/vscode-extension/dynlex-language-${REQUESTED_VERSION}-vscode-marketplace.vsix"
           sha256sum "$PACKAGE_PATH"
-          npx vsce publish --packagePath "$PACKAGE_PATH" --oidc
+          npx vsce publish --packagePath "$PACKAGE_PATH" --azure-credential
 
   publish-open-vsx:
+    if: ${{ inputs.registry == 'both' || inputs.registry == 'open-vsx' }}
     runs-on: ubuntu-24.04
     environment: extension-publishing
     permissions:
@@ -72,9 +110,9 @@ jobs:
       OPEN_VSX_TOKEN: ${{ secrets.OPEN_VSX_TOKEN }}
       REQUESTED_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
