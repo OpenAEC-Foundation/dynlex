@@ -7,7 +7,7 @@ on:
       - '*.*.*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify-version-tag:
@@ -63,6 +63,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
     needs: [verify-version-tag]
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -91,11 +95,54 @@ jobs:
         shell: bash
         run: ./scripts/test.sh --release
 
+      - name: Log in to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign Windows executable
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\build\dynlex.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: DynLex compiler
+          description-url: https://dynlex.com
+          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-executable
+
+      - name: Verify Windows executable signature
+        shell: pwsh
+        run: ./scripts/verify-windows-signature.ps1 -Path "build/dynlex.exe"
+
       - name: Package MSI
         shell: bash
         run: |
           cd build
           cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
+
+      - name: Sign Windows installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\build\dynlex.msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: DynLex installer
+          description-url: https://dynlex.com
+          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-installer
+
+      - name: Verify Windows installer signature
+        shell: pwsh
+        run: ./scripts/verify-windows-signature.ps1 -Path "build/dynlex.msi"
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
@@ -108,6 +155,7 @@ jobs:
   build-macos:
     runs-on: macos-14
     needs: [verify-version-tag]
+    environment: release-signing
     steps:
       - uses: actions/checkout@v4
         with:
@@ -125,13 +173,68 @@ jobs:
       - name: Build and test (Release)
         run: ./scripts/test.sh --release
 
-      - name: Package PKG
+      - name: Import Apple signing identities
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_APPLICATION_CERTIFICATE: ${{ secrets.APPLE_APPLICATION_CERTIFICATE }}
+          APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ vars.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
         run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/dynlex-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          APPLICATION_CERTIFICATE_PATH="$RUNNER_TEMP/dynlex-application.p12"
+          INSTALLER_CERTIFICATE_PATH="$RUNNER_TEMP/dynlex-installer.p12"
+          API_KEY_PATH="$RUNNER_TEMP/AuthKey_${{ vars.APPLE_API_KEY_ID }}.p8"
+
+          printf '%s' "$APPLE_APPLICATION_CERTIFICATE" | base64 --decode > "$APPLICATION_CERTIFICATE_PATH"
+          printf '%s' "$APPLE_INSTALLER_CERTIFICATE" | base64 --decode > "$INSTALLER_CERTIFICATE_PATH"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$API_KEY_PATH"
+          chmod 600 "$APPLICATION_CERTIFICATE_PATH" "$INSTALLER_CERTIFICATE_PATH" "$API_KEY_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$APPLICATION_CERTIFICATE_PATH" \
+            -P "$APPLE_APPLICATION_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$INSTALLER_CERTIFICATE_PATH" \
+            -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S "apple-tool:,apple:,codesign:" \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security find-identity -v "$KEYCHAIN_PATH"
+          security find-certificate -c "$APPLE_APPLICATION_SIGNING_IDENTITY" "$KEYCHAIN_PATH" > /dev/null
+          security find-certificate -c "$APPLE_INSTALLER_SIGNING_IDENTITY" "$KEYCHAIN_PATH" > /dev/null
+
+          echo "DYNLEX_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "DYNLEX_NOTARY_API_KEY=$API_KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign executable and package PKG
+        env:
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ vars.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
           cd build
-          rm -rf pkgroot dynlex-component.pkg
+          rm -rf pkgroot
+          rm -f dynlex-component.pkg dynlex-unsigned.pkg dynlex.pkg
           cmake --install . --prefix "${PWD}/pkgroot/usr/local"
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$APPLE_APPLICATION_SIGNING_IDENTITY" \
+            "pkgroot/usr/local/bin/dynlex"
+          codesign --verify --strict --verbose=2 "pkgroot/usr/local/bin/dynlex"
           pkgbuild \
             --root "${PWD}/pkgroot" \
             --identifier "org.dynlex.dynlex" \
@@ -140,7 +243,58 @@ jobs:
             "dynlex-component.pkg"
           productbuild \
             --package "dynlex-component.pkg" \
+            "dynlex-unsigned.pkg"
+          productsign \
+            --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" \
+            --timestamp \
+            "dynlex-unsigned.pkg" \
             "dynlex.pkg"
+          pkgutil --check-signature "dynlex.pkg"
+          rm -f dynlex-unsigned.pkg
+
+      - name: Notarize and staple PKG
+        env:
+          APPLE_API_ISSUER_ID: ${{ vars.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY_ID: ${{ vars.APPLE_API_KEY_ID }}
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          SUBMISSION_PLIST="$RUNNER_TEMP/dynlex-notary-submission.plist"
+          NOTARY_LOG="$RUNNER_TEMP/dynlex-notary-log.json"
+
+          set +e
+          xcrun notarytool submit "build/dynlex.pkg" \
+            --key "$DYNLEX_NOTARY_API_KEY" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            --wait \
+            --output-format plist > "$SUBMISSION_PLIST"
+          NOTARYTOOL_EXIT_CODE=$?
+          set -e
+
+          if [[ ! -s "$SUBMISSION_PLIST" ]]; then
+            echo "Apple notarytool did not return a submission result." >&2
+            exit 1
+          fi
+
+          SUBMISSION_ID="$(/usr/libexec/PlistBuddy -c 'Print :id' "$SUBMISSION_PLIST")"
+          SUBMISSION_STATUS="$(/usr/libexec/PlistBuddy -c 'Print :status' "$SUBMISSION_PLIST")"
+          printf 'Apple notarization submission %s finished with status %s.\n' \
+            "$SUBMISSION_ID" "$SUBMISSION_STATUS"
+
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --key "$DYNLEX_NOTARY_API_KEY" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            "$NOTARY_LOG"
+          cat "$NOTARY_LOG"
+
+          if [[ "$NOTARYTOOL_EXIT_CODE" -ne 0 || "$SUBMISSION_STATUS" != "Accepted" ]]; then
+            echo "Apple rejected the DynLex installer notarization submission." >&2
+            exit 1
+          fi
+
+          xcrun stapler staple "build/dynlex.pkg"
 
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
@@ -149,6 +303,17 @@ jobs:
           path: |
             build/*.pkg
           if-no-files-found: error
+
+      - name: Remove Apple signing credentials
+        if: ${{ always() }}
+        run: |
+          if [[ -n "${DYNLEX_SIGNING_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$DYNLEX_SIGNING_KEYCHAIN"
+          fi
+          rm -f \
+            "$RUNNER_TEMP/dynlex-application.p12" \
+            "$RUNNER_TEMP/dynlex-installer.p12" \
+            "$RUNNER_TEMP/AuthKey_${{ vars.APPLE_API_KEY_ID }}.p8"
 
   smoke-linux:
     runs-on: ubuntu-24.04
@@ -200,6 +365,7 @@ jobs:
           if (-not $msi) {
             throw "No MSI artifact found."
           }
+          ./scripts/verify-windows-signature.ps1 -Path $msi.FullName
           Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart" -Wait -NoNewWindow
           $dynlex = Get-Item "C:\Program Files\dynlex\bin\dynlex.exe" -ErrorAction SilentlyContinue
           if (-not $dynlex) {
@@ -208,6 +374,7 @@ jobs:
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
           }
+          ./scripts/verify-windows-signature.ps1 -Path $dynlex.FullName
           $helpStdout = "$env:TEMP\\dynlex-smoke-windows-help.stdout.log"
           $helpStderr = "$env:TEMP\\dynlex-smoke-windows-help.stderr.log"
           $helpExit = -1
@@ -236,6 +403,10 @@ jobs:
   smoke-macos:
     runs-on: macos-14
     needs: [build-macos]
+    env:
+      APPLE_APPLICATION_SIGNING_IDENTITY: ${{ vars.APPLE_APPLICATION_SIGNING_IDENTITY }}
+      APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,6 +432,7 @@ jobs:
             DYNLEX_BIN="$(find /usr/local -name dynlex -type f | head -n 1)"
           fi
           [ -n "${DYNLEX_BIN:-}" ] && [ -x "$DYNLEX_BIN" ]
+          ./scripts/verify-macos-signature.sh "$PKG" "$DYNLEX_BIN"
           "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-macos
           /tmp/dynlex-smoke-macos > /tmp/dynlex-smoke-macos.out
           diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-macos.out
@@ -268,6 +440,8 @@ jobs:
   publish-release:
     runs-on: ubuntu-latest
     needs: [build-linux, build-windows, build-macos, smoke-linux, smoke-windows, smoke-macos]
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4

@@ -531,6 +531,7 @@ run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
+run_auxiliary_test "macos_signature_verifier" 10 python3 -B "$SCRIPT_DIR/test_verify_macos_signature.py"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \
