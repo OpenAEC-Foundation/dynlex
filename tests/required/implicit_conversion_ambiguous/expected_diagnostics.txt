@@ -3,4 +3,4 @@ tests/required/implicit_conversion_ambiguous/main.dl:35-36: Error: More than one
   note: Conversion is defined here tests/required/implicit_conversion_ambiguous/main.dl:20-36
   note: while inferring call 'the payload unwrapped from 8' with arguments [a 32-bit integer] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:8-36
   note: while inferring call 'print (the payload unwrapped from 8' with arguments [an unresolved value] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:1-36
-  note: while inferring call 'print (the payload unwrapped from 8) as line' with arguments [an unresolved value] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:1-45
+  note: while inferring call 'print (the payload unwrapped from 8) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:1-47

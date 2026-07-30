@@ -1,2 +1,2 @@
-tests/required/invalid_main_return_type/main.dl:1-56: Error: Program return value must be convertible to a 32-bit integer, got box
-  note: while inferring intrinsic 'return' in '@intrinsic("return", @intrinsic("construct", a box, 1))' with arguments [box] -> an unresolved value tests/required/invalid_main_return_type/main.dl:1-56
+tests/required/invalid_main_return_type/main.dl:1-56: Error: Program return value must be convertible to a 32-bit integer, got a box
+  note: while inferring intrinsic 'return' in '@intrinsic("return", @intrinsic("construct", a box, 1))' with arguments [a box] -> an unresolved value tests/required/invalid_main_return_type/main.dl:1-56

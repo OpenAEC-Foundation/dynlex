@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import {
-  captureScreenshot, closeBrowserSession, command, dispatchKey, evaluate, findMonacoText,
+  captureScreenshot, clickElement, closeBrowserSession, command, dispatchKey, evaluate, findMonacoText,
   hoverMonacoText, navigate, replaceMonacoSource, requestedUrls, runtimeExceptions,
   screenshotDirectory, siteOrigin, sourceEditExpression, waitFor
 } from "./browser_test_driver.mjs";
 import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
+import {
+  assertRiverChallengeLoadingBoundary,
+  runRiverChallengeBrowserTest
+} from "./river_challenge_browser.mjs";
 
 const shaderManifest = await fetch(`${siteOrigin}/shaders/manifest.json`).then((response) => {
   assert.equal(response.ok, true, "The live shader manifest must load");
@@ -21,12 +25,12 @@ assert.ok(Number.isInteger(nanoTimeBinding), "The volumetric shader must reflect
 
 await navigate("/");
 await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]').length === 5",
+  "document.querySelectorAll('[data-runnable-sketch]').length === 2",
   "the runnable homepage sketches"
 );
 await waitFor("document.fonts.status === 'loaded'", "the homepage fonts");
 await waitFor(
-  "document.querySelectorAll('.snippet-editor-shell[data-highlight-state=\"cached\"]').length === 7",
+  "document.querySelectorAll('.snippet-editor-shell[data-highlight-state=\"cached\"]').length === 4",
   "cached syntax highlighting on every homepage editor"
 );
 await waitFor(
@@ -114,9 +118,17 @@ assert.ok(
   "The first generated shader must be rendered"
 );
 assert.equal(
-  requestedUrls.some((url) => /\.(?:mp4|webm|webp)(?:$|\?)/i.test(url)),
+  requestedUrls.some((url) => /\.(?:mp4|webm)(?:$|\?)/i.test(url)),
   false,
   "The live banner must not request encoded media"
+);
+assert.equal(
+  requestedUrls.some((url) => (
+    /\.webp(?:$|\?)/i.test(url)
+    && !url.includes("/media/river-challenge/")
+  )),
+  false,
+  "Only the visible river challenge preview may request WebP artwork"
 );
 await captureScreenshot("homepage-initial-immersive");
 const immersiveChrome = await evaluate(`(() => {
@@ -491,6 +503,7 @@ assert.equal(
   false,
   "The compiler must stay lazy until a visitor edits or runs a sketch"
 );
+assertRiverChallengeLoadingBoundary(requestedUrls);
 
 const heroEdit = await evaluate(sourceEditExpression(0, `import lib/std.dl
 
@@ -532,77 +545,17 @@ assert.ok(
   "Running a homepage sketch must load the shared compiler worker"
 );
 
+await evaluate("document.querySelector('[data-lab-tab=\"reuse\"]').click()");
 await evaluate(sourceEditExpression(1, `import lib/std.dl
 
-loop 2 times:
-    print "Hello" as a line`));
-await evaluate(sourceEditExpression(2, `import lib/std.dl
-
-print "neon violet" as a line`));
-await evaluate(`(() => {
-  const buttons = document.querySelectorAll('[data-snippet-run]');
-  buttons[1].click();
-  buttons[2].click();
-})()`);
-await waitFor(
-  "[...document.querySelectorAll('[data-runnable-sketch]')].slice(1, 3).every((sketch) => sketch.dataset.runState === 'done')",
-  "queued sketches to run in order"
-);
-assert.deepEqual(
-  await evaluate("[...document.querySelectorAll('[data-snippet-output]')[1].children].map((node) => node.textContent)"),
-  ["Hello", "Hello"]
-);
-assert.deepEqual(
-  await evaluate("[...document.querySelectorAll('[data-snippet-output]')[2].children].map((node) => node.textContent)"),
-  ["neon", "violet"]
-);
-
-await evaluate(sourceEditExpression(3, `import lib/std.dl
-
-print "Found it." as a line`));
-await evaluate(`(() => {
-  const source = document.querySelectorAll('[data-runnable-sketch]')[3].querySelector('[data-snippet-source]');
-  source.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
-})()`);
-await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]')[3].dataset.runState === 'done'",
-  "the keyboard-triggered sketch run"
-);
-assert.equal(
-  await evaluate("document.querySelectorAll('[data-snippet-output]')[3].querySelector('span').textContent"),
-  "Found it."
-);
-
-await evaluate(sourceEditExpression(3, "this phrase does not exist"));
-await evaluate("document.querySelectorAll('[data-snippet-run]')[3].click()");
-await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]')[3].dataset.runState === 'error'",
-  "invalid source to report a compile error"
-);
-const compileFailure = await evaluate(`(() => {
-  const sketch = document.querySelectorAll('[data-runnable-sketch]')[3];
-  const diagnostics = sketch.querySelector('[data-snippet-diagnostics]');
-  return {
-    diagnosticsHidden: diagnostics.hidden,
-    diagnostics: diagnostics.textContent,
-    output: sketch.querySelector('[data-snippet-output] span').textContent
-  };
-})()`);
-assert.equal(compileFailure.diagnosticsHidden, false);
-assert.ok(compileFailure.diagnostics.length > 0);
-assert.equal(compileFailure.output, "Found it.", "A failed compile must never run a stale artifact");
-
-await evaluate("document.querySelector('[data-lab-tab=\"reuse\"]').click()");
-await evaluate(sourceEditExpression(4, `import lib/std.dl
-
 print "Words become tools." as a line`));
-await evaluate("document.querySelectorAll('[data-snippet-run]')[4].click()");
+await evaluate("document.querySelectorAll('[data-snippet-run]')[1].click()");
 await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]')[4].dataset.runState === 'done'",
+  "document.querySelectorAll('[data-runnable-sketch]')[1].dataset.runState === 'done'",
   "the active language sketch to run"
 );
 assert.equal(
-  await evaluate("document.querySelectorAll('[data-snippet-output]')[4].textContent.trim()"),
+  await evaluate("document.querySelectorAll('[data-snippet-output]')[1].textContent.trim()"),
   "Words become tools."
 );
 assert.equal(
@@ -610,11 +563,17 @@ assert.equal(
   1,
   "Homepage edits and runs must reuse one compiler worker"
 );
-for (const section of ["sketches", "language"]) {
-  await evaluate(`document.querySelector('#${section}').scrollIntoView()`);
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-  await captureScreenshot(`homepage-${section}`);
-}
+
+await runRiverChallengeBrowserTest({
+  captureScreenshot,
+  clickElement,
+  evaluate,
+  requestedUrls,
+  waitFor
+});
+await evaluate("document.querySelector('#language').scrollIntoView()");
+await new Promise((resolve) => setTimeout(resolve, 1200));
+await captureScreenshot("homepage-language");
 
 await navigate(terrainShaderEditorPath);
 await waitFor(
@@ -670,7 +629,7 @@ assert.ok(
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
-await hoverMonacoText("continental");
+await hoverMonacoText("fold");
 await waitFor(
   "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
   "the shader IDE to display DynLex hover information",
@@ -687,7 +646,7 @@ else:
     set pulse to the sine of pulse
     set pulse to pulse * 0.5 + 0.5
     set glow to the shader render pass * 0.22
-    set the fragment color with red (pulse + glow), green 0.12, blue 0.72 and alpha 1.0
+    set the fragment color with a red channel of (pulse + glow), a green channel of 0.12, a blue channel of 0.72 and an alpha channel of 1.0
 `);
 await waitFor(
   `Number(document.querySelector('#shader-preview').dataset.previewRevision) > ${initialShaderState.revision}`,
@@ -722,7 +681,7 @@ await waitFor(
   "the IDE to compile and run its starting sketch"
 );
 assert.equal(await evaluate("document.querySelector('#runtime-output').textContent.trim()"), "64");
-await hoverMonacoText("squared", 1);
+await hoverMonacoText("square", 1);
 await waitFor(
   `[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => {
     const rect = hover.getBoundingClientRect();
@@ -749,21 +708,19 @@ await waitFor(
   10000
 );
 await captureScreenshot("ide-hover");
-await hoverMonacoText("squared");
-await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('{a 32 bit integer:value} squared'))`, "the inferred-instance hover to display its parameter type");
-await findMonacoText("8 squared");
-await dispatchKey("ArrowRight", "ArrowRight", 39);
-await dispatchKey("ArrowRight", "ArrowRight", 39);
+await hoverMonacoText("square");
+await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('square {a 32 bit integer:value}'))`, "the inferred-instance hover to display its parameter type");
+await findMonacoText("square 8");
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",
-  "the squared-value invocation to be selected"
+  "the square invocation to be selected"
 );
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '3'",
-  "F12 to navigate from the squared-value invocation to its definition"
+  "F12 to navigate from the square invocation to its definition"
 );
-await findMonacoText("print 8 squared");
+await findMonacoText("print square 8");
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'string.dl')",
@@ -799,7 +756,7 @@ await waitFor(
   "the editable file to reopen from the project list"
 );
 await waitFor(
-  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print 8 squared as a line')",
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as a line')",
   "returning from a definition to render the preserved editable source model"
 );
 await captureScreenshot("ide-finished");
@@ -894,6 +851,30 @@ const mobileLayout = await evaluate(`({
 assert.equal(mobileLayout.pageWidth, mobileLayout.viewportWidth, "Mobile homepage must not scroll sideways");
 assert.deepEqual(mobileLayout.overflowingEditors, [], "Initial mobile snippets must fit before scrolling");
 assert.equal(mobileLayout.runButtonsFit, true, "Mobile run controls must remain inside the viewport");
+await clickElement("[data-river-challenge-load]");
+await waitFor(
+  "document.querySelector('[data-river-challenge-mount]').dataset.challengeLoaded === 'true'",
+  "the mobile river challenge"
+);
+const mobileChallengeLayout = await evaluate(`(() => ({
+  viewportWidth: window.innerWidth,
+  pageWidth: document.documentElement.scrollWidth,
+  controlsFit: [...document.querySelectorAll('.river-playback button')].every((button) => {
+    const bounds = button.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.right <= window.innerWidth;
+  }),
+  editorFits: document.querySelector('[data-river-editor-shell]').scrollWidth
+    <= document.querySelector('[data-river-editor-shell]').clientWidth
+}))()`);
+assert.equal(
+  mobileChallengeLayout.pageWidth,
+  mobileChallengeLayout.viewportWidth,
+  "The opened mobile challenge must not scroll sideways"
+);
+assert.equal(mobileChallengeLayout.controlsFit, true, "Mobile challenge controls must fit the viewport");
+assert.equal(mobileChallengeLayout.editorFits, true, "The mobile challenge editor must fit its panel");
+await captureScreenshot("homepage-challenge-mobile");
+await evaluate("window.scrollTo({ top: 0 })");
 await evaluate("document.querySelector('.menu-toggle').click()");
 await waitFor("document.body.classList.contains('menu-open')", "the opaque mobile navigation to open");
 const mobileMenu = await evaluate(`(() => {
@@ -941,7 +922,7 @@ assert.equal(documentationMenu.background, "rgb(8, 10, 9)");
 assert.equal(documentationMenu.current, "Docs");
 assert.deepEqual(
   documentationMenu.paths,
-  ["/index.html#sketches", "/index.html#language", "/index.html#studio", "/wiki/index.html", "/ide/index.html"]
+  ["/index.html#challenges", "/index.html#language", "/index.html#studio", "/wiki/index.html", "/ide/index.html"]
 );
 assert.equal(
   documentationMenu.styledCardBackground,
@@ -957,5 +938,6 @@ assert.deepEqual(
   [],
   "Homepage and IDE interactions must not raise uncaught browser exceptions"
 );
+
 closeBrowserSession();
-console.log("Homepage sketches and IDE compile and run in Chrome.");
+console.log("Homepage challenge, examples, and IDE compile and run in Chrome.");

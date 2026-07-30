@@ -207,7 +207,7 @@ const instantiations = requestLsp("dynlex/instantiationsInDocument", textDocumen
 assert.ok(Array.isArray(instantiations));
 assert.ok(
   instantiations.some((entry) => (
-    entry.options.some((option) => option.label === "{a 32 bit integer:value} squared")
+    entry.options.some((option) => option.label === "{a 32-bit integer:value} squared")
   )),
   `Expected typed squared-value instantiation label, got: ${JSON.stringify(instantiations)}`
 );
@@ -278,7 +278,7 @@ moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
 set pulse to the shader time
 set pulse to the sine of pulse
 set pulse to pulse saturated
-set the fragment color with red pulse, green 0.2, blue 0.8 and alpha 1.0
+set the fragment color with a red channel of pulse, a green channel of 0.2, a blue channel of 0.8 and an alpha channel of 1.0
 `
 ]);
 const shaderStatus = moduleInstance.ccall(
@@ -336,12 +336,12 @@ moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
   `import lib/shader.dl
 
 if this is a vertex shader:
-    set the shader interpolant named "surface" to (the vertex x) (the vertex y) (the vertex z) 1.0
-    set the output position to (the vertex x) (the vertex y) (the vertex z) (the vertex w)
+    set the shader interpolant named "surface" with an x coordinate of (the vertex x), a y coordinate of (the vertex y), a z coordinate of (the vertex z) and a w coordinate of 1.0
+    set the output position with x (the vertex x), y (the vertex y), z (the vertex z) and w (the vertex w)
 
 if this is a fragment shader:
     set shade to the shader interpolant x named "surface"
-    set the fragment color to shade shade shade 1.0
+    set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 `
 ]);
 const interpolantGlsl = {};
@@ -457,7 +457,7 @@ copy the filesystem entry at "session.txt" to "copy.txt" and print whether it su
 rename the filesystem entry at "copy.txt" to "moved.txt" and print whether it succeeded as a line
 delete the filesystem entry at "session.txt" and print whether it succeeded
 `);
-if (writeOutput !== "1\n1\n1\n1\n1") {
+if (writeOutput !== "true\ntrue\ntrue\ntrue\ntrue") {
   throw new Error(`Unexpected filesystem mutation output: ${JSON.stringify(writeOutput)}`);
 }
 
@@ -467,7 +467,7 @@ read the file at "moved.txt" and print whether it succeeded as a line
 print the contents of it as a line
 delete the filesystem entry at "moved.txt" and print whether it succeeded
 `);
-if (readOutput !== "1\nsaved-data\n1") {
+if (readOutput !== "true\nsaved-data\ntrue") {
   throw new Error(`Unexpected persistent filesystem output: ${JSON.stringify(readOutput)}`);
 }
 
@@ -485,7 +485,7 @@ print whether the error message of it is not empty as a line
 delete the filesystem entry at "metadata/file.txt"
 delete the filesystem entry at "metadata"
 `);
-if (metadataOutput !== "1\n0\n0\n1\n1\n1\n0\n1\n") {
+if (metadataOutput !== "true\nfalse\nfalse\ntrue\ntrue\ntrue\nfalse\ntrue\n") {
   throw new Error(`Unexpected filesystem metadata output: ${JSON.stringify(metadataOutput)}`);
 }
 
@@ -498,7 +498,7 @@ print whether entry lookup succeeded as a line
 print whether entry was found as a line
 print whether entry is a regular file as a line
 print whether entry's mode is unsupported as a line
-print whether entry's modification time is supported as a line
+print whether entry supports modification times as a line
 print whether entry's identity is unsupported as a line
 create a staging file beside "transaction-source.txt" and set staging to it
 print whether staging is unsupported as a line
@@ -506,7 +506,7 @@ print whether staging failed as a line
 print whether staging's error message is not empty as a line
 delete the filesystem entry at "transaction-source.txt"
 `);
-if (transactionOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+if (transactionOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
   throw new Error(`Unexpected filesystem transaction-capability output: ${JSON.stringify(transactionOutput)}`);
 }
 
@@ -530,7 +530,7 @@ print whether reference failed as a line
 print whether reference is unsupported as a line
 print whether reference's error message is not empty as a line
 `);
-if (pathOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+if (pathOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
   throw new Error(`Unexpected browser path output: ${JSON.stringify(pathOutput)}`);
 }
 
@@ -555,7 +555,7 @@ print whether the length of input's contents is 0 as a line
 print whether input has not reached the end of file as a line
 print whether input's error message is not empty as a line
 `);
-if (hostOutput !== "1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n1\n") {
+if (hostOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
   throw new Error(`Unexpected browser host output: ${JSON.stringify(hostOutput)}`);
 }
 

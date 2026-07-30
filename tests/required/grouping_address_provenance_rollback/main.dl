@@ -22,11 +22,11 @@ function left - right:
     execute:
         return @intrinsic("cast", @intrinsic("subtract", left, right), @intrinsic("type", "float"))
 
-function {floating-point number:value} odded:
+function {floating-point number:value} adjusted to be odd:
     execute:
         return value
 
-function {integer:value} odded:
+function {integer:value} adjusted to be odd:
     globals:
         guard
     execute:
@@ -35,7 +35,7 @@ function {integer:value} odded:
 
 function value tested:
     execute:
-        return value - 1 odded
+        return value - 1 adjusted to be odd
 
 function the identity of value:
     execute:

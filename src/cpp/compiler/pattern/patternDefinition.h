@@ -7,6 +7,7 @@
 #include <climits>
 #include <functional>
 #include <string_view>
+#include <unordered_set>
 struct Section;
 struct Instantiation;
 struct PatternTreeNode;
@@ -40,8 +41,9 @@ struct PatternDefinition {
 	std::vector<PatternPathSignature> signaturePaths;
 	// the exact trie endpoint nodes this definition currently ends at
 	std::vector<PatternTreeNode *> endNodes;
-	// precedence level (higher = evaluated first). 0 = no precedence declared.
-	int precedence = 0;
+	// Definitions which this pattern must bind before. Precedence is a partial
+	// order: sharing a predecessor does not create an ordering between peers.
+	std::unordered_set<PatternDefinition *> precedenceSuccessors;
 	PatternDefinition(Range range, Section *section);
 
 	std::string toString() const {

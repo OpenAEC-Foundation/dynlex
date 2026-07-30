@@ -1,4 +1,4 @@
 tests/required/precedence/main.dl:1-26: Warning: Expression 'print 2 + 3 + 4 as a line' has multiple valid operand groupings. Using 'print (((2 + 3) + 4) as a line)' instead of 'print ((2 + (3 + 4)) as a line)'.
-  note: while inferring call 'print 2 + 3 + 4 as a line' with arguments [string] -> nothing tests/required/precedence/main.dl:1-26
+  note: while inferring call 'print 2 + 3 + 4 as a line' with arguments [a string] -> nothing tests/required/precedence/main.dl:1-26
 tests/required/precedence/main.dl:1-26: Warning: Expression 'print 2 * 3 * 4 as a line' has multiple valid operand groupings. Using 'print (((2 * 3) * 4) as a line)' instead of 'print ((2 * (3 * 4)) as a line)'.
-  note: while inferring call 'print 2 * 3 * 4 as a line' with arguments [string] -> nothing tests/required/precedence/main.dl:1-26
+  note: while inferring call 'print 2 * 3 * 4 as a line' with arguments [a string] -> nothing tests/required/precedence/main.dl:1-26

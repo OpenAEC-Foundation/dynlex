@@ -1,0 +1,20 @@
+import lib/std.dl
+
+function {boolean:left} woven with {boolean:right}:
+    before: $ follows $
+    execute:
+        return left and right
+
+function {floating-point number:left} [woven with|braided with] {floating-point number:right}:
+    execute:
+        return left + right
+
+function {integer:left} braided with {integer:right}:
+    execute:
+        return left + right
+
+function left follows right:
+    execute:
+        return left - right
+
+print 10 follows 2 braided with 3 as a line

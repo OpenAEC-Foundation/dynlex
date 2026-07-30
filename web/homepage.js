@@ -92,6 +92,12 @@ let snippetCompilerQueue = Promise.resolve();
 const pendingSnippetRequests = new Map();
 const snippetHighlightStates = new WeakMap();
 const runtimeSemanticHighlightCache = new Map();
+const snippetDocumentUri = "file:///workspace/homepage-snippet.dl";
+let snippetDocumentDiagnostics = Object.freeze([]);
+const riverChallenge = required("[data-river-challenge]");
+const riverChallengeLoad = required("[data-river-challenge-load]", riverChallenge);
+const riverChallengeError = required("[data-river-challenge-error]", riverChallenge);
+let riverChallengePromise = null;
 
 function setSketchState(sketch, state) {
   const status = required("[data-snippet-status]", sketch);
@@ -150,6 +156,15 @@ function ensureSnippetWorker() {
     createSnippetWorker();
     snippetWorkerReady = callSnippetWorker("init").then(async (result) => {
       snippetLsp = new LspClient((message) => callSnippetWorker("lsp.exchange", { message }));
+      snippetLsp.onNotification("textDocument/publishDiagnostics", (params) => {
+        if (params.uri !== snippetDocumentUri) {
+          return;
+        }
+        if (!Array.isArray(params.diagnostics)) {
+          throw new Error("DynLex language server returned malformed diagnostics");
+        }
+        snippetDocumentDiagnostics = Object.freeze([...params.diagnostics]);
+      });
       snippetLsp.onRequest("workspace/semanticTokens/refresh", () => null);
       const initializeResult = await initializeLsp(snippetLsp, {
         capabilities: {
@@ -168,7 +183,7 @@ function ensureSnippetWorker() {
         throw new Error("DynLex language server legend differs from the generated highlight cache");
       }
       snippetLspDocument = new LspTextDocument(snippetLsp, {
-        uri: "file:///workspace/homepage-snippet.dl",
+        uri: snippetDocumentUri,
         languageId: "dynlex"
       });
       snippetWorkerInitialized = true;
@@ -197,6 +212,103 @@ function queueCompilerTask(task) {
   );
   return result;
 }
+
+async function compileAndRunSource(sourceText) {
+  await ensureSnippetWorker();
+  const compileResult = await callSnippetWorker("compile", {
+    source: sourceText,
+    version: nextSnippetVersion++
+  });
+  renderCompilationTime(compileResult.compilationMilliseconds);
+  if (compileResult.status !== 0) {
+    return { compileResult, runResult: null };
+  }
+
+  const runResult = await callSnippetWorker("run");
+  if (runResult.error) {
+    console.error("Homepage program execution failed", runResult.error);
+    throw new Error("Program execution failed");
+  }
+  return { compileResult, runResult };
+}
+
+async function analyzeDynLexSource(sourceText) {
+  await ensureSnippetWorker();
+  const textDocument = await syncSnippetLspDocument(sourceText);
+  const response = await snippetLsp.request("textDocument/semanticTokens/full", {
+    textDocument
+  });
+  return Object.freeze({
+    diagnostics: snippetDocumentDiagnostics,
+    semanticTokens: Object.freeze([...response.data])
+  });
+}
+
+async function semanticTokensForSource(sourceText) {
+  return (await analyzeDynLexSource(sourceText)).semanticTokens;
+}
+
+function startRiverChallengeMusic() {
+  const sourcePath = riverChallenge.dataset.riverMusic;
+  if (!sourcePath) {
+    throw new Error("River challenge music path is missing");
+  }
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    throw new Error("River challenge requires Web Audio");
+  }
+
+  const audio = new Audio(new URL(sourcePath, document.baseURI).href);
+  const context = new AudioContextClass();
+  const source = context.createMediaElementSource(audio);
+  const gain = context.createGain();
+  audio.loop = true;
+  audio.preload = "auto";
+  gain.gain.value = 0.34;
+  source.connect(gain);
+  gain.connect(context.destination);
+  const started = Promise.all([context.resume(), audio.play()]);
+  void started.catch(() => undefined);
+  return { audio, context, gain, started };
+}
+
+riverChallengeLoad.addEventListener("click", () => {
+  if (riverChallengePromise) {
+    return;
+  }
+
+  riverChallengeLoad.disabled = true;
+  riverChallengeLoad.dataset.loadState = "loading";
+  riverChallengeLoad.setAttribute("aria-expanded", "true");
+  riverChallenge.dataset.challengeState = "accepted";
+  let music;
+  try {
+    music = startRiverChallengeMusic();
+  } catch (error) {
+    console.error("River challenge audio failed to initialize", error);
+    riverChallenge.dataset.challengeState = "error";
+    riverChallengeError.hidden = false;
+    return;
+  }
+  riverChallengePromise = import("./river-challenge.js")
+    .then((module) => module.initializeRiverChallenge(riverChallenge, {
+      music,
+      analyzeDynLex: (sourceText) => (
+        queueCompilerTask(() => analyzeDynLexSource(sourceText))
+      ),
+      runDynLex: (sourceText) => queueCompilerTask(() => compileAndRunSource(sourceText))
+    }))
+    .then(() => {
+      riverChallenge.dataset.challengeState = "ready";
+    })
+    .catch((error) => {
+      console.error("River challenge failed to load", error);
+      music.audio.pause();
+      void music.context.close();
+      riverChallenge.dataset.challengeState = "error";
+      riverChallengeError.hidden = false;
+    });
+});
 
 function activeSnippetSource(sketch) {
   const visiblePanelSource = sketch.querySelector("[data-lab-panel]:not([hidden]) [data-snippet-source]");
@@ -283,13 +395,8 @@ function scheduleSemanticHighlight(source) {
     const sourceText = source.value;
     void queueCompilerTask(async () => {
       if (generation !== highlightState.generation || sourceText !== source.value) return;
-      await ensureSnippetWorker();
-      const textDocument = await syncSnippetLspDocument(sourceText);
-      const response = await snippetLsp.request("textDocument/semanticTokens/full", {
-        textDocument
-      });
+      const tokenData = await semanticTokensForSource(sourceText);
       if (generation !== highlightState.generation || sourceText !== source.value) return;
-      const tokenData = Object.freeze([...response.data]);
       runtimeSemanticHighlightCache.set(sourceText, tokenData);
       renderSemanticHighlight(source, tokenData, semanticTokenLegend, "semantic");
     }).catch((error) => {
@@ -325,36 +432,6 @@ function renderSnippetOutput(sketch, stdout) {
     return;
   }
 
-  if (mode === "rhythm") {
-    const lines = text.length > 0 ? text.split("\n") : ["(no output)"];
-    output.replaceChildren(...lines.map((line) => {
-      const span = document.createElement("span");
-      span.textContent = line;
-      return span;
-    }));
-    output.setAttribute("aria-label", `Output: ${lines.join(", ")}`);
-    return;
-  }
-
-  if (mode === "color") {
-    const words = (text || "no output").split(/\s+/);
-    const strong = document.createElement("strong");
-    strong.textContent = words.pop();
-    const span = document.createElement("span");
-    span.textContent = words.join(" ") || "output";
-    output.replaceChildren(span, strong);
-    return;
-  }
-
-  if (mode === "signal") {
-    const signal = document.createElement("i");
-    signal.setAttribute("aria-hidden", "true");
-    const value = document.createElement("span");
-    value.textContent = text || "(no output)";
-    output.replaceChildren(signal, value);
-    return;
-  }
-
   throw new Error(`Unknown snippet output mode: ${mode}`);
 }
 
@@ -376,21 +453,11 @@ async function executeSketch(sketch) {
     }
     await ensureSnippetWorker();
     setSketchState(sketch, "running");
-    const compileResult = await callSnippetWorker("compile", {
-      source: source.value,
-      version: nextSnippetVersion++
-    });
-    renderCompilationTime(compileResult.compilationMilliseconds);
+    const { compileResult, runResult } = await compileAndRunSource(source.value);
     renderSnippetDiagnostics(sketch, compileResult.diagnostics);
     if (compileResult.status !== 0) {
       setSketchState(sketch, "error");
       return;
-    }
-
-    const runResult = await callSnippetWorker("run");
-    if (runResult.error) {
-      console.error("Homepage sketch execution failed", runResult.error);
-      throw new Error("Program execution failed");
     }
     renderSnippetOutput(sketch, runResult.stdout);
     source.dataset.edited = "false";

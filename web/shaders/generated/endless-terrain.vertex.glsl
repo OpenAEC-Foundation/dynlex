@@ -150,7 +150,7 @@ float the_absolute_value_of_magnitude_f32(float magnitude)
     return abs(magnitude);
 }
 
-float the_simplex_corner_at_3a_point8offset5_with_permutation_3any8permutation5_a_point_f32(_class offset, float permutation)
+float the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_point_f32(_class offset, float permutation)
 {
     float tmp = 0.5;
     float tmp1 = offset._m0.x;
@@ -195,7 +195,7 @@ float the_simplex_corner_at_3a_point8offset5_with_permutation_3any8permutation5_
     return left1_4321_43right_f32_f32(tmp35, tmp46);
 }
 
-float the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class point, float phase)
+float the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_class point, float phase)
 {
     float tmp = point._m0.x;
     float tmp1 = 17.1700000762939453125;
@@ -322,9 +322,9 @@ float the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class
     float tmp200 = 1.0;
     float tmp201 = left1_4331_43right_f32_f32(tmp199, tmp200);
     float final = the_simplex_permutation_of_value_f32(tmp201);
-    float leading = the_simplex_corner_at_3a_point8offset5_with_permutation_3any8permutation5_a_point_f32(offset, initial);
-    float central = the_simplex_corner_at_3a_point8offset5_with_permutation_3any8permutation5_a_point_f32(middle, following);
-    float trailing = the_simplex_corner_at_3a_point8offset5_with_permutation_3any8permutation5_a_point_f32(third, final);
+    float leading = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_point_f32(offset, initial);
+    float central = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_point_f32(middle, following);
+    float trailing = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_point_f32(third, final);
     float tmp202 = left1_4331_43right_f32_f32(leading, central);
     float tmp203 = left1_4331_43right_f32_f32(tmp202, trailing);
     float tmp204 = 130.0;
@@ -374,7 +374,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     class_tmp._m0 = _1091;
     _class tmp9 = class_tmp;
     float tmp10 = 1.7000000476837158203125;
-    float continental = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp9, tmp10);
+    float continental = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp9, tmp10);
     float tmp16 = position._m0.x;
     float tmp17 = 0.02099999971687793731689453125;
     float tmp18 = left1_4321_43right_f32_f32(tmp16, tmp17);
@@ -391,7 +391,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     _class tmp31 = class_tmp12;
     float tmp32 = 4.099999904632568359375;
     vec3 _1115 = vec3(0.0);
-    _1115.x = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp31, tmp32);
+    _1115.x = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp31, tmp32);
     _1115.y = 0.0;
     float tmp39 = position._m0.x;
     float tmp40 = 0.006000000052154064178466796875;
@@ -413,7 +413,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     class_tmp35._m0 = _1127;
     _class tmp65 = class_tmp35;
     float tmp66 = 8.30000019073486328125;
-    _1115.z = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp65, tmp66);
+    _1115.z = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp65, tmp66);
     class_0 class_tmp11 = class_0(vec3(0.0));
     class_tmp11._m0 = _1115;
     class_0 warp = class_tmp11;
@@ -451,7 +451,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     class_tmp96._m0 = _1174;
     _class tmp125 = class_tmp96;
     float tmp126 = 2.2999999523162841796875;
-    float mountain = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp125, tmp126);
+    float mountain = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp125, tmp126);
     float tmp131 = bent._m0.x;
     float tmp132 = 0.017999999225139617919921875;
     float tmp133 = _the_negative_of_4the_opposite_of_453value_f32(tmp132);
@@ -472,7 +472,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     class_tmp127._m0 = _1198;
     _class tmp157 = class_tmp127;
     float tmp158 = 6.900000095367431640625;
-    float crossing = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp157, tmp158);
+    float crossing = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp157, tmp158);
     float tmp163 = bent._m0.x;
     float tmp164 = 0.11900000274181365966796875;
     float tmp165 = left1_4321_43right_f32_f32(tmp163, tmp164);
@@ -492,7 +492,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_point(class_0 positi
     class_tmp159._m0 = _1221;
     _class tmp188 = class_tmp159;
     float tmp189 = 9.69999980926513671875;
-    float broken = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp188, tmp189);
+    float broken = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp188, tmp189);
     float tmp190 = 0.60000002384185791015625;
     float tmp191 = left1_4321_43right_f32_f32(mountain, tmp190);
     float tmp192 = 0.2700000107288360595703125;
@@ -623,8 +623,8 @@ void main()
         float tmp35 = 0.04500000178813934326171875;
         float tmp36 = left1_4321_43right_f32_f32(tmp34, tmp35);
         float yaw = left1_4331_43right_f32_f32(tmp31, tmp36);
-        float yawsine = the_sine_of_value_f32(yaw);
-        float yawcosine = the_cosine_of_value_f32(yaw);
+        float turning = the_sine_of_value_f32(yaw);
+        float alignment = the_cosine_of_value_f32(yaw);
         float tmp37 = 0.0;
         float tmp41 = camera._m0.y;
         float vertical = left1_4351_43right_f32_f32(tmp37, tmp41);
@@ -644,16 +644,16 @@ void main()
         float depth = left1_4351_43right_f32_f32(tmp52, tmp53);
         float lateral = left1_4321_43right_f32_f32(slope, depth);
         float tmp58 = camera._m0.x;
-        float tmp59 = left1_4321_43right_f32_f32(lateral, yawcosine);
+        float tmp59 = left1_4321_43right_f32_f32(lateral, alignment);
         float tmp60 = left1_4331_43right_f32_f32(tmp58, tmp59);
-        float tmp61 = left1_4321_43right_f32_f32(forward, yawsine);
+        float tmp61 = left1_4321_43right_f32_f32(forward, turning);
         vec3 _466 = vec3(0.0);
         _466.x = left1_4331_43right_f32_f32(tmp60, tmp61);
         _466.y = 0.0;
         float tmp67 = camera._m0.z;
-        float tmp68 = left1_4321_43right_f32_f32(forward, yawcosine);
+        float tmp68 = left1_4321_43right_f32_f32(forward, alignment);
         float tmp69 = left1_4331_43right_f32_f32(tmp67, tmp68);
-        float tmp70 = left1_4321_43right_f32_f32(lateral, yawsine);
+        float tmp70 = left1_4321_43right_f32_f32(lateral, turning);
         _466.z = left1_4351_43right_f32_f32(tmp69, tmp70);
         class_0 class_tmp54 = class_0(vec3(0.0));
         class_tmp54._m0 = _466;
@@ -850,7 +850,7 @@ void main()
             class_tmp333._m0 = _553;
             _class tmp348 = class_tmp333;
             float tmp349 = 13.69999980926513671875;
-            float tmp350 = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp348, tmp349);
+            float tmp350 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp348, tmp349);
             float tmp351 = 0.5;
             float tmp352 = left1_4321_43right_f32_f32(tmp350, tmp351);
             float tmp353 = 0.5;
@@ -865,7 +865,7 @@ void main()
             class_tmp354._m0 = _568;
             _class tmp369 = class_tmp354;
             float tmp370 = 16.200000762939453125;
-            float tmp371 = the_simplex_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp369, tmp370);
+            float tmp371 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp369, tmp370);
             float tmp372 = 0.5;
             float tmp373 = left1_4321_43right_f32_f32(tmp371, tmp372);
             float tmp374 = 0.5;

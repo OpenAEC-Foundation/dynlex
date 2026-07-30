@@ -211,17 +211,13 @@ static bool
 isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpression, GroupingGenerationState &state) {
 	if (!canClaimGroupingSpan(start, end, rootIndex, rootExpression, state))
 		return false;
-	int rootPrecedence = expressionPrecedence(rootExpression);
-	if (rootPrecedence <= 0)
-		return true;
 	for (int otherIndex = start; otherIndex <= end; otherIndex++) {
 		if (otherIndex == rootIndex)
 			continue;
 		Expression *otherExpression = state.flatNodes[otherIndex];
 		if (!canClaimGroupingSpan(start, end, otherIndex, otherExpression, state))
 			continue;
-		int otherPrecedence = expressionPrecedence(otherExpression);
-		if (otherPrecedence > 0 && otherPrecedence < rootPrecedence)
+		if (expressionMustEvaluateBefore(rootExpression, otherExpression))
 			return false;
 	}
 	return true;

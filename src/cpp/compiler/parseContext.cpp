@@ -185,7 +185,6 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->groupingArgumentHasAdjacentSiblingSlot = expression->groupingArgumentHasAdjacentSiblingSlot;
 	clone->groupingStartsWithArgument = expression->groupingStartsWithArgument;
 	clone->groupingEndsWithArgument = expression->groupingEndsWithArgument;
-	clone->groupingPrecedence = expression->groupingPrecedence;
 	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->selectedPatternPathIndex = preserveInferenceMetadata ? expression->selectedPatternPathIndex : std::nullopt;

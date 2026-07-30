@@ -79,7 +79,7 @@ float _the_negative_of_4the_opposite_of_453value_f32(float value)
     return -value;
 }
 
-float the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(_class point, float phase)
+float the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_class point, float phase)
 {
     float tmp = point._m0.x;
     float tmp1 = 0.730000019073486328125;
@@ -159,9 +159,9 @@ float the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(_class p
     return left1_4331_43right_f32_f32(tmp76, tmp81);
 }
 
-float the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class point, float phase)
+float the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_class point, float phase)
 {
-    float tmp = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(point, phase);
+    float tmp = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(point, phase);
     float tmp1 = 0.5;
     float tmp2 = left1_4321_43right_f32_f32(tmp, tmp1);
     float tmp3 = 0.5;
@@ -173,9 +173,9 @@ float the_absolute_value_of_magnitude_f32(float magnitude)
     return abs(magnitude);
 }
 
-float the_ridged_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class point, float phase)
+float the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_class point, float phase)
 {
-    float tmp = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(point, phase);
+    float tmp = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(point, phase);
     float wave = the_absolute_value_of_magnitude_f32(tmp);
     float tmp1 = 1.0;
     float tmp2 = 1.0;
@@ -242,7 +242,7 @@ float the_glow_from_inner_to_outer_at_sample_f32_f32_f32(float inner, float oute
     return left1_4351_43right_f32_f32(tmp, tmp1);
 }
 
-float the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class point, float phase)
+float the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_class point, float phase)
 {
     float tmp = point._m0.x;
     float tmp1 = 0.189999997615814208984375;
@@ -254,7 +254,7 @@ float the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class p
     _class class_tmp = _class(vec2(0.0));
     class_tmp._m0 = _1952;
     _class _sample = class_tmp;
-    float warp = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(_sample, phase);
+    float warp = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(_sample, phase);
     float tmp13 = point._m0.x;
     float tmp14 = 0.23000000417232513427734375;
     float tmp15 = left1_4321_43right_f32_f32(tmp13, tmp14);
@@ -276,7 +276,7 @@ float the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class p
     float tmp37 = point._m0.y;
     float tmp38 = 1.7000000476837158203125;
     float tmp39 = left1_4331_43right_f32_f32(phase, tmp38);
-    float tmp40 = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(shifted, tmp39);
+    float tmp40 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(shifted, tmp39);
     float tmp41 = 1.7000000476837158203125;
     float tmp42 = left1_4321_43right_f32_f32(tmp40, tmp41);
     float latitude = left1_4331_43right_f32_f32(tmp37, tmp42);
@@ -316,14 +316,14 @@ float the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(_class p
     _class location = class_tmp65;
     float tmp72 = 4.0;
     float tmp73 = left1_4331_43right_f32_f32(phase, tmp72);
-    float rarity = the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(location, tmp73);
+    float rarity = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(location, tmp73);
     float tmp74 = 0.4799999892711639404296875;
     float tmp75 = 0.819999992847442626953125;
     float tmp76 = the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp74, tmp75, rarity);
     return left1_4321_43right_f32_f32(brightness, tmp76);
 }
 
-float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale5_during_3float8phase5_at_3float8time5_a_point_f32_f32_f32(_class position, float scale, float phase, float time)
+float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_point_f32_f32_f32(_class position, float scale, float phase, float time)
 {
     float tmp = 0.12999999523162841796875;
     float tmp1 = left1_4321_43right_f32_f32(time, tmp);
@@ -352,7 +352,7 @@ float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale
     _class tmp27 = class_tmp16;
     float tmp28 = 13.69999980926513671875;
     float tmp29 = left1_4321_43right_f32_f32(phase, tmp28);
-    float points = the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp27, tmp29);
+    float points = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp27, tmp29);
     float tmp34 = _sample._m0.x;
     float tmp35 = 0.3300000131130218505859375;
     vec2 _1816 = vec2(0.0);
@@ -365,7 +365,7 @@ float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale
     float tmp45 = left1_4321_43right_f32_f32(phase, tmp44);
     float tmp46 = 0.0900000035762786865234375;
     float tmp47 = left1_4331_43right_f32_f32(tmp45, tmp46);
-    float horizontal = the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp43, tmp47);
+    float horizontal = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp43, tmp47);
     vec2 _1829 = vec2(0.0);
     _1829.x = _sample._m0.x;
     float tmp56 = _sample._m0.y;
@@ -378,7 +378,7 @@ float a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale
     float tmp63 = left1_4321_43right_f32_f32(phase, tmp62);
     float tmp64 = 0.10999999940395355224609375;
     float tmp65 = left1_4351_43right_f32_f32(tmp63, tmp64);
-    float vertical = the_spark_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp61, tmp65);
+    float vertical = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp61, tmp65);
     float tmp69 = position._m0.x;
     float tmp73 = position._m0.x;
     float tmp74 = left1_4321_43right_f32_f32(tmp69, tmp73);
@@ -551,7 +551,7 @@ void main()
     class_tmp153._m0 = _876;
     _class tmp173 = class_tmp153;
     float tmp174 = 1.7000000476837158203125;
-    float primary = the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp173, tmp174);
+    float primary = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp173, tmp174);
     float tmp179 = universe._m0.x;
     float tmp180 = 4.599999904632568359375;
     float tmp181 = left1_4321_43right_f32_f32(tmp179, tmp180);
@@ -568,7 +568,7 @@ void main()
     class_tmp175._m0 = _891;
     _class tmp195 = class_tmp175;
     float tmp196 = 5.30000019073486328125;
-    float secondary = the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp195, tmp196);
+    float secondary = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp195, tmp196);
     float tmp201 = universe._m0.x;
     float tmp202 = 2.400000095367431640625;
     float tmp203 = left1_4321_43right_f32_f32(tmp201, tmp202);
@@ -585,7 +585,7 @@ void main()
     _class tmp216 = class_tmp197;
     float tmp217 = 0.04500000178813934326171875;
     float tmp218 = left1_4321_43right_f32_f32(time, tmp217);
-    float ridge = the_ridged_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp216, tmp218);
+    float ridge = the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp216, tmp218);
     float tmp222 = universe._m0.x;
     float tmp223 = 2.7000000476837158203125;
     float tmp224 = left1_4321_43right_f32_f32(tmp222, tmp223);
@@ -639,13 +639,13 @@ void main()
     class_0 color = class_tmp242;
     float tmp271 = 13.0;
     float tmp272 = 0.0900000035762786865234375;
-    float faraway = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale5_during_3float8phase5_at_3float8time5_a_point_f32_f32_f32(universe, tmp271, tmp272, time);
+    float faraway = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_point_f32_f32_f32(universe, tmp271, tmp272, time);
     float tmp273 = 21.0;
     float tmp274 = 0.4099999964237213134765625;
-    float middle = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale5_during_3float8phase5_at_3float8time5_a_point_f32_f32_f32(universe, tmp273, tmp274, time);
+    float middle = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_point_f32_f32_f32(universe, tmp273, tmp274, time);
     float tmp275 = 31.0;
     float tmp276 = 0.769999980926513671875;
-    float nearby = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3float8scale5_during_3float8phase5_at_3float8time5_a_point_f32_f32_f32(universe, tmp275, tmp276, time);
+    float nearby = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_point_f32_f32_f32(universe, tmp275, tmp276, time);
     float tmp277 = 0.4600000083446502685546875;
     float tmp278 = left1_4321_43right_f32_f32(faraway, tmp277);
     float tmp279 = 0.7599999904632568359375;
@@ -665,7 +665,7 @@ void main()
     class_tmp284._m0 = _967;
     _class tmp299 = class_tmp284;
     float tmp300 = 8.19999980926513671875;
-    float temperature = the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp299, tmp300);
+    float temperature = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp299, tmp300);
     vec3 _977 = color._m0;
     float tmp305 = color._m0.x;
     float tmp306 = 0.579999983310699462890625;
@@ -747,7 +747,7 @@ void main()
     class_tmp391._m0 = _1061;
     _class tmp405 = class_tmp391;
     float tmp406 = 3.099999904632568359375;
-    float turbulence = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp405, tmp406);
+    float turbulence = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp405, tmp406);
     float tmp411 = disk._m0.x;
     float tmp412 = 18.0;
     float tmp413 = left1_4321_43right_f32_f32(tmp411, tmp412);
@@ -761,7 +761,7 @@ void main()
     class_tmp407._m0 = _1073;
     _class tmp421 = class_tmp407;
     float tmp422 = 7.900000095367431640625;
-    float detail = the_signed_flow_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp421, tmp422);
+    float detail = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp421, tmp422);
     float tmp423 = 39.0;
     float tmp424 = left1_4321_43right_f32_f32(orbit, tmp423);
     float tmp425 = 6.80000019073486328125;
@@ -872,7 +872,7 @@ void main()
     class_tmp529._m0 = _1163;
     _class tmp547 = class_tmp529;
     float tmp548 = 10.0;
-    float flicker = the_flowing_field_at_3a_point8point5_during_3any8phase5_a_point_f32(tmp547, tmp548);
+    float flicker = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_point_f32(tmp547, tmp548);
     float tmp549 = 0.519999980926513671875;
     float tmp550 = left1_4321_43right_f32_f32(core, tmp549);
     float tmp551 = 0.12999999523162841796875;

@@ -1,0 +1,6 @@
+import lib/river_challenge.dl
+
+# River subjects are values, so a passenger can flow through a variable.
+set passenger to the sheep
+get passenger in the boat
+row to the other side

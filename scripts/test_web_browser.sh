@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVER_PORT="${DYNLEX_TEST_SERVER_PORT:-8765}"
 DEBUG_PORT="${DYNLEX_TEST_DEBUG_PORT:-9222}"
+BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/browser_execution.mjs}"
 
 for dependency in node python3 google-chrome setsid; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
@@ -67,4 +68,4 @@ fi
 
 DYNLEX_CDP_ORIGIN="http://127.0.0.1:$DEBUG_PORT" \
 DYNLEX_SITE_ORIGIN="http://127.0.0.1:$SERVER_PORT" \
-node "$PROJECT_DIR/tests/web/browser_execution.mjs"
+node "$BROWSER_TEST_ENTRY"

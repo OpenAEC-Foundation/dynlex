@@ -51,7 +51,6 @@ bool typeHasManagedLifecycle(const DataType &type, std::set<ClassInstanceKey> &v
 std::string canonicalTypePatternName(std::string_view patternName) {
 	std::string result;
 	result.reserve(patternName.size());
-	bool omittedParameter = false;
 	for (size_t index = 0; index < patternName.size();) {
 		if (patternName[index] == '{') {
 			size_t closing = patternName.find('}', index + 1);
@@ -59,8 +58,7 @@ std::string canonicalTypePatternName(std::string_view patternName) {
 				result.append(patternName.substr(index));
 				break;
 			}
-			omittedParameter = true;
-			result += ' ';
+			result += " … ";
 			index = closing + 1;
 			continue;
 		}
@@ -92,10 +90,6 @@ std::string canonicalTypePatternName(std::string_view patternName) {
 			pendingSpace = false;
 		}
 		normalized += character;
-	}
-	if (omittedParameter) {
-		for (size_t position = normalized.find(" by "); position != std::string::npos; position = normalized.find(" by "))
-			normalized.replace(position, 4, " ");
 	}
 	return normalized;
 }

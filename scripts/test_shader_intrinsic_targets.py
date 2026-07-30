@@ -183,6 +183,9 @@ if red > 10.0:
     set red to green
 set the fragment color with a red channel of red, a green channel of green, a blue channel of blue and an alpha channel of 1.0
 """
+VECTOR_LOAD_SHADER_OUTPUT = """\
+@intrinsic("shader output", @intrinsic("shader input", "Position"))
+"""
 LOOP_WITH_NESTED_EXIT = """\
 import lib/shader.dl
 
@@ -633,6 +636,24 @@ def main() -> int:
                     failures.append(
                         f"SPIR-V {selection_case_name} at {optimization} reused merge target %{merge_targets[0]}"
                     )
+
+        for optimization in ("-O0", "-O1", "-O2", "-O3"):
+            case_name = f"vector-load-shader-output-{optimization[1:]}"
+            result = compile_source(
+                compiler,
+                temporary_path,
+                case_name,
+                VECTOR_LOAD_SHADER_OUTPUT,
+                ("--emit-spirv", "--shader-stage=vertex", optimization),
+            )
+            if result.returncode != 0:
+                diagnostics = (result.stdout + result.stderr).strip()
+                failures.append(f"SPIR-V rejected vector-load shader output at {optimization}: {diagnostics}")
+                continue
+            try:
+                spirv_instructions(temporary_path / f"{case_name}.out")
+            except ValueError as error:
+                failures.append(str(error))
 
         for optimization in ("-O0", "-O1", "-O2", "-O3"):
             case_name = f"branched-shader-output-{optimization[1:]}"

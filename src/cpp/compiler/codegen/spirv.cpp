@@ -74,26 +74,27 @@ static llvm::Constant *defineVectorConstant(llvm::Constant *constant) {
 	return llvm::ConstantVector::get(elements);
 }
 
-static size_t defineShaderOutputVectorSeeds(llvm::Use &use, llvm::Type *vectorType) {
+static void defineShaderOutputVectorSeeds(
+	llvm::Use &use, llvm::Type *vectorType, std::unordered_set<llvm::Instruction *> &visitedInstructions
+) {
 	llvm::Value *value = use.get();
 	if (auto *constant = llvm::dyn_cast<llvm::Constant>(value)) {
 		if (constant->getType() != vectorType)
-			return 0;
+			return;
 		use.set(defineVectorConstant(constant));
-		return 1;
+		return;
 	}
 
 	auto *instruction = llvm::dyn_cast<llvm::Instruction>(value);
-	if (!instruction || instruction->getType() != vectorType)
-		return 0;
+	if (!instruction || instruction->getType() != vectorType || !visitedInstructions.insert(instruction).second)
+		return;
 
-	size_t seedCount = 0;
 	for (llvm::Use &operand : instruction->operands())
-		seedCount += defineShaderOutputVectorSeeds(operand, vectorType);
-	return seedCount;
+		defineShaderOutputVectorSeeds(operand, vectorType, visitedInstructions);
 }
 
 static void defineShaderOutputVectorSeeds(llvm::Module &module) {
+	std::unordered_set<llvm::Instruction *> visitedInstructions;
 	for (llvm::Function &function : module) {
 		for (llvm::BasicBlock &block : function) {
 			for (llvm::Instruction &instruction : block) {
@@ -102,8 +103,7 @@ static void defineShaderOutputVectorSeeds(llvm::Module &module) {
 					continue;
 
 				llvm::Type *vectorType = store->getValueOperand()->getType();
-				size_t seedCount = defineShaderOutputVectorSeeds(store->getOperandUse(0), vectorType);
-				requireCompilerInvariant(seedCount > 0, "shader output vector has no constant seed");
+				defineShaderOutputVectorSeeds(store->getOperandUse(0), vectorType, visitedInstructions);
 			}
 		}
 	}

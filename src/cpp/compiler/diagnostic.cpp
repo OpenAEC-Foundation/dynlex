@@ -1,8 +1,6 @@
 #include "diagnostic.h"
 
-Diagnostic unknownTypeConstraintDiagnostic(
-	const ParseContext &context, Range range, std::string_view constraint
-) {
+Diagnostic unknownTypeConstraintDiagnostic(const ParseContext &context, Range range, std::string_view constraint) {
 	return Diagnostic(context, Diagnostic::Level::Error, "unknown type constraint", range, "type_constraint", constraint);
 }
 

@@ -361,17 +361,26 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	}
 
 	SemanticTokenBuilder builder(lineCount);
-	auto addTokenWithModifiers = [&builder, &uri](const ::Range &range, SemanticTokenType type, int modifiers) {
+	using MappedRange = std::pair<SourceLocation, SourceLocation>;
+	auto mappedRangeForUri = [&uri](const ::Range &range) -> std::optional<MappedRange> {
 		SourceLocation mappedStart = range.sourceStart();
 		SourceLocation mappedEnd = range.sourceEnd();
-		if (!mappedStart.sourceFile || !mappedEnd.sourceFile)
-			return;
-		if (pathutil::toAbsoluteUri(mappedStart.sourceFile->uri) != uri ||
-			pathutil::toAbsoluteUri(mappedEnd.sourceFile->uri) != uri)
-			return;
-		if (mappedStart.sourceFileLineIndex != mappedEnd.sourceFileLineIndex)
-			return;
+		if (!mappedStart.sourceFile || !mappedEnd.sourceFile || pathutil::toAbsoluteUri(mappedStart.sourceFile->uri) != uri ||
+			pathutil::toAbsoluteUri(mappedEnd.sourceFile->uri) != uri ||
+			mappedStart.sourceFileLineIndex != mappedEnd.sourceFileLineIndex)
+			return std::nullopt;
+		return MappedRange{mappedStart, mappedEnd};
+	};
+	auto addMappedTokenWithModifiers = [&builder](const MappedRange &mappedRange, SemanticTokenType type, int modifiers) {
+		const auto &[mappedStart, mappedEnd] = mappedRange;
 		builder.add(mappedStart.sourceFileLineIndex, {mappedStart.column, mappedEnd.column, type, modifiers});
+	};
+	auto addTokenWithModifiers = [&mappedRangeForUri,
+								  &addMappedTokenWithModifiers](const ::Range &range, SemanticTokenType type, int modifiers) {
+		std::optional<MappedRange> mappedRange = mappedRangeForUri(range);
+		if (!mappedRange)
+			return;
+		addMappedTokenWithModifiers(*mappedRange, type, modifiers);
 	};
 	auto addToken = [&addTokenWithModifiers](const ::Range &range, SemanticTokenType type, bool isDefinition) {
 		addTokenWithModifiers(range, type, semanticTokenModifiers(isDefinition, false));
@@ -380,11 +389,15 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	std::function<void(Section *)> tokenizeVariables = [&](Section *section) {
 		for (auto &[name, refs] : section->variableReferences) {
 			(void)name;
-			for (VariableReference *ref : refs)
-				addTokenWithModifiers(
-					ref->range, SemanticTokenType::Variable,
+			for (VariableReference *ref : refs) {
+				std::optional<MappedRange> mappedRange = mappedRangeForUri(ref->range);
+				if (!mappedRange)
+					continue;
+				addMappedTokenWithModifiers(
+					*mappedRange, SemanticTokenType::Variable,
 					semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
 				);
+			}
 		}
 		for (Section *child : section->children)
 			tokenizeVariables(child);
@@ -392,6 +405,8 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	tokenizeVariables(context.mainSection);
 
 	for (const ParseContext::SourceTokenAnnotation &annotation : context.sourceTokenAnnotations) {
+		if (!mappedRangeForUri(annotation.range))
+			continue;
 		switch (annotation.kind) {
 		case ParseContext::SourceTokenKind::Keyword:
 			addToken(annotation.range, SemanticTokenType::Keyword, false);

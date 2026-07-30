@@ -65,7 +65,7 @@ assert.doesNotMatch(sharedSource, /function (?:value|fractal) noise\b/i);
 assert.doesNotMatch(sharedSource, /\bcell_[xy]\b/i);
 assert.match(
   sharedSource,
-  /function the simplex field at \{a point:point\} during \{any:phase\}/,
+  /function the simplex field at \{a point:point\} during \{a value:phase\}/,
   "Shared shader art must provide a non-square procedural field"
 );
 
@@ -126,7 +126,7 @@ assert.match(terrainSource, /set depth to \(forward \* cosine\) - \(vertical \* 
 assert.match(terrainSource, /set lateral to slope \* depth/);
 assert.match(
   terrainSource,
-  /set the shader interpolant named "terrain normal" to normal's x normal's y normal's z distance/
+  /set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance/
 );
 assert.match(
   terrainSource,

@@ -146,7 +146,6 @@ struct Expression {
 	bool groupingStartsWithArgument = false;
 	bool groupingEndsWithArgument = false;
 	// Precedence of the source pattern that expanded into this expression root.
-	int groupingPrecedence = 0;
 };
 
 template <typename Visitor>

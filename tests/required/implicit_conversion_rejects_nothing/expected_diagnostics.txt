@@ -1,0 +1,2 @@
+tests/required/implicit_conversion_rejects_nothing/main.dl:1-21: Error: No overload matches call 'consume finish and 1' for argument types [nothing, a 32-bit integer]. Available overloads: 'consume {a value:first} and {a number box:second}'
+  note: while inferring call 'consume finish and 1' with arguments [nothing, a 32-bit integer] -> an unresolved value tests/required/implicit_conversion_rejects_nothing/main.dl:1-21

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <list>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <tuple>
 #include <unordered_set>
@@ -237,6 +238,22 @@ static bool referenceComesBefore(const PatternReference *left, const PatternRefe
 	std::string leftText = left ? left->pattern.text : "";
 	std::string rightText = right ? right->pattern.text : "";
 	return leftText < rightText;
+}
+
+static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition *definition) {
+	std::vector<PatternDefinition *> family;
+	std::vector<PatternDefinition *> pending{definition};
+	std::unordered_set<PatternDefinition *> visited;
+	while (!pending.empty()) {
+		PatternDefinition *current = pending.back();
+		pending.pop_back();
+		if (!visited.insert(current).second)
+			continue;
+		family.push_back(current);
+		for (PatternTreeNode *endNode : current->endNodes)
+			pending.insert(pending.end(), endNode->matchingDefinitions.begin(), endNode->matchingDefinitions.end());
+	}
+	return family;
 }
 
 static bool resolutionTraceEnabled() {

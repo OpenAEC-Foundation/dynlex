@@ -677,9 +677,9 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 				if (probe == PatternTypeConstraintProbe::Invalid && item.failureDiagnostic) {
 					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
 				} else if (probe == PatternTypeConstraintProbe::Invalid) {
-					parseContext.diagnostics.push_back(unknownTypeConstraintDiagnostic(
-						parseContext, item.definition->range, item.element->typeConstraintName
-					));
+					parseContext.diagnostics.push_back(
+						unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+					);
 				} else {
 					parseContext.diagnostics.push_back(Diagnostic(
 						parseContext, Diagnostic::Level::Error, "impure type constraint", item.definition->range,
