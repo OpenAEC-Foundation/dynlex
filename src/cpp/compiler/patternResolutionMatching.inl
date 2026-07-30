@@ -194,6 +194,14 @@ static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 	});
 }
 
+static bool isArgumentExpressionReference(const PatternReference *reference) {
+	requireCompilerInvariant(
+		reference && reference->expression && reference->range().line,
+		"pattern reference argument classification requires a source expression"
+	);
+	return reference->range().line->expression != reference->expression;
+}
+
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
 static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts, bool allowUnmatchedVariables,
@@ -295,10 +303,11 @@ static bool resolveReferences(
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			const std::string &varName = reference->patternElements[0].text;
-			if (!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName))
+			if (!isArgumentExpressionReference(reference) ||
+				(!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName)))
 				return false;
 			failedMatchDependencies.erase(reference);
-			// Single-word reference that didn't match any pattern — must be a variable.
+			// An unmatched word can only be a variable when another expression consumes it as an argument.
 			reference->patternElements[0].type = PatternElement::Type::Variable;
 			reference->resolve();
 			reference->range().section()->addVariableReference(
