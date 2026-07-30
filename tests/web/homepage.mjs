@@ -47,11 +47,15 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(html, /class="[^"]*(?:capability-grid|final-cta|idea-path)[^"]*"/);
 assert.match(html, /<section[^>]+class="[^"]*hero-workbench[^"]*"/);
-assert.match(html, /class="sketch-grid"/);
-assert.ok((html.match(/data-runnable-sketch/g) ?? []).length >= 5, "Homepage needs at least five runnable sketches");
-assert.ok((html.match(/data-snippet-source/g) ?? []).length >= 5, "Runnable sketches need editable source fields");
-assert.ok((html.match(/data-snippet-run/g) ?? []).length >= 5, "Runnable sketches need run controls");
-assert.ok((html.match(/data-snippet-output/g) ?? []).length >= 5, "Runnable sketches need inline output");
+assert.match(html, /data-river-challenge/);
+assert.match(html, /data-river-preview/);
+assert.match(html, /data-river-challenge-load/);
+assert.doesNotMatch(html, /challenge-door(?:-|\b)/, "The retired river trailer must be removed");
+assert.doesNotMatch(html, /#sketches/, "Retired sketch links must be removed");
+assert.equal((html.match(/data-runnable-sketch/g) ?? []).length, 2, "Homepage needs its focused runnable sketches");
+assert.equal((html.match(/data-snippet-source/g) ?? []).length, 4, "Runnable sketches need editable source fields");
+assert.equal((html.match(/data-snippet-run/g) ?? []).length, 2, "Runnable sketches need run controls");
+assert.equal((html.match(/data-snippet-output/g) ?? []).length, 2, "Runnable sketches need inline output");
 assert.match(html, /<textarea[^>]+data-snippet-source/);
 
 const homepageJavascript = fs.readFileSync(files.javascript, "utf8");
@@ -91,7 +95,7 @@ for (const retiredAsset of ["cpp_site.png", "python_site.png"]) {
   assert.ok(!fs.existsSync(path.join(webDir, retiredAsset)), `Retired homepage asset still exists: ${retiredAsset}`);
 }
 
-for (const sectionId of ["playground", "sketches", "language", "studio"]) {
+for (const sectionId of ["playground", "challenges", "language", "studio"]) {
   assert.match(html, new RegExp(`id="${sectionId}"`), `Missing homepage section #${sectionId}`);
 }
 

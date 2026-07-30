@@ -1,0 +1,862 @@
+.river-game {
+    --river-panel: #0c110e;
+    --river-panel-raised: #121a15;
+    --river-border: rgba(229, 240, 226, 0.2);
+    --river-text: #f5f2e8;
+    --river-muted: #9fa9a0;
+    --river-green: #c7ff38;
+    --river-blue: #85dcff;
+    --river-red: #ff6f5e;
+    overflow: hidden;
+    border: 1px solid #58645b;
+    background: var(--river-panel);
+    color: var(--river-text);
+    box-shadow: 12px 12px 0 #152d26;
+}
+
+.river-game button {
+    font: inherit;
+    color: inherit;
+}
+
+.river-game-header {
+    display: grid;
+    min-height: 52px;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    border-bottom: 1px solid var(--river-border);
+    background: #090d0b;
+    font: 500 0.61rem/1 var(--mono);
+    letter-spacing: 0.08em;
+}
+
+.river-game-header span,
+.river-game-header strong,
+.river-game-header i {
+    padding: 0 18px;
+}
+
+.river-game-header span {
+    color: var(--river-green);
+}
+
+.river-game-header strong {
+    color: #ccd3cc;
+    font-weight: 400;
+}
+
+.river-game-header i {
+    color: var(--river-blue);
+    font-style: normal;
+}
+
+.river-game-body {
+    display: grid;
+    grid-template-columns: minmax(330px, 0.68fr) minmax(600px, 1.32fr);
+}
+
+.river-editor-panel,
+.river-world-panel {
+    min-width: 0;
+}
+
+.river-editor-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--river-border);
+    background:
+        radial-gradient(circle at 0 100%, rgba(102, 115, 255, 0.12), transparent 42%),
+        var(--river-panel);
+}
+
+.river-panel-label {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 17px;
+    border-bottom: 1px solid var(--river-border);
+    color: var(--river-muted);
+    font: 500 0.56rem/1 var(--mono);
+    letter-spacing: 0.09em;
+}
+
+.river-panel-label small {
+    color: #667068;
+    font: inherit;
+    letter-spacing: 0;
+}
+
+.river-editor-shell {
+    --river-source-font-size: 0.76rem;
+    --river-source-line-step: 1.482rem;
+    --river-source-padding-x: 28px;
+    --river-source-padding-y: 34px;
+    --river-source-scroll-y: 0px;
+    position: relative;
+    min-height: 385px;
+    flex: 1;
+    overflow: hidden;
+    cursor: text;
+}
+
+.river-source,
+.river-source-highlight,
+.river-source-diagnostics {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    overflow: auto;
+    padding: var(--river-source-padding-y) var(--river-source-padding-x);
+    border: 0;
+    outline: 0;
+    font: 400 var(--river-source-font-size)/1.95 var(--mono);
+    font-variant-ligatures: none;
+    letter-spacing: normal;
+    tab-size: 4;
+    white-space: pre;
+}
+
+.river-source {
+    z-index: 3;
+    resize: none;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--river-green);
+    -webkit-text-fill-color: transparent;
+}
+
+.river-source-highlight {
+    z-index: 1;
+    color: #dde5dd;
+    pointer-events: none;
+    scrollbar-width: none;
+}
+
+.river-source-highlight::-webkit-scrollbar,
+.river-source-diagnostics::-webkit-scrollbar {
+    display: none;
+}
+
+.river-source-highlight code,
+.river-source-diagnostics code {
+    display: block;
+    min-width: max-content;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+}
+
+.river-source-diagnostics {
+    z-index: 2;
+    color: transparent;
+    pointer-events: none;
+    scrollbar-width: none;
+}
+
+.river-source-diagnostics [data-river-diagnostic-range] {
+    text-decoration-line: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: #ff655f;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+    text-decoration-skip-ink: none;
+}
+
+.river-source-diagnostics [data-river-diagnostic-range].is-empty {
+    display: inline-block;
+    width: 0.7em;
+}
+
+.river-source:focus {
+    box-shadow: inset 0 0 0 1px var(--river-blue);
+}
+
+.river-source::selection {
+    background: rgba(133, 220, 255, 0.3);
+}
+
+.river-source-line-state {
+    position: absolute;
+    z-index: 0;
+    top: calc(
+        var(--river-source-padding-y)
+        + var(--river-source-scroll-y)
+        + var(--river-source-line-index) * var(--river-source-line-step)
+    );
+    right: var(--river-source-padding-x);
+    left: calc(var(--river-source-padding-x) - 8px);
+    height: var(--river-source-line-step);
+    border-left: 2px solid transparent;
+    pointer-events: none;
+    transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.river-token-comment {
+    color: #79867c;
+}
+
+.river-token-function,
+.river-token-section,
+.river-token-keyword {
+    color: var(--river-blue);
+}
+
+.river-token-variable,
+.river-token-type {
+    color: #ffd787;
+}
+
+.river-token-string {
+    color: #b7e59b;
+}
+
+.river-token-number {
+    color: #f1a5ff;
+}
+
+.river-token-intrinsic,
+.river-token-patterndefinition {
+    color: #b8acff;
+}
+
+.river-source-line-state[data-river-line-state="active"] {
+    border-color: var(--river-green);
+    background: linear-gradient(90deg, rgba(199, 255, 56, 0.18), transparent);
+    box-shadow: 0 0 13px rgba(199, 255, 56, 0.16);
+}
+
+.river-source-line-state[data-river-line-state="error"] {
+    border-color: var(--river-red);
+    background: linear-gradient(90deg, rgba(255, 111, 94, 0.24), transparent);
+    box-shadow: 0 0 14px rgba(255, 80, 65, 0.28);
+}
+
+.river-diagnostics {
+    min-height: 48px;
+    padding: 12px 17px;
+    border-top: 1px solid rgba(255, 111, 94, 0.48);
+    background: rgba(255, 111, 94, 0.1);
+    color: #ffafa2;
+    font: 400 0.61rem/1.5 var(--mono);
+    white-space: pre-wrap;
+}
+
+.river-diagnostics[hidden] {
+    display: none;
+}
+
+.river-editor-actions {
+    display: grid;
+    min-height: 55px;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    border-top: 1px solid var(--river-border);
+}
+
+.river-editor-actions > span {
+    padding: 0 17px;
+    color: #657067;
+    font: 500 0.53rem/1 var(--mono);
+}
+
+.river-editor-actions button {
+    align-self: stretch;
+    min-width: 118px;
+    border: 0;
+    border-left: 1px solid var(--river-border);
+    background: var(--river-green);
+    color: #0a0d0a;
+    cursor: pointer;
+    font: 600 0.61rem/1 var(--mono);
+}
+
+.river-editor-actions button i {
+    margin-left: 8px;
+    color: #3a4919;
+    font-style: normal;
+}
+
+.river-editor-actions button:hover:not(:disabled) {
+    background: var(--river-blue);
+}
+
+.river-editor-actions button:disabled {
+    cursor: wait;
+    opacity: 0.58;
+}
+
+.river-world-panel {
+    position: relative;
+    background: #071513;
+}
+
+.river-world-label {
+    background: #0a100d;
+}
+
+.river-stage {
+    --river-animation-play-state: paused;
+    --river-character-size: 7.4cqw;
+    --river-passenger-size: 5.92cqw;
+    position: relative;
+    container-type: inline-size;
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    isolation: isolate;
+    background: #0b5d6e;
+}
+
+.river-stage::after {
+    position: absolute;
+    z-index: 20;
+    inset: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 70px rgba(0, 12, 15, 0.48);
+    content: "";
+    pointer-events: none;
+}
+
+.river-landscape {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+}
+
+.river-light {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background:
+        radial-gradient(circle at 18% 55%, rgba(255, 231, 118, 0.12), transparent 29%),
+        radial-gradient(circle at 81% 52%, rgba(255, 231, 118, 0.12), transparent 29%),
+        linear-gradient(180deg, rgba(5, 21, 30, 0.15), transparent 34%, rgba(4, 16, 19, 0.12));
+    mix-blend-mode: screen;
+    pointer-events: none;
+}
+
+.river-shore-label {
+    position: absolute;
+    z-index: 3;
+    top: 5%;
+    padding: 6px 8px;
+    border: 1px solid rgba(246, 241, 218, 0.38);
+    background: rgba(7, 22, 18, 0.62);
+    color: rgba(249, 244, 222, 0.86);
+    backdrop-filter: blur(5px);
+    font: 500 clamp(0.42rem, 0.7vw, 0.58rem)/1 var(--mono);
+    letter-spacing: 0.1em;
+}
+
+.river-shore-home {
+    left: 4%;
+}
+
+.river-shore-far {
+    right: 4%;
+}
+
+.river-boat,
+.river-boat-hull,
+.river-character,
+.river-dust {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    will-change: left, top, translate, transform;
+}
+
+.river-stage[data-boat-heading="HOME"] .river-boat,
+.river-stage[data-boat-heading="HOME"] .river-boat-hull {
+    transform: translate(-50%, -50%) scaleX(-1);
+}
+
+.river-boat,
+.river-boat-hull {
+    width: 14.8%;
+}
+
+.river-boat {
+    z-index: 6;
+    filter: drop-shadow(0 5px 4px rgba(0, 25, 29, 0.42));
+}
+
+.river-boat-hull {
+    z-index: 10;
+    clip-path: polygon(0 63%, 100% 63%, 100% 100%, 0 100%);
+    pointer-events: none;
+}
+
+.river-boat img,
+.river-boat-hull img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.river-character {
+    z-index: 7;
+    width: var(--river-character-size);
+    aspect-ratio: 1;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    filter: drop-shadow(0 8px 5px rgba(5, 24, 19, 0.35));
+    transition: filter 160ms ease, opacity 180ms ease;
+}
+
+.river-sheep {
+    --river-aboard-lift: -81.0667%;
+    background-image: url("media/river-challenge/sheep.webp");
+}
+
+.river-wolf {
+    --river-aboard-lift: -94%;
+    background-image: url("media/river-challenge/wolf.webp");
+}
+
+.river-hay {
+    --river-aboard-lift: -79.6%;
+    background-image: url("media/river-challenge/hay.webp");
+}
+
+.river-character.is-aboard {
+    z-index: 8;
+    width: var(--river-passenger-size);
+    transform: translate(-50%, var(--river-aboard-lift));
+}
+
+.river-blink-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    opacity: 0;
+    animation: river-character-blink 7.3s steps(1, end) infinite;
+    will-change: opacity;
+    pointer-events: none;
+}
+
+.river-boat-farmer-blink {
+    background-image: url("media/river-challenge/boat-blink.webp");
+    mask-image: radial-gradient(ellipse 9% 15% at 36% 35%, #000 55%, transparent 78%);
+}
+
+.river-sheep-blink {
+    background-image: url("media/river-challenge/sheep-blink.webp");
+    mask-image: radial-gradient(ellipse 29% 20% at 50% 43%, #000 55%, transparent 78%);
+    animation-delay: -2.1s;
+    animation-duration: 6.4s;
+}
+
+.river-wolf-blink {
+    background-image: url("media/river-challenge/wolf-blink.webp");
+    mask-image: radial-gradient(ellipse 27% 19% at 50% 44%, #000 55%, transparent 78%);
+    animation-delay: -4.6s;
+    animation-duration: 8.1s;
+}
+
+.river-sheep-mouth {
+    position: absolute;
+    top: 52%;
+    left: 56%;
+    width: 9%;
+    height: 7%;
+    transform: translate(-50%, -50%) scaleY(0.12);
+    transform-origin: center top;
+    border: 1px solid #171312;
+    border-radius: 45% 45% 52% 52%;
+    background: #211718;
+    opacity: 0;
+    z-index: 2;
+    pointer-events: none;
+    transition: transform 90ms ease-out, opacity 70ms linear;
+}
+
+.river-sheep-mouth::after {
+    position: absolute;
+    right: 16%;
+    bottom: 4%;
+    left: 16%;
+    height: 34%;
+    border-radius: 50%;
+    background: #b95d68;
+    content: "";
+}
+
+.river-sheep.is-bellowing .river-sheep-mouth {
+    transform: translate(-50%, -50%) scaleY(1);
+    opacity: 1;
+}
+
+.river-character.is-fighting {
+    animation: river-character-scuffle 150ms ease-in-out infinite alternate;
+    animation-play-state: var(--river-animation-play-state, running);
+}
+
+.river-character.is-eaten {
+    opacity: 0;
+    filter: blur(5px);
+}
+
+.river-wolf-tongue {
+    position: absolute;
+    right: 24%;
+    bottom: 19%;
+    width: 12%;
+    height: 18%;
+    transform: rotate(-18deg) scaleY(0);
+    transform-origin: top;
+    border: 2px solid #6d2633;
+    border-radius: 0 0 50% 50%;
+    background: #f27086;
+    opacity: 0;
+    z-index: 2;
+}
+
+.river-wolf.is-licking .river-wolf-tongue {
+    animation: river-wolf-lick 650ms ease-in-out infinite;
+    animation-play-state: var(--river-animation-play-state, running);
+    opacity: 1;
+}
+
+.river-dust {
+    z-index: 12;
+    top: 61%;
+    left: 25%;
+    display: none;
+    width: 15%;
+    aspect-ratio: 1.5;
+}
+
+.river-stage[data-danger-side="FAR"] .river-dust {
+    left: 75%;
+}
+
+.river-dust.is-active {
+    display: block;
+}
+
+.river-dust i {
+    position: absolute;
+    width: 42%;
+    aspect-ratio: 1;
+    animation: river-dust-pop 420ms ease-in-out infinite alternate;
+    animation-play-state: var(--river-animation-play-state, running);
+    border: 2px solid rgba(89, 68, 42, 0.32);
+    border-radius: 50%;
+    background: #dfc995;
+    box-shadow: inset -7px -8px 0 rgba(119, 91, 55, 0.16);
+}
+
+.river-dust i:first-child {
+    top: 26%;
+    left: 4%;
+}
+
+.river-dust i:nth-child(2) {
+    top: 2%;
+    left: 27%;
+    animation-delay: -210ms;
+}
+
+.river-dust i:nth-child(3) {
+    top: 30%;
+    left: 51%;
+    animation-delay: -110ms;
+}
+
+.river-dust i:nth-child(4) {
+    top: 49%;
+    left: 25%;
+    width: 31%;
+    animation-delay: -310ms;
+}
+
+.river-dust i:nth-child(5) {
+    top: 18%;
+    left: 63%;
+    width: 24%;
+    animation-delay: -80ms;
+}
+
+.river-speech {
+    --river-speech-edge: #3c503a;
+    --river-speech-tail: #ddd3a8;
+    position: absolute;
+    z-index: 16;
+    transform: translate(-75%, calc(-100% - 30px));
+    transform-origin: 75% calc(100% + 30px);
+    width: min(31%, 260px);
+    padding: clamp(10px, 1.4vw, 18px);
+    border: 2px solid var(--river-speech-edge);
+    border-radius: 24px;
+    box-shadow:
+        0 0 0 3px rgba(240, 224, 163, 0.24),
+        5px 7px 0 rgba(19, 48, 39, 0.3),
+        0 17px 34px rgba(5, 28, 24, 0.25),
+        inset 0 1px rgba(255, 255, 231, 0.8);
+    background:
+        radial-gradient(circle at 14% 18%, rgba(255, 253, 225, 0.86), transparent 34%),
+        radial-gradient(circle at 88% 86%, rgba(82, 117, 66, 0.18), transparent 40%),
+        repeating-linear-gradient(112deg, transparent 0 12px, rgba(101, 91, 54, 0.035) 13px 14px),
+        linear-gradient(135deg, #eee8c9, #d8cda0);
+    color: #233025;
+    font-size: clamp(0.65rem, 1.15vw, 0.98rem);
+    font-weight: 700;
+    line-height: 1.35;
+    text-shadow: 0 1px rgba(255, 255, 235, 0.72);
+}
+
+.river-speech::before {
+    position: absolute;
+    z-index: 2;
+    top: -30px;
+    right: 10px;
+    width: 72px;
+    height: 34px;
+    transform: rotate(-7deg);
+    background: url("media/river-challenge/speech-sprig.svg") center / contain no-repeat;
+    content: "";
+    filter: drop-shadow(0 2px 1px rgba(20, 44, 31, 0.35));
+    pointer-events: none;
+}
+
+.river-speech::after {
+    position: absolute;
+    bottom: -22px;
+    left: 69%;
+    width: 32px;
+    height: 32px;
+    transform: rotate(45deg);
+    border-right: 2px solid var(--river-speech-edge);
+    border-bottom: 2px solid var(--river-speech-edge);
+    background: var(--river-speech-tail);
+    box-shadow: 3px 3px 2px rgba(19, 48, 39, 0.12);
+    content: "";
+}
+
+.river-speech[data-side="FAR"] {
+    --river-speech-edge: #4a6538;
+    --river-speech-tail: #dce7ad;
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at 14% 18%, rgba(255, 255, 224, 0.85), transparent 34%),
+        radial-gradient(circle at 88% 86%, rgba(88, 133, 60, 0.2), transparent 40%),
+        repeating-linear-gradient(112deg, transparent 0 12px, rgba(78, 108, 49, 0.035) 13px 14px),
+        linear-gradient(135deg, #eff3c8, #d4e69f);
+}
+
+.river-speech[hidden] {
+    display: none;
+}
+
+.river-playback {
+    display: grid;
+    min-height: 50px;
+    grid-template-columns: repeat(4, auto);
+    justify-content: end;
+    border-top: 1px solid var(--river-border);
+    background: #09100d;
+}
+
+.river-playback button {
+    min-width: 100px;
+    padding: 0 14px;
+    border: 0;
+    border-left: 1px solid var(--river-border);
+    background: transparent;
+    color: #adb7af;
+    cursor: pointer;
+    font: 500 0.56rem/1 var(--mono);
+}
+
+.river-playback button:hover:not(:disabled) {
+    background: #14251d;
+    color: var(--river-green);
+}
+
+.river-playback button:disabled {
+    cursor: default;
+    opacity: 0.4;
+}
+
+.river-playback [data-river-playback-toggle] {
+    color: var(--river-blue);
+}
+
+.river-playback [data-river-mute][aria-pressed="true"] {
+    color: #757d77;
+}
+
+.river-program-message {
+    min-height: 43px;
+    margin: 0;
+    padding: 13px 17px;
+    border-top: 1px solid var(--river-border);
+    color: #a9b3ab;
+    font: 400 0.61rem/1.45 var(--mono);
+}
+
+.river-game[data-playback-state="failure"] .river-program-message,
+.river-game[data-playback-state="error"] .river-program-message {
+    color: #ffafa2;
+}
+
+.river-game[data-playback-state="success"] .river-program-message {
+    color: var(--river-green);
+}
+
+.river-game-credit {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 8px 17px;
+    border-top: 1px solid var(--river-border);
+    background: #070a08;
+    color: #59635b;
+    font: 500 0.51rem/1.4 var(--mono);
+    letter-spacing: 0.04em;
+}
+
+.river-game-credit a {
+    color: #849087;
+}
+
+.river-game-credit a:hover {
+    color: var(--river-blue);
+}
+
+@keyframes river-character-scuffle {
+    from { rotate: -8deg; translate: -4px 2px; }
+    to { rotate: 9deg; translate: 4px -3px; }
+}
+
+@keyframes river-character-blink {
+    0%, 91%, 95%, 100% { opacity: 0; }
+    92%, 94% { opacity: 1; }
+}
+
+@keyframes river-wolf-lick {
+    0%, 100% { transform: rotate(-18deg) scaleY(0.18); }
+    50% { transform: rotate(-18deg) scaleY(1); }
+}
+
+@keyframes river-dust-pop {
+    from { transform: scale(0.78) translate(-4px, 3px); }
+    to { transform: scale(1.06) translate(3px, -4px); }
+}
+
+@media (max-width: 1120px) {
+    .river-game-body {
+        grid-template-columns: 1fr;
+    }
+
+    .river-world-panel {
+        order: 1;
+    }
+
+    .river-editor-panel {
+        order: 2;
+        border-top: 1px solid var(--river-border);
+        border-right: 0;
+    }
+
+    .river-editor-shell {
+        min-height: 265px;
+    }
+}
+
+@media (max-width: 680px) {
+    .river-game {
+        box-shadow: 7px 7px 0 #152d26;
+    }
+
+    .river-game-header {
+        grid-template-columns: 1fr auto;
+    }
+
+    .river-game-header strong {
+        display: none;
+    }
+
+    .river-stage {
+        --river-character-size: 10cqw;
+        --river-passenger-size: 8cqw;
+        aspect-ratio: 4 / 3;
+    }
+
+    .river-landscape {
+        width: 134%;
+        max-width: none;
+        transform: translateX(-12.7%);
+    }
+
+    .river-boat,
+    .river-boat-hull {
+        width: 19%;
+    }
+
+    .river-speech {
+        width: 41%;
+        font-size: 0.64rem;
+    }
+
+    .river-shore-label {
+        display: none;
+    }
+
+    .river-playback {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .river-playback button {
+        min-height: 42px;
+        border-bottom: 1px solid var(--river-border);
+    }
+
+    .river-editor-shell {
+        min-height: 250px;
+    }
+
+    .river-source,
+    .river-source-highlight,
+    .river-source-diagnostics {
+        font-size: var(--river-source-font-size);
+    }
+
+    .river-editor-shell {
+        --river-source-font-size: 0.64rem;
+        --river-source-line-step: 1.248rem;
+        --river-source-padding-x: 16px;
+        --river-source-padding-y: 25px;
+    }
+
+    .river-game-credit {
+        display: grid;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .river-character,
+    .river-source-line-state,
+    .river-blink-layer,
+    .river-sheep-mouth,
+    .river-wolf-tongue,
+    .river-dust i,
+    .river-speech {
+        transition: none;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}

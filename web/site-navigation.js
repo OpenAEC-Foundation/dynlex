@@ -9,7 +9,7 @@ const navigationMarkup = `
     <span class="menu-toggle-lines" aria-hidden="true"><span></span><span></span></span>
   </button>
   <nav class="primary-nav" id="primary-nav" aria-label="Primary navigation" data-primary-nav>
-    <a href="/index.html#sketches">Sketches</a>
+    <a href="/index.html#challenges">Challenges</a>
     <a href="/index.html#language">Language</a>
     <a href="/index.html#studio">Studio</a>
     <a href="/wiki/index.html" data-navigation-docs>Docs</a>
