@@ -1,17 +1,17 @@
-function call a:
+function argument called:
     replacement:
-        a
+        argument
 
-function use b z:
+function value used with sentinel:
     replacement:
-        b
-        hold z
+        value
+        hold sentinel
 
-function call x:
+function argument called:
     replacement:
-        hold x
+        hold argument
 
-function [target|objective] x y:
+function [target|objective] for first and second:
     replacement:
-        call x
-        use y z
+        first called
+        second used with sentinel

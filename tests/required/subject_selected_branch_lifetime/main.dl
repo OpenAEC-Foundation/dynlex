@@ -1,11 +1,11 @@
 import lib/filesystem.dl
 
-function read and print {fixed integer:n}:
+function read and print {fixed integer:choice}:
     execute:
-        if n = 1:
-            read "/tmp/dynlex-subject-branch.txt"
-        print (the contents of it) as line
+        if choice = 1:
+            read the file at "/tmp/dynlex-subject-branch.txt"
+        print (the contents of it) as a line
 
-write the string form of "hello" to "/tmp/dynlex-subject-branch.txt"
+write the string form of "hello" to the file at "/tmp/dynlex-subject-branch.txt"
 read and print 1
-delete "/tmp/dynlex-subject-branch.txt"
+delete the filesystem entry at "/tmp/dynlex-subject-branch.txt"

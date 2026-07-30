@@ -755,10 +755,12 @@ static std::string formatInstantiationKeyValue(const CompileTimeValue &value) {
 		return *text;
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-		return typeRef->type.toString();
+	if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value)) {
+		return typeRef->type.kind == DataType::Kind::Type ? typeToUserName(typeRef->type.toReferencedType())
+														  : typeToUserName(typeRef->type);
+	}
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
-		return constraint->toString();
+		return typeToUserName(*constraint);
 	return "?";
 }
 
@@ -775,23 +777,6 @@ static std::string makeInstantiationSignature(const InstantiationKey &key) {
 	}
 	signature += "}";
 	return signature;
-}
-
-static std::string typeToUserPatternName(const ParseContext &parseContext, const DataType &type) {
-	if (type.pointerDepth == 0) {
-		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
-		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit float";
-		if (type.kind == DataType::Kind::Bool)
-			return "a boolean";
-		if (type.kind == DataType::Kind::Void)
-			return "nothing";
-	}
-	auto it = parseContext.typeAliasNames.find(type);
-	if (it != parseContext.typeAliasNames.end())
-		return it->second;
-	return type.toString();
 }
 
 struct PatternParameterInfo {
@@ -819,8 +804,7 @@ static void collectPatternParameters(
 }
 
 static std::string formatInstancePattern(
-	ParseContext &parseContext, const PatternDefinition *definition, const std::vector<DataType> &signatureTypes,
-	const Instantiation &instantiation
+	const PatternDefinition *definition, const std::vector<DataType> &signatureTypes, const Instantiation &instantiation
 ) {
 	if (!definition)
 		return {};
@@ -859,7 +843,7 @@ static std::string formatInstancePattern(
 			if (typeName.empty() && indexIt != parameterIndexByName.end()) {
 				size_t index = indexIt->second;
 				if (index < signatureTypes.size() && signatureTypes[index].isDeduced())
-					typeName = typeToUserPatternName(parseContext, signatureTypes[index]);
+					typeName = typeToUserName(signatureTypes[index]);
 			}
 
 			if (!typeName.empty()) {
@@ -880,16 +864,16 @@ static std::string formatInstancePattern(
 	return rendered;
 }
 
-static Json buildInstantiationOptions(ParseContext &parseContext, const Section *ownerSection) {
+static Json buildInstantiationOptions(const Section *ownerSection) {
 	Json options = Json::array();
 	const PatternDefinition *primaryDefinition =
 		(ownerSection && !ownerSection->patternDefinitions.empty()) ? ownerSection->patternDefinitions.front() : nullptr;
 	int index = 1;
 	for (const auto &[instantiationKey, inst] : ownerSection->instantiations) {
 		std::string signature = makeInstantiationSignature(instantiationKey);
-		std::string label = formatInstancePattern(parseContext, primaryDefinition, instantiationKey.argumentTypes, inst);
+		std::string label = formatInstancePattern(primaryDefinition, instantiationKey.argumentTypes, inst);
 		if (label.empty())
-			label = "DynLex path " + std::to_string(index) + " " + signature;
+			label = "DynLex path " + std::to_string(index);
 		options.push_back({{"key", signature}, {"label", label}});
 		index++;
 	}

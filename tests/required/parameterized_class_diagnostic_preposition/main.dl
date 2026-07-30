@@ -1,0 +1,32 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+class:
+    patterns:
+        [a|] record owned by {fixed integer:owner}
+    members:
+        value
+
+function a record owned by {fixed integer:owner} containing value:
+    replacement:
+        @intrinsic("construct", a record owned by owner, value)
+
+function consume {integer:value}:
+    replacement:
+        @intrinsic("discard", value)
+
+set result to a record owned by 7 containing 3
+consume result

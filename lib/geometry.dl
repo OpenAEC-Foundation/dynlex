@@ -1,0 +1,127 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a point
+    members:
+        coordinates
+
+class:
+    patterns:
+        a color
+    members:
+        channels
+
+function {a point:value}'s x:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 0)
+
+function {a point:value}'s y:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 1)
+
+function {a point:value}'s z:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 2)
+
+function {a point:value}'s width:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 0)
+
+function {a point:value}'s height:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 1)
+
+function {a point:value}'s depth:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's coordinates, 2)
+
+flex function set the x coordinate of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, coordinate)
+
+flex function set the y coordinate of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, coordinate)
+
+flex function set the z coordinate of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, coordinate)
+
+flex function set the width of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, coordinate)
+
+flex function set the height of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, coordinate)
+
+flex function set the depth of {a point:value} to {a number:coordinate}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, coordinate)
+
+flex function increase the x coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, value's x + amount)
+
+flex function increase the y coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, value's y + amount)
+
+flex function increase the z coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, value's z + amount)
+
+flex function decrease the x coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, value's x - amount)
+
+flex function decrease the y coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, value's y - amount)
+
+flex function decrease the z coordinate of {a point:value} by {a number:amount}:
+    replacement:
+        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, value's z - amount)
+
+function {a color:value}'s red:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's channels, 0)
+
+function {a color:value}'s green:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's channels, 1)
+
+function {a color:value}'s blue:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's channels, 2)
+
+function {a color:value}'s alpha:
+    before: $ + $, $ - $, $ * $, $ / $, set $ to $
+    replacement:
+        @intrinsic("extract element", value's channels, 3)
+
+flex function set the red channel of {a color:value} to {a number:channel}:
+    replacement:
+        set value's channels to @intrinsic("insert element", value's channels, 0, channel)
+
+flex function set the green channel of {a color:value} to {a number:channel}:
+    replacement:
+        set value's channels to @intrinsic("insert element", value's channels, 1, channel)
+
+flex function set the blue channel of {a color:value} to {a number:channel}:
+    replacement:
+        set value's channels to @intrinsic("insert element", value's channels, 2, channel)
+
+flex function set the alpha channel of {a color:value} to {a number:channel}:
+    replacement:
+        set value's channels to @intrinsic("insert element", value's channels, 3, channel)

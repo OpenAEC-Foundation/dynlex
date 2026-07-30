@@ -18,6 +18,7 @@ namespace lsp {
 struct SourceFile;
 }
 struct PatternDefinition;
+struct CallableFunctionMatch;
 
 struct CodegenResult {
 	llvm::Value *value = nullptr;
@@ -101,7 +102,8 @@ bool generateSpecializedFunction(
 	Instantiation &instantiation
 );
 bool ensureCallableFunctionGenerated(
-	ParseContext &context, PatternDefinition *definition, bool requireExternalLinkage, llvm::Function *&generatedFunction
+	ParseContext &context, const CallableFunctionMatch &match, Instantiation &instantiation, bool requireExternalLinkage,
+	llvm::Function *&generatedFunction
 );
 
 // Intrinsic code generation (codegenIntrinsics.cpp)

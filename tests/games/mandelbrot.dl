@@ -13,14 +13,14 @@ import lib/graphics.dl
 set window to a new window with width 800 and height 600
 
 # Load both SPIR-V shaders
-set vert to a vertex shader from "tests/games/passthrough.spv"
-set frag to a fragment shader from "tests/games/mandelbrot.spv"
+set vertex to a vertex shader from "tests/games/passthrough.spv"
+set fragment to a fragment shader from "tests/games/mandelbrot.spv"
 
 # Link shader program
-set prog to a shader program with vertex vert and fragment frag
-use shader program prog
+set program to a shader program combining vertex and fragment
+use program as the shader program
 
-while not the window should close:
+while the window remains open:
     clear the screen
     draw a fullscreen quad
     display the frame of window

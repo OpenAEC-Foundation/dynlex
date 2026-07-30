@@ -1,16 +1,20 @@
-function integer:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
 class:
     patterns:
-        failing lifecycle value
+        [a|] failing lifecycle value
     members:
-        marker as integer
+        marker as an integer
     retain:
         @intrinsic("discard", @intrinsic("address of", 1))
     release:
         @intrinsic("discard", @intrinsic("lifecycle value"))
 
-@intrinsic("store", value, @intrinsic("construct", failing lifecycle value, 0))
-@intrinsic("discard", value)
+@intrinsic("store", value, @intrinsic("construct", a failing lifecycle value, 0))
+ignore value

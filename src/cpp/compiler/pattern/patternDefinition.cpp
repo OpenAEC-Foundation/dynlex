@@ -47,6 +47,16 @@ bool patternDefinitionComesBefore(const PatternDefinition *left, const PatternDe
 	return leftText < rightText;
 }
 
+Range patternElementTypeConstraintRange(const PatternDefinition &definition, const DefinitionPatternElement &element) {
+	requireCompilerInvariant(
+		definition.range.line && !element.typeConstraintName.empty(),
+		"type-constraint range requires a source definition and constraint"
+	);
+	int constraintEnd = definition.range.start() + static_cast<int>(element.startPos) - 1;
+	int constraintStart = constraintEnd - static_cast<int>(element.typeConstraintName.size());
+	return Range(definition.range.line, constraintStart, constraintEnd);
+}
+
 void mutatePatternDefinition(ParseContext &context, PatternDefinition &definition, const std::function<void()> &mutation) {
 	requireCompilerInvariant(static_cast<bool>(mutation), "pattern definition mutation requires an operation");
 	if (!definition.indexedTree) {

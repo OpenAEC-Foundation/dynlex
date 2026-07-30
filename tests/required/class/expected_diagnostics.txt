@@ -1,3 +1,0 @@
-tests/required/class/main.dl:32-38: Warning: Ambiguous single-word reference 'point' resolved as a function call, but the same token is also used as a parameter in an enclosing pattern. If this was meant as an argument, rename the variable; otherwise add an extra possible pattern.
-  note: Enclosing parameter candidate appears here tests/required/class/main.dl:14-19
-  note: Matched function pattern appears here tests/required/class/main.dl:9-14

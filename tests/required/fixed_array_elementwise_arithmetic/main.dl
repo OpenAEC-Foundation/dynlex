@@ -1,0 +1,15 @@
+import lib/std.dl
+
+set point to [1, 2]
+set moved to (point + [10.5, 20.5])
+set scaled to (moved * 2)
+ignore @intrinsic(
+    "variadic call",
+    "libc",
+    "printf",
+    an integer,
+    1,
+    "%.1f %.1f\n",
+    the item at 0 in scaled,
+    the item at 1 in scaled
+)

@@ -14,9 +14,9 @@ class DiscoverDynLexFilesTests(unittest.TestCase):
             repo_root = Path(temporary_directory)
             source = repo_root / "main.dl"
             worktree_source = repo_root / ".worktrees" / "feature" / "main.dl"
-            source.write_text("print 1 as line\n", encoding="utf-8")
+            source.write_text("print 1 as a line\n", encoding="utf-8")
             worktree_source.parent.mkdir(parents=True)
-            worktree_source.write_text("print 2 as line\n", encoding="utf-8")
+            worktree_source.write_text("print 2 as a line\n", encoding="utf-8")
 
             self.assertEqual(discover_dl_files(repo_root), [source.resolve()])
 

@@ -23,9 +23,9 @@ function referenced mutual second {integer:value}:
 			return referenced mutual first (value - 1)
 		return value
 
-@intrinsic("discard", @intrinsic("function", "recursive"))
-set direct_function to the function named "referenced direct recursive $"
-set mutual_function to the function named "referenced mutual first $"
+ignore @intrinsic("function", "recursive")
+set direct to the function named "referenced direct recursive $"
+set mutual to the function named "referenced mutual first $"
 
-discard direct_function
-discard mutual_function
+ignore direct
+ignore mutual

@@ -1,29 +1,29 @@
 import lib/process.dl
 
-function [the|] stress process test interpreter:
+function the stress process test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-set input_size to 262144
-set input to a new string buffer with length input_size
-set input_index to 0
-loop while input_index < input_size:
-    store 73 as a byte into the data of input at input_index
-    set input_index to input_index + 1
+set length to 262144
+set input to a new string buffer containing length bytes
+set position to 0
+loop while position < length:
+    store 73 as a byte into the data of input at position
+    set position to (position + 1)
 
 set command to a process command for the stress process test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add "import sys\nsize=262144\nsys.stdout.write('O'*size); sys.stdout.flush()\nsys.stderr.write('E'*size); sys.stderr.flush()\ndata=sys.stdin.buffer.read()\nsys.stdout.write(str(len(data)))" as an argument to command
-set result to run command using input
+run command using input and set result to it
 
-print result's launched as line
-print result's succeeded as line
-print result's exit code as line
-print (result's standard output's length = input_size + 6) as line
-print (character 0 of result's standard output = 79) as line
-print (character input_size - 1 of result's standard output = 79) as line
-print (the substring of result's standard output from input_size with length 6 = "262144") as line
-print (result's standard error's length = input_size) as line
-print (character 0 of result's standard error = 69) as line
-print (character input_size - 1 of result's standard error = 69) as line
+print whether result was launched as a line
+print whether result succeeded as a line
+print result's exit code as a line
+print whether (result's standard output's length = length + 6) as a line
+print whether (the character at 0 in result's standard output = 79) as a line
+print whether (the character at (length - 1) in result's standard output = 79) as a line
+print whether (the substring of result's standard output from length spanning 6 bytes = "262144") as a line
+print whether (result's standard error's length = length) as a line
+print whether (the character at 0 in result's standard error = 69) as a line
+print whether (the character at (length - 1) in result's standard error = 69) as a line

@@ -1,0 +1,5 @@
+lib/std.dl:16-51: Error: Incompatible operand types 'a 32-bit integer' and 'a fixed array containing 2 items whose type is a 32-bit integer'
+  note: while inferring intrinsic 'subtract' in 'return @intrinsic("subtract", left, right)' with arguments [a 32-bit integer, a fixed array containing 2 items whose type is a 32-bit integer] -> an unresolved value lib/std.dl:16-51
+  note: while inferring call 'return @intrinsic("subtract", left, right)' with arguments [an unresolved value] -> an unresolved value lib/std.dl:9-51
+  note: while inferring call '1 - [2, 3]' with arguments [a 32-bit integer, a fixed array containing 2 items whose type is a 32-bit integer] -> an unresolved value tests/required/integer_minus_fixed_array/main.dl:9-19
+  note: while inferring call 'ignore (1 - [2, 3]' with arguments [an unresolved value] -> an unresolved value tests/required/integer_minus_fixed_array/main.dl:1-19

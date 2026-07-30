@@ -9,40 +9,53 @@ import lib/filesystem.dl
 The module provides these file actions:
 
 ```dynlex
-write contents to path
-append contents to path
-read path
-copy source to destination
-rename source to destination
-delete path
-create directory at path
+write contents to the file at path
+append contents to the file at path
+read the file at path
+copy the filesystem entry at source to destination
+rename the filesystem entry at source to destination
+delete the filesystem entry at path
+create a directory at path
 ```
 
-Actions return `void` and set the subject to an action object. Test an action on the same line or afterward:
+Actions return `nothing` and set the subject to an action object. Test an action on the same line or afterward:
 
 ```dynlex
-delete "b.txt" and print if it succeeded
+delete the filesystem entry at "b.txt" and print whether it succeeded as a line
 ```
 
-Write, append, copy, rename, delete, and directory creation set a `file action`. Read sets a `file read action`. Both action types provide `succeeded` and `error message`; read actions also provide `contents`:
+Write, append, copy, rename, delete, and directory creation set a `file action`.
+Read sets a `file read action`. Both action types have `succeeded` and `failed`
+predicates plus an `error message` property; read actions also provide
+`contents`:
 
 ```dynlex
-read "notes.txt" and print if it succeeded
-print (the contents of it) as line
-print (the error message of it) as line
+read the file at "notes.txt" and print whether it succeeded as a line
+print the contents of it as a line
+print the error message of it as a line
 ```
 
 The error message is empty after a successful action and contains the filesystem failure after an unsuccessful action. A failed read has empty contents. Delete accepts regular files and empty directories.
 
-The module provides regular-file, readability, and modification-time queries:
+The module provides regular-file and readability predicates. Detailed metadata
+comes from a file-system entry:
 
 ```dynlex
-print "notes.txt" is a regular file as line
-print "notes.txt" is readable as line
-print the modification time of "notes.txt" as line
+print whether "notes.txt" is a regular file as a line
+print whether "notes.txt" is readable as a line
+set entry to the file system entry at "notes.txt"
+print whether entry lookup succeeded as a line
+if entry lookup succeeded:
+    print whether entry's modification time is supported as a line
+    if entry's modification time is supported:
+        print (entry's modification time)'s seconds as a line
+        print (entry's modification time)'s nanoseconds as a line
 ```
 
-`path is readable` is true only for a regular file that can be opened for reading; directories are not readable files. Modification time is a signed 64-bit count of milliseconds since the Unix epoch. It is zero when metadata for the path cannot be read.
+`path is readable` is true only for a regular file that can be opened for
+reading; directories are not readable files. Check whether the entry lookup
+succeeded and whether its modification time is supported before using the
+timestamp's word-sized `seconds` and integer `nanoseconds` properties.
 
 Reads and writes preserve embedded zero bytes. Paths may be string values or C string literals. The module's runtime helpers and operation implementations are `local`; the action patterns, action types and properties, and path queries are public.
 

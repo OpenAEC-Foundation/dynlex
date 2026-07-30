@@ -1,5 +1,15 @@
 #version 300 es
 
+struct class_0
+{
+    vec2 _m0;
+};
+
+struct _class
+{
+    vec3 _m0;
+};
+
 layout(std140) uniform DynlexUniformBlock0
 {
     float value;
@@ -27,7 +37,7 @@ float left1_4371_43right_f32_f32(float left, float right)
     return left / right;
 }
 
-float _the43_floor_of_value_f32(float value)
+float the_floor_of_value_f32(float value)
 {
     return floor(value);
 }
@@ -42,14 +52,14 @@ float left1_4351_43right_f32_f32(float left, float right)
     return left - right;
 }
 
-float _the43_maximum_of_a_and_b_f32_f32(float a, float b)
+float the_maximum_of_left_and_right_f32_f32(float left, float right)
 {
-    return isnan(b) ? a : (isnan(a) ? b : max(a, b));
+    return isnan(right) ? left : (isnan(left) ? right : max(left, right));
 }
 
-float _the43_minimum_of_a_and_b_f32_f32(float a, float b)
+float the_minimum_of_left_and_right_f32_f32(float left, float right)
 {
-    return isnan(b) ? a : (isnan(a) ? b : min(a, b));
+    return isnan(right) ? left : (isnan(left) ? right : min(left, right));
 }
 
 float left1_4331_43right_f32_f32(float left, float right)
@@ -67,7 +77,7 @@ bool left_2_right_f32_f32(float left, float right)
     return left > right;
 }
 
-float saturate_number_f32(float number)
+float number_saturated_f32(float number)
 {
     float result = number;
     float tmp = 0.0;
@@ -83,12 +93,12 @@ float saturate_number_f32(float number)
     return result;
 }
 
-float smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(float lower, float upper, float _sample)
+float the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(float lower, float upper, float _sample)
 {
     float tmp = left1_4351_43right_f32_f32(_sample, lower);
     float tmp1 = left1_4351_43right_f32_f32(upper, lower);
     float normalized = left1_4371_43right_f32_f32(tmp, tmp1);
-    normalized = saturate_number_f32(normalized);
+    normalized = number_saturated_f32(normalized);
     float tmp2 = left1_4321_43right_f32_f32(normalized, normalized);
     float tmp3 = 3.0;
     float tmp4 = 2.0;
@@ -97,30 +107,30 @@ float smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(float lower, f
     return left1_4321_43right_f32_f32(tmp2, tmp6);
 }
 
-float scene_window_from_opening_to_closing_at_moment_f32_f32_f32(float opening, float closing, float moment)
+float the_scene_window_from_opening_to_closing_at_moment_f32_f32_f32(float opening, float closing, float moment)
 {
     float tmp = 0.550000011920928955078125;
     float tmp1 = left1_4331_43right_f32_f32(opening, tmp);
-    float arrival = smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(opening, tmp1, moment);
+    float arrival = the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(opening, tmp1, moment);
     float tmp2 = 1.0;
     float tmp3 = 0.550000011920928955078125;
     float tmp4 = left1_4351_43right_f32_f32(closing, tmp3);
-    float tmp5 = smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp4, closing, moment);
+    float tmp5 = the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp4, closing, moment);
     float departure = left1_4351_43right_f32_f32(tmp2, tmp5);
     return left1_4321_43right_f32_f32(arrival, departure);
 }
 
-float _the43_sine_of_value_f32(float value)
+float the_sine_of_value_f32(float value)
 {
     return sin(value);
 }
 
-float _the43_cosine_of_value_f32(float value)
+float the_cosine_of_value_f32(float value)
 {
     return cos(value);
 }
 
-float _the_431negative_1of_34opposite_1of_3453value_f32(float value)
+float _the_negative_of_4the_opposite_of_453value_f32(float value)
 {
     return -value;
 }
@@ -132,300 +142,447 @@ bool left_1is_greater_than_or_equal_to4213_right_f32_f32(float left, float right
 
 void main()
 {
-    float packed_x = in_Position.x;
-    float packed_y = in_Position.y;
-    float packed_z = in_Position.z;
-    float encoded_triangle_corner = in_Position.w;
+    vec3 _434 = vec3(0.0);
+    _434.x = in_Position.x;
+    _434.y = in_Position.y;
+    _434.z = in_Position.z;
+    _class class_tmp = _class(vec3(0.0));
+    class_tmp._m0 = _434;
+    _class _packed = class_tmp;
+    float encoding = in_Position.w;
     float tmp = 4.0;
-    float tmp7 = left1_4371_43right_f32_f32(encoded_triangle_corner, tmp);
-    float wheel_point = _the43_floor_of_value_f32(tmp7);
-    float tmp8 = 4.0;
-    float tmp9 = left1_4321_43right_f32_f32(wheel_point, tmp8);
-    float triangle_corner = left1_4351_43right_f32_f32(encoded_triangle_corner, tmp9);
-    float tmp10 = 4096.0;
-    float tmp11 = left1_4371_43right_f32_f32(packed_x, tmp10);
-    float target_quantized_x = _the43_floor_of_value_f32(tmp11);
-    float tmp12 = 4096.0;
-    float tmp13 = left1_4371_43right_f32_f32(packed_y, tmp12);
-    float target_quantized_y = _the43_floor_of_value_f32(tmp13);
-    float tmp14 = 4096.0;
-    float tmp15 = left1_4371_43right_f32_f32(packed_z, tmp14);
-    float target_quantized_z = _the43_floor_of_value_f32(tmp15);
+    float tmp9 = left1_4371_43right_f32_f32(encoding, tmp);
+    float wheel = the_floor_of_value_f32(tmp9);
+    float tmp10 = 4.0;
+    float tmp11 = left1_4321_43right_f32_f32(wheel, tmp10);
+    float triangle = left1_4351_43right_f32_f32(encoding, tmp11);
+    float tmp15 = _packed._m0.x;
     float tmp16 = 4096.0;
-    float tmp17 = left1_4321_43right_f32_f32(target_quantized_x, tmp16);
-    float motorcycle_quantized_x = left1_4351_43right_f32_f32(packed_x, tmp17);
-    float tmp18 = 4096.0;
-    float tmp19 = left1_4321_43right_f32_f32(target_quantized_y, tmp18);
-    float motorcycle_quantized_y = left1_4351_43right_f32_f32(packed_y, tmp19);
-    float tmp20 = 4096.0;
-    float tmp21 = left1_4321_43right_f32_f32(target_quantized_z, tmp20);
-    float motorcycle_quantized_z = left1_4351_43right_f32_f32(packed_z, tmp21);
-    float tmp22 = 4095.0;
-    float tmp23 = left1_4371_43right_f32_f32(target_quantized_x, tmp22);
-    float tmp24 = 4.0;
-    float tmp25 = left1_4321_43right_f32_f32(tmp23, tmp24);
-    float tmp26 = 2.0;
-    float point_x = left1_4351_43right_f32_f32(tmp25, tmp26);
-    float tmp27 = 4095.0;
-    float tmp28 = left1_4371_43right_f32_f32(target_quantized_y, tmp27);
-    float tmp29 = 4.0;
-    float tmp30 = left1_4321_43right_f32_f32(tmp28, tmp29);
-    float tmp31 = 2.0;
-    float point_y = left1_4351_43right_f32_f32(tmp30, tmp31);
-    float tmp32 = 4095.0;
-    float tmp33 = left1_4371_43right_f32_f32(target_quantized_z, tmp32);
-    float tmp34 = 4.0;
-    float tmp35 = left1_4321_43right_f32_f32(tmp33, tmp34);
-    float tmp36 = 2.0;
-    float point_z = left1_4351_43right_f32_f32(tmp35, tmp36);
-    float tmp37 = 4095.0;
-    float tmp38 = left1_4371_43right_f32_f32(motorcycle_quantized_x, tmp37);
-    float tmp39 = 4.0;
-    float tmp40 = left1_4321_43right_f32_f32(tmp38, tmp39);
-    float tmp41 = 2.0;
-    float motorcycle_local_x = left1_4351_43right_f32_f32(tmp40, tmp41);
-    float tmp42 = 4095.0;
-    float tmp43 = left1_4371_43right_f32_f32(motorcycle_quantized_y, tmp42);
-    float tmp44 = 4.0;
+    float tmp17 = left1_4371_43right_f32_f32(tmp15, tmp16);
+    vec3 _454 = vec3(0.0);
+    _454.x = the_floor_of_value_f32(tmp17);
+    float tmp22 = _packed._m0.y;
+    float tmp23 = 4096.0;
+    float tmp24 = left1_4371_43right_f32_f32(tmp22, tmp23);
+    _454.y = the_floor_of_value_f32(tmp24);
+    float tmp29 = _packed._m0.z;
+    float tmp30 = 4096.0;
+    float tmp31 = left1_4371_43right_f32_f32(tmp29, tmp30);
+    _454.z = the_floor_of_value_f32(tmp31);
+    _class class_tmp12 = _class(vec3(0.0));
+    class_tmp12._m0 = _454;
+    _class target = class_tmp12;
+    float tmp39 = _packed._m0.x;
+    float tmp43 = target._m0.x;
+    float tmp44 = 4096.0;
     float tmp45 = left1_4321_43right_f32_f32(tmp43, tmp44);
-    float tmp46 = 2.0;
-    float motorcycle_local_y = left1_4351_43right_f32_f32(tmp45, tmp46);
-    float tmp47 = 4095.0;
-    float tmp48 = left1_4371_43right_f32_f32(motorcycle_quantized_z, tmp47);
-    float tmp49 = 4.0;
-    float tmp50 = left1_4321_43right_f32_f32(tmp48, tmp49);
-    float tmp51 = 2.0;
-    float motorcycle_local_z = left1_4351_43right_f32_f32(tmp50, tmp51);
+    vec3 _477 = vec3(0.0);
+    _477.x = left1_4351_43right_f32_f32(tmp39, tmp45);
+    float tmp50 = _packed._m0.y;
+    float tmp54 = target._m0.y;
+    float tmp55 = 4096.0;
+    float tmp56 = left1_4321_43right_f32_f32(tmp54, tmp55);
+    _477.y = left1_4351_43right_f32_f32(tmp50, tmp56);
+    float tmp61 = _packed._m0.z;
+    float tmp65 = target._m0.z;
+    float tmp66 = 4096.0;
+    float tmp67 = left1_4321_43right_f32_f32(tmp65, tmp66);
+    _477.z = left1_4351_43right_f32_f32(tmp61, tmp67);
+    _class class_tmp35 = _class(vec3(0.0));
+    class_tmp35._m0 = _477;
+    _class quantized = class_tmp35;
+    float tmp75 = target._m0.x;
+    float tmp76 = 4095.0;
+    float tmp77 = left1_4371_43right_f32_f32(tmp75, tmp76);
+    float tmp78 = 4.0;
+    float tmp79 = left1_4321_43right_f32_f32(tmp77, tmp78);
+    float tmp80 = 2.0;
+    vec3 _504 = vec3(0.0);
+    _504.x = left1_4351_43right_f32_f32(tmp79, tmp80);
+    float tmp85 = target._m0.y;
+    float tmp86 = 4095.0;
+    float tmp87 = left1_4371_43right_f32_f32(tmp85, tmp86);
+    float tmp88 = 4.0;
+    float tmp89 = left1_4321_43right_f32_f32(tmp87, tmp88);
+    float tmp90 = 2.0;
+    _504.y = left1_4351_43right_f32_f32(tmp89, tmp90);
+    float tmp95 = target._m0.z;
+    float tmp96 = 4095.0;
+    float tmp97 = left1_4371_43right_f32_f32(tmp95, tmp96);
+    float tmp98 = 4.0;
+    float tmp99 = left1_4321_43right_f32_f32(tmp97, tmp98);
+    float tmp100 = 2.0;
+    _504.z = left1_4351_43right_f32_f32(tmp99, tmp100);
+    _class class_tmp71 = _class(vec3(0.0));
+    class_tmp71._m0 = _504;
+    _class point = class_tmp71;
+    float tmp108 = quantized._m0.x;
+    float tmp109 = 4095.0;
+    float tmp110 = left1_4371_43right_f32_f32(tmp108, tmp109);
+    float tmp111 = 4.0;
+    float tmp112 = left1_4321_43right_f32_f32(tmp110, tmp111);
+    float tmp113 = 2.0;
+    vec3 _527 = vec3(0.0);
+    _527.x = left1_4351_43right_f32_f32(tmp112, tmp113);
+    float tmp118 = quantized._m0.y;
+    float tmp119 = 4095.0;
+    float tmp120 = left1_4371_43right_f32_f32(tmp118, tmp119);
+    float tmp121 = 4.0;
+    float tmp122 = left1_4321_43right_f32_f32(tmp120, tmp121);
+    float tmp123 = 2.0;
+    _527.y = left1_4351_43right_f32_f32(tmp122, tmp123);
+    float tmp128 = quantized._m0.z;
+    float tmp129 = 4095.0;
+    float tmp130 = left1_4371_43right_f32_f32(tmp128, tmp129);
+    float tmp131 = 4.0;
+    float tmp132 = left1_4321_43right_f32_f32(tmp130, tmp131);
+    float tmp133 = 2.0;
+    _527.z = left1_4351_43right_f32_f32(tmp132, tmp133);
+    _class class_tmp104 = _class(vec3(0.0));
+    class_tmp104._m0 = _527;
+    _class local = class_tmp104;
     float time = dynlexUniform0.value;
-    float tmp52 = dynlexUniform2.value;
-    float tmp53 = 1.0;
-    float width = _the43_maximum_of_a_and_b_f32_f32(tmp52, tmp53);
-    float tmp54 = dynlexUniform3.value;
-    float tmp55 = 1.0;
-    float height = _the43_maximum_of_a_and_b_f32_f32(tmp54, tmp55);
-    float render_pass = dynlexUniform1.value;
-    float aspect = left1_4371_43right_f32_f32(width, height);
-    float tmp56 = 1.0;
-    float viewport_horizontal_scale = left1_4371_43right_f32_f32(tmp56, aspect);
-    float tmp57 = 10.3999996185302734375;
-    float moment = _the43_minimum_of_a_and_b_f32_f32(time, tmp57);
-    float tmp58 = 0.0;
-    float tmp59 = 11.0;
-    float visibility = scene_window_from_opening_to_closing_at_moment_f32_f32_f32(tmp58, tmp59, moment);
-    float tmp60 = 0.0;
-    float tmp61 = left1_4351_43right_f32_f32(tmp60, time);
-    float tmp62 = 9.3999996185302734375;
-    float motorcycle_wheel_spin = left1_4321_43right_f32_f32(tmp61, tmp62);
-    float wheel_spin_sine = _the43_sine_of_value_f32(motorcycle_wheel_spin);
-    float wheel_spin_cosine = _the43_cosine_of_value_f32(motorcycle_wheel_spin);
-    float tmp63 = 0.7200000286102294921875;
-    float wheel_center_x = _the_431negative_1of_34opposite_1of_3453value_f32(tmp63);
-    float tmp64 = 0.0;
-    if (left_2_right_f32_f32(motorcycle_local_x, tmp64))
+    float tmp138 = dynlexUniform2.value;
+    float tmp139 = 1.0;
+    vec2 _547 = vec2(0.0);
+    _547.x = the_maximum_of_left_and_right_f32_f32(tmp138, tmp139);
+    float tmp141 = dynlexUniform3.value;
+    float tmp142 = 1.0;
+    _547.y = the_maximum_of_left_and_right_f32_f32(tmp141, tmp142);
+    class_0 class_tmp137 = class_0(vec2(0.0));
+    class_tmp137._m0 = _547;
+    class_0 frame = class_tmp137;
+    float pass = dynlexUniform1.value;
+    float tmp149 = frame._m0.x;
+    float tmp153 = frame._m0.y;
+    float aspect = left1_4371_43right_f32_f32(tmp149, tmp153);
+    float tmp154 = 1.0;
+    float scale = left1_4371_43right_f32_f32(tmp154, aspect);
+    float tmp155 = 10.3999996185302734375;
+    float moment = the_minimum_of_left_and_right_f32_f32(time, tmp155);
+    float tmp156 = 0.0;
+    float tmp157 = 11.0;
+    float visibility = the_scene_window_from_opening_to_closing_at_moment_f32_f32_f32(tmp156, tmp157, moment);
+    float tmp158 = 0.0;
+    float tmp159 = left1_4351_43right_f32_f32(tmp158, time);
+    float tmp160 = 9.3999996185302734375;
+    float spin = left1_4321_43right_f32_f32(tmp159, tmp160);
+    float sine = the_sine_of_value_f32(spin);
+    float cosine = the_cosine_of_value_f32(spin);
+    float tmp161 = 0.7200000286102294921875;
+    float center = _the_negative_of_4the_opposite_of_453value_f32(tmp161);
+    float tmp165 = local._m0.x;
+    float tmp166 = 0.0;
+    if (left_2_right_f32_f32(tmp165, tmp166))
     {
-        wheel_center_x = 0.7200000286102294921875;
+        center = 0.7200000286102294921875;
     }
-    float wheel_offset_x = left1_4351_43right_f32_f32(motorcycle_local_x, wheel_center_x);
-    float tmp65 = 0.4199999868869781494140625;
-    float wheel_offset_y = left1_4331_43right_f32_f32(motorcycle_local_y, tmp65);
-    float tmp66 = left1_4321_43right_f32_f32(wheel_offset_x, wheel_spin_cosine);
-    float tmp67 = left1_4321_43right_f32_f32(wheel_offset_y, wheel_spin_sine);
-    float wheel_rotated_x = left1_4351_43right_f32_f32(tmp66, tmp67);
-    float tmp68 = left1_4321_43right_f32_f32(wheel_offset_x, wheel_spin_sine);
-    float tmp69 = left1_4321_43right_f32_f32(wheel_offset_y, wheel_spin_cosine);
-    float wheel_rotated_y = left1_4331_43right_f32_f32(tmp68, tmp69);
-    float tmp72 = 0.5;
-    if (left_2_right_f32_f32(wheel_point, tmp72))
+    float tmp171 = local._m0.x;
+    vec2 _577 = vec2(0.0);
+    _577.x = left1_4351_43right_f32_f32(tmp171, center);
+    float tmp176 = local._m0.y;
+    float tmp177 = 0.4199999868869781494140625;
+    _577.y = left1_4331_43right_f32_f32(tmp176, tmp177);
+    class_0 class_tmp167 = class_0(vec2(0.0));
+    class_tmp167._m0 = _577;
+    class_0 offset = class_tmp167;
+    float tmp185 = offset._m0.x;
+    float tmp186 = left1_4321_43right_f32_f32(tmp185, cosine);
+    float tmp190 = offset._m0.y;
+    float tmp191 = left1_4321_43right_f32_f32(tmp190, sine);
+    vec2 _594 = vec2(0.0);
+    _594.x = left1_4351_43right_f32_f32(tmp186, tmp191);
+    float tmp196 = offset._m0.x;
+    float tmp197 = left1_4321_43right_f32_f32(tmp196, sine);
+    float tmp201 = offset._m0.y;
+    float tmp202 = left1_4321_43right_f32_f32(tmp201, cosine);
+    _594.y = left1_4331_43right_f32_f32(tmp197, tmp202);
+    class_0 class_tmp181 = class_0(vec2(0.0));
+    class_tmp181._m0 = _594;
+    class_0 rotated = class_tmp181;
+    float tmp208 = 0.5;
+    if (left_2_right_f32_f32(wheel, tmp208))
     {
-        motorcycle_local_x = left1_4331_43right_f32_f32(wheel_center_x, wheel_rotated_x);
-        float tmp73 = 0.4199999868869781494140625;
-        float tmp74 = _the_431negative_1of_34opposite_1of_3453value_f32(tmp73);
-        motorcycle_local_y = left1_4331_43right_f32_f32(tmp74, wheel_rotated_y);
+        vec3 _609 = local._m0;
+        float tmp214 = rotated._m0.x;
+        _609.x = left1_4331_43right_f32_f32(center, tmp214);
+        local._m0 = _609;
+        vec3 _617 = local._m0;
+        float tmp218 = 0.4199999868869781494140625;
+        float tmp219 = _the_negative_of_4the_opposite_of_453value_f32(tmp218);
+        float tmp223 = rotated._m0.y;
+        _617.y = left1_4331_43right_f32_f32(tmp219, tmp223);
+        local._m0 = _617;
     }
-    float tmp75 = 0.0;
-    float tmp76 = 4.25;
-    float motorcycle_progress = smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp75, tmp76, moment);
-    float tmp77 = 1.2999999523162841796875;
-    float tmp78 = 0.039999999105930328369140625;
-    float tmp79 = left1_4321_43right_f32_f32(motorcycle_progress, tmp78);
-    float motorcycle_yaw = left1_4331_43right_f32_f32(tmp77, tmp79);
-    float motorcycle_yaw_sine = _the43_sine_of_value_f32(motorcycle_yaw);
-    float motorcycle_yaw_cosine = _the43_cosine_of_value_f32(motorcycle_yaw);
-    float tmp80 = left1_4321_43right_f32_f32(motorcycle_local_x, motorcycle_yaw_cosine);
-    float tmp81 = left1_4321_43right_f32_f32(motorcycle_local_z, motorcycle_yaw_sine);
-    float motorcycle_turned_x = left1_4331_43right_f32_f32(tmp80, tmp81);
-    float tmp82 = left1_4321_43right_f32_f32(motorcycle_local_z, motorcycle_yaw_cosine);
-    float tmp83 = left1_4321_43right_f32_f32(motorcycle_local_x, motorcycle_yaw_sine);
-    float motorcycle_turned_z = left1_4351_43right_f32_f32(tmp82, tmp83);
-    float tmp84 = 0.0;
-    float tmp85 = 1.2599999904632568359375;
-    float tmp86 = left1_4351_43right_f32_f32(tmp84, tmp85);
-    float tmp87 = 1.17999994754791259765625;
-    float tmp88 = left1_4321_43right_f32_f32(motorcycle_progress, tmp87);
-    float tmp89 = left1_4331_43right_f32_f32(tmp86, tmp88);
-    float motorcycle_world_x = left1_4331_43right_f32_f32(motorcycle_turned_x, tmp89);
-    float tmp90 = 0.0;
-    float tmp91 = 0.189999997615814208984375;
-    float tmp92 = left1_4351_43right_f32_f32(tmp90, tmp91);
-    float tmp93 = 0.119999997317790985107421875;
-    float tmp94 = left1_4321_43right_f32_f32(motorcycle_progress, tmp93);
-    float tmp95 = left1_4331_43right_f32_f32(tmp92, tmp94);
-    float motorcycle_world_y = left1_4331_43right_f32_f32(motorcycle_local_y, tmp95);
-    float tmp96 = 2.7999999523162841796875;
-    float tmp97 = 4.900000095367431640625;
-    float tmp98 = left1_4321_43right_f32_f32(motorcycle_progress, tmp97);
-    float tmp99 = left1_4351_43right_f32_f32(tmp96, tmp98);
-    float motorcycle_world_z = left1_4331_43right_f32_f32(motorcycle_turned_z, tmp99);
-    float tmp100 = 4.19999980926513671875;
-    float tmp101 = left1_4331_43right_f32_f32(motorcycle_world_z, tmp100);
-    float tmp102 = 0.20000000298023223876953125;
-    float motorcycle_depth = _the43_maximum_of_a_and_b_f32_f32(tmp101, tmp102);
-    float tmp103 = 1.7200000286102294921875;
-    float tmp104 = left1_4321_43right_f32_f32(motorcycle_world_x, tmp103);
-    float tmp105 = left1_4321_43right_f32_f32(tmp104, viewport_horizontal_scale);
-    float motorcycle_ndc_x = left1_4371_43right_f32_f32(tmp105, motorcycle_depth);
-    float tmp106 = 1.7200000286102294921875;
-    float tmp107 = left1_4321_43right_f32_f32(motorcycle_world_y, tmp106);
-    float motorcycle_ndc_y = left1_4371_43right_f32_f32(tmp107, motorcycle_depth);
-    float tmp108 = 0.310000002384185791015625;
-    float tmp109 = left1_4321_43right_f32_f32(time, tmp108);
-    float tmp110 = _the43_sine_of_value_f32(tmp109);
-    float tmp111 = 0.3400000035762786865234375;
-    float target_yaw = left1_4321_43right_f32_f32(tmp110, tmp111);
-    float target_yaw_sine = _the43_sine_of_value_f32(target_yaw);
-    float target_yaw_cosine = _the43_cosine_of_value_f32(target_yaw);
-    float tmp112 = left1_4321_43right_f32_f32(point_x, target_yaw_cosine);
-    float tmp113 = left1_4321_43right_f32_f32(point_z, target_yaw_sine);
-    float target_turned_x = left1_4331_43right_f32_f32(tmp112, tmp113);
-    float tmp114 = left1_4321_43right_f32_f32(point_z, target_yaw_cosine);
-    float tmp115 = left1_4321_43right_f32_f32(point_x, target_yaw_sine);
-    float target_turned_z = left1_4351_43right_f32_f32(tmp114, tmp115);
-    float tmp116 = 3.25;
-    float tmp117 = 0.519999980926513671875;
-    float tmp118 = left1_4321_43right_f32_f32(target_turned_z, tmp117);
-    float target_depth = left1_4331_43right_f32_f32(tmp116, tmp118);
-    float tmp119 = 1.65999996662139892578125;
-    float tmp120 = left1_4321_43right_f32_f32(target_turned_x, tmp119);
-    float tmp121 = left1_4321_43right_f32_f32(tmp120, viewport_horizontal_scale);
-    float target_ndc_x = left1_4371_43right_f32_f32(tmp121, target_depth);
-    float tmp122 = 1.86000001430511474609375;
-    float tmp123 = left1_4321_43right_f32_f32(point_y, tmp122);
-    float tmp124 = 0.039999999105930328369140625;
-    float tmp125 = left1_4351_43right_f32_f32(tmp123, tmp124);
-    float target_ndc_y = left1_4371_43right_f32_f32(tmp125, target_depth);
-    float tmp126 = 3.13000011444091796875;
-    float tmp127 = left1_4321_43right_f32_f32(point_x, tmp126);
-    float tmp128 = 2.71000003814697265625;
-    float tmp129 = left1_4321_43right_f32_f32(point_y, tmp128);
-    float tmp130 = left1_4331_43right_f32_f32(tmp127, tmp129);
-    float tmp131 = 4.190000057220458984375;
-    float tmp132 = left1_4321_43right_f32_f32(point_z, tmp131);
-    float tmp133 = left1_4331_43right_f32_f32(tmp130, tmp132);
-    float tmp134 = _the43_sine_of_value_f32(tmp133);
-    float tmp135 = 0.5;
-    float tmp136 = left1_4321_43right_f32_f32(tmp134, tmp135);
-    float tmp137 = 0.5;
-    float drone_seed_a = left1_4331_43right_f32_f32(tmp136, tmp137);
-    float tmp138 = 2.1700000762939453125;
-    float tmp139 = _the_431negative_1of_34opposite_1of_3453value_f32(tmp138);
-    float tmp140 = left1_4321_43right_f32_f32(point_x, tmp139);
-    float tmp141 = 3.9100000858306884765625;
-    float tmp142 = left1_4321_43right_f32_f32(point_y, tmp141);
-    float tmp143 = left1_4331_43right_f32_f32(tmp140, tmp142);
-    float tmp144 = 2.4300000667572021484375;
-    float tmp145 = left1_4321_43right_f32_f32(point_z, tmp144);
-    float tmp146 = left1_4331_43right_f32_f32(tmp143, tmp145);
-    float tmp147 = _the43_sine_of_value_f32(tmp146);
-    float tmp148 = 0.5;
-    float tmp149 = left1_4321_43right_f32_f32(tmp147, tmp148);
-    float tmp150 = 0.5;
-    float drone_seed_b = left1_4331_43right_f32_f32(tmp149, tmp150);
-    float tmp151 = 0.75;
-    float drone_delay = left1_4321_43right_f32_f32(drone_seed_a, tmp151);
-    float tmp152 = 4.44999980926513671875;
-    float tmp153 = left1_4331_43right_f32_f32(tmp152, drone_delay);
-    float tmp154 = 6.650000095367431640625;
-    float tmp155 = left1_4331_43right_f32_f32(tmp154, drone_delay);
-    float assembly_progress = smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp153, tmp155, moment);
-    float tmp156 = 3.1415927410125732421875;
-    float tmp157 = left1_4321_43right_f32_f32(assembly_progress, tmp156);
-    float tmp158 = _the43_sine_of_value_f32(tmp157);
-    float tmp159 = 0.100000001490116119384765625;
-    float tmp160 = 0.23999999463558197021484375;
-    float tmp161 = left1_4321_43right_f32_f32(drone_seed_b, tmp160);
-    float tmp162 = left1_4331_43right_f32_f32(tmp159, tmp161);
-    float flight_arc = left1_4321_43right_f32_f32(tmp158, tmp162);
-    float tmp163 = 6.283185482025146484375;
-    float tmp164 = left1_4321_43right_f32_f32(drone_seed_b, tmp163);
-    float tmp165 = 3.2000000476837158203125;
-    float tmp166 = left1_4321_43right_f32_f32(assembly_progress, tmp165);
-    float flight_phase = left1_4331_43right_f32_f32(tmp164, tmp166);
-    float tmp167 = 3.1415927410125732421875;
-    float tmp168 = left1_4321_43right_f32_f32(assembly_progress, tmp167);
-    float tmp169 = _the43_sine_of_value_f32(tmp168);
-    float tmp170 = 0.119999997317790985107421875;
-    float flight_sweep = left1_4321_43right_f32_f32(tmp169, tmp170);
-    float tmp171 = _the43_cosine_of_value_f32(flight_phase);
-    float tmp172 = left1_4321_43right_f32_f32(tmp171, flight_arc);
-    float tmp173 = left1_4331_43right_f32_f32(tmp172, flight_sweep);
-    float flight_x = left1_4321_43right_f32_f32(tmp173, viewport_horizontal_scale);
-    float tmp174 = _the43_sine_of_value_f32(flight_phase);
-    float tmp175 = left1_4321_43right_f32_f32(tmp174, flight_arc);
-    float tmp176 = 0.7200000286102294921875;
-    float flight_y = left1_4321_43right_f32_f32(tmp175, tmp176);
-    float tmp177 = left1_4351_43right_f32_f32(target_ndc_x, motorcycle_ndc_x);
-    float tmp178 = left1_4321_43right_f32_f32(tmp177, assembly_progress);
-    float tmp179 = left1_4331_43right_f32_f32(motorcycle_ndc_x, tmp178);
-    float assembled_ndc_x = left1_4331_43right_f32_f32(tmp179, flight_x);
-    float tmp180 = left1_4351_43right_f32_f32(target_ndc_y, motorcycle_ndc_y);
-    float tmp181 = left1_4321_43right_f32_f32(tmp180, assembly_progress);
-    float tmp182 = left1_4331_43right_f32_f32(motorcycle_ndc_y, tmp181);
-    float assembled_ndc_y = left1_4331_43right_f32_f32(tmp182, flight_y);
-    float tmp183 = left1_4351_43right_f32_f32(target_depth, motorcycle_depth);
-    float tmp184 = left1_4321_43right_f32_f32(tmp183, assembly_progress);
-    float depth = left1_4331_43right_f32_f32(motorcycle_depth, tmp184);
-    float tmp185 = 0.0010400000028312206268310546875;
-    float tmp186 = 0.959999978542327880859375;
-    float tmp187 = 0.039999999105930328369140625;
-    float tmp188 = left1_4321_43right_f32_f32(render_pass, tmp187);
-    float tmp189 = left1_4331_43right_f32_f32(tmp186, tmp188);
-    float relative_point_size = left1_4321_43right_f32_f32(tmp185, tmp189);
-    float point_size_x = left1_4321_43right_f32_f32(relative_point_size, viewport_horizontal_scale);
-    float point_size_y = relative_point_size;
-    float tmp190 = 0.0;
-    float corner_x = left1_4351_43right_f32_f32(tmp190, point_size_x);
-    float tmp191 = 0.0;
-    float corner_y = left1_4351_43right_f32_f32(tmp191, point_size_y);
-    float tmp194 = 1.0;
-    if (left_1is_greater_than_or_equal_to4213_right_f32_f32(triangle_corner, tmp194))
+    float tmp226 = 0.0;
+    float tmp227 = 4.25;
+    float progress = the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp226, tmp227, moment);
+    float tmp228 = 1.2999999523162841796875;
+    float tmp229 = 0.039999999105930328369140625;
+    float tmp230 = left1_4321_43right_f32_f32(progress, tmp229);
+    float yaw = left1_4331_43right_f32_f32(tmp228, tmp230);
+    sine = the_sine_of_value_f32(yaw);
+    cosine = the_cosine_of_value_f32(yaw);
+    float tmp235 = local._m0.x;
+    float tmp236 = left1_4321_43right_f32_f32(tmp235, cosine);
+    float tmp240 = local._m0.z;
+    float tmp241 = left1_4321_43right_f32_f32(tmp240, sine);
+    vec3 _639 = vec3(0.0);
+    _639.x = left1_4331_43right_f32_f32(tmp236, tmp241);
+    _639.y = local._m0.y;
+    float tmp250 = local._m0.z;
+    float tmp251 = left1_4321_43right_f32_f32(tmp250, cosine);
+    float tmp255 = local._m0.x;
+    float tmp256 = left1_4321_43right_f32_f32(tmp255, sine);
+    _639.z = left1_4351_43right_f32_f32(tmp251, tmp256);
+    _class class_tmp231 = _class(vec3(0.0));
+    class_tmp231._m0 = _639;
+    _class turned = class_tmp231;
+    float tmp264 = turned._m0.x;
+    float tmp265 = 0.0;
+    float tmp266 = 1.2599999904632568359375;
+    float tmp267 = left1_4351_43right_f32_f32(tmp265, tmp266);
+    float tmp268 = 1.17999994754791259765625;
+    float tmp269 = left1_4321_43right_f32_f32(progress, tmp268);
+    float tmp270 = left1_4331_43right_f32_f32(tmp267, tmp269);
+    vec3 _663 = vec3(0.0);
+    _663.x = left1_4331_43right_f32_f32(tmp264, tmp270);
+    float tmp275 = turned._m0.y;
+    float tmp276 = 0.0;
+    float tmp277 = 0.189999997615814208984375;
+    float tmp278 = left1_4351_43right_f32_f32(tmp276, tmp277);
+    float tmp279 = 0.119999997317790985107421875;
+    float tmp280 = left1_4321_43right_f32_f32(progress, tmp279);
+    float tmp281 = left1_4331_43right_f32_f32(tmp278, tmp280);
+    _663.y = left1_4331_43right_f32_f32(tmp275, tmp281);
+    float tmp286 = turned._m0.z;
+    float tmp287 = 2.7999999523162841796875;
+    float tmp288 = 4.900000095367431640625;
+    float tmp289 = left1_4321_43right_f32_f32(progress, tmp288);
+    float tmp290 = left1_4351_43right_f32_f32(tmp287, tmp289);
+    _663.z = left1_4331_43right_f32_f32(tmp286, tmp290);
+    _class class_tmp260 = _class(vec3(0.0));
+    class_tmp260._m0 = _663;
+    _class world = class_tmp260;
+    float tmp297 = world._m0.z;
+    float tmp298 = 4.19999980926513671875;
+    float tmp299 = left1_4331_43right_f32_f32(tmp297, tmp298);
+    float tmp300 = 0.20000000298023223876953125;
+    float depth = the_maximum_of_left_and_right_f32_f32(tmp299, tmp300);
+    float tmp305 = world._m0.x;
+    float tmp306 = 1.7200000286102294921875;
+    float tmp307 = left1_4321_43right_f32_f32(tmp305, tmp306);
+    float tmp308 = left1_4321_43right_f32_f32(tmp307, scale);
+    vec2 _692 = vec2(0.0);
+    _692.x = left1_4371_43right_f32_f32(tmp308, depth);
+    float tmp313 = world._m0.y;
+    float tmp314 = 1.7200000286102294921875;
+    float tmp315 = left1_4321_43right_f32_f32(tmp313, tmp314);
+    _692.y = left1_4371_43right_f32_f32(tmp315, depth);
+    class_0 class_tmp301 = class_0(vec2(0.0));
+    class_tmp301._m0 = _692;
+    class_0 motorcycle = class_tmp301;
+    float tmp319 = 0.310000002384185791015625;
+    float tmp320 = left1_4321_43right_f32_f32(time, tmp319);
+    float tmp321 = the_sine_of_value_f32(tmp320);
+    float tmp322 = 0.3400000035762786865234375;
+    yaw = left1_4321_43right_f32_f32(tmp321, tmp322);
+    sine = the_sine_of_value_f32(yaw);
+    cosine = the_cosine_of_value_f32(yaw);
+    float tmp327 = point._m0.x;
+    float tmp328 = left1_4321_43right_f32_f32(tmp327, cosine);
+    float tmp332 = point._m0.z;
+    float tmp333 = left1_4321_43right_f32_f32(tmp332, sine);
+    vec3 _715 = vec3(0.0);
+    _715.x = left1_4331_43right_f32_f32(tmp328, tmp333);
+    _715.y = point._m0.y;
+    float tmp342 = point._m0.z;
+    float tmp343 = left1_4321_43right_f32_f32(tmp342, cosine);
+    float tmp347 = point._m0.x;
+    float tmp348 = left1_4321_43right_f32_f32(tmp347, sine);
+    _715.z = left1_4351_43right_f32_f32(tmp343, tmp348);
+    _class class_tmp323 = _class(vec3(0.0));
+    class_tmp323._m0 = _715;
+    turned = class_tmp323;
+    float tmp352 = 3.25;
+    float tmp356 = turned._m0.z;
+    float tmp357 = 0.519999980926513671875;
+    float tmp358 = left1_4321_43right_f32_f32(tmp356, tmp357);
+    float destination = left1_4331_43right_f32_f32(tmp352, tmp358);
+    float tmp363 = turned._m0.x;
+    float tmp364 = 1.65999996662139892578125;
+    float tmp365 = left1_4321_43right_f32_f32(tmp363, tmp364);
+    float tmp366 = left1_4321_43right_f32_f32(tmp365, scale);
+    vec2 _743 = vec2(0.0);
+    _743.x = left1_4371_43right_f32_f32(tmp366, destination);
+    float tmp371 = point._m0.y;
+    float tmp372 = 1.86000001430511474609375;
+    float tmp373 = left1_4321_43right_f32_f32(tmp371, tmp372);
+    float tmp374 = 0.039999999105930328369140625;
+    float tmp375 = left1_4351_43right_f32_f32(tmp373, tmp374);
+    _743.y = left1_4371_43right_f32_f32(tmp375, destination);
+    class_0 class_tmp359 = class_0(vec2(0.0));
+    class_tmp359._m0 = _743;
+    class_0 projection = class_tmp359;
+    float tmp382 = point._m0.x;
+    float tmp383 = 3.13000011444091796875;
+    float tmp384 = left1_4321_43right_f32_f32(tmp382, tmp383);
+    float tmp388 = point._m0.y;
+    float tmp389 = 2.71000003814697265625;
+    float tmp390 = left1_4321_43right_f32_f32(tmp388, tmp389);
+    float tmp391 = left1_4331_43right_f32_f32(tmp384, tmp390);
+    float tmp395 = point._m0.z;
+    float tmp396 = 4.190000057220458984375;
+    float tmp397 = left1_4321_43right_f32_f32(tmp395, tmp396);
+    float tmp398 = left1_4331_43right_f32_f32(tmp391, tmp397);
+    float tmp399 = the_sine_of_value_f32(tmp398);
+    float tmp400 = 0.5;
+    float tmp401 = left1_4321_43right_f32_f32(tmp399, tmp400);
+    float tmp402 = 0.5;
+    float seed = left1_4331_43right_f32_f32(tmp401, tmp402);
+    float tmp406 = point._m0.x;
+    float tmp407 = 2.1700000762939453125;
+    float tmp408 = _the_negative_of_4the_opposite_of_453value_f32(tmp407);
+    float tmp409 = left1_4321_43right_f32_f32(tmp406, tmp408);
+    float tmp413 = point._m0.y;
+    float tmp414 = 3.9100000858306884765625;
+    float tmp415 = left1_4321_43right_f32_f32(tmp413, tmp414);
+    float tmp416 = left1_4331_43right_f32_f32(tmp409, tmp415);
+    float tmp420 = point._m0.z;
+    float tmp421 = 2.4300000667572021484375;
+    float tmp422 = left1_4321_43right_f32_f32(tmp420, tmp421);
+    float tmp423 = left1_4331_43right_f32_f32(tmp416, tmp422);
+    float tmp424 = the_sine_of_value_f32(tmp423);
+    float tmp425 = 0.5;
+    float tmp426 = left1_4321_43right_f32_f32(tmp424, tmp425);
+    float tmp427 = 0.5;
+    float variation = left1_4331_43right_f32_f32(tmp426, tmp427);
+    float tmp428 = 0.75;
+    float delay = left1_4321_43right_f32_f32(seed, tmp428);
+    float tmp429 = 4.44999980926513671875;
+    float tmp430 = left1_4331_43right_f32_f32(tmp429, delay);
+    float tmp431 = 6.650000095367431640625;
+    float tmp432 = left1_4331_43right_f32_f32(tmp431, delay);
+    float assembly = the_smooth_transition_from_lower_to_upper_at_sample_f32_f32_f32(tmp430, tmp432, moment);
+    float tmp433 = 3.1415927410125732421875;
+    float tmp434 = left1_4321_43right_f32_f32(assembly, tmp433);
+    float tmp435 = the_sine_of_value_f32(tmp434);
+    float tmp436 = 0.100000001490116119384765625;
+    float tmp437 = 0.23999999463558197021484375;
+    float tmp438 = left1_4321_43right_f32_f32(variation, tmp437);
+    float tmp439 = left1_4331_43right_f32_f32(tmp436, tmp438);
+    float arc = left1_4321_43right_f32_f32(tmp435, tmp439);
+    float tmp440 = 6.283185482025146484375;
+    float tmp441 = left1_4321_43right_f32_f32(variation, tmp440);
+    float tmp442 = 3.2000000476837158203125;
+    float tmp443 = left1_4321_43right_f32_f32(assembly, tmp442);
+    float phase = left1_4331_43right_f32_f32(tmp441, tmp443);
+    float tmp444 = 3.1415927410125732421875;
+    float tmp445 = left1_4321_43right_f32_f32(assembly, tmp444);
+    float tmp446 = the_sine_of_value_f32(tmp445);
+    float tmp447 = 0.119999997317790985107421875;
+    float sweep = left1_4321_43right_f32_f32(tmp446, tmp447);
+    float tmp449 = the_cosine_of_value_f32(phase);
+    float tmp450 = left1_4321_43right_f32_f32(tmp449, arc);
+    float tmp451 = left1_4331_43right_f32_f32(tmp450, sweep);
+    vec2 _807 = vec2(0.0);
+    _807.x = left1_4321_43right_f32_f32(tmp451, scale);
+    float tmp453 = the_sine_of_value_f32(phase);
+    float tmp454 = left1_4321_43right_f32_f32(tmp453, arc);
+    float tmp455 = 0.7200000286102294921875;
+    _807.y = left1_4321_43right_f32_f32(tmp454, tmp455);
+    class_0 class_tmp448 = class_0(vec2(0.0));
+    class_tmp448._m0 = _807;
+    class_0 flight = class_tmp448;
+    float tmp463 = motorcycle._m0.x;
+    float tmp467 = projection._m0.x;
+    float tmp471 = motorcycle._m0.x;
+    float tmp472 = left1_4351_43right_f32_f32(tmp467, tmp471);
+    float tmp473 = left1_4321_43right_f32_f32(tmp472, assembly);
+    float tmp474 = left1_4331_43right_f32_f32(tmp463, tmp473);
+    float tmp478 = flight._m0.x;
+    vec2 _830 = vec2(0.0);
+    _830.x = left1_4331_43right_f32_f32(tmp474, tmp478);
+    float tmp483 = motorcycle._m0.y;
+    float tmp487 = projection._m0.y;
+    float tmp491 = motorcycle._m0.y;
+    float tmp492 = left1_4351_43right_f32_f32(tmp487, tmp491);
+    float tmp493 = left1_4321_43right_f32_f32(tmp492, assembly);
+    float tmp494 = left1_4331_43right_f32_f32(tmp483, tmp493);
+    float tmp498 = flight._m0.y;
+    _830.y = left1_4331_43right_f32_f32(tmp494, tmp498);
+    class_0 class_tmp459 = class_0(vec2(0.0));
+    class_tmp459._m0 = _830;
+    class_0 assembled = class_tmp459;
+    float tmp502 = left1_4351_43right_f32_f32(destination, depth);
+    float tmp503 = left1_4321_43right_f32_f32(tmp502, assembly);
+    depth = left1_4331_43right_f32_f32(depth, tmp503);
+    float tmp504 = 0.0010400000028312206268310546875;
+    float tmp505 = 0.959999978542327880859375;
+    float tmp506 = 0.039999999105930328369140625;
+    float tmp507 = left1_4321_43right_f32_f32(pass, tmp506);
+    float tmp508 = left1_4331_43right_f32_f32(tmp505, tmp507);
+    float size = left1_4321_43right_f32_f32(tmp504, tmp508);
+    vec2 _857 = vec2(0.0);
+    _857.x = left1_4321_43right_f32_f32(size, scale);
+    _857.y = size;
+    class_0 class_tmp509 = class_0(vec2(0.0));
+    class_tmp509._m0 = _857;
+    class_0 extent = class_tmp509;
+    float tmp515 = 0.0;
+    float tmp519 = extent._m0.x;
+    vec2 _866 = vec2(0.0);
+    _866.x = left1_4351_43right_f32_f32(tmp515, tmp519);
+    float tmp521 = 0.0;
+    float tmp525 = extent._m0.y;
+    _866.y = left1_4351_43right_f32_f32(tmp521, tmp525);
+    class_0 class_tmp514 = class_0(vec2(0.0));
+    class_tmp514._m0 = _866;
+    class_0 corner = class_tmp514;
+    float tmp531 = 1.0;
+    if (left_1is_greater_than_or_equal_to4213_right_f32_f32(triangle, tmp531))
     {
-        corner_x = point_size_x;
+        vec2 _876 = corner._m0;
+        _876.x = extent._m0.x;
+        corner._m0 = _876;
     }
-    float tmp197 = 2.0;
-    if (left_1is_greater_than_or_equal_to4213_right_f32_f32(triangle_corner, tmp197))
+    float tmp541 = 2.0;
+    if (left_1is_greater_than_or_equal_to4213_right_f32_f32(triangle, tmp541))
     {
-        corner_x = 0.0;
-        float tmp198 = 1.4500000476837158203125;
-        corner_y = left1_4321_43right_f32_f32(point_size_y, tmp198);
+        vec2 _884 = corner._m0;
+        _884.x = 0.0;
+        corner._m0 = _884;
+        vec2 _888 = corner._m0;
+        float tmp551 = extent._m0.y;
+        float tmp552 = 1.4500000476837158203125;
+        _888.y = left1_4321_43right_f32_f32(tmp551, tmp552);
+        corner._m0 = _888;
     }
-    float tmp199 = left1_4331_43right_f32_f32(assembled_ndc_x, corner_x);
-    float tmp200 = left1_4331_43right_f32_f32(assembled_ndc_y, corner_y);
-    float tmp203 = 0.001000000047497451305389404296875;
-    float _552 = 0.0;
-    if (left_0_right_f32_f32(visibility, tmp203))
+    float tmp559 = assembled._m0.x;
+    float tmp563 = corner._m0.x;
+    float tmp564 = left1_4331_43right_f32_f32(tmp559, tmp563);
+    vec2 _903 = vec2(0.0);
+    _903.x = left1_4321_43right_f32_f32(tmp564, depth);
+    float tmp569 = assembled._m0.y;
+    float tmp573 = corner._m0.y;
+    float tmp574 = left1_4331_43right_f32_f32(tmp569, tmp573);
+    _903.y = left1_4321_43right_f32_f32(tmp574, depth);
+    class_0 class_tmp555 = class_0(vec2(0.0));
+    class_tmp555._m0 = _903;
+    class_0 clip = class_tmp555;
+    float tmp580 = 0.001000000047497451305389404296875;
+    if (left_0_right_f32_f32(visibility, tmp580))
     {
-        float tmp204 = 3.0;
-        _552 = left1_4321_43right_f32_f32(depth, tmp204);
+        vec2 _917 = clip._m0;
+        float tmp583 = 3.0;
+        _917.x = left1_4321_43right_f32_f32(depth, tmp583);
+        clip._m0 = _917;
     }
-    else
-    {
-        _552 = left1_4321_43right_f32_f32(tmp199, depth);
-    }
-    float tmp205 = 0.4199999868869781494140625;
-    vec4 _555 = vec4(0.0);
-    _555.w = depth;
-    _555.z = left1_4321_43right_f32_f32(depth, tmp205);
-    _555.y = left1_4321_43right_f32_f32(tmp200, depth);
-    _555.x = _552;
-    gl_Position = _555;
+    vec4 _924 = vec4(0.0);
+    _924.x = clip._m0.x;
+    _924.y = clip._m0.y;
+    float tmp594 = 0.4199999868869781494140625;
+    _924.z = left1_4321_43right_f32_f32(depth, tmp594);
+    _924.w = depth;
+    gl_Position = _924;
 }

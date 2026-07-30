@@ -2,7 +2,7 @@ import lib/std.dl
 
 function print owner count of {string:value}:
     execute:
-        print @intrinsic("dereference", the owner of value) as line
+        print @intrinsic("dereference", the owner of value) as a line
 
 function exercise string ownership:
     execute:

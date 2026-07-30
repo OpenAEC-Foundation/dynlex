@@ -2,7 +2,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -10,13 +10,13 @@ function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-function [a|] pointer to pointedtype:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointedtype)
+        @intrinsic("add pointer depth", pointee)
 
-function value as destinationtype:
+function value as destination:
     execute:
-        return @intrinsic("cast", value, destinationtype)
+        return @intrinsic("cast", value, destination)
 
 function left = right:
     execute:
@@ -26,8 +26,8 @@ function left or right:
     execute:
         return @intrinsic("or", left, right)
 
-function compare first with second and third:
+function whether first matches second and third:
     execute:
-        return (first = 0 as a pointer to byte) or ((second = 0 as a pointer to byte) or (third = 0 as a pointer to byte))
+        return (first = 0 as a pointer to a byte) or ((second = 0 as a pointer to a byte) or (third = 0 as a pointer to a byte))
 
-discard compare (0 as a pointer to byte) with (0 as a pointer to byte) and (0 as a pointer to byte)
+ignore whether (0 as a pointer to a byte) matches (0 as a pointer to a byte) and (0 as a pointer to a byte)

@@ -2,20 +2,20 @@ import lib/process.dl
 
 function [the|] process kill test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-set process_command to a process command for the process kill test interpreter
-add "-u" as an argument to process_command
-add "-c" as an argument to process_command
-add "import time;time.sleep(10)" as an argument to process_command
-set child to launch process_command
-print child launched as line
-set killed to kill child
-print killed's succeeded as line
-set finished to wait up to 2000 milliseconds for child
-print (finished's succeeded and finished's finished) as line
-print finished's terminated as line
-set killed_again to kill child
-print killed_again's succeeded as line
-set cleaned to clean up child
-print cleaned's succeeded as line
+set command to a process command for the process kill test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import time;time.sleep(10)" as an argument to command
+launch command and set child to it
+print whether child was launched as a line
+kill child and set killed to it
+print whether killed succeeded as a line
+wait up to 2000 milliseconds for child and set finished to it
+print whether (finished succeeded) and (finished reports completion) as a line
+print whether finished reports termination as a line
+kill child and set repeated to it
+print whether repeated succeeded as a line
+clean up child and set cleaned to it
+print whether cleaned succeeded as a line

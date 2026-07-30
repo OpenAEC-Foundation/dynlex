@@ -1,3 +1,3 @@
 tests/required/property_store_requires_addressable_owner/main.dl:5-51: Error: assignment target 'the value of @intrinsic("construct", a box, 1)' is not writable
-  note: while inferring intrinsic 'store' in '@intrinsic("store", var, val)' with arguments [i8*, a 32 bit integer, a 32 bit integer] -> undeduced lib/std.dl:9-38
-  note: while inferring call 'set the value of @intrinsic("construct", a box, 1) to 2' with arguments [a 32 bit integer, a 32 bit integer] -> undeduced tests/required/property_store_requires_addressable_owner/main.dl:1-56
+  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-45
+  note: while inferring call 'set the value of @intrinsic("construct", a box, 1) to 2' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/property_store_requires_addressable_owner/main.dl:1-56

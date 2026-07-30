@@ -546,24 +546,38 @@ convertStructurallyRefinedClass(ParseContext &context, llvm::Value *value, const
 	return result;
 }
 
+static bool isSequentialAggregate(const DataType &type) {
+	return (type.kind == DataType::Kind::Array || type.kind == DataType::Kind::Vector) && !type.isPointer() &&
+		   type.arrayElementType;
+}
+
 static llvm::Value *
-convertStructurallyRefinedArray(ParseContext &context, llvm::Value *value, const DataType &fromType, const DataType &toType) {
+convertSequentialAggregate(ParseContext &context, llvm::Value *value, const DataType &fromType, const DataType &toType) {
 	requireCompilerInvariant(
-		fromType.kind == DataType::Kind::Array && toType.kind == DataType::Kind::Array && !fromType.isPointer() &&
-			!toType.isPointer() && fromType.arrayElementType && toType.arrayElementType &&
-			ClassDefinition::typeStructurallyRefines(toType, fromType),
-		"structural array conversion target does not refine its source"
+		isSequentialAggregate(fromType) && isSequentialAggregate(toType) && fromType.arraySize == toType.arraySize &&
+			DataType::supportsRuntimeConversion(*fromType.arrayElementType, *toType.arrayElementType),
+		"sequential aggregate conversion requires matching lengths and convertible elements"
 	);
 	requireCompilerInvariant(
-		value->getType() == getLLVMType(context, fromType), "structural array conversion value has the wrong source ABI"
+		value->getType() == getLLVMType(context, fromType), "sequential aggregate conversion value has the wrong source ABI"
 	);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::Value *result = llvm::UndefValue::get(getLLVMType(context, toType));
 	for (int elementIndex = 0; elementIndex < fromType.arraySize; elementIndex++) {
-		llvm::Value *elementValue = builder.CreateExtractValue(value, static_cast<unsigned>(elementIndex), "array_element");
+		llvm::Value *elementValue =
+			fromType.kind == DataType::Kind::Array
+				? builder.CreateExtractValue(value, static_cast<unsigned>(elementIndex), "aggregate_element")
+				: builder.CreateExtractElement(
+					  value, getVectorLaneIndexValue(context, static_cast<unsigned>(elementIndex)), "aggregate_element"
+				  );
 		elementValue = ensureType(context, elementValue, *fromType.arrayElementType, *toType.arrayElementType);
-		result = builder.CreateInsertValue(result, elementValue, static_cast<unsigned>(elementIndex), "array_refine");
+		result = toType.kind == DataType::Kind::Array
+					 ? builder.CreateInsertValue(result, elementValue, static_cast<unsigned>(elementIndex), "aggregate_cast")
+					 : builder.CreateInsertElement(
+						   result, elementValue, getVectorLaneIndexValue(context, static_cast<unsigned>(elementIndex)),
+						   "aggregate_cast"
+					   );
 	}
 	return result;
 }
@@ -617,9 +631,8 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		!toType.isPointer())
 		return convertStructurallyRefinedClass(context, val, fromType, toType);
 
-	if (fromType.kind == DataType::Kind::Array && toType.kind == DataType::Kind::Array && !fromType.isPointer() &&
-		!toType.isPointer())
-		return convertStructurallyRefinedArray(context, val, fromType, toType);
+	if (isSequentialAggregate(fromType) && isSequentialAggregate(toType))
+		return convertSequentialAggregate(context, val, fromType, toType);
 
 	if (fromType.kind == DataType::Kind::Matrix && toType.kind == DataType::Kind::Matrix && !fromType.isPointer() &&
 		!toType.isPointer())
@@ -652,17 +665,6 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		for (int i = 0; i < toType.vectorSize(); i++)
 			vectorValue = builder.CreateInsertElement(vectorValue, scalar, getVectorLaneIndexValue(context, i), "splat");
 		return vectorValue;
-	}
-
-	if (fromType.kind == DataType::Kind::Vector && toType.kind == DataType::Kind::Vector &&
-		fromType.vectorSize() == toType.vectorSize()) {
-		llvm::Value *result = llvm::Constant::getNullValue(targetLLVM);
-		for (int i = 0; i < toType.vectorSize(); i++) {
-			llvm::Value *lane = builder.CreateExtractElement(val, getVectorLaneIndexValue(context, i), "vec_lane");
-			lane = ensureType(context, lane, fromType.vectorElementType(), toType.vectorElementType());
-			result = builder.CreateInsertElement(result, lane, getVectorLaneIndexValue(context, i), "vec_cast");
-		}
-		return result;
 	}
 
 	// Bool → Numeric

@@ -1,14 +1,14 @@
 import lib/std.dl
 
-function print choice for n:
+function print choice for selection:
     execute:
         set result to 0
-        match on n:
+        match on selection:
             case 1:
                 set result to 10
             otherwise:
                 set result to 20
-        print result as line
+        print result as a line
 
 print choice for 1
 print choice for 2

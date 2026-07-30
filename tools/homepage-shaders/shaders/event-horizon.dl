@@ -1,136 +1,153 @@
+# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
+
 import lib/shader_art.dl
 
 # EVENT HORIZON
 # A camera falls through a continuously warped star field toward a rotating
 # black hole. No spatial lattice is used anywhere in the image.
 
-function moving star field at x y with scale phase time:
+function [a|] planar coordinate:
+    replacement:
+        a point
+
+function [a|] radiant color:
+    replacement:
+        a color
+
+function a planar coordinate with x {floating-point number:x} and y {floating-point number:y}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
+        )
+
+function a radiant color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
+        )
+
+function a moving star field at {planar coordinate:position} scaled by {floating-point number:scale} during {floating-point number:phase} at {floating-point number:time}:
     execute:
-        set depth to fractional part of (time * 0.13 + phase)
-        set expansion to 0.42 + ((depth * depth) * 3.6)
-        set star_x to (x / expansion) * scale
-        set star_y to (y / expansion) * scale
-        set points to spark field at star_x star_y (phase * 13.7)
-        set streak_x to spark field at (star_x * 0.33) star_y (phase * 13.7 + 0.09)
-        set streak_y to spark field at star_x (star_y * 0.33) (phase * 13.7 - 0.11)
-        set streaks to (streak_x + streak_y) * glow from 0.0 to 1.35 at (the square root of (x * x + y * y))
-        set twinkle to (the sine of (time * 2.7 + phase * 29.0)) * 0.13 + 0.87
+        set depth to the fractional part of ((time * 0.13) + phase)
+        set expansion to (0.42 + ((depth * depth) * 3.6))
+        set sample to a planar coordinate with x (((position's x) / expansion) * scale) and y (((position's y) / expansion) * scale)
+        set points to the spark field at (a point with x sample's x and y sample's y) during (phase * 13.7)
+        set horizontal to the spark field at (a point with x (sample's x * 0.33) and y sample's y) during ((phase * 13.7) + 0.09)
+        set vertical to the spark field at (a point with x sample's x and y (sample's y * 0.33)) during ((phase * 13.7) - 0.11)
+        set radius to the square root of ((position's x * position's x) + (position's y * position's y))
+        set streaks to ((horizontal + vertical) * (the glow from 0.0 to 1.35 at radius))
+        set twinkle to (((the sine of ((time * 2.7) + (phase * 29.0))) * 0.13) + 0.87)
         return (((points * 2.8) + (streaks * 0.17)) * (0.28 + (depth * 1.25))) * twinkle
 
-set pixel_x to the fragment x coordinate
-set pixel_y to the fragment y coordinate
+set pixel to a planar coordinate with x the fragment x coordinate and y the fragment y coordinate
 set time to the shader time
-set width to the maximum of the shader width and 1.0
-set height to the maximum of the shader height and 1.0
-set aspect to width / height
-set screen_x to (((pixel_x / width) * 2.0) - 1.0) * aspect
-set screen_y to ((pixel_y / height) * 2.0) - 1.0
+set frame to a planar coordinate with x (the maximum of (the shader width) and 1.0) and y (the maximum of (the shader height) and 1.0)
+set aspect to (frame's x / frame's y)
+set screen to a planar coordinate with x (((pixel's x / (frame's x)) * 2.0 - 1.0) * aspect) and y ((pixel's y / (frame's y)) * 2.0 - 1.0)
 
 # The fall accelerates and drifts, making the horizon consume the camera.
-set flight_scale to (0.62 + (time * 0.055)) + ((time * time) * 0.0018)
-set drift_x to (the sine of (time * 0.27)) * 0.048
-set drift_y to (the cosine of (time * 0.21)) * 0.026
-set x to (screen_x + drift_x) / flight_scale
-set y to (screen_y + drift_y) / flight_scale
-set radius to the square root of (x * x + y * y)
-set safe_radius to the maximum of radius and 0.001
+set flight to ((0.62 + (time * 0.055)) + ((time * time) * 0.0018))
+set drift to a planar coordinate with x ((the sine of (time * 0.27)) * 0.048) and y ((the cosine of (time * 0.21)) * 0.026)
+set position to a planar coordinate with x ((screen's x + drift's x) / flight) and y ((screen's y + drift's y) / flight)
+set radius to the square root of ((position's x * position's x) + (position's y * position's y))
+set denominator to the maximum of radius and 0.001
 
 # Gravitational lensing twists and magnifies the universe around the shadow.
-set lens_angle to 0.19 / (radius * radius + 0.021) + time * 0.035
-set lens_angle to the minimum of lens_angle and 4.6
-set lens_sine to the sine of lens_angle
-set lens_cosine to the cosine of lens_angle
-set lens_scale to 1.0 + 0.12 / (radius * radius + 0.012)
-set universe_x to (x * lens_cosine - y * lens_sine) * lens_scale
-set universe_y to (x * lens_sine + y * lens_cosine) * lens_scale
+set angle to ((0.19 / ((radius * radius) + 0.021)) + (time * 0.035))
+set angle to the minimum of angle and 4.6
+set sine to the sine of angle
+set cosine to the cosine of angle
+set scale to (1.0 + (0.12 / ((radius * radius) + 0.012)))
+set universe to a planar coordinate with x (((position's x * cosine) - (position's y * sine)) * scale) and y (((position's x * sine) + (position's y * cosine)) * scale)
 
 # A continuous domain-warped nebula replaces the old square value-noise field.
-set cloud_one to flowing field at (universe_x * 1.8 + time * 0.025) (universe_y * 1.8 - 4.0) 1.7
-set cloud_two to flowing field at (universe_x * 4.6 - 11.0) (universe_y * 4.6 + time * 0.018) 5.3
-set cloud_ridge to ridged field at (universe_x * 2.4 + 7.0) (universe_y * 2.4 - 9.0) (time * 0.045)
-set aurora_phase to (universe_x * 2.7 - universe_y * 3.6) + cloud_one * 8.0
-set aurora to (the sine of aurora_phase) * 0.5 + 0.5
-set cloud_light to smooth transition from 0.45 to 0.86 at cloud_one
-set dust_light to smooth transition from 0.52 to 0.90 at cloud_two
-set red to (0.002 + (cloud_light * 0.022)) + ((cloud_ridge * aurora) * 0.075)
-set green to (0.004 + (cloud_light * 0.028)) + ((dust_light * aurora) * 0.052)
-set blue to (0.014 + (cloud_light * 0.13)) + ((dust_light * (1.0 - aurora)) * 0.24)
+set primary to the flowing field at (a point with x ((universe's x * 1.8) + (time * 0.025)) and y ((universe's y * 1.8) - 4.0)) during 1.7
+set secondary to the flowing field at (a point with x ((universe's x * 4.6) - 11.0) and y ((universe's y * 4.6) + (time * 0.018))) during 5.3
+set ridge to the ridged field at (a point with x ((universe's x * 2.4) + 7.0) and y ((universe's y * 2.4) - 9.0)) during (time * 0.045)
+set phase to (((universe's x * 2.7) - (universe's y * 3.6)) + (primary * 8.0))
+set aurora to (((the sine of phase) * 0.5) + 0.5)
+set cloud to the smooth transition from 0.45 to 0.86 at primary
+set dust to the smooth transition from 0.52 to 0.90 at secondary
+set color to a radiant color with red ((0.002 + (cloud * 0.022)) + ((ridge * aurora) * 0.075)), green ((0.004 + (cloud * 0.028)) + ((dust * aurora) * 0.052)) and blue ((0.014 + (cloud * 0.13)) + ((dust * (1.0 - aurora)) * 0.24))
 
 # Three curved depth strata stream past the lens.
-set stars_far to moving star field at universe_x universe_y with 13.0 0.09 time
-set stars_mid to moving star field at universe_x universe_y with 21.0 0.41 time
-set stars_near to moving star field at universe_x universe_y with 31.0 0.77 time
-set stars to ((stars_far * 0.46) + (stars_mid * 0.76)) + (stars_near * 1.14)
-set star_color to flowing field at (universe_x * 5.1) (universe_y * 5.1) 8.2
-set red to red + stars * (0.58 + star_color * 0.62)
-set green to green + stars * (0.70 + star_color * 0.31)
-set blue to blue + stars * (1.25 - star_color * 0.18)
+set faraway to a moving star field at universe scaled by 13.0 during 0.09 at time
+set middle to a moving star field at universe scaled by 21.0 during 0.41 at time
+set nearby to a moving star field at universe scaled by 31.0 during 0.77 at time
+set stars to (((faraway * 0.46) + (middle * 0.76)) + (nearby * 1.14))
+set temperature to the flowing field at (a point with x (universe's x * 5.1) and y (universe's y * 5.1)) during 8.2
+set the red channel of color to (color's red + (stars * (0.58 + (temperature * 0.62))))
+set the green channel of color to (color's green + (stars * (0.70 + (temperature * 0.31))))
+set the blue channel of color to (color's blue + (stars * (1.25 - (temperature * 0.18))))
 
 # A dense, tilted accretion flow. Continuous curl controls every filament.
-set tilt to 0.12 + (the sine of (time * 0.17)) * 0.018
-set tilt_sine to the sine of tilt
-set tilt_cosine to the cosine of tilt
-set disk_x to x * tilt_cosine + y * tilt_sine
-set disk_y to y * tilt_cosine - x * tilt_sine
-set stretched_y to disk_y * 7.2
-set disk_radius to the square root of (disk_x * disk_x + stretched_y * stretched_y)
-set disk_inner to smooth transition from 0.23 to 0.285 at disk_radius
-set disk_outer to 1.0 - smooth transition from 0.72 to 1.12 at disk_radius
-set disk_mask to disk_inner * disk_outer
-set turbulence to signed flow at (disk_x * 8.3 + time * 0.52) (stretched_y * 1.8) 3.1
-set fine_turbulence to signed flow at (disk_x * 18.0 - time * 0.91) (stretched_y * 3.7) 7.9
-set spiral_phase to (((disk_radius * 39.0) - (time * 6.8)) + (turbulence * 7.4)) + (fine_turbulence * 2.2)
-set spiral to (the sine of spiral_phase) * 0.5 + 0.5
-set braided_phase to ((disk_radius * 71.0) - (time * 10.4)) - (turbulence * 4.0)
-set braided to (the cosine of braided_phase) * 0.5 + 0.5
-set hot_inner to 1.0 - smooth transition from 0.29 to 0.83 at disk_radius
-set disk_energy to (disk_mask * ((0.19 + (spiral * 0.58)) + (braided * 0.23))) * (0.55 + (hot_inner * 4.4))
-set approaching to saturate ((disk_x / the maximum of disk_radius and 0.001) * 0.5 + 0.5)
-set red to red + disk_energy * (1.72 - approaching * 0.62)
-set green to green + disk_energy * (0.30 + approaching * 1.04)
-set blue to blue + disk_energy * (0.055 + approaching * 2.18)
+set tilt to (0.12 + ((the sine of (time * 0.17)) * 0.018))
+set sine to the sine of tilt
+set cosine to the cosine of tilt
+set disk to a planar coordinate with x ((position's x * cosine) + (position's y * sine)) and y ((position's y * cosine) - (position's x * sine))
+set stretched to (disk's y * 7.2)
+set orbit to the square root of ((disk's x * disk's x) + (stretched * stretched))
+set inner to the smooth transition from 0.23 to 0.285 at orbit
+set outer to (1.0 - the smooth transition from 0.72 to 1.12 at orbit)
+set mask to (inner * outer)
+set turbulence to the signed flow at (a point with x ((disk's x * 8.3) + (time * 0.52)) and y (stretched * 1.8)) during 3.1
+set detail to the signed flow at (a point with x ((disk's x * 18.0) - (time * 0.91)) and y (stretched * 3.7)) during 7.9
+set phase to ((((orbit * 39.0) - (time * 6.8)) + (turbulence * 7.4)) + (detail * 2.2))
+set spiral to (((the sine of phase) * 0.5) + 0.5)
+set phase to (((orbit * 71.0) - (time * 10.4)) - (turbulence * 4.0))
+set braid to (((the cosine of phase) * 0.5) + 0.5)
+set heat to (1.0 - the smooth transition from 0.29 to 0.83 at orbit)
+set energy to ((mask * ((0.19 + (spiral * 0.58)) + (braid * 0.23))) * (0.55 + (heat * 4.4)))
+set approaching to ((((disk's x / (the maximum of orbit and 0.001)) * 0.5) + 0.5) saturated)
+set the red channel of color to (color's red + (energy * (1.72 - (approaching * 0.62))))
+set the green channel of color to (color's green + (energy * (0.30 + (approaching * 1.04))))
+set the blue channel of color to (color's blue + (energy * (0.055 + (approaching * 2.18))))
 
 # Relativistic jets become visible close to the poles.
-set jet_axis to the absolute value of x
-set jet_core to glow from 0.0 to 0.032 at jet_axis
-set jet_halo to glow from 0.018 to 0.16 at jet_axis
-set jet_reach to smooth transition from 0.19 to 0.72 at (the absolute value of y)
-set jet_flicker to flowing field at (x * 15.0) (y * 3.0 - time * 0.8) 10.0
-set jet to (((jet_core * 0.52) + (jet_halo * 0.13)) * jet_reach) * (0.35 + (jet_flicker * 0.65))
-set red to red + jet * 0.21
-set green to green + jet * 0.48
-set blue to blue + jet * 1.36
+set axis to the absolute value of (position's x)
+set core to the glow from 0.0 to 0.032 at axis
+set halo to the glow from 0.018 to 0.16 at axis
+set reach to the smooth transition from 0.19 to 0.72 at (the absolute value of (position's y))
+set flicker to the flowing field at (a point with x (position's x * 15.0) and y ((position's y * 3.0) - (time * 0.8))) during 10.0
+set jet to ((((core * 0.52) + (halo * 0.13)) * reach) * (0.35 + (flicker * 0.65)))
+set the red channel of color to (color's red + (jet * 0.21))
+set the green channel of color to (color's green + (jet * 0.48))
+set the blue channel of color to (color's blue + (jet * 1.36))
 
 # The shadow erases the far universe. The near side of the disk remains.
-set horizon to 1.0 - smooth transition from 0.176 to 0.202 at radius
-set red to red * (1.0 - horizon)
-set green to green * (1.0 - horizon)
-set blue to blue * (1.0 - horizon)
-set near_side to 1.0 - smooth transition from -0.019 to 0.015 at disk_y
-set foreground_disk to disk_energy * near_side
-set red to red + foreground_disk * (1.61 - approaching * 0.48)
-set green to green + foreground_disk * (0.34 + approaching * 0.93)
-set blue to blue + foreground_disk * (0.07 + approaching * 1.94)
+set horizon to (1.0 - the smooth transition from 0.176 to 0.202 at radius)
+set the red channel of color to (color's red * (1.0 - horizon))
+set the green channel of color to (color's green * (1.0 - horizon))
+set the blue channel of color to (color's blue * (1.0 - horizon))
+set front to (1.0 - the smooth transition from -0.019 to 0.015 at disk's y)
+set foreground to (energy * front)
+set the red channel of color to (color's red + (foreground * (1.61 - (approaching * 0.48))))
+set the green channel of color to (color's green + (foreground * (0.34 + (approaching * 0.93))))
+set the blue channel of color to (color's blue + (foreground * (0.07 + (approaching * 1.94))))
 
 # Light wraps around both poles into a sharp photon ring.
-set photon_distance to the absolute value of (radius - 0.216)
-set photon_ring to glow from 0.001 to 0.017 at photon_distance
-set polar_amount to the absolute value of (y / safe_radius)
-set polar_arcs to photon_ring * smooth transition from 0.16 to 0.86 at polar_amount
-set ring_flicker to (the sine of (time * 2.1 + turbulence * 5.0)) * 0.10 + 0.90
-set red to (red + ((photon_ring * 1.34) * ring_flicker)) + (polar_arcs * 2.2)
-set green to (green + ((photon_ring * 0.72) * ring_flicker)) + (polar_arcs * 0.93)
-set blue to (blue + ((photon_ring * 0.44) * ring_flicker)) + (polar_arcs * 1.48)
+set distance to the absolute value of (radius - 0.216)
+set ring to the glow from 0.001 to 0.017 at distance
+set poles to the absolute value of (position's y / denominator)
+set arcs to (ring * (the smooth transition from 0.16 to 0.86 at poles))
+set flicker to (((the sine of ((time * 2.1) + (turbulence * 5.0))) * 0.10) + 0.90)
+set the red channel of color to ((color's red + ((ring * 1.34) * flicker)) + (arcs * 2.2))
+set the green channel of color to ((color's green + ((ring * 0.72) * flicker)) + (arcs * 0.93))
+set the blue channel of color to ((color's blue + ((ring * 0.44) * flicker)) + (arcs * 1.48))
 
 # Filmic compression without a raster film: the browser shades every pixel.
-set horizon_gap to the absolute value of (radius - 0.202)
-set halo to (0.04 / (horizon_gap + 0.04)) * (1.0 - horizon)
-set red to red + halo * 0.19
-set green to green + halo * 0.07
-set blue to blue + halo * 0.31
-set vignette_radius to the square root of ((screen_x / aspect) * (screen_x / aspect) + screen_y * screen_y)
-set vignette to 0.18 + (1.0 - smooth transition from 0.48 to 1.34 at vignette_radius) * 0.82
-set red to the square root of ((red * vignette) / (1.0 + red))
-set green to the square root of ((green * vignette) / (1.0 + green))
-set blue to the square root of ((blue * vignette) / (1.0 + blue))
-set the fragment color to red green blue 1.0
+set gap to the absolute value of (radius - 0.202)
+set halo to ((0.04 / (gap + 0.04)) * (1.0 - horizon))
+set the red channel of color to (color's red + (halo * 0.19))
+set the green channel of color to (color's green + (halo * 0.07))
+set the blue channel of color to (color's blue + (halo * 0.31))
+set edge to the square root of (((screen's x / aspect) * (screen's x / aspect)) + (screen's y * screen's y))
+set vignette to (0.18 + ((1.0 - the smooth transition from 0.48 to 1.34 at edge) * 0.82))
+set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red))
+set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green))
+set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue))
+set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

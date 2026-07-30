@@ -63,6 +63,33 @@ std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeVal
 	return std::nullopt;
 }
 
+bool readTypeConstraintValue(
+	const CompileTimeValue &value, const DataType &expressionType, TypeConstraint &outConstraint, DataType &outParameterType
+) {
+	outParameterType = {};
+	if (const auto *constraint = std::get_if<TypeConstraint>(&value)) {
+		if (!constraint->isResolved())
+			return false;
+		outConstraint = *constraint;
+		outParameterType = constraint->exactValueType().value_or(DataType{});
+		return true;
+	}
+	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value)) {
+		if (!typeReference->constraint.isResolved())
+			return false;
+		outConstraint = typeReference->constraint;
+		if (typeReference->type.kind == DataType::Kind::Type)
+			outParameterType = typeReference->type.toReferencedType();
+		return true;
+	}
+	if (expressionType.kind == DataType::Kind::Type && expressionType.referencedKind != DataType::Kind::Unresolved) {
+		outConstraint = TypeConstraint::fromTypeReference(expressionType);
+		outParameterType = expressionType.toReferencedType();
+		return true;
+	}
+	return false;
+}
+
 static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token) {
 	NumericLiteralParseResult parsed = parseNumericLiteral(token);
 	if (!parsed)

@@ -1,0 +1,17 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function a number:
+    replacement:
+        @intrinsic("number")
+
+function [an|] array of numbers:
+    replacement:
+        @intrinsic("array", a number)
+
+function the numeric array {an array of numbers:values} is accepted:
+    replacement:
+        1
+
+@intrinsic("discard", the numeric array [1, 2] is accepted)

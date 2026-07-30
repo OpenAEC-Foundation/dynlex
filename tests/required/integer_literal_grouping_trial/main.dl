@@ -10,4 +10,8 @@ function {integer:left} + {integer:right}:
     replacement:
         @intrinsic("add", left, right)
 
-@intrinsic("discard", negative 9223372036854775808 + 1)
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+ignore negative 9223372036854775808 + 1

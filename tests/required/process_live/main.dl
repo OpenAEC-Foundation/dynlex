@@ -1,62 +1,62 @@
 import lib/process.dl
 
-function [the|] live process test interpreter:
+function the live process test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
 set command to a process command for the live process test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add "import sys\nfor line in sys.stdin:\n sys.stdout.write('out:' + line); sys.stdout.flush()\n sys.stderr.write('err:' + line); sys.stderr.flush()" as an argument to command
-set child to launch command
+launch command and set child to it
 
-print child's launched as line
-set initial_status to poll child
-print initial_status's succeeded as line
-print (not initial_status's finished) as line
-set initial_stdout to read available the standard output of child
-print initial_stdout's succeeded as line
-print (initial_stdout's contents = "") as line
-print (not initial_stdout's end of stream) as line
+print whether child was launched as a line
+poll child and set pending to it
+print whether pending succeeded as a line
+print whether pending does not report completion as a line
+read the available standard output of child and set initial to it
+print whether initial succeeded as a line
+print whether (initial's contents = "") as a line
+print whether initial has not reached the end of stream as a line
 
-set first_write to write (the string form of "first\n") to child
-print first_write's succeeded as line
-print first_write's byte count as line
-set first_stdout to read the standard output of child
-set first_stderr to read the standard error of child
-print first_stdout's succeeded as line
-print (first_stdout's contents = "out:first\n") as line
-print first_stderr's succeeded as line
-print (first_stderr's contents = "err:first\n") as line
+write (the string form of "first\n") to the standard input of child and set request to it
+print whether request succeeded as a line
+print request's byte count as a line
+read the standard output of child and set response to it
+read the standard error of child and set warning to it
+print whether response succeeded as a line
+print whether (response's contents = "out:first\n") as a line
+print whether warning succeeded as a line
+print whether (warning's contents = "err:first\n") as a line
 
-set second_write to write (the string form of "second\n") to child
-set close_result to close the standard input of child
-print second_write's succeeded as line
-print close_result's succeeded as line
-set second_stdout to read the standard output of child
-set second_stderr to read the standard error of child
-print (second_stdout's contents = "out:second\n") as line
-print (second_stderr's contents = "err:second\n") as line
+write (the string form of "second\n") to the standard input of child and set followup to it
+close the standard input of child and set closure to it
+print whether followup succeeded as a line
+print whether closure succeeded as a line
+read the standard output of child and set following to it
+read the standard error of child and set failure to it
+print whether (following's contents = "out:second\n") as a line
+print whether (failure's contents = "err:second\n") as a line
 
-set status to wait for child
-print status's succeeded as line
-print status's finished as line
-print status's exit code as line
-print (not status's terminated) as line
+wait for child and set status to it
+print whether status succeeded as a line
+print whether status reports completion as a line
+print status's exit code as a line
+print whether status does not report termination as a line
 
-set sleeper_command to a process command for the live process test interpreter
-add "-c" as an argument to sleeper_command
-add "import time; time.sleep(30)" as an argument to sleeper_command
-set sleeper to launch sleeper_command
-set termination to terminate sleeper
-set terminated_status to wait for sleeper
-print sleeper's launched as line
-print termination's succeeded as line
-print terminated_status's succeeded as line
-print terminated_status's finished as line
-print terminated_status's terminated as line
+set delay to a process command for the live process test interpreter
+add "-c" as an argument to delay
+add "import time; time.sleep(30)" as an argument to delay
+launch delay and set sleeper to it
+terminate sleeper and set termination to it
+wait for sleeper and set terminated to it
+print whether sleeper was launched as a line
+print whether termination succeeded as a line
+print whether terminated succeeded as a line
+print whether terminated reports completion as a line
+print whether terminated reports termination as a line
 
-set cleanup_child to launch sleeper_command
-set cleanup_result to clean up cleanup_child
-print cleanup_child's launched as line
-print cleanup_result's succeeded as line
+launch delay and set orphan to it
+clean up orphan and set cleanup to it
+print whether orphan was launched as a line
+print whether cleanup succeeded as a line

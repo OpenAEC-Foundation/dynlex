@@ -1,4 +1,4 @@
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -6,16 +6,16 @@ section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function first value:
+function the first recursive result for value:
     execute:
         if @intrinsic("greater than", value, 0):
-            @intrinsic("return", second @intrinsic("subtract", value, 1))
+            @intrinsic("return", the second recursive result for @intrinsic("subtract", value, 1))
         @intrinsic("return", @intrinsic("equal", 1, 2))
 
-function second value:
+function the second recursive result for value:
     execute:
         if @intrinsic("greater than", value, 0):
-            @intrinsic("return", first @intrinsic("subtract", value, 1))
+            @intrinsic("return", the first recursive result for @intrinsic("subtract", value, 1))
         @intrinsic("return", @intrinsic("equal", 1, 2))
 
-discard (first 2)
+ignore (the first recursive result for 2)

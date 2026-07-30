@@ -1,8 +1,8 @@
 import lib/std.dl
 
-function compile-time selected value for {fixed integer:n}:
+function the compile-time selected value for {fixed integer:choice}:
     execute:
-        if n = 2:
+        if choice = 2:
             return 11
         else:
             return "unreachable"
@@ -12,5 +12,5 @@ function immediately returned value:
         return 12
         return "unreachable"
 
-print compile-time selected value for 2 as line
-print immediately returned value as line
+print the compile-time selected value for 2 as a line
+print immediately returned value as a line

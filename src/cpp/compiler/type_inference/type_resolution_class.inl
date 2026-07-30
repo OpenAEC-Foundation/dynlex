@@ -3,19 +3,7 @@ static DataType toTypeReference(const DataType &valueType) {
 		return {};
 	if (valueType.kind == DataType::Kind::Type)
 		return valueType;
-	DataType concreteValueType = valueType;
-	DataType typeReference;
-	typeReference.kind = DataType::Kind::Type;
-	typeReference.referencedKind = concreteValueType.kind;
-	typeReference.numericSize = concreteValueType.numericSize;
-	typeReference.pointerDepth = concreteValueType.pointerDepth;
-	typeReference.classDefinition = concreteValueType.classDefinition;
-	typeReference.classInstIndex = concreteValueType.classInstIndex;
-	typeReference.arraySize = concreteValueType.arraySize;
-	typeReference.matrixRowCount = concreteValueType.matrixRowCount;
-	if (concreteValueType.arrayElementType)
-		typeReference.arrayElementType = std::make_shared<DataType>(*concreteValueType.arrayElementType);
-	return typeReference;
+	return valueType.asTypeReference();
 }
 
 static bool resolveCompileTimeTypeReference(
@@ -324,8 +312,10 @@ static DataType instantiateBoundClassType(
 					return {};
 				fieldType.typeExpression = typeExpression;
 				DataType inferredTypeRef;
-				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef))
+				if (!readInferredTypeReferenceValue(fieldType.typeExpression, inferenceContext, inferredTypeRef)) {
+					recordUnknownTypeConstraintFailure(inferenceContext, parseContext, fieldType.typeExpression->range);
 					return {};
+				}
 				fieldType = inferredTypeRef.toReferencedType();
 			} else {
 				DataType resolvedTypeRef;

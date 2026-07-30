@@ -1,1 +1,1 @@
-tests/required/integer_literal_configured_message/main.dl:9-28: Error: Configured integer range error
+tests/required/integer_literal_configured_message/main.dl:8-27: Error: Configured integer range error

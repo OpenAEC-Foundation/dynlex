@@ -4,7 +4,7 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 convert {integer:input}:
     replacement:
@@ -12,5 +12,5 @@ convert {integer:input}:
 
 set input to 23
 set wrapped to input as a number box
-print the payload of wrapped as line
-print input as line
+print the payload of wrapped as a line
+print input as a line

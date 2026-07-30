@@ -1,17 +1,9 @@
-function set var to val:
-    replacement:
-        @intrinsic("store", var, val)
+# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
-flex section if condition:
-    replacement:
-        @intrinsic("if", condition)
+import lib/shader.dl
 
-flex section else:
-    replacement:
-        @intrinsic("else")
-
-if @intrinsic("shader stage is", "vertex"):
-    @intrinsic("shader output", 0.0, 0.0, 0.0, 1.0)
+if this is a vertex shader:
+    set the output position with x 0.0, y 0.0, z 0.0 and w 1.0
 else:
-    set pulse to @intrinsic("shader uniform", "time")
-    @intrinsic("shader output", pulse, 0.2, 0.8, 1.0)
+    set pulse to the shader time
+    set the fragment color with a red channel of pulse, a green channel of 0.2, a blue channel of 0.8 and an alpha channel of 1.0

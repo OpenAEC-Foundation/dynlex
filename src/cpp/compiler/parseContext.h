@@ -12,7 +12,6 @@
 #include <functional>
 #include <limits>
 #include <list>
-#include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -201,9 +200,6 @@ struct ParseContext {
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
-	// Precedence level assigned to function patterns not in the explicit precedence system.
-	// Default-level patterns should not propagate minRightPrecedence constraints.
-	int defaultPrecedenceLevel = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// Owns all VariableReference instances for this compilation.
@@ -218,8 +214,6 @@ struct ParseContext {
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
-	// User-facing aliases for concrete types discovered from flex replacements like @intrinsic("type", ...).
-	std::map<DataType, std::string> typeAliasNames;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
 	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
 	SyntaxConfig builtinSyntax;

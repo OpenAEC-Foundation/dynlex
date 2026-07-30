@@ -1,23 +1,23 @@
-function i32:
+function [a|] thirty two bit integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
 class:
     patterns:
         [a|] managed token
     members:
-        payload as i32
+        payload as a thirty two bit integer
     retain:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")
     release:
-        discard @intrinsic("lifecycle value")
+        ignore @intrinsic("lifecycle value")
 
 set token to @intrinsic("construct", a managed token, 7)

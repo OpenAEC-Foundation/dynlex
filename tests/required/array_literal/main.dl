@@ -1,24 +1,39 @@
 import lib/std.dl
 
+function the pointer category of {a pointer to an integer:value}:
+    execute:
+        return 1
+
+function the pointer category of {a pointer to (an integer array of 3 items):value}:
+    execute:
+        return 2
+
 set base to 10
 set values to [base, base + 5, 30]
 
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", values), a pointer to integer), 0)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", values), a pointer to integer), 1)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", values), a pointer to integer), 2)) as line
+print the item at 0 in values as a line
+print the item at 1 in values as a line
+print the item at 2 in values as a line
+print the value at (1 + values) as a line
+print the value at ((values + 2) - 1) as a line
+print the value at (values - 0) as a line
+print the pointer category of (values + 0) as a line
+print the pointer category of the address of values as a line
+store 99 at (values + 1)
+print the item at 1 in values as a line
 
-set numericValues to [1, 2.5, 3]
+set numbers to [1, 2.5, 3]
 
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", numericValues), a pointer to float), 0)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", numericValues), a pointer to float), 1)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", numericValues), a pointer to float), 2)) as line
+print the item at 0 in numbers as a line
+print the item at 1 in numbers as a line
+print the item at 2 in numbers as a line
 
-set multilineValues to [
+set rows to [
     base,
     base + 20,
-    @intrinsic("dereference", @intrinsic("cast", @intrinsic("address of", numericValues), a pointer to float)) as an integer
+    the item at 0 in numbers as an integer
 ]
 
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", multilineValues), a pointer to integer), 0)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", multilineValues), a pointer to integer), 1)) as line
-print @intrinsic("dereference", @intrinsic("add", @intrinsic("cast", @intrinsic("address of", multilineValues), a pointer to integer), 2)) as line
+print the item at 0 in rows as a line
+print the item at 1 in rows as a line
+print the item at 2 in rows as a line

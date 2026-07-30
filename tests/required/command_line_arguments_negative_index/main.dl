@@ -1,4 +1,4 @@
 import lib/std.dl
 
 set arguments to the command line arguments
-print argument -1 of arguments
+print the argument at -1 in arguments

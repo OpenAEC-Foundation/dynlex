@@ -2,11 +2,11 @@ import lib/std.dl
 
 function consume value:
     execute:
-        discard value
+        ignore value
 
 function demo:
     execute:
-        set s to new string from data "a" with length 1
-        consume character 0 of s
+        set text to a new string from "a" containing 1 byte
+        consume the character at 0 in text
 
 demo

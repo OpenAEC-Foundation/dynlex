@@ -1,2 +1,2 @@
-tests/required/ambiguous_grouping/main.dl:1-38: Warning: Expression 'print combine 1 + 2 and 3 + 4 as line' has multiple valid operand groupings. Using 'print (((combine (1 + 2) and 3) + 4) as line)' instead of 'print ((combine (1 + 2) and (3 + 4)) as line)'.
-  note: while inferring call 'print combine 1 + 2 and 3 + 4 as line' with arguments [string] -> nothing tests/required/ambiguous_grouping/main.dl:1-38
+tests/required/ambiguous_grouping/main.dl:1-51: Warning: Expression 'print the combination of 1 + 2 and 3 + 4 as a line' has multiple valid operand groupings. Using 'print (((the combination of (1 + 2) and 3) + 4) as a line)' instead of 'print ((the combination of (1 + 2) and (3 + 4)) as a line)'.
+  note: while inferring call 'print the combination of 1 + 2 and 3 + 4 as a line' with arguments [a string] -> nothing tests/required/ambiguous_grouping/main.dl:1-51

@@ -1,38 +1,34 @@
-import lib/shader.dl
+import tests/games/shader_values.dl
 
 # Concentric rings with animated color wave — hypnotic pattern
 # DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
-set px to the fragment x coordinate
-set py to the fragment y coordinate
-set t to the shader time
+set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
+set time to the shader time
 
 # Center and normalize
-set x to px / 400.0 - 1.0
-set y to py / 300.0 - 1.0
+set position to a planar position with x (pixel's x / 400.0 - 1.0) and y (pixel's y / 300.0 - 1.0)
 
 # Distance from center
-set d to the square root of (x * x + y * y)
+set distance to the square root of ((position's x * position's x) + (position's y * position's y))
 
 # Concentric rings with smooth color bands (animated)
-set ring to the sine of (d * 30.0 - t * 4.0)
+set ring to the sine of (distance * 30.0 - time * 4.0)
 
 # Angle for directional color variation
 set angle to 0.0
-if d > 0.001:
-    set angle to x / d
+if distance > 0.001:
+    set angle to (position's x / distance)
 
-set r to the sine of (ring + angle * 3.0) * 0.5 + 0.5
-set g to the sine of (ring * 1.5 + 1.0) * 0.5 + 0.5
-set b to the sine of (ring * 2.0 + 2.0) * 0.5 + 0.5
+set color to a light color with red (the sine of (ring + angle * 3.0) * 0.5 + 0.5), green (the sine of (ring * 1.5 + 1.0) * 0.5 + 0.5), blue (the sine of (ring * 2.0 + 2.0) * 0.5 + 0.5) and alpha 1.0
 
 # Darken edges with vignette
-set vignette to 1.0 - d * 0.5
+set vignette to (1.0 - distance * 0.5)
 if vignette < 0.0:
     set vignette to 0.0
 
-set r to r * vignette
-set g to g * vignette
-set b to b * vignette
+set the red channel of color to (color's red * vignette)
+set the green channel of color to (color's green * vignette)
+set the blue channel of color to (color's blue * vignette)
 
-set the fragment color to r g b 1.0
+set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of color's alpha

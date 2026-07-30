@@ -1,7 +1,7 @@
 import lib/std.dl
 
-function repeat {integer:value}:
+function the repetition of {integer:value}:
     replacement:
-        repeat value
+        the repetition of value
 
-discard repeat 1
+ignore the repetition of 1

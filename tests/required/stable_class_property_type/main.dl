@@ -1,20 +1,20 @@
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function cstring:
+function [a|] C string:
     replacement:
         @intrinsic("type", "string")
 
 class:
     patterns:
-        box
+        [a|] box
     members:
         item
 
-set box_value to @intrinsic("construct", box, 1)
-set box_value's item to "wrong"
+set instance to @intrinsic("construct", a box, 1)
+set instance's item to "wrong"

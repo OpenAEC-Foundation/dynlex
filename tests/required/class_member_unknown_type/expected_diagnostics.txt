@@ -1,0 +1,1 @@
+tests/required/class_member_unknown_type/main.dl:18-27: Error: Type constraint 'a mystery' does not refer to a known type

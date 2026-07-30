@@ -1,21 +1,21 @@
 import lib/std.dl
 # this function has a single pattern, defined right at the function definition line instead of in a pattern section.
-function var's next power of two:
+function variable's next power of two:
 	execute:
 		set result to 1
-		while result < var:
+		while result < variable:
 			multiply result by 2
 		return result
 
 function say message:
 	execute:
-		print message as line
+		print message as a line
 
 class:
 	patterns:
-		octet
-		unsigned char
-		uint_8
+		[an|] octet
+		[an|] unsigned char
+		[an|] eight bit unsigned integer
 
 
 function number%:
@@ -25,7 +25,7 @@ function number%:
 say "Hello, World!"
 		
 # should print 8
-print 5.5's next power of two as line
+print 5.5's next power of two as a line
 
 #should print 0.1
-print 10% as line
+print 10% as a line

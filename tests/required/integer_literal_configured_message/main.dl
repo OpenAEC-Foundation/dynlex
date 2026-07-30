@@ -1,3 +1,3 @@
 import lib/std.dl
 
-discard 9223372036854775808
+ignore 9223372036854775808

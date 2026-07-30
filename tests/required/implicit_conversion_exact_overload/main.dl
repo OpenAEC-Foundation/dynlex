@@ -4,18 +4,18 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:number}:
     replacement:
         @intrinsic("construct", a number box, number)
 
-function describe {integer:value}:
+function the description of {integer:value}:
     execute:
         return 1
 
-function describe {a number box:value}:
+function the description of {a number box:value}:
     execute:
         return 2
 
-print describe 9 as line
+print (the description of 9) as a line

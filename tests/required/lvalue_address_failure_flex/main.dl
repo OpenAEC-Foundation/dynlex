@@ -1,5 +1,9 @@
-function fail:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function the invalid address:
     replacement:
         @intrinsic("address of", 1)
 
-@intrinsic("discard", fail)
+ignore the invalid address

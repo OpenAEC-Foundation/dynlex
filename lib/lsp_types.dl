@@ -5,157 +5,179 @@ import lib/list.dl
 
 class:
     patterns:
-        [an|a|] lsp document
+        [an|] LSP document
     members:
-        uri as string
-        language_id as string
-        text as string
-        version as i32
+        uri as a string
+        language as a string
+        text as a string
+        version as a 32 bit integer
 
 class:
     patterns:
-        [an|a|] lsp diagnostic report
+        [an|] LSP diagnostic report
     members:
-        uri as string
-        has_version as boolean
-        version as i32
-        diagnostics as a pointer to json value
+        uri as a string
+        version presence as a boolean
+        version as a 32 bit integer
+        diagnostics as a pointer to a JSON value
 
 class:
     patterns:
-        [an|a|] lsp client
+        [an|] LSP synchronization
     members:
-        rpc_session as a pointer to json rpc session
-        lifecycle as i32
-        synchronization_kind as i32
-        synchronization_open_close as boolean
-        synchronization_save as boolean
-        synchronization_save_include_text as boolean
-        server_capabilities as a pointer to json value
-        documents as a pointer to list
-        diagnostic_reports as a pointer to list
-        notifications as a pointer to list
+        kind as a 32 bit integer
+        open and close notifications as a boolean
+        save notifications as a boolean
+        saved text inclusion as a boolean
 
 class:
     patterns:
-        [an|a|] lsp client result
+        [an|] LSP client
     members:
-        succeeded as boolean
-        status as i32
-        client as a pointer to lsp client
-        error_message as string
+        session as a pointer to a JSON-RPC session
+        lifecycle as a 32 bit integer
+        synchronization as an LSP synchronization
+        capabilities as a pointer to a JSON value
+        documents as a pointer to a list
+        reports as a pointer to a list
+        notifications as a pointer to a list
 
 class:
     patterns:
-        [an|a|] lsp document result
+        [an|] LSP client result
     members:
-        found as boolean
-        uri as string
-        language_id as string
-        text as string
-        version as i32
+        success as a boolean
+        status as a 32 bit integer
+        client as a pointer to an LSP client
+        error message as a string
 
 class:
     patterns:
-        [an|a|] lsp diagnostics result
+        [an|] LSP document result
     members:
-        found as boolean
-        has_version as boolean
-        version as i32
-        diagnostics as a pointer to json value
+        availability as a boolean
+        uri as a string
+        language as a string
+        text as a string
+        version as a 32 bit integer
 
-function {lsp client result:outcome}'s error message:
-    replacement:
-        @intrinsic("property", outcome, "error_message")
+class:
+    patterns:
+        [an|] LSP diagnostics result
+    members:
+        availability as a boolean
+        version presence as a boolean
+        version as a 32 bit integer
+        diagnostics as a pointer to a JSON value
 
-function [the|] lsp created lifecycle:
+function the LSP created lifecycle:
     replacement:
         0
 
-function [the|] lsp running lifecycle:
+function the LSP running lifecycle:
     replacement:
         1
 
-function [the|] lsp shutdown lifecycle:
+function the LSP shutdown lifecycle:
     replacement:
         2
 
-function [the|] lsp stopped lifecycle:
+function the LSP stopped lifecycle:
     replacement:
         3
 
-function [the|] lsp no synchronization kind:
+function the LSP no synchronization kind:
     replacement:
         0
 
-function [the|] lsp full synchronization kind:
+function the LSP full synchronization kind:
     replacement:
         1
 
-function [the|] lsp incremental synchronization kind:
+function the LSP incremental synchronization kind:
     replacement:
         2
 
-function [the|] lsp invalid state status:
+function the LSP invalid state status:
     replacement:
         20
 
-function [the|] lsp invalid response status:
+function the LSP invalid response status:
     replacement:
         21
 
-function [the|] lsp document error status:
+function the LSP document error status:
     replacement:
         22
 
-function [the|] lsp server not initialized code:
+function the LSP server not initialized code:
     replacement:
         0 - 32002
 
-function [the|] lsp unknown error code:
+function the LSP unknown error code:
     replacement:
         0 - 32001
 
-function [the|] lsp request failed code:
+function the LSP request failed code:
     replacement:
         0 - 32803
 
-function [the|] lsp server cancelled code:
+function the LSP server cancelled code:
     replacement:
         0 - 32802
 
-function [the|] lsp content modified code:
+function the LSP content modified code:
     replacement:
         0 - 32801
 
-function [the|] lsp request cancelled code:
+function the LSP request cancelled code:
     replacement:
         0 - 32800
 
-function {a pointer to lsp client:state}'s synchronization kind:
+function {LSP client result:outcome} succeeded:
     replacement:
-        @intrinsic("property", state, "synchronization_kind")
+        outcome's success
 
-function {a pointer to lsp client:state}'s synchronization open and close:
+function {LSP client result:outcome} failed:
     replacement:
-        @intrinsic("property", state, "synchronization_open_close")
+        the inverse of outcome's success
 
-function {a pointer to lsp client:state}'s synchronization save:
+function {LSP document result:outcome} was found:
     replacement:
-        @intrinsic("property", state, "synchronization_save")
+        outcome's availability
 
-function {a pointer to lsp client:state}'s synchronization save includes text:
+function {LSP document result:outcome} is missing:
     replacement:
-        @intrinsic("property", state, "synchronization_save_include_text")
+        the inverse of outcome's availability
 
-function {a pointer to lsp client:state}'s lifecycle:
+function {LSP diagnostics result:outcome} was found:
     replacement:
-        @intrinsic("property", state, "lifecycle")
+        outcome's availability
 
-function {a pointer to lsp client:state} server capabilities:
+function {LSP diagnostics result:outcome} has a version:
     replacement:
-        @intrinsic("property", state, "server_capabilities")
+        outcome's version presence
 
-function {lsp diagnostics result:outcome}'s has version:
+function {LSP synchronization:settings} sends open and close notifications:
     replacement:
-        @intrinsic("property", outcome, "has_version")
+        settings's open and close notifications
+
+function {LSP synchronization:settings} does not send open and close notifications:
+    replacement:
+        the inverse of settings's open and close notifications
+
+function {LSP synchronization:settings} sends save notifications:
+    replacement:
+        settings's save notifications
+
+function {LSP synchronization:settings} does not send save notifications:
+    replacement:
+        the inverse of settings's save notifications
+
+function {LSP synchronization:settings} includes text in save notifications:
+    replacement:
+        settings's saved text inclusion
+
+function {LSP synchronization:settings} does not include text in save notifications:
+    replacement:
+        the inverse of settings's saved text inclusion

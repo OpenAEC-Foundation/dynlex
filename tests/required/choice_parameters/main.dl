@@ -5,32 +5,32 @@ import std.dl
 # call matches another alternative, the parameter behaves like a fresh local
 # of that instantiation.
 
-function combine alpha [beta|]:
+function the combination of alpha [with beta|]:
 	execute:
 		return alpha + beta
 
-print (combine 1 2) as line
+print (the combination of 1 with 2) as a line
 
-function run count [frame|frames]:
+function run count iterations [starting at frame|from the beginning]:
 	execute:
 		set frame to 0
 		loop while frame < count:
 			increment frame
-		print frame as line
+		print frame as a line
 
-run 3 frames
-run 5 frames
+run 3 iterations from the beginning
+run 5 iterations from the beginning
 
 # The bound instantiation of the same definition still works alongside the
 # unbound one: here the second argument binds frame through the alternative.
-run 4 9
+run 4 iterations starting at 9
 
 # A choice parameter in the middle of the pattern, unbound through the word
 # alternative and bound through the parameter alternative.
-function middle [gap|word] tail:
+function the middle result [from gap|by default] with tail:
 	execute:
-		set gap to tail * 2
+		set gap to (tail * 2)
 		return gap
 
-print (middle word 6) as line
-print (middle 5 7) as line
+print (the middle result by default with 6) as a line
+print (the middle result from 5 with 7) as a line

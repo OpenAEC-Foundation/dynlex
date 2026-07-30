@@ -2,11 +2,11 @@ import lib/std.dl
 
 function print boolean comparisons for {boolean:left} and {boolean:right}:
     execute:
-        print (left = right) as line
-        print (left != right) as line
+        print (left = right) as a line
+        print (left != right) as a line
 
 print boolean comparisons for true and true
 print boolean comparisons for true and false
 
 if true = true:
-    print true as line
+    print true as a line

@@ -12,52 +12,103 @@ TARGETS_WITHOUT_SHADERS = (
     ("cpu", ()),
     ("wasm", ("--emit-wasm",)),
 )
+IGNORE_VALUE = """\
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+"""
 SHADER_INTRINSICS = {
     "shader input": (
-        "import lib/shader.dl\nset x to the fragment x coordinate\n",
+        "import lib/shader.dl\nset coordinate to the fragment x coordinate\n",
         "fragment",
     ),
     "shader uniform": (
-        '@intrinsic("discard", @intrinsic("shader uniform", "time"))\n',
+        IGNORE_VALUE
+        + """\
+function the shader time:
+    replacement:
+        @intrinsic("shader uniform", "time")
+
+ignore the shader time
+""",
         "fragment",
     ),
     "shader output": (
-        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        """\
+function [a|] floating-point number:
+    replacement:
+        @intrinsic("type", "float")
+
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
+    replacement:
+        @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
+
+set the fragment color with a red channel of 0.1, a green channel of 0.2, a blue channel of 0.3 and an alpha channel of 1.0
+""",
         "fragment",
     ),
     "shader interpolant input": (
         '@intrinsic("discard", @intrinsic("shader interpolant input", "surface"))\n'
-        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         "fragment",
     ),
     "shader interpolant output": (
         '@intrinsic("shader interpolant output", "surface", 0.1, 0.2, 0.3, 1.0)\n'
-        '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n',
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
         "vertex",
     ),
 }
 INVALID_SPIRV_SHADER_IO = (
     (
         "non-literal-input",
-        '@intrinsic("discard", @intrinsic("shader input", 1))\n',
+        IGNORE_VALUE
+        + """\
+function the invalid shader input:
+    replacement:
+        @intrinsic("shader input", 1)
+
+ignore the invalid shader input
+""",
         ("--emit-spirv", "--shader-stage=fragment"),
         "shader input requires a string literal name",
     ),
     (
         "unknown-input",
-        '@intrinsic("discard", @intrinsic("shader input", "Noise"))\n',
+        IGNORE_VALUE
+        + """\
+function the invalid shader input:
+    replacement:
+        @intrinsic("shader input", "Noise")
+
+ignore the invalid shader input
+""",
         ("--emit-spirv", "--shader-stage=fragment"),
         "Unknown shader input: Noise",
     ),
     (
         "position-in-fragment",
-        '@intrinsic("discard", @intrinsic("shader input", "Position"))\n',
+        IGNORE_VALUE
+        + """\
+function the invalid shader input:
+    replacement:
+        @intrinsic("shader input", "Position")
+
+ignore the invalid shader input
+""",
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader input 'Position' is unavailable for this shader stage",
     ),
     (
         "fragcoord-in-vertex",
-        '@intrinsic("discard", @intrinsic("shader input", "FragCoord"))\n',
+        IGNORE_VALUE
+        + """\
+function the invalid shader input:
+    replacement:
+        @intrinsic("shader input", "FragCoord")
+
+ignore the invalid shader input
+""",
         ("--emit-spirv", "--shader-stage=vertex"),
         "Shader input 'FragCoord' is unavailable for this shader stage",
     ),
@@ -89,14 +140,14 @@ INVALID_SPIRV_SHADER_IO = (
 FLEX_BRANCH_SHADER = """\
 import lib/shader.dl
 
-function bounded number:
+function number bounded between zero and one:
     execute:
         set result to number
         clamp result between 0.0 and 1.0
         return result
 
-set shade to bounded the shader time
-set the fragment color to 0.0 shade 0.0 1.0
+set shade to the shader time bounded between zero and one
+set the fragment color with a red channel of 0.0, a green channel of shade, a blue channel of 0.0 and an alpha channel of 1.0
 """
 NESTED_SELECTION_SHADER = """\
 import lib/shader.dl
@@ -109,7 +160,7 @@ else:
     if altitude > 2.0:
         set shade to 2.0
 
-set the fragment color to shade shade shade 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 ELSE_IF_SELECTION_SHADER = """\
 import lib/shader.dl
@@ -120,7 +171,7 @@ if shade > 2.0:
 else if shade > 1.0:
     set shade to 1.0
 
-set the fragment color to shade shade shade 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 BRANCHED_SHADER_OUTPUT = """\
 import lib/shader.dl
@@ -130,60 +181,179 @@ set green to the fragment y coordinate
 set blue to the shader time
 if red > 10.0:
     set red to green
-set the fragment color to red green blue 1.0
+set the fragment color with a red channel of red, a green channel of green, a blue channel of blue and an alpha channel of 1.0
+"""
+VECTOR_LOAD_SHADER_OUTPUT = """\
+@intrinsic("shader output", @intrinsic("shader input", "Position"))
 """
 LOOP_WITH_NESTED_EXIT = """\
 import lib/shader.dl
 
 set shade to the fragment x coordinate
-set step to 0
-set hit to false
+set iteration to 0
+set marching to true
 set travel to 0.0
-while step < 52 and not hit:
+while iteration < 52 and marching:
     set sample to shade + travel
     if sample < 0.0:
-        set hit to true
+        set marching to false
     else:
         set travel to travel + 1.0
         if travel > 44.0:
-            set step to 52
-    set step to step + 1
+            set iteration to 52
+    set iteration to iteration + 1
 
-set the fragment color to shade shade shade 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 REPEATED_UNIFORM_LOAD_SHADER = """\
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function [the|] shader time:
+function the shader time:
     replacement:
         @intrinsic("shader uniform", "time")
 
+function [a|] floating-point number:
+    replacement:
+        @intrinsic("type", "float")
+
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
+    replacement:
+        @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
+
 set first to the shader time
 set second to the shader time
-@intrinsic("shader output", first, second, 0.0, 1.0)
+set the fragment color with a red channel of first, a green channel of second, a blue channel of 0.0 and an alpha channel of 1.0
+"""
+CLASS_PROPERTY_SHADER = """\
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function [a|] floating-point number:
+    replacement:
+        @intrinsic("type", "float")
+
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
+    replacement:
+        @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
+
+class:
+    patterns:
+        sample pair
+    members:
+        first, second
+
+function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
+    replacement:
+        @intrinsic("construct", sample pair, first, second)
+
+set sample to a sample pair with first 0.25 and second 0.75
+set the fragment color with a red channel of sample's first, a green channel of sample's second, a blue channel of 0.0 and an alpha channel of 1.0
+"""
+CLASS_ARGUMENT_SHADER = """\
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function [a|] floating-point number:
+    replacement:
+        @intrinsic("type", "float")
+
+function {floating-point number:left} + {floating-point number:right}:
+    replacement:
+        @intrinsic("add", left, right)
+
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
+    replacement:
+        @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
+
+class:
+    patterns:
+        sample pair
+    members:
+        first, second
+
+function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
+    replacement:
+        @intrinsic("construct", sample pair, first, second)
+
+function the sum of {sample pair:pair}:
+    execute:
+        return pair's first + pair's second
+
+set pair to a sample pair with first 0.25 and second 0.75
+set value to the sum of pair
+set the fragment color with a red channel of value, a green channel of 0.0, a blue channel of 0.0 and an alpha channel of 1.0
+"""
+NATURAL_CLASS_PADDING_SHADER = """\
+function [a|] boolean:
+    replacement:
+        @intrinsic("type", "bool")
+
+function [a|] floating-point number:
+    replacement:
+        @intrinsic("type", "float", 32)
+
+function false:
+    replacement:
+        @intrinsic("cast", 0, a boolean)
+
+function true:
+    replacement:
+        @intrinsic("cast", 1, a boolean)
+
+class:
+    patterns:
+        [a|] parcel
+    members:
+        first as a boolean, second as a boolean, value as a floating-point number
+
+function a parcel with first {boolean:first}, second {boolean:second} and value {floating-point number:value}:
+    replacement:
+        @intrinsic("construct", a parcel, first, second, value)
+
+function paint {parcel:item}:
+    replacement:
+        @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), item's value, 0.0, 0.0, 1.0))
+
+paint a parcel with first false, second true and value 1.0
+"""
+FIXED_ARRAY_ARITHMETIC_SHADER = """\
+import lib/shader.dl
+
+set source to [1.0, 2.0]
+set moved to source + [10.0, 20.0]
+set the fragment color with a red channel of (the item at 0 in moved), a green channel of (the item at 1 in moved), a blue channel of 0.0 and an alpha channel of 1.0
 """
 WRAPPED_INTERPOLANT_SHADERS = {
     "vertex": """\
 import lib/shader.dl
 
-set the shader interpolant named "surface" to 0.1 0.2 0.3 1.0
-set the output position to 0.0 0.0 0.0 1.0
+set the shader interpolant named "surface" with an x coordinate of 0.1, a y coordinate of 0.2, a z coordinate of 0.3 and a w coordinate of 1.0
+set the output position with x 0.0, y 0.0, z 0.0 and w 1.0
 """,
     "fragment": """\
 import lib/shader.dl
 
 set shade to the shader interpolant x named "surface"
-set the fragment color to shade shade shade 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """,
 }
 SPIRV_MAGIC = 0x07230203
 OP_NAME = 5
 OP_TYPE_INT = 21
+OP_TYPE_FLOAT = 22
+OP_TYPE_STRUCT = 30
 OP_TYPE_POINTER = 32
 OP_CONSTANT = 43
 OP_SPEC_CONSTANT_OP = 52
+OP_FUNCTION_PARAMETER = 55
 OP_ACCESS_CHAIN = 65
 OP_DECORATE = 71
 OP_BITCAST = 124
@@ -194,6 +364,7 @@ OP_BRANCH_CONDITIONAL = 250
 STORAGE_CLASS_INPUT = 1
 STORAGE_CLASS_OUTPUT = 3
 STORAGE_CLASS_CROSS_WORKGROUP = 5
+STORAGE_CLASS_FUNCTION = 7
 DECORATION_LOCATION = 30
 
 
@@ -308,16 +479,27 @@ def main() -> int:
                 diagnostics = (result.stdout + result.stderr).strip()
                 failures.append(f"SPIR-V rejected intrinsic '{intrinsic_name}': {diagnostics}")
 
+        result = compile_source(
+            compiler,
+            temporary_path,
+            "fixed-array-arithmetic",
+            FIXED_ARRAY_ARITHMETIC_SHADER,
+            ("--emit-spirv", "--shader-stage=fragment"),
+        )
+        if result.returncode != 0:
+            diagnostics = (result.stdout + result.stderr).strip()
+            failures.append(f"SPIR-V rejected DynLex fixed-array arithmetic: {diagnostics}")
+
         interpolant_sources = {
             "vertex": (
                 '@intrinsic("shader interpolant output", "terrain_position", 0.1, 0.2, 0.3, 1.0)\n'
                 '@intrinsic("shader interpolant output", "terrain_normal", 0.4, 0.5, 0.6, 0.0)\n'
-                '@intrinsic("shader output", 0.0, 0.0, 0.0, 1.0)\n'
+                '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.0, 0.0, 0.0, 1.0))\n'
             ),
             "fragment": (
                 '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_normal"))\n'
                 '@intrinsic("discard", @intrinsic("shader interpolant input", "terrain_position"))\n'
-                '@intrinsic("shader output", 0.1, 0.2, 0.3, 1.0)\n'
+                '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
             ),
         }
         interpolant_locations: dict[str, dict[str, int]] = {}
@@ -456,6 +638,24 @@ def main() -> int:
                     )
 
         for optimization in ("-O0", "-O1", "-O2", "-O3"):
+            case_name = f"vector-load-shader-output-{optimization[1:]}"
+            result = compile_source(
+                compiler,
+                temporary_path,
+                case_name,
+                VECTOR_LOAD_SHADER_OUTPUT,
+                ("--emit-spirv", "--shader-stage=vertex", optimization),
+            )
+            if result.returncode != 0:
+                diagnostics = (result.stdout + result.stderr).strip()
+                failures.append(f"SPIR-V rejected vector-load shader output at {optimization}: {diagnostics}")
+                continue
+            try:
+                spirv_instructions(temporary_path / f"{case_name}.out")
+            except ValueError as error:
+                failures.append(str(error))
+
+        for optimization in ("-O0", "-O1", "-O2", "-O3"):
             case_name = f"branched-shader-output-{optimization[1:]}"
             result = compile_source(
                 compiler,
@@ -587,6 +787,103 @@ def main() -> int:
                     for operands in access_chains:
                         if len(operands) != 4 or operands[3] not in unsigned_zero_constants:
                             failures.append("SPIR-V uniform access chain used an undeclared zero index")
+
+        result = compile_source(
+            compiler,
+            temporary_path,
+            "class-property-load",
+            CLASS_PROPERTY_SHADER,
+            ("--emit-spirv", "--shader-stage=fragment", "-O0"),
+        )
+        if result.returncode != 0:
+            diagnostics = (result.stdout + result.stderr).strip()
+            failures.append(f"SPIR-V rejected a class property load at -O0: {diagnostics}")
+        else:
+            try:
+                bitcasts = spirv_operands(
+                    temporary_path / "class-property-load.out",
+                    OP_BITCAST,
+                )
+            except ValueError as error:
+                failures.append(str(error))
+            else:
+                if bitcasts:
+                    failures.append(
+                        f"SPIR-V class property load emitted {len(bitcasts)} logical pointer bitcasts"
+                    )
+
+        result = compile_source(
+            compiler,
+            temporary_path,
+            "natural-class-padding",
+            NATURAL_CLASS_PADDING_SHADER,
+            ("--emit-spirv", "--shader-stage=fragment", "-O0"),
+        )
+        if result.returncode != 0:
+            diagnostics = (result.stdout + result.stderr).strip()
+            failures.append(f"SPIR-V rejected a naturally padded class at -O0: {diagnostics}")
+        else:
+            try:
+                narrow_integer_types = [
+                    operands
+                    for operands in spirv_operands(
+                        temporary_path / "natural-class-padding.out",
+                        OP_TYPE_INT,
+                    )
+                    if len(operands) == 3 and operands[1] < 32
+                ]
+            except ValueError as error:
+                failures.append(str(error))
+            else:
+                if narrow_integer_types:
+                    failures.append(
+                        "SPIR-V naturally padded class emitted narrow integer padding types"
+                    )
+
+        result = compile_source(
+            compiler,
+            temporary_path,
+            "class-function-argument",
+            CLASS_ARGUMENT_SHADER,
+            ("--emit-spirv", "--shader-stage=fragment", "-O0"),
+        )
+        if result.returncode != 0:
+            diagnostics = (result.stdout + result.stderr).strip()
+            failures.append(f"SPIR-V rejected a class function argument at -O0: {diagnostics}")
+        else:
+            output_path = temporary_path / "class-function-argument.out"
+            try:
+                float_types = {
+                    operands[0]
+                    for operands in spirv_operands(output_path, OP_TYPE_FLOAT)
+                    if len(operands) == 2 and operands[1] == 32
+                }
+                pair_types = {
+                    operands[0]
+                    for operands in spirv_operands(output_path, OP_TYPE_STRUCT)
+                    if len(operands) == 3
+                    and operands[1] in float_types
+                    and operands[2] in float_types
+                }
+                pair_pointer_types = {
+                    operands[0]
+                    for operands in spirv_operands(output_path, OP_TYPE_POINTER)
+                    if len(operands) == 3
+                    and operands[1] == STORAGE_CLASS_FUNCTION
+                    and operands[2] in pair_types
+                }
+                parameter_types = {
+                    operands[0]
+                    for operands in spirv_operands(output_path, OP_FUNCTION_PARAMETER)
+                    if len(operands) == 2
+                }
+            except ValueError as error:
+                failures.append(str(error))
+            else:
+                if pair_pointer_types.isdisjoint(parameter_types):
+                    failures.append(
+                        "SPIR-V class function argument was not emitted as a pointer to the class"
+                    )
 
     if failures:
         for failure in failures:

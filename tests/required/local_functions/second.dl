@@ -8,13 +8,13 @@ local class:
     patterns:
         [a|] shared record
     members:
-        number as integer
+        number as an integer
 
 local flex section when shared condition:
     replacement:
         @intrinsic("if", condition)
 
-function result from second module:
+function the result from second module:
     execute:
         set record to @intrinsic("construct", a shared record, secret)
         set output to 0

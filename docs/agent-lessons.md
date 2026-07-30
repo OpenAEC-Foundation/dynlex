@@ -78,9 +78,10 @@ Corpus used for these lessons:
 - If the user says report first, report first.
 - When an agent violates stated workflow, John treats that as a serious failure.
 
-10. Standalone non-void expressions in `execute:` blocks must be explicit.
+10. Actions produce nothing; value-producing phrases must be consumed.
 
-- If an intrinsic returns a value and the result is intentionally ignored, use `discard`.
+- Wrap a value-returning intrinsic in a plain-English action that produces nothing and consume its result inside that implementation.
+- Raw `discard` is limited to replacement-level implementation code. Callers should say what action they intend instead of discarding the result of an action-shaped phrase.
 - Library code should not rely on the compiler to implicitly drop return values from calls like `glfwInit`, `fseek`, `fread`, or `fclose`.
 
 11. Stable callable ABI is a separate concern from normal DynLex calls.
@@ -175,7 +176,7 @@ When a plain pattern word like `width` is implicitly promoted into a parameter b
 
 SPIR-V shader uniform fallback bindings must be derived from parse-time source location order, not codegen use order. Reading a new uniform earlier in shader `main` must never renumber existing UBO bindings.
 
-Repeated plain `VariableLike` words inside one pattern definition must be tracked per concrete pattern path, not by flat leaf order. Choice alternatives like `[an|a|] bits bit integer` contain parallel copies of the same parameter and must keep both promotable. Only later same-path occurrences should be forced to stay literal.
+Repeated plain `VariableLike` words inside one pattern definition must be tracked per concrete pattern path, not by flat leaf order. Choice alternatives like `[a|] bits bit integer` contain parallel copies of the same parameter and must keep both promotable. Only later same-path occurrences should be forced to stay literal.
 
 One-line `section: body` syntax should be desugared before `analyzeSections`, not implemented as a second execution path. The splitter must ignore `:` inside strings and nested `()`, `[]`, and `{}`. Real directives like `alignment:` and `padding:` should be promoted into actual sections instead of keeping inline special cases. Chained one-liners represent nested sections only; sibling sections still need separate physical lines.
 

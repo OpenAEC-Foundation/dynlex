@@ -1,17 +1,17 @@
 import lib/filesystem.dl
 
 set path to "tests/required/filesystem_append_copy/content.tmp"
-delete path
+delete the filesystem entry at path
 
-set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "wb")
-@intrinsic("discard", @intrinsic("call", "libc", "fputs", an integer, "alpha", stream))
-@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
-append the string form of "-beta" to path
-set contents to allocate 11 bytes
-set stream to @intrinsic("call", "libc", "fopen", a pointer to byte, path, "rb")
-@intrinsic("discard", @intrinsic("call", "libc", "fgets", a pointer to byte, contents, 11, stream))
-@intrinsic("discard", @intrinsic("call", "libc", "fclose", an integer, stream))
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", contents))
-@intrinsic("call", "libc", "free", void, contents)
+set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "wb")
+ignore @intrinsic("call", "libc", "fputs", an integer, "alpha", stream)
+ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+append the string form of "-beta" to the file at path
+allocate 11 bytes and set contents to it
+set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+ignore @intrinsic("call", "libc", "fgets", a pointer to a byte, contents, 11, stream)
+ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", contents)
+@intrinsic("call", "libc", "free", nothing, contents)
 
-delete path
+delete the filesystem entry at path

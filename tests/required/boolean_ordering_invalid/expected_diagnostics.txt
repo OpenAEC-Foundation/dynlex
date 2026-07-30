@@ -1,5 +1,5 @@
 lib/std.dl:16-52: Error: Incompatible operand types 'a boolean' and 'a boolean'
-  note: while inferring intrinsic 'less than' in 'return @intrinsic("less than", left, right)' with arguments [i8*, a boolean, a boolean] -> undeduced lib/std.dl:16-52
-  note: while inferring call 'return @intrinsic("less than", left, right)' with arguments [unresolved(?)] -> undeduced lib/std.dl:9-52
-  note: while inferring call 'true < false' with arguments [a boolean, a boolean] -> undeduced tests/required/boolean_ordering_invalid/main.dl:23-35
-  note: while inferring intrinsic 'discard' in '@intrinsic("discard", true < false)' with arguments [i8*, unresolved(?)] -> undeduced tests/required/boolean_ordering_invalid/main.dl:1-36
+  note: while inferring intrinsic 'less than' in 'return @intrinsic("less than", left, right)' with arguments [a boolean, a boolean] -> an unresolved value lib/std.dl:16-52
+  note: while inferring call 'return @intrinsic("less than", left, right)' with arguments [an unresolved value] -> an unresolved value lib/std.dl:9-52
+  note: while inferring call 'true < false' with arguments [a boolean, a boolean] -> an unresolved value tests/required/boolean_ordering_invalid/main.dl:9-21
+  note: while inferring call 'ignore (true < false' with arguments [an unresolved value] -> an unresolved value tests/required/boolean_ordering_invalid/main.dl:1-21

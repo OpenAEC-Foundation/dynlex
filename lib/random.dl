@@ -6,10 +6,10 @@ function a random number:
     execute:
         return @intrinsic("call", "libc", "rand", an integer)
 
-function current time:
+function the current time:
     execute:
         return @intrinsic("call", "libc", "time", a 64 bit integer, 0)
 
-function seed random with value:
+function seed the random number generator with value:
     execute:
-        @intrinsic("call", "libc", "srand", void, value)
+        @intrinsic("call", "libc", "srand", nothing, value)

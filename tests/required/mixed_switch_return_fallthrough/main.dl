@@ -1,11 +1,11 @@
 import lib/std.dl
 
-function choose value for n:
+function the value chosen for choice:
     execute:
-        match on n:
+        match on choice:
             case 1:
                 return 10
             otherwise:
-                discard 20
+                ignore 20
 
-print choose value for 1 as line
+print the value chosen for 1 as a line

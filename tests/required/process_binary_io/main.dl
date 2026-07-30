@@ -1,10 +1,10 @@
 import lib/process.dl
 
-function [the|] binary process test interpreter:
+function the binary process test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-set input to a new string buffer with length 3
+set input to a new string buffer containing 3 bytes
 store 65 as a byte into the data of input at 0
 store 0 as a byte into the data of input at 1
 store 66 as a byte into the data of input at 2
@@ -12,16 +12,16 @@ store 66 as a byte into the data of input at 2
 set command to a process command for the binary process test interpreter
 add "-c" as an argument to command
 add "import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data); sys.stderr.buffer.write(bytes([69,0,70]))" as an argument to command
-set result to run command using input
+run command using input and set result to it
 
-print result's launched as line
-print result's succeeded as line
-print (result's exit code = (0 as a 64 bit integer)) as line
-print (result's standard output's length = 3) as line
-print (character 0 of result's standard output = 65) as line
-print (character 1 of result's standard output = 0) as line
-print (character 2 of result's standard output = 66) as line
-print (result's standard error's length = 3) as line
-print (character 0 of result's standard error = 69) as line
-print (character 1 of result's standard error = 0) as line
-print (character 2 of result's standard error = 70) as line
+print whether result was launched as a line
+print whether result succeeded as a line
+print whether (result's exit code = (0 as a 64 bit integer)) as a line
+print whether (result's standard output's length = 3) as a line
+print whether (the character at 0 in result's standard output = 65) as a line
+print whether (the character at 1 in result's standard output = 0) as a line
+print whether (the character at 2 in result's standard output = 66) as a line
+print whether (result's standard error's length = 3) as a line
+print whether (the character at 0 in result's standard error = 69) as a line
+print whether (the character at 1 in result's standard error = 0) as a line
+print whether (the character at 2 in result's standard error = 70) as a line

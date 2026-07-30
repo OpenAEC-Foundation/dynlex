@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arithmeticTypePromotion.h"
 #include "compilerUtils.h"
 #include "const_evaluation.inl"
 #include "sectionFlexBody.h"
@@ -478,28 +479,6 @@ struct ArgumentTypeInferenceResult {
 	DataType type;
 	bool deferred = false;
 };
-
-static bool definitionParameterAcceptsVoid(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex) {
-	if (!definition)
-		return false;
-	size_t currentArgumentIndex = 0;
-	bool acceptsVoid = false;
-	forEachPatternParameterName(
-		definition, pathIndex,
-		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
-		if (acceptsVoid || currentArgumentIndex != argumentIndex) {
-			currentArgumentIndex++;
-			return;
-		}
-		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, parameterName, startPos);
-		requireCompilerInvariant(element != nullptr, "matched pattern parameter has no definition element");
-		acceptsVoid = element->resolvedTypeConstraint.isResolved() &&
-					  element->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false);
-		currentArgumentIndex++;
-	}
-	);
-	return acceptsVoid;
-}
 
 static ArgumentTypeInferenceResult ensureArgumentTypeForPatternCall(
 	Expression *argExpr, InferenceContext &context, const BindingFrameStack &callerBindingFrameStack

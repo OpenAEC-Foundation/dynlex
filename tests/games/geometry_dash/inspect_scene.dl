@@ -2,37 +2,37 @@ import lib/array.dl
 import tests/games/geometry_dash/generator.dl
 import tests/games/geometry_dash/physics.dl
 
-set count to 24
-set levels to allocate count slots of an integer
-set jump_ms to allocate count slots of an integer
-set slide_ms to allocate count slots of an integer
+function report {route plan:plan} whose average is {integer:average}, minimum is {integer:minimum}, maximum is {integer:maximum}, peak is {integer:peak} and longest staircase is {integer:staircase}:
+	replacement:
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "INSPECT avg_jump=%ld min_jump=%ld max_jump=%ld highest_level=%ld longest_staircase=%ld\n", average as a 64 bit integer, minimum as a 64 bit integer, maximum as a 64 bit integer, peak as a 64 bit integer, staircase as a 64 bit integer)
 
-fill plan levels jump_ms slide_ms with count count using seed 1337
+set plan to a route plan with 24 steps
+fill plan using seed 1337
 
-set min_jump to item 0 of jump_ms
-set max_jump to item 0 of jump_ms
-set total_jump to 0
-set highest_level to 0
-set staircase_run to 0
-set longest_staircase to 0
-set i to 0
-loop while i < count:
-	set jump_value to item i of jump_ms
-	set level_value to item i of levels
-	add jump_value to total_jump
-	if jump_value < min_jump:
-		set min_jump to jump_value
-	if jump_value > max_jump:
-		set max_jump to jump_value
-	if level_value > highest_level:
-		set highest_level to level_value
-	if i > 0 and level_value > item i - 1 of levels:
-		set staircase_run to staircase_run + 1
-		if staircase_run > longest_staircase:
-			set longest_staircase to staircase_run
+set minimum to the item at 0 in plan's jumps
+set maximum to the item at 0 in plan's jumps
+set total to 0
+set peak to 0
+set run to 0
+set longest to 0
+set index to 0
+loop while index < plan's count:
+	set jump to the item at index in plan's jumps
+	set level to the item at index in plan's levels
+	add jump to total
+	if jump < minimum:
+		set minimum to jump
+	if jump > maximum:
+		set maximum to jump
+	if level > peak:
+		set peak to level
+	if index > 0 and level > the item at (index - 1) in plan's levels:
+		increment run
+		if run > longest:
+			set longest to run
 	else:
-		set staircase_run to 0
-	set i to i + 1
+		set run to 0
+	increment index
 
-set average_jump to total_jump / count
-discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "INSPECT avg_jump=%ld min_jump=%ld max_jump=%ld highest_level=%ld longest_staircase=%ld\n", average_jump as a 64 bit integer, min_jump as a 64 bit integer, max_jump as a 64 bit integer, highest_level as a 64 bit integer, longest_staircase as a 64 bit integer)
+set average to (total / plan's count)
+report plan whose average is average, minimum is minimum, maximum is maximum, peak is peak and longest staircase is longest

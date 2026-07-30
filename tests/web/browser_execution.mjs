@@ -507,9 +507,9 @@ assertRiverChallengeLoadingBoundary(requestedUrls);
 
 const heroEdit = await evaluate(sourceEditExpression(0, `import lib/std.dl
 
-print 81 as line`));
+print 81 as a line`));
 assert.equal(heroEdit.state, "edited");
-assert.match(heroEdit.value, /print 81 as line/);
+assert.match(heroEdit.value, /print 81 as a line/);
 await waitFor(
   "document.querySelectorAll('.snippet-editor-shell')[0].dataset.highlightState === 'semantic'",
   "semantic highlighting for the edited hero sketch"
@@ -548,7 +548,7 @@ assert.ok(
 await evaluate("document.querySelector('[data-lab-tab=\"reuse\"]').click()");
 await evaluate(sourceEditExpression(1, `import lib/std.dl
 
-print "Words become tools." as line`));
+print "Words become tools." as a line`));
 await evaluate("document.querySelectorAll('[data-snippet-run]')[1].click()");
 await waitFor(
   "document.querySelectorAll('[data-runnable-sketch]')[1].dataset.runState === 'done'",
@@ -629,7 +629,7 @@ assert.ok(
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
-await hoverMonacoText("continental_fold");
+await hoverMonacoText("fold");
 await waitFor(
   "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
   "the shader IDE to display DynLex hover information",
@@ -640,13 +640,13 @@ await captureScreenshot("ide-shader-initial");
 await replaceMonacoSource(`import lib/shader.dl
 
 if this is a vertex shader:
-    set the output position to the vertex x the vertex y the vertex z 1.0
+    set the output position with x the vertex x, y the vertex y, z the vertex z and w 1.0
 else:
     set pulse to the shader time
     set pulse to the sine of pulse
     set pulse to pulse * 0.5 + 0.5
-    set pass_glow to the shader render pass * 0.22
-    set the fragment color to (pulse + pass_glow) 0.12 0.72 1.0
+    set glow to the shader render pass * 0.22
+    set the fragment color with a red channel of (pulse + glow), a green channel of 0.12, a blue channel of 0.72 and an alpha channel of 1.0
 `);
 await waitFor(
   `Number(document.querySelector('#shader-preview').dataset.previewRevision) > ${initialShaderState.revision}`,
@@ -756,7 +756,7 @@ await waitFor(
   "the editable file to reopen from the project list"
 );
 await waitFor(
-  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as line')",
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as a line')",
   "returning from a definition to render the preserved editable source model"
 );
 await captureScreenshot("ide-finished");

@@ -96,7 +96,7 @@ static bool inferExpression(
 				context.fail(
 					buildFailureDetailDiagnostic(
 						originalDiagnostic.range, "Standalone expression '" + std::string(expr->range.subString) +
-													  "' must return nothing; use discard if you want to ignore a value"
+													  "' must return nothing; use ignore if you want to ignore a value"
 					),
 					0
 				);

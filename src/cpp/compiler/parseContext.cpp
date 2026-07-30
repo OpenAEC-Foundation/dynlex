@@ -15,7 +15,6 @@
 #include "llvm/IR/Module.h"
 #include <iostream>
 #include <iterator>
-#include <limits>
 #include <unordered_set>
 
 namespace {
@@ -37,31 +36,6 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 	delete node;
 }
 } // namespace
-
-static bool tryParseIntrinsicTypeAlias(Expression *intrinsicExpr, DataType &outType, bool emitSPIRV) {
-	if (!intrinsicExpr || intrinsicKind(intrinsicExpr->intrinsicName) != IntrinsicKind::Type ||
-		intrinsicExpr->arguments.size() < 2)
-		return false;
-
-	Expression *kindExpr = intrinsicExpr->arguments[1];
-	auto *kindStr = std::get_if<std::string>(&kindExpr->literalValue);
-	if (!kindStr)
-		return false;
-
-	std::optional<int> numericByteSize;
-	if (intrinsicExpr->arguments.size() > 2) {
-		Expression *bitsExpr = intrinsicExpr->arguments[2];
-		auto *bits = std::get_if<std::int64_t>(&bitsExpr->literalValue);
-		if (!bits || *bits <= 0 || *bits % 8 != 0 || *bits / 8 > std::numeric_limits<int>::max())
-			return false;
-		numericByteSize = static_cast<int>(*bits / 8);
-	}
-	std::optional<DataType> typeReference = makeBuiltinTypeReference(*kindStr, emitSPIRV, numericByteSize);
-	if (!typeReference)
-		return false;
-	outType = typeReference->toReferencedType();
-	return true;
-}
 
 void ParseContext::printDiagnostics() {
 	for (Diagnostic d : diagnostics) {
@@ -174,34 +148,6 @@ void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
 		if (auto *uniformName = std::get_if<std::string>(&intrinsicExpr->arguments[1]->literalValue))
 			registerShaderUniformName(*uniformName, intrinsicExpr->range.line, intrinsicExpr->range.start());
 	}
-
-	CodeLine *line = intrinsicExpr->range.line;
-	if (!line || !line->section)
-		return;
-
-	Section *replacementSection = line->section;
-	if (replacementSection->type != SectionType::Replacement)
-		return;
-	if (replacementSection->codeLines.size() != 1 || replacementSection->codeLines.front() != line)
-		return;
-	if (intrinsicExpr->range.start() != 0 || intrinsicExpr->range.end() != (int)line->patternText.size())
-		return;
-
-	Section *flexSection = replacementSection->parent;
-	if (!flexSection || !flexSection->isFlex || flexSection->type != SectionType::Function ||
-		flexSection->patternDefinitions.empty())
-		return;
-
-	DataType aliasType;
-	if (!tryParseIntrinsicTypeAlias(intrinsicExpr, aliasType, options.emitSPIRV))
-		return;
-
-	if (typeAliasNames.contains(aliasType))
-		return;
-
-	std::string aliasName = (std::string)flexSection->patternDefinitions.front()->range.subString;
-	if (!aliasName.empty())
-		typeAliasNames.emplace(aliasType, std::move(aliasName));
 }
 
 VariableReference *ParseContext::createVariableReference(Range range, const std::string &name) {
@@ -239,11 +185,11 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->groupingArgumentHasAdjacentSiblingSlot = expression->groupingArgumentHasAdjacentSiblingSlot;
 	clone->groupingStartsWithArgument = expression->groupingStartsWithArgument;
 	clone->groupingEndsWithArgument = expression->groupingEndsWithArgument;
-	clone->groupingPrecedence = expression->groupingPrecedence;
 	clone->type = preserveInferenceMetadata ? expression->type : DataType{};
 	clone->selectedPatternDefinition = preserveInferenceMetadata ? expression->selectedPatternDefinition : nullptr;
 	clone->selectedPatternPathIndex = preserveInferenceMetadata ? expression->selectedPatternPathIndex : std::nullopt;
 	clone->selectedCallableDefinition = preserveInferenceMetadata ? expression->selectedCallableDefinition : nullptr;
+	clone->selectedCallablePathIndex = preserveInferenceMetadata ? expression->selectedCallablePathIndex : std::nullopt;
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};

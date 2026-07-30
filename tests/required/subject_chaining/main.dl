@@ -4,42 +4,42 @@ class:
     patterns:
         [an|] example action
     members:
-        succeeded as boolean
+        success as a boolean
 
-function a new example action which succeeded if outcome:
+function a successful example action:
     replacement:
-        @intrinsic("construct", an example action, outcome)
+        @intrinsic("construct", an example action, true)
+
+function a failed example action:
+    replacement:
+        @intrinsic("construct", an example action, false)
 
 function {example action:action} succeeded:
     execute:
-        return action's succeeded
+        return action's success
 
 flex function perform a successful example action:
     replacement:
-        set the subject to a new example action which succeeded if true
+        set the subject to a successful example action
 
 flex function perform a failed example action:
     replacement:
-        set the subject to a new example action which succeeded if false
+        set the subject to a failed example action
 
 function preserve subject through branch condition:
     execute:
-        set the subject to a new example action which succeeded if true
+        set the subject to a successful example action
         if condition:
-            discard 1
+            ignore 1
         else:
-            discard 2
-        print if it succeeded
-        print "" as line
+            ignore 2
+        print whether it succeeded as a line
 
-perform a successful example action and print if it succeeded
-print "" as line
-perform a failed example action and print if it succeeded
-print "" as line
+perform a successful example action and print whether it succeeded as a line
+perform a failed example action and print whether it succeeded as a line
 perform a successful example action
-print if it succeeded
-print "" as line
-print true and false as line
-print true and true as line
+print whether it succeeded as a line
+print whether true and false as a line
+print whether true and true as a line
 preserve subject through branch true
 preserve subject through branch false

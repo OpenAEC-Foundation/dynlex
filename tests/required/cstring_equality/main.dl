@@ -1,11 +1,11 @@
 import lib/std.dl
 
-function emit bool_value:
+function emit condition:
     execute:
-        discard @intrinsic("call", "libc", "puts", an integer, @intrinsic("select", bool_value, "1", "0"))
+        ignore @intrinsic("call", "libc", "puts", an integer, @intrinsic("select", condition, "1", "0"))
 
-set equal_same to "dynlex" = "dynlex"
-set equal_different to "dynlex" = "dyn"
+set identical to ("dynlex" = "dynlex")
+set different to ("dynlex" = "dyn")
 
-emit equal_same
-emit equal_different
+emit identical
+emit different

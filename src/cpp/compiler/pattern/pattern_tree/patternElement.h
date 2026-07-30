@@ -7,6 +7,7 @@
 #include "type.h"
 #include "typeConstraint.h"
 struct ParseContext;
+struct VariableReference;
 
 struct PatternElement {
 	enum Type {
@@ -46,6 +47,9 @@ struct DefinitionPatternElement : public PatternElement {
 	// Concrete runtime representation declared by the constraint expression, when it has one.
 	// Overload matching uses resolvedTypeConstraint; callable ABI generation uses this exact type.
 	DataType resolvedParameterType;
+	// Later parameter constraints may use earlier parameters. Each authored path
+	// compiles such a constraint into PatternDefinition::signaturePaths.
+	bool hasDependentTypeConstraint = false;
 	// true when a plain VariableLike word was implicitly promoted into a parameter by body usage
 	bool promotedFromVariableLike = false;
 	// the first body reference range that caused the implicit promotion

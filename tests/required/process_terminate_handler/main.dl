@@ -1,39 +1,65 @@
 import lib/process.dl
 import lib/text.dl
 
-function [the|] terminate handler test interpreter:
+function the test interpreter for termination handlers:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
-set command to a process command for the terminate handler test interpreter
+class:
+    patterns:
+        [a|] reading state
+    members:
+        success as a boolean
+        completion as a boolean
+        stream ending as a boolean
+
+function {reading state:state} succeeded:
+    replacement:
+        state's success
+
+function {reading state:state} is complete:
+    replacement:
+        state's completion
+
+function {reading state:state} is incomplete:
+    replacement:
+        the inverse of state's completion
+
+function {reading state:state} awaits the stream ending:
+    replacement:
+        the inverse of state's stream ending
+
+function {reading state:state} should continue:
+    replacement:
+        (state succeeded) and ((state is incomplete) and (state awaits the stream ending))
+
+set command to a process command for the test interpreter for termination handlers
 add "-u" as an argument to command
 add "-c" as an argument to command
 add "import os,signal,sys,time\nif os.name != 'nt': signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\nprint('ready')\ntime.sleep(30)" as an argument to command
-set child to launch command
+launch command and set child to it
 
-set ready_contents to the string form of ""
-set ready_succeeded to true
-set ready_complete to false
-set ready_stream_ended to false
-loop while ready_succeeded and ((not ready_complete) and (not ready_stream_ended)):
-    set ready_chunk to read the standard output of child
-    set ready_succeeded to ready_chunk's succeeded
-    if ready_succeeded:
-        set ready_contents to ready_contents + ready_chunk's contents
-        set ready_complete to ready_contents ends with "\n"
-        set ready_stream_ended to ready_chunk's end of stream
-set termination to terminate child
-set status to wait for child
-set expected_exit_code to 0 as a 64 bit integer
-if the process platform is windows:
-    set expected_exit_code to 1 as a 64 bit integer
+set contents to the string form of ""
+set reading to @intrinsic("construct", a reading state, true, false, false)
+loop while reading should continue:
+    read the standard output of child and set chunk to it
+    set reading's success to chunk succeeded
+    if reading succeeded:
+        set contents to (contents + chunk's contents)
+        set reading's completion to contents ends with "\n"
+        set reading's stream ending to chunk reached the end of stream
+terminate child and set termination to it
+wait for child and set status to it
+set expected to 0 as a 64 bit integer
+if the process platform is Windows:
+    set expected to 1 as a 64 bit integer
 
-print child's launched as line
-print (ready_succeeded and ready_complete) as line
-print (ready_contents = "ready\n") as line
-print termination's succeeded as line
-print status's succeeded as line
-print status's finished as line
-print status's terminated as line
-print (status's exit code = expected_exit_code) as line
-print (status's termination signal = (0 as a 32 bit integer)) as line
+print whether child was launched as a line
+print whether (reading succeeded) and (reading is complete) as a line
+print whether (contents = "ready\n") as a line
+print whether termination succeeded as a line
+print whether status succeeded as a line
+print whether status reports completion as a line
+print whether status reports termination as a line
+print whether (status's exit code = expected) as a line
+print whether (status's termination signal = (0 as a 32 bit integer)) as a line

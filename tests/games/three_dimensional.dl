@@ -1,0 +1,73 @@
+import lib/geometry.dl
+
+class:
+    patterns:
+        [a|] spatial camera
+    members:
+        position, yaw, movement, turning
+
+class:
+    patterns:
+        [a|] spatial bounding box
+    members:
+        minimum, maximum
+
+function [a|] spatial position:
+    replacement:
+        a point
+
+function [the|] spatial dimensions:
+    replacement:
+        a point
+
+function [a|] spatial color:
+    replacement:
+        a color
+
+function [a|] normalized color:
+    replacement:
+        a color
+
+function a position with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
+        )
+
+function the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
+        )
+
+function a color with red {integer:red}, green {integer:green} and blue {integer:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 integer values, red, green, blue)
+        )
+
+function a normalized color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
+        )
+
+function a camera at {spatial position:position} facing {floating-point number:yaw} degrees with speed {floating-point number:movement} and turn rate {floating-point number:turning}:
+    replacement:
+        @intrinsic("construct", a spatial camera, position, yaw, movement, turning)
+
+function a bounding box from {spatial position:minimum} to {spatial position:maximum}:
+    replacement:
+        @intrinsic("construct", a spatial bounding box, minimum, maximum)
+
+function key {integer:number} is down in {C string:window}:
+    execute:
+        return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = 1

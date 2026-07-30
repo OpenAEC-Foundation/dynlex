@@ -1,31 +1,31 @@
 import json.dl
 
-set leading_zero to parse "01" as json
-print json parsing succeeded for leading_zero as line
-print the json error position in leading_zero as line
-free json result leading_zero
+parse "01" as JSON and set leading to it
+print whether leading succeeded as a line
+print the JSON error position in leading as a line
+free leading
 
-set bad_fraction to parse "1." as json
-print json parsing succeeded for bad_fraction as line
-print the json error position in bad_fraction as line
-free json result bad_fraction
+parse "1." as JSON and set fraction to it
+print whether fraction succeeded as a line
+print the JSON error position in fraction as a line
+free fraction
 
-set bad_exponent to parse "1e+" as json
-print json parsing succeeded for bad_exponent as line
-print the json error position in bad_exponent as line
-free json result bad_exponent
+parse "1e+" as JSON and set exponent to it
+print whether exponent succeeded as a line
+print the JSON error position in exponent as a line
+free exponent
 
-set bad_escape to parse "\"\\x\"" as json
-print json parsing succeeded for bad_escape as line
-print the json error position in bad_escape as line
-free json result bad_escape
+parse "\"\\x\"" as JSON and set escape to it
+print whether escape succeeded as a line
+print the JSON error position in escape as a line
+free escape
 
-set bad_surrogate to parse "\"\\ud800\"" as json
-print json parsing succeeded for bad_surrogate as line
-print the json error position in bad_surrogate as line
-free json result bad_surrogate
+parse "\"\\ud800\"" as JSON and set surrogate to it
+print whether surrogate succeeded as a line
+print the JSON error position in surrogate as a line
+free surrogate
 
-set trailing_comma to parse "[1,]" as json
-print json parsing succeeded for trailing_comma as line
-print the json error position in trailing_comma as line
-free json result trailing_comma
+parse "[1,]" as JSON and set trailing to it
+print whether trailing succeeded as a line
+print the JSON error position in trailing as a line
+free trailing

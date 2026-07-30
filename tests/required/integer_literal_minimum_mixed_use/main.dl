@@ -1,7 +1,7 @@
 import lib/std.dl
 
-function negative plus original value:
+function the sum of value and its negative:
     execute:
         return (the negative of value) + value
 
-discard negative plus original 9223372036854775808
+ignore the sum of 9223372036854775808 and its negative

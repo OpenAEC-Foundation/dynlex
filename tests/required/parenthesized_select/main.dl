@@ -3,10 +3,10 @@ import std.dl
 # The select pattern contains a literal comma, so its grouping parentheses
 # must keep the comma as an ordinary token instead of splitting arguments.
 
-set vx to 200
-set vy to 100
-set flag to (1 if vx + vy > 255, else 0)
-print flag as line
-set flag2 to (1 if vx > 255, else 0)
-print flag2 as line
-print (7 if vx = 200, else 9) as line
+set horizontal to 200
+set vertical to 100
+set combination to (1 if horizontal + vertical > 255, else 0)
+print combination as a line
+set overflow to (1 if horizontal > 255, else 0)
+print overflow as a line
+print (7 if horizontal = 200, else 9) as a line

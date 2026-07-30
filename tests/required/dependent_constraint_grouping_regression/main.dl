@@ -1,0 +1,41 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function an array:
+    replacement:
+        @intrinsic("array")
+
+flex function [an|] array as long as value:
+    replacement:
+        @intrinsic("array", @intrinsic("type extent", value, 0))
+
+function left[ |]+[ |]right:
+    before: $ = $
+    execute:
+        return @intrinsic("add", left, right)
+
+function {an array:left}[ |]+[ |]{an array as long as left:right}:
+    before: $ = $
+    execute:
+        return left
+
+function left[ |]=[ |]right:
+    execute:
+        return @intrinsic("equal", left, right)
+
+function store value into array at index:
+    replacement:
+        @intrinsic("store at", array + index, value)
+
+function copy value into target at offset:
+    execute:
+        store value into target at offset + 1

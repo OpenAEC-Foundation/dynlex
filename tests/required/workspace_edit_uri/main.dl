@@ -1,64 +1,60 @@
 import lib/workspace_edit.dl
 
-create a temporary directory
-set temporary to it
-if not temporary's succeeded:
-    print temporary's error_message as line
-    @intrinsic("call", "libc", "abort", void)
+create a temporary directory and set temporary to it
+if temporary failed:
+    print temporary's error message as a line
+    @intrinsic("call", "libc", "abort", nothing)
 
-set root_path to temporary's directory_path
-set native_style to the native path style
-set child_path_result to join root_path with "a b.txt" using native_style's value
-set child_uri_result to a file URI from native path child_path_result's value
-set normalized to normalize workspace file URI child_uri_result's value inside native root root_path
-print normalized's succeeded as line
-print (normalized's path = child_path_result's value) as line
-print (normalized's relative path = "a b.txt") as line
+set root to temporary's directory path
+set native to the native path style
+set child to root joined with "a b.txt" using native's value
+set uri to the file URI for child's value interpreted as a native path
+set normalized to the normalized workspace file URI for uri's value inside root
+print whether normalized succeeded as a line
+print (normalized's path = child's value) as a line
+print (normalized's relative path = "a b.txt") as a line
 
-set root_uri_result to a file URI from native path root_path
-set escaped_uri to root_uri_result's value + the string form of "/%2e%2e/outside.txt"
-set escaped to normalize workspace file URI escaped_uri inside native root root_path
-print escaped's succeeded as line
-print escaped's failure reason as line
+set uri to the file URI for root interpreted as a native path
+set text to (uri's value + the string form of "/%2e%2e/outside.txt")
+set escaped to the normalized workspace file URI for text inside root
+print whether escaped succeeded as a line
+print escaped's failure reason as a line
 
-set directory_uri to root_uri_result's value + the string form of "/folder/"
-set directory_normalized to normalize workspace file URI directory_uri inside native root root_path
-print directory_normalized's succeeded as line
-print directory_normalized's directory hint as line
+set text to (uri's value + the string form of "/folder/")
+set directory to the normalized workspace file URI for text inside root
+print whether directory succeeded as a line
+print directory's directory hint as a line
 
-set invalid_scheme to normalize workspace file URI "https://example.com/file" inside native root root_path
-print invalid_scheme's succeeded as line
+set invalid to the normalized workspace file URI for "https://example.com/file" inside root
+print whether invalid succeeded as a line
 
-set invalid_escape to normalize workspace file URI "file:///tmp/a%2Fb" using the POSIX path style
-print invalid_escape's succeeded as line
+set invalid to the normalized workspace file URI for "file:///tmp/a%2Fb" using the POSIX path style
+print whether invalid succeeded as a line
 
-set windows_drive to normalize workspace file URI "file:///C:/Folder/%41.txt" using the Windows path style
-print windows_drive's succeeded as line
-print windows_drive's path as line
-print windows_drive's identity as line
+set drive to the normalized workspace file URI for "file:///C:/Folder/%41.txt" using the Windows path style
+print whether drive succeeded as a line
+print drive's path as a line
+print drive's identity as a line
 
-set windows_unc to normalize workspace file URI "file://server/share/a%20b" using the Windows path style
-print windows_unc's succeeded as line
-print windows_unc's path as line
+set network to the normalized workspace file URI for "file://server/share/a%20b" using the Windows path style
+print whether network succeeded as a line
+print network's path as a line
 
-set target_path_result to join root_path with "target.txt" using native_style's value
-set link_path_result to join root_path with "alias.txt" using native_style's value
-set target_path to target_path_result's value
-set link_path to link_path_result's value
-set symlink_status to @intrinsic(
+set target to root joined with "target.txt" using native's value
+set link to root joined with "alias.txt" using native's value
+set status to @intrinsic(
     "call",
     "libc",
     "symlink",
     an integer,
-    the data of target_path,
-    the data of link_path
+    the data of target's value,
+    the data of link's value
 )
-print symlink_status as line
-set link_uri_result to a file URI from native path link_path
-set link_normalized to normalize workspace file URI link_uri_result's value inside native root root_path
-print link_normalized's succeeded as line
-print link_normalized's failure reason as line
+print status as a line
+set uri to the file URI for link's value interpreted as a native path
+set linked to the normalized workspace file URI for uri's value inside root
+print whether linked succeeded as a line
+print linked's failure reason as a line
 
-remove filesystem tree at root_path
-set cleanup to it
-print cleanup's succeeded as line
+remove the filesystem tree at root and set cleanup to it
+print whether cleanup succeeded as a line

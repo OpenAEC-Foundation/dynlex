@@ -1,63 +1,63 @@
 import lib/std.dl
 
 # test: recursive function (factorial)
-function factorial of n:
+function the factorial of number:
     execute:
-        if n is less than or equal to 1:
+        if number is less than or equal to 1:
             return 1
-        set m to n - 1
-        return n * factorial of m
+        set predecessor to (number - 1)
+        return number * the factorial of predecessor
 
-print factorial of 5 as line
-print factorial of 10 as line
+print the factorial of 5 as a line
+print the factorial of 10 as a line
 
-# test: mutual recursion (is even / is odd)
-function n is even:
+# test: mutual recursion (even parity / odd parity)
+function number has even parity:
     execute:
-        if n = 0:
+        if number = 0:
             return 1
-        return n - 1 is odd
+        return number - 1 has odd parity
 
-function n is odd:
+function number has odd parity:
     execute:
-        if n = 0:
+        if number = 0:
             return 0
-        return n - 1 is even
+        return number - 1 has even parity
 
-print 4 is even as line
-print 7 is even as line
+print whether (4 has even parity) as a line
+print whether (7 has even parity) as a line
 
 # exception case: base return appears after the recursive return path
-function n is even inverted:
+function number has even parity under inversion:
     execute:
-        if n != 0:
-            return n - 1 is odd inverted
+        if number is not 0:
+            return number - 1 has odd parity under inversion
         return 1
 
-function n is odd inverted:
+function number has odd parity under inversion:
     execute:
-        if n != 0:
-            return n - 1 is even inverted
+        if number is not 0:
+            return number - 1 has even parity under inversion
         return 0
 
-print 4 is even inverted as line
-print 7 is even inverted as line
+print whether (4 has even parity under inversion) as a line
+print whether (7 has even parity under inversion) as a line
 
 # exception case: recursive call is used in a nested condition before base return
-function n is even nested:
+function number has even parity through nested recursion:
     execute:
-        if n != 0:
-            if (n - 1) is odd nested:
+        if number is not 0:
+            if (number - 1) has odd parity through nested recursion:
                 return true
             else:
                 return false
         return true
 
-function n is odd nested:
+function number has odd parity through nested recursion:
     execute:
-        if n != 0:
-            return (n - 1) is even nested
+        if number is not 0:
+            return (number - 1) has even parity through nested recursion
         return false
 
-print 4 is even nested as line
-print 7 is even nested as line
+print whether (4 has even parity through nested recursion) as a line
+print whether (7 has even parity through nested recursion) as a line

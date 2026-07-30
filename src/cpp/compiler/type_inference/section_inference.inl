@@ -477,6 +477,7 @@ struct PatternTypeConstraintWorkItem {
 	PatternDefinition *definition{};
 	DefinitionPatternElement *element{};
 	Expression *expression{};
+	std::optional<Diagnostic> failureDiagnostic;
 };
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
@@ -484,33 +485,12 @@ enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
 static bool readPatternTypeConstraintValue(
 	Expression *expression, InferenceContext &context, TypeConstraint &outConstraint, DataType &outParameterType
 ) {
-	outParameterType = {};
 	CompileTimeValue value = resolveStoredCompileTimeValue(expression, {}, &context);
-	if (const auto *constraint = std::get_if<TypeConstraint>(&value)) {
-		if (!constraint->isResolved())
-			return false;
-		outConstraint = *constraint;
-		outParameterType = constraint->exactValueType().value_or(DataType{});
-		return true;
-	}
-	if (const auto *typeReference = std::get_if<TypeReferenceValue>(&value)) {
-		if (!typeReference->constraint.isResolved())
-			return false;
-		outConstraint = typeReference->constraint;
-		if (typeReference->type.kind == DataType::Kind::Type)
-			outParameterType = typeReference->type.toReferencedType();
-		return true;
-	}
-	if (expression && expression->type.kind == DataType::Kind::Type &&
-		expression->type.referencedKind != DataType::Kind::Unresolved) {
-		outConstraint = TypeConstraint::fromTypeReference(expression->type);
-		outParameterType = expression->type.toReferencedType();
-		return true;
-	}
-	return false;
+	return expression && readTypeConstraintValue(value, expression->type, outConstraint, outParameterType);
 }
 
 static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+	item.failureDiagnostic.reset();
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
 	resetExpressionTypes(item.expression);
 	InferenceContext::TrialJournal journal;
@@ -527,6 +507,8 @@ static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstrai
 	DataType parameterType;
 	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
 	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
+	if (!deferred && (!inferred || !producedType) && trialContext.hasTypeFailureDiagnostic)
+		item.failureDiagnostic = trialContext.typeFailureDiagnostic;
 	rollbackTrialJournal(journal);
 	applyGroupingSnapshot(originalGrouping);
 	item.expression = originalGrouping.root;
@@ -567,13 +549,32 @@ static void commitPatternTypeConstraint(PatternTypeConstraintWorkItem &item, Par
 	item.element->resolvedParameterType = std::move(parameterType);
 }
 
-static void collectPatternTypeConstraintWorkItems(
+static bool classifyPatternTypeConstraintDependencies(
+	ParseContext &parseContext, PatternDefinition &definition, DefinitionPatternElement &element, Expression *expression
+) {
+	(void)parseContext;
+	bool referencesPatternParameter = visitExpressionTree(expression, [&](Expression *current) {
+		if (current->kind != Expression::Kind::Variable || !current->variable)
+			return false;
+		VariableReference *referencedDefinition = normalizeBindingReference(current->variable);
+		auto sectionDefinition = definition.section->variableDefinitions.find(referencedDefinition->name);
+		return sectionDefinition != definition.section->variableDefinitions.end() &&
+			   normalizeBindingReference(sectionDefinition->second) == referencedDefinition;
+	});
+	element.hasDependentTypeConstraint = referencesPatternParameter;
+	return true;
+}
+
+static bool collectPatternTypeConstraintWorkItems(
 	ParseContext &parseContext, Section *section, std::vector<PatternTypeConstraintWorkItem> &items
 ) {
 	for (PatternDefinition *definition : section->patternDefinitions) {
+		bool definitionValid = true;
 		std::function<void(std::vector<DefinitionPatternElement> &)> collectElements =
 			[&](std::vector<DefinitionPatternElement> &elements) {
 			for (DefinitionPatternElement &element : elements) {
+				if (!definitionValid)
+					return;
 				if (element.type == PatternElement::Type::Choice) {
 					for (auto &alternative : element.alternatives)
 						collectElements(alternative);
@@ -581,26 +582,64 @@ static void collectPatternTypeConstraintWorkItems(
 				}
 				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isResolved())
 					continue;
-				int constraintEnd = definition->range.start() + static_cast<int>(element.startPos) - 1;
-				int constraintStart = constraintEnd - static_cast<int>(element.typeConstraintName.size());
-				Range constraintRange(definition->range.line, constraintStart, constraintEnd);
-				items.push_back({
-					definition,
-					&element,
-					createTypeConstraintExpression(parseContext, definition->section, constraintRange),
-				});
+				Range constraintRange = patternElementTypeConstraintRange(*definition, element);
+				Expression *expression = createTypeConstraintExpression(parseContext, definition->section, constraintRange);
+				if (expression && !classifyPatternTypeConstraintDependencies(parseContext, *definition, element, expression)) {
+					destroyTypeConstraintExpression(expression);
+					definitionValid = false;
+					return;
+				}
+				if (element.hasDependentTypeConstraint) {
+					element.resolvedTypeConstraint = TypeConstraint::any();
+					destroyTypeConstraintExpression(expression);
+					continue;
+				}
+				items.push_back({definition, &element, expression, std::nullopt});
 			}
 		};
 		collectElements(definition->patternElements);
+		if (!definitionValid)
+			return false;
 	}
-	for (Section *child : section->children)
-		collectPatternTypeConstraintWorkItems(parseContext, child, items);
+	for (Section *child : section->children) {
+		if (!collectPatternTypeConstraintWorkItems(parseContext, child, items))
+			return false;
+	}
+	return true;
+}
+
+#include "dependent_constraint_compilation.inl"
+
+static void materializeExplicitPatternParameterDefinitions(ParseContext &parseContext) {
+	std::function<void(Section *)> visit = [&](Section *section) {
+		std::unordered_set<std::string> materializedNames;
+		for (PatternDefinition *definition : section->patternDefinitions) {
+			for (const auto &path : definition->indexedPaths) {
+				for (const PatternElement &element : path) {
+					if ((element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word) ||
+						!materializedNames.insert(element.text).second)
+						continue;
+					int sourceStart = definition->range.start() + static_cast<int>(element.startPos);
+					Range sourceRange(definition->range.line, sourceStart, sourceStart + static_cast<int>(element.text.size()));
+					requireCompilerInvariant(
+						section->resolvePatternParameterBinding(parseContext, element.text, sourceRange),
+						"indexed explicit pattern parameter has no binding definition"
+					);
+				}
+			}
+		}
+		for (Section *child : section->children)
+			visit(child);
+	};
+	visit(parseContext.mainSection);
 }
 
 static bool inferPatternTypeConstraints(ParseContext &parseContext) {
+	materializeExplicitPatternParameterDefinitions(parseContext);
 	std::vector<PatternTypeConstraintWorkItem> items;
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
-	collectPatternTypeConstraintWorkItems(parseContext, parseContext.mainSection, items);
+	if (!collectPatternTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
+		return false;
 	auto destroyExpressions = [&]() {
 		for (PatternTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
@@ -613,10 +652,9 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 		if (item.expression)
 			continue;
 		if (parseContext.diagnostics.size() == diagnosticsBeforeParsing) {
-			parseContext.diagnostics.push_back(Diagnostic(
-				parseContext, Diagnostic::Level::Error, "unknown type constraint", item.definition->range, "type_constraint",
-				item.element->typeConstraintName
-			));
+			parseContext.diagnostics.push_back(
+				unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+			);
 		}
 		destroyExpressions();
 		return false;
@@ -636,12 +674,18 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 			if (probe == PatternTypeConstraintProbe::Deferred)
 				continue;
 			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
-				const char *diagnosticKey =
-					probe == PatternTypeConstraintProbe::Impure ? "impure type constraint" : "unknown type constraint";
-				parseContext.diagnostics.push_back(Diagnostic(
-					parseContext, Diagnostic::Level::Error, diagnosticKey, item.definition->range, "type_constraint",
-					item.element->typeConstraintName
-				));
+				if (probe == PatternTypeConstraintProbe::Invalid && item.failureDiagnostic) {
+					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
+				} else if (probe == PatternTypeConstraintProbe::Invalid) {
+					parseContext.diagnostics.push_back(
+						unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+					);
+				} else {
+					parseContext.diagnostics.push_back(Diagnostic(
+						parseContext, Diagnostic::Level::Error, "impure type constraint", item.definition->range,
+						"type_constraint", item.element->typeConstraintName
+					));
+				}
 				destroyExpressions();
 				return false;
 			}
@@ -664,7 +708,7 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 		destroyExpressions();
 		return false;
 	}
-	return true;
+	return compileDependentPatternSignatures(parseContext);
 }
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
@@ -764,9 +808,13 @@ bool inferTypes(ParseContext &parseContext) {
 		if (!section)
 			return true;
 		if (section->isExposed) {
-			if (section->patternDefinitions.empty() ||
-				!ensureCallableFunctionInstantiationInferred(
-					section->patternDefinitions.front(), context,
+			if (section->patternDefinitions.size() != 1 || section->patternDefinitions.front()->indexedPaths.size() != 1) {
+				context.setTypeFailure("exposed function requires exactly one pattern path");
+				return false;
+			}
+			PatternDefinition *definition = section->patternDefinitions.front();
+			if (!ensureCallableFunctionInstantiationInferred(
+					{definition, 0}, context,
 					section->openingLine ? Range(section->openingLine, section->openingLine->patternText) : Range()
 				)) {
 				return false;

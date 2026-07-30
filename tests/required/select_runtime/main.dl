@@ -1,41 +1,41 @@
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard val:
+function ignore value:
     replacement:
-        @intrinsic("discard", val)
+        @intrinsic("discard", value)
 
-function fixed tofix:
+function fixed quantity:
     replacement:
-        @intrinsic("fix", tofix)
+        @intrinsic("fix", quantity)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [an|a|] {fixed integer:bits} bit integer:
+function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
-function value as [a|an|] {fixed integer:bits} bit integer:
+function value as [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function true_value if condition, else false_value:
+function affirmative if condition, else negative:
     replacement:
-        @intrinsic("select", condition, true_value, false_value)
+        @intrinsic("select", condition, affirmative, negative)
 
 function left = right:
     replacement:
         @intrinsic("equal", left, right)
 
-function print msg:
+function print message:
     execute:
-        discard @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%d\n", msg as a 32 bit integer)
+        ignore @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%d\n", message as a 32 bit integer)
 
-set runtime_true to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
-set runtime_false to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 2)
+set succeeds to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
+set fails to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 2)
 
-print 10 if runtime_true, else 20
-print 10 if runtime_false, else 20
+print 10 if succeeds, else 20
+print 10 if fails, else 20

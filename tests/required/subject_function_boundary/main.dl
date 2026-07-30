@@ -8,6 +8,6 @@ function preserve the caller subject:
     execute:
         set the subject to 1
         set a private subject
-        print it as line
+        print it as a line
 
 preserve the caller subject

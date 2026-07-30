@@ -1,6 +1,6 @@
 lib/std.dl:9-30: Error: the subject depends on which control-flow path executes
-  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' with arguments [i8*] -> undeduced lib/std.dl:9-30
-  note: while inferring call 'it' -> undeduced tests/required/subject_switch_ambiguous/main.dl:15-17
-  note: while inferring call 'print it' with arguments [unresolved(?)] -> undeduced tests/required/subject_switch_ambiguous/main.dl:9-17
-  note: while inferring call 'print it as a line' with arguments [unresolved(?)] -> undeduced tests/required/subject_switch_ambiguous/main.dl:9-27
-  note: while inferring call 'publish choice for 1' with arguments [a 32 bit integer] -> undeduced tests/required/subject_switch_ambiguous/main.dl:1-21
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/std.dl:9-30
+  note: while inferring call 'it' -> an unresolved value tests/required/subject_switch_ambiguous/main.dl:15-17
+  note: while inferring call 'print it' with arguments [an unresolved value] -> an unresolved value tests/required/subject_switch_ambiguous/main.dl:9-17
+  note: while inferring call 'print it as a line' with arguments [an unresolved value] -> an unresolved value tests/required/subject_switch_ambiguous/main.dl:9-27
+  note: while inferring call 'publish choice for 1' with arguments [a 32-bit integer] -> an unresolved value tests/required/subject_switch_ambiguous/main.dl:1-21

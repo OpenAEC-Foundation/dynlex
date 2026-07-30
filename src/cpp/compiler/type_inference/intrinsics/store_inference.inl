@@ -99,9 +99,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.setTypeFailure(renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
 			"message",
-			{{"name", variable->name},
-			 {"from_type", typeToUserName(variable->type, context.parseContext)},
-			 {"to_type", typeToUserName(valueType, context.parseContext)}}
+			{{"name", variable->name}, {"from_type", typeToUserName(variable->type)}, {"to_type", typeToUserName(valueType)}}
 		));
 		if (!context.trial) {
 			context.addDiagnosticWithCurrentTrace(
@@ -127,10 +125,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 		return;
 	}
+	std::optional<AddressProvenance> ownerLValueProvenance;
 	if (!instanceType.isPointer()) {
-		bool ownerIsVariable = ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable;
-		Section *ownerSection = ownerIsVariable && ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
-		if (!ownerSection || !ownerSection->findVariable(ownerExpr->variable->name)) {
+		ownerLValueProvenance = inferLValueAddressProvenance(ownerExpr, context, ownerBindingFrameStack, false);
+		if (!ownerLValueProvenance) {
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
 		}
@@ -150,20 +148,11 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	AddressProvenance assignedProvenance;
 	auto updateOwnerAddressProvenance = [&]() {
 		assignedProvenance = inferAddressProvenance(valueExpr, context, valueBindingFrameStack);
-		if (!instanceType.isPointer()) {
-			Variable *ownerVariable = ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable
-										  ? variableForAddressTarget(ownerExpr->variable)
-										  : nullptr;
-			if (!ownerVariable)
-				crashCompilerBug("validated class property owner variable could not be resolved");
-			AddressProvenance ownerProvenance = context.lookupAddressProvenance(ownerVariable->definition);
-			joinAddressProvenance(ownerProvenance, assignedProvenance);
-			context.setAddressProvenance(ownerVariable->definition, std::move(ownerProvenance));
-			return;
-		}
-		AddressProvenance ownerPointer = inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack);
-		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerPointer);
-		if (ownerPointer.unknown)
+		AddressProvenance ownerStorage = instanceType.isPointer()
+											 ? inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack)
+											 : *ownerLValueProvenance;
+		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerStorage);
+		if (ownerStorage.unknown)
 			noteUnknownAddressWrite(context);
 		for (VariableReference *ownerTarget : ownerTargets) {
 			AddressProvenance ownerProvenance = context.lookupAddressProvenance(ownerTarget);
@@ -192,8 +181,8 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 						syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
 						"variable type change", "message",
 						{{"name", destinationName},
-						 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
-						 {"to_type", typeToUserName(valueType, context.parseContext)}}
+						 {"from_type", typeToUserName(currentFieldType)},
+						 {"to_type", typeToUserName(valueType)}}
 					));
 					if (!context.trial) {
 						context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(

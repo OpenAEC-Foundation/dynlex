@@ -1,38 +1,38 @@
 import lib/std.dl
 
-flex function nested condition value:
+flex function the nested branch condition for value:
     replacement:
         @intrinsic("if", value)
 
-flex function twice nested condition value:
+flex function the twice nested branch condition for value:
     replacement:
-        nested condition value
+        the nested branch condition for value
 
-flex section when nested condition:
+flex section when truth satisfies the nested branch condition:
     replacement:
-        twice nested condition condition
+        the twice nested branch condition for truth
 
-flex function nested loop condition value:
+flex function the nested loop condition for value:
     replacement:
         @intrinsic("loop while", value)
 
-flex section while nested condition:
+flex section while truth satisfies the nested loop condition:
     replacement:
-        nested loop condition condition
+        the nested loop condition for truth
 
-function publish branch for condition:
+function publish a branch for condition:
     execute:
-        when nested condition:
+        when condition satisfies the nested branch condition:
             set the subject to 1
         else:
             set the subject to 2
-        discard it
+        ignore it
 
-function publish loop for condition:
+function publish a loop for condition:
     execute:
-        while nested condition:
+        while condition satisfies the nested loop condition:
             set the subject to 3
-        discard it
+        ignore it
 
-publish branch for true
-publish loop for false
+publish a branch for true
+publish a loop for false

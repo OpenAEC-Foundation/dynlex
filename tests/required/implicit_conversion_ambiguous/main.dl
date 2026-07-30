@@ -4,7 +4,7 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:first}:
     replacement:
@@ -14,8 +14,8 @@ implicitly convert {integer:second}:
     replacement:
         @intrinsic("construct", a number box, second)
 
-function unwrap {a number box:boxed}:
+function the payload unwrapped from {a number box:boxed}:
     execute:
         return the payload of boxed
 
-print unwrap 8 as line
+print (the payload unwrapped from 8) as a line

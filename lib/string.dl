@@ -6,30 +6,30 @@ class:
     patterns:
         [a|] string
     members:
-        data as pointer to byte
-        length as i32
-        owner as pointer to integer
+        data as a pointer to a byte
+        length as an integer
+        owner as a pointer to an integer
     retain:
         set owner to the owner of @intrinsic("lifecycle value")
-        if owner != 0 as a pointer to integer:
+        if owner != 0 as a pointer to an integer:
             set references to @intrinsic("dereference", owner)
             @intrinsic("store at", owner, references + 1)
     release:
         set owner to the owner of @intrinsic("lifecycle value")
-        if owner != 0 as a pointer to integer:
+        if owner != 0 as a pointer to an integer:
             set references to @intrinsic("dereference", owner)
             if references = 1:
-                @intrinsic("call", "libc", "free", void, owner)
+                @intrinsic("call", "libc", "free", nothing, owner)
             else:
                 @intrinsic("store at", owner, references - 1)
 
-function cstring:
+function [a|] C string:
     replacement:
         @intrinsic("type", "string")
 
-function new string from data ptr with length len:
+function a new string from address containing {integer:count} [byte|bytes]:
     replacement:
-        @intrinsic("construct", a string, ptr, len, 0 as a pointer to integer)
+        @intrinsic("construct", a string, address, count, 0 as a pointer to an integer)
 
 function {string:value} is valid:
     execute:
@@ -37,46 +37,54 @@ function {string:value} is valid:
             return false
         if value's length = 0:
             return true
-        return the data of value != (0 as a pointer to byte)
+        return the data of value != (0 as a pointer to a byte)
 
-local function new owned string from data ptr with length len owned by owner:
+function {string:value} is invalid:
+    execute:
+        if value's length < 0:
+            return true
+        if value's length = 0:
+            return false
+        return the data of value = 0 as a pointer to a byte
+
+local function a new string from address containing {integer:count} [byte|bytes] and owned by owner:
     replacement:
-        @intrinsic("construct", a string, ptr, len, owner)
+        @intrinsic("construct", a string, address, count, owner)
 
-function character index of {string:str}:
+function the character at index in {string:text}:
     execute:
-        return @intrinsic("dereference", the data of str + index)
+        return @intrinsic("dereference", the data of text + index)
 
-function character index of {cstring:str}:
+function the character at index in {C string:text}:
     execute:
-        return @intrinsic("dereference", str + index)
+        return @intrinsic("dereference", text + index)
 
-function the length of {cstring:str}:
+function the length of {C string:text}:
     execute:
-        set len to 0
-        set ch to character len of str
-        loop while ch is not 0:
-            set len to len + 1
-            set ch to character len of str
-        return len
+        set count to 0
+        set character to the character at count in text
+        loop while character is not 0:
+            set count to (count + 1)
+            set character to the character at count in text
+        return count
 
-function {cstring:left} = {cstring:right}:
+function {C string:left} = {C string:right}:
     execute:
         if @intrinsic("equal", left, right):
             return true
-        if @intrinsic("equal", left, 0 as a pointer to byte):
+        if @intrinsic("equal", left, 0 as a pointer to a byte):
             return false
-        if @intrinsic("equal", right, 0 as a pointer to byte):
+        if @intrinsic("equal", right, 0 as a pointer to a byte):
             return false
         set index to 0
         loop while index >= 0:
-            set left_character to character index of left
-            set right_character to character index of right
-            if @intrinsic("not equal", left_character, right_character):
+            set actual to the character at index in left
+            set expected to the character at index in right
+            if @intrinsic("not equal", actual, expected):
                 return false
-            if @intrinsic("equal", left_character, 0 as a byte):
+            if @intrinsic("equal", actual, 0 as a byte):
                 return true
-            set index to index + 1
+            set index to (index + 1)
         return false
 
 function {string:left} = {string:right}:
@@ -85,66 +93,82 @@ function {string:left} = {string:right}:
             return false
         set position to 0
         loop while position < the length of left:
-            if character position of left != character position of right:
+            if the character at position in left != the character at position in right:
                 return false
-            set position to position + 1
+            set position to (position + 1)
         return true
 
-function {string:left} = {cstring:right}:
+function {string:left} = {C string:right}:
     execute:
         if the length of left != the length of right:
             return false
         set position to 0
         loop while position < the length of left:
-            if character position of left != character position of right:
+            if the character at position in left != the character at position in right:
                 return false
-            set position to position + 1
+            set position to (position + 1)
         return true
 
-function {cstring:left} = {string:right}:
+function {C string:left} = {string:right}:
     execute:
         return right = left
+
+function {string:text} is empty:
+    replacement:
+        text's length = 0
+
+function {string:text} is not empty:
+    replacement:
+        text's length != 0
+
+function {C string:text} is empty:
+    replacement:
+        the length of text = 0
+
+function {C string:text} is not empty:
+    replacement:
+        the length of text != 0
 
 # --- Conversions to string ---
 
 local function stop because string allocation failed:
     execute:
-        @intrinsic("call", "libc", "abort", void)
+        @intrinsic("call", "libc", "abort", nothing)
 
-function [the|] maximum string buffer length:
+function the maximum string buffer length:
     execute:
         return 2147483647 - ((the size of an integer) + 1)
 
-function a new string buffer with length len:
+function a new string buffer containing {integer:count} [byte|bytes]:
     execute:
-        set metadata_size to the size of an integer
-        set maximum_length to the maximum string buffer length
-        if (len < 0) or (len > maximum_length):
+        set metadata to the size of an integer
+        set maximum to the maximum string buffer length
+        if (count < 0) or (count > maximum):
             stop because string allocation failed
-        set owner to allocate (len + (metadata_size + 1)) bytes as a pointer to integer
-        if @intrinsic("equal", owner, 0 as a pointer to integer):
+        allocate (count + (metadata + 1)) bytes as a pointer to an integer and set owner to it
+        if @intrinsic("equal", owner, 0 as a pointer to an integer):
             stop because string allocation failed
-        set data to (owner + 1) as a pointer to byte
-        return new owned string from data data with length len owned by owner
+        set address to (owner + 1) as a pointer to a byte
+        return a new string from address containing count bytes and owned by owner
 
-function character value is ascii whitespace:
+function value is an ASCII whitespace character:
     execute:
         return (value = 32) or ((value = 9) or ((value = 10) or (value = 13)))
 
-function [the|] substring of {string:text} from {integer:start} with length {integer:requested_length}:
+function the substring of {string:text} from {integer:start} spanning {integer:count} [byte|bytes]:
     execute:
-        if (start < 0) or ((requested_length < 0) or (start + requested_length > the length of text)):
-            @intrinsic("call", "libc", "abort", void)
-        set result to a new string buffer with length requested_length
+        if (start < 0) or ((count < 0) or (start + count > the length of text)):
+            @intrinsic("call", "libc", "abort", nothing)
+        set result to a new string buffer containing count bytes
         set cursor to 0
-        loop while cursor < requested_length:
-            store character start + cursor of text into the data of result at cursor
-            set cursor to cursor + 1
+        loop while cursor < count:
+            store the character at start + cursor in text into the data of result at cursor
+            set cursor to (cursor + 1)
         return result
 
-function [the|] substring of {cstring:text} from {integer:start} with length {integer:requested_length}:
+function the substring of {C string:text} from {integer:start} spanning {integer:count} [byte|bytes]:
     execute:
-        return the substring of the string form of text from start with length requested_length
+        return the substring of the string form of text from start spanning count bytes
 
 function {string:text} has {string:fragment} at offset {integer:position}:
     execute:
@@ -152,189 +176,206 @@ function {string:text} has {string:fragment} at offset {integer:position}:
             return false
         set cursor to 0
         loop while cursor < the length of fragment:
-            if character position + cursor of text != character cursor of fragment:
+            if the character at position + cursor in text != the character at cursor in fragment:
                 return false
-            set cursor to cursor + 1
+            set cursor to (cursor + 1)
         return true
 
-function {string:text} has {cstring:fragment} at offset {integer:position}:
+function {string:text} has {C string:fragment} at offset {integer:position}:
     execute:
         return text has the string form of fragment at offset position
 
-function copy {string:source} into target at offset {integer:destination_offset}:
+function {string:text} lacks {string:fragment} at offset {integer:position}:
     execute:
-        set i to 0
-        loop while i < source's length:
-            store character i of source into target at destination_offset + i
-            set i to i + 1
+        return (text has fragment at offset position) = false
+
+function {string:text} lacks {C string:fragment} at offset {integer:position}:
+    execute:
+        return text lacks the string form of fragment at offset position
+
+function copy {string:source} into target at offset {integer:offset}:
+    execute:
+        set index to 0
+        loop while index < source's length:
+            store the character at index in source into target at offset + index
+            set index to (index + 1)
 
 function the count of decimal digits in {integer:value}:
     execute:
-        set remaining to value as a 64 bit integer
-        set digit_total to 1
-        loop while remaining <= -10 or remaining >= 10:
-            set remaining to remaining / 10
-            set digit_total to digit_total + 1
-        return digit_total
+        set remaining to value as a word sized integer
+        set total to 1
+        loop while (remaining <= -10) or (remaining >= 10):
+            set remaining to (remaining / 10)
+            set total to (total + 1)
+        return total
 
-function zero pad {integer:value} to {integer:digit_count}:
+function {integer:value} padded to {integer:width} digits:
     execute:
-        set result to a new string buffer with length digit_count
+        set result to a new string buffer containing width bytes
         set data to the data of result
-        set remaining to value as a 64 bit integer
-        set index to (digit_count - 1)
-        set should_continue to true
-        loop while should_continue:
-            set digit to remaining mod 10
+        set remaining to value as a word sized integer
+        set index to (width - 1)
+        set writing to true
+        loop while writing:
+            set digit to the remainder of remaining divided by 10
             if digit < 0:
-                set digit to 0 - digit
+                set digit to (0 - digit)
             set character to ((digit + 48) as a byte)
             store character into data at index
-            set remaining to remaining / 10
+            set remaining to (remaining / 10)
             if index = 0:
-                set should_continue to false
+                set writing to false
             else:
-                set index to index - 1
+                set index to (index - 1)
         return result
 
-function [the|] string form of {integer:value}:
+function the string form of {integer:value}:
     execute:
         set digits to the count of decimal digits in value
-        set is_negative to value < 0
-        set result_length to digits
-        if is_negative:
-            set result_length to result_length + 1
-        set result to a new string buffer with length result_length
+        set negative to (value < 0)
+        set length to digits
+        if negative:
+            set length to (length + 1)
+        set result to a new string buffer containing length bytes
         set data to the data of result
-        set remaining to value as a 64 bit integer
-        set index to result_length - 1
-        set should_continue to true
-        loop while should_continue:
-            set digit to remaining mod 10
+        set remaining to value as a word sized integer
+        set index to (length - 1)
+        set writing to true
+        loop while writing:
+            set digit to the remainder of remaining divided by 10
             if digit < 0:
-                set digit to 0 - digit
+                set digit to (0 - digit)
             set character to ((digit + 48) as a byte)
             store character into data at index
-            set remaining to remaining / 10
+            set remaining to (remaining / 10)
             if remaining = 0:
-                set should_continue to false
+                set writing to false
             else:
-                set index to index - 1
-        if is_negative:
+                set index to (index - 1)
+        if negative:
             store 45 as a byte into data at 0
         return result
 
-function [the|] string form of {float:value}:
+function the string form of {floating-point number:value}:
     execute:
-        set negative to value < 0.0
-        set absolute_value to the absolute value of value
-        set whole to (the floor of absolute_value) as a 64 bit integer
-        set whole_digits to the count of decimal digits in whole
-        set fractional_digits to the maximum of 0 and (6 - whole_digits)
+        set negative to (value < 0.0)
+        set magnitude to the absolute value of value
+        set whole to (the floor of magnitude) as a word sized integer
+        set places to the count of decimal digits in whole
+        set decimals to (6 - places)
+        if decimals < 0:
+            set decimals to 0
         set scale to 1
-        set scale_index to 0
-        loop while scale_index < fractional_digits:
-            set scale to scale * 10
-            set scale_index to scale_index + 1
-        set rounded to (the floor of ((absolute_value * scale) as a float + 0.5)) as a 64 bit integer
-        set whole_part to rounded / scale
-        set fraction_part to rounded mod scale
-        set whole_text to the string form of whole_part
-        if fraction_part = 0:
+        set index to 0
+        loop while index < decimals:
+            set scale to (scale * 10)
+            set index to (index + 1)
+        set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a word sized integer
+        set whole to (rounded / scale)
+        set fraction to the remainder of rounded divided by scale
+        set integral to the string form of whole
+        if fraction = 0:
             if negative:
-                set minus_sign to the string form of "-"
-                return minus_sign + whole_text
-            return whole_text
-        set trimmed_fraction to fraction_part
-        set trimmed_digits to fractional_digits
-        set has_trailing_zeroes to trimmed_digits > 0
-        loop while has_trailing_zeroes:
-            set last_digit to trimmed_fraction mod 10
-            if last_digit = 0:
-                set trimmed_fraction to trimmed_fraction / 10
-                set trimmed_digits to trimmed_digits - 1
-                set has_trailing_zeroes to trimmed_digits > 0
+                set sign to the string form of "-"
+                return sign + integral
+            return integral
+        set trimming to (decimals > 0)
+        loop while trimming:
+            set digit to the remainder of fraction divided by 10
+            if digit = 0:
+                set fraction to (fraction / 10)
+                set decimals to (decimals - 1)
+                set trimming to (decimals > 0)
             else:
-                set has_trailing_zeroes to false
-        set fractional_text to zero pad trimmed_fraction to trimmed_digits
+                set trimming to false
+        set decimal to fraction padded to decimals digits
         set dot to the string form of "."
-        set result to whole_text + dot
-        set result to result + fractional_text
+        set result to (integral + dot)
+        set result to (result + decimal)
         if negative:
-            set minus_sign to the string form of "-"
-            return minus_sign + result
+            set sign to the string form of "-"
+            return sign + result
         return result
 
-function [the|] string form of {boolean:value}:
+function the string form of {boolean:value}:
     execute:
         if value:
             return the string form of "true"
         return the string form of "false"
 
-function [the|] string form of {string:value}:
+function the string form of {string:value}:
     execute:
         return value
 
-function [the|] string form of {cstring:value}:
+function the string form of {C string:value}:
     execute:
-        return new string from data value with length the length of value
+        return a new string from value containing (the length of value) bytes
 
-implicitly convert {cstring:value}:
+implicitly convert {C string:value}:
     execute:
         return the string form of value
 
 # --- Line suffix ---
 
-function value as [a|] line:
+function value as a line:
     execute:
         set result to the string form of value
-        set newline to new string from data "\n" with length 1
+        set newline to a new string from "\n" containing 1 byte
         return result + newline
 
 # --- Output ---
 
-function write {string:msg}:
+function write {string:message}:
     execute:
-        discard @intrinsic("call", "env", "dynlex_print_string", an integer, the data of msg, msg's length) if the build target is wasm, else @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.*s", msg's length, the data of msg)
+        if the build target is WebAssembly:
+            ignore @intrinsic("call", "env", "dynlex_print_string", an integer, the data of message, message's length)
+        else:
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.*s", message's length, the data of message)
 
-function print msg:
+function print message:
     execute:
-        set text to the string form of msg
+        set text to the string form of message
         write text
+
+function print whether condition:
+    execute:
+        print condition
+
+function print whether condition as a line:
+    execute:
+        print condition as a line
 
 # --- Concatenation ---
 
 function {string:left} + {string:right}:
-    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
-        set left_length to left's length
-        set right_length to right's length
-        set total to left_length + right_length
-        set result to a new string buffer with length total
+        set total to (left's length + right's length)
+        set result to a new string buffer containing total bytes
         set data to the data of result
-        set left_offset to left_length
+        set boundary to left's length
         set index to 0
-        loop while index < left_offset:
-            store character index of left into data at index
-            set index to index + 1
-        set right_index to 0
-        loop while right_index < right's length:
-            store character right_index of right into data at left_offset + right_index
-            set right_index to right_index + 1
+        loop while index < boundary:
+            store the character at index in left into data at index
+            set index to (index + 1)
+        set cursor to 0
+        loop while cursor < right's length:
+            store the character at cursor in right into data at boundary + cursor
+            set cursor to (cursor + 1)
         return result
 
 # --- Array text ---
 
-function a string from count items of values:
+function a string containing count items from values:
     execute:
         set result to the string form of "["
         set separator to the string form of ", "
         set end to the string form of "]"
-        set i to 0
-        loop while i < count:
-            if i > 0:
-                set result to result + separator
-            set result to result + the string form of item i of the address of values
-            increment i
-        set result to result + end
+        set index to 0
+        loop while index < count:
+            if index > 0:
+                set result to (result + separator)
+            set result to (result + the string form of the item at index in the address of values)
+            increment index
+        set result to (result + end)
         return result

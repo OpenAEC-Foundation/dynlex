@@ -1,21 +1,21 @@
-function integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function floating:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
-function discard value:
-    execute:
+function ignore value:
+    replacement:
         @intrinsic("discard", value)
 
 implicitly convert {integer:value}:
     replacement:
         2.0
 
-function require {floating:value}:
+function the required floating value from {a floating-point number:value}:
     replacement:
         value
 
-discard require 1
+ignore (the required floating value from 1)

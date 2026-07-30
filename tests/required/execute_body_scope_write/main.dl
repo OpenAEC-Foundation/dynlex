@@ -10,4 +10,4 @@ set observed to 0
 around observed:
     set marker to 3
 
-print observed as line
+print observed as a line

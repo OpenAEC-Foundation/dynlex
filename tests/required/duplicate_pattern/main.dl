@@ -1,15 +1,15 @@
-function [an|a|] integer:
+function [an|] integer:
 	replacement:
 		@intrinsic("type", "int")
 
-function discard val:
+function ignore value:
 	replacement:
-		@intrinsic("discard", val)
+		@intrinsic("discard", value)
 
 function test:
 	execute:
-		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "1")
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "1")
 
 function te[st|]:
 	execute:
-		discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "2")
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "2")

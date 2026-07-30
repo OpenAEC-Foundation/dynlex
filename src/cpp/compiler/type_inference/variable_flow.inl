@@ -10,14 +10,13 @@ static Diagnostic buildAssignmentTypeChangeDiagnostic(
 	Range diagnosticRange = valueExpr ? valueExpr->range : currentTypeOriginRange;
 	Diagnostic diagnostic(
 		parseContext, Diagnostic::Level::Error, "variable type change", diagnosticRange, "name", name, "from_type",
-		typeToUserName(currentType, parseContext), "to_type", typeToUserName(valueType, parseContext)
+		typeToUserName(currentType), "to_type", typeToUserName(valueType)
 	);
 	const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, diagnosticRange);
 	if (currentTypeOriginRange.line) {
 		diagnostic.relatedInfo.push_back(
 			{renderConfiguredMessage(
-				 syntax, "variable type change", "related origin",
-				 {{"name", name}, {"type", typeToUserName(currentType, parseContext)}}
+				 syntax, "variable type change", "related origin", {{"name", name}, {"type", typeToUserName(currentType)}}
 			 ),
 			 currentTypeOriginRange}
 		);

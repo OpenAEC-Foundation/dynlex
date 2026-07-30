@@ -232,7 +232,9 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					DataType leftType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 					DataType result;
-					if (DataType::promoteArithmetic(leftType, rightType, result))
+					if (promoteIntrinsicArithmetic(
+							arithmeticIntrinsicKind(resolved->intrinsicName), leftType, rightType, result
+						))
 						return result;
 				}
 				return {};
@@ -381,19 +383,35 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return {DataType::Kind::Constraint};
 		} else if (kind == IntrinsicKind::TypeOf) {
 			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-			if (valueType.isDeduced()) {
-				DataType typeRef;
-				typeRef.kind = DataType::Kind::Type;
-				typeRef.referencedKind = valueType.kind;
-				typeRef.numericSize = valueType.numericSize;
-				typeRef.pointerDepth = valueType.pointerDepth;
-				typeRef.classDefinition = valueType.classDefinition;
-				typeRef.classInstIndex = valueType.classInstIndex;
-				typeRef.arraySize = valueType.arraySize;
-				typeRef.arrayElementType =
-					valueType.arrayElementType ? std::make_shared<DataType>(*valueType.arrayElementType) : nullptr;
-				return typeRef;
-			}
+			if (valueType.isDeduced())
+				return valueType.asTypeReference();
+		} else if (kind == IntrinsicKind::ElementType) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.kind == DataType::Kind::Type)
+				aggregateType = aggregateType.toReferencedType();
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType.aggregateElementType().asTypeReference();
+		} else if (kind == IntrinsicKind::PromoteArithmeticType) {
+			return {DataType::Kind::Type};
+		} else if (kind == IntrinsicKind::Number) {
+			return {DataType::Kind::Constraint};
+		} else if (kind == IntrinsicKind::ExtractElement) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType.aggregateElementType();
+		} else if (kind == IntrinsicKind::InsertElement) {
+			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (aggregateType.hasAggregateElementType())
+				return aggregateType;
+		} else if (kind == IntrinsicKind::ShaderInput) {
+			DataType vectorType{DataType::Kind::Vector};
+			vectorType.arraySize = 4;
+			vectorType.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
+			return vectorType;
+		} else if (kind == IntrinsicKind::TypeExtent) {
+			DataType valueType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (valueType.isDeduced())
+				return {DataType::Kind::Int, 4};
 		} else if (kind == IntrinsicKind::SizeOf) {
 			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
@@ -421,6 +439,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			if (selectedBranch)
 				return resolveKnownExpressionType(selectedBranch, effectiveBindingFrameStack);
 		} else if (kind == IntrinsicKind::Array) {
+			if (resolved->arguments.size() == 1)
+				return {DataType::Kind::Constraint};
 			Expression *sizeExpr =
 				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;
 			if (auto *size = std::get_if<std::int64_t>(&sizeExpr->literalValue)) {
@@ -575,26 +595,15 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 	return resolved->type;
 }
 
-static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
-	if (type.pointerDepth == 0) {
-		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
-		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit float";
-		if (type.kind == DataType::Kind::Bool)
-			return "a boolean";
-		if (type.kind == DataType::Kind::Void)
-			return "nothing";
-		if (type.kind == DataType::Kind::Constraint)
-			return "a constraint";
-	}
-	auto it = parseContext.typeAliasNames.find(type);
-	if (it != parseContext.typeAliasNames.end())
-		return it->second;
-	return type.toString();
-}
+static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range);
 
 #include "type_resolution_class.inl"
 #include "type_resolution_diagnostics.inl"
 #include "type_resolution_overloads.inl"
+
+static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range) {
+	requireCompilerInvariant(inferenceContext != nullptr, "type-constraint failure requires an inference context");
+	inferenceContext->fail(unknownTypeConstraintDiagnostic(parseContext, range, range.subString), 1, false);
+}
+
 #include "type_resolution_values.inl"

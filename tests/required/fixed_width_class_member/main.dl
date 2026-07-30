@@ -1,0 +1,19 @@
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] {fixed integer:bits} bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+class:
+    patterns:
+        [a|] sample
+    members:
+        count as a 32 bit integer
+
+@intrinsic("discard", @intrinsic("size of", a sample))

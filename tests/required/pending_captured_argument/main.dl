@@ -1,7 +1,9 @@
 import lib/std.dl
 
-function demo len:
+function a string buffer measuring length:
     execute:
-        return new string from data allocate len bytes with length len
+        allocate length bytes
+        set address to it
+        return a new string from address containing length bytes
 
-discard demo 1
+ignore a string buffer measuring 1

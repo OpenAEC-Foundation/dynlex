@@ -56,7 +56,7 @@ def main() -> int:
         action = actions[0]
         expected_replacement = '@intrinsic("cast", value, @intrinsic("type", "int", 32))'
         edits = action.get("edit", {}).get("changes", {}).get(uri, [])
-        if action.get("kind") != "quickfix" or action.get("title") != "Convert returned value to a 32 bit integer":
+        if action.get("kind") != "quickfix" or action.get("title") != "Convert returned value to a 32-bit integer":
             raise RuntimeError(f"unexpected code action metadata: {action}")
         if len(edits) != 1 or edits[0].get("newText") != expected_replacement:
             raise RuntimeError(f"unexpected return conversion edit: {edits}")

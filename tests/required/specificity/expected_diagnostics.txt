@@ -1,12 +1,12 @@
 tests/required/specificity/main.dl:9-33: Warning: Expression 'return item + 100 + user' has multiple valid operand groupings. Using 'return ((item + 100) + user)' instead of 'return (item + (100 + user))'.
-  note: while inferring call 'return item + 100 + user' with arguments [a 32 bit integer] -> nothing tests/required/specificity/main.dl:9-33
-  note: while inferring call 'set test to turn the dummy off for user' with arguments [a 32 bit integer, a 32 bit integer] -> undeduced tests/required/specificity/main.dl:21-48
-  note: while inferring call 'set test to turn the dummy off for user' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/specificity/main.dl:9-48
-  note: while inferring call 'print turn the lights off for 4' with arguments [a 32 bit integer] -> undeduced tests/required/specificity/main.dl:15-40
-  note: while inferring call 'print turn the lights off for 4' with arguments [unresolved(?)] -> undeduced tests/required/specificity/main.dl:9-40
-  note: while inferring call 'shut down the lights' -> undeduced tests/required/specificity/main.dl:1-21
+  note: while inferring call 'return item + 100 + user' with arguments [a 32-bit integer] -> nothing tests/required/specificity/main.dl:9-33
+  note: while inferring call 'set verification to the shutdown code for placeholder and user' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/specificity/main.dl:29-71
+  note: while inferring call 'set verification to the shutdown code for placeholder and user' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/specificity/main.dl:9-71
+  note: while inferring call 'print the shutdown code for lights and 4' with arguments [a 32-bit integer] -> an unresolved value tests/required/specificity/main.dl:15-49
+  note: while inferring call 'print the shutdown code for lights and 4' with arguments [an unresolved value] -> an unresolved value tests/required/specificity/main.dl:9-49
+  note: while inferring call 'shut down the lights' -> an unresolved value tests/required/specificity/main.dl:1-21
 tests/required/specificity/main.dl:9-35: Warning: Expression 'set result to 1 + 1 + user' has multiple valid operand groupings. Using 'set result to ((1 + 1) + user)' instead of 'set result to (1 + (1 + user))'.
-  note: while inferring call 'set result to 1 + 1 + user' with arguments [a 32 bit integer, a 32 bit integer] -> nothing tests/required/specificity/main.dl:9-35
-  note: while inferring call 'print turn the lights off for 4' with arguments [a 32 bit integer] -> undeduced tests/required/specificity/main.dl:15-40
-  note: while inferring call 'print turn the lights off for 4' with arguments [unresolved(?)] -> undeduced tests/required/specificity/main.dl:9-40
-  note: while inferring call 'shut down the lights' -> undeduced tests/required/specificity/main.dl:1-21
+  note: while inferring call 'set result to 1 + 1 + user' with arguments [a 32-bit integer, a 32-bit integer] -> nothing tests/required/specificity/main.dl:9-35
+  note: while inferring call 'print the shutdown code for lights and 4' with arguments [a 32-bit integer] -> an unresolved value tests/required/specificity/main.dl:15-49
+  note: while inferring call 'print the shutdown code for lights and 4' with arguments [an unresolved value] -> an unresolved value tests/required/specificity/main.dl:9-49
+  note: while inferring call 'shut down the lights' -> an unresolved value tests/required/specificity/main.dl:1-21

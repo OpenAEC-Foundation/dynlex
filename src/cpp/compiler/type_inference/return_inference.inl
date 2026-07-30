@@ -74,8 +74,8 @@ static Diagnostic buildIncompatibleReturnTypeDiagnostic(
 ) {
 	Range diagnosticRange = returnValueExpression ? returnValueExpression->range : returnExpression->range;
 	const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
-	std::string expectedTypeName = typeToUserName(expectedType, context.parseContext);
-	std::string actualTypeName = typeToUserName(actualType, context.parseContext);
+	std::string expectedTypeName = typeToUserName(expectedType);
+	std::string actualTypeName = typeToUserName(actualType);
 	Diagnostic diagnostic(
 		context.parseContext, Diagnostic::Level::Error, "incompatible return type", diagnosticRange, "expected_type",
 		expectedTypeName, "actual_type", actualTypeName

@@ -528,7 +528,7 @@ loop 5 times:
     diagnostics: document.querySelector('[data-river-diagnostics]').textContent,
     failedLine: document.querySelector('[data-river-line-state="error"]')?.dataset.riverSourceLine
   }))()`);
-  assert.equal(loopFailure.diagnostics, "there is no sheep to pickup");
+  assert.equal(loopFailure.diagnostics, "there is no sheep to pick up");
   assert.equal(loopFailure.failedLine, "3");
 
   const headingSource = `get the sheep in the boat

@@ -4,6 +4,6 @@ function publish subject through nested loop:
     execute:
         loop 0 times:
             set the subject to 1
-        discard it
+        ignore it
 
 publish subject through nested loop

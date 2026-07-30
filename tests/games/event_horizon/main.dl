@@ -1,110 +1,170 @@
 import lib/graphics.dl
+import tests/games/three_dimensional.dl
 
 # EVENT HORIZON — interactive procedural black hole
 #
 # WASD or arrows move the camera. Move the mouse to shift the lens.
 # Click to send a gravitational shockwave. R recenters. Escape closes.
 
-function key key_code is down in target_window:
+class:
+    patterns:
+        [a|] coordinate buffer pair
+    members:
+        x, y as a uniform buffer
+
+class:
+    patterns:
+        [a|] horizon buffer set
+    members:
+        time as a uniform buffer
+        width as a uniform buffer
+        height as a uniform buffer
+        mouse as a coordinate buffer pair
+        pulse as a uniform buffer
+        camera as a coordinate buffer pair
+
+class:
+    patterns:
+        [a|] horizon resource set
+    members:
+        vertex as an integer
+        fragment as an integer
+        program as an integer
+        buffers as a horizon buffer set
+
+function a coordinate buffer pair with x {uniform buffer:x} and y {uniform buffer:y}:
+    replacement:
+        @intrinsic("construct", a coordinate buffer pair, x, y)
+
+function a horizon buffer set with time {uniform buffer:time}, width {uniform buffer:width}, height {uniform buffer:height}, mouse {coordinate buffer pair:mouse}, pulse {uniform buffer:pulse} and camera {coordinate buffer pair:camera}:
+    replacement:
+        @intrinsic("construct", a horizon buffer set, time, width, height, mouse, pulse, camera)
+
+function a horizon resource set owning {integer:vertex}, {integer:fragment}, {integer:program} and {horizon buffer set:buffers}:
+    replacement:
+        @intrinsic("construct", a horizon resource set, vertex, fragment, program, buffers)
+
+function set the title of {C string:window} to {C string:title}:
     execute:
-        return @intrinsic("call", "glfw", "glfwGetKey", an integer, target_window, key_code) = 1
+        @intrinsic("call", "glfw", "glfwSetWindowTitle", nothing, window, title)
+
+function preserve mouse clicks in {C string:window}:
+    execute:
+        @intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, 208899, 1)
+
+function read the cursor from {C string:window} into {spatial position:position}:
+    execute:
+        set horizontal to position's x
+        set vertical to position's y
+        @intrinsic("call", "glfw", "glfwGetCursorPos", nothing, window, the address of horizontal, the address of vertical)
+        set the x coordinate of position to horizontal
+        set the y coordinate of position to vertical
+
+function mouse button {integer:number} is down in {C string:window}:
+    execute:
+        return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, number) = 1
+
+function request that {C string:window} close:
+    execute:
+        @intrinsic("call", "glfw", "glfwSetWindowShouldClose", nothing, window, 1)
+
+function release {horizon resource set:resources}:
+    execute:
+        @intrinsic("call", "GL", "glDeleteProgram", nothing, resources's program)
+        @intrinsic("call", "GL", "glDeleteShader", nothing, resources's vertex)
+        @intrinsic("call", "GL", "glDeleteShader", nothing, resources's fragment)
+        delete resources's buffers's time
+        delete resources's buffers's width
+        delete resources's buffers's height
+        delete resources's buffers's mouse's x
+        delete resources's buffers's mouse's y
+        delete resources's buffers's pulse
+        delete resources's buffers's camera's x
+        delete resources's buffers's camera's y
 
 set window to a new window with width 1280 and height 720
-@intrinsic("call", "glfw", "glfwSetWindowTitle", void, window, "EVENT HORIZON  |  WASD/arrows: move  |  mouse: bend  |  click: pulse  |  R: center")
+set the title of window to "EVENT HORIZON  |  WASD/arrows: move  |  mouse: bend  |  click: pulse  |  R: center"
 # GLFW_STICKY_MOUSE_BUTTONS preserves short clicks between expensive frames.
-@intrinsic("call", "glfw", "glfwSetInputMode", void, window, 208899, 1)
+preserve mouse clicks in window
 
-set vertex_shader to a vertex shader from "tests/games/event_horizon/vertex.spv"
-set fragment_shader to a fragment shader from "tests/games/event_horizon/horizon.spv"
-set program to a shader program with vertex vertex_shader and fragment fragment_shader
-use shader program program
+set vertex to a vertex shader from "tests/games/event_horizon/vertex.spv"
+set fragment to a fragment shader from "tests/games/event_horizon/horizon.spv"
+set program to a shader program combining vertex and fragment
+use program as the shader program
 
 # One scalar per UBO, in the source-defined binding order of horizon.dl.
-set time_buffer to a uniform buffer
-set width_buffer to a uniform buffer
-set height_buffer to a uniform buffer
-set mouse_x_buffer to a uniform buffer
-set mouse_y_buffer to a uniform buffer
-set pulse_age_buffer to a uniform buffer
-set camera_x_buffer to a uniform buffer
-set camera_y_buffer to a uniform buffer
-bind uniform buffer time_buffer to 0
-bind uniform buffer width_buffer to 1
-bind uniform buffer height_buffer to 2
-bind uniform buffer mouse_x_buffer to 3
-bind uniform buffer mouse_y_buffer to 4
-bind uniform buffer pulse_age_buffer to 5
-bind uniform buffer camera_x_buffer to 6
-bind uniform buffer camera_y_buffer to 7
+set cursor to a coordinate buffer pair with x (a new uniform buffer) and y (a new uniform buffer)
+set lens to a coordinate buffer pair with x (a new uniform buffer) and y (a new uniform buffer)
+set buffers to a horizon buffer set with time (a new uniform buffer), width (a new uniform buffer), height (a new uniform buffer), mouse cursor, pulse (a new uniform buffer) and camera lens
+set resources to a horizon resource set owning vertex, fragment, program and buffers
+bind resources's buffers's time to binding 0
+bind resources's buffers's width to binding 1
+bind resources's buffers's height to binding 2
+bind resources's buffers's mouse's x to binding 3
+bind resources's buffers's mouse's y to binding 4
+bind resources's buffers's pulse to binding 5
+bind resources's buffers's camera's x to binding 6
+bind resources's buffers's camera's y to binding 7
 
-set last_click_time to 0.0 - 10.0
-set mouse_was_down to false
-set camera_x to 0.0
-set camera_y to 0.0
-set previous_time to the time since start
+set click to (0.0 - 10.0)
+set ready to true
+set view to a camera at (a position with x 0.0, y 0.0 and z 0.0) facing 0.0 degrees with speed 0.72 and turn rate 0.0
+set previous to the time since start
 
-while not the window should close:
+while the window remains open:
     set time to the time since start
-    set frame_time to time - previous_time
-    set previous_time to time
-    clamp frame_time between 0.0 and 0.1
-    set movement to frame_time * 0.72
+    set elapsed to (time - previous)
+    set previous to time
+    clamp elapsed between 0.0 and 0.1
+    set movement to (elapsed * view's movement)
 
-    set moving_left to key 65 is down in window or key 263 is down in window
-    set moving_right to key 68 is down in window or key 262 is down in window
-    set moving_up to key 87 is down in window or key 265 is down in window
-    set moving_down to key 83 is down in window or key 264 is down in window
-    if moving_left:
-        subtract movement from camera_x
-    if moving_right:
-        add movement to camera_x
-    if moving_up:
-        add movement to camera_y
-    if moving_down:
-        subtract movement from camera_y
-    clamp camera_x between 0.0 - 0.82 and 0.82
-    clamp camera_y between 0.0 - 0.52 and 0.52
+    set left to key 65 is down in window or key 263 is down in window
+    set right to key 68 is down in window or key 262 is down in window
+    set up to key 87 is down in window or key 265 is down in window
+    set down to key 83 is down in window or key 264 is down in window
+    if left:
+        decrease the x coordinate of view's position by movement
+    if right:
+        increase the x coordinate of view's position by movement
+    if up:
+        increase the y coordinate of view's position by movement
+    if down:
+        decrease the y coordinate of view's position by movement
+    set the x coordinate of view's position to (view's position's x clamped between (0.0 - 0.82) and 0.82)
+    set the y coordinate of view's position to (view's position's y clamped between (0.0 - 0.52) and 0.52)
     if key 82 is down in window:
-        set camera_x to 0.0
-        set camera_y to 0.0
+        set the x coordinate of view's position to 0.0
+        set the y coordinate of view's position to 0.0
 
-    set width to query the framebuffer width of window
-    set height to query the framebuffer height of window
+    set width to the framebuffer width of window
+    set height to the framebuffer height of window
 
-    set mouse_x to 0.0
-    set mouse_y to 0.0
-    @intrinsic("call", "glfw", "glfwGetCursorPos", void, window, address of mouse_x, address of mouse_y)
+    set mouse to a position with x 0.0, y 0.0 and z 0.0
+    read the cursor from window into mouse
 
-    set mouse_is_down to @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, 0) = 1
-    if mouse_is_down and not mouse_was_down:
-        set last_click_time to time
-    set mouse_was_down to mouse_is_down
+    set pressed to mouse button 0 is down in window
+    if pressed:
+        if ready:
+            set click to time
+        set ready to false
+    else:
+        set ready to true
 
-    if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 256) = 1:
-        @intrinsic("call", "glfw", "glfwSetWindowShouldClose", void, window, 1)
+    if key 256 is down in window:
+        request that window close
 
-    update uniform buffer time_buffer with time
-    update uniform buffer width_buffer with width
-    update uniform buffer height_buffer with height
-    update uniform buffer mouse_x_buffer with mouse_x
-    update uniform buffer mouse_y_buffer with mouse_y
-    update uniform buffer pulse_age_buffer with time - last_click_time
-    update uniform buffer camera_x_buffer with camera_x
-    update uniform buffer camera_y_buffer with camera_y
+    update resources's buffers's time with time
+    update resources's buffers's width with width
+    update resources's buffers's height with height
+    update resources's buffers's mouse's x with mouse's x
+    update resources's buffers's mouse's y with mouse's y
+    update resources's buffers's pulse with time - click
+    update resources's buffers's camera's x with view's position's x
+    update resources's buffers's camera's y with view's position's y
 
     clear the screen
     draw a fullscreen quad
     display the frame of window
 
-@intrinsic("call", "GL", "glDeleteProgram", void, program)
-@intrinsic("call", "GL", "glDeleteShader", void, vertex_shader)
-@intrinsic("call", "GL", "glDeleteShader", void, fragment_shader)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of time_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of width_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of height_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of mouse_x_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of mouse_y_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of pulse_age_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of camera_x_buffer)
-@intrinsic("call", "GL", "glDeleteBuffers", void, 1, address of camera_y_buffer)
+release resources
 close the window

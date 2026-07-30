@@ -6,66 +6,122 @@ class:
     patterns:
         [a|] host text result
     members:
-        succeeded as boolean
-        supported as boolean
-        value as string
-        error message as string
+        success as a boolean
+        support as a boolean
+        value as a string
+        error message as a string
 
 class:
     patterns:
         [a|] host truth result
     members:
-        succeeded as boolean
-        supported as boolean
-        value as boolean
-        error message as string
+        success as a boolean
+        support as a boolean
+        value as a boolean
+        error message as a string
 
 class:
     patterns:
         [a|] standard input chunk result
     members:
-        succeeded as boolean
-        supported as boolean
-        contents as string
-        end of file as boolean
-        error message as string
+        success as a boolean
+        support as a boolean
+        contents as a string
+        end of file as a boolean
+        error message as a string
+
+function {host text result:result} succeeded:
+    replacement:
+        result's success
+
+function {host text result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {host text result:result} is supported:
+    replacement:
+        result's support
+
+function {host text result:result} is unsupported:
+    replacement:
+        the inverse of result's support
+
+function {host truth result:result} succeeded:
+    replacement:
+        result's success
+
+function {host truth result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {host truth result:result} is supported:
+    replacement:
+        result's support
+
+function {host truth result:result} is unsupported:
+    replacement:
+        the inverse of result's support
+
+function {standard input chunk result:reading} succeeded:
+    replacement:
+        reading's success
+
+function {standard input chunk result:reading} failed:
+    replacement:
+        the inverse of reading's success
+
+function {standard input chunk result:reading} is supported:
+    replacement:
+        reading's support
+
+function {standard input chunk result:reading} is unsupported:
+    replacement:
+        the inverse of reading's support
+
+function {standard input chunk result:reading} reached the end of file:
+    replacement:
+        reading's end of file
+
+function {standard input chunk result:reading} has not reached the end of file:
+    replacement:
+        the inverse of reading's end of file
 
 local function an empty host string:
     execute:
         return the string form of ""
 
-local function [the|] current host error message:
+local function the current host error message:
     execute:
-        set message_length to @intrinsic(
+        set length to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_host_error_message",
             a word sized integer,
-            0 as a pointer to byte,
+            0 as a pointer to a byte,
             0 as a word sized integer
         )
-        set error_text to a new string buffer with length message_length as an integer
-        if message_length > 0 as a word sized integer:
-            discard @intrinsic(
+        set text to a new string buffer containing (length as an integer) bytes
+        if length > 0 as a word sized integer:
+            ignore @intrinsic(
                 "call",
                 "dynlex_runtime",
                 "dynlex_host_error_message",
                 a word sized integer,
-                the data of error_text,
-                message_length + 1
+                the data of text,
+                length + 1
             )
-        return error_text
+        return text
 
-function whether [the|] host platform is Windows:
+function whether the host platform is Windows:
     execute:
-        set is_windows to 0 as a 32 bit integer
-        set supported to 0 as a 32 bit integer
+        set windows to 0 as an integer
+        set supported to 0 as an integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
             "dynlex_host_platform_is_windows",
             an integer,
-            the address of is_windows,
+            the address of windows,
             the address of supported
         )
         if outcome != 0:
@@ -91,14 +147,14 @@ function whether [the|] host platform is Windows:
             a host truth result,
             true,
             true,
-            is_windows != 0,
+            windows != 0,
             an empty host string
         )
 
-local function retrieve host path value {integer:kind}:
+local function the host path value of kind {integer:kind}:
     execute:
-        set output_length to 0 as a word sized integer
-        set supported to 0 as a 32 bit integer
+        set length to 0 as a word sized integer
+        set supported to 0 as an integer
         set outcome to 0
         if kind = 1:
             set outcome to @intrinsic(
@@ -106,9 +162,9 @@ local function retrieve host path value {integer:kind}:
                 "dynlex_runtime",
                 "dynlex_host_executable_path",
                 an integer,
-                0 as a pointer to byte,
+                0 as a pointer to a byte,
                 0 as a word sized integer,
-                the address of output_length,
+                the address of length,
                 the address of supported
             )
         else:
@@ -118,9 +174,9 @@ local function retrieve host path value {integer:kind}:
                     "dynlex_runtime",
                     "dynlex_host_executable_directory",
                     an integer,
-                    0 as a pointer to byte,
+                    0 as a pointer to a byte,
                     0 as a word sized integer,
-                    the address of output_length,
+                    the address of length,
                     the address of supported
                 )
             else:
@@ -129,9 +185,9 @@ local function retrieve host path value {integer:kind}:
                     "dynlex_runtime",
                     "dynlex_host_user_cache_directory",
                     an integer,
-                    0 as a pointer to byte,
+                    0 as a pointer to a byte,
                     0 as a word sized integer,
-                    the address of output_length,
+                    the address of length,
                     the address of supported
                 )
         if outcome != 0:
@@ -153,7 +209,7 @@ local function retrieve host path value {integer:kind}:
                 the current host error message
             )
 
-        set output to a new string buffer with length output_length as an integer
+        set output to a new string buffer containing (length as an integer) bytes
         if kind = 1:
             set outcome to @intrinsic(
                 "call",
@@ -161,8 +217,8 @@ local function retrieve host path value {integer:kind}:
                 "dynlex_host_executable_path",
                 an integer,
                 the data of output,
-                output_length,
-                the address of output_length,
+                length,
+                the address of length,
                 the address of supported
             )
         else:
@@ -173,8 +229,8 @@ local function retrieve host path value {integer:kind}:
                     "dynlex_host_executable_directory",
                     an integer,
                     the data of output,
-                    output_length,
-                    the address of output_length,
+                    length,
+                    the address of length,
                     the address of supported
                 )
             else:
@@ -184,8 +240,8 @@ local function retrieve host path value {integer:kind}:
                     "dynlex_host_user_cache_directory",
                     an integer,
                     the data of output,
-                    output_length,
-                    the address of output_length,
+                    length,
+                    the address of length,
                     the address of supported
                 )
         if outcome != 0:
@@ -206,24 +262,24 @@ local function retrieve host path value {integer:kind}:
             an empty host string
         )
 
-function [the|] running executable path:
+function the running executable path:
     execute:
-        return retrieve host path value 1
+        return the host path value of kind 1
 
-function [the|] running executable directory:
+function the running executable directory:
     execute:
-        return retrieve host path value 2
+        return the host path value of kind 2
 
-function [the|] user cache directory:
+function the user cache directory:
     execute:
-        return retrieve host path value 3
+        return the host path value of kind 3
 
-function read a chunk from [the|] standard input:
+local function the chunk read from the standard input:
     execute:
-        set data to 0 as a pointer to byte
+        set data to 0 as a pointer to a byte
         set length to 0 as a word sized integer
-        set end_of_file to 0 as a 32 bit integer
-        set supported to 0 as a 32 bit integer
+        set ending to 0 as an integer
+        set supported to 0 as an integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",
@@ -231,11 +287,11 @@ function read a chunk from [the|] standard input:
             an integer,
             the address of data,
             the address of length,
-            the address of end_of_file,
+            the address of ending,
             the address of supported
         )
         if outcome != 0:
-            @intrinsic("call", "libc", "free", void, data)
+            @intrinsic("call", "libc", "free", nothing, data)
             return @intrinsic(
                 "construct",
                 a standard input chunk result,
@@ -246,7 +302,7 @@ function read a chunk from [the|] standard input:
                 the current host error message
             )
         if supported = 0:
-            @intrinsic("call", "libc", "free", void, data)
+            @intrinsic("call", "libc", "free", nothing, data)
             return @intrinsic(
                 "construct",
                 a standard input chunk result,
@@ -257,24 +313,28 @@ function read a chunk from [the|] standard input:
                 the current host error message
             )
 
-        set contents to a new string buffer with length length as an integer
+        set contents to a new string buffer containing (length as an integer) bytes
         if length > 0 as a word sized integer:
-            discard @intrinsic(
+            ignore @intrinsic(
                 "call",
                 "libc",
                 "memcpy",
-                a pointer to byte,
+                a pointer to a byte,
                 the data of contents,
                 data,
                 length
             )
-        @intrinsic("call", "libc", "free", void, data)
+        @intrinsic("call", "libc", "free", nothing, data)
         return @intrinsic(
             "construct",
             a standard input chunk result,
             true,
             true,
             contents,
-            end_of_file != 0,
+            ending != 0,
             an empty host string
         )
+
+flex function read a chunk from the standard input:
+    replacement:
+        set the subject to the chunk read from the standard input

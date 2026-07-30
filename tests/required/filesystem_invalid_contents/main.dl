@@ -1,9 +1,8 @@
 import lib/filesystem.dl
 
-set output_path to "tests/required/filesystem_invalid_contents/output.tmp"
-delete output_path
-set null_data to 0 as a pointer to byte
-set invalid_contents to new string from data null_data with length -1
-write invalid_contents to output_path and print if it succeeded
-print "" as line
-print output_path is readable as line
+set destination to "tests/required/filesystem_invalid_contents/output.tmp"
+delete the filesystem entry at destination
+set empty to 0 as a pointer to a byte
+set contents to a new string from empty containing -1 bytes
+write contents to the file at destination and print whether it succeeded as a line
+print whether destination is readable as a line

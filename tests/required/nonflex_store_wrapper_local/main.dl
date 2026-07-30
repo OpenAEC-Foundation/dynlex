@@ -2,14 +2,14 @@ import lib/std.dl
 
 function probe {string:left}:
     execute:
-        set ch to character 0 of left
-        set result to a new string buffer with length 1
+        set character to the character at 0 in left
+        set result to a new string buffer containing 1 byte
         set data to the data of result
-        store ch into data at 0
+        store character into data at 0
 
 function demo:
     execute:
-        set s to new string from data "a" with length 1
-        probe s
+        set text to a new string from "a" containing 1 byte
+        probe text
 
 demo

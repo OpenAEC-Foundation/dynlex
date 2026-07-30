@@ -4,190 +4,188 @@ import lib/shader_art.dl
 # One persistent point population forms a racing motorcycle, flies through
 # three-dimensional space, and lands on a model-derived Vitruvian figure.
 
-function scene window from opening to closing at moment:
+function [a|] planar coordinate:
+    replacement:
+        a point
+
+function [a|] spatial coordinate:
+    replacement:
+        a point
+
+function [a|] radiant color:
+    replacement:
+        a color
+
+function a planar coordinate with x {floating-point number:x} and y {floating-point number:y}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
+        )
+
+function a spatial coordinate with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a point,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
+        )
+
+function a radiant color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
+    replacement:
+        @intrinsic(
+            "construct",
+            a color,
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
+        )
+
+function the scene window from opening to closing at moment:
     execute:
-        set arrival to smooth transition from opening to (opening + 0.55) at moment
-        set departure to 1.0 - smooth transition from (closing - 0.55) to closing at moment
+        set arrival to the smooth transition from opening to (opening + 0.55) at moment
+        set departure to (1.0 - the smooth transition from (closing - 0.55) to closing at moment)
         return arrival * departure
 
 if this is a vertex shader:
     # Each input axis packs one motorcycle source and one Vitruvian target.
-    set packed_x to the vertex x
-    set packed_y to the vertex y
-    set packed_z to the vertex z
-    set encoded_triangle_corner to the vertex w
-    set wheel_point to the floor of (encoded_triangle_corner / 4.0)
-    set triangle_corner to encoded_triangle_corner - (wheel_point * 4.0)
-    set target_quantized_x to the floor of (packed_x / 4096.0)
-    set target_quantized_y to the floor of (packed_y / 4096.0)
-    set target_quantized_z to the floor of (packed_z / 4096.0)
-    set motorcycle_quantized_x to packed_x - (target_quantized_x * 4096.0)
-    set motorcycle_quantized_y to packed_y - (target_quantized_y * 4096.0)
-    set motorcycle_quantized_z to packed_z - (target_quantized_z * 4096.0)
-    set point_x to ((target_quantized_x / 4095.0) * 4.0) - 2.0
-    set point_y to ((target_quantized_y / 4095.0) * 4.0) - 2.0
-    set point_z to ((target_quantized_z / 4095.0) * 4.0) - 2.0
-    set motorcycle_local_x to ((motorcycle_quantized_x / 4095.0) * 4.0) - 2.0
-    set motorcycle_local_y to ((motorcycle_quantized_y / 4095.0) * 4.0) - 2.0
-    set motorcycle_local_z to ((motorcycle_quantized_z / 4095.0) * 4.0) - 2.0
+    set packed to a spatial coordinate with x the vertex x, y the vertex y and z the vertex z
+    set encoding to the vertex w
+    set wheel to the floor of (encoding / 4.0)
+    set triangle to (encoding - (wheel * 4.0))
+    set target to a spatial coordinate with x (the floor of (packed's x / 4096.0)), y (the floor of (packed's y / 4096.0)) and z (the floor of (packed's z / 4096.0))
+    set quantized to a spatial coordinate with x (packed's x - (target's x * 4096.0)), y (packed's y - (target's y * 4096.0)) and z (packed's z - (target's z * 4096.0))
+    set point to a spatial coordinate with x (((target's x / 4095.0) * 4.0) - 2.0), y (((target's y / 4095.0) * 4.0) - 2.0) and z (((target's z / 4095.0) * 4.0) - 2.0)
+    set local to a spatial coordinate with x (((quantized's x / 4095.0) * 4.0) - 2.0), y (((quantized's y / 4095.0) * 4.0) - 2.0) and z (((quantized's z / 4095.0) * 4.0) - 2.0)
 
     set time to the shader time
-    set width to the maximum of the shader width and 1.0
-    set height to the maximum of the shader height and 1.0
-    set render_pass to the shader render pass
-    set aspect to width / height
-    set viewport_horizontal_scale to 1.0 / aspect
+    set frame to a planar coordinate with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
+    set pass to the shader render pass
+    set aspect to (frame's x / frame's y)
+    set scale to (1.0 / aspect)
     set moment to the minimum of time and 10.40
-    set visibility to scene window from 0.0 to 11.0 at moment
+    set visibility to the scene window from 0.0 to 11.0 at moment
 
     # Wheel-tagged points rotate around their generated local hubs.
-    set motorcycle_wheel_spin to (0.0 - time) * 9.4
-    set wheel_spin_sine to the sine of motorcycle_wheel_spin
-    set wheel_spin_cosine to the cosine of motorcycle_wheel_spin
-    set wheel_center_x to -0.72
-    if motorcycle_local_x > 0.0:
-        set wheel_center_x to 0.72
-    set wheel_offset_x to motorcycle_local_x - wheel_center_x
-    set wheel_offset_y to motorcycle_local_y + 0.42
-    set wheel_rotated_x to (wheel_offset_x * wheel_spin_cosine) - (wheel_offset_y * wheel_spin_sine)
-    set wheel_rotated_y to (wheel_offset_x * wheel_spin_sine) + (wheel_offset_y * wheel_spin_cosine)
-    if wheel_point > 0.5:
-        set motorcycle_local_x to wheel_center_x + wheel_rotated_x
-        set motorcycle_local_y to -0.42 + wheel_rotated_y
+    set spin to ((0.0 - time) * 9.4)
+    set sine to the sine of spin
+    set cosine to the cosine of spin
+    set center to -0.72
+    if local's x > 0.0:
+        set center to 0.72
+    set offset to a planar coordinate with x (local's x - center) and y (local's y + 0.42)
+    set rotated to a planar coordinate with x ((offset's x * cosine) - (offset's y * sine)) and y ((offset's x * sine) + (offset's y * cosine))
+    if wheel > 0.5:
+        set the x coordinate of local to (center + rotated's x)
+        set the y coordinate of local to (-0.42 + rotated's y)
 
     # The point-built motorcycle races front-first toward the perspective camera.
-    set motorcycle_progress to smooth transition from 0.0 to 4.25 at moment
-    set motorcycle_yaw to 1.30 + (motorcycle_progress * 0.04)
-    set motorcycle_yaw_sine to the sine of motorcycle_yaw
-    set motorcycle_yaw_cosine to the cosine of motorcycle_yaw
-    set motorcycle_turned_x to (motorcycle_local_x * motorcycle_yaw_cosine) + (motorcycle_local_z * motorcycle_yaw_sine)
-    set motorcycle_turned_z to (motorcycle_local_z * motorcycle_yaw_cosine) - (motorcycle_local_x * motorcycle_yaw_sine)
-    set motorcycle_world_x to motorcycle_turned_x + ((0.0 - 1.26) + (motorcycle_progress * 1.18))
-    set motorcycle_world_y to motorcycle_local_y + ((0.0 - 0.19) + (motorcycle_progress * 0.12))
-    set motorcycle_world_z to motorcycle_turned_z + (2.80 - (motorcycle_progress * 4.90))
-    set motorcycle_depth to the maximum of (motorcycle_world_z + 4.2) and 0.20
-    set motorcycle_ndc_x to ((motorcycle_world_x * 1.72) * viewport_horizontal_scale) / motorcycle_depth
-    set motorcycle_ndc_y to (motorcycle_world_y * 1.72) / motorcycle_depth
+    set progress to the smooth transition from 0.0 to 4.25 at moment
+    set yaw to (1.30 + (progress * 0.04))
+    set sine to the sine of yaw
+    set cosine to the cosine of yaw
+    set turned to a spatial coordinate with x ((local's x * cosine) + (local's z * sine)), y local's y and z ((local's z * cosine) - (local's x * sine))
+    set world to a spatial coordinate with x (turned's x + ((0.0 - 1.26) + (progress * 1.18))), y (turned's y + ((0.0 - 0.19) + (progress * 0.12))) and z (turned's z + (2.80 - (progress * 4.90)))
+    set depth to the maximum of (world's z + 4.2) and 0.20
+    set motorcycle to a planar coordinate with x (((world's x * 1.72) * scale) / depth) and y ((world's y * 1.72) / depth)
 
     # The model target keeps its centered, slowly rotating volumetric projection.
-    set target_yaw to (the sine of (time * 0.31)) * 0.34
-    set target_yaw_sine to the sine of target_yaw
-    set target_yaw_cosine to the cosine of target_yaw
-    set target_turned_x to (point_x * target_yaw_cosine) + (point_z * target_yaw_sine)
-    set target_turned_z to (point_z * target_yaw_cosine) - (point_x * target_yaw_sine)
-    set target_depth to 3.25 + (target_turned_z * 0.52)
-    set target_ndc_x to ((target_turned_x * 1.66) * viewport_horizontal_scale) / target_depth
-    set target_ndc_y to ((point_y * 1.86) - 0.04) / target_depth
+    set yaw to ((the sine of (time * 0.31)) * 0.34)
+    set sine to the sine of yaw
+    set cosine to the cosine of yaw
+    set turned to a spatial coordinate with x ((point's x * cosine) + (point's z * sine)), y point's y and z ((point's z * cosine) - (point's x * sine))
+    set destination to (3.25 + (turned's z * 0.52))
+    set projection to a planar coordinate with x (((turned's x * 1.66) * scale) / destination) and y (((point's y * 1.86) - 0.04) / destination)
 
     # Continuous flock fields make neighboring drones leave and land together.
-    set drone_seed_a to ((the sine of (((point_x * 3.13) + (point_y * 2.71)) + (point_z * 4.19))) * 0.5) + 0.5
-    set drone_seed_b to ((the sine of (((point_x * -2.17) + (point_y * 3.91)) + (point_z * 2.43))) * 0.5) + 0.5
-    set drone_delay to drone_seed_a * 0.75
-    set assembly_progress to smooth transition from (4.45 + drone_delay) to (6.65 + drone_delay) at moment
-    set flight_arc to (the sine of (assembly_progress * 3.14159265)) * (0.10 + (drone_seed_b * 0.24))
-    set flight_phase to (drone_seed_b * 6.28318531) + (assembly_progress * 3.2)
-    set flight_sweep to (the sine of (assembly_progress * 3.14159265)) * 0.12
-    set flight_x to (((the cosine of flight_phase) * flight_arc) + flight_sweep) * viewport_horizontal_scale
-    set flight_y to (the sine of flight_phase) * flight_arc * 0.72
-    set assembled_ndc_x to motorcycle_ndc_x + (target_ndc_x - motorcycle_ndc_x) * assembly_progress + flight_x
-    set assembled_ndc_y to motorcycle_ndc_y + (target_ndc_y - motorcycle_ndc_y) * assembly_progress + flight_y
-    set depth to motorcycle_depth + ((target_depth - motorcycle_depth) * assembly_progress)
+    set seed to (((the sine of (((point's x * 3.13) + (point's y * 2.71)) + (point's z * 4.19))) * 0.5) + 0.5)
+    set variation to (((the sine of (((point's x * -2.17) + (point's y * 3.91)) + (point's z * 2.43))) * 0.5) + 0.5)
+    set delay to (seed * 0.75)
+    set assembly to the smooth transition from (4.45 + delay) to (6.65 + delay) at moment
+    set arc to ((the sine of (assembly * 3.14159265)) * (0.10 + (variation * 0.24)))
+    set phase to ((variation * 6.28318531) + (assembly * 3.2))
+    set sweep to ((the sine of (assembly * 3.14159265)) * 0.12)
+    set flight to a planar coordinate with x ((((the cosine of phase) * arc) + sweep) * scale) and y (((the sine of phase) * arc) * 0.72)
+    set assembled to a planar coordinate with x ((motorcycle's x + ((projection's x - motorcycle's x) * assembly)) + flight's x) and y ((motorcycle's y + ((projection's y - motorcycle's y) * assembly)) + flight's y)
+    set depth to (depth + ((destination - depth) * assembly))
 
-    set relative_point_size to 0.00104 * (0.96 + render_pass * 0.04)
-    set point_size_x to relative_point_size * viewport_horizontal_scale
-    set point_size_y to relative_point_size
-    set corner_x to 0.0 - point_size_x
-    set corner_y to 0.0 - point_size_y
-    if triangle_corner >= 1.0:
-        set corner_x to point_size_x
-    if triangle_corner >= 2.0:
-        set corner_x to 0.0
-        set corner_y to point_size_y * 1.45
-    set clip_x to (assembled_ndc_x + corner_x) * depth
-    set clip_y to (assembled_ndc_y + corner_y) * depth
+    set size to (0.00104 * (0.96 + (pass * 0.04)))
+    set extent to a planar coordinate with x (size * scale) and y size
+    set corner to a planar coordinate with x (0.0 - extent's x) and y (0.0 - extent's y)
+    if triangle >= 1.0:
+        set the x coordinate of corner to extent's x
+    if triangle >= 2.0:
+        set the x coordinate of corner to 0.0
+        set the y coordinate of corner to (extent's y * 1.45)
+    set clip to a planar coordinate with x ((assembled's x + corner's x) * depth) and y ((assembled's y + corner's y) * depth)
     if visibility < 0.001:
-        set clip_x to depth * 3.0
-    set the output position to clip_x clip_y (depth * 0.42) depth
+        set the x coordinate of clip to (depth * 3.0)
+    set the output position with x clip's x, y clip's y, z (depth * 0.42) and w depth
 else:
-    set pixel_x to the fragment x coordinate
-    set pixel_y to the fragment y coordinate
+    set pixel to a planar coordinate with x the fragment x coordinate and y the fragment y coordinate
     set time to the shader time
-    set width to the maximum of the shader width and 1.0
-    set height to the maximum of the shader height and 1.0
-    set render_pass to the shader render pass
-    set aspect to width / height
-    set screen_x to ((((pixel_x / width) * 2.0) - 1.0) * aspect)
-    set screen_y to (((pixel_y / height) * 2.0) - 1.0)
-    set radial to the square root of ((screen_x * screen_x) + (screen_y * screen_y))
+    set frame to a planar coordinate with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
+    set pass to the shader render pass
+    set aspect to (frame's x / frame's y)
+    set screen to a planar coordinate with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (((pixel's y / frame's y) * 2.0) - 1.0)
+    set radial to the square root of ((screen's x * screen's x) + (screen's y * screen's y))
     set moment to the minimum of time and 10.40
 
-    if render_pass > 0.5:
-        set point_wave to ((the sine of (((screen_x * 19.0) - (screen_y * 13.0)) + (time * 4.2))) * 0.5) + 0.5
-        set scan_wave to ((the sine of ((screen_y * 47.0) - (time * 6.8))) * 0.5) + 0.5
-        set motorcycle_color to 1.0 - (smooth transition from 4.45 to 7.40 at moment)
-        set point_red to 0.08 + (point_wave * 0.28) + (motorcycle_color * 0.38)
-        set point_green to 0.30 + (scan_wave * 0.24) + (motorcycle_color * 0.12)
-        set point_blue to 0.66 + (point_wave * 0.30) - (motorcycle_color * 0.18)
-        set the fragment color to point_red point_green point_blue 1.0
+    if pass > 0.5:
+        set wave to (((the sine of (((screen's x * 19.0) - (screen's y * 13.0)) + (time * 4.2))) * 0.5) + 0.5)
+        set scan to (((the sine of ((screen's y * 47.0) - (time * 6.8))) * 0.5) + 0.5)
+        set warmth to (1.0 - the smooth transition from 4.45 to 7.40 at moment)
+        set color to a radiant color with red ((0.08 + (wave * 0.28)) + (warmth * 0.38)), green ((0.30 + (scan * 0.24)) + (warmth * 0.12)) and blue ((0.66 + (wave * 0.30)) - (warmth * 0.18))
+        set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0
     else:
-        set speed_visibility to scene window from 0.0 to 7.40 at moment
-        set vitruvian_visibility to scene window from 6.85 to 11.0 at moment
+        set speed to the scene window from 0.0 to 7.40 at moment
+        set figure to the scene window from 6.85 to 11.0 at moment
 
         # Continuous fields form a deep chamber and a wake around the point vehicle.
-        set chamber_one to flowing field at (screen_x * 2.2 + time * 0.021) (screen_y * 2.2 - time * 0.014) 1.9
-        set chamber_two to ridged field at (screen_x * 4.1 - time * 0.017) (screen_y * 4.1 + time * 0.011) 5.4
-        set free_drones to spark field at (screen_x * 27.0 + time * 0.24) (screen_y * 27.0 - time * 0.13) 9.7
-        set speed_particles to spark field at (screen_x * 7.0 + time * 8.4) (screen_y * 46.0) 14.2
-        set speed_core to glow from 0.0 to 0.66 at (the absolute value of screen_y)
-        set speed_trails to (speed_particles * speed_core) * speed_visibility
-        set red to (((0.003 + (chamber_one * 0.012)) + (chamber_two * 0.018)) + (free_drones * 0.18)) + (speed_trails * 0.32)
-        set green to (((0.006 + (chamber_one * 0.024)) + (chamber_two * 0.015)) + (free_drones * 0.46)) + (speed_trails * 0.78)
-        set blue to (((0.024 + (chamber_one * 0.082)) + (chamber_two * 0.071)) + (free_drones * 1.02)) + (speed_trails * 1.46)
-        set figure_aura to glow from 0.28 to 1.26 at radial
-        set red to red + ((figure_aura * vitruvian_visibility) * 0.032)
-        set green to green + ((figure_aura * vitruvian_visibility) * 0.095)
-        set blue to blue + ((figure_aura * vitruvian_visibility) * 0.21)
+        set chamber to the flowing field at (a point with x ((screen's x * 2.2) + (time * 0.021)) and y ((screen's y * 2.2) - (time * 0.014))) during 1.9
+        set ridges to the ridged field at (a point with x ((screen's x * 4.1) - (time * 0.017)) and y ((screen's y * 4.1) + (time * 0.011))) during 5.4
+        set drones to the spark field at (a point with x ((screen's x * 27.0) + (time * 0.24)) and y ((screen's y * 27.0) - (time * 0.13))) during 9.7
+        set particles to the spark field at (a point with x ((screen's x * 7.0) + (time * 8.4)) and y (screen's y * 46.0)) during 14.2
+        set core to the glow from 0.0 to 0.66 at (the absolute value of screen's y)
+        set trails to ((particles * core) * speed)
+        set color to a radiant color with red ((((0.003 + (chamber * 0.012)) + (ridges * 0.018)) + (drones * 0.18)) + (trails * 0.32)), green ((((0.006 + (chamber * 0.024)) + (ridges * 0.015)) + (drones * 0.46)) + (trails * 0.78)) and blue ((((0.024 + (chamber * 0.082)) + (ridges * 0.071)) + (drones * 1.02)) + (trails * 1.46))
+        set aura to the glow from 0.28 to 1.26 at radial
+        set the red channel of color to (color's red + ((aura * figure) * 0.032))
+        set the green channel of color to (color's green + ((aura * figure) * 0.095))
+        set the blue channel of color to (color's blue + ((aura * figure) * 0.21))
 
         # A projected radius sweeps around the model's own rotating circle.
-        set measurement_visibility to smooth transition from 7.55 to 8.10 at moment
-        set measurement_angle to (time - 7.55) * 1.32
-        set measurement_radius to 1.08
-        set circle_source_x to (the cosine of measurement_angle) * measurement_radius
-        set circle_source_y to (the sine of measurement_angle) * measurement_radius
-        set measurement_yaw to (the sine of (time * 0.31)) * 0.34
-        set circle_turned_x to circle_source_x * (the cosine of measurement_yaw)
-        set circle_turned_z to 0.0 - (circle_source_x * (the sine of measurement_yaw))
-        set circle_depth to 3.25 + (circle_turned_z * 0.52)
-        set radius_center_y to (0.0 - 0.04) / 3.25
-        set radius_end_x to circle_turned_x * 1.66 / circle_depth
-        set radius_end_y to ((circle_source_y * 1.86) - 0.04) / circle_depth
-        set radius_distance to distance from point screen_x screen_y to segment 0.0 radius_center_y radius_end_x radius_end_y
-        set radius_line to glow from 0.002 to 0.009 at radius_distance
-        set radius_vector_x to radius_end_x
-        set radius_vector_y to radius_end_y - radius_center_y
-        set radius_length to the maximum of (the square root of ((radius_vector_x * radius_vector_x) + (radius_vector_y * radius_vector_y))) and 0.0001
-        set tangent_x to (0.0 - radius_vector_y) / radius_length
-        set tangent_y to radius_vector_x / radius_length
-        set tick_start_x to radius_end_x - (tangent_x * 0.026)
-        set tick_start_y to radius_end_y - (tangent_y * 0.026)
-        set tick_end_x to radius_end_x + (tangent_x * 0.026)
-        set tick_end_y to radius_end_y + (tangent_y * 0.026)
-        set radius_tick_distance to distance from point screen_x screen_y to segment tick_start_x tick_start_y tick_end_x tick_end_y
-        set radius_tick to glow from 0.002 to 0.011 at radius_tick_distance
-        set highlight_x to screen_x - radius_end_x
-        set highlight_y to screen_y - radius_end_y
-        set highlight_distance to the square root of ((highlight_x * highlight_x) + (highlight_y * highlight_y))
-        set circle_highlight to glow from 0.0 to 0.045 at highlight_distance
-        set center_distance to the square root of ((screen_x * screen_x) + ((screen_y - radius_center_y) * (screen_y - radius_center_y)))
-        set center_highlight to glow from 0.0 to 0.025 at center_distance
-        set measurement_light to (((radius_line * 0.62) + (radius_tick * 0.82)) + (circle_highlight * 0.48)) + (center_highlight * 0.36)
-        set measurement_light to measurement_light * measurement_visibility
-        set red to red + (measurement_light * 0.46)
-        set green to green + (measurement_light * 0.88)
-        set blue to blue + (measurement_light * 1.24)
+        set visibility to the smooth transition from 7.55 to 8.10 at moment
+        set angle to ((time - 7.55) * 1.32)
+        set radius to 1.08
+        set source to a planar coordinate with x ((the cosine of angle) * radius) and y ((the sine of angle) * radius)
+        set yaw to ((the sine of (time * 0.31)) * 0.34)
+        set turned to a spatial coordinate with x (source's x * the cosine of yaw), y source's y and z (0.0 - (source's x * the sine of yaw))
+        set depth to (3.25 + (turned's z * 0.52))
+        set center to a planar coordinate with x 0.0 and y ((0.0 - 0.04) / 3.25)
+        set ending to a planar coordinate with x ((turned's x * 1.66) / depth) and y (((source's y * 1.86) - 0.04) / depth)
+        set distance to the distance from screen to segment from center to ending
+        set line to the glow from 0.002 to 0.009 at distance
+        set vector to a planar coordinate with x ending's x and y (ending's y - center's y)
+        set length to the maximum of (the square root of ((vector's x * vector's x) + (vector's y * vector's y))) and 0.0001
+        set tangent to a planar coordinate with x ((0.0 - vector's y) / length) and y (vector's x / length)
+        set start to a planar coordinate with x (ending's x - (tangent's x * 0.026)) and y (ending's y - (tangent's y * 0.026))
+        set finish to a planar coordinate with x (ending's x + (tangent's x * 0.026)) and y (ending's y + (tangent's y * 0.026))
+        set distance to the distance from screen to segment from start to finish
+        set tick to the glow from 0.002 to 0.011 at distance
+        set highlight to a planar coordinate with x (screen's x - ending's x) and y (screen's y - ending's y)
+        set distance to the square root of ((highlight's x * highlight's x) + (highlight's y * highlight's y))
+        set circle to the glow from 0.0 to 0.045 at distance
+        set highlight to a planar coordinate with x screen's x and y (screen's y - center's y)
+        set distance to the square root of ((highlight's x * highlight's x) + (highlight's y * highlight's y))
+        set radiance to the glow from 0.0 to 0.025 at distance
+        set light to ((((line * 0.62) + (tick * 0.82)) + (circle * 0.48)) + (radiance * 0.36))
+        set light to (light * visibility)
+        set the red channel of color to (color's red + (light * 0.46))
+        set the green channel of color to (color's green + (light * 0.88))
+        set the blue channel of color to (color's blue + (light * 1.24))
 
-        set vignette to 0.18 + ((1.0 - (smooth transition from 0.52 to 1.62 at radial)) * 0.82)
-        set red to the square root of ((red * vignette) / (1.0 + red))
-        set green to the square root of ((green * vignette) / (1.0 + green))
-        set blue to the square root of ((blue * vignette) / (1.0 + blue))
-        set the fragment color to red green blue 1.0
+        set vignette to (0.18 + ((1.0 - the smooth transition from 0.52 to 1.62 at radial) * 0.82))
+        set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red))
+        set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green))
+        set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue))
+        set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

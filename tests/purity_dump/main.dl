@@ -2,15 +2,11 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard val:
-    replacement:
-        @intrinsic("discard", val)
-
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -18,44 +14,44 @@ function left + right:
     replacement:
         @intrinsic("add", left, right)
 
-function touch runtime value:
+function print a runtime marker:
     replacement:
-        @intrinsic("call", "libc", "puts", an integer, "side effect")
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", an integer, "side effect"))
 
-function sum left and right:
+function the sum of left and right:
     execute:
         set result to left
-        set result to result + right
+        set result to (result + right)
         return result
 
-function caller value:
+function input increased by one:
     execute:
-        return sum value and 1
+        return the sum of input and 1
 
-function write global value:
+function store value globally:
     globals: total
     execute:
         set total to value
 
-function read global:
+function the global value:
     globals: total
     execute:
         return total
 
-function write value through target:
+function set target to value through its address:
     execute:
         set target to value
 
-function impure via flex value:
+function input after printing a runtime marker:
     execute:
-        discard touch runtime value
-        return value
+        print a runtime marker
+        return input
 
 set total to 0
 set local to 0
-set a to sum 1 and 2
-set b to caller 4
-write global 3
-set d to read global
-write 9 through local
-set c to impure via flex 5
+set sum to the sum of 1 and 2
+set increment to 4 increased by one
+store 3 globally
+set retrieved to the global value
+set local to 9 through its address
+set affected to 5 after printing a runtime marker

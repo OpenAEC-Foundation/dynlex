@@ -1,12 +1,12 @@
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -26,11 +26,11 @@ class:
     patterns:
         [a|] tracked value
     members:
-        number as integer
+        number as an integer
     retain:
-        discard the number of @intrinsic("lifecycle value")
+        ignore the number of @intrinsic("lifecycle value")
     release:
-        discard @intrinsic(
+        ignore @intrinsic(
             "variadic call",
             "libc",
             "printf",
@@ -47,4 +47,4 @@ flex function publish {tracked value:value}:
 set index to 0
 loop while index < 2:
     publish @intrinsic("construct", a tracked value, index + 1)
-    set index to index + 1
+    set index to (index + 1)

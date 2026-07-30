@@ -2,95 +2,95 @@
 
 import lib/list.dl
 
-function [the|] unsigned byte value of byte_value:
+function the unsigned byte value of octet:
     execute:
-        return (byte_value as i32) bitwise and 255
+        return (octet as a 32 bit integer) bitwise and 255
 
-function bytewise compare {string:left} with {string:right}:
+function the bytewise comparison of {string:left} with {string:right}:
     execute:
-        set shared_length to the minimum of the length of left and the length of right
+        set limit to the minimum of the length of left and the length of right
         set position to 0
-        loop while position < shared_length:
-            set left_byte to the unsigned byte value of character position of left
-            set right_byte to the unsigned byte value of character position of right
-            if left_byte < right_byte:
+        loop while position < limit:
+            set actual to the unsigned byte value of the character at position in left
+            set expected to the unsigned byte value of the character at position in right
+            if actual < expected:
                 return 0 - 1
-            if left_byte > right_byte:
+            if actual > expected:
                 return 1
-            set position to position + 1
+            set position to (position + 1)
         if the length of left < the length of right:
             return 0 - 1
         if the length of left > the length of right:
             return 1
         return 0
 
-function bytewise compare {cstring:left} with {string:right}:
+function the bytewise comparison of {C string:left} with {string:right}:
     execute:
-        return bytewise compare the string form of left with right
+        return the bytewise comparison of the string form of left with right
 
-function bytewise compare {string:left} with {cstring:right}:
+function the bytewise comparison of {string:left} with {C string:right}:
     execute:
-        return bytewise compare left with the string form of right
+        return the bytewise comparison of left with the string form of right
 
-function bytewise compare {cstring:left} with {cstring:right}:
+function the bytewise comparison of {C string:left} with {C string:right}:
     execute:
-        return bytewise compare the string form of left with the string form of right
+        return the bytewise comparison of the string form of left with the string form of right
 
-function stable bytewise order for {a pointer to list:keys}:
+function the stable bytewise order for {a pointer to a list:keys}:
     execute:
-        set permutation to an empty list of i32
-        set source_index to 0
-        loop while source_index < the length of keys:
-            set insertion_position to the length of permutation
-            append source_index to permutation
+        set permutation to an empty list of a 32 bit integer
+        set source to 0
+        loop while source < the length of keys:
+            set position to the length of permutation
+            append source to permutation
             set searching to true
-            loop while searching and insertion_position > 0:
-                set previous_source_index to item insertion_position - 1 of permutation
-                set current_key to item source_index of keys
-                set previous_key to item previous_source_index of keys
-                if bytewise compare current_key with previous_key < 0:
-                    replace item at index insertion_position in permutation with previous_source_index
-                    replace item at index insertion_position - 1 in permutation with source_index
-                    set insertion_position to insertion_position - 1
+            loop while searching and position > 0:
+                set previous to (the item at position - 1 in permutation)
+                set current to the item at source in keys
+                set prior to the item at previous in keys
+                if the bytewise comparison of current with prior < 0:
+                    replace item at index position in permutation with previous
+                    replace item at index position - 1 in permutation with source
+                    set position to (position - 1)
                 else:
                     set searching to false
-            set source_index to source_index + 1
+            set source to (source + 1)
         return permutation
 
-local function apply stable order {a pointer to list:permutation} to {a pointer to list:values}:
+local function apply the stable ordering in {a pointer to a list:permutation} to {a pointer to a list:values}:
     execute:
         if the length of permutation != the length of values:
-            @intrinsic("call", "libc", "abort", void)
-        set sorted to an empty list of the type of item 0 of values
+            @intrinsic("call", "libc", "abort", nothing)
+        set sorted to an empty list of the type of the item at 0 in values
         set position to 0
         loop while position < the length of permutation:
-            set source_index to item position of permutation
-            if source_index < 0 or source_index >= the length of values:
-                @intrinsic("call", "libc", "abort", void)
-            append item source_index of values to sorted
-            set position to position + 1
+            set source to the item at position in permutation
+            if source < 0 or source >= the length of values:
+                @intrinsic("call", "libc", "abort", nothing)
+            append the item at source in values to sorted
+            set position to (position + 1)
         clear values
         set position to 0
         loop while position < the length of sorted:
-            append item position of sorted to values
-            set position to position + 1
-        free list sorted
+            append the item at position in sorted to values
+            set position to (position + 1)
+        free sorted
 
-function stable sort {a pointer to list:strings} in bytewise order:
+function sort {a pointer to a list:strings} stably in bytewise order:
     execute:
         if the length of strings = 0:
             @intrinsic("return")
-        set permutation to stable bytewise order for strings
-        apply stable order permutation to strings
-        free list permutation
+        set permutation to the stable bytewise order for strings
+        apply the stable ordering in permutation to strings
+        free permutation
 
-function stable sort {a pointer to list:records} using bytewise keys {a pointer to list:keys}:
+function sort {a pointer to a list:records} stably in the bytewise order of {a pointer to a list:keys}:
     execute:
         if the length of records != the length of keys:
-            @intrinsic("call", "libc", "abort", void)
+            @intrinsic("call", "libc", "abort", nothing)
         if the length of records = 0:
             @intrinsic("return")
-        set permutation to stable bytewise order for keys
-        apply stable order permutation to records
-        apply stable order permutation to keys
-        free list permutation
+        set permutation to the stable bytewise order for keys
+        apply the stable ordering in permutation to records
+        apply the stable ordering in permutation to keys
+        free permutation

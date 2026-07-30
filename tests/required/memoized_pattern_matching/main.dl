@@ -2,9 +2,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
 
 function left[ |]+[ |]right:
     execute:
@@ -22,4 +22,4 @@ function first second suffix:
     execute:
         return @intrinsic("add", first, second)
 
-set r to r * 0.5 + 0.5 set g to g * 0.5 +import0.5
+set red to (red * 0.5 + 0.5 set green to green * 0.5 +import0.5)

@@ -1,0 +1,8 @@
+import std.dl
+
+function the chosen number from [a fixed count of {fixed integer:count} and {an array of count items:values}|a runtime count of {integer:count} and {integer:values}]:
+    execute:
+        return count
+
+set reference to the function named "the chosen number from a runtime count of $ and $"
+ignore reference

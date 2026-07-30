@@ -1,11 +1,15 @@
-function integer:
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
 class:
     patterns:
-        box
+        [a|] box
     members:
-        value as integer
+        value as an integer
 
-@intrinsic("discard", @intrinsic("address of", @intrinsic("property", @intrinsic("construct", box, 1), "value")))
+ignore @intrinsic("address of", @intrinsic("property", @intrinsic("construct", a box, 1), "value"))

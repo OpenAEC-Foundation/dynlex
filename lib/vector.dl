@@ -2,49 +2,45 @@ import std.dl
 
 class:
     patterns:
-        [a|] cpu vector
+        [a|] CPU vector
         vector
     members:
         x, y, z
 
-function [a|] gpu vector:
+function a GPU vector:
     replacement:
         @intrinsic("vector", 3)
 
-function [a|] vector type:
+function the vector type:
     replacement:
-        a gpu vector if the build target is gpu, else a cpu vector
+        a GPU vector if the build target is GPU, else a CPU vector
 
-function a new vector with x vx, y vy and z vz:
+function a new vector with x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
     replacement:
-        @intrinsic("construct", a vector type, vx, vy, vz)
-
-function a new vector from x y z:
-    replacement:
-        @intrinsic("construct", a vector type, x, y, z)
+        @intrinsic("construct", the vector type, horizontal, vertical, depth)
 
 function {vector:left} + right:
     execute:
-        set x_component to (the x of left) + right
-        set y_component to (the y of left) + right
-        set z_component to (the z of left) + right
-        return a new vector from x_component y_component z_component
+        set horizontal to ((the x of left) + right)
+        set vertical to ((the y of left) + right)
+        set depth to ((the z of left) + right)
+        return a new vector with x horizontal, y vertical and z depth
 
 function {vector:left} * factor:
     execute:
-        set x_component to (the x of left) * factor
-        set y_component to (the y of left) * factor
-        set z_component to (the z of left) * factor
-        return a new vector from x_component y_component z_component
+        set horizontal to ((the x of left) * factor)
+        set vertical to ((the y of left) * factor)
+        set depth to ((the z of left) * factor)
+        return a new vector with x horizontal, y vertical and z depth
 
-function [the|] string form of {vector:msg}:
+function the string form of {vector:value}:
     execute:
         set result to the string form of "["
         set separator to the string form of ", "
-        set result to (result + the string form of the x of msg)
+        set result to (result + the string form of the x of value)
         set result to (result + separator)
-        set result to (result + the string form of the y of msg)
+        set result to (result + the string form of the y of value)
         set result to (result + separator)
-        set result to (result + the string form of the z of msg)
+        set result to (result + the string form of the z of value)
         set result to (result + the string form of "]")
         return result

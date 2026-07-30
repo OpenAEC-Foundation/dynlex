@@ -1,3 +1,3 @@
 tests/required/case_requires_constant_integer/main.dl:27-33: Error: case value must be a constant integer
-  note: while inferring intrinsic 'case' in '@intrinsic("case", value)' with arguments [i8*, a 32 bit integer] -> undeduced tests/required/case_requires_constant_integer/main.dl:9-34
-  note: while inferring call 'case x' with arguments [a 32 bit integer] -> undeduced tests/required/case_requires_constant_integer/main.dl:5-11
+  note: while inferring intrinsic 'case' in '@intrinsic("case", value)' with arguments [a 32-bit integer] -> an unresolved value tests/required/case_requires_constant_integer/main.dl:9-34
+  note: while inferring call 'case choice' with arguments [a 32-bit integer] -> an unresolved value tests/required/case_requires_constant_integer/main.dl:5-16

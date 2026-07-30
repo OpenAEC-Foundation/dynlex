@@ -1,11 +1,11 @@
 import lib/std.dl
 
-function value for condition:
+function the value for condition:
     execute:
         if condition:
             return 1
         loop while true:
-            discard 0
+            ignore 0
         return 2
 
-print value for @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1) as line
+print the value for @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1) as a line

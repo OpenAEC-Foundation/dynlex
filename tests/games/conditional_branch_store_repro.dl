@@ -1,6 +1,14 @@
-function set var to val:
+function set variable to value:
     replacement:
-        @intrinsic("store", var, val)
+        @intrinsic("store", variable, value)
+
+function left equals right:
+    replacement:
+        @intrinsic("equal", left, right)
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
 
 flex section if condition:
     replacement:
@@ -10,8 +18,8 @@ flex section else:
     replacement:
         @intrinsic("else")
 
-if @intrinsic("equal", 0, 0):
-    @intrinsic("discard", 0.0)
+if 0 equals 0:
+    ignore 0.0
 else:
     set pulse to 1.0
-    @intrinsic("discard", pulse)
+    ignore pulse

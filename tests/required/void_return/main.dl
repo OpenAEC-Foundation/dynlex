@@ -3,9 +3,9 @@ import lib/std.dl
 function finish immediately:
     execute:
         @intrinsic("return")
-        print 2 as line
+        print 2 as a line
 
 finish immediately
-print 1 as line
+print 1 as a line
 @intrinsic("return")
-print 3 as line
+print 3 as a line

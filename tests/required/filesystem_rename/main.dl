@@ -1,12 +1,14 @@
 import lib/filesystem.dl
 
-set source_path to "tests/required/filesystem_rename/source.tmp"
-set moved_path to "tests/required/filesystem_rename/moved.tmp"
-delete source_path
-delete moved_path
+set source to "tests/required/filesystem_rename/source.tmp"
+set destination to "tests/required/filesystem_rename/moved.tmp"
+delete the filesystem entry at source
+delete the filesystem entry at destination
 
-write the string form of "contents" to source_path
-rename source_path to moved_path
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n%d\n%d\n", @intrinsic("cast", it succeeded, an integer), @intrinsic("cast", source_path is readable, an integer), @intrinsic("cast", moved_path is readable, an integer)))
+write the string form of "contents" to the file at source
+rename the filesystem entry at source to destination
+print whether it succeeded as a line
+print whether source is readable as a line
+print whether destination is readable as a line
 
-delete moved_path
+delete the filesystem entry at destination

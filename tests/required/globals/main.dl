@@ -5,12 +5,12 @@ import lib/string.dl
 function increase total by amount:
     globals: total
     execute:
-        set total to total + amount
+        set total to (total + amount)
 
 function show total:
     globals: total
     execute:
-        print total as line
+        print total as a line
 
 set total to 0
 increase total by 10
@@ -19,33 +19,33 @@ increase total by 5
 show total
 
 # test 2: local variable with same name as global (shadowing)
-function double value:
+function value doubled:
     execute:
-        set total to value * 2
+        set total to (value * 2)
         return total
 
-print double 7 as line
+print 7 doubled as a line
 
 # test 3: global should still be unchanged after shadowing
-print total as line
+print total as a line
 
 # test 4: function-local variable doesn't leak to global scope
 set result to 99
-function triple value:
+function value tripled:
     execute:
-        set result to value * 3
+        set result to (value * 3)
         return result
 
-print triple 5 as line
+print 5 tripled as a line
 # global "result" should still be 99, not overwritten by triple's local
-print result as line
+print result as a line
 
 # test 5: function with globals: DOES modify the global
 function set result to value times multiplier:
     globals: result
     execute:
-        set result to value * multiplier
+        set result to (value * multiplier)
 
 set result to 7 times 3
 # global "result" should now be 21
-print result as line
+print result as a line

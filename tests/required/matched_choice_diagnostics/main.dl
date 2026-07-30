@@ -1,4 +1,4 @@
-function [foo alpha|foo beta]:
+function [entry alpha|entry beta]:
     replacement:
         1
 

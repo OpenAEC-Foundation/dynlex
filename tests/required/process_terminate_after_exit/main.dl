@@ -1,27 +1,27 @@
 import lib/process.dl
 
-function [the|] terminated status test interpreter:
+function the terminated status test interpreter:
     execute:
-        return "python" if the process platform is windows, else "python3"
+        return "python" if the process platform is Windows, else "python3"
 
 set command to a process command for the terminated status test interpreter
 add "-c" as an argument to command
 add "" as an argument to command
-set child to launch command
+launch command and set child to it
 
-set delay_command to a process command for the terminated status test interpreter
-add "-c" as an argument to delay_command
-add "import time; time.sleep(0.5)" as an argument to delay_command
-set delay_result to run delay_command
+set delay to a process command for the terminated status test interpreter
+add "-c" as an argument to delay
+add "import time; time.sleep(0.5)" as an argument to delay
+run delay and set pause to it
 
-set termination to terminate child
-set status to wait for child
+terminate child and set termination to it
+wait for child and set status to it
 
-print child's launched as line
-print delay_result's succeeded as line
-print termination's succeeded as line
-print status's succeeded as line
-print status's finished as line
-print (status's exit code = (0 as a 64 bit integer)) as line
-print (not status's terminated) as line
-print (status's termination signal = (0 as a 32 bit integer)) as line
+print whether child was launched as a line
+print whether pause succeeded as a line
+print whether termination succeeded as a line
+print whether status succeeded as a line
+print whether status reports completion as a line
+print whether (status's exit code = (0 as a 64 bit integer)) as a line
+print whether status does not report termination as a line
+print whether (status's termination signal = (0 as a 32 bit integer)) as a line

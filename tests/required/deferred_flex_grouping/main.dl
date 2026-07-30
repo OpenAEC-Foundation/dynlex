@@ -6,10 +6,6 @@ function left = right:
     replacement:
         @intrinsic("equal", left, right)
 
-function not value:
-    replacement:
-        @intrinsic("not", value)
-
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
@@ -22,7 +18,7 @@ class:
     patterns:
         [a|] container
     members:
-        stored_value
+        stored value
 
 class:
     patterns:
@@ -32,15 +28,19 @@ class:
 
 function {container:values} contains value:
     execute:
-        return the stored_value of values = value
+        return the stored value of values = value
 
 function {box:object} contains value:
     execute:
         return the values of object contains value
 
+function {box:object} does not contain value:
+    execute:
+        return @intrinsic("not", object contains value)
+
 flex function add value to {box:object}:
     replacement:
-        if not object contains value:
+        if object does not contain value:
             @intrinsic("discard", value)
 
 set values to @intrinsic("construct", a container, 2)

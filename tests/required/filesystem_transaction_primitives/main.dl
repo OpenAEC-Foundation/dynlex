@@ -2,152 +2,138 @@ import lib/filesystem.dl
 import lib/process.dl
 
 set root to "tests/required/filesystem_transaction_primitives/tree.tmp"
-set original_path to "tests/required/filesystem_transaction_primitives/tree.tmp/original.bin"
-set missing_path to "tests/required/filesystem_transaction_primitives/tree.tmp/missing.bin"
-set copied_path to "tests/required/filesystem_transaction_primitives/tree.tmp/copied.bin"
-set durable_path to "tests/required/filesystem_transaction_primitives/tree.tmp/durable.bin"
-set windows to the process platform is windows
+set source to "tests/required/filesystem_transaction_primitives/tree.tmp/original.bin"
+set missing to "tests/required/filesystem_transaction_primitives/tree.tmp/missing.bin"
+set copy to "tests/required/filesystem_transaction_primitives/tree.tmp/copied.bin"
+set destination to "tests/required/filesystem_transaction_primitives/tree.tmp/durable.bin"
+set windows to the process platform is Windows
 
-remove filesystem tree at root
-create directory tree at root
-set created to it
-print created's succeeded as line
+remove the filesystem tree at root
+create a directory tree at root and set created to it
+print whether created succeeded as a line
 
-set missing to the file system entry at missing_path
-print missing's supported as line
-print missing's succeeded as line
-print (not missing's found) as line
-print ((the length of missing's error message) = 0) as line
+set absence to the file system entry at missing
+print whether absence is supported as a line
+print whether absence lookup succeeded as a line
+print whether absence was absent as a line
+print whether (the length of absence's error message) = 0 as a line
 
-write the string form of "old" to original_path
-set original to the file system entry at original_path
-print original's succeeded as line
-print original's found as line
-print original's regular file as line
-print (not original's directory) as line
-print (not original's symbolic link) as line
-print (not original's other) as line
-print original's modification time supported as line
-print ((original's modification time)'s nanoseconds >= 0) as line
-print ((original's modification time)'s nanoseconds < 1000000000) as line
-print original's identity's supported as line
-print original's identity's available as line
+write the string form of "old" to the file at source
+set original to the file system entry at source
+print whether original lookup succeeded as a line
+print whether original was found as a line
+print whether original is a regular file as a line
+print whether original is not a directory as a line
+print whether original is not a symbolic link as a line
+print whether original does not have another filesystem kind as a line
+print whether original supports modification times as a line
+print whether (original's modification time)'s nanoseconds >= 0 as a line
+print whether (original's modification time)'s nanoseconds < 1000000000 as a line
+print whether original's identity is supported as a line
+print whether original's identity is available as a line
 
 if windows:
-    print (not original's mode supported) as line
-    print original's Windows attributes supported as line
+    print whether original's mode is unsupported as a line
+    print whether original's Windows attributes are supported as a line
 else:
-    print original's mode supported as line
-    print (not original's Windows attributes supported) as line
-    print (original's mode >= 0) as line
-    print (original's mode <= 4095) as line
+    print whether original's mode is supported as a line
+    print whether original's Windows attributes are unsupported as a line
+    print whether original's mode >= 0 as a line
+    print whether original's mode <= 4095 as a line
 
-set same_original to the file system entry at original_path
-print original's identity identifies the same file as same_original's identity as line
+set unchanged to the file system entry at source
+print whether original's identity identifies the same file as unchanged's identity as a line
 
-set exact_bytes to a new string buffer with length 2
-store 0 as a byte into the data of exact_bytes at 0
-store 255 as a byte into the data of exact_bytes at 1
-set exact_identity to @intrinsic("construct", a file identity, true, true, exact_bytes)
-set same_exact_identity to @intrinsic("construct", a file identity, true, true, exact_bytes)
-print exact_identity identifies the same file as same_exact_identity as line
+set exact to a new string buffer containing 2 bytes
+store 0 as a byte into the data of exact at 0
+store 255 as a byte into the data of exact at 1
+set identity to @intrinsic("construct", a file identity, true, true, exact)
+set identical to @intrinsic("construct", a file identity, true, true, exact)
+print whether identity identifies the same file as identical as a line
 
-create a staging file beside exact_bytes
-set invalid_stage to it
-set invalid_stage_message to invalid_stage's error message
-print invalid_stage's supported as line
-print (not invalid_stage's succeeded) as line
-print ((the length of invalid_stage_message) > 0) as line
+create a staging file beside exact and set invalid to it
+set message to invalid's error message
+print whether invalid is supported as a line
+print whether invalid failed as a line
+print whether the length of message > 0 as a line
 
-create a staging file beside original_path and write the string form of "refused" to it
-set staging to it
-print staging's supported as line
-print staging's succeeded as line
+create a staging file beside source and set staging to it
+write the string form of "refused" to staging and set staging to it
+print whether staging is supported as a line
+print whether staging succeeded as a line
 
-commit staging allowing overwrite false and requiring durability false
-set refused to it
-print refused's supported as line
-print refused's commit outcome known as line
-print (not refused's committed) as line
-print (not refused's succeeded) as line
-print refused's cleanup succeeded as line
-read original_path
-print ((it succeeded) and ((the contents of it) = "old")) as line
+commit staging where overwriting is false and durability is false and set refused to it
+print whether refused is supported as a line
+print whether refused's commit outcome is known as a line
+print whether refused was not committed as a line
+print whether refused failed as a line
+print whether refused's cleanup succeeded as a line
+read the file at source and print whether (it succeeded) and ((the contents of it) = "old") as a line
 
-create a staging file beside original_path and write the string form of "first" to it
-set first_write to it
-write the string form of "second" to first_write
-set second_write to it
-print first_write's succeeded as line
-print second_write's succeeded as line
-restore metadata from original to second_write
-set restored to it
-print restored's supported as line
-print restored's succeeded as line
-commit restored allowing overwrite true and requiring durability false
-set committed to it
-print committed's supported as line
-print committed's succeeded as line
-print committed's commit outcome known as line
-print committed's committed as line
-print (not committed's durable) as line
-print committed's cleanup succeeded as line
+create a staging file beside source and set first to it
+write the string form of "first" to first and set first to it
+write the string form of "second" to first and set second to it
+print whether first succeeded as a line
+print whether second succeeded as a line
+restore metadata from original to second and set restored to it
+print whether restored is supported as a line
+print whether restored succeeded as a line
+commit restored where overwriting is true and durability is false and set committed to it
+print whether committed is supported as a line
+print whether committed succeeded as a line
+print whether committed's commit outcome is known as a line
+print whether committed was committed as a line
+print whether committed is not durable as a line
+print whether committed's cleanup succeeded as a line
 
-set replaced to the file system entry at original_path
+set replaced to the file system entry at source
 if windows:
-    print (replaced's restorable Windows attributes = original's restorable Windows attributes) as line
+    print whether replaced's restorable Windows attributes = original's restorable Windows attributes as a line
 else:
-    print (replaced's mode = original's mode) as line
-print ((replaced's access time)'s seconds = (original's access time)'s seconds) as line
-print ((replaced's access time)'s nanoseconds = (original's access time)'s nanoseconds) as line
-print ((replaced's modification time)'s seconds = (original's modification time)'s seconds) as line
-print ((replaced's modification time)'s nanoseconds = (original's modification time)'s nanoseconds) as line
-read original_path
-print it succeeded as line
-print ((the contents of it) = "firstsecond") as line
+    print whether replaced's mode = original's mode as a line
+print whether (replaced's access time)'s seconds = (original's access time)'s seconds as a line
+print whether (replaced's access time)'s nanoseconds = (original's access time)'s nanoseconds as a line
+print whether (replaced's modification time)'s seconds = (original's modification time)'s seconds as a line
+print whether (replaced's modification time)'s nanoseconds = (original's modification time)'s nanoseconds as a line
+read the file at source and print whether it succeeded as a line
+print whether ((the contents of it) = "firstsecond") as a line
 
-create a staging file beside copied_path
-set cancelled_stage to it
-set cancelled_path to cancelled_stage's path
-cancel cancelled_stage
-set cancelled to it
-print cancelled's supported as line
-print cancelled's succeeded as line
-print cancelled's cleanup succeeded as line
-set cancelled_entry to the file system entry at cancelled_path
-print cancelled_entry's supported as line
-print cancelled_entry's succeeded as line
-print (not cancelled_entry's found) as line
-print ((the length of cancelled_entry's error message) = 0) as line
+create a staging file beside copy and set cancellation to it
+set pathname to cancellation's path
+cancel cancellation and set cancelled to it
+print whether cancelled is supported as a line
+print whether cancelled succeeded as a line
+print whether cancelled's cleanup succeeded as a line
+set remnant to the file system entry at pathname
+print whether remnant is supported as a line
+print whether remnant lookup succeeded as a line
+print whether remnant was absent as a line
+print whether (the length of remnant's error message) = 0 as a line
 
-set new_contents to the string form of "new"
-create a staging file beside copied_path and write new_contents to it
-set new_stage to it
-commit new_stage allowing overwrite false and requiring durability false
-set new_commit to it
-print new_commit's succeeded as line
-print new_commit's committed as line
-print new_commit's cleanup succeeded as line
-read copied_path
-print ((it succeeded) and ((the contents of it) = "new")) as line
+set replacement to the string form of "new"
+create a staging file beside copy and set temporary to it
+write replacement to temporary and set temporary to it
+commit temporary where overwriting is false and durability is false and set publication to it
+print whether publication succeeded as a line
+print whether publication was committed as a line
+print whether publication's cleanup succeeded as a line
+read the file at copy and print whether (it succeeded) and ((the contents of it) = "new") as a line
 
-create a staging file beside durable_path and write the string form of "durable" to it
-set durable_stage to it
-commit durable_stage allowing overwrite false and requiring durability true
-set durable_commit to it
+create a staging file beside destination and set staging to it
+write the string form of "durable" to staging and set staging to it
+commit staging where overwriting is false and durability is true and set commit to it
 if windows:
-    print (not durable_commit's supported) as line
-    print durable_commit's commit outcome known as line
-    print (not durable_commit's committed) as line
-    print durable_commit's cleanup succeeded as line
-    set durable_entry to the file system entry at durable_stage's path
-    print (durable_entry's succeeded and (not durable_entry's found)) as line
+    print whether commit is unsupported as a line
+    print whether commit's commit outcome is known as a line
+    print whether commit was not committed as a line
+    print whether commit's cleanup succeeded as a line
+    set metadata to the file system entry at staging's path
+    print whether (metadata lookup succeeded) and (metadata was absent) as a line
 else:
-    print durable_commit's supported as line
-    print durable_commit's succeeded as line
-    print durable_commit's durable as line
-    print durable_commit's cleanup succeeded as line
+    print whether commit is supported as a line
+    print whether commit succeeded as a line
+    print whether commit is durable as a line
+    print whether commit's cleanup succeeded as a line
 
-remove filesystem tree at root
-set cleaned to it
-print cleaned's succeeded as line
+remove the filesystem tree at root and set cleaned to it
+print whether cleaned succeeded as a line

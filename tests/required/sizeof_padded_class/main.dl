@@ -2,19 +2,19 @@ function [a|] byte:
     replacement:
         @intrinsic("type", "int", 8)
 
-function i32:
+function [a|] thirty two bit integer:
     replacement:
         @intrinsic("type", "int", 32)
 
-function [a|] pointer to pointed_type:
+function [a|] pointer to pointee:
     replacement:
-        @intrinsic("add pointer depth", pointed_type)
+        @intrinsic("add pointer depth", pointee)
 
-function [the|] size of type_to_measure:
+function the size of measured:
     replacement:
-        @intrinsic("size of", type_to_measure)
+        @intrinsic("size of", measured)
 
-function discard value:
+function ignore value:
     replacement:
         @intrinsic("discard", value)
 
@@ -22,7 +22,7 @@ class:
     patterns:
         [a|] padded value
     members:
-        data as a pointer to byte
-        length as i32
+        data as a pointer to a byte
+        length as a thirty two bit integer
 
-discard @intrinsic("call", "libc", "printf", i32, "%lld\n", the size of a padded value)
+ignore @intrinsic("call", "libc", "printf", a thirty two bit integer, "%lld\n", the size of a padded value)

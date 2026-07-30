@@ -169,8 +169,8 @@ assert.doesNotMatch(
   "River commands must accept a typed passenger instead of hard-coded zero-argument phrases"
 );
 
-assert.match(library, /RIVER\|ERROR\|there is no sheep to pickup/);
-assert.match(library, /RIVER\|ERROR\|there is no hay to pickup/);
+assert.match(library, /RIVER\|ERROR\|there is no sheep to pick up/);
+assert.match(library, /RIVER\|ERROR\|there is no hay to pick up/);
 assert.match(library, /RIVER\|DANGER\|WOLF\|SHEEP/);
 assert.match(library, /RIVER\|DANGER\|SHEEP\|HAY/);
 assert.match(library, /RIVER\|SUCCESS/);

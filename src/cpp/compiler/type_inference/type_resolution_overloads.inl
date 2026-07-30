@@ -378,9 +378,7 @@ struct InferenceContext {
 		std::unordered_set<Expression *> seenExpressions;
 		if (currentExpressionOverride && expressionParticipatesInInferenceTrace(currentExpressionOverride) &&
 			currentExpressionOverride->range.line) {
-			relatedInfo.push_back(
-				{describeInferenceTraceFrame(currentExpressionOverride, parseContext), currentExpressionOverride->range}
-			);
+			relatedInfo.push_back({describeInferenceTraceFrame(currentExpressionOverride), currentExpressionOverride->range});
 			seenExpressions.insert(currentExpressionOverride);
 		}
 		for (auto it = expressionStack.rbegin(); it != expressionStack.rend(); ++it) {
@@ -389,7 +387,7 @@ struct InferenceContext {
 				continue;
 			if (!seenExpressions.insert(expression).second)
 				continue;
-			relatedInfo.push_back({describeInferenceTraceFrame(expression, parseContext), expression->range});
+			relatedInfo.push_back({describeInferenceTraceFrame(expression), expression->range});
 		}
 		return relatedInfo;
 	}

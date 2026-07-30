@@ -14,4 +14,4 @@ around:
     else:
         set result to 20
 
-print result as line
+print result as a line

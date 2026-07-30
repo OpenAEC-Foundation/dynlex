@@ -2,26 +2,26 @@ import lib/std.dl
 
 class:
     patterns:
-        first box
+        [a|] first box
     members:
-        payload as integer
+        payload as an integer
 
 class:
     patterns:
-        second box
+        [a|] second box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:value}:
     replacement:
-        @intrinsic("construct", first box, value)
+        @intrinsic("construct", a first box, value)
 
 implicitly convert {first box:value}:
     replacement:
-        @intrinsic("construct", second box, the payload of value)
+        @intrinsic("construct", a second box, the payload of value)
 
-function unwrap {second box:value}:
+function the payload unwrapped from {second box:value}:
     execute:
         return the payload of value
 
-print unwrap 5 as line
+print (the payload unwrapped from 5) as a line

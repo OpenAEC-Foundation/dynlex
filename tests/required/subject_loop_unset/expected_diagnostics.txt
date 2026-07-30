@@ -1,5 +1,5 @@
 lib/std.dl:9-30: Error: the subject depends on which control-flow path executes
-  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' with arguments [i8*] -> undeduced lib/std.dl:9-30
-  note: while inferring call 'print it' -> undeduced tests/required/subject_loop_unset/main.dl:15-17
-  note: while inferring call 'print it' with arguments [unresolved(?)] -> undeduced tests/required/subject_loop_unset/main.dl:9-17
-  note: while inferring call 'choose subject in loop false' with arguments [a boolean] -> undeduced tests/required/subject_loop_unset/main.dl:1-29
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/std.dl:9-30
+  note: while inferring call 'print it' -> an unresolved value tests/required/subject_loop_unset/main.dl:15-17
+  note: while inferring call 'print it' with arguments [an unresolved value] -> an unresolved value tests/required/subject_loop_unset/main.dl:9-17
+  note: while inferring call 'choose subject in loop false' with arguments [a boolean] -> an unresolved value tests/required/subject_loop_unset/main.dl:1-29

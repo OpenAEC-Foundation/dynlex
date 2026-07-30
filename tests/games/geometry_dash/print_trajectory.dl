@@ -1,14 +1,14 @@
 import lib/array.dl
 import tests/games/geometry_dash/generator.dl
 
-set count to 24
-set levels to allocate count slots of an integer
-set jump_ms to allocate count slots of an integer
-set slide_ms to allocate count slots of an integer
+function report step {integer:index} of {route plan:plan}:
+	replacement:
+		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "step=%ld level=%ld jump_ms=%ld slide_ms=%ld\n", index as a 64 bit integer, (the item at index in plan's levels) as a 64 bit integer, (the item at index in plan's jumps) as a 64 bit integer, (the item at index in plan's slides) as a 64 bit integer)
 
-fill plan levels jump_ms slide_ms with count count using seed 1337
+set plan to a route plan with 24 steps
+fill plan using seed 1337
 
-set i to 0
-loop while i < count:
-	discard @intrinsic("variadic call", "libc", "printf", an integer, 1, "step=%ld level=%ld jump_ms=%ld slide_ms=%ld\n", i as a 64 bit integer, item i of levels as a 64 bit integer, item i of jump_ms as a 64 bit integer, item i of slide_ms as a 64 bit integer)
-	set i to i + 1
+set index to 0
+loop while index < plan's count:
+	report step index of plan
+	increment index

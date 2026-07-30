@@ -1,11 +1,13 @@
 #pragma once
 #include "codeLine.h"
+#include "dependentTypeConstraint.h"
 #include "pattern_tree/patternElement.h"
 #include "range.h"
 #include "sectionType.h"
 #include <climits>
 #include <functional>
 #include <string_view>
+#include <unordered_set>
 struct Section;
 struct Instantiation;
 struct PatternTreeNode;
@@ -35,10 +37,13 @@ struct PatternDefinition {
 	SectionType indexedTreeType = SectionType::Count;
 	std::vector<std::vector<PatternElement>> indexedPaths;
 	std::vector<std::vector<PatternTreeNode *>> indexedNodePaths;
+	// Definition-time-validated parameter domains for every authored canonical path.
+	std::vector<PatternPathSignature> signaturePaths;
 	// the exact trie endpoint nodes this definition currently ends at
 	std::vector<PatternTreeNode *> endNodes;
-	// precedence level (higher = evaluated first). 0 = no precedence declared.
-	int precedence = 0;
+	// Definitions which this pattern must bind before. Precedence is a partial
+	// order: sharing a predecessor does not create an ordering between peers.
+	std::unordered_set<PatternDefinition *> precedenceSuccessors;
 	PatternDefinition(Range range, Section *section);
 
 	std::string toString() const {
@@ -69,6 +74,7 @@ struct PatternDefinition {
 bool isPatternDefinitionVisibleFromSource(const PatternDefinition &definition, const lsp::SourceFile &sourceFile);
 bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const PatternDefinition &right);
 bool patternDefinitionComesBefore(const PatternDefinition *left, const PatternDefinition *right);
+Range patternElementTypeConstraintRange(const PatternDefinition &definition, const DefinitionPatternElement &element);
 void mutatePatternDefinition(ParseContext &context, PatternDefinition &definition, const std::function<void()> &mutation);
 void promoteImplicitPatternParameter(
 	ParseContext &context, PatternDefinition &definition, DefinitionPatternElement &element, const Range &useRange
