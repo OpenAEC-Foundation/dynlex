@@ -78,9 +78,9 @@ Corpus used for these lessons:
 - If the user says report first, report first.
 - When an agent violates stated workflow, John treats that as a serious failure.
 
-10. Actions are void; value-producing phrases must be consumed.
+10. Actions produce nothing; value-producing phrases must be consumed.
 
-- Wrap a value-returning intrinsic in a plain-English, void action and consume its result inside that implementation.
+- Wrap a value-returning intrinsic in a plain-English action that produces nothing and consume its result inside that implementation.
 - Raw `discard` is limited to replacement-level implementation code. Callers should say what action they intend instead of discarding the result of an action-shaped phrase.
 - Library code should not rely on the compiler to implicitly drop return values from calls like `glfwInit`, `fseek`, `fread`, or `fclose`.
 

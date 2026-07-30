@@ -12,7 +12,7 @@ function an empty set of {type:kind}:
     execute:
         set values to an empty list of kind
         set initial to @intrinsic("construct", a unique set, values)
-        allocate 1 slots of initial and set result to it
+        allocate one slot of initial and set result to it
         return result
 
 function the size of {a pointer to a unique set:items}:
@@ -25,7 +25,7 @@ function {a pointer to a unique set:items} contains value:
 
 function {a pointer to a unique set:items} does not contain value:
     execute:
-        return the inverse of (the values of items contains value)
+        return the values of items does not contain value
 
 function add value to {a pointer to a unique set:items}:
     execute:

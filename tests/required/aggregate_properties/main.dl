@@ -3,12 +3,12 @@ import lib/geometry.dl
 set location to @intrinsic(
     "construct",
     a point,
-    @intrinsic("construct", an aggregate of 3 float values, 1.0, 2.0, 3.0)
+    @intrinsic("construct", an aggregate of 3 floating-point number values, 1.0, 2.0, 3.0)
 )
 set pigment to @intrinsic(
     "construct",
     a color,
-    @intrinsic("construct", an aggregate of 4 float values, 0.1, 0.2, 0.3, 1.0)
+    @intrinsic("construct", an aggregate of 4 floating-point number values, 0.1, 0.2, 0.3, 1.0)
 )
 
 increase the x coordinate of location by 4.0

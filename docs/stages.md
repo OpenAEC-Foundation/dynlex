@@ -61,7 +61,7 @@ Example:
 print value as a line
 ```
 
-We do not know that `print value` returns `void` and cannot be used as an argument for `as a line`.
+We do not know that `print value` returns `nothing` and cannot be used as an argument for `as a line`.
 
 Since we are fully agnostic, we will make all left expressions subexpressions:
 
@@ -142,7 +142,7 @@ set count to 1 and increment count
 We infer:
 
 ```dynlex
-{void:first} and {void:second}
+{nothing:first} and {nothing:second}
 ```
 
 We infer the arguments first, so we infer `first` and `second` after. `count` has a type when we get to `second`.
@@ -152,7 +152,7 @@ We infer the arguments first, so we infer `first` and `second` after. `count` ha
 - Now we infer the `set variable to value` flex.
 - We infer the `store` intrinsic. We resolve `variable` and `value`.
 - We set the value of `variable` to `1`.
-- We set the result of this `store` intrinsic to `void`.
+- We set the result of this `store` intrinsic to `nothing`.
 - We infer `increment`.
 - We infer the second `count`, which reads `1` from the variable.
 - We resolve `value`.
@@ -166,7 +166,7 @@ When processing a function call, we infer that function right away so we can kno
 
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
 
-`(print value) as a line` is incorrect, since `void` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `void`.
+`(print value) as a line` is incorrect, since `nothing` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `nothing`.
 
 We know this because we instantiate `print value` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
 
@@ -184,7 +184,7 @@ The only exception is the `store` intrinsic: it takes a value whose first argume
 
 We prefer sub-first, aka `left = subexpression`, just like pattern matching.
 
-A function's return value may never be unused. This prevents wrong groupings. Public value-producing patterns therefore use noun, adjective, or predicate phrases whose values are consumed by their surrounding sentence. Imperative action patterns return `void`. Only replacement-level compiler or library code may intentionally drop a raw intrinsic result with the `discard` intrinsic.
+A function's return value may never be unused. This prevents wrong groupings. Public value-producing patterns therefore use noun, adjective, or predicate phrases whose values are consumed by their surrounding sentence. Imperative action patterns return `nothing`. Only replacement-level compiler or library code may intentionally drop a raw intrinsic result with the `discard` intrinsic.
 
 Enclosed expressions like `1 + 4` in `the minimum of 1 + 4 and 5 + 6` are inferred first. When an ordering in the parent expression fails, different orderings in enclosed expressions are tried.
 

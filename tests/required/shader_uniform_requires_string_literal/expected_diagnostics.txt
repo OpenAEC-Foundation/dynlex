@@ -1,2 +1,2 @@
 tests/required/shader_uniform_requires_string_literal/main.dl:37-38: Error: shader uniform requires a string literal name
-  note: while inferring call 'ignore @intrinsic("shader uniform", 1)' with arguments [unresolved(?)] -> undeduced tests/required/shader_uniform_requires_string_literal/main.dl:1-39
+  note: while inferring call 'ignore @intrinsic("shader uniform", 1)' with arguments [an unresolved value] -> an unresolved value tests/required/shader_uniform_requires_string_literal/main.dl:1-39

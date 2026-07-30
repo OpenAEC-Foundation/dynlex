@@ -14,7 +14,7 @@ function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
-function [a|] {fixed integer:bits} bit float:
+function [a|] {fixed integer:bits} bit floating-point number:
     replacement:
         @intrinsic("type", "float", bits)
 
@@ -26,19 +26,19 @@ function [a|] constraint:
     replacement:
         @intrinsic("type", "constraint")
 
-function any:
+function a value:
     replacement:
         @intrinsic("type", "any")
 
 function fixed:
     replacement:
-        @intrinsic("fix", any)
+        @intrinsic("fix", a value)
 
 function fixed value:
     replacement:
         @intrinsic("fix", value)
 
-function [a|] {fixed integer:bits} bit any:
+function [a|] {fixed integer:bits} bit value:
     replacement:
         @intrinsic("type", "any", bits)
 
@@ -46,7 +46,7 @@ function [a|] pointer to pointed:
     replacement:
         @intrinsic("add pointer depth", pointed)
 
-function [an|] array containing {fixed integer:size} element [item|items]:
+function [an|] array containing {fixed integer:size} [item|items] of {type:element}:
     replacement:
         @intrinsic("array", size, element)
 
@@ -58,15 +58,15 @@ function the captured value of {fixed:value}:
     execute:
         return 1
 
-function the description of {a 64 bit any:value}:
+function the description of {a 64 bit value:value}:
     execute:
         return 64
 
-function the description of pointer {a pointer to any:value}:
+function the description of pointer {a pointer to a value:value}:
     execute:
         return 8
 
-function the description of pair {an array containing 2 any items:value}:
+function the description of pair {an array containing 2 items of a value:value}:
     execute:
         return 2
 
@@ -77,6 +77,6 @@ function print value:
 print the captured value of 12
 print the captured value of an integer
 print the description of (1 as a 64 bit integer)
-print the description of (1 as a 64 bit float)
+print the description of (1 as a 64 bit floating-point number)
 print the description of pointer "value"
 print the description of pair [1, 2]

@@ -15,7 +15,7 @@ function the vector type:
     replacement:
         a GPU vector if the build target is GPU, else a CPU vector
 
-function a new vector with x {any:horizontal}, y {any:vertical} and z {any:depth}:
+function a new vector with x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
     replacement:
         @intrinsic("construct", the vector type, horizontal, vertical, depth)
 

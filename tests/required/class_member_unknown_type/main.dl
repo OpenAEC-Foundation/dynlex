@@ -1,0 +1,9 @@
+class:
+    patterns:
+        [a|] record
+    members:
+        value as a mystery
+
+function inspect {a record:value}:
+    replacement:
+        @intrinsic("discard", value)

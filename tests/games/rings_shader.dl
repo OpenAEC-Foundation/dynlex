@@ -31,4 +31,4 @@ set the red channel of color to (color's red * vignette)
 set the green channel of color to (color's green * vignette)
 set the blue channel of color to (color's blue * vignette)
 
-set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha
+set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of color's alpha

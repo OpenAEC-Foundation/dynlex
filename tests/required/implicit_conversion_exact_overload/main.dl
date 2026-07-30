@@ -4,7 +4,7 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:number}:
     replacement:
@@ -18,4 +18,4 @@ function the description of {a number box:value}:
     execute:
         return 2
 
-print (the description of 9) as line
+print (the description of 9) as a line

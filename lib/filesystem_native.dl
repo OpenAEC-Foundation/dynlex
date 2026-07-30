@@ -101,7 +101,7 @@ local function {native filesystem path:path} is invalid:
 
 local class:
     patterns:
-        [file|] metadata support
+        [a|] file metadata support record
     members:
         mode as an integer
         Windows attributes as an integer
@@ -162,13 +162,25 @@ function {file system entry:entry} is a directory:
     replacement:
         entry's directory kind
 
+function {file system entry:entry} is not a directory:
+    replacement:
+        entry's directory kind = false
+
 function {file system entry:entry} is a symbolic link:
     replacement:
         entry's symbolic link kind
 
+function {file system entry:entry} is not a symbolic link:
+    replacement:
+        entry's symbolic link kind = false
+
 function {file system entry:entry} has another filesystem kind:
     replacement:
         entry's other kind
+
+function {file system entry:entry} does not have another filesystem kind:
+    replacement:
+        entry's other kind = false
 
 function {file system entry:entry}'s mode is supported:
     replacement:
@@ -194,11 +206,11 @@ function {file system entry:entry}'s access time is unsupported:
     replacement:
         the inverse of entry's access time support
 
-function {file system entry:entry}'s modification time is supported:
+function {file system entry:entry} supports modification times:
     replacement:
         entry's modification time support
 
-function {file system entry:entry}'s modification time is unsupported:
+function {file system entry:entry} does not support modification times:
     replacement:
         the inverse of entry's modification time support
 
@@ -234,9 +246,17 @@ function {file system staging file:staging} was committed:
     replacement:
         staging's commitment
 
+function {file system staging file:staging} was not committed:
+    replacement:
+        staging's commitment = false
+
 function {file system staging file:staging} is durable:
     replacement:
         staging's durability
+
+function {file system staging file:staging} is not durable:
+    replacement:
+        staging's durability = false
 
 function {file system staging file:staging}'s cleanup succeeded:
     replacement:
@@ -391,7 +411,7 @@ function {file identity:left} identifies the same file as {file identity:right}:
             return false
         return left's representation = right's representation
 
-function the file system entry at {any:path}:
+function the file system entry at {a value:path}:
     execute:
         set prepared to a native filesystem path for path
         if prepared is invalid:
@@ -399,7 +419,7 @@ function the file system entry at {any:path}:
             return a supported file system entry failure reporting message
 
         set kind to 0
-        set support to @intrinsic("construct", file metadata support, 0, 0, 0, 0, 0, 0)
+        set support to @intrinsic("construct", a file metadata support record, 0, 0, 0, 0, 0, 0)
         set mode to 0 as a word sized integer
         set attributes to 0 as a word sized integer
         set restoration to 0 as a word sized integer

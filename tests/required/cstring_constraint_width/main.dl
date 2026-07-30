@@ -4,7 +4,7 @@ function the selected overload for {C string:value}:
     execute:
         return 1
 
-function the selected overload for {any:value}:
+function the selected overload for {a value:value}:
     execute:
         return 2
 

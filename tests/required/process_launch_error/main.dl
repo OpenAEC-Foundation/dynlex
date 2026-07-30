@@ -1,9 +1,5 @@
 import lib/process.dl
 
-function {process result:result} failed to launch:
-    replacement:
-        the inverse of (result was launched)
-
 set command to a process command for "dynlex-executable-that-does-not-exist-72f4a7"
 launch command and set child to it
 print whether child failed to launch as a line

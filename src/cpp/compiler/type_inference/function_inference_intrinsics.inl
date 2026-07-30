@@ -15,8 +15,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!promoteIntrinsicArithmetic(arithmeticOperation, leftType, rightType, result)) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(leftType, context.parseContext)},
-						 {"right_type", typeToUserName(rightType, context.parseContext)}}
+						{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
 					);
 					break;
 				}
@@ -35,7 +34,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!isBitwiseOperandType(valueType)) {
 					setConfiguredTypeFailure(
 						expr->range, "bitwise operator operand invalid", "message",
-						{{"operator", expr->intrinsicName}, {"value_type", typeToUserName(valueType, context.parseContext)}}
+						{{"operator", expr->intrinsicName}, {"value_type", typeToUserName(valueType)}}
 					);
 					break;
 				}
@@ -48,8 +47,8 @@ case Expression::Kind::IntrinsicCall: {
 					setConfiguredTypeFailure(
 						expr->range, "bitwise operator operands invalid", "message",
 						{{"operator", expr->intrinsicName},
-						 {"left_type", typeToUserName(leftType, context.parseContext)},
-						 {"right_type", typeToUserName(rightType, context.parseContext)}}
+						 {"left_type", typeToUserName(leftType)},
+						 {"right_type", typeToUserName(rightType)}}
 					);
 					break;
 				}
@@ -64,8 +63,8 @@ case Expression::Kind::IntrinsicCall: {
 					setConfiguredTypeFailure(
 						expr->range, "logical operator operands invalid", "message",
 						{{"operator", expr->intrinsicName},
-						 {"left_type", typeToUserName(leftType, context.parseContext)},
-						 {"right_type", typeToUserName(rightType, context.parseContext)}}
+						 {"left_type", typeToUserName(leftType)},
+						 {"right_type", typeToUserName(rightType)}}
 					);
 					break;
 				}
@@ -74,7 +73,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!isLogicalOperandType(valueType)) {
 					setConfiguredTypeFailure(
 						expr->range, "logical operator operand invalid", "message",
-						{{"operator", "not"}, {"value_type", typeToUserName(valueType, context.parseContext)}}
+						{{"operator", "not"}, {"value_type", typeToUserName(valueType)}}
 					);
 					break;
 				}
@@ -92,8 +91,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!pointerEquality && !promotable) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(leftType, context.parseContext)},
-						 {"right_type", typeToUserName(rightType, context.parseContext)}}
+						{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
 					);
 					break;
 				}
@@ -135,7 +133,7 @@ case Expression::Kind::IntrinsicCall: {
 					if (!DataType::supportsRuntimeConversion(retType, programReturnType)) {
 						std::string detail = renderConfiguredMessage(
 							syntaxConfigForRange(context.parseContext, returnRange), "program return value invalid", "message",
-							{{"value_type", typeToUserName(retType, context.parseContext)}}
+							{{"value_type", typeToUserName(retType)}}
 						);
 						failWithDetail(returnRange, detail);
 						break;
@@ -168,7 +166,7 @@ case Expression::Kind::IntrinsicCall: {
 																				: "loop while condition";
 					setConfiguredTypeFailure(
 						expr->range, "logical operator operand invalid", "message",
-						{{"operator", operatorLabel}, {"value_type", typeToUserName(operandType, context.parseContext)}}
+						{{"operator", operatorLabel}, {"value_type", typeToUserName(operandType)}}
 					);
 					break;
 				}
@@ -215,8 +213,7 @@ case Expression::Kind::IntrinsicCall: {
 							break;
 						setConfiguredTypeFailure(
 							expr->range, "store at value incompatible", "message",
-							{{"value_type", typeToUserName(valueType, context.parseContext)},
-							 {"element_type", typeToUserName(elementType, context.parseContext)}}
+							{{"value_type", typeToUserName(valueType)}, {"element_type", typeToUserName(elementType)}}
 						);
 						break;
 					}
@@ -251,7 +248,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!DataType::supportsRuntimeConversion(outputType, shaderVector)) {
 					setConfiguredTypeFailure(
 						expr->range, "shader output requires four numbers", "message",
-						{{"value_type", typeToUserName(outputType, context.parseContext)}}
+						{{"value_type", typeToUserName(outputType)}}
 					);
 					break;
 				}
@@ -386,54 +383,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (retTypeRef.kind == DataType::Kind::Type)
 					expr->type = retTypeRef.toReferencedType();
 			} else if (kind == IntrinsicKind::Function) {
-				Expression *functionExpr = resolveThroughFlexBindings(expr->arguments[1]);
-				requireCompilerInvariant(
-					functionExpr != nullptr, "function intrinsic lost its argument expression during type inference"
-				);
-				if (!std::holds_alternative<std::string>(functionExpr->literalValue)) {
-					setConfiguredTypeFailure(functionExpr->range, "function intrinsic requires string literal");
-					if (!context.trial)
-						context.addDiagnosticWithCurrentTrace(Diagnostic(
-							context.parseContext, Diagnostic::Level::Error, "function intrinsic requires string literal",
-							functionExpr->range
-						));
-					break;
-				}
-				std::string signature = std::get<std::string>(functionExpr->literalValue);
-				std::vector<CallableFunctionMatch> callableMatches = findCallableFunctionsBySignature(
-					context.parseContext, signature, functionExpr->range.line ? functionExpr->range.line->sourceFile : nullptr
-				);
-				if (callableMatches.empty()) {
-					setConfiguredTypeFailure(
-						functionExpr->range, "unknown function reference", "message", {{"signature", signature}}
-					);
-					if (!context.trial)
-						context.addDiagnosticWithCurrentTrace(Diagnostic(
-							context.parseContext, Diagnostic::Level::Error, "unknown function reference", functionExpr->range,
-							"signature", signature
-						));
-					break;
-				}
-				if (callableMatches.size() > 1) {
-					setConfiguredTypeFailure(
-						functionExpr->range, "ambiguous function reference", "message", {{"signature", signature}}
-					);
-					if (!context.trial)
-						context.addDiagnosticWithCurrentTrace(Diagnostic(
-							context.parseContext, Diagnostic::Level::Error, "ambiguous function reference", functionExpr->range,
-							"signature", signature
-						));
-					break;
-				}
-				Instantiation *callableInstantiation =
-					ensureCallableFunctionInstantiationInferred(callableMatches.front(), context, functionExpr->range);
-				if (!callableInstantiation)
-					break;
-				expr->selectedCallableDefinition = callableMatches.front().definition;
-				expr->selectedCallablePathIndex = callableMatches.front().pathIndex;
-				expr->selectedInstantiation = callableInstantiation;
-				expr->type = {DataType::Kind::Int, 1};
-				expr->type.pointerDepth = 1;
+#include "intrinsics/function_reference_inference.inl"
 			} else if (kind == IntrinsicKind::Cast) {
 				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType typeArgType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
@@ -460,15 +410,13 @@ case Expression::Kind::IntrinsicCall: {
 						break;
 					if (!isValidCastRuntimeType(valueType)) {
 						setConfiguredTypeFailure(
-							expr->range, "invalid cast source type", "message",
-							{{"source_type", typeToUserName(valueType, context.parseContext)}}
+							expr->range, "invalid cast source type", "message", {{"source_type", typeToUserName(valueType)}}
 						);
 						break;
 					}
 					setConfiguredTypeFailure(
 						expr->range, "unsupported cast", "message",
-						{{"from_type", typeToUserName(valueType, context.parseContext)},
-						 {"to_type", typeToUserName(requestedType, context.parseContext)}}
+						{{"from_type", typeToUserName(valueType)}, {"to_type", typeToUserName(requestedType)}}
 					);
 					break;
 				}
@@ -548,7 +496,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!isLogicalOperandType(conditionType)) {
 					setConfiguredTypeFailure(
 						expr->range, "logical operator operand invalid", "message",
-						{{"operator", "select condition"}, {"value_type", typeToUserName(conditionType, context.parseContext)}}
+						{{"operator", "select condition"}, {"value_type", typeToUserName(conditionType)}}
 					);
 					break;
 				}
@@ -575,8 +523,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!mergeSelectBranchTypes(trueType, falseType, mergedType)) {
 					setConfiguredTypeFailure(
 						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(trueType, context.parseContext)},
-						 {"right_type", typeToUserName(falseType, context.parseContext)}}
+						{{"left_type", typeToUserName(trueType)}, {"right_type", typeToUserName(falseType)}}
 					);
 					break;
 				}
@@ -1003,7 +950,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!expr->type.isDeduced() && !fieldName.empty()) {
 					setConfiguredTypeFailure(
 						expr->range, "class missing property", "message",
-						{{"type", typeToUserName(instType, context.parseContext)}, {"property", fieldName}}
+						{{"type", typeToUserName(instType)}, {"property", fieldName}}
 					);
 				}
 			} else {

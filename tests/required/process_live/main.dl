@@ -1,13 +1,5 @@
 import lib/process.dl
 
-function {process wait result:status} has no completion report:
-    replacement:
-        the inverse of (status reports completion)
-
-function {process wait result:status} has no termination report:
-    replacement:
-        the inverse of (status reports termination)
-
 function the live process test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
@@ -21,7 +13,7 @@ launch command and set child to it
 print whether child was launched as a line
 poll child and set pending to it
 print whether pending succeeded as a line
-print whether pending has no completion report as a line
+print whether pending does not report completion as a line
 read the available standard output of child and set initial to it
 print whether initial succeeded as a line
 print whether (initial's contents = "") as a line
@@ -50,7 +42,7 @@ wait for child and set status to it
 print whether status succeeded as a line
 print whether status reports completion as a line
 print status's exit code as a line
-print whether status has no termination report as a line
+print whether status does not report termination as a line
 
 set delay to a process command for the live process test interpreter
 add "-c" as an argument to delay

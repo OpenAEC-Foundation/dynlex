@@ -603,7 +603,7 @@ if (kind == IntrinsicKind::Property) {
 
 	if (!classDef) {
 		context.diagnostics.push_back(Diagnostic(
-			context, Diagnostic::Level::Error, "class has no properties", args[1]->range, "type", instType.toString()
+			context, Diagnostic::Level::Error, "class has no properties", args[1]->range, "type", typeToUserName(instType)
 		));
 		return CodegenResult::failure();
 	}
@@ -619,7 +619,7 @@ if (kind == IntrinsicKind::Property) {
 
 	if (fieldIdx == -1) {
 		context.diagnostics.push_back(Diagnostic(
-			context, Diagnostic::Level::Error, "class missing property", args[1]->range, "type", instType.toString(),
+			context, Diagnostic::Level::Error, "class missing property", args[1]->range, "type", typeToUserName(instType),
 			"property", fieldName
 		));
 		return CodegenResult::failure();

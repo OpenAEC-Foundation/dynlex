@@ -2,127 +2,127 @@
 
 import lib/json_rpc_values.dl
 
-function the default lsp client capabilities:
+function the default LSP client capabilities:
     execute:
-        set encodings to a new json rpc array
-        add a new json rpc text for "utf-16" to the JSON array encodings
-        set general to a new json rpc object
-        add json rpc member "positionEncodings" containing encodings to general
-        set synchronization to a new json rpc object
-        add json rpc member "dynamicRegistration" containing a new json rpc boolean for false to synchronization
-        add json rpc member "willSave" containing a new json rpc boolean for false to synchronization
-        add json rpc member "willSaveWaitUntil" containing a new json rpc boolean for false to synchronization
-        add json rpc member "didSave" containing a new json rpc boolean for true to synchronization
-        set document to a new json rpc object
-        add json rpc member "synchronization" containing synchronization to document
-        set result to a new json rpc object
-        add json rpc member "general" containing general to result
-        add json rpc member "textDocument" containing document to result
+        set encodings to a new JSON-RPC array
+        add a new JSON-RPC text for "utf-16" to the JSON array encodings
+        set general to a new JSON-RPC object
+        add JSON-RPC member "positionEncodings" containing encodings to general
+        set synchronization to a new JSON-RPC object
+        add JSON-RPC member "dynamicRegistration" containing a new JSON-RPC boolean for false to synchronization
+        add JSON-RPC member "willSave" containing a new JSON-RPC boolean for false to synchronization
+        add JSON-RPC member "willSaveWaitUntil" containing a new JSON-RPC boolean for false to synchronization
+        add JSON-RPC member "didSave" containing a new JSON-RPC boolean for true to synchronization
+        set document to a new JSON-RPC object
+        add JSON-RPC member "synchronization" containing synchronization to document
+        set result to a new JSON-RPC object
+        add JSON-RPC member "general" containing general to result
+        add JSON-RPC member "textDocument" containing document to result
         return result
 
-function an lsp position at line {integer:line} and character {integer:character}:
+function an LSP position at line {integer:line} and character {integer:character}:
     execute:
         if line < 0 or character < 0:
             @intrinsic("call", "libc", "abort", nothing)
-        set node to a new json rpc object
-        add json rpc member "line" containing a new json rpc integer for line to node
-        add json rpc member "character" containing a new json rpc integer for character to node
+        set node to a new JSON-RPC object
+        add JSON-RPC member "line" containing a new JSON-RPC integer for line to node
+        add JSON-RPC member "character" containing a new JSON-RPC integer for character to node
         return node
 
-function an lsp range from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end}:
+function an LSP range from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end}:
     execute:
-        set node to a new json rpc object
-        set first to an lsp position at line beginning and character start
-        set last to an lsp position at line ending and character end
-        add json rpc member "start" containing first to node
-        add json rpc member "end" containing last to node
+        set node to a new JSON-RPC object
+        set first to an LSP position at line beginning and character start
+        set last to an LSP position at line ending and character end
+        add JSON-RPC member "start" containing first to node
+        add JSON-RPC member "end" containing last to node
         return node
 
-function an lsp text document identifier for {string:uri}:
+function an LSP text document identifier for {string:uri}:
     execute:
-        set node to a new json rpc object
-        add json rpc member "uri" containing a new json rpc text for uri to node
+        set node to a new JSON-RPC object
+        add JSON-RPC member "uri" containing a new JSON-RPC text for uri to node
         return node
 
-function an lsp versioned text document identifier for {string:uri} at version {integer:version}:
+function an LSP versioned text document identifier for {string:uri} at {integer:version}:
     execute:
-        set node to an lsp text document identifier for uri
-        add json rpc member "version" containing a new json rpc integer for version to node
+        set node to an LSP text document identifier for uri
+        add JSON-RPC member "version" containing a new JSON-RPC integer for version to node
         return node
 
-function lsp initialization parameters for root uri {string:root} with capabilities {a pointer to a JSON value:capabilities}:
+function the LSP initialization parameters rooted at {string:root} with {a pointer to a JSON value:capabilities}:
     execute:
-        set client to a new json rpc object
-        add json rpc member "name" containing a new json rpc text for "DynLex" to client
-        set result to a new json rpc object
-        add json rpc member "processId" containing a new json rpc null to result
-        add json rpc member "clientInfo" containing client to result
-        add json rpc member "rootUri" containing a new json rpc text for root to result
-        add json rpc member "capabilities" containing a copy of json rpc node capabilities to result
+        set client to a new JSON-RPC object
+        add JSON-RPC member "name" containing a new JSON-RPC text for "DynLex" to client
+        set result to a new JSON-RPC object
+        add JSON-RPC member "processId" containing a new JSON-RPC null to result
+        add JSON-RPC member "clientInfo" containing client to result
+        add JSON-RPC member "rootUri" containing a new JSON-RPC text for root to result
+        add JSON-RPC member "capabilities" containing a copy of JSON-RPC node capabilities to result
         return result
 
-function lsp initialization parameters with capabilities {a pointer to a JSON value:capabilities}:
+function the LSP initialization parameters with {a pointer to a JSON value:capabilities}:
     execute:
-        set client to a new json rpc object
-        add json rpc member "name" containing a new json rpc text for "DynLex" to client
-        set result to a new json rpc object
-        add json rpc member "processId" containing a new json rpc null to result
-        add json rpc member "clientInfo" containing client to result
-        add json rpc member "rootUri" containing a new json rpc null to result
-        add json rpc member "capabilities" containing a copy of json rpc node capabilities to result
+        set client to a new JSON-RPC object
+        add JSON-RPC member "name" containing a new JSON-RPC text for "DynLex" to client
+        set result to a new JSON-RPC object
+        add JSON-RPC member "processId" containing a new JSON-RPC null to result
+        add JSON-RPC member "clientInfo" containing client to result
+        add JSON-RPC member "rootUri" containing a new JSON-RPC null to result
+        add JSON-RPC member "capabilities" containing a copy of JSON-RPC node capabilities to result
         return result
 
-function lsp document opening parameters for uri {string:uri} language {string:language} version {integer:version} and text {string:contents}:
+function the LSP document opening parameters for URI {string:uri}, language {string:language}, version {integer:version} and text {string:contents}:
     execute:
-        set descriptor to a new json rpc object
-        add json rpc member "uri" containing a new json rpc text for uri to descriptor
-        add json rpc member "languageId" containing a new json rpc text for language to descriptor
-        add json rpc member "version" containing a new json rpc integer for version to descriptor
-        add json rpc member "text" containing a new json rpc text for contents to descriptor
-        set result to a new json rpc object
-        add json rpc member "textDocument" containing descriptor to result
+        set descriptor to a new JSON-RPC object
+        add JSON-RPC member "uri" containing a new JSON-RPC text for uri to descriptor
+        add JSON-RPC member "languageId" containing a new JSON-RPC text for language to descriptor
+        add JSON-RPC member "version" containing a new JSON-RPC integer for version to descriptor
+        add JSON-RPC member "text" containing a new JSON-RPC text for contents to descriptor
+        set result to a new JSON-RPC object
+        add JSON-RPC member "textDocument" containing descriptor to result
         return result
 
-function lsp document closing parameters for uri {string:uri}:
+function the LSP document closing parameters for URI {string:uri}:
     execute:
-        set result to a new json rpc object
-        set descriptor to an lsp text document identifier for uri
-        add json rpc member "textDocument" containing descriptor to result
+        set result to a new JSON-RPC object
+        set descriptor to an LSP text document identifier for uri
+        add JSON-RPC member "textDocument" containing descriptor to result
         return result
 
-function lsp document saving parameters for uri {string:uri}:
+function the LSP document saving parameters for {string:uri}:
     execute:
-        set result to a new json rpc object
-        set descriptor to an lsp text document identifier for uri
-        add json rpc member "textDocument" containing descriptor to result
+        set result to a new JSON-RPC object
+        set descriptor to an LSP text document identifier for uri
+        add JSON-RPC member "textDocument" containing descriptor to result
         return result
 
-function lsp document saving parameters for uri {string:uri} with text {string:contents}:
+function the LSP document saving parameters for {string:uri} with text {string:contents}:
     execute:
-        set result to lsp document saving parameters for uri uri
-        add json rpc member "text" containing a new json rpc text for contents to result
+        set result to the LSP document saving parameters for uri
+        add JSON-RPC member "text" containing a new JSON-RPC text for contents to result
         return result
 
-function a full lsp content change containing {string:contents}:
+function a full LSP content change containing {string:contents}:
     execute:
-        set node to a new json rpc object
-        add json rpc member "text" containing a new json rpc text for contents to node
+        set node to a new JSON-RPC object
+        add JSON-RPC member "text" containing a new JSON-RPC text for contents to node
         return node
 
-function a ranged lsp content change from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end} containing {string:contents}:
+function a ranged LSP content change from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end} containing {string:contents}:
     execute:
-        set node to a new json rpc object
-        set span to an lsp range from line beginning and character start to line ending and character end
-        add json rpc member "range" containing span to node
-        add json rpc member "text" containing a new json rpc text for contents to node
+        set node to a new JSON-RPC object
+        set span to an LSP range from line beginning and character start to line ending and character end
+        add JSON-RPC member "range" containing span to node
+        add JSON-RPC member "text" containing a new JSON-RPC text for contents to node
         return node
 
-function lsp document change parameters for uri {string:uri} version {integer:version} containing {a pointer to a JSON value:change}:
+function the LSP document change parameters for {string:uri} at {integer:version} containing {a pointer to a JSON value:change}:
     execute:
-        set changes to a new json rpc array
+        set changes to a new JSON-RPC array
         add change to the JSON array changes
-        set result to a new json rpc object
-        set descriptor to an lsp versioned text document identifier for uri at version version
-        add json rpc member "textDocument" containing descriptor to result
-        add json rpc member "contentChanges" containing changes to result
+        set result to a new JSON-RPC object
+        set descriptor to an LSP versioned text document identifier for uri at version
+        add JSON-RPC member "textDocument" containing descriptor to result
+        add JSON-RPC member "contentChanges" containing changes to result
         return result

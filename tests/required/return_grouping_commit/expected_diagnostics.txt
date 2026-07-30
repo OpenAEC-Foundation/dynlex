@@ -1,5 +1,5 @@
 tests/required/return_grouping_commit/main.dl:9-34: Warning: Expression 'return value - 1 adjusted' has multiple valid operand groupings. Using 'return ((value - 1) adjusted)' instead of 'return (value - (1 adjusted))'.
-  note: while inferring call 'return value - 1 adjusted' with arguments [a 32 bit integer] -> nothing tests/required/return_grouping_commit/main.dl:9-34
-  note: while inferring call ' the tested form of 4' with arguments [a 32 bit integer] -> undeduced tests/required/return_grouping_commit/main.dl:27-48
-  note: while inferring intrinsic 'array' in 'ignore @intrinsic("array", the tested form of 4, a byte)' with arguments [i8*, unresolved(?), unresolved(?)] -> undeduced tests/required/return_grouping_commit/main.dl:8-57
-  note: while inferring call 'ignore @intrinsic("array", the tested form of 4, a byte)' with arguments [unresolved(?)] -> undeduced tests/required/return_grouping_commit/main.dl:1-57
+  note: while inferring call 'return value - 1 adjusted' with arguments [a 32-bit integer] -> nothing tests/required/return_grouping_commit/main.dl:9-34
+  note: while inferring call ' the tested form of 4' with arguments [a 32-bit integer] -> an unresolved value tests/required/return_grouping_commit/main.dl:27-48
+  note: while inferring intrinsic 'array' in 'ignore @intrinsic("array", the tested form of 4, a byte)' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/return_grouping_commit/main.dl:8-57
+  note: while inferring call 'ignore @intrinsic("array", the tested form of 4, a byte)' with arguments [an unresolved value] -> an unresolved value tests/required/return_grouping_commit/main.dl:1-57

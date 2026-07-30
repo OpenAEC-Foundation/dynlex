@@ -4,9 +4,9 @@ set integers to [7, 8]
 set selected to @intrinsic("extract element", integers, 1)
 
 set source to [1, 2, 3]
-set lanes to source as @intrinsic("vector", 3, a 32 bit float)
+set lanes to source as @intrinsic("vector", 3, a 32 bit floating-point number)
 set extracted to @intrinsic("extract element", lanes, 1)
-set recovered to lanes as a 32 bit float array of 3 items
+set recovered to lanes as a 32 bit floating-point number array of 3 items
 
 ignore @intrinsic(
     "variadic call",

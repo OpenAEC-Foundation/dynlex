@@ -76,6 +76,10 @@ struct Diagnostic {
 	}
 };
 
+Diagnostic unknownTypeConstraintDiagnostic(
+	const ParseContext &context, Range range, std::string_view constraint
+);
+
 template <> inline bool stringToEnum<Diagnostic::Level>(std::string_view levelName, Diagnostic::Level &result) {
 	if (levelName == "Info") {
 		result = Diagnostic::Level::Info;

@@ -3,7 +3,7 @@ import lib/array.dl
 
 class:
 	patterns:
-		route plan
+		[a|] route plan
 	members:
 		count, levels, jumps, slides
 
@@ -12,7 +12,7 @@ function a route plan with {integer:count} steps:
 		allocate count slots of an integer and set levels to it
 		allocate count slots of an integer and set jumps to it
 		allocate count slots of an integer and set slides to it
-		return @intrinsic("construct", route plan, count, levels, jumps, slides)
+		return @intrinsic("construct", a route plan, count, levels, jumps, slides)
 
 function fill {route plan:plan} using seed {integer:seed}:
 	execute:

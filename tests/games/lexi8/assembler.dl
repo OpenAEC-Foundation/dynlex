@@ -12,43 +12,43 @@ import lib/array.dl
 
 class:
 	patterns:
-		assembled program
+		[an|] assembled program
 	members:
 		bytes, cursor
 
 class:
 	patterns:
-		label table
+		[a|] label table
 	members:
 		names, addresses, count
 
 class:
 	patterns:
-		fixup table
+		[a|] fixup table
 	members:
 		offsets, names, count
 
 class:
 	patterns:
-		assembly state
+		[an|] assembly state
 	members:
 		program, labels, fixups
 
 function an assembled program with {a pointer to an integer:bytes} and cursor {integer:cursor}:
 	replacement:
-		@intrinsic("construct", assembled program, bytes, cursor)
+		@intrinsic("construct", an assembled program, bytes, cursor)
 
 function a label table using {a pointer to a C string:names} and {a pointer to an integer:addresses} with count {integer:count}:
 	replacement:
-		@intrinsic("construct", label table, names, addresses, count)
+		@intrinsic("construct", a label table, names, addresses, count)
 
 function a fixup table using {a pointer to an integer:offsets} and {a pointer to a C string:names} with count {integer:count}:
 	replacement:
-		@intrinsic("construct", fixup table, offsets, names, count)
+		@intrinsic("construct", a fixup table, offsets, names, count)
 
 function an assembly state with {assembled program:program}, {label table:labels} and {fixup table:fixups}:
 	replacement:
-		@intrinsic("construct", assembly state, program, labels, fixups)
+		@intrinsic("construct", an assembly state, program, labels, fixups)
 
 allocate 3584 slots of an integer and set bytes to it
 allocate 128 slots of "unnamed" and set names to it

@@ -16,23 +16,23 @@ import tests/games/lexi8/breakout.dl
 
 class:
 	patterns:
-		console display
+		[a|] console display
 	members:
 		scale, playfield, status, phosphor
 
 class:
 	patterns:
-		phosphor color
+		[a|] phosphor color
 	members:
 		red, green, blue
 
 function a phosphor color with red {integer:red}, green {integer:green} and blue {integer:blue}:
 	replacement:
-		@intrinsic("construct", phosphor color, red, green, blue)
+		@intrinsic("construct", a phosphor color, red, green, blue)
 
-function a console display at scale {integer:scale} with playfield {integer:playfield} and status area height {integer:status}, backed by {a pointer to a float:phosphor}:
+function a console display at scale {integer:scale} with playfield {integer:playfield} and status area height {integer:status}, backed by {a pointer to a floating-point number:phosphor}:
 	replacement:
-		@intrinsic("construct", console display, scale, playfield, status, phosphor)
+		@intrinsic("construct", a console display, scale, playfield, status, phosphor)
 
 allocate 2048 slots of 0.0 and set phosphor to it
 set panel to a console display at scale 16 with playfield (32 * 16) and status area height 48, backed by phosphor

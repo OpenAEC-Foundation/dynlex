@@ -12,4 +12,4 @@ function the result after the third passage of source:
     replacement:
         source
 
-print (the result after the first passage of 7) as line
+print (the result after the first passage of 7) as a line

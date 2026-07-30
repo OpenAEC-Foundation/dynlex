@@ -36,15 +36,15 @@ ignore the shader time
     ),
     "shader output": (
         """\
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
-function set the fragment color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
 
-set the fragment color with red 0.1, green 0.2, blue 0.3 and alpha 1.0
+set the fragment color with a red channel of 0.1, a green channel of 0.2, a blue channel of 0.3 and an alpha channel of 1.0
 """,
         "fragment",
     ),
@@ -147,7 +147,7 @@ function number bounded between zero and one:
         return result
 
 set shade to the shader time bounded between zero and one
-set the fragment color with red 0.0, green shade, blue 0.0 and alpha 1.0
+set the fragment color with a red channel of 0.0, a green channel of shade, a blue channel of 0.0 and an alpha channel of 1.0
 """
 NESTED_SELECTION_SHADER = """\
 import lib/shader.dl
@@ -160,7 +160,7 @@ else:
     if altitude > 2.0:
         set shade to 2.0
 
-set the fragment color with red shade, green shade, blue shade and alpha 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 ELSE_IF_SELECTION_SHADER = """\
 import lib/shader.dl
@@ -171,7 +171,7 @@ if shade > 2.0:
 else if shade > 1.0:
     set shade to 1.0
 
-set the fragment color with red shade, green shade, blue shade and alpha 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 BRANCHED_SHADER_OUTPUT = """\
 import lib/shader.dl
@@ -181,7 +181,7 @@ set green to the fragment y coordinate
 set blue to the shader time
 if red > 10.0:
     set red to green
-set the fragment color with red red, green green, blue blue and alpha 1.0
+set the fragment color with a red channel of red, a green channel of green, a blue channel of blue and an alpha channel of 1.0
 """
 LOOP_WITH_NESTED_EXIT = """\
 import lib/shader.dl
@@ -200,7 +200,7 @@ while iteration < 52 and marching:
             set iteration to 52
     set iteration to iteration + 1
 
-set the fragment color with red shade, green shade, blue shade and alpha 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
 REPEATED_UNIFORM_LOAD_SHADER = """\
 function set variable to value:
@@ -211,28 +211,28 @@ function the shader time:
     replacement:
         @intrinsic("shader uniform", "time")
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
-function set the fragment color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
 
 set first to the shader time
 set second to the shader time
-set the fragment color with red first, green second, blue 0.0 and alpha 1.0
+set the fragment color with a red channel of first, a green channel of second, a blue channel of 0.0 and an alpha channel of 1.0
 """
 CLASS_PROPERTY_SHADER = """\
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
-function set the fragment color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
 
@@ -242,12 +242,12 @@ class:
     members:
         first, second
 
-function a sample pair with first {float:first} and second {float:second}:
+function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
     replacement:
         @intrinsic("construct", sample pair, first, second)
 
 set sample to a sample pair with first 0.25 and second 0.75
-set the fragment color with red sample's first, green sample's second, blue 0.0 and alpha 1.0
+set the fragment color with a red channel of sample's first, a green channel of sample's second, a blue channel of 0.0 and an alpha channel of 1.0
 """
 CLASS_ARGUMENT_SHADER = """\
 function set variable to value:
@@ -258,15 +258,15 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
-function {float:left} + {float:right}:
+function {floating-point number:left} + {floating-point number:right}:
     replacement:
         @intrinsic("add", left, right)
 
-function set the fragment color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
 
@@ -276,7 +276,7 @@ class:
     members:
         first, second
 
-function a sample pair with first {float:first} and second {float:second}:
+function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
     replacement:
         @intrinsic("construct", sample pair, first, second)
 
@@ -286,14 +286,14 @@ function the sum of {sample pair:pair}:
 
 set pair to a sample pair with first 0.25 and second 0.75
 set value to the sum of pair
-set the fragment color with red value, green 0.0, blue 0.0 and alpha 1.0
+set the fragment color with a red channel of value, a green channel of 0.0, a blue channel of 0.0 and an alpha channel of 1.0
 """
 NATURAL_CLASS_PADDING_SHADER = """\
 function [a|] boolean:
     replacement:
         @intrinsic("type", "bool")
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float", 32)
 
@@ -309,9 +309,9 @@ class:
     patterns:
         [a|] parcel
     members:
-        first as a boolean, second as a boolean, value as a float
+        first as a boolean, second as a boolean, value as a floating-point number
 
-function a parcel with first {boolean:first}, second {boolean:second} and value {float:value}:
+function a parcel with first {boolean:first}, second {boolean:second} and value {floating-point number:value}:
     replacement:
         @intrinsic("construct", a parcel, first, second, value)
 
@@ -326,20 +326,20 @@ import lib/shader.dl
 
 set source to [1.0, 2.0]
 set moved to source + [10.0, 20.0]
-set the fragment color with red (the item at 0 in moved), green (the item at 1 in moved), blue 0.0 and alpha 1.0
+set the fragment color with a red channel of (the item at 0 in moved), a green channel of (the item at 1 in moved), a blue channel of 0.0 and an alpha channel of 1.0
 """
 WRAPPED_INTERPOLANT_SHADERS = {
     "vertex": """\
 import lib/shader.dl
 
-set the shader interpolant named "surface" to 0.1 0.2 0.3 1.0
+set the shader interpolant named "surface" with an x coordinate of 0.1, a y coordinate of 0.2, a z coordinate of 0.3 and a w coordinate of 1.0
 set the output position with x 0.0, y 0.0, z 0.0 and w 1.0
 """,
     "fragment": """\
 import lib/shader.dl
 
 set shade to the shader interpolant x named "surface"
-set the fragment color with red shade, green shade, blue shade and alpha 1.0
+set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """,
 }
 SPIRV_MAGIC = 0x07230203

@@ -6,13 +6,13 @@ import tests/games/geometry_dash/scene.dl
 
 class:
 	patterns:
-		route follower
+		[a|] route follower
 	members:
 		runner, step, elapsed, sliding
 
 function a route follower tracking {runner state:body}:
 	replacement:
-		@intrinsic("construct", route follower, body, 0, 0, true)
+		@intrinsic("construct", a route follower, body, 0, 0, true)
 
 function {route follower:follower} is sliding:
 	execute:

@@ -15,6 +15,7 @@ class LLVMContext;
 
 struct ClassDefinition;
 struct Expression;
+struct TypeConstraint;
 
 struct DataType {
 	enum class Kind {
@@ -361,7 +362,7 @@ struct DataType {
 		return true;
 	}
 
-	// Convert a Type literal to the type it references
+	// Convert a value type to a Type literal that references it.
 	DataType asTypeReference() const {
 		requireCompilerInvariant(isDeduced() && kind != Kind::Type, "Only value types can become type references");
 		DataType result{Kind::Type};
@@ -397,6 +398,8 @@ struct DataType {
 };
 
 bool typeHasManagedLifecycle(const DataType &type);
+std::string typeToUserName(const DataType &type);
+std::string typeToUserName(const TypeConstraint &constraint);
 
 inline int defaultFloatByteSize(bool emitSPIRV) { return emitSPIRV ? 4 : 8; }
 
@@ -415,7 +418,7 @@ makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optiona
 		if (numericByteSize)
 			return std::nullopt;
 		result.referencedKind = DataType::Kind::Bool;
-	} else if (kindName == "void") {
+	} else if (kindName == "nothing") {
 		if (numericByteSize)
 			return std::nullopt;
 		result.referencedKind = DataType::Kind::Void;

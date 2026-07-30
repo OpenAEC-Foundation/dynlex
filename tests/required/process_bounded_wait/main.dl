@@ -19,7 +19,7 @@ print (error's contents) as a line
 
 wait up to 10 milliseconds for child and set early to it
 print whether early succeeded as a line
-print whether the inverse of (early reports completion) as a line
+print whether early does not report completion as a line
 
 wait up to 2000 milliseconds for child and set finished to it
 print whether finished succeeded as a line

@@ -11,8 +11,7 @@ inline DataType pointerArithmeticBaseType(const DataType &type) {
 	if (type.isPointer())
 		return type;
 	requireCompilerInvariant(isFixedArrayValue(type), "pointer arithmetic base is neither a pointer nor a fixed array");
-	if (!type.arrayElementType)
-		return {DataType::Kind::Unresolved};
+	requireCompilerInvariant(type.arrayElementType != nullptr, "fixed array value is missing its element type");
 	return type.arrayElementType->pointed();
 }
 

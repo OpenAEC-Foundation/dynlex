@@ -24,33 +24,33 @@ function return value:
 
 class:
     patterns:
-        point
+        [a|] point
     members:
         x as an integer
         y as an integer
 
 class:
     patterns:
-        content
+        [a|] content record
     members:
         length as an integer
 
 class:
     patterns:
-        record
+        [a|] record
     members:
         data as a C string
 
-set location to @intrinsic("construct", point, 10, 20)
+set location to @intrinsic("construct", a point, 10, 20)
 set location's x to 12
 set the x of location to 13
 set reference to @intrinsic("address of", location)
 set the x of reference to 14
-set paragraph to @intrinsic("construct", content, 7)
+set paragraph to @intrinsic("construct", a content record, 7)
 set length to the length of paragraph
-set object to @intrinsic("construct", record, "hello")
+set object to @intrinsic("construct", a record, "hello")
 set nested to the length of the data of object
-set points to @intrinsic("construct", point, 20, 30)
+set points to @intrinsic("construct", a point, 20, 30)
 set points' x to 21
 
 ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the x of location)

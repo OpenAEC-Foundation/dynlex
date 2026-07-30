@@ -281,17 +281,33 @@ function {process wait result:result} reports completion:
     replacement:
         result's completion
 
+function {process wait result:result} does not report completion:
+    replacement:
+        result's completion = false
+
 function {process wait result:result} reports termination:
     replacement:
         result's termination
+
+function {process wait result:result} does not report termination:
+    replacement:
+        result's termination = false
 
 function {process result:result} was launched:
     replacement:
         result's launch
 
+function {process result:result} failed to launch:
+    replacement:
+        result's launch = false
+
 function {process result:result} reports termination:
     replacement:
         result's termination
+
+function {process result:result} does not report termination:
+    replacement:
+        result's termination = false
 
 function a process command for executable:
     execute:

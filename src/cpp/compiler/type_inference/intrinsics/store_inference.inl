@@ -99,9 +99,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.setTypeFailure(renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "variable type change",
 			"message",
-			{{"name", variable->name},
-			 {"from_type", typeToUserName(variable->type, context.parseContext)},
-			 {"to_type", typeToUserName(valueType, context.parseContext)}}
+			{{"name", variable->name}, {"from_type", typeToUserName(variable->type)}, {"to_type", typeToUserName(valueType)}}
 		));
 		if (!context.trial) {
 			context.addDiagnosticWithCurrentTrace(
@@ -183,8 +181,8 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 						syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range),
 						"variable type change", "message",
 						{{"name", destinationName},
-						 {"from_type", typeToUserName(currentFieldType, context.parseContext)},
-						 {"to_type", typeToUserName(valueType, context.parseContext)}}
+						 {"from_type", typeToUserName(currentFieldType)},
+						 {"to_type", typeToUserName(valueType)}}
 					));
 					if (!context.trial) {
 						context.addDiagnosticWithCurrentTrace(buildAssignmentTypeChangeDiagnostic(

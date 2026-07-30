@@ -14,7 +14,7 @@ function the uppercase ASCII character corresponding to value:
             return (value - 32) as a byte
         return value
 
-function the index of {any:fragment} in {any:text} starting at {integer:start}:
+function the index of {a value:fragment} in {a value:text} starting at {integer:start}:
     execute:
         if start < 0 or start > the length of text:
             return 0 - 1
@@ -27,7 +27,7 @@ function the index of {any:fragment} in {any:text} starting at {integer:start}:
             set cursor to (cursor + 1)
         return 0 - 1
 
-function the index of {any:fragment} in {any:text}:
+function the index of {a value:fragment} in {a value:text}:
     execute:
         return the index of fragment in text starting at 0
 

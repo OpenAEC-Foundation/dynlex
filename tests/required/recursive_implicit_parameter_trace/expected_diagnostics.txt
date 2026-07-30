@@ -1,4 +1,4 @@
-tests/required/recursive_implicit_parameter_trace/main.dl:1-20: Error: No overload matches call 'cache profile width' for argument types [unresolved(?)]. Available overloads: 'cache profile width'
+tests/required/recursive_implicit_parameter_trace/main.dl:1-20: Error: No overload matches call 'cache profile width' for argument types [an unresolved value]. Available overloads: 'cache profile width'
   note: 'width' is a parameter because it was used here: tests/required/recursive_implicit_parameter_trace/main.dl:13-18
   note: The first nested parameter name mismatch was here: tests/required/recursive_implicit_parameter_trace/main.dl:13-18
-  note: while inferring call 'cache profile width' with arguments [unresolved(?)] -> undeduced tests/required/recursive_implicit_parameter_trace/main.dl:1-20
+  note: while inferring call 'cache profile width' with arguments [an unresolved value] -> an unresolved value tests/required/recursive_implicit_parameter_trace/main.dl:1-20

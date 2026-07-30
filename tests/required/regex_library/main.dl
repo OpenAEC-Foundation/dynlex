@@ -1,16 +1,16 @@
 import regex.dl
 
-print whether "abc123" matches the regular expression described by "^[a-z]+[0-9]+$" as a line
-print whether "abc" matches the regular expression described by "^(cat|dog)$" as a line
-print whether "dog" matches the regular expression described by "^(cat|dog)$" as a line
-print whether "color" matches the regular expression described by "^colou?r$" as a line
-print whether "colour" matches the regular expression described by "^colou?r$" as a line
-print whether "abbbc" matches the regular expression described by "^ab*c$" as a line
-print whether "xx abbbc yy" contains a match for the regular expression described by "ab+c" as a line
-print whether "123" matches the regular expression described by "^[^a-z]+$" as a line
-print whether "a.c" matches the regular expression described by "^a\\.c$" as a line
-print whether "user_42" matches the regular expression described by "^\\w+$" as a line
-print whether "42" matches the regular expression described by "^\\d+$" as a line
-print whether " 	" matches the regular expression described by "^\\s+$" as a line
-print whether "A" matches the regular expression described by "^\\D$" as a line
-print whether "5" matches the regular expression described by "^[\\d]$" as a line
+print whether ("abc123" matches the regular expression described by "^[a-z]+[0-9]+$") as a line
+print whether ("abc" matches the regular expression described by "^(cat|dog)$") as a line
+print whether ("dog" matches the regular expression described by "^(cat|dog)$") as a line
+print whether ("color" matches the regular expression described by "^colou?r$") as a line
+print whether ("colour" matches the regular expression described by "^colou?r$") as a line
+print whether ("abbbc" matches the regular expression described by "^ab*c$") as a line
+print whether ("xx abbbc yy" contains a match for the regular expression described by "ab+c") as a line
+print whether ("123" matches the regular expression described by "^[^a-z]+$") as a line
+print whether ("a.c" matches the regular expression described by "^a\\.c$") as a line
+print whether ("user_42" matches the regular expression described by "^\\w+$") as a line
+print whether ("42" matches the regular expression described by "^\\d+$") as a line
+print whether (" 	" matches the regular expression described by "^\\s+$") as a line
+print whether ("A" matches the regular expression described by "^\\D$") as a line
+print whether ("5" matches the regular expression described by "^[\\d]$") as a line

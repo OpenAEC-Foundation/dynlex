@@ -4,7 +4,7 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 class:
     patterns:
@@ -24,11 +24,11 @@ function the boxed value chosen using {boolean:first}:
 
 set variable to @intrinsic("construct", a number box, 1)
 set variable to 2
-print the payload of variable as line
+print the payload of variable as a line
 
 set holder to @intrinsic("construct", a box holder, @intrinsic("construct", a number box, 3))
 set the held of holder to 4
-print the payload of the held of holder as line
+print the payload of the held of holder as a line
 
 set returned to the boxed value chosen using false
-print the payload of returned as line
+print the payload of returned as a line

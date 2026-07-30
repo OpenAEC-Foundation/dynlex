@@ -5,7 +5,7 @@ function set the perspective with width {integer:width} and height {integer:heig
     execute:
         @intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
         @intrinsic("call", "GL", "glLoadIdentity", nothing)
-        set aspect to ((width as a float) / (height as a float))
+        set aspect to ((width as a floating-point number) / (height as a floating-point number))
         set near to 0.1
         set far to 200.0
         set top to 0.08
@@ -25,7 +25,7 @@ function enable the depth test:
 
 function set the clear color to {spatial color:color}:
     execute:
-        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit float / 255.0, color's green as a 32 bit float / 255.0, color's blue as a 32 bit float / 255.0, 1.0 as a 32 bit float)
+        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit floating-point number / 255.0, color's green as a 32 bit floating-point number / 255.0, color's blue as a 32 bit floating-point number / 255.0, 1.0 as a 32 bit floating-point number)
 
 function position the camera from {spatial camera:view}:
     execute:
@@ -34,7 +34,7 @@ function position the camera from {spatial camera:view}:
         @intrinsic("call", "GL", "glRotated", nothing, 0.0 - view's yaw, 0.0, 1.0, 0.0)
         @intrinsic("call", "GL", "glTranslated", nothing, 0.0 - view's position's x, 0.0 - view's position's y, 0.0 - view's position's z)
 
-function draw a cube at {spatial position:position} with size {float:size}:
+function draw a cube at {spatial position:position} with size {floating-point number:size}:
     execute:
         set half to (size / 2.0)
         @intrinsic("call", "GL", "glPushMatrix", nothing)

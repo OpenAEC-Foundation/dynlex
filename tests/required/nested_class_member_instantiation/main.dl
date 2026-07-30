@@ -12,7 +12,7 @@ function [a|] pointer to pointee:
 
 function nothing:
     replacement:
-        @intrinsic("type", "void")
+        @intrinsic("type", "nothing")
 
 class:
     patterns:

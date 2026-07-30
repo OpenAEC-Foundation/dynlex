@@ -14,11 +14,11 @@ function the fragment y coordinate:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
 
-function set the fragment color with red {any:red}, green {any:green}, blue {any:blue} and alpha {any:alpha}:
+function set the fragment color with a red channel of {a value:red}, a green channel of {a value:green}, a blue channel of {a value:blue} and an alpha channel of {a value:alpha}:
     replacement:
         @intrinsic(
             "shader output",
-            @intrinsic("construct", an aggregate of 4 float values, red, green, blue, alpha)
+            @intrinsic("construct", an aggregate of 4 floating-point number values, red, green, blue, alpha)
         )
 
 # Vertex shader I/O
@@ -43,18 +43,18 @@ function the vertex w:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
-function set the output position with x {any:horizontal}, y {any:vertical}, z {any:depth} and w {any:magnitude}:
+function set the output position with x {a value:horizontal}, y {a value:vertical}, z {a value:depth} and w {a value:magnitude}:
     replacement:
         @intrinsic(
             "shader output",
-            @intrinsic("construct", an aggregate of 4 float values, horizontal, vertical, depth, magnitude)
+            @intrinsic("construct", an aggregate of 4 floating-point number values, horizontal, vertical, depth, magnitude)
         )
 
 # Vertex-to-fragment interpolants
 
-function set [the|] shader interpolant named name to x y z w:
+function set [the|] shader interpolant named {a value:name} with an x coordinate of {a value:horizontal}, a y coordinate of {a value:vertical}, a z coordinate of {a value:depth} and a w coordinate of {a value:magnitude}:
     replacement:
-        @intrinsic("shader interpolant output", name, x, y, z, w)
+        @intrinsic("shader interpolant output", name, horizontal, vertical, depth, magnitude)
 
 function [the|] shader interpolant x named name:
     replacement:

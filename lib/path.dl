@@ -30,7 +30,7 @@ class:
     members:
         success as a boolean
         support as a boolean
-        value as path style
+        value as a path style
         error message as a string
 
 class:

@@ -1,5 +1,5 @@
 tests/required/execute_body_duplicate_invocation/main.dl:9-19: Error: execute body can only run once per section flex call
-  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' with arguments [i8*] -> undeduced tests/required/execute_body_duplicate_invocation/main.dl:9-35
-  note: while inferring call 'relay body' -> undeduced tests/required/execute_body_duplicate_invocation/main.dl:9-19
-  note: while inferring call 'execute body twice' -> undeduced tests/required/execute_body_duplicate_invocation/main.dl:9-27
-  note: while inferring call 'exercise duplicate' -> undeduced tests/required/execute_body_duplicate_invocation/main.dl:1-19
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value tests/required/execute_body_duplicate_invocation/main.dl:9-35
+  note: while inferring call 'relay body' -> an unresolved value tests/required/execute_body_duplicate_invocation/main.dl:9-19
+  note: while inferring call 'execute body twice' -> an unresolved value tests/required/execute_body_duplicate_invocation/main.dl:9-27
+  note: while inferring call 'exercise duplicate' -> an unresolved value tests/required/execute_body_duplicate_invocation/main.dl:1-19

@@ -1,9 +1,5 @@
 import lib/process.dl
 
-function {process wait result:status} has no termination report:
-    replacement:
-        the inverse of (status reports termination)
-
 function the terminated status test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
@@ -27,5 +23,5 @@ print whether termination succeeded as a line
 print whether status succeeded as a line
 print whether status reports completion as a line
 print whether (status's exit code = (0 as a 64 bit integer)) as a line
-print whether status has no termination report as a line
+print whether status does not report termination as a line
 print whether (status's termination signal = (0 as a 32 bit integer)) as a line

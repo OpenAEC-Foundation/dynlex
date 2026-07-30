@@ -16,23 +16,23 @@ function the address of value:
 
 class:
     patterns:
-        inner state
+        [an|] inner state
     members:
         value as an integer
 
 class:
     patterns:
-        outer state
+        [an|] outer state
     members:
-        inner as inner state
+        inner as an inner state
 
 function an inner state containing {an integer:value}:
     replacement:
-        @intrinsic("construct", inner state, value)
+        @intrinsic("construct", an inner state, value)
 
 function an outer state containing {inner state:inner}:
     replacement:
-        @intrinsic("construct", outer state, inner)
+        @intrinsic("construct", an outer state, inner)
 
 set inner to an inner state containing 0
 set outer to an outer state containing inner

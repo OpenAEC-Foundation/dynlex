@@ -13,23 +13,23 @@ import tests/games/lexi8/assembler.dl
 
 class:
 	patterns:
-		chip machine
+		[a|] chip machine
 	members:
 		memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles
 
 class:
 	patterns:
-		pixel position
+		[a|] pixel position
 	members:
 		x, y
 
 function a pixel position at x {integer:x} and y {integer:y}:
 	replacement:
-		@intrinsic("construct", pixel position, x, y)
+		@intrinsic("construct", a pixel position, x, y)
 
 function a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles}:
 	replacement:
-		@intrinsic("construct", chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
+		@intrinsic("construct", a chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
 
 allocate 4096 slots of an integer and set memory to it
 allocate 16 slots of an integer and set registers to it

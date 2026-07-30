@@ -1,1 +1,1 @@
-tests/required/standalone_execute_body_result/main.dl:1-7: Error: Standalone expression 'number' must return nothing; use discard if you want to ignore a value
+tests/required/standalone_execute_body_result/main.dl:1-7: Error: Standalone expression 'number' must return nothing; use ignore if you want to ignore a value

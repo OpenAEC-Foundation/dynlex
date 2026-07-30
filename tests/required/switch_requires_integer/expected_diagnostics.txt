@@ -1,2 +1,2 @@
 tests/required/switch_requires_integer/main.dl:22-25: Error: switch requires an integer value
-  note: while inferring intrinsic 'switch' in '@intrinsic("switch", 1.5)' with arguments [i8*, a 64 bit float] -> undeduced tests/required/switch_requires_integer/main.dl:1-26
+  note: while inferring intrinsic 'switch' in '@intrinsic("switch", 1.5)' with arguments [a 64-bit floating-point number] -> an unresolved value tests/required/switch_requires_integer/main.dl:1-26

@@ -92,6 +92,57 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	return requiredParameters;
 }
 
+ResolvedPatternConstraint
+resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex) {
+	requireCompilerInvariant(definition != nullptr, "initial pattern constraint resolution requires a definition");
+	requireCompilerInvariant(
+		pathIndex < definition->indexedPaths.size(), "initial pattern constraint path is absent from its definition"
+	);
+	const DefinitionPatternElement *parameterElement = nullptr;
+	size_t currentArgument = 0;
+	forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		if (currentArgument++ == argumentIndex)
+			parameterElement = matchedPatternParameterElement(definition, name, startPos);
+	});
+	requireCompilerInvariant(parameterElement != nullptr, "initial pattern constraint argument is absent from its path");
+	const bool untypedParameter = parameterElement->typeConstraintName.empty();
+	requireCompilerInvariant(
+		parameterElement->resolvedTypeConstraint.isResolved() || untypedParameter,
+		"initial pattern constraint resolution encountered an unresolved dependency"
+	);
+	TypeConstraint constraint = parameterElement->resolvedTypeConstraint.isResolved() ? parameterElement->resolvedTypeConstraint
+																					  : TypeConstraint::any();
+	const bool acceptsNothing = !parameterElement->typeConstraintName.empty() && constraint.explicitlyAcceptsNothing();
+	return ResolvedPatternConstraint{
+		std::move(constraint),
+		parameterElement->type == PatternElement::Type::Word ||
+			parameterElement->resolvedTypeConstraint.requiresCompileTimeValue,
+		untypedParameter, acceptsNothing
+	};
+}
+
+std::optional<ResolvedPatternConstraint> resolveCompiledPatternConstraint(
+	PatternDefinition *definition, size_t pathIndex, size_t argumentIndex, const std::vector<DataType> &argumentTypes,
+	const std::vector<CompileTimeValue> &argumentValues
+) {
+	requireCompilerInvariant(definition != nullptr, "pattern constraint resolution requires a definition");
+	requireCompilerInvariant(
+		pathIndex < definition->signaturePaths.size(), "pattern signature path is absent during constraint resolution"
+	);
+	const PatternPathSignature &path = definition->signaturePaths[pathIndex];
+	requireCompilerInvariant(
+		argumentIndex < path.parameters.size(), "pattern signature argument is absent during constraint resolution"
+	);
+	const PatternParameterSignature &signature = path.parameters[argumentIndex];
+	std::optional<TypeConstraint> materialized = signature.constraint.materialize(argumentTypes, argumentValues);
+	if (!materialized)
+		return std::nullopt;
+	const bool acceptsNothing = signature.hasExplicitTypeConstraint && materialized->explicitlyAcceptsNothing();
+	return ResolvedPatternConstraint{
+		std::move(*materialized), signature.requiresCompileTimeValue, signature.acceptsUnresolvedType, acceptsNothing
+	};
+}
+
 PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> & /*sortedArgs*/,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
@@ -99,68 +150,35 @@ PatternOverloadSelection selectOverload(
 ) {
 	if (definitions.empty())
 		return {};
+	requireCompilerInvariant(static_cast<bool>(resolveConstraint), "overload selection requires a constraint resolver");
 
-	// Score each candidate: count how many type constraints match
-	PatternOverloadSelection best;
-	int bestScore = -1;
-	std::vector<TypeConstraint> bestConstraints;
+	struct ViableOverload {
+		PatternDefinition *definition;
+		size_t pathIndex;
+		std::vector<TypeConstraint> constraints;
+	};
+	std::vector<ViableOverload> viableOverloads;
 
 	for (auto *candidate : definitions) {
 		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, candidate)) {
-			int score = 0;
 			bool constraintFailed = false;
 			std::vector<TypeConstraint> candidateConstraints;
 			candidateConstraints.reserve(argTypes.size());
 
 			size_t argIdx = 0;
-			forEachPatternParameterName(
-				candidate, pathIndex,
-				[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+			forEachPatternParameterName(candidate, pathIndex, [&](const std::string &, PatternTreeNode *, size_t) {
 				if (constraintFailed || argIdx >= argTypes.size()) {
 					constraintFailed = true;
 					argIdx++;
 					return;
 				}
-				const DefinitionPatternElement *parameterElement =
-					matchedPatternParameterElement(candidate, parameterName, startPos);
-				requireCompilerInvariant(parameterElement != nullptr, "overload parameter has no definition element");
-				std::optional<ResolvedPatternConstraint> resolvedConstraint;
-				if (resolveConstraint) {
-					resolvedConstraint = resolveConstraint(candidate, pathIndex, argIdx);
-				} else {
-					if (pathIndex < candidate->signaturePaths.size() &&
-						argIdx < candidate->signaturePaths[pathIndex].parameters.size()) {
-						const PatternParameterSignature &signature = candidate->signaturePaths[pathIndex].parameters[argIdx];
-						std::optional<TypeConstraint> materialized = signature.constraint.materialize({}, {});
-						if (materialized) {
-							bool acceptsNothing = signature.hasExplicitTypeConstraint &&
-												  materialized->accepts(DataType{DataType::Kind::Void}, false);
-							resolvedConstraint = ResolvedPatternConstraint{
-								std::move(*materialized), signature.constraint.structuralSpecificity(),
-								signature.requiresCompileTimeValue, signature.acceptsUnresolvedType, acceptsNothing
-							};
-						}
-					} else {
-						resolvedConstraint = ResolvedPatternConstraint{
-							parameterElement->resolvedTypeConstraint,
-							parameterElement->resolvedTypeConstraint.structuralSpecificity(),
-							parameterElement->type == PatternElement::Type::Word ||
-								parameterElement->resolvedTypeConstraint.requiresCompileTimeValue,
-							!parameterElement->resolvedTypeConstraint.isResolved(),
-							!parameterElement->typeConstraintName.empty() &&
-								parameterElement->resolvedTypeConstraint.isResolved() &&
-								parameterElement->resolvedTypeConstraint.accepts(DataType{DataType::Kind::Void}, false)
-						};
-					}
-				}
+				std::optional<ResolvedPatternConstraint> resolvedConstraint = resolveConstraint(candidate, pathIndex, argIdx);
 				if (!resolvedConstraint) {
 					constraintFailed = true;
 					argIdx++;
 					return;
 				}
-				TypeConstraint parameterConstraint = std::move(resolvedConstraint->constraint);
-				parameterConstraint.requiresCompileTimeValue =
-					parameterConstraint.requiresCompileTimeValue || resolvedConstraint->requiresCompileTimeValue;
+				TypeConstraint parameterConstraint = resolvedConstraint->effectiveConstraint();
 				const DataType &argType = argTypes[argIdx];
 				if (!argType.isDeduced()) {
 					bool acceptsUnset =
@@ -173,34 +191,55 @@ PatternOverloadSelection selectOverload(
 				}
 				if (parameterConstraint.isResolved()) {
 					bool compileTimeKnown = argIdx < argCompileTimeKnown.size() && argCompileTimeKnown[argIdx];
-					if ((argType.kind == DataType::Kind::Void && !resolvedConstraint->acceptsNothing) ||
-						!parameterConstraint.accepts(argType, compileTimeKnown)) {
+					if (!resolvedConstraint->accepts(argType, compileTimeKnown)) {
 						constraintFailed = true;
 						argIdx++;
 						return;
 					}
-					score += resolvedConstraint->structuralSpecificity;
 				}
 				candidateConstraints.push_back(std::move(parameterConstraint));
 				argIdx++;
-			}
-			);
+			});
 			if (argIdx != argTypes.size())
 				constraintFailed = true;
 			if (constraintFailed)
 				continue;
-			if (score > bestScore) {
-				bestScore = score;
-				best = {candidate, pathIndex, false};
-				bestConstraints = std::move(candidateConstraints);
-			} else if (score == bestScore) {
-				if (!equivalentSelectedPath(
-						best.definition, best.pathIndex, bestConstraints, candidate, pathIndex, candidateConstraints
-					))
-					best.ambiguous = true;
-			}
+			viableOverloads.push_back({candidate, pathIndex, std::move(candidateConstraints)});
 		}
 	}
 
-	return best;
+	if (viableOverloads.empty())
+		return {};
+
+	std::vector<size_t> maximalOverloads;
+	for (size_t candidateIndex = 0; candidateIndex < viableOverloads.size(); candidateIndex++) {
+		bool dominated = false;
+		for (size_t otherIndex = 0; otherIndex < viableOverloads.size(); otherIndex++) {
+			if (candidateIndex == otherIndex)
+				continue;
+			if (compareConstraintSpecificity(
+					viableOverloads[candidateIndex].constraints, viableOverloads[otherIndex].constraints
+				) == ConstraintSpecificity::RightMoreSpecific) {
+				dominated = true;
+				break;
+			}
+		}
+		if (!dominated)
+			maximalOverloads.push_back(candidateIndex);
+	}
+	requireCompilerInvariant(!maximalOverloads.empty(), "viable overload domains have no maximal candidate");
+
+	const ViableOverload &selected = viableOverloads[maximalOverloads.front()];
+	PatternOverloadSelection result{selected.definition, selected.pathIndex, false};
+	for (size_t maximalIndex : maximalOverloads) {
+		const ViableOverload &other = viableOverloads[maximalIndex];
+		if (!equivalentSelectedPath(
+				selected.definition, selected.pathIndex, selected.constraints, other.definition, other.pathIndex,
+				other.constraints
+			)) {
+			result.ambiguous = true;
+			break;
+		}
+	}
+	return result;
 }

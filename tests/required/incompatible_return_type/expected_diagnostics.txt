@@ -1,6 +1,6 @@
-tests/required/incompatible_return_type/main.dl:16-21: Error: Function return type is a 32 bit integer, but this return statement produces a 8 bit integer
-  note: Function return type was first inferred as a 32 bit integer here tests/required/incompatible_return_type/main.dl:20-30
-  note: while inferring intrinsic 'return' in '@intrinsic("return", value)' with arguments [i8*, a 8 bit integer] -> undeduced tests/required/incompatible_return_type/main.dl:9-36
-  note: while inferring call 'return value' with arguments [a 8 bit integer] -> undeduced tests/required/incompatible_return_type/main.dl:9-21
-  note: while inferring call 'widened (65 as a byte' with arguments [a 8 bit integer] -> undeduced tests/required/incompatible_return_type/main.dl:8-29
-  note: while inferring call 'ignore widened (65 as a byte' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_return_type/main.dl:1-29
+tests/required/incompatible_return_type/main.dl:16-21: Error: Function return type is a 32-bit integer, but this return statement produces a byte
+  note: Function return type was first inferred as a 32-bit integer here tests/required/incompatible_return_type/main.dl:20-30
+  note: while inferring intrinsic 'return' in '@intrinsic("return", value)' with arguments [a byte] -> an unresolved value tests/required/incompatible_return_type/main.dl:9-36
+  note: while inferring call 'return value' with arguments [a byte] -> an unresolved value tests/required/incompatible_return_type/main.dl:9-21
+  note: while inferring call 'widened (65 as a byte' with arguments [a byte] -> an unresolved value tests/required/incompatible_return_type/main.dl:8-29
+  note: while inferring call 'ignore widened (65 as a byte' with arguments [an unresolved value] -> an unresolved value tests/required/incompatible_return_type/main.dl:1-29

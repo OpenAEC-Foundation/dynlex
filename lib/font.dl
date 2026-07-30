@@ -90,11 +90,11 @@ function a new font using {pointer:face} and {integer:texture}:
     replacement:
         @intrinsic("construct", a font, face, texture)
 
-function a font color from {any:red}, {any:green} and {any:blue}:
+function a font color from {a value:red}, {a value:green} and {a value:blue}:
     replacement:
         @intrinsic("construct", a font color, red, green, blue)
 
-function a loaded font from path at size {any:size}:
+function a loaded font from path at size {a value:size}:
     execute:
         # Initialize FreeType
         set library to 0 as a pointer to a byte
@@ -121,7 +121,7 @@ function a loaded font from path at size {any:size}:
 
 # --- Character rendering ---
 
-local function the horizontal position after rendering character {any:code} at x {any:horizontal} and y {any:vertical} using {font:typeface} in {font color:color}:
+local function the horizontal position after rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
     execute:
         set face to the face of typeface
         set texture to the texture of typeface
@@ -171,7 +171,7 @@ local function the horizontal position after rendering character {any:code} at x
         # Advance is in 26.6 fixed point, so divide it by 64.
         return (horizontal + advance / 64) as an integer
 
-flex function render {any:code} at x {any:horizontal} and y {any:vertical} using {font:typeface} in {font color:color}:
+flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
     replacement:
         set the subject to the horizontal position after rendering character code at x horizontal and y vertical using typeface in color
 
@@ -190,14 +190,14 @@ function disable text rendering:
         @intrinsic("call", "GL", "glDisable", nothing, 3553)
 
 # Set font pixel size (call before rendering at a new size)
-function set {font:typeface}'s pixel size to {any:size}:
+function set {font:typeface}'s pixel size to {a value:size}:
     execute:
         set face to the face of typeface
         ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
 
 # --- Number rendering ---
 
-function draw {any:number} as a number at x {any:horizontal} and y {any:vertical} using {font:typeface} in color red {any:red}, green {any:green} and blue {any:blue}:
+function draw {a value:number} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
     execute:
         enable text rendering
         set cursor to horizontal
@@ -216,7 +216,7 @@ function draw {any:number} as a number at x {any:horizontal} and y {any:vertical
 
 # --- Text rendering ---
 
-function draw {any:message} as text at x {any:horizontal} and y {any:vertical} using {font:typeface} in color red {any:red}, green {any:green} and blue {any:blue}:
+function draw {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
     execute:
         enable text rendering
         set cursor to horizontal

@@ -5,7 +5,7 @@ import lib/random.dl
 
 class:
 	patterns:
-		board layout
+		[a|] board layout
 	members:
 		cells, scale, capacity, extent
 
@@ -17,21 +17,21 @@ class:
 
 class:
 	patterns:
-		snake game
+		[a|] snake game
 	members:
 		body, length, direction, food, running, score
 
 function a board with {integer:count} cells of {integer:scale} pixels each:
 	replacement:
-		@intrinsic("construct", board layout, count, scale, count * count, count * scale)
+		@intrinsic("construct", a board layout, count, scale, count * count, count * scale)
 
 function a grid position at x {integer:x} and y {integer:y}:
 	replacement:
-		@intrinsic("construct", grid position, x, y)
+		@intrinsic("construct", a grid position, x, y)
 
 function a snake game with {a pointer to a grid position:body} moving {integer:direction} toward {grid position:food}:
 	replacement:
-		@intrinsic("construct", snake game, body, 3, direction, food, true, 0)
+		@intrinsic("construct", a snake game, body, 3, direction, food, true, 0)
 
 function {snake game:game} is running:
 	execute:

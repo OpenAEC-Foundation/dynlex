@@ -1,9 +1,5 @@
 import lib/process.dl
 
-function {process wait result:status} has no completion report:
-    replacement:
-        the inverse of (status reports completion)
-
 function the nonblocking process test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
@@ -25,5 +21,5 @@ print whether (output's contents's length > 0) as a line
 print whether error succeeded as a line
 print whether (error's contents's length > 0) as a line
 print whether status succeeded as a line
-print whether status has no completion report as a line
+print whether status does not report completion as a line
 print whether cleanup succeeded as a line

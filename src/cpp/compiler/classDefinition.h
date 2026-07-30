@@ -32,6 +32,7 @@ struct ClassInstantiation {
 
 struct ClassDefinition {
 	std::vector<std::string> patternNames;
+	std::vector<std::string> displayPatternNames;
 	std::vector<FieldDefinition> fields;
 	std::vector<ClassInstantiation> instantiations;
 	// Canonical instantiation selected for a structural set of bound class-pattern arguments.

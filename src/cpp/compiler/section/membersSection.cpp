@@ -2,6 +2,7 @@
 #include "classSection.h"
 #include "paddingSection.h"
 #include "parseContext.h"
+#include "pattern/patternReference.h"
 #include "syntaxConfig.h"
 
 // Parse a single field declaration, handling optional "name as type" syntax
@@ -30,6 +31,8 @@ bool parseFieldDeclaration(ParseContext &context, Range fieldRange, ClassSection
 		Expression *typeExpr = referenceOwner->detectPatterns(context, typeRange, SectionType::Function);
 		if (!typeExpr)
 			return false;
+		requireCompilerInvariant(typeExpr->patternReference, "class member type expression has no root pattern reference");
+		typeExpr->patternReference->purpose = PatternReference::Purpose::TypeConstraint;
 
 		DataType type;
 		type.kind = DataType::Kind::Unresolved;

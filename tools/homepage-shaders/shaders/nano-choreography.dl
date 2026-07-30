@@ -16,28 +16,28 @@ function [a|] radiant color:
     replacement:
         a color
 
-function a planar coordinate with x {float:x} and y {float:y}:
+function a planar coordinate with x {floating-point number:x} and y {floating-point number:y}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 2 float values, x, y)
+            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
         )
 
-function a spatial coordinate with x {float:x}, y {float:y} and z {float:z}:
+function a spatial coordinate with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 3 float values, x, y, z)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
         )
 
-function a radiant color with red {float:red}, green {float:green} and blue {float:blue}:
+function a radiant color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
     replacement:
         @intrinsic(
             "construct",
             a color,
-            @intrinsic("construct", an aggregate of 3 float values, red, green, blue)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
         )
 
 function the scene window from opening to closing at moment:
@@ -135,7 +135,7 @@ else:
         set scan to (((the sine of ((screen's y * 47.0) - (time * 6.8))) * 0.5) + 0.5)
         set warmth to (1.0 - the smooth transition from 4.45 to 7.40 at moment)
         set color to a radiant color with red ((0.08 + (wave * 0.28)) + (warmth * 0.38)), green ((0.30 + (scan * 0.24)) + (warmth * 0.12)) and blue ((0.66 + (wave * 0.30)) - (warmth * 0.18))
-        set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0
+        set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0
     else:
         set speed to the scene window from 0.0 to 7.40 at moment
         set figure to the scene window from 6.85 to 11.0 at moment
@@ -177,8 +177,8 @@ else:
         set circle to the glow from 0.0 to 0.045 at distance
         set highlight to a planar coordinate with x screen's x and y (screen's y - center's y)
         set distance to the square root of ((highlight's x * highlight's x) + (highlight's y * highlight's y))
-        set centerlight to the glow from 0.0 to 0.025 at distance
-        set light to ((((line * 0.62) + (tick * 0.82)) + (circle * 0.48)) + (centerlight * 0.36))
+        set radiance to the glow from 0.0 to 0.025 at distance
+        set light to ((((line * 0.62) + (tick * 0.82)) + (circle * 0.48)) + (radiance * 0.36))
         set light to (light * visibility)
         set the red channel of color to (color's red + (light * 0.46))
         set the green channel of color to (color's green + (light * 0.88))
@@ -188,4 +188,4 @@ else:
         set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red))
         set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green))
         set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue))
-        set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0
+        set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

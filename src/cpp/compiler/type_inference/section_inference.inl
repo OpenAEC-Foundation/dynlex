@@ -477,6 +477,7 @@ struct PatternTypeConstraintWorkItem {
 	PatternDefinition *definition{};
 	DefinitionPatternElement *element{};
 	Expression *expression{};
+	std::optional<Diagnostic> failureDiagnostic;
 };
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
@@ -489,6 +490,7 @@ static bool readPatternTypeConstraintValue(
 }
 
 static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+	item.failureDiagnostic.reset();
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
 	resetExpressionTypes(item.expression);
 	InferenceContext::TrialJournal journal;
@@ -505,6 +507,8 @@ static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstrai
 	DataType parameterType;
 	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
 	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
+	if (!deferred && (!inferred || !producedType) && trialContext.hasTypeFailureDiagnostic)
+		item.failureDiagnostic = trialContext.typeFailureDiagnostic;
 	rollbackTrialJournal(journal);
 	applyGroupingSnapshot(originalGrouping);
 	item.expression = originalGrouping.root;
@@ -590,7 +594,7 @@ static bool collectPatternTypeConstraintWorkItems(
 					destroyTypeConstraintExpression(expression);
 					continue;
 				}
-				items.push_back({definition, &element, expression});
+				items.push_back({definition, &element, expression, std::nullopt});
 			}
 		};
 		collectElements(definition->patternElements);
@@ -648,10 +652,9 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 		if (item.expression)
 			continue;
 		if (parseContext.diagnostics.size() == diagnosticsBeforeParsing) {
-			parseContext.diagnostics.push_back(Diagnostic(
-				parseContext, Diagnostic::Level::Error, "unknown type constraint", item.definition->range, "type_constraint",
-				item.element->typeConstraintName
-			));
+			parseContext.diagnostics.push_back(
+				unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+			);
 		}
 		destroyExpressions();
 		return false;
@@ -671,12 +674,18 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 			if (probe == PatternTypeConstraintProbe::Deferred)
 				continue;
 			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
-				const char *diagnosticKey =
-					probe == PatternTypeConstraintProbe::Impure ? "impure type constraint" : "unknown type constraint";
-				parseContext.diagnostics.push_back(Diagnostic(
-					parseContext, Diagnostic::Level::Error, diagnosticKey, item.definition->range, "type_constraint",
-					item.element->typeConstraintName
-				));
+				if (probe == PatternTypeConstraintProbe::Invalid && item.failureDiagnostic) {
+					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
+				} else if (probe == PatternTypeConstraintProbe::Invalid) {
+					parseContext.diagnostics.push_back(unknownTypeConstraintDiagnostic(
+						parseContext, item.definition->range, item.element->typeConstraintName
+					));
+				} else {
+					parseContext.diagnostics.push_back(Diagnostic(
+						parseContext, Diagnostic::Level::Error, "impure type constraint", item.definition->range,
+						"type_constraint", item.element->typeConstraintName
+					));
+				}
 				destroyExpressions();
 				return false;
 			}

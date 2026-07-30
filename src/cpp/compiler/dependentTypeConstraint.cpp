@@ -204,19 +204,6 @@ TypeConstraintTemplate TypeConstraintTemplate::projectedType(size_t argumentInde
 
 bool TypeConstraintTemplate::isDependent() const { return !dependencies.empty(); }
 
-int TypeConstraintTemplate::structuralSpecificity() const {
-	int result = constantPart.structuralSpecificity();
-	result += rootProjection ? 1 : 0;
-	result += numericSize ? 1 : 0;
-	result += pointerDepth ? 1 : 0;
-	result += arraySize ? 1 : 0;
-	result += matrixRows ? 1 : 0;
-	result += matrixColumns ? 1 : 0;
-	if (elementConstraint)
-		result += elementConstraint->structuralSpecificity();
-	return result;
-}
-
 TypeConstraint TypeConstraintTemplate::structuralEnvelope() const {
 	TypeConstraint result = constantPart;
 	if (elementConstraint)

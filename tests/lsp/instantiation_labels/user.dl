@@ -1,9 +1,9 @@
 class:
     patterns:
-        user record
+        [a|] user record
     members:
         name
 
 function a user named {C string:name}:
     replacement:
-        @intrinsic("construct", user record, name)
+        @intrinsic("construct", a user record, name)

@@ -1,6 +1,6 @@
-lib/std.dl:16-54: Error: Bitwise operator 'bitwise and' requires integer operands, got 'a 64 bit float' and 'a 32 bit integer'
-  note: while inferring intrinsic 'bitwise and' in 'return @intrinsic("bitwise and", left, right)' with arguments [i8*, a 64 bit float, a 32 bit integer] -> undeduced lib/std.dl:16-54
-  note: while inferring call 'return @intrinsic("bitwise and", left, right)' with arguments [unresolved(?)] -> undeduced lib/std.dl:9-54
-  note: while inferring call '1.5 & 1' with arguments [a 64 bit float, a 32 bit integer] -> undeduced tests/required/bitwise_invalid_operand/main.dl:7-14
-  note: while inferring call 'print 1.5 & 1' with arguments [unresolved(?)] -> undeduced tests/required/bitwise_invalid_operand/main.dl:1-14
-  note: while inferring call 'print 1.5 & 1 as a line' with arguments [unresolved(?)] -> undeduced tests/required/bitwise_invalid_operand/main.dl:1-24
+lib/std.dl:16-54: Error: Bitwise operator 'bitwise and' requires integer operands, got 'a 64-bit floating-point number' and 'a 32-bit integer'
+  note: while inferring intrinsic 'bitwise and' in 'return @intrinsic("bitwise and", left, right)' with arguments [a 64-bit floating-point number, a 32-bit integer] -> an unresolved value lib/std.dl:16-54
+  note: while inferring call 'return @intrinsic("bitwise and", left, right)' with arguments [an unresolved value] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call '1.5 & 1' with arguments [a 64-bit floating-point number, a 32-bit integer] -> an unresolved value tests/required/bitwise_invalid_operand/main.dl:7-14
+  note: while inferring call 'print 1.5 & 1' with arguments [an unresolved value] -> an unresolved value tests/required/bitwise_invalid_operand/main.dl:1-14
+  note: while inferring call 'print 1.5 & 1 as a line' with arguments [an unresolved value] -> an unresolved value tests/required/bitwise_invalid_operand/main.dl:1-24

@@ -8,7 +8,7 @@ function [an|] integer:
 
 class:
     patterns:
-        failing lifecycle value
+        [a|] failing lifecycle value
     members:
         marker as an integer
     retain:
@@ -16,5 +16,5 @@ class:
     release:
         @intrinsic("discard", @intrinsic("lifecycle value"))
 
-@intrinsic("store", value, @intrinsic("construct", failing lifecycle value, 0))
+@intrinsic("store", value, @intrinsic("construct", a failing lifecycle value, 0))
 ignore value

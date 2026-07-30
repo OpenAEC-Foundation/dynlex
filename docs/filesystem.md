@@ -18,7 +18,7 @@ delete the filesystem entry at path
 create a directory at path
 ```
 
-Actions return `void` and set the subject to an action object. Test an action on the same line or afterward:
+Actions return `nothing` and set the subject to an action object. Test an action on the same line or afterward:
 
 ```dynlex
 delete the filesystem entry at "b.txt" and print whether it succeeded as a line

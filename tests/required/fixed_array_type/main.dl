@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function show {float array of 4 items:values}:
+function show {floating-point number array of 4 items:values}:
     execute:
         print 1 as a line
 

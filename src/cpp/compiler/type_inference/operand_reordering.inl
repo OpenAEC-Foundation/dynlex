@@ -839,7 +839,7 @@ static bool validateGroupingInTrial(
 	if (trialSucceeded && requireVoidResult) {
 		if (standaloneExpressionHasNonVoidResult(expr, context, transaction->dependsOnRecursiveDependency())) {
 			std::string detail = "Standalone expression '" + std::string(expr->range.subString) +
-								 "' must return nothing; use discard if you want to ignore a value";
+								 "' must return nothing; use ignore if you want to ignore a value";
 			Diagnostic diagnostic = buildFailureDetailDiagnostic(failureSnapshot.range, detail);
 			context.fail(std::move(diagnostic), 0);
 			considerGroupingFailure(trialFailure, context.typeFailureDiagnostic, 0);

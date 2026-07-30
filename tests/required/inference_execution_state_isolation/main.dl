@@ -20,7 +20,7 @@ function value after one loop:
 
 class:
     patterns:
-        state pointer holder
+        [a|] state pointer holder
     members:
         target
 
@@ -33,7 +33,7 @@ print the branch value for false as a line
 print value after one loop as a line
 
 set target to 0
-set holder to @intrinsic("construct", state pointer holder, @intrinsic("address of", target))
+set holder to @intrinsic("construct", a state pointer holder, @intrinsic("address of", target))
 write 7 through holder
 print target as a line
 

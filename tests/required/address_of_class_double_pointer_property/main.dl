@@ -8,11 +8,11 @@ function [an|] integer:
 
 class:
     patterns:
-        box
+        [a|] box
     members:
         value as an integer
 
-@intrinsic("store", value, @intrinsic("construct", box, 1))
+@intrinsic("store", value, @intrinsic("construct", a box, 1))
 @intrinsic("store", pointer, @intrinsic("address of", value))
 @intrinsic("store", indirect, @intrinsic("address of", pointer))
 ignore @intrinsic("address of", @intrinsic("property", indirect, "value"))

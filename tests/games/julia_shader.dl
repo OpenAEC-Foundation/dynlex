@@ -25,10 +25,10 @@ while iteration < limit and magnitude < 4.0:
     set magnitude to ((orbit's real part * orbit's real part) + (orbit's imaginary part * orbit's imaginary part))
 
 if iteration = limit:
-    set the fragment color with red 0.0, green 0.0, blue 0.0 and alpha 1.0
+    set the fragment color with a red channel of 0.0, a green channel of 0.0, a blue channel of 0.0 and an alpha channel of 1.0
 else:
     # Smooth coloring using sqrt for gradient
-    set progress to ((iteration as a float) / (limit as a float))
+    set progress to ((iteration as a floating-point number) / (limit as a floating-point number))
     set shade to the square root of progress
     set color to a light color with red shade, green (progress * progress), blue (the sine of (progress * 6.283) * 0.5 + 0.5) and alpha 1.0
-    set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha
+    set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of color's alpha

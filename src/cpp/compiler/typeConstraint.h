@@ -7,6 +7,13 @@
 #include <string>
 #include <tuple>
 
+enum class ConstraintSpecificity {
+	Equivalent,
+	LeftMoreSpecific,
+	RightMoreSpecific,
+	Incomparable,
+};
+
 struct TypeConstraint {
 	bool resolved = false;
 	std::optional<DataType::Kind> kind;
@@ -147,6 +154,18 @@ struct TypeConstraint {
 		return true;
 	}
 
+	bool explicitlyAcceptsNothing() const {
+		return kind == DataType::Kind::Void && pointerDepth == 0 && accepts(DataType{DataType::Kind::Void}, false);
+	}
+
+	TypeConstraint structuralDomain() const {
+		TypeConstraint result = *this;
+		result.requiresCompileTimeValue = false;
+		if (elementConstraint)
+			result.elementConstraint = std::make_shared<TypeConstraint>(elementConstraint->structuralDomain());
+		return result;
+	}
+
 	bool structurallyOverlaps(const TypeConstraint &other) const {
 		if (!resolved || !other.resolved)
 			return true;
@@ -157,10 +176,13 @@ struct TypeConstraint {
 			incompatible(pointerDepth, other.pointerDepth) || incompatible(arraySize, other.arraySize) ||
 			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns))
 			return false;
-		auto constrainsNonNumericKind = [](const TypeConstraint &constraint) {
-			return constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::Float;
+		auto excludesNumericValues = [](const TypeConstraint &constraint) {
+			const bool hasNonNumericKind =
+				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::Float;
+			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
+			return hasNonNumericKind || requiresPointer;
 		};
-		if ((requiresNumeric && constrainsNonNumericKind(other)) || (other.requiresNumeric && constrainsNonNumericKind(*this)))
+		if ((requiresNumeric && excludesNumericValues(other)) || (other.requiresNumeric && excludesNumericValues(*this)))
 			return false;
 		if (constrainsClassDefinition && other.constrainsClassDefinition && classDefinition != other.classDefinition)
 			return false;
@@ -195,8 +217,12 @@ struct TypeConstraint {
 			!containsField(matrixRows, other.matrixRows) || !containsField(matrixColumns, other.matrixColumns) ||
 			(requiresCompileTimeValue && !other.requiresCompileTimeValue))
 			return false;
-		if (requiresNumeric && !other.requiresNumeric &&
-			(!other.kind || (*other.kind != DataType::Kind::Int && *other.kind != DataType::Kind::Float)))
+		const bool otherHasNumericDomain =
+			other.requiresNumeric ||
+			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::Float) && other.pointerDepth &&
+			 *other.pointerDepth == 0) ||
+			(other.numericSize && other.pointerDepth && *other.pointerDepth == 0);
+		if (requiresNumeric && !otherHasNumericDomain)
 			return false;
 		if (constrainsClassDefinition && (!other.constrainsClassDefinition || classDefinition != other.classDefinition))
 			return false;
@@ -220,20 +246,20 @@ struct TypeConstraint {
 		return true;
 	}
 
-	int structuralSpecificity() const {
-		if (!resolved)
-			return 0;
-		int result = kind ? 4 : 0;
-		result += numericSize ? 1 : 0;
-		result += pointerDepth ? 1 : 0;
-		result += arraySize ? 1 : 0;
-		result += matrixRows ? 1 : 0;
-		result += matrixColumns ? 1 : 0;
-		result += requiresNumeric ? 3 : 0;
-		result += constrainsClassDefinition ? 2 : 0;
-		result += classInstantiationIndex ? 1 : 0;
-		result += elementConstraint ? elementConstraint->structuralSpecificity() : 0;
-		return result;
+	ConstraintSpecificity compareSpecificity(const TypeConstraint &other) const {
+		if (equivalentTo(other))
+			return ConstraintSpecificity::Equivalent;
+		TypeConstraint leftDomain = structuralDomain();
+		TypeConstraint rightDomain = other.structuralDomain();
+		const bool leftContainsRight = leftDomain.contains(rightDomain);
+		const bool rightContainsLeft = rightDomain.contains(leftDomain);
+		if (leftContainsRight && rightContainsLeft)
+			return ConstraintSpecificity::Equivalent;
+		if (rightContainsLeft)
+			return ConstraintSpecificity::LeftMoreSpecific;
+		if (leftContainsRight)
+			return ConstraintSpecificity::RightMoreSpecific;
+		return ConstraintSpecificity::Incomparable;
 	}
 
 	std::optional<DataType> exactValueType() const {
@@ -274,25 +300,26 @@ struct TypeConstraint {
 		return result;
 	}
 
-	std::string toString() const {
-		if (!resolved)
-			return "unresolved constraint";
-		std::string result = requiresCompileTimeValue ? "fixed " : "";
-		if (!kind) {
-			if (requiresNumeric)
-				return result + "number";
-			if (numericSize)
-				return result + "a " + std::to_string(*numericSize * 8) + " bit any";
-			return result + "any";
-		}
-		DataType displayType{*kind};
-		displayType.numericSize = numericSize.value_or(0);
-		displayType.pointerDepth = pointerDepth.value_or(0);
-		displayType.arraySize = arraySize.value_or(matrixColumns.value_or(0));
-		displayType.matrixRowCount = matrixRows.value_or(0);
-		displayType.classDefinition = classDefinition;
-		displayType.classInstIndex = classInstantiationIndex.value_or(-1);
-		return result + displayType.toString();
+	std::string toInternalString() const {
+		std::string result = resolved ? "constraint(r1" : "constraint(r0";
+		auto appendOptional = [&](std::string_view name, const auto &value) {
+			result += "|" + std::string(name);
+			result += value ? std::to_string(static_cast<long long>(*value)) : "-";
+		};
+		appendOptional("k", kind);
+		appendOptional("n", numericSize);
+		appendOptional("p", pointerDepth);
+		appendOptional("a", arraySize);
+		appendOptional("mr", matrixRows);
+		appendOptional("mc", matrixColumns);
+		appendOptional("ci", classInstantiationIndex);
+		result += "|num" + std::to_string(requiresNumeric);
+		result += "|dc" + std::to_string(constrainsClassDefinition);
+		result += "|cd" + std::to_string(reinterpret_cast<uintptr_t>(classDefinition));
+		result += "|ct" + std::to_string(requiresCompileTimeValue);
+		result += "|e";
+		result += elementConstraint ? elementConstraint->toInternalString() : "-";
+		return result + ")";
 	}
 
 	bool samePayload(const TypeConstraint &other, bool includeCompileTimeRequirement) const {
@@ -328,3 +355,34 @@ struct TypeConstraint {
 		return elementConstraint && *elementConstraint < *other.elementConstraint;
 	}
 };
+
+template <typename LeftConstraints, typename RightConstraints>
+ConstraintSpecificity compareConstraintSpecificity(const LeftConstraints &left, const RightConstraints &right) {
+	if (left.size() != right.size())
+		return ConstraintSpecificity::Incomparable;
+	bool leftCanBeMoreSpecific = true;
+	bool rightCanBeMoreSpecific = true;
+	for (size_t index = 0; index < left.size(); index++) {
+		switch (left[index].compareSpecificity(right[index])) {
+		case ConstraintSpecificity::Equivalent:
+			break;
+		case ConstraintSpecificity::LeftMoreSpecific:
+			rightCanBeMoreSpecific = false;
+			break;
+		case ConstraintSpecificity::RightMoreSpecific:
+			leftCanBeMoreSpecific = false;
+			break;
+		case ConstraintSpecificity::Incomparable:
+			leftCanBeMoreSpecific = false;
+			rightCanBeMoreSpecific = false;
+			break;
+		}
+	}
+	if (leftCanBeMoreSpecific && rightCanBeMoreSpecific)
+		return ConstraintSpecificity::Equivalent;
+	if (leftCanBeMoreSpecific)
+		return ConstraintSpecificity::LeftMoreSpecific;
+	if (rightCanBeMoreSpecific)
+		return ConstraintSpecificity::RightMoreSpecific;
+	return ConstraintSpecificity::Incomparable;
+}

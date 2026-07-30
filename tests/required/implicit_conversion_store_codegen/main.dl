@@ -2,7 +2,7 @@ function set destination to source:
     replacement:
         @intrinsic("store", destination, source)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -10,7 +10,7 @@ class:
     patterns:
         a box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:number}:
     replacement:

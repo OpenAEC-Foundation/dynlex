@@ -33,13 +33,13 @@ function write indirectly through holder:
 
 class:
     patterns:
-        pointer state
+        [a|] pointer state
     members:
         value
         published address
         returned value
 
-set state to @intrinsic("construct", pointer state, 0, @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int", 32))), 0)
+set state to @intrinsic("construct", a pointer state, 0, @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int", 32))), 0)
 
 function publish global address:
     globals:
@@ -55,7 +55,7 @@ function global value address:
 
 class:
     patterns:
-        address holder
+        [an|] address holder
     members:
         stored address
 
@@ -106,13 +106,13 @@ if @intrinsic("equal", reverse, 63):
     ignore @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "numeric-left pointer arithmetic write")
 
 set property to 0
-set container to @intrinsic("construct", address holder, @intrinsic("address of", property))
+set container to @intrinsic("construct", an address holder, @intrinsic("address of", property))
 @intrinsic("store at", @intrinsic("property", container, "stored address"), 67)
 if @intrinsic("equal", property, 67):
     ignore @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "property-held pointer write")
 
 set owned to 0
-set owner to @intrinsic("construct", address holder, @intrinsic("address of", owned))
+set owner to @intrinsic("construct", an address holder, @intrinsic("address of", owned))
 set ownership to @intrinsic("address of", owner)
 @intrinsic("store at", @intrinsic("property", ownership, "stored address"), 68)
 if @intrinsic("equal", owned, 68):
@@ -126,7 +126,7 @@ if @intrinsic("equal", byte, @intrinsic("cast", 6, @intrinsic("type", "int", 8))
 
 set initial to 0
 set replacement to 0
-set reassigned to @intrinsic("construct", address holder, @intrinsic("address of", initial))
+set reassigned to @intrinsic("construct", an address holder, @intrinsic("address of", initial))
 set @intrinsic("property", reassigned, "stored address") to @intrinsic("address of", replacement)
 @intrinsic("store at", @intrinsic("property", reassigned, "stored address"), 69)
 if @intrinsic("equal", replacement, 69):

@@ -1,0 +1,2 @@
+tests/required/explicit_value_rejects_nothing/main.dl:1-15: Error: No overload matches call 'consume finish' for argument types [nothing]. Available overloads: 'consume {a value:item}'
+  note: while inferring call 'consume finish' with arguments [nothing] -> an unresolved value tests/required/explicit_value_rejects_nothing/main.dl:1-15

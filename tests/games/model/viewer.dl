@@ -25,7 +25,7 @@ function set model viewer perspective for a viewport measuring {integer:width} b
         set divisor to height
         if divisor < 1:
             set divisor to 1
-        set aspect to ((width as a float) / (divisor as a float))
+        set aspect to ((width as a floating-point number) / (divisor as a floating-point number))
         set near to 0.8
         set far to 24000.0
         # fov = 88 degrees, so top = near * tan(44 deg)
@@ -49,7 +49,7 @@ function enable the model viewer render state:
 
 function set the model viewer clear color to {normalized color:color}:
     execute:
-        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit float, color's green as a 32 bit float, color's blue as a 32 bit float, 1.0 as a 32 bit float)
+        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit floating-point number, color's green as a 32 bit floating-point number, color's blue as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number)
 
 function position the model viewer camera from {spatial camera:view}:
     execute:

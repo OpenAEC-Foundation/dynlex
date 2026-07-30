@@ -84,7 +84,7 @@ dynlex options:
         implicit modifier requires conversion: "The '{modifier}' modifier can only be used with '{conversion}'"
         ambiguous conversion: "More than one conversion from {from_type} to {to_type} is equally specific"
         multiple reachable return types: "Function has multiple reachable return types: {first_type} and {second_type}"
-        program return value invalid: "Program return value must be convertible to a 32 bit integer, got {value_type}"
+        program return value invalid: "Program return value must be convertible to a 32-bit integer, got {value_type}"
         incompatible return type:
             message: "Function return type is {expected_type}, but this return statement produces {actual_type}"
             related origin: "Function return type was first inferred as {type} here"
@@ -92,7 +92,7 @@ dynlex options:
         variable type change:
             message: "Variable '{name}' cannot change type from {from_type} to {to_type}"
             related origin: "Variable '{name}' first became {type} here"
-            quick fix float literal: "Change '{original}' to '{replacement}'"
+            quick fix floating-point number literal: "Change '{original}' to '{replacement}'"
         expression type inference failed:
             message: "Expression '{expression}' parses successfully without types, but not with types"
             with detail: "Expression '{expression}' parses successfully without types, but not with types: {detail}"

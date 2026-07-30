@@ -20,14 +20,14 @@ class:
     patterns:
         [a|] tracked container
     members:
-        value as tracked allocation
+        value as a tracked allocation
 
 class:
     patterns:
         [a|] padded tracked container
     members:
         marker as a byte
-        value as tracked allocation
+        value as a tracked allocation
 
 function a new tracked allocation numbered number:
     execute:

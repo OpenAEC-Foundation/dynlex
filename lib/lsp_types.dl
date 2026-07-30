@@ -5,7 +5,7 @@ import lib/list.dl
 
 class:
     patterns:
-        [an|a|] lsp document
+        [an|] LSP document
     members:
         uri as a string
         language as a string
@@ -14,16 +14,16 @@ class:
 
 class:
     patterns:
-        [an|a|] lsp diagnostic report
+        [an|] LSP diagnostic report
     members:
         uri as a string
-        versioned as a boolean
+        version presence as a boolean
         version as a 32 bit integer
         diagnostics as a pointer to a JSON value
 
 class:
     patterns:
-        [an|a|] lsp synchronization
+        [an|] LSP synchronization
     members:
         kind as a 32 bit integer
         open and close notifications as a boolean
@@ -32,28 +32,28 @@ class:
 
 class:
     patterns:
-        [an|a|] lsp client
+        [an|] LSP client
     members:
-        session as a pointer to json rpc session
+        session as a pointer to a JSON-RPC session
         lifecycle as a 32 bit integer
-        synchronization as an lsp synchronization
+        synchronization as an LSP synchronization
         capabilities as a pointer to a JSON value
-        documents as a pointer to list
-        reports as a pointer to list
-        notifications as a pointer to list
+        documents as a pointer to a list
+        reports as a pointer to a list
+        notifications as a pointer to a list
 
 class:
     patterns:
-        [an|a|] lsp client result
+        [an|] LSP client result
     members:
         success as a boolean
         status as a 32 bit integer
-        client as a pointer to an lsp client
+        client as a pointer to an LSP client
         error message as a string
 
 class:
     patterns:
-        [an|a|] lsp document result
+        [an|] LSP document result
     members:
         availability as a boolean
         uri as a string
@@ -63,97 +63,121 @@ class:
 
 class:
     patterns:
-        [an|a|] lsp diagnostics result
+        [an|] LSP diagnostics result
     members:
         availability as a boolean
-        versioned as a boolean
+        version presence as a boolean
         version as a 32 bit integer
         diagnostics as a pointer to a JSON value
 
-function the lsp created lifecycle:
+function the LSP created lifecycle:
     replacement:
         0
 
-function the lsp running lifecycle:
+function the LSP running lifecycle:
     replacement:
         1
 
-function the lsp shutdown lifecycle:
+function the LSP shutdown lifecycle:
     replacement:
         2
 
-function the lsp stopped lifecycle:
+function the LSP stopped lifecycle:
     replacement:
         3
 
-function the lsp no synchronization kind:
+function the LSP no synchronization kind:
     replacement:
         0
 
-function the lsp full synchronization kind:
+function the LSP full synchronization kind:
     replacement:
         1
 
-function the lsp incremental synchronization kind:
+function the LSP incremental synchronization kind:
     replacement:
         2
 
-function the lsp invalid state status:
+function the LSP invalid state status:
     replacement:
         20
 
-function the lsp invalid response status:
+function the LSP invalid response status:
     replacement:
         21
 
-function the lsp document error status:
+function the LSP document error status:
     replacement:
         22
 
-function the lsp server not initialized code:
+function the LSP server not initialized code:
     replacement:
         0 - 32002
 
-function the lsp unknown error code:
+function the LSP unknown error code:
     replacement:
         0 - 32001
 
-function the lsp request failed code:
+function the LSP request failed code:
     replacement:
         0 - 32803
 
-function the lsp server cancelled code:
+function the LSP server cancelled code:
     replacement:
         0 - 32802
 
-function the lsp content modified code:
+function the LSP content modified code:
     replacement:
         0 - 32801
 
-function the lsp request cancelled code:
+function the LSP request cancelled code:
     replacement:
         0 - 32800
 
-function {lsp client result:outcome} succeeded:
+function {LSP client result:outcome} succeeded:
     replacement:
         outcome's success
 
-function {lsp client result:outcome} failed:
+function {LSP client result:outcome} failed:
     replacement:
         the inverse of outcome's success
 
-function {lsp document result:outcome} was found:
+function {LSP document result:outcome} was found:
     replacement:
         outcome's availability
 
-function {lsp document result:outcome} is missing:
+function {LSP document result:outcome} is missing:
     replacement:
         the inverse of outcome's availability
 
-function {lsp diagnostics result:outcome} was found:
+function {LSP diagnostics result:outcome} was found:
     replacement:
         outcome's availability
 
-function {lsp diagnostics result:outcome} has a version:
+function {LSP diagnostics result:outcome} has a version:
     replacement:
-        outcome's versioned
+        outcome's version presence
+
+function {LSP synchronization:settings} sends open and close notifications:
+    replacement:
+        settings's open and close notifications
+
+function {LSP synchronization:settings} does not send open and close notifications:
+    replacement:
+        the inverse of settings's open and close notifications
+
+function {LSP synchronization:settings} sends save notifications:
+    replacement:
+        settings's save notifications
+
+function {LSP synchronization:settings} does not send save notifications:
+    replacement:
+        the inverse of settings's save notifications
+
+function {LSP synchronization:settings} includes text in save notifications:
+    replacement:
+        settings's saved text inclusion
+
+function {LSP synchronization:settings} does not include text in save notifications:
+    replacement:
+        the inverse of settings's saved text inclusion

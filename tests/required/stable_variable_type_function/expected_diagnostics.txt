@@ -1,3 +1,3 @@
-lib/std.dl:9-45: Error: Variable 'number' cannot change type from a 64 bit float to a 32 bit integer
-  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [i8*, a 64 bit float, a 32 bit integer] -> undeduced lib/std.dl:9-45
-  note: while inferring call 'set number to the integer form of number' with arguments [a 64 bit float, a 32 bit integer] -> undeduced tests/required/stable_variable_type_function/main.dl:1-41
+lib/std.dl:9-45: Error: Variable 'number' cannot change type from a 64-bit floating-point number to a 32-bit integer
+  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [a 64-bit floating-point number, a 32-bit integer] -> an unresolved value lib/std.dl:9-45
+  note: while inferring call 'set number to the integer form of number' with arguments [a 64-bit floating-point number, a 32-bit integer] -> an unresolved value tests/required/stable_variable_type_function/main.dl:1-41

@@ -2,7 +2,7 @@ function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
@@ -14,7 +14,7 @@ implicitly convert {integer:value}:
     replacement:
         2.0
 
-function the required floating value from {a float:value}:
+function the required floating value from {a floating-point number:value}:
     replacement:
         value
 

@@ -14,23 +14,23 @@ function [a|] radiant color:
     replacement:
         a color
 
-function a planar coordinate with x {float:x} and y {float:y}:
+function a planar coordinate with x {floating-point number:x} and y {floating-point number:y}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 2 float values, x, y)
+            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
         )
 
-function a radiant color with red {float:red}, green {float:green} and blue {float:blue}:
+function a radiant color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
     replacement:
         @intrinsic(
             "construct",
             a color,
-            @intrinsic("construct", an aggregate of 3 float values, red, green, blue)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
         )
 
-function a moving star field at {planar coordinate:position} scaled by {float:scale} during {float:phase} at {float:time}:
+function a moving star field at {planar coordinate:position} scaled by {floating-point number:scale} during {floating-point number:phase} at {floating-point number:time}:
     execute:
         set depth to the fractional part of ((time * 0.13) + phase)
         set expansion to (0.42 + ((depth * depth) * 3.6))
@@ -150,4 +150,4 @@ set vignette to (0.18 + ((1.0 - the smooth transition from 0.48 to 1.34 at edge)
 set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red))
 set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green))
 set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue))
-set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0
+set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

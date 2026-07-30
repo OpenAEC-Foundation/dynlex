@@ -20,4 +20,4 @@ print the x of sample + the y of sample as a line
 print 3.14 as an integer as a line
 print 42 as a 16 bit integer as a line
 print 7 as a byte as a line
-print 100 as a float as a line
+print 100 as a floating-point number as a line

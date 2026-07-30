@@ -360,7 +360,7 @@ local function {a pointer to a byte:buffer} resized to {word sized integer:count
     execute:
         return @intrinsic("call", "libc", "realloc", a pointer to a byte, buffer, count)
 
-local function the result of transferring up to count bytes into buffer from stream:
+local function the result of transferring up to count [byte|bytes] into buffer from stream:
     execute:
         set transferred to 0 as a word sized integer
         set ending to 0
@@ -516,7 +516,7 @@ local function the result of reading the file at path:
             if continuing and total = capacity:
                 if capacity = maximum:
                     set extra to 0 as a byte
-                    set remainder to the result of transferring up to 1 bytes into the address of extra from stream
+                    set remainder to the result of transferring up to 1 byte into the address of extra from stream
                     if remainder failed:
                         set message to remainder's error message
                         set failed to true

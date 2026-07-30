@@ -7,7 +7,7 @@ function the test interpreter for termination handlers:
 
 class:
     patterns:
-        reading state
+        [a|] reading state
     members:
         success as a boolean
         completion as a boolean
@@ -40,7 +40,7 @@ add "import os,signal,sys,time\nif os.name != 'nt': signal.signal(signal.SIGTERM
 launch command and set child to it
 
 set contents to the string form of ""
-set reading to @intrinsic("construct", reading state, true, false, false)
+set reading to @intrinsic("construct", a reading state, true, false, false)
 loop while reading should continue:
     read the standard output of child and set chunk to it
     set reading's success to chunk succeeded

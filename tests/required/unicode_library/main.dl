@@ -41,18 +41,18 @@ function a four byte string from {integer:first} then {integer:second} then {int
 
 function print validation of {string:text}:
     execute:
-        validate text as UTF8 and set validation to it
+        validate text as UTF-8 and set validation to it
         print the status of validation
         print ":"
         print the error byte offset of validation as a line
 
 set text to a Unicode test string
-validate text as UTF8 and set validation to it
+validate text as UTF-8 and set validation to it
 print the status of validation as a line
 
 set offset to 0
 loop while offset < the length of text:
-    decode the UTF8 code point in text at byte offset and set decoded to it
+    decode the UTF-8 code point in text at byte offset and set decoded to it
     print the code point of decoded
     print "@"
     print the byte offset of decoded
@@ -60,22 +60,22 @@ loop while offset < the length of text:
     print the next byte offset of decoded as a line
     set offset to the next byte offset of decoded
 
-decode the UTF8 code point in text at byte 2 and set middle to it
+decode the UTF-8 code point in text at byte 2 and set middle to it
 print the status of middle as a line
-decode the UTF8 code point in text at byte 10 and set past to it
+decode the UTF-8 code point in text at byte 10 and set past to it
 print the status of past as a line
 
-set encoded to the UTF16 position of UTF8 byte offset 6 in text
+set encoded to the UTF-16 position of UTF-8 byte offset 6 in text
 print the status of encoded
 print ":"
 print the position of encoded as a line
-set position to the UTF8 byte offset of UTF16 position 3 in text
+set position to the UTF-8 byte offset of UTF-16 position 3 in text
 print the status of position
 print ":"
 print the position of position as a line
-set surrogate to the UTF8 byte offset of UTF16 position 4 in text
+set surrogate to the UTF-8 byte offset of UTF-16 position 4 in text
 print the status of surrogate as a line
-set sequence to the UTF16 position of UTF8 byte offset 8 in text
+set sequence to the UTF-16 position of UTF-8 byte offset 8 in text
 print the status of sequence as a line
 
 print validation of a string containing bytes 192 128
@@ -93,11 +93,11 @@ print validation of a four byte string from 240 then 144 then 128 then 65
 print validation of a four byte string from 245 then 128 then 128 then 128
 
 set malformed to a string containing bytes 192 128
-decode the UTF8 code point in malformed at byte 0 and set decoding to it
+decode the UTF-8 code point in malformed at byte 0 and set decoding to it
 print the status of decoding
 print ":"
 print the error byte offset of decoding as a line
-set conversion to the UTF16 position of UTF8 byte offset 0 in malformed
+set conversion to the UTF-16 position of UTF-8 byte offset 0 in malformed
 print the status of conversion
 print ":"
 print the error byte offset of conversion as a line

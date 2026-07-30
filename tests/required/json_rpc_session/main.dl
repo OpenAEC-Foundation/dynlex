@@ -1,64 +1,64 @@
 import lib/json_rpc_session.dl
 
-function [the|] json rpc session test interpreter:
+function [the|] JSON-RPC session test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
 
 set script to "import json,sys\ndef read():\n headers={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  name,value=line.decode('ascii').split(':',1);headers[name.lower()]=value.strip()\n return json.loads(sys.stdin.buffer.read(int(headers['content-length'])))\ndef send(message):\n payload=json.dumps(message,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(payload)).encode()+b'\\r\\n\\r\\n'+payload);sys.stdout.buffer.flush()\nfirst=read();assert first['id']=='1' and first['method']=='first'\nsend({'jsonrpc':'2.0','method':'note','params':{'value':3}})\nsend({'jsonrpc':'2.0','id':7,'method':'workspace/configuration','params':{'items':[]}})\nreply=read();assert reply=={'jsonrpc':'2.0','id':7,'result':['configured']}\nsend({'jsonrpc':'2.0','id':'1','result':{'ok':True}})\nsecond=read();assert second['id']=='2' and second['method']=='second'\nsend({'jsonrpc':'2.0','id':'2','error':{'code':-32001,'message':'rejected','data':{'why':'test'}}})"
-set command to a process command for the json rpc session test interpreter
+set command to a process command for the JSON-RPC session test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add script as an argument to command
 launch command and set child to it
-set opened to the result of connecting json rpc to child
-set session to a json rpc session for opened's connection
+set opened to the result of connecting JSON-RPC to child
+set session to a JSON-RPC session for opened's connection
 
 set parameters to a new JSON value of kind the JSON object kind
-set sent to the result of sending json rpc request "first" with parameters using session
-print sent's succeeded as a line
+set sent to the result of sending JSON-RPC request "first" with parameters using session
+print whether sent succeeded as a line
 print (sent's request id = "1") as a line
 
 set identifier to sent's request id
-set paused to the json rpc response for identifier using session
-print (paused's status = the json rpc server request pending status) as a line
-set request to the next json rpc server request from session
-print request's succeeded as a line
+set paused to the JSON-RPC response for identifier using session
+print (paused's status = the JSON-RPC server request pending status) as a line
+set request to the next JSON-RPC server request from session
+print whether request succeeded as a line
 print (the JSON text named "method" in request's message = "workspace/configuration") as a line
 set configuration to a new JSON value of kind the JSON array kind
 set configured to a new JSON value of kind the JSON text kind
 set the text of configured to the string form of "configured"
 add configured to the JSON array configuration
 set message to request's message
-set replied to the result of replying to json rpc request message with configuration using session
-print replied's succeeded as a line
+set replied to the result of replying to message with configuration using session
+print whether replied succeeded as a line
 free configuration
-free json rpc queued message request
+free request
 
-set response to the json rpc response for identifier using session
-print response's succeeded as a line
+set response to the JSON-RPC response for identifier using session
+print whether response succeeded as a line
 set result to response's result
 print the JSON boolean named "ok" in result as a line
-free json rpc response response
+free response
 
-set notification to the next json rpc notification from session
-print notification's succeeded as a line
+set notification to the next JSON-RPC notification from session
+print whether notification succeeded as a line
 print (the JSON text named "method" in notification's message = "note") as a line
-free json rpc queued message notification
+free notification
 
-set sent to the result of sending json rpc request "second" with parameters using session
+set sent to the result of sending JSON-RPC request "second" with parameters using session
 print (sent's request id = "2") as a line
 set identifier to sent's request id
-set response to the json rpc response for identifier using session
-print (response's status = the json rpc remote error status) as a line
+set response to the JSON-RPC response for identifier using session
+print (response's status = the JSON-RPC remote error status) as a line
 print (response's remote error code = (0 - 32001)) as a line
 print (response's remote error message = "rejected") as a line
 print (the JSON text named "why" in response's remote error data = "test") as a line
-free json rpc response response
+free response
 
 free parameters
 set connection to session's connection
 set closure to the result of closing the input of connection
-set closed to the result of closing json rpc connection connection
-print closure's succeeded as a line
-print closed's succeeded as a line
-free json rpc session session
+set closed to the result of closing connection
+print whether closure succeeded as a line
+print whether closed succeeded as a line
+free session

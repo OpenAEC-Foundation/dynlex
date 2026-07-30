@@ -1,6 +1,6 @@
 function nothing:
     replacement:
-        @intrinsic("type", "void")
+        @intrinsic("type", "nothing")
 
 function finish:
     execute:

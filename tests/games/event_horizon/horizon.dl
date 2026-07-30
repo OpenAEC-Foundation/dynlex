@@ -36,17 +36,17 @@ function the shader camera y:
     replacement:
         @intrinsic("shader uniform", "camera_y")
 
-function the fractional part of {float:number}:
+function the fractional part of {floating-point number:number}:
     execute:
         return number - the floor of number
 
-function {float:number} saturated:
+function {floating-point number:number} saturated:
     execute:
         set result to number
         clamp result between 0.0 and 1.0
         return result
 
-function the smooth transition from {float:lower} to {float:upper} at {float:sample}:
+function the smooth transition from {floating-point number:lower} to {floating-point number:upper} at {floating-point number:sample}:
     execute:
         set span to (upper - lower)
         set normalized to ((sample - lower) / span)
@@ -76,7 +76,7 @@ function the value noise at {planar position:position}:
         set upper to (northwest + ((northeast - northwest) * blend's x))
         return lower + ((upper - lower) * blend's y)
 
-function the nebula density at {planar position:position} during {float:phase}:
+function the nebula density at {planar position:position} during {floating-point number:phase}:
     execute:
         set total to 0.0
         set amplitude to 0.55
@@ -96,7 +96,7 @@ function the nebula density at {planar position:position} during {float:phase}:
             increment octave
         return total
 
-function the star brightness at {planar position:position} with scale {float:scale} during {float:time} in layer {float:layer}:
+function the star brightness at {planar position:position} with scale {floating-point number:scale} during {floating-point number:time} in layer {floating-point number:layer}:
     execute:
         set grid to a planar position with x (position's x * scale) and y (position's y * scale)
         set cell to a planar position with x (the floor of (grid's x)) and y (the floor of (grid's y))
@@ -241,4 +241,4 @@ set the red channel of color to the square root of (color's red / (1.0 + color's
 set the green channel of color to the square root of (color's green / (1.0 + color's green))
 set the blue channel of color to the square root of (color's blue / (1.0 + color's blue))
 
-set the fragment color with red color's red, green color's green, blue color's blue and alpha color's alpha
+set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of color's alpha

@@ -2,13 +2,13 @@ import lib/std.dl
 
 class:
 	patterns:
-		runner state
+		[a|] runner state
 	members:
 		y, velocity
 
-function a runner at height {float:y} moving with velocity {float:velocity}:
+function a runner at height {floating-point number:y} moving with velocity {floating-point number:velocity}:
 	replacement:
-		@intrinsic("construct", runner state, y, velocity)
+		@intrinsic("construct", a runner state, y, velocity)
 
 function the window width:
 	execute:
@@ -56,7 +56,7 @@ function the jump speed:
 
 function the player's ground height:
 	execute:
-		return (the ground height - the player size) as a float
+		return (the ground height - the player size) as a floating-point number
 
 function start a jump for {runner state:body}:
 	execute:

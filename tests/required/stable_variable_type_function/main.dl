@@ -1,6 +1,6 @@
 import lib/std.dl
 
-function the integer form of {float:value}:
+function the integer form of {floating-point number:value}:
     execute:
         return value as a 32 bit integer
 

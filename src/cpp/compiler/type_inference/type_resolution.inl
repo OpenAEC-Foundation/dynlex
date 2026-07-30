@@ -595,26 +595,15 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 	return resolved->type;
 }
 
-static std::string typeToUserName(const DataType &type, ParseContext &parseContext) {
-	if (type.pointerDepth == 0) {
-		if (type.kind == DataType::Kind::Int && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit integer";
-		if (type.kind == DataType::Kind::Float && type.numericSize > 0)
-			return "a " + std::to_string(type.numericSize * 8) + " bit float";
-		if (type.kind == DataType::Kind::Bool)
-			return "a boolean";
-		if (type.kind == DataType::Kind::Void)
-			return "nothing";
-		if (type.kind == DataType::Kind::Constraint)
-			return "a constraint";
-	}
-	auto it = parseContext.typeAliasNames.find(type);
-	if (it != parseContext.typeAliasNames.end())
-		return it->second;
-	return type.toString();
-}
+static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range);
 
 #include "type_resolution_class.inl"
 #include "type_resolution_diagnostics.inl"
 #include "type_resolution_overloads.inl"
+
+static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range) {
+	requireCompilerInvariant(inferenceContext != nullptr, "type-constraint failure requires an inference context");
+	inferenceContext->fail(unknownTypeConstraintDiagnostic(parseContext, range, range.subString), 1, false);
+}
+
 #include "type_resolution_values.inl"

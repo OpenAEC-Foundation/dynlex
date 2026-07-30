@@ -1,9 +1,5 @@
 import lib/process.dl
 
-function {process result:result} failed to launch:
-    replacement:
-        the inverse of (result was launched)
-
 set argument to a new string buffer containing 3 bytes
 store 65 as a byte into the data of argument at 0
 store 0 as a byte into the data of argument at 1

@@ -12,7 +12,6 @@
 #include <functional>
 #include <limits>
 #include <list>
-#include <map>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -218,8 +217,6 @@ struct ParseContext {
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
-	// User-facing aliases for concrete types discovered from flex replacements like @intrinsic("type", ...).
-	std::map<DataType, std::string> typeAliasNames;
 	// Parse-time source token annotations for metadata syntax that is not represented as normal functions.
 	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
 	SyntaxConfig builtinSyntax;

@@ -1,7 +1,7 @@
 lib/std.dl:9-45: Error: the assigned value 'beta' has no type
-  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [i8*, a 32 bit integer, unresolved(?)] -> undeduced lib/std.dl:9-45
+  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [a 32-bit integer, an unresolved value] -> an unresolved value lib/std.dl:9-45
   note: parameter 'beta' is not bound by this call: the matched alternative does not include it tests/required/unbound_choice_parameter_return/main.dl:38-42
-  note: while inferring call 'set chosen to beta' with arguments [a 32 bit integer, unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:3-21
-  note: while inferring call 'the selection of 1 alone' with arguments [a 32 bit integer] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:8-32
-  note: while inferring call 'print (the selection of 1 alone' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:1-32
-  note: while inferring call 'print (the selection of 1 alone) as a line' with arguments [unresolved(?)] -> undeduced tests/required/unbound_choice_parameter_return/main.dl:1-43
+  note: while inferring call 'set chosen to beta' with arguments [a 32-bit integer, an unresolved value] -> an unresolved value tests/required/unbound_choice_parameter_return/main.dl:3-21
+  note: while inferring call 'the selection of 1 alone' with arguments [a 32-bit integer] -> an unresolved value tests/required/unbound_choice_parameter_return/main.dl:8-32
+  note: while inferring call 'print (the selection of 1 alone' with arguments [an unresolved value] -> an unresolved value tests/required/unbound_choice_parameter_return/main.dl:1-32
+  note: while inferring call 'print (the selection of 1 alone) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/unbound_choice_parameter_return/main.dl:1-43

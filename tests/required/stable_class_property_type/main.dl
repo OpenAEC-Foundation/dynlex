@@ -12,9 +12,9 @@ function [a|] C string:
 
 class:
     patterns:
-        box
+        [a|] box
     members:
         item
 
-set instance to @intrinsic("construct", box, 1)
+set instance to @intrinsic("construct", a box, 1)
 set instance's item to "wrong"

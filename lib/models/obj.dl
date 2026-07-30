@@ -9,26 +9,26 @@ class:
     patterns:
         [an|] OBJ color
     members:
-        red as a float
-        green as a float
-        blue as a float
+        red as a floating-point number
+        green as a floating-point number
+        blue as a floating-point number
 
 class:
     patterns:
         [an|] OBJ vertex
     members:
-        x as a float
-        y as a float
-        z as a float
+        x as a floating-point number
+        y as a floating-point number
+        z as a floating-point number
         color presence as an integer
-        color as OBJ color
+        color as an OBJ color
 
 class:
     patterns:
         [an|] OBJ texture coordinate
     members:
-        u as a float
-        v as a float
+        u as a floating-point number
+        v as a floating-point number
 
 class:
     patterns:
@@ -42,9 +42,9 @@ class:
     patterns:
         [an|] OBJ triangle
     members:
-        first as OBJ face reference
-        second as OBJ face reference
-        third as OBJ face reference
+        first as an OBJ face reference
+        second as an OBJ face reference
+        third as an OBJ face reference
         material as an integer
 
 class:
@@ -52,7 +52,7 @@ class:
         [an|] OBJ material
     members:
         name as a pointer to a byte
-        color as OBJ color
+        color as an OBJ color
         texture path as a pointer to a byte
         texture as an integer
 
@@ -86,47 +86,47 @@ class:
         materials as a pointer to an OBJ material
         material count as an integer
 
-function a new OBJ color from {any:red}, {any:green} and {any:blue}:
+function a new OBJ color from {a value:red}, {a value:green} and {a value:blue}:
     replacement:
         @intrinsic("construct", an OBJ color, red, green, blue)
 
-function a grayscale OBJ color with brightness {any:brightness}:
+function a grayscale OBJ color with brightness {a value:brightness}:
     replacement:
         @intrinsic("construct", an OBJ color, brightness, brightness, brightness)
 
-function a new OBJ vertex at x {any:horizontal}, y {any:vertical} and z {any:depth}:
+function a new OBJ vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
     replacement:
         @intrinsic("construct", an OBJ vertex, horizontal, vertical, depth, 0, (a new OBJ color from 0.0, 0.0 and 0.0))
 
-function a new colored OBJ vertex at x {any:horizontal}, y {any:vertical} and z {any:depth} in {OBJ color:color}:
+function a new colored OBJ vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} in {OBJ color:color}:
     replacement:
         @intrinsic("construct", an OBJ vertex, horizontal, vertical, depth, 1, color)
 
-function a new OBJ texture coordinate with u {any:horizontal} and v {any:vertical}:
+function a new OBJ texture coordinate with u {a value:horizontal} and v {a value:vertical}:
     replacement:
         @intrinsic("construct", an OBJ texture coordinate, horizontal, vertical)
 
-function a new OBJ face reference with vertex {any:vertex}, texture coordinate {any:texture} and normal {any:normal}:
+function a new OBJ face reference with vertex {a value:vertex}, texture coordinate {a value:texture} and normal {a value:normal}:
     replacement:
         @intrinsic("construct", an OBJ face reference, vertex, texture, normal)
 
-function a new OBJ triangle from {OBJ face reference:first}, {OBJ face reference:second} and {OBJ face reference:third} in material {any:material}:
+function a new OBJ triangle from {OBJ face reference:first}, {OBJ face reference:second} and {OBJ face reference:third} in material {a value:material}:
     replacement:
         @intrinsic("construct", an OBJ triangle, first, second, third, material)
 
-function a new OBJ material named {any:name} with {OBJ color:color}, texture path {any:path} and texture {any:texture}:
+function a new OBJ material named {a value:name} with {OBJ color:color}, texture path {a value:path} and texture {a value:texture}:
     replacement:
         @intrinsic("construct", an OBJ material, name, color, path, texture)
 
-function a new OBJ material set containing {any:materials} totalling {any:count}:
+function a new OBJ material set containing {a value:materials} totalling {a value:count}:
     replacement:
         @intrinsic("construct", an OBJ material set, materials, count)
 
-function a new OBJ mesh quantities with vertices {any:vertices}, texture coordinates {any:coordinates}, triangles {any:triangles} and materials {any:materials}:
+function a new OBJ mesh quantities with vertices {a value:vertices}, texture coordinates {a value:coordinates}, triangles {a value:triangles} and materials {a value:materials}:
     replacement:
         @intrinsic("construct", an OBJ mesh quantities, vertices, coordinates, triangles, materials)
 
-function a new OBJ mesh backed by {any:vertices}, {any:coordinates}, {any:triangles} and {any:materials}, sized according to {OBJ mesh quantities:quantities}:
+function a new OBJ mesh backed by {a value:vertices}, {a value:coordinates}, {a value:triangles} and {a value:materials}, sized according to {OBJ mesh quantities:quantities}:
     replacement:
         @intrinsic("construct", an OBJ mesh, vertices, quantities's vertices, coordinates, quantities's texture coordinates, triangles, quantities's triangles, materials, quantities's materials)
 
@@ -194,7 +194,7 @@ function a loaded OBJ texture from PPM file at path:
         @intrinsic("call", "libc", "free", nothing, pixels)
         return identifier as an integer
 
-function the index of OBJ material named {any:name} in {any:materials} with count {any:count}:
+function the index of OBJ material named {a value:name} in {a value:materials} with count {a value:count}:
     execute:
         set cursor to 0
         while cursor < count:
@@ -285,7 +285,7 @@ function a loaded OBJ material set from path:
 
         return a new OBJ material set containing materials totalling count
 
-function the zero-based OBJ index from {any:index}:
+function the zero-based OBJ index from {a value:index}:
     execute:
         if index > 0:
             return index - 1
@@ -453,7 +453,7 @@ function {OBJ color:color} scaled by factor:
     execute:
         return a new OBJ color from ((color's red) * factor), ((color's green) * factor) and ((color's blue) * factor)
 
-function a normalized OBJ color from byte values {any:red}, {any:green} and {any:blue}:
+function a normalized OBJ color from byte values {a value:red}, {a value:green} and {a value:blue}:
     execute:
         return a new OBJ color from (red / 255.0), (green / 255.0) and (blue / 255.0)
 
@@ -527,11 +527,11 @@ function {OBJ triangle:triangle} has usable texture coordinates for {OBJ mesh:me
         set third to triangle's third's texture coordinate
         return (first >= 0) and ((second >= 0) and ((third >= 0) and ((first < mesh's texture coordinate count) and ((second < mesh's texture coordinate count) and (third < mesh's texture coordinate count)))))
 
-function draw {OBJ mesh:mesh} at x {any:horizontal}, y {any:vertical} and z {any:depth} scaled by {any:scale} in {OBJ color:color}:
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color}:
     execute:
         draw mesh at x horizontal, y vertical and z depth scaled by scale in color with 0 as its render mode
 
-function draw {OBJ mesh:mesh} at x {any:horizontal}, y {any:vertical} and z {any:depth} scaled by {any:scale} in {OBJ color:color} with {any:requested} as its render mode:
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color} with {a value:requested} as its render mode:
     execute:
         if mesh's triangle count > 0:
             set vertices to mesh's vertices

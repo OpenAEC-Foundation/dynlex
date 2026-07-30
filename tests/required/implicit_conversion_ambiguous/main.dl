@@ -4,7 +4,7 @@ class:
     patterns:
         a number box
     members:
-        payload as integer
+        payload as an integer
 
 implicitly convert {integer:first}:
     replacement:
@@ -18,4 +18,4 @@ function the payload unwrapped from {a number box:boxed}:
     execute:
         return the payload of boxed
 
-print (the payload unwrapped from 8) as line
+print (the payload unwrapped from 8) as a line

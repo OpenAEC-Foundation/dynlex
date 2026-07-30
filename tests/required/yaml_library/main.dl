@@ -1,6 +1,6 @@
 import yaml.dl
 
-function print YAML error for {any:input}:
+function print YAML error for {a value:input}:
     execute:
         parse input as a YAML mapping and set parsed to it
         print whether parsed succeeded

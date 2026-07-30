@@ -1,5 +1,5 @@
 tests/required/recursive_inference_nonconvergent/main.dl:24-89: Error: Recursive type inference did not converge for function 'the second recursive result for value'
-  note: while inferring call ' the second recursive result for @intrinsic("subtract", value, 1)' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_inference_nonconvergent/main.dl:24-89
-  note: while inferring intrinsic 'return' in '@intrinsic("return", the second recursive result for @intrinsic("subtract", value, 1))' with arguments [i8*, unresolved(?)] -> undeduced tests/required/recursive_inference_nonconvergent/main.dl:4-90
-  note: while inferring call 'ignore the first recursive result for 1' with arguments [a 32 bit integer] -> undeduced tests/required/recursive_inference_nonconvergent/main.dl:8-40
-  note: while inferring call 'ignore the first recursive result for 1' with arguments [unresolved(?)] -> undeduced tests/required/recursive_inference_nonconvergent/main.dl:1-40
+  note: while inferring call ' the second recursive result for @intrinsic("subtract", value, 1)' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursive_inference_nonconvergent/main.dl:24-89
+  note: while inferring intrinsic 'return' in '@intrinsic("return", the second recursive result for @intrinsic("subtract", value, 1))' with arguments [an unresolved value] -> an unresolved value tests/required/recursive_inference_nonconvergent/main.dl:4-90
+  note: while inferring call 'ignore the first recursive result for 1' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursive_inference_nonconvergent/main.dl:8-40
+  note: while inferring call 'ignore the first recursive result for 1' with arguments [an unresolved value] -> an unresolved value tests/required/recursive_inference_nonconvergent/main.dl:1-40

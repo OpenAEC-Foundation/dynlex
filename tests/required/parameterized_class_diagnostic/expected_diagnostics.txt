@@ -1,0 +1,2 @@
+tests/required/parameterized_class_diagnostic/main.dl:1-15: Error: No overload matches call 'consume result' for argument types [a box with items]. Available overloads: 'consume {integer:value}'
+  note: while inferring call 'consume result' with arguments [a box with items] -> an unresolved value tests/required/parameterized_class_diagnostic/main.dl:1-15

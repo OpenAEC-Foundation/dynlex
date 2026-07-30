@@ -64,7 +64,7 @@ local function a new YAML mapping node named {string:name} at source position {i
             line,
             column
         )
-        allocate 1 slots of initial and set result to it
+        allocate one slot of initial and set result to it
         return result
 
 local function add {a pointer to a YAML mapping node:child} to the YAML mapping {a pointer to a YAML mapping node:parent}:
@@ -455,18 +455,18 @@ function the YAML entry at index {integer:index} in {a pointer to a YAML mapping
             @intrinsic("call", "libc", "abort", nothing)
         return the item at index in the children of parent
 
-function {a pointer to a YAML mapping node:parent} has YAML entry named {any:name}:
+function {a pointer to a YAML mapping node:parent} has YAML entry named {a value:name}:
     execute:
         return the YAML child index named the string form of name in parent >= 0
 
-function the YAML entry named {any:name} in {a pointer to a YAML mapping node:parent}:
+function the YAML entry named {a value:name} in {a pointer to a YAML mapping node:parent}:
     execute:
         set index to the YAML child index named the string form of name in parent
         if index < 0:
             @intrinsic("call", "libc", "abort", nothing)
         return the item at index in the children of parent
 
-function the YAML scalar named {any:name} in {a pointer to a YAML mapping node:parent}:
+function the YAML scalar named {a value:name} in {a pointer to a YAML mapping node:parent}:
     execute:
         set child to the YAML entry named name in parent
         return the YAML scalar of child

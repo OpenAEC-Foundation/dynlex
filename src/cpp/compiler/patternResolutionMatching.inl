@@ -656,15 +656,19 @@ bool resolvePatterns(ParseContext &context) {
 				));
 			}
 		}
-		for (PatternReference *reference : bodyReferences) {
-			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
+		auto emitReferenceDiagnostic = [&](PatternReference *reference) {
+			Diagnostic diagnostic =
+				reference->purpose == PatternReference::Purpose::TypeConstraint
+					? unknownTypeConstraintDiagnostic(context, reference->range(), reference->range().subString)
+					: Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
 			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
 			context.diagnostics.push_back(std::move(diagnostic));
+		};
+		for (PatternReference *reference : bodyReferences) {
+			emitReferenceDiagnostic(reference);
 		}
 		for (PatternReference *reference : globalReferences) {
-			Diagnostic diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
-			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
-			context.diagnostics.push_back(std::move(diagnostic));
+			emitReferenceDiagnostic(reference);
 		}
 	};
 

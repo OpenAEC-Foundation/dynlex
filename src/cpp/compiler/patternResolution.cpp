@@ -169,20 +169,35 @@ static void populateClassPatternNames(Section *section) {
 	requireCompilerInvariant(classSection->classDefinition, "class section is missing its definition");
 
 	std::vector<std::string> names;
+	std::vector<std::string> displayNames;
 	for (PatternDefinition *definition : classSection->patternDefinitions) {
 		requireCompilerInvariant(definition, "class section contains a null pattern definition");
 		for (std::string spelling : canonicalPatternSpellings(definition->patternElements)) {
 			if (std::find(names.begin(), names.end(), spelling) == names.end())
 				names.push_back(std::move(spelling));
 		}
+		for (const auto &path : canonicalPatternPaths(definition->patternElements)) {
+			std::string spelling;
+			for (const DefinitionPatternElement &element : path)
+				spelling += element.type == PatternElement::Type::Variable ? "{}" : element.text;
+			if (std::find(displayNames.begin(), displayNames.end(), spelling) == displayNames.end())
+				displayNames.push_back(std::move(spelling));
+		}
 	}
 	requireCompilerInvariant(!names.empty(), "resolved class has no pattern names");
+	requireCompilerInvariant(!displayNames.empty(), "resolved class has no display pattern names");
 	std::ranges::sort(names, [](const std::string &left, const std::string &right) {
 		if (left.size() != right.size())
 			return left.size() < right.size();
 		return left < right;
 	});
+	std::ranges::sort(displayNames, [](const std::string &left, const std::string &right) {
+		if (left.size() != right.size())
+			return left.size() < right.size();
+		return left < right;
+	});
 	classSection->classDefinition->patternNames = std::move(names);
+	classSection->classDefinition->displayPatternNames = std::move(displayNames);
 }
 
 static bool sectionComesBefore(const Section *left, const Section *right) {
@@ -356,7 +371,6 @@ struct PatternDomainAutomaton {
 		size_t target;
 		PatternElement element;
 		TypeConstraint constraint = TypeConstraint::any();
-		int constraintSpecificity = 0;
 	};
 	struct State {
 		std::vector<size_t> epsilonTargets;
@@ -400,7 +414,6 @@ struct PatternDomainAutomaton {
 				);
 				const TypeConstraintTemplate &constraint = signature.parameters[parameterIndex++].constraint;
 				transition.constraint = constraint.structuralEnvelope();
-				transition.constraintSpecificity = constraint.structuralSpecificity();
 			}
 			states[current].transitions.push_back(std::move(transition));
 			current = next;
@@ -414,7 +427,8 @@ struct PatternDomainAutomaton {
 struct PatternDomainSearchState {
 	size_t leftState;
 	size_t rightState;
-	int constraintScoreDifference;
+	bool leftCanBeMoreSpecific;
+	bool rightCanBeMoreSpecific;
 
 	bool operator==(const PatternDomainSearchState &) const = default;
 };
@@ -423,7 +437,8 @@ struct PatternDomainSearchStateHash {
 	size_t operator()(const PatternDomainSearchState &state) const {
 		size_t hash = std::hash<size_t>{}(state.leftState);
 		hash ^= std::hash<size_t>{}(state.rightState) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-		hash ^= std::hash<int>{}(state.constraintScoreDifference) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		hash ^= std::hash<bool>{}(state.leftCanBeMoreSpecific) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		hash ^= std::hash<bool>{}(state.rightCanBeMoreSpecific) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
 		return hash;
 	}
 };
@@ -443,7 +458,7 @@ static bool
 definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinition, const PatternDefinition &rightDefinition) {
 	PatternDomainAutomaton left(leftDefinition);
 	PatternDomainAutomaton right(rightDefinition);
-	std::vector<PatternDomainSearchState> pending{{0, 0, 0}};
+	std::vector<PatternDomainSearchState> pending{{0, 0, true, true}};
 	std::unordered_set<PatternDomainSearchState, PatternDomainSearchStateHash> visited;
 
 	while (!pending.empty()) {
@@ -454,24 +469,41 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 
 		const auto &leftState = left.states[current.leftState];
 		const auto &rightState = right.states[current.rightState];
-		if (leftState.accepting && rightState.accepting && current.constraintScoreDifference == 0)
-			return true;
+		if (leftState.accepting && rightState.accepting) {
+			const bool oneDomainStrictlyContainsTheOther = current.leftCanBeMoreSpecific != current.rightCanBeMoreSpecific;
+			if (!oneDomainStrictlyContainsTheOther)
+				return true;
+		}
 
 		for (size_t target : leftState.epsilonTargets)
-			pending.push_back({target, current.rightState, current.constraintScoreDifference});
+			pending.push_back({target, current.rightState, current.leftCanBeMoreSpecific, current.rightCanBeMoreSpecific});
 		for (size_t target : rightState.epsilonTargets)
-			pending.push_back({current.leftState, target, current.constraintScoreDifference});
+			pending.push_back({current.leftState, target, current.leftCanBeMoreSpecific, current.rightCanBeMoreSpecific});
 		for (const auto &leftTransition : leftState.transitions) {
 			for (const auto &rightTransition : rightState.transitions) {
 				if (!patternTransitionsOverlap(leftTransition, rightTransition))
 					continue;
-				int nextDifference = current.constraintScoreDifference;
+				bool leftCanBeMoreSpecific = current.leftCanBeMoreSpecific;
+				bool rightCanBeMoreSpecific = current.rightCanBeMoreSpecific;
 				if (leftTransition.element.type == PatternElement::Type::Variable ||
 					leftTransition.element.type == PatternElement::Type::Word) {
-					nextDifference += leftTransition.constraintSpecificity;
-					nextDifference -= rightTransition.constraintSpecificity;
+					switch (leftTransition.constraint.compareSpecificity(rightTransition.constraint)) {
+					case ConstraintSpecificity::Equivalent:
+						break;
+					case ConstraintSpecificity::LeftMoreSpecific:
+						rightCanBeMoreSpecific = false;
+						break;
+					case ConstraintSpecificity::RightMoreSpecific:
+						leftCanBeMoreSpecific = false;
+						break;
+					case ConstraintSpecificity::Incomparable:
+						leftCanBeMoreSpecific = false;
+						rightCanBeMoreSpecific = false;
+						break;
+					}
 				}
-				pending.push_back({leftTransition.target, rightTransition.target, nextDifference});
+				pending.push_back({leftTransition.target, rightTransition.target, leftCanBeMoreSpecific, rightCanBeMoreSpecific}
+				);
 			}
 		}
 	}

@@ -3,28 +3,28 @@ import lib/geometry.dl
 
 # Shared procedural-art vocabulary for editable fragment shaders.
 
-function a point with x {float:horizontal} and y {float:vertical}:
+function a point with x {floating-point number:horizontal} and y {floating-point number:vertical}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 2 float values, horizontal, vertical)
+            @intrinsic("construct", an aggregate of 2 floating-point number values, horizontal, vertical)
         )
 
-function a point with x {float:horizontal}, y {float:vertical} and z {float:depth}:
+function a point with x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 3 float values, horizontal, vertical, depth)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, horizontal, vertical, depth)
         )
 
-function the dimensions measuring {float:width} by {float:height} by {float:depth}:
+function the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 3 float values, width, height, depth)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
         )
 
 function the shader width:
@@ -60,7 +60,7 @@ function the simplex permutation of value:
         set polynomial to (((value * 34.0) + 1.0) * value)
         return polynomial - (the floor of (polynomial / 289.0)) * 289.0
 
-function the simplex corner at {a point:offset} with permutation {any:permutation}:
+function the simplex corner at {a point:offset} with permutation {a value:permutation}:
     execute:
         set radius to the maximum of (0.5 - ((offset's x * offset's x) + (offset's y * offset's y))) and 0.0
         set axis to (((the fractional part of (permutation / 41.0)) * 2.0) - 1.0)
@@ -74,7 +74,7 @@ function the simplex corner at {a point:offset} with permutation {any:permutatio
 
 # A triangular simplex lattice avoids the axis-aligned cells and repeating
 # wave bands that become conspicuous when a field displaces visible geometry.
-function the simplex field at {a point:point} during {any:phase}:
+function the simplex field at {a point:point} during {a value:phase}:
     execute:
         set sample to a point with x (point's x + phase * 17.17) and y (point's y - phase * 11.13)
         set skew to ((sample's x + sample's y) * 0.36602540)
@@ -99,7 +99,7 @@ function the simplex field at {a point:point} during {any:phase}:
         set trailing to the simplex corner at third with permutation final
         return ((leading + central) + trailing) * 130.0
 
-function the signed flow at {a point:point} during {any:phase}:
+function the signed flow at {a point:point} during {a value:phase}:
     execute:
         set sway to the sine of (((point's x * 0.73) - (point's y * 0.41)) + phase)
         set drift to the cosine of (((point's x * 0.37) + (point's y * 0.89)) - (phase * 0.71))
@@ -111,17 +111,17 @@ function the signed flow at {a point:point} during {any:phase}:
         set detail to the cosine of (((longitude * 4.03) + (latitude * 3.17)) + (crossing * 1.4))
         return ((broad * 0.46) + (crossing * 0.29)) + ((curl * 0.17) + (detail * 0.08))
 
-function the flowing field at {a point:point} during {any:phase}:
+function the flowing field at {a point:point} during {a value:phase}:
     execute:
         return (the signed flow at point during phase) * 0.5 + 0.5
 
-function the ridged field at {a point:point} during {any:phase}:
+function the ridged field at {a point:point} during {a value:phase}:
     execute:
         set wave to the absolute value of (the signed flow at point during phase)
         set ridge to (1.0 - the minimum of wave and 1.0)
         return ridge * ridge
 
-function the spark field at {a point:point} during {any:phase}:
+function the spark field at {a point:point} during {a value:phase}:
     execute:
         set sample to a point with x (point's x * 0.19) and y (point's y * 0.19)
         set warp to the signed flow at sample during phase
@@ -151,14 +151,14 @@ function the distance from {a point:point} to segment from {a point:start} to {a
         set deviation to (point's y - latitude)
         return the square root of (difference * difference + deviation * deviation)
 
-function the ring distance from {a point:point} around {a point:center} with radius {any:radius}:
+function the ring distance from {a point:point} around {a point:center} with radius {a value:radius}:
     execute:
         set difference to (point's x - center's x)
         set deviation to (point's y - center's y)
         set result to the square root of (difference * difference + deviation * deviation)
         return the absolute value of (result - radius)
 
-function the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius {any:radius}:
+function the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius {a value:radius}:
     execute:
         set span to (end's x - start's x)
         set rise to (end's y - start's y)
@@ -186,12 +186,12 @@ function the ellipsoid distance from {a point:point} with radii {a point:radii}:
         set smallest to the minimum of radii's width and (the minimum of radii's height and radii's depth)
         return (result - 1.0) * smallest
 
-function the torus distance from {a point:point} with major radius {any:outer} and tube radius {any:inner}:
+function the torus distance from {a point:point} with major radius {a value:outer} and tube radius {a value:inner}:
     execute:
         set offset to ((the square root of (point's x * point's x + point's y * point's y)) - outer)
         return (the square root of (offset * offset + point's z * point's z)) - inner
 
-function the nano drone field at {a point:point} with phase {any:phase}:
+function the nano drone field at {a point:point} with phase {a value:phase}:
     execute:
         set first to (((point's x) * 43.13) + (((point's y) * 17.71) + (((point's z) * 7.19) + phase)))
         set second to (((point's x) * -13.37) + (((point's y) * 47.07) + (((point's z) * 21.41) - (phase * 0.73))))

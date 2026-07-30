@@ -14,7 +14,7 @@ function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
-function [a|] float:
+function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")
 
@@ -22,7 +22,7 @@ function left - right:
     execute:
         return @intrinsic("cast", @intrinsic("subtract", left, right), @intrinsic("type", "float"))
 
-function {float:value} odded:
+function {floating-point number:value} odded:
     execute:
         return value
 

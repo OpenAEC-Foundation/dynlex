@@ -10,7 +10,7 @@ function value as destination:
     execute:
         return @intrinsic("cast", value, destination)
 
-function [an|a|] integer:
+function [an|] integer:
     replacement:
         @intrinsic("type", "int")
 
@@ -18,7 +18,7 @@ class:
     patterns:
         a box
     members:
-        payload as integer
+        payload as an integer
 
 convert {integer:number}:
     replacement:

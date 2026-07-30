@@ -13,9 +13,9 @@ function say message:
 
 class:
 	patterns:
-		octet
-		unsigned char
-		eight bit unsigned integer
+		[an|] octet
+		[an|] unsigned char
+		[an|] eight bit unsigned integer
 
 
 function number%:

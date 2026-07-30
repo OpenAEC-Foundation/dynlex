@@ -12,7 +12,7 @@ function [a|] byte:
 
 function nothing:
     replacement:
-        @intrinsic("type", "void")
+        @intrinsic("type", "nothing")
 
 function the type for item and quantity:
     replacement:

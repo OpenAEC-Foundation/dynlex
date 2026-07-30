@@ -75,7 +75,6 @@ struct TypeConstraintTemplate {
 	static TypeConstraintTemplate projectedType(size_t argumentIndex, size_t elementDepth = 0);
 
 	bool isDependent() const;
-	int structuralSpecificity() const;
 	TypeConstraint structuralEnvelope() const;
 	void collectDependencies();
 	std::optional<TypeConstraint>

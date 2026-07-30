@@ -13,28 +13,28 @@ function [a|] light color:
     replacement:
         a color
 
-function a planar position with x {float:x} and y {float:y}:
+function a planar position with x {floating-point number:x} and y {floating-point number:y}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 2 float values, x, y)
+            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
         )
 
-function a complex number with real {float:real} and imaginary {float:imaginary}:
+function a complex number with real {floating-point number:real} and imaginary {floating-point number:imaginary}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 2 float values, real, imaginary)
+            @intrinsic("construct", an aggregate of 2 floating-point number values, real, imaginary)
         )
 
-function a light color with red {float:red}, green {float:green}, blue {float:blue} and alpha {float:alpha}:
+function a light color with red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha}:
     replacement:
         @intrinsic(
             "construct",
             a color,
-            @intrinsic("construct", an aggregate of 4 float values, red, green, blue, alpha)
+            @intrinsic("construct", an aggregate of 4 floating-point number values, red, green, blue, alpha)
         )
 
 function {complex number:value}'s real part:

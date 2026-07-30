@@ -157,7 +157,7 @@ Implementation details are documented in `docs/stages.md`.
 
 - File extension: `.dl`
 - Pattern types:
-  - `function`: A function pattern (void-returning for side effects)
+  - `function`: A function pattern (producing `nothing` when it only has side effects)
   - `section`: Outermost pattern for section openings (loop/if/etc.)
 - Classes add patterns to the function tree because type literals are functions.
 - Intrinsics should stay minimal (core arithmetic/memory/comparison only); stdlib should live in DynLex.
@@ -179,7 +179,7 @@ Implementation details are documented in `docs/stages.md`.
 - Type system: static typing with full inference.
 - DynLex language memory: automatic scope-based destruction (RAII style).
 - Compiler-internal memory: arena-style lifetime owned by parse context for compilation duration.
-- Primitive types: `i8/i16/i32/i64`, `f32/f64`, `bool`, `string`.
+- Primitive types: byte and bit-width integers, bit-width floating-point numbers, booleans, and strings.
 - Classes: data-only structs (no member functions).
 - Pattern ambiguity: compile error when multiple patterns match.
 

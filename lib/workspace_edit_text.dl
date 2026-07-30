@@ -8,42 +8,42 @@ local class:
     patterns:
         [a|] workspace offset result
     members:
-        success as boolean
-        offset as i32
-        failure reason as string
+        success as a boolean
+        offset as a 32 bit integer
+        failure reason as a string
 
 local class:
     patterns:
         [a|] workspace edit index collection
     members:
-        items as a pointer to integer
-        length as i32
-        capacity as i32
+        items as a pointer to an integer
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
 local class:
     patterns:
         [a|] prepared workspace text edit
     members:
-        start offset as i32
-        end offset as i32
-        new text as string
-        source index as i32
+        start offset as a 32 bit integer
+        end offset as a 32 bit integer
+        new text as a string
+        source index as a 32 bit integer
 
 local class:
     patterns:
         [a|] prepared workspace text edit collection
     members:
-        items as a pointer to prepared workspace text edit
-        length as i32
-        capacity as i32
+        items as a pointer to a prepared workspace text edit
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
 local class:
     patterns:
         [a|] prepared workspace text edit result
     members:
-        success as boolean
-        edits as a pointer to prepared workspace text edit collection
-        failure reason as string
+        success as a boolean
+        edits as a pointer to a prepared workspace text edit collection
+        failure reason as a string
 
 local function {workspace offset result:result} succeeded:
     replacement:
@@ -67,7 +67,7 @@ local function a successful workspace offset at {integer:position}:
             "construct",
             a workspace offset result,
             true,
-            position as i32,
+            position as a 32 bit integer,
             an empty workspace edit text
         )
 
@@ -85,19 +85,19 @@ local function the workspace UTF32 offset for position {integer:goal} in {string
     execute:
         if goal < 0:
             return a failed workspace offset reporting the string form of "Text position is negative"
-        set offset to 0
+        set cursor to 0
         set count to 0
-        loop while count < goal and offset < the length of line:
-            decode the UTF8 code point in line at byte offset and set decoded to it
+        loop while count < goal and cursor < the length of line:
+            decode the UTF-8 code point in line at byte cursor and set decoded to it
             if decoded failed:
                 return a failed workspace offset reporting the string form of "Text is not valid UTF-8"
-            set offset to the next byte offset of decoded
+            set cursor to the next byte offset of decoded
             set count to (count + 1)
         if count != goal:
             return a failed workspace offset reporting the string form of "Text position is outside the line"
-        return a successful workspace offset at offset
+        return a successful workspace offset at cursor
 
-local function the workspace line byte offset for {workspace edit position:requested} in {string:source} using {a pointer to text line index:lines} and encoding {integer:encoding}:
+local function the workspace line byte offset for {workspace edit position:requested} in {string:source} using {a pointer to a text line index:lines} and {integer:encoding}:
     execute:
         if requested's line < 0 or requested's character < 0:
             return a failed workspace offset reporting the string form of "Text position is negative"
@@ -107,22 +107,22 @@ local function the workspace line byte offset for {workspace edit position:reque
             return a failed workspace offset reporting the string form of "Text line is outside the document"
         set start to the position of beginning
         set end to the position of ending
-        set line to the substring of source from start spanning (end - start) bytes
+        set segment to the substring of source from start spanning (end - start) bytes
         set displacement to a failed workspace offset reporting the string form of "Unsupported position encoding"
-        if encoding = the workspace UTF8 position encoding:
-            set boundary to the UTF16 position of UTF8 byte offset requested's character in line
+        if encoding = the workspace UTF-8 position encoding:
+            set boundary to the UTF-16 position of UTF-8 byte offset requested's character in segment
             if boundary succeeded:
                 set displacement to a successful workspace offset at requested's character
             else:
                 set displacement to a failed workspace offset reporting the string form of "UTF-8 position is outside a code point boundary"
-        else if encoding = the workspace UTF16 position encoding:
-            set converted to the UTF8 byte offset of UTF16 position requested's character in line
+        else if encoding = the workspace UTF-16 position encoding:
+            set converted to the UTF-8 byte offset of UTF-16 position requested's character in segment
             if converted succeeded:
                 set displacement to a successful workspace offset at the position of converted
             else:
                 set displacement to a failed workspace offset reporting the string form of "UTF-16 position is outside a code point boundary"
         else if encoding = the workspace UTF32 position encoding:
-            set displacement to the workspace UTF32 offset for position requested's character in line
+            set displacement to the workspace UTF32 offset for position requested's character in segment
         if displacement failed:
             return displacement
         return a successful workspace offset at start + displacement's offset
@@ -132,14 +132,14 @@ local function a new prepared workspace text edit collection:
         set initial to @intrinsic(
             "construct",
             a prepared workspace text edit collection,
-            0 as a pointer to prepared workspace text edit,
+            0 as a pointer to a prepared workspace text edit,
             0,
             0
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-local function append {prepared workspace text edit:value} to prepared workspace edits {a pointer to prepared workspace text edit collection:collection}:
+local function append {prepared workspace text edit:value} to prepared workspace edits {a pointer to a prepared workspace text edit collection:collection}:
     execute:
         if the length of collection = the capacity of collection:
             set growth to ((the capacity of collection) * 2)
@@ -149,7 +149,7 @@ local function append {prepared workspace text edit:value} to prepared workspace
                 "call",
                 "libc",
                 "realloc",
-                a pointer to prepared workspace text edit,
+                a pointer to a prepared workspace text edit,
                 the items of collection,
                 growth * the size of a prepared workspace text edit
             )
@@ -158,13 +158,13 @@ local function append {prepared workspace text edit:value} to prepared workspace
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
         set the length of collection to ((the length of collection) + 1)
 
-local function prepared workspace text edit at {integer:position} in {a pointer to prepared workspace text edit collection:collection}:
+local function the prepared workspace text edit at {integer:position} in {a pointer to a prepared workspace text edit collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
             @intrinsic("call", "libc", "abort", nothing)
         return the item at position in the items of collection
 
-local function free prepared workspace text edits {a pointer to prepared workspace text edit collection:collection}:
+local function free prepared workspace text edits {a pointer to a prepared workspace text edit collection:collection}:
     execute:
         set position to 0
         loop while position < the length of collection:
@@ -179,14 +179,14 @@ local function a new workspace edit index collection:
         set initial to @intrinsic(
             "construct",
             a workspace edit index collection,
-            0 as a pointer to integer,
+            0 as a pointer to an integer,
             0,
             0
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-local function append workspace edit index {integer:value} to {a pointer to workspace edit index collection:sequence}:
+local function append workspace edit index {integer:value} to {a pointer to a workspace edit index collection:sequence}:
     execute:
         if the length of sequence = the capacity of sequence:
             set growth to ((the capacity of sequence) * 2)
@@ -196,7 +196,7 @@ local function append workspace edit index {integer:value} to {a pointer to work
                 "call",
                 "libc",
                 "realloc",
-                a pointer to integer,
+                a pointer to an integer,
                 the items of sequence,
                 growth * the size of an integer
             )
@@ -205,25 +205,25 @@ local function append workspace edit index {integer:value} to {a pointer to work
         @intrinsic("initialize at", (the items of sequence) + (the length of sequence), value)
         set the length of sequence to ((the length of sequence) + 1)
 
-local function workspace edit index at {integer:position} in {a pointer to workspace edit index collection:sequence}:
+local function the workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:sequence}:
     execute:
         if position < 0 or position >= the length of sequence:
             @intrinsic("call", "libc", "abort", nothing)
         return the item at position in the items of sequence
 
-local function replace workspace edit index at {integer:position} in {a pointer to workspace edit index collection:sequence} with {integer:value}:
+local function replace workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:sequence} with {integer:value}:
     execute:
         if position < 0 or position >= the length of sequence:
             @intrinsic("call", "libc", "abort", nothing)
         store value into the items of sequence at position
 
-local function free workspace edit index collection {a pointer to workspace edit index collection:sequence}:
+local function free workspace edit index collection {a pointer to a workspace edit index collection:sequence}:
     execute:
         @intrinsic("call", "libc", "free", nothing, the items of sequence)
         @intrinsic("destroy at", sequence)
         @intrinsic("call", "libc", "free", nothing, sequence)
 
-local function the stable prepared workspace edit indexes for {a pointer to prepared workspace text edit collection:collection}:
+local function the stable prepared workspace edit indexes for {a pointer to a prepared workspace text edit collection:collection}:
     execute:
         set order to a new workspace edit index collection
         set cursor to 0
@@ -232,9 +232,9 @@ local function the stable prepared workspace edit indexes for {a pointer to prep
             set position to ((the length of order) - 1)
             set searching to true
             loop while searching and position > 0:
-                set previous to workspace edit index at (position - 1) in order
-                set left to prepared workspace text edit at previous in collection
-                set right to prepared workspace text edit at cursor in collection
+                set previous to the workspace edit index at (position - 1) in order
+                set left to the prepared workspace text edit at previous in collection
+                set right to the prepared workspace text edit at cursor in collection
                 set moving to (left's start offset > right's start offset)
                 if left's start offset = right's start offset:
                     set moving to (left's source index > right's source index)
@@ -247,15 +247,15 @@ local function the stable prepared workspace edit indexes for {a pointer to prep
             set cursor to (cursor + 1)
         return order
 
-local function the result of validating workspace text edit indexes {a pointer to prepared workspace text edit collection:collection} ordered by {a pointer to workspace edit index collection:order}:
+local function the result of validating workspace text edit indexes {a pointer to a prepared workspace text edit collection:collection} ordered by {a pointer to a workspace edit index collection:order}:
     execute:
         set consumed to 0
         set grouping to (0 - 1)
         set replacement to false
         set position to 0
         loop while position < the length of order:
-            set position to workspace edit index at position in order
-            set prepared to prepared workspace text edit at position in collection
+            set position to the workspace edit index at position in order
+            set prepared to the prepared workspace text edit at position in collection
             if prepared's start offset < consumed:
                 return a failed workspace text result reporting the string form of "Text edit ranges overlap"
             if prepared's start offset != grouping:
@@ -272,9 +272,9 @@ local function the result of validating workspace text edit indexes {a pointer t
             set position to (position + 1)
         return a successful workspace text result containing an empty workspace edit text
 
-local function the prepared workspace text edit result for {a pointer to workspace text edit collection:edits} against {string:source} using encoding {integer:encoding}:
+local function the prepared workspace text edit result for {a pointer to a workspace text edit collection:edits} against {string:source} using {integer:encoding}:
     execute:
-        set prepared to a new prepared workspace text edit collection
+        set collection to a new prepared workspace text edit collection
         scan lines in source and set indexing to it
         if indexing failed:
             free indexing
@@ -282,7 +282,7 @@ local function the prepared workspace text edit result for {a pointer to workspa
                 "construct",
                 a prepared workspace text edit result,
                 false,
-                prepared,
+                collection,
                 the string form of "Text is not valid UTF-8"
             )
         set lines to the line index of indexing
@@ -290,9 +290,9 @@ local function the prepared workspace text edit result for {a pointer to workspa
         set valid to true
         set reason to an empty workspace edit text
         loop while position < the length of edits and valid:
-            set edit to workspace text edit at index position in edits
-            set start to the workspace line byte offset for edit's start in source using lines and encoding encoding
-            set end to the workspace line byte offset for edit's end in source using lines and encoding encoding
+            set amendment to the workspace text edit at index position in edits
+            set start to the workspace line byte offset for amendment's start in source using lines and encoding
+            set end to the workspace line byte offset for amendment's end in source using lines and encoding
             if start failed:
                 set valid to false
                 set reason to start's failure reason
@@ -308,9 +308,9 @@ local function the prepared workspace text edit result for {a pointer to workspa
                     a prepared workspace text edit,
                     start's offset,
                     end's offset,
-                    edit's new text,
+                    amendment's new text,
                     position
-                ) to prepared workspace edits prepared
+                ) to prepared workspace edits collection
             set position to (position + 1)
         free indexing
         if the inverse of valid:
@@ -318,20 +318,20 @@ local function the prepared workspace text edit result for {a pointer to workspa
                 "construct",
                 a prepared workspace text edit result,
                 false,
-                prepared,
+                collection,
                 reason
             )
         return @intrinsic(
             "construct",
             a prepared workspace text edit result,
             true,
-            prepared,
+            collection,
             an empty workspace edit text
         )
 
-function the result of applying workspace text edits {a pointer to workspace text edit collection:edits} to {string:source} using encoding {integer:encoding}:
+function the result of applying workspace text edits {a pointer to a workspace text edit collection:edits} to {string:source} using {integer:encoding}:
     execute:
-        set preparation to the prepared workspace text edit result for edits against source using encoding encoding
+        set preparation to the prepared workspace text edit result for edits against source using encoding
         set prepared to preparation's edits
         if preparation failed:
             set reason to preparation's failure reason
@@ -346,7 +346,7 @@ function the result of applying workspace text edits {a pointer to workspace tex
         set length to the length of source
         set position to 0
         loop while position < the length of order:
-            set change to prepared workspace text edit at (workspace edit index at position in order) in prepared
+            set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
             set length to (length + the length of change's new text)
             set length to (length - (change's end offset - change's start offset))
             set position to (position + 1)
@@ -359,7 +359,7 @@ function the result of applying workspace text edits {a pointer to workspace tex
         set writer to 0
         set position to 0
         loop while position < the length of order:
-            set change to prepared workspace text edit at (workspace edit index at position in order) in prepared
+            set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
             set span to (change's start offset - reader)
             if span > 0:
                 set unchanged to the substring of source from reader spanning span bytes

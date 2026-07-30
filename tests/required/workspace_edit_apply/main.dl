@@ -3,15 +3,16 @@ import lib/workspace_edit.dl
 create a temporary directory and set temporary to it
 if temporary failed:
     @intrinsic("call", "libc", "abort", nothing)
-set creation to the result of creating a workspace edit context rooted at temporary's directory path
-print creation succeeded as line
+set directory to temporary's directory path
+set creation to the result of creating a workspace edit context rooted at directory
+print whether creation succeeded as a line
 if creation failed:
     @intrinsic("call", "libc", "abort", nothing)
 set context to creation's context
 
 set empty to the result of applying workspace edit "{\"documentChanges\":[]}" using context
-print empty was applied as line
+print empty was applied as a line
 
 free context
 remove the filesystem tree at temporary's directory path and set cleanup to it
-print cleanup succeeded as line
+print whether cleanup succeeded as a line

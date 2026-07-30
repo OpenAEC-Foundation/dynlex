@@ -6,4 +6,4 @@ if this is a vertex shader:
     set the output position with x 0.0, y 0.0, z 0.0 and w 1.0
 else:
     set pulse to the shader time
-    set the fragment color with red pulse, green 0.2, blue 0.8 and alpha 1.0
+    set the fragment color with a red channel of pulse, a green channel of 0.2, a blue channel of 0.8 and an alpha channel of 1.0

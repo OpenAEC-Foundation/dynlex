@@ -12,23 +12,23 @@ function [a|] pointer to pointee:
 
 class:
     patterns:
-        cell
+        [a|] cell
     members:
         number as an integer
 
 class:
     patterns:
-        holder
+        [a|] holder
     members:
-        child as cell
+        child as a cell
         pointer as a pointer to an integer
 
 class:
     patterns:
-        managed holder
+        [a|] managed holder
     members:
         references as a pointer to an integer
-        child as cell
+        child as a cell
     retain:
         @intrinsic("store", count, @intrinsic("dereference", @intrinsic("property", @intrinsic("lifecycle value"), "references")))
         @intrinsic("store at", @intrinsic("property", @intrinsic("lifecycle value"), "references"), @intrinsic("add", count, 1))
@@ -46,7 +46,7 @@ function pointer after incrementing counter:
 @intrinsic("store", dereferenced, @intrinsic("address of", @intrinsic("dereference", pointer)))
 @intrinsic("store at", dereferenced, 11)
 
-@intrinsic("store", owner, @intrinsic("construct", holder, @intrinsic("construct", cell, 20), pointer))
+@intrinsic("store", owner, @intrinsic("construct", a holder, @intrinsic("construct", a cell, 20), pointer))
 @intrinsic("store", handle, @intrinsic("address of", owner))
 @intrinsic("store", child, @intrinsic("address of", @intrinsic("property", owner, "child")))
 @intrinsic("store", nested, @intrinsic("address of", @intrinsic("property", @intrinsic("property", owner, "child"), "number")))
@@ -57,7 +57,7 @@ function pointer after incrementing counter:
 @intrinsic("store", evaluations, 0)
 @intrinsic("store", evaluated, @intrinsic("address of", @intrinsic("property", handle after incrementing evaluations, "child")))
 @intrinsic("store", references, 0)
-@intrinsic("store", managed, @intrinsic("construct", managed holder, @intrinsic("address of", references), @intrinsic("construct", cell, 30)))
+@intrinsic("store", managed, @intrinsic("construct", a managed holder, @intrinsic("address of", references), @intrinsic("construct", a cell, 30)))
 @intrinsic("store", ownership, @intrinsic("address of", managed))
 @intrinsic("store", retained, @intrinsic("address of", @intrinsic("property", managed, "child")))
 @intrinsic("store", deep, @intrinsic("address of", @intrinsic("property", @intrinsic("property", managed, "child"), "number")))

@@ -1,71 +1,71 @@
 import lib/json_rpc.dl
 
-function [the|] json rpc id test interpreter:
+function [the|] JSON-RPC id test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
 
 set script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\na=read();b=read();c=read();d=read()\nassert a['id']==9007199254740993 and a['method']=='number' and 'params' not in a\nassert b['id']=='9007199254740993' and b['params'] is None\nassert c['id'] is None and c['params']=={}\nassert d['id']==0 and 'params' not in d\nsend({'jsonrpc':'2.0','id':'9007199254740993','result':{'kind':'string'}})\nsend({'jsonrpc':'2.0','id':9007199254740993,'error':{'code':-9007199254740993,'message':'exact','data':None}})\nsend({'jsonrpc':'2.0','id':None,'result':3})\nsend({'jsonrpc':'2.0','id':0,'result':4})\nsend({'jsonrpc':'2.0','id':'unknown','result':False})"
-set command to a process command for the json rpc id test interpreter
+set command to a process command for the JSON-RPC id test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add script as an argument to command
 launch command and set child to it
-set opened to the result of connecting json rpc to child
-set state to a json rpc session for opened's connection
+set opened to the result of connecting JSON-RPC to child
+set state to a JSON-RPC session for opened's connection
 
-set number to a new json rpc integer from "9007199254740993"
-set text to a new json rpc text for "9007199254740993"
-set null to a new json rpc null
-set negative to a new json rpc integer from "-0"
-set zero to a new json rpc integer from "0"
-set parameters to a new json rpc null
-set object to a new json rpc object
+set number to a new JSON-RPC integer from "9007199254740993"
+set text to a new JSON-RPC text for "9007199254740993"
+set null to a new JSON-RPC null
+set negative to a new JSON-RPC integer from "-0"
+set zero to a new JSON-RPC integer from "0"
+set parameters to a new JSON-RPC null
+set object to a new JSON-RPC object
 
-set first to the result of sending json rpc request "number" and identifier number using state
-set second to the result of sending json rpc request "string" with parameters and identifier text using state
-set third to the result of sending json rpc request "null" with object and identifier null using state
-set fourth to the result of sending json rpc request "zero" and identifier negative using state
-print first's succeeded as a line
-print second's succeeded as a line
-print third's succeeded as a line
-print fourth's succeeded as a line
+set first to the result of sending JSON-RPC request "number" identified by number using state
+set second to the result of sending JSON-RPC request "string" with parameters identified by text using state
+set third to the result of sending JSON-RPC request "null" with object identified by null using state
+set fourth to the result of sending JSON-RPC request "zero" identified by negative using state
+print whether first succeeded as a line
+print whether second succeeded as a line
+print whether third succeeded as a line
+print whether fourth succeeded as a line
 print (first's request id = "9007199254740993") as a line
 print (third's request id = "null") as a line
 
-set duplicate to the result of sending json rpc request "duplicate" and identifier zero using state
-print the inverse of duplicate's succeeded as a line
-print (duplicate's status = the json rpc protocol error status) as a line
+set duplicate to the result of sending JSON-RPC request "duplicate" identified by zero using state
+print whether duplicate failed as a line
+print (duplicate's status = the JSON-RPC protocol error status) as a line
 
-set reply to the json rpc response for identifier number using state
-print (reply's status = the json rpc remote error status) as a line
+set reply to the JSON-RPC response for number using state
+print (reply's status = the JSON-RPC remote error status) as a line
 print (reply's remote error code text = "-9007199254740993") as a line
 print (reply's remote error message = "exact") as a line
 print (reply's remote error data is JSON null) as a line
-free json rpc response reply
+free reply
 
-set reply to the json rpc response for identifier text using state
-print reply's succeeded as a line
+set reply to the JSON-RPC response for text using state
+print whether reply succeeded as a line
 print (the JSON text named "kind" in reply's result = "string") as a line
-free json rpc response reply
+free reply
 
-set reply to the json rpc response for identifier null using state
-print reply's succeeded as a line
+set reply to the JSON-RPC response for null using state
+print whether reply succeeded as a line
 print (the number of reply's result = 3.0) as a line
-free json rpc response reply
+free reply
 
-set reply to the json rpc response for identifier negative using state
-print reply's succeeded as a line
+set reply to the JSON-RPC response for negative using state
+print whether reply succeeded as a line
 print (the number of reply's result = 4.0) as a line
-free json rpc response reply
+free reply
 
-set unknown to the result of pumping one json rpc message using state
-print the inverse of unknown's succeeded as a line
-print (unknown's status = the json rpc protocol error status) as a line
-set diagnostic to the next json rpc diagnostic from state
-print diagnostic's succeeded as a line
+set unknown to the result of pumping one JSON-RPC message using state
+print whether unknown failed as a line
+print (unknown's status = the JSON-RPC protocol error status) as a line
+set diagnostic to the next JSON-RPC diagnostic from state
+print whether diagnostic succeeded as a line
 print (diagnostic's error message = "JSON-RPC response has an unknown ID") as a line
 print (the JSON text named "id" in diagnostic's message = "unknown") as a line
-free json rpc queued message diagnostic
+free diagnostic
 
 free number
 free text
@@ -74,4 +74,4 @@ free negative
 free zero
 free parameters
 free object
-free json rpc session state
+free state

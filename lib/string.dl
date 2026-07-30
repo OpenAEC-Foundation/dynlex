@@ -185,6 +185,14 @@ function {string:text} has {C string:fragment} at offset {integer:position}:
     execute:
         return text has the string form of fragment at offset position
 
+function {string:text} lacks {string:fragment} at offset {integer:position}:
+    execute:
+        return (text has fragment at offset position) = false
+
+function {string:text} lacks {C string:fragment} at offset {integer:position}:
+    execute:
+        return text lacks the string form of fragment at offset position
+
 function copy {string:source} into target at offset {integer:offset}:
     execute:
         set index to 0
@@ -248,7 +256,7 @@ function the string form of {integer:value}:
             store 45 as a byte into data at 0
         return result
 
-function the string form of {float:value}:
+function the string form of {floating-point number:value}:
     execute:
         set negative to (value < 0.0)
         set magnitude to the absolute value of value
@@ -262,7 +270,7 @@ function the string form of {float:value}:
         loop while index < decimals:
             set scale to (scale * 10)
             set index to (index + 1)
-        set rounded to (the floor of ((magnitude * scale) as a float + 0.5)) as a word sized integer
+        set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a word sized integer
         set whole to (rounded / scale)
         set fraction to the remainder of rounded divided by scale
         set integral to the string form of whole
@@ -309,7 +317,7 @@ implicitly convert {C string:value}:
 
 # --- Line suffix ---
 
-function value as [a|] line:
+function value as a line:
     execute:
         set result to the string form of value
         set newline to a new string from "\n" containing 1 byte
@@ -333,7 +341,7 @@ function print whether condition:
     execute:
         print condition
 
-function print whether condition as [a|] line:
+function print whether condition as a line:
     execute:
         print condition as a line
 

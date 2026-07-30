@@ -3,23 +3,23 @@ import tests/games/geometry_dash/physics.dl
 
 class:
 	patterns:
-		screen position
+		[a|] screen position
 	members:
 		x, y
 
 class:
 	patterns:
-		screen color
+		[a|] screen color
 	members:
 		red, green, blue
 
 function a screen position with x {integer:x} and y {integer:y}:
 	replacement:
-		@intrinsic("construct", screen position, x, y)
+		@intrinsic("construct", a screen position, x, y)
 
 function a screen color with red {integer:red}, green {integer:green} and blue {integer:blue}:
 	replacement:
-		@intrinsic("construct", screen color, red, green, blue)
+		@intrinsic("construct", a screen color, red, green, blue)
 
 function draw the static world:
 	execute:

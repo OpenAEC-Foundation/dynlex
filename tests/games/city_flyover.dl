@@ -12,17 +12,17 @@ import tests/games/three_dimensional.dl
 # Run:
 #   ./tests/games/city_flyover
 
-function the fractional part of {float:value}:
+function the fractional part of {floating-point number:value}:
     execute:
         return value - the floor of value
 
-function {float:value} clamped between zero and one:
+function {floating-point number:value} clamped between zero and one:
     execute:
         set result to value
         clamp result between 0.0 and 1.0
         return result
 
-function the hash of x {float:x} and z {float:z}:
+function the hash of x {floating-point number:x} and z {floating-point number:z}:
     execute:
         set phase to (x * 127.1 + z * 311.7)
         set wave to ((the sine of phase) * 43758.5453)
@@ -35,7 +35,7 @@ function set city perspective for a viewport measuring {integer:width} by {integ
         set divisor to height
         if divisor < 1:
             set divisor to 1
-        set aspect to ((width as a float) / (divisor as a float))
+        set aspect to ((width as a floating-point number) / (divisor as a floating-point number))
         set near to 0.4
         set far to 1400.0
         set top to 0.28
@@ -58,7 +58,7 @@ function enable the city render state:
 
 function set the city clear color to {normalized color:color}:
     execute:
-        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit float, color's green as a 32 bit float, color's blue as a 32 bit float, 1.0 as a 32 bit float)
+        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit floating-point number, color's green as a 32 bit floating-point number, color's blue as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number)
 
 function position the flyover camera from {spatial camera:view}:
     execute:
@@ -206,7 +206,7 @@ function draw a low poly roof cap centered at {spatial position:center} with {sp
         @intrinsic("call", "GL", "glEnd", nothing)
         @intrinsic("call", "GL", "glPopMatrix", nothing)
 
-function draw a vehicle module centered at {spatial position:center} heading {float:angle} with {spatial color:color}:
+function draw a vehicle module centered at {spatial position:center} heading {floating-point number:angle} with {spatial color:color}:
     execute:
         @intrinsic("call", "GL", "glPushMatrix", nothing)
         @intrinsic("call", "GL", "glTranslated", nothing, center's x, center's y, center's z)
@@ -241,7 +241,7 @@ function draw a sidewalk slab centered at {spatial position:center} with {spatia
         set raised to a position with x (center's x), y 0.11 and z (center's z)
         draw a box centered at raised with shape and color
 
-function draw a distant block silhouette at grid position {float:column}, {float:row}:
+function draw a distant block silhouette at grid position {floating-point number:column}, {floating-point number:row}:
     execute:
         set origin to a position with x (column * 48.0), y 0.0 and z (row * 48.0)
         set center to a position with x (origin's x + 24.0), y 0.0 and z (origin's z + 24.0)
@@ -272,7 +272,7 @@ function draw a distant block silhouette at grid position {float:column}, {float
             set shade to a color with red (color's red - 8), green (color's green - 8) and blue (color's blue - 8)
             draw a box centered at extension with annex and shade
 
-function draw a lot scene at grid position {float:column}, {float:row} with detail level {float:quality}:
+function draw a lot scene at grid position {floating-point number:column}, {floating-point number:row} with detail level {floating-point number:quality}:
     execute:
         set center to a position with x (column * 18.0 + 21.0), y 0.0 and z (row * 18.0 + 21.0)
         set occupancy to the hash of x column and z row
@@ -332,7 +332,7 @@ function draw a lot scene at grid position {float:column}, {float:row} with deta
                             set unit to the dimensions measuring (footprint's width * 0.36) by 1.2 by (footprint's depth * 0.32)
                             draw a rooftop unit centered at rooftop with unit and (a color with red 76, green 82 and blue 88)
 
-function draw a block at grid position {float:column}, {float:row} at {float:time} with detail level {float:quality}:
+function draw a block at grid position {floating-point number:column}, {floating-point number:row} at {floating-point number:time} with detail level {floating-point number:quality}:
     execute:
         set origin to a position with x (column * 48.0), y 0.0 and z (row * 48.0)
         set asphalt to a color with red 38, green 40 and blue 46

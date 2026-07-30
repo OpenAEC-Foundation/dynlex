@@ -1,26 +1,6 @@
 import lib/filesystem.dl
 import lib/process.dl
 
-function {file system entry:entry} is not a directory:
-    replacement:
-        the inverse of (entry is a directory)
-
-function {file system entry:entry} is not a symbolic link:
-    replacement:
-        the inverse of (entry is a symbolic link)
-
-function {file system entry:entry} is not other:
-    replacement:
-        the inverse of (entry has another filesystem kind)
-
-function {file system staging file:staging} was not committed:
-    replacement:
-        the inverse of (staging was committed)
-
-function {file system staging file:staging} is not durable:
-    replacement:
-        the inverse of (staging is durable)
-
 set root to "tests/required/filesystem_transaction_primitives/tree.tmp"
 set source to "tests/required/filesystem_transaction_primitives/tree.tmp/original.bin"
 set missing to "tests/required/filesystem_transaction_primitives/tree.tmp/missing.bin"
@@ -45,8 +25,8 @@ print whether original was found as a line
 print whether original is a regular file as a line
 print whether original is not a directory as a line
 print whether original is not a symbolic link as a line
-print whether original is not other as a line
-print whether original's modification time is supported as a line
+print whether original does not have another filesystem kind as a line
+print whether original supports modification times as a line
 print whether (original's modification time)'s nanoseconds >= 0 as a line
 print whether (original's modification time)'s nanoseconds < 1000000000 as a line
 print whether original's identity is supported as a line

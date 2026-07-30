@@ -15,7 +15,7 @@ class:
     members:
         kind as an integer
         text as a string
-        number as a float
+        number as a floating-point number
         boolean as a boolean
         items as a pointer to a pointer to a JSON value
         members as a pointer to a JSON member
@@ -65,7 +65,7 @@ function an empty JSON string:
     replacement:
         a new string from (0 as a pointer to a byte) containing 0 bytes
 
-local function the unsigned JSON byte value of {any:character}:
+local function the unsigned JSON byte value of {a value:character}:
     execute:
         return (character as a 32 bit integer) bitwise and 255
 
@@ -74,8 +74,8 @@ function a new JSON value of kind {integer:kind}:
         set text to an empty JSON string
         set items to 0 as a pointer to a pointer to a JSON value
         set members to 0 as a pointer to a JSON member
-        set initial to @intrinsic("construct", a JSON value, kind, text, 0.0 as a 64 bit float, false, items, members, 0, 0)
-        allocate 1 slots of initial and set result to it
+        set initial to @intrinsic("construct", a JSON value, kind, text, 0.0 as a 64 bit floating-point number, false, items, members, 0, 0)
+        allocate one slot of initial and set result to it
         return result
 
 function ensure that {a pointer to a JSON value:parent} has JSON capacity for {integer:count}:
@@ -130,9 +130,9 @@ local function {a pointer to a JSON parser:parser} has JSON token {C string:toke
 
 local function {a pointer to a JSON parser:parser} lacks JSON token {C string:token}:
     execute:
-        return the inverse of (the source of parser has token at offset the position of parser)
+        return the source of parser lacks token at offset the position of parser
 
-local function the JSON hexadecimal value of {any:character}:
+local function the JSON hexadecimal value of {a value:character}:
     execute:
         if character >= 48 and character <= 57:
             return character - 48
@@ -160,7 +160,7 @@ local function the JSON Unicode code point read by {a pointer to a JSON parser:p
             set index to (index + 1)
         return scalar
 
-local function the JSON UTF8 end position after writing {integer:scalar} into {a pointer to a byte:output} at {integer:start}:
+local function the JSON UTF-8 end position after writing {integer:scalar} into {a pointer to a byte:output} at {integer:start}:
     execute:
         set writer to start
         if scalar <= 127:
@@ -181,9 +181,9 @@ local function the JSON UTF8 end position after writing {integer:scalar} into {a
         store (128 + the remainder of scalar divided by 64) as a byte into output at writer + 3
         return writer + 4
 
-local flex function write {integer:scalar} as JSON UTF8 into {a pointer to a byte:output} at {integer:start}:
+local flex function write {integer:scalar} as JSON UTF-8 into {a pointer to a byte:output} at {integer:start}:
     replacement:
-        set the subject to the JSON UTF8 end position after writing scalar into output at start
+        set the subject to the JSON UTF-8 end position after writing scalar into output at start
 
 local function the JSON text read by {a pointer to a JSON parser:parser}:
     execute:
@@ -249,7 +249,7 @@ local function the JSON text read by {a pointer to a JSON parser:parser}:
                     else if scalar >= 56320 and scalar <= 57343:
                         record a JSON error at escape for parser
                         return an empty JSON string
-                    write scalar as JSON UTF8 into the data of output at writer and set writer to it
+                    write scalar as JSON UTF-8 into the data of output at writer and set writer to it
                 else:
                     record a JSON error at escape for parser
                     return an empty JSON string
@@ -262,11 +262,11 @@ local function the JSON text read by {a pointer to a JSON parser:parser}:
         set output's length to writer
         return output
 
-local function {any:value} is a JSON decimal digit:
+local function {a value:value} is a JSON decimal digit:
     execute:
         return value >= 48 and value <= 57
 
-local function {any:value} is not a JSON decimal digit:
+local function {a value:value} is not a JSON decimal digit:
     execute:
         return value < 48 or value > 57
 
@@ -278,25 +278,25 @@ local function the JSON number read by {a pointer to a JSON parser:parser}:
             set the position of parser to ((the position of parser) + 1)
         if the position of parser >= the length of the source of parser:
             record a JSON error at the position of parser for parser
-            return 0.0 as a float
+            return 0.0 as a floating-point number
         set start to the position of parser
         set first to the character at start in the source of parser
         if first is not a JSON decimal digit:
             record a JSON error at start for parser
-            return 0.0 as a float
-        set amount to 0.0 as a float
+            return 0.0 as a floating-point number
+        set amount to 0.0 as a floating-point number
         if first = 48:
             set the position of parser to (start + 1)
             if the position of parser < the length of the source of parser:
                 if the character at the position of parser in the source of parser is a JSON decimal digit:
                     record a JSON error at the position of parser for parser
-                    return 0.0 as a float
+                    return 0.0 as a floating-point number
         else:
             set reading to true
             loop while reading and the position of parser < the length of the source of parser:
                 set digit to the character at the position of parser in the source of parser
                 if digit is a JSON decimal digit:
-                    set amount to ((amount * 10.0) + ((digit - 48) as a 64 bit float))
+                    set amount to ((amount * 10.0) + ((digit - 48) as a 64 bit floating-point number))
                     set the position of parser to ((the position of parser) + 1)
                 else:
                     set reading to false
@@ -304,19 +304,19 @@ local function the JSON number read by {a pointer to a JSON parser:parser}:
             if the character at the position of parser in the source of parser = 46:
                 set the position of parser to ((the position of parser) + 1)
                 set start to the position of parser
-                set scale to 0.1 as a float
+                set scale to 0.1 as a floating-point number
                 set reading to true
                 loop while reading and the position of parser < the length of the source of parser:
                     set digit to the character at the position of parser in the source of parser
                     if digit is a JSON decimal digit:
-                        set amount to (amount + (((digit - 48) as a 64 bit float) * scale))
+                        set amount to (amount + (((digit - 48) as a 64 bit floating-point number) * scale))
                         set scale to (scale / 10.0)
                         set the position of parser to ((the position of parser) + 1)
                     else:
                         set reading to false
                 if the position of parser = start:
                     record a JSON error at start for parser
-                    return 0.0 as a float
+                    return 0.0 as a floating-point number
         if the position of parser < the length of the source of parser:
             set marker to the character at the position of parser in the source of parser
             if marker = 69 or marker = 101:
@@ -328,18 +328,18 @@ local function the JSON number read by {a pointer to a JSON parser:parser}:
                         set negative to (sign = 45)
                         set the position of parser to ((the position of parser) + 1)
                 set start to the position of parser
-                set exponent to 0.0 as a float
+                set exponent to 0.0 as a floating-point number
                 set reading to true
                 loop while reading and the position of parser < the length of the source of parser:
                     set digit to the character at the position of parser in the source of parser
                     if digit is a JSON decimal digit:
-                        set exponent to ((exponent * 10.0) + ((digit - 48) as a 64 bit float))
+                        set exponent to ((exponent * 10.0) + ((digit - 48) as a 64 bit floating-point number))
                         set the position of parser to ((the position of parser) + 1)
                     else:
                         set reading to false
                 if the position of parser = start:
                     record a JSON error at start for parser
-                    return 0.0 as a float
+                    return 0.0 as a floating-point number
                 if negative:
                     set exponent to (0.0 - exponent)
                 set amount to (amount * (10.0 raised to the power of exponent))
@@ -549,15 +549,31 @@ function {a pointer to a JSON value:value} is JSON null:
     execute:
         return (value != (0 as a pointer to a JSON value)) and (the kind of value = the JSON null kind)
 
+function {a pointer to a JSON value:value} is not JSON null:
+    execute:
+        return (value = (0 as a pointer to a JSON value)) or (the kind of value != the JSON null kind)
+
 function {a pointer to a JSON value:value} is a JSON array:
     execute:
         return (value != (0 as a pointer to a JSON value)) and (the kind of value = the JSON array kind)
+
+function {a pointer to a JSON value:value} is not a JSON array:
+    execute:
+        return (value = (0 as a pointer to a JSON value)) or (the kind of value != the JSON array kind)
 
 function {a pointer to a JSON value:value} is a JSON object:
     execute:
         return (value != (0 as a pointer to a JSON value)) and (the kind of value = the JSON object kind)
 
-function the JSON member index named {any:name} in {a pointer to a JSON value:document}:
+function {a pointer to a JSON value:value} is not a JSON object:
+    execute:
+        return (value = (0 as a pointer to a JSON value)) or (the kind of value != the JSON object kind)
+
+function {a pointer to a JSON value:value} is neither a JSON object nor a JSON array:
+    execute:
+        return value is not a JSON object and value is not a JSON array
+
+function the JSON member index named {a value:name} in {a pointer to a JSON value:document}:
     execute:
         require that document has the JSON object kind as its JSON kind
         set cursor to 0
@@ -568,11 +584,15 @@ function the JSON member index named {any:name} in {a pointer to a JSON value:do
             set cursor to (cursor + 1)
         return 0 - 1
 
-function {a pointer to a JSON value:document} has JSON member named {any:name}:
+function {a pointer to a JSON value:document} has JSON member named {a value:name}:
     execute:
         return the JSON member index named name in document >= 0
 
-function the JSON member named {any:name} in {a pointer to a JSON value:document}:
+function {a pointer to a JSON value:document} lacks JSON member named {a value:name}:
+    execute:
+        return the JSON member index named name in document < 0
+
+function the JSON member named {a value:name} in {a pointer to a JSON value:document}:
     execute:
         set position to the JSON member index named name in document
         if position < 0:
@@ -585,19 +605,19 @@ function the number of JSON members in {a pointer to a JSON value:document}:
         require that document has the JSON object kind as its JSON kind
         return the length of document
 
-function the JSON text named {any:name} in {a pointer to a JSON value:document}:
+function the JSON text named {a value:name} in {a pointer to a JSON value:document}:
     execute:
         set entry to the JSON member named name in document
         require that entry has the JSON text kind as its JSON kind
         return the text of entry
 
-function the JSON boolean named {any:name} in {a pointer to a JSON value:document}:
+function the JSON boolean named {a value:name} in {a pointer to a JSON value:document}:
     execute:
         set entry to the JSON member named name in document
         require that entry has the JSON boolean kind as its JSON kind
         return the boolean of entry
 
-function the JSON number named {any:name} in {a pointer to a JSON value:document}:
+function the JSON number named {a value:name} in {a pointer to a JSON value:document}:
     execute:
         set entry to the JSON member named name in document
         require that entry has the JSON number kind as its JSON kind

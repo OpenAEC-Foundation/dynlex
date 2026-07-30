@@ -1,4 +1,4 @@
 lib/std.dl:9-37: Error: function reference cannot bind fixed parameter 'count'
-  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [i8*, i8*] -> undeduced lib/std.dl:9-37
-  note: while inferring call 'set reference to the function named "the chosen number from a fixed count of $ and $"' with arguments [i8*] -> undeduced tests/required/callable_selected_fixed_path/main.dl:18-86
-  note: while inferring call 'set reference to the function named "the chosen number from a fixed count of $ and $"' with arguments [unresolved(?), unresolved(?)] -> undeduced tests/required/callable_selected_fixed_path/main.dl:1-86
+  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [a pointer to a byte] -> an unresolved value lib/std.dl:9-37
+  note: while inferring call 'set reference to the function named "the chosen number from a fixed count of $ and $"' with arguments [a pointer to a byte] -> an unresolved value tests/required/callable_selected_fixed_path/main.dl:18-86
+  note: while inferring call 'set reference to the function named "the chosen number from a fixed count of $ and $"' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/callable_selected_fixed_path/main.dl:1-86

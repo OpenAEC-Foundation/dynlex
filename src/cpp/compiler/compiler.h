@@ -83,18 +83,35 @@ struct PatternOverloadSelection {
 
 struct ResolvedPatternConstraint {
 	TypeConstraint constraint;
-	int structuralSpecificity{};
 	bool requiresCompileTimeValue = false;
 	bool acceptsUnresolvedType = false;
 	bool acceptsNothing = false;
+
+	TypeConstraint effectiveConstraint() const {
+		TypeConstraint result = constraint;
+		result.requiresCompileTimeValue = result.requiresCompileTimeValue || requiresCompileTimeValue;
+		return result;
+	}
+
+	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
+		if (argumentType.kind == DataType::Kind::Void && !acceptsNothing)
+			return false;
+		return effectiveConstraint().accepts(argumentType, compileTimeKnown);
+	}
 };
 
 using PatternConstraintResolver = std::function<std::optional<ResolvedPatternConstraint>(PatternDefinition *, size_t, size_t)>;
 
+ResolvedPatternConstraint
+resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex);
+std::optional<ResolvedPatternConstraint> resolveCompiledPatternConstraint(
+	PatternDefinition *definition, size_t pathIndex, size_t argumentIndex, const std::vector<DataType> &argumentTypes,
+	const std::vector<CompileTimeValue> &argumentValues
+);
 PatternOverloadSelection selectOverload(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<Expression *> &sortedArgs,
 	const std::vector<PatternTreeNode *> &nodesPassed, const std::vector<DataType> &argTypes,
-	const std::vector<bool> &argCompileTimeKnown, const PatternConstraintResolver &resolveConstraint = {}
+	const std::vector<bool> &argCompileTimeKnown, const PatternConstraintResolver &resolveConstraint
 );
 const DefinitionPatternElement *
 matchedPatternParameterElement(PatternDefinition *definition, std::string_view parameterName, size_t startPos);

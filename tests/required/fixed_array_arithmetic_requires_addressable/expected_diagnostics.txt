@@ -1,4 +1,4 @@
 tests/required/fixed_array_arithmetic_requires_addressable/main.dl:9-39: Error: fixed array pointer arithmetic requires an addressable array
-  note: while inferring intrinsic 'add' in '@intrinsic("add", left, right)' with arguments [i8*, array[2] of i32, a 32 bit integer] -> undeduced tests/required/fixed_array_arithmetic_requires_addressable/main.dl:9-39
-  note: while inferring call 'ignore [1, 2] + 1' with arguments [array[2] of i32, a 32 bit integer] -> undeduced tests/required/fixed_array_arithmetic_requires_addressable/main.dl:8-18
-  note: while inferring call 'ignore [1, 2] + 1' with arguments [unresolved(?)] -> undeduced tests/required/fixed_array_arithmetic_requires_addressable/main.dl:1-18
+  note: while inferring intrinsic 'add' in '@intrinsic("add", left, right)' with arguments [a fixed array containing 2 items whose type is a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/fixed_array_arithmetic_requires_addressable/main.dl:9-39
+  note: while inferring call 'ignore [1, 2] + 1' with arguments [a fixed array containing 2 items whose type is a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/fixed_array_arithmetic_requires_addressable/main.dl:8-18
+  note: while inferring call 'ignore [1, 2] + 1' with arguments [an unresolved value] -> an unresolved value tests/required/fixed_array_arithmetic_requires_addressable/main.dl:1-18

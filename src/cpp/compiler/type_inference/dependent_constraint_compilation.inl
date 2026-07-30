@@ -353,14 +353,16 @@ struct SymbolicConstraintCompiler {
 	}
 
 	bool candidateAccepts(
-		PatternDefinition *candidate, size_t pathIndex, const std::vector<SymbolicSignatureValue> &arguments, int &score
+		PatternDefinition *candidate, size_t pathIndex, const std::vector<SymbolicSignatureValue> &arguments,
+		std::vector<TypeConstraint> &domains
 	) {
 		if (pathIndex >= candidate->signaturePaths.size())
 			return false;
 		const auto &parameters = candidate->signaturePaths[pathIndex].parameters;
 		if (parameters.size() != arguments.size())
 			return false;
-		score = 0;
+		domains.clear();
+		domains.reserve(parameters.size());
 		for (size_t index = 0; index < parameters.size(); index++) {
 			if (parameters[index].constraint.isDependent())
 				return false;
@@ -369,7 +371,7 @@ struct SymbolicConstraintCompiler {
 				return false;
 			if (!parameterDomain.contains(arguments[index].domain))
 				return false;
-			score += parameters[index].constraint.structuralSpecificity();
+			domains.push_back(std::move(parameterDomain));
 		}
 		return true;
 	}
@@ -384,29 +386,48 @@ struct SymbolicConstraintCompiler {
 				return {};
 			arguments.push_back(std::move(argument));
 		}
-		PatternDefinition *selected = nullptr;
-		size_t selectedPath = 0;
-		int bestScore = -1;
-		bool ambiguous = false;
+		struct SymbolicOverload {
+			PatternDefinition *definition;
+			size_t pathIndex;
+			std::vector<TypeConstraint> domains;
+		};
+		std::vector<SymbolicOverload> viableOverloads;
 		for (PatternDefinition *candidate : expression->patternMatch->matchingDefinitions) {
 			for (size_t pathIndex : matchingPatternPathIndices(expression->patternMatch->nodesPassed, candidate)) {
-				int score = 0;
-				if (!candidateAccepts(candidate, pathIndex, arguments, score))
+				std::vector<TypeConstraint> domains;
+				if (!candidateAccepts(candidate, pathIndex, arguments, domains))
 					continue;
-				if (score > bestScore) {
-					selected = candidate;
-					selectedPath = pathIndex;
-					bestScore = score;
-					ambiguous = false;
-				} else if (score == bestScore && (selected != candidate || selectedPath != pathIndex)) {
-					ambiguous = true;
-				}
+				viableOverloads.push_back({candidate, pathIndex, std::move(domains)});
 			}
 		}
-		if (!selected)
+		if (viableOverloads.empty())
 			return fail("dependent constraint call has no overload valid for the complete symbolic domain");
-		if (ambiguous)
-			return fail("dependent constraint call is ambiguous for the symbolic domain");
+
+		std::vector<size_t> maximalOverloads;
+		for (size_t candidateIndex = 0; candidateIndex < viableOverloads.size(); candidateIndex++) {
+			bool dominated = false;
+			for (size_t otherIndex = 0; otherIndex < viableOverloads.size(); otherIndex++) {
+				if (candidateIndex == otherIndex)
+					continue;
+				if (compareConstraintSpecificity(
+						viableOverloads[candidateIndex].domains, viableOverloads[otherIndex].domains
+					) == ConstraintSpecificity::RightMoreSpecific) {
+					dominated = true;
+					break;
+				}
+			}
+			if (!dominated)
+				maximalOverloads.push_back(candidateIndex);
+		}
+		requireCompilerInvariant(!maximalOverloads.empty(), "symbolic overload domains have no maximal candidate");
+		const SymbolicOverload &selectedOverload = viableOverloads[maximalOverloads.front()];
+		for (size_t maximalIndex : maximalOverloads) {
+			const SymbolicOverload &other = viableOverloads[maximalIndex];
+			if (other.definition != selectedOverload.definition || other.pathIndex != selectedOverload.pathIndex)
+				return fail("dependent constraint call is ambiguous for the symbolic domain");
+		}
+		PatternDefinition *selected = selectedOverload.definition;
+		size_t selectedPath = selectedOverload.pathIndex;
 		Expression *body = singleReplacementExpression(selected);
 		if (!body)
 			return fail("dependent constraint calls a function without one pure replacement expression");
@@ -497,10 +518,9 @@ static bool compileDependentPatternSignatures(ParseContext &parseContext) {
 					Range constraintRange = patternElementTypeConstraintRange(*definition, *element);
 					Expression *expression = createTypeConstraintExpression(parseContext, definition->section, constraintRange);
 					if (!expression) {
-						parseContext.diagnostics.push_back(Diagnostic(
-							parseContext, Diagnostic::Level::Error, "unknown type constraint", constraintRange,
-							"type_constraint", element->typeConstraintName
-						));
+						parseContext.diagnostics.push_back(
+							unknownTypeConstraintDiagnostic(parseContext, constraintRange, element->typeConstraintName)
+						);
 						return false;
 					}
 					SymbolicSignatureBindings bindings;

@@ -1,7 +1,7 @@
-tests/required/incompatible_return_types/main.dl:20-25: Error: Function return type is a 32 bit integer, but this return statement produces a boolean
-  note: Function return type was first inferred as a 32 bit integer here tests/required/incompatible_return_types/main.dl:20-21
-  note: while inferring intrinsic 'return' in '@intrinsic("return", value)' with arguments [i8*, a boolean] -> undeduced lib/std.dl:9-36
-  note: while inferring call 'return false' with arguments [a boolean] -> undeduced tests/required/incompatible_return_types/main.dl:13-25
-  note: while inferring call 'the value for true' with arguments [a boolean] -> undeduced tests/required/incompatible_return_types/main.dl:7-25
-  note: while inferring call 'print the value for true' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_return_types/main.dl:1-25
-  note: while inferring call 'print the value for true as a line' with arguments [unresolved(?)] -> undeduced tests/required/incompatible_return_types/main.dl:1-35
+tests/required/incompatible_return_types/main.dl:20-25: Error: Function return type is a 32-bit integer, but this return statement produces a boolean
+  note: Function return type was first inferred as a 32-bit integer here tests/required/incompatible_return_types/main.dl:20-21
+  note: while inferring intrinsic 'return' in '@intrinsic("return", value)' with arguments [a boolean] -> an unresolved value lib/std.dl:9-36
+  note: while inferring call 'return false' with arguments [a boolean] -> an unresolved value tests/required/incompatible_return_types/main.dl:13-25
+  note: while inferring call 'the value for true' with arguments [a boolean] -> an unresolved value tests/required/incompatible_return_types/main.dl:7-25
+  note: while inferring call 'print the value for true' with arguments [an unresolved value] -> an unresolved value tests/required/incompatible_return_types/main.dl:1-25
+  note: while inferring call 'print the value for true as a line' with arguments [an unresolved value] -> an unresolved value tests/required/incompatible_return_types/main.dl:1-35

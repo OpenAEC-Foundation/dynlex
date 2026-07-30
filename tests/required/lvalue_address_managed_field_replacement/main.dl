@@ -14,13 +14,13 @@ class:
 
 class:
     patterns:
-        managed container
+        [a|] managed container
     members:
-        value as tracked value
+        value as a tracked value
 
 set previous to 0
 set current to 0
-set container to @intrinsic("construct", managed container, @intrinsic("construct", a tracked value, the address of previous))
+set container to @intrinsic("construct", a managed container, @intrinsic("construct", a tracked value, the address of previous))
 set address to the address of the value of container
 @intrinsic("store at", address, @intrinsic("construct", a tracked value, the address of current))
 print previous as a line

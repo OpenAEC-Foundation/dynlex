@@ -1,66 +1,66 @@
 import lib/lsp.dl
 
-function the lsp lifecycle test interpreter:
+function the LSP lifecycle test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
 
 set script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':'),ensure_ascii=False).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['method']=='initialize' and init['params']['rootUri']=='file:///workspace';assert init['params']['clientInfo']=={'name':'DynLex'};assert init['params']['capabilities']['general']['positionEncodings']==['utf-16']\nsend({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{'positionEncoding':'utf-16','textDocumentSync':{'openClose':True,'change':2,'save':{'includeText':True}},'workspace':{'workspaceFolders':{'supported':True}}},'serverInfo':{'name':'fake'}}})\nassert read()['method']=='initialized'\nopened=read();td=opened['params']['textDocument'];assert opened['method']=='textDocument/didOpen' and td['version']==1 and td['text']=='a😀b\\nline😀'\nchanged=read();assert changed['method']=='textDocument/didChange';assert changed['params']['textDocument']['version']==2;change=changed['params']['contentChanges'][0];assert change['range']=={'start':{'line':0,'character':1},'end':{'line':0,'character':3}} and change['text']=='X'\nreplaced=read();assert replaced['method']=='textDocument/didChange';assert replaced['params']['textDocument']['version']==3;change=replaced['params']['contentChanges'][0];assert change['range']=={'start':{'line':0,'character':0},'end':{'line':1,'character':6}} and change['text']=='final'\nsaved=read();assert saved['method']=='textDocument/didSave' and saved['params']=={'textDocument':{'uri':'file:///workspace/main.dl'},'text':'final'}\nrelated={'location':{'uri':'file:///workspace/other.dl','range':{'start':{'line':1,'character':2},'end':{'line':1,'character':3}}},'message':'related'}\ndiagnostic={'range':{'start':{'line':0,'character':0},'end':{'line':0,'character':1}},'severity':2,'code':7,'codeDescription':{'href':'https://example.invalid/7'},'source':'fake','message':'sample','tags':[1,2],'relatedInformation':[related],'data':{'value':True}}\nsend({'jsonrpc':'2.0','method':'textDocument/publishDiagnostics','params':{'uri':'file:///workspace/main.dl','version':3,'diagnostics':[diagnostic]}})\nsend({'jsonrpc':'2.0','id':9007199254740993,'method':'workspace/applyEdit','params':{'edit':{'changes':{'file:///workspace/main.dl':[]}}}})\nreply=read();assert reply['id']==9007199254740993 and reply['error']['code']==-32601\nclosed=read();assert closed['method']=='textDocument/didClose' and closed['params']['textDocument']['uri']=='file:///workspace/main.dl'\nshutdown=read();assert shutdown['method']=='shutdown' and 'params' not in shutdown\nsend({'jsonrpc':'2.0','id':shutdown['id'],'result':None})\nassert read()['method']=='exit'\nsys.stderr.write('fake-server-stderr\\n');sys.stderr.flush()"
-set command to a process command for the lsp lifecycle test interpreter
+set command to a process command for the LSP lifecycle test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add script as an argument to command
 
-set capabilities to the default lsp client capabilities
-set started to the result of starting an lsp client using command at root uri "file:///workspace" with capabilities capabilities waiting up to 2000 milliseconds
-print started's succeeded as a line
+set capabilities to the default LSP client capabilities
+set started to the result of starting an LSP client using command rooted at "file:///workspace" with capabilities waiting up to 2000 milliseconds
+print whether started succeeded as a line
 set client to started's client
-print whether (client's synchronization's kind = the lsp incremental synchronization kind) as a line
-print client's synchronization's opens and closes as a line
-print client's synchronization's saves as a line
-print client's synchronization's includes text as a line
+print whether (client's synchronization's kind = the LSP incremental synchronization kind) as a line
+print whether client's synchronization sends open and close notifications as a line
+print whether client's synchronization sends save notifications as a line
+print whether client's synchronization includes text in save notifications as a line
 set offered to client's capabilities
 print whether (offered has JSON member named "workspace") as a line
 
-set opened to the result of opening lsp document uri "file:///workspace/main.dl" with language "dynlex" and text "a😀b\nline😀" using client
-print opened's succeeded as a line
-set changed to the result of editing lsp document uri "file:///workspace/main.dl" from line 0 and character 1 to line 0 and character 3 with text "X" using client
-print changed's succeeded as a line
-set replaced to the result of replacing lsp document uri "file:///workspace/main.dl" with text "final" using client
-print replaced's succeeded as a line
-set saved to the result of saving lsp document uri "file:///workspace/main.dl" using client
-print saved's succeeded as a line
-set document to the lsp document with uri "file:///workspace/main.dl" in client
-print document's found as a line
+set opened to the result of opening LSP document "file:///workspace/main.dl" written in "dynlex" with "a😀b\nline😀" as its text using client
+print whether opened succeeded as a line
+set changed to the result of editing LSP document uri "file:///workspace/main.dl" from line 0 and character 1 to line 0 and character 3 with text "X" using client
+print whether changed succeeded as a line
+set replaced to the result of replacing LSP document uri "file:///workspace/main.dl" with text "final" using client
+print whether replaced succeeded as a line
+set saved to the result of saving LSP document uri "file:///workspace/main.dl" using client
+print whether saved succeeded as a line
+set document to the LSP document with uri "file:///workspace/main.dl" in client
+print whether document was found as a line
 print whether (document's version = 3) as a line
 print whether (document's text = "final") as a line
 
-set published to the result of pumping one lsp message using client waiting up to 2000 milliseconds
-print published's succeeded as a line
-set report to the lsp diagnostics for uri "file:///workspace/main.dl" in client
-print report's found as a line
-print report's has version as a line
+set published to the result of pumping one LSP message using client waiting up to 2000 milliseconds
+print whether published succeeded as a line
+set report to the LSP diagnostics for uri "file:///workspace/main.dl" in client
+print whether report was found as a line
+print whether report has a version as a line
 print whether (report's version = 3) as a line
 print whether (the number of JSON items in report's diagnostics = 1) as a line
 set diagnostic to the JSON value at index 0 in report's diagnostics
 print whether (the JSON text named "message" in diagnostic = "sample") as a line
 
-set received to the result of pumping one lsp message using client waiting up to 2000 milliseconds
-print received's succeeded as a line
-set request to the next lsp server request from client
-print request's succeeded as a line
+set received to the result of pumping one LSP message using client waiting up to 2000 milliseconds
+print whether received succeeded as a line
+set request to the next LSP server request from client
+print whether request succeeded as a line
 print whether (the JSON text named "method" in request's message = "workspace/applyEdit") as a line
 set parameters to the JSON member named "params" in request's message
 print whether (parameters has JSON member named "edit") as a line
-set rejected to the result of rejecting lsp server request request's message as method not found using client
-print rejected's succeeded as a line
-free json rpc queued message request
+set rejected to the result of rejecting request's message from the LSP server as method not found using client
+print whether rejected succeeded as a line
+free request
 
-set closed to the result of closing lsp document uri "file:///workspace/main.dl" using client
-print closed's succeeded as a line
-set stopped to the result of shutting down lsp client client waiting up to 2000 milliseconds
-print stopped's succeeded as a line
-print whether (client's lifecycle = the lsp stopped lifecycle) as a line
-print whether (the lsp standard error from client = "fake-server-stderr\n") as a line
+set closed to the result of closing LSP document uri "file:///workspace/main.dl" using client
+print whether closed succeeded as a line
+set stopped to the result of shutting down client waiting up to 2000 milliseconds
+print whether stopped succeeded as a line
+print whether (client's lifecycle = the LSP stopped lifecycle) as a line
+print whether (the LSP standard error from client = "fake-server-stderr\n") as a line
 
 free capabilities
-free lsp client client
+free client

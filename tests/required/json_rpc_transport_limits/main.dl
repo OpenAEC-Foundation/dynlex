@@ -15,36 +15,36 @@ function the limited transport command with {C string:output} and {C string:erro
         add error as an argument to result
         return result
 
-function limited transport fails using {process command:command} under {json rpc limits:limits}:
+function limited transport fails using {process command:command} under {JSON-RPC limit configuration:limits}:
     execute:
-        set opened to the result of opening a json rpc connection using command under limits
-        if the inverse of (opened's succeeded):
+        set opened to the result of opening a JSON-RPC connection using command under limits
+        if opened failed:
             return false
         set connection to opened's connection
-        set received to the next json rpc message from connection
-        set passed to (received's status = the json rpc limit exceeded status)
-        set passed to (passed and (connection's state = the json rpc broken state))
-        set closed to the result of closing json rpc connection connection
-        set passed to (passed and closed's succeeded)
-        free json rpc receive result received
-        free json rpc connection connection
+        set received to the next JSON-RPC message from connection
+        set passed to (received's status = the JSON-RPC limit exceeded status)
+        set passed to (passed and (connection's state = the JSON-RPC broken state))
+        set closed to the result of closing connection
+        set passed to (passed and closed succeeded)
+        free received
+        free connection
         return passed
 
-set limits to the default json rpc limits
+set limits to the default JSON-RPC limit configuration
 set limits's maximum header length to 16
 set limits's graceful close timeout to 10
 set limits's termination timeout to 100
 set command to the limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
 print limited transport fails using command under limits as a line
 
-set limits to the default json rpc limits
+set limits to the default JSON-RPC limit configuration
 set limits's maximum payload length to 1
 set limits's graceful close timeout to 10
 set limits's termination timeout to 100
 set command to the limited transport command with "436f6e74656e742d4c656e6774683a20320d0a0d0a7b7d" and ""
 print limited transport fails using command under limits as a line
 
-set limits to the default json rpc limits
+set limits to the default JSON-RPC limit configuration
 set limits's maximum header length to 16
 set limits's maximum buffered output length to 16
 set limits's graceful close timeout to 10
@@ -52,17 +52,17 @@ set limits's termination timeout to 100
 set command to the limited transport command with "3132333435363738393031323334353637" and ""
 print limited transport fails using command under limits as a line
 
-set limits to the default json rpc limits
+set limits to the default JSON-RPC limit configuration
 set limits's maximum standard error length to 4
 set limits's graceful close timeout to 10
 set limits's termination timeout to 100
 set command to the limited transport command with "" and "3132333435"
-set opened to the result of opening a json rpc connection using command under limits
+set opened to the result of opening a JSON-RPC connection using command under limits
 set connection to opened's connection
-set received to the next json rpc message from connection
-print (received's status = the json rpc limit exceeded status) as a line
+set received to the next JSON-RPC message from connection
+print (received's status = the JSON-RPC limit exceeded status) as a line
 print (connection's standard error = "1234") as a line
-set closure to the result of closing json rpc connection connection
-print (closure's succeeded and closure's forced) as a line
-free json rpc receive result received
-free json rpc connection connection
+set closure to the result of closing connection
+print (closure succeeded and closure's force) as a line
+free received
+free connection

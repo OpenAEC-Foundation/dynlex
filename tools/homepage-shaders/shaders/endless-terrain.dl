@@ -17,28 +17,28 @@ function [a|] terrain color:
     replacement:
         a color
 
-function a terrain coordinate with x {float:x} and z {float:z}:
+function a terrain coordinate with x {floating-point number:x} and z {floating-point number:z}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 3 float values, x, 0.0, z)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, x, 0.0, z)
         )
 
-function a spatial coordinate with x {float:x}, y {float:y} and z {float:z}:
+function a spatial coordinate with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z}:
     replacement:
         @intrinsic(
             "construct",
             a point,
-            @intrinsic("construct", an aggregate of 3 float values, x, y, z)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
         )
 
-function a terrain color with red {float:red}, green {float:green} and blue {float:blue}:
+function a terrain color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
     replacement:
         @intrinsic(
             "construct",
             a color,
-            @intrinsic("construct", an aggregate of 3 float values, red, green, blue)
+            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
         )
 
 function the terrain height at {terrain coordinate:position}:
@@ -86,9 +86,9 @@ if this is a vertex shader:
     set surface to the vertex w
 
     if surface < 0.5:
-        set the shader interpolant named "terrain position" to (the vertex x) (the vertex y) 0.0 0.0
-        set the shader interpolant named "terrain normal" to 0.0 1.0 0.0 0.0
-        set the shader interpolant named "terrain material" to 0.5 0.0 0.0 0.0
+        set the shader interpolant named "terrain position" with an x coordinate of (the vertex x), a y coordinate of (the vertex y), a z coordinate of 0.0 and a w coordinate of 0.0
+        set the shader interpolant named "terrain normal" with an x coordinate of 0.0, a y coordinate of 1.0, a z coordinate of 0.0 and a w coordinate of 0.0
+        set the shader interpolant named "terrain material" with an x coordinate of 0.5, a y coordinate of 0.0, a z coordinate of 0.0 and a w coordinate of 0.0
         set the output position with x the vertex x, y the vertex y, z 0.9999 and w 1.0
     else:
         set distance to the vertex y
@@ -97,8 +97,8 @@ if this is a vertex shader:
         set sine to the sine of pitch
         set cosine to the cosine of pitch
         set yaw to (((the sine of (time * 0.073)) * 0.13) + ((the cosine of (time * 0.041)) * 0.045))
-        set yawsine to the sine of yaw
-        set yawcosine to the cosine of yaw
+        set turning to the sine of yaw
+        set alignment to the cosine of yaw
 
         set vertical to (0.0 - camera's y)
         set slope to (((the vertex x) * aspect) * 0.80)
@@ -106,7 +106,7 @@ if this is a vertex shader:
         set forward to (distance / scale)
         set depth to ((forward * cosine) - (vertical * sine))
         set lateral to (slope * depth)
-        set world to a terrain coordinate with x ((camera's x + (lateral * yawcosine)) + (forward * yawsine)) and z ((camera's z + (forward * yawcosine)) - (lateral * yawsine))
+        set world to a terrain coordinate with x ((camera's x + (lateral * alignment)) + (forward * turning)) and z ((camera's z + (forward * alignment)) - (lateral * turning))
 
         set elevation to 0.0
         set normal to a spatial coordinate with x 0.0, y 1.0 and z 0.0
@@ -148,9 +148,9 @@ if this is a vertex shader:
         set view to a point with x (vertical * cosine + (forward * sine)) and y ((forward * cosine) - (vertical * sine))
         set clip to a spatial coordinate with x (lateral / (aspect * 0.72)), y (view's x / 0.72) and z ((view's y * 1.00078) - 0.40016)
 
-        set the shader interpolant named "terrain position" to world's x elevation world's z surface
-        set the shader interpolant named "terrain normal" to normal's x normal's y normal's z distance
-        set the shader interpolant named "terrain material" to variation detail submersion 0.0
+        set the shader interpolant named "terrain position" with an x coordinate of world's x, a y coordinate of elevation, a z coordinate of world's z and a w coordinate of surface
+        set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance
+        set the shader interpolant named "terrain material" with an x coordinate of variation, a y coordinate of detail, a z coordinate of submersion and a w coordinate of 0.0
         set the output position with x clip's x, y clip's y, z clip's z and w view's y
 
 if this is a fragment shader:
@@ -296,4 +296,4 @@ if this is a fragment shader:
     set the red channel of color to the square root of ((color's red * vignette) / (1.0 + (color's red * 0.38)))
     set the green channel of color to the square root of ((color's green * vignette) / (1.0 + (color's green * 0.38)))
     set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + (color's blue * 0.38)))
-    set the fragment color with red color's red, green color's green, blue color's blue and alpha 1.0
+    set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

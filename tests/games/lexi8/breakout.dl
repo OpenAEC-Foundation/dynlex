@@ -12,33 +12,33 @@ import tests/games/lexi8/assembler.dl
 
 class:
 	patterns:
-		register pair
+		[a|] register pair
 	members:
 		x, y
 
 class:
 	patterns:
-		ball register set
+		[a|] ball register set
 	members:
 		x, y, horizontal, vertical
 
 class:
 	patterns:
-		breakout register set
+		[a|] breakout register set
 	members:
 		scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags
 
 function a ball register set with x {integer:x}, y {integer:y}, horizontal {integer:horizontal} and vertical {integer:vertical}:
 	replacement:
-		@intrinsic("construct", ball register set, x, y, horizontal, vertical)
+		@intrinsic("construct", a ball register set, x, y, horizontal, vertical)
 
 function a register pair with x {integer:x} and y {integer:y}:
 	replacement:
-		@intrinsic("construct", register pair, x, y)
+		@intrinsic("construct", a register pair, x, y)
 
 function a breakout register set using {ball register set:ball} for the ball and {register pair:cursor} for the cursor, with scratch {integer:scratch}, tens {integer:tens}, ones {integer:ones}, paddle {integer:paddle}, score {integer:score}, bricks {integer:bricks}, lives {integer:lives}, temporary {integer:temporary}, auxiliary {integer:auxiliary} and flags {integer:flags}:
 	replacement:
-		@intrinsic("construct", breakout register set, scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags)
+		@intrinsic("construct", a breakout register set, scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags)
 
 function build the breakout program:
 	execute:

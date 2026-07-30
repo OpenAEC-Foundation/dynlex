@@ -4,14 +4,14 @@ import lib/workspace_edit_plan.dl
 import lib/filesystem.dl
 import lib/path.dl
 
-local function {a pointer to workspace resource snapshot:resource} is unchanged in {a pointer to workspace edit context:context}:
+local function {a pointer to a workspace resource snapshot:resource} is unchanged in {a pointer to a workspace edit context:context}:
     execute:
         if native path resource's original path has a symbolic link ancestor within the workspace using the path style of context:
             return false
         set entry to the file system entry at resource's original path
         if entry lookup failed:
             return false
-        if entry was found != resource's disk exists:
+        if entry was found != resource's disk presence:
             return false
         if entry was found:
             set kind to 0
@@ -23,9 +23,9 @@ local function {a pointer to workspace resource snapshot:resource} is unchanged 
                 return false
             if kind != resource's disk kind:
                 return false
-            if (entry's modification time is supported) != resource's disk modification time supported:
+            if (entry supports modification times) != resource's disk modification time support:
                 return false
-            if entry's modification time is supported:
+            if entry supports modification times:
                 set current to entry's modification time
                 set snapshot to resource's disk modification time
                 if current's seconds != snapshot's seconds:
@@ -39,9 +39,9 @@ local function {a pointer to workspace resource snapshot:resource} is unchanged 
                     return false
                 if the contents of reading != resource's disk content:
                     return false
-        set document to the workspace open document with identity resource's original identity in context
-        if resource's open snapshot present:
-            if document = (0 as a pointer to workspace open document):
+        set document to the workspace open document identified by resource's original identity in context
+        if resource's open snapshot presence:
+            if document = (0 as a pointer to a workspace open document):
                 return false
             if document != resource's open document:
                 return false
@@ -54,28 +54,32 @@ local function {a pointer to workspace resource snapshot:resource} is unchanged 
             if document's version != resource's open version:
                 return false
         else:
-            if document != (0 as a pointer to workspace open document):
+            if document != (0 as a pointer to a workspace open document):
                 return false
         return true
 
-local function the result of revalidating workspace edit plan {a pointer to workspace edit plan:plan} using {a pointer to workspace edit context:context}:
+local function {a pointer to a workspace resource snapshot:resource} changed in {a pointer to a workspace edit context:context}:
+    execute:
+        return (resource is unchanged in context) = false
+
+local function the result of revalidating {a pointer to a workspace edit plan:plan} using {a pointer to a workspace edit context:context}:
     execute:
         set position to 0
         loop while position < the length of the resources of plan:
-            set resource to workspace resource snapshot at position in the resources of plan
-            if the inverse of (resource is unchanged in context):
+            set resource to the workspace resource snapshot at position in the resources of plan
+            if resource changed in context:
                 return a failed workspace edit result reporting the string form of "Workspace resource changed before the edit was committed" at change resource's first change index
             set position to (position + 1)
         return a successful workspace edit result
 
-local function update workspace documents after rename {a pointer to planned workspace operation:operation} using {a pointer to workspace edit context:context}:
+local function update workspace documents after rename {a pointer to a planned workspace operation:operation} using {a pointer to a workspace edit context:context}:
     execute:
         set position to 0
         loop while position < the length of the documents of context:
-            set document to workspace open document at index position in the documents of context
+            set document to the workspace open document at index position in the documents of context
             if workspace identity document's identity equals or is below operation's old identity:
                 set path to the workspace path mapped from document's path rooted at operation's old path to operation's new path
-                set identity to the workspace identity of native path path using the path style of context
+                set identity to the workspace identity of path using the path style of context
                 set uri to the file URI for path interpreted as a native path
                 if uri failed or uri is unsupported:
                     @intrinsic("call", "libc", "abort", nothing)
@@ -84,22 +88,22 @@ local function update workspace documents after rename {a pointer to planned wor
                 set the uri of document to uri's value
             set position to (position + 1)
 
-local function workspace commit failure for {a pointer to planned workspace operation:operation} after mutation {boolean:mutated}:
+local function a workspace commit failure for {a pointer to a planned workspace operation:operation} after mutation {boolean:mutated}:
     execute:
         set reason to the string form of "Workspace edit mutation failed"
         if mutated:
             return a partially applied workspace edit result reporting reason at change operation's protocol index
         return a failed workspace edit result reporting reason at change operation's protocol index
 
-local function the result of committing workspace edit plan {a pointer to workspace edit plan:plan} using {a pointer to workspace edit context:context}:
+local function the result of committing {a pointer to a workspace edit plan:plan} using {a pointer to a workspace edit context:context}:
     execute:
         set mutated to false
         set position to 0
         loop while position < the length of the operations of plan:
-            set operation to planned workspace operation at position in the operations of plan
+            set operation to the planned workspace operation at position in the operations of plan
             if the inverse of operation's skip:
                 if operation's kind = the workspace text change kind:
-                    if operation's open document != (0 as a pointer to workspace open document):
+                    if operation's open document != (0 as a pointer to a workspace open document):
                         set the text of operation's open document to operation's text
                         set the version of operation's open document to ((the version of operation's open document) + 1)
                         set mutated to true
@@ -108,13 +112,13 @@ local function the result of committing workspace edit plan {a pointer to worksp
                         set contents to operation's text
                         write contents to the file at path
                         if it failed:
-                            return workspace commit failure for operation after mutation mutated
+                            return a workspace commit failure for operation after mutation mutated
                         set mutated to true
                 else if operation's kind = the workspace create change kind:
                     if operation's directory:
                         create a directory tree at operation's path and set creation to it
                         if creation failed:
-                            return workspace commit failure for operation after mutation mutated
+                            return a workspace commit failure for operation after mutation mutated
                         if the inverse of operation's overwrite target:
                             set mutated to true
                     else:
@@ -122,61 +126,61 @@ local function the result of committing workspace edit plan {a pointer to worksp
                         set empty to an empty workspace edit text
                         write empty to the file at path
                         if it failed:
-                            return workspace commit failure for operation after mutation mutated
+                            return a workspace commit failure for operation after mutation mutated
                         set mutated to true
                 else if operation's kind = the workspace rename change kind:
                     if operation's overwrite target:
                         remove the filesystem tree at operation's new path and set removal to it
                         if removal failed:
-                            return workspace commit failure for operation after mutation mutated
+                            return a workspace commit failure for operation after mutation mutated
                         set mutated to true
                     set source to operation's old path
                     set destination to operation's new path
                     rename the filesystem entry at source to destination
                     if it failed:
-                        return workspace commit failure for operation after mutation mutated
+                        return a workspace commit failure for operation after mutation mutated
                     set mutated to true
                     update workspace documents after rename operation using context
                 else if operation's kind = the workspace delete change kind:
                     remove the filesystem tree at operation's path and set removal to it
                     if removal failed:
-                        return workspace commit failure for operation after mutation mutated
+                        return a workspace commit failure for operation after mutation mutated
                     set mutated to true
                 else:
                     @intrinsic("call", "libc", "abort", nothing)
             set position to (position + 1)
         return a successful workspace edit result
 
-function the result of applying parsed workspace edit {a pointer to parsed workspace edit:edit} using {a pointer to workspace edit context:context}:
+function the result of applying parsed workspace edit {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context}:
     execute:
         set plan to a workspace edit plan for edit using context
         if plan is invalid:
             set failure to the outcome of plan
             free plan
             return failure
-        set revalidation to the result of revalidating workspace edit plan plan using context
+        set revalidation to the result of revalidating plan using context
         if revalidation was not applied:
             free plan
             return revalidation
-        set result to the result of committing workspace edit plan plan using context
+        set outcome to the result of committing plan using context
         free plan
-        return result
+        return outcome
 
-function the result of applying workspace edit {string:source} using {a pointer to workspace edit context:context}:
+function the result of applying workspace edit {string:source} using {a pointer to a workspace edit context:context}:
     execute:
         set parsing to the result of parsing source as a workspace edit
         if parsing failed:
             set reason to parsing's failure reason
-            set indexed to parsing's failed change present
+            set indexed to parsing's failed change presence
             set failure to parsing's failed change
             free parsing
             if indexed:
                 return a failed workspace edit result reporting reason at change failure
             return a failed workspace edit result reporting reason
-        set result to the result of applying parsed workspace edit parsing's edit using context
+        set outcome to the result of applying parsed workspace edit parsing's edit using context
         free parsing
-        return result
+        return outcome
 
-function the result of applying workspace edit {C string:source} using {a pointer to workspace edit context:context}:
+function the result of applying workspace edit {C string:source} using {a pointer to a workspace edit context:context}:
     execute:
         return the result of applying workspace edit the string form of source using context

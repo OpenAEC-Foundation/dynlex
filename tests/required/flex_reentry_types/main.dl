@@ -1,6 +1,6 @@
 import lib/std.dl
 
-flex function finish with [integer {integer:value}|floating {float:value}] and {fixed integer:remaining}:
+flex function finish with [integer {integer:value}|floating {floating-point number:value}] and {fixed integer:remaining}:
     replacement:
         if remaining > 0:
             finish with floating 1.5 and (remaining - 1)

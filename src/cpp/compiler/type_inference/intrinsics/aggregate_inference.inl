@@ -14,8 +14,7 @@ if (kind == IntrinsicKind::ShaderInput) {
 		aggregateType = aggregateType.toReferencedType();
 	if (!aggregateType.hasAggregateElementType()) {
 		setConfiguredTypeFailure(
-			expr->range, "element type requires aggregate", "message",
-			{{"value_type", typeToUserName(aggregateType, context.parseContext)}}
+			expr->range, "element type requires aggregate", "message", {{"value_type", typeToUserName(aggregateType)}}
 		);
 	} else {
 		expr->type = aggregateType.aggregateElementType().asTypeReference();
@@ -35,8 +34,8 @@ if (kind == IntrinsicKind::ShaderInput) {
 			)) {
 			setConfiguredTypeFailure(
 				expr->range, "incompatible operand types", "message",
-				{{"left_type", typeToUserName(leftReference->type.toReferencedType(), context.parseContext)},
-				 {"right_type", typeToUserName(rightReference->type.toReferencedType(), context.parseContext)}}
+				{{"left_type", typeToUserName(leftReference->type.toReferencedType())},
+				 {"right_type", typeToUserName(rightReference->type.toReferencedType())}}
 			);
 		} else {
 			expr->type = promoted.asTypeReference();
@@ -50,15 +49,13 @@ if (kind == IntrinsicKind::ShaderInput) {
 		aggregateType.pointerDepth == 0 && aggregateType.arrayElementType;
 	if (!isSequentialAggregate) {
 		setConfiguredTypeFailure(
-			expr->range, "element extraction requires aggregate", "message",
-			{{"value_type", typeToUserName(aggregateType, context.parseContext)}}
+			expr->range, "element extraction requires aggregate", "message", {{"value_type", typeToUserName(aggregateType)}}
 		);
 	} else {
 		DataType indexType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 		if (!indexType.isInteger()) {
 			setConfiguredTypeFailure(
-				expr->range, "element extraction requires integer index", "message",
-				{{"index_type", typeToUserName(indexType, context.parseContext)}}
+				expr->range, "element extraction requires integer index", "message", {{"index_type", typeToUserName(indexType)}}
 			);
 		} else {
 			std::optional<std::int64_t> index =
@@ -74,8 +71,8 @@ if (kind == IntrinsicKind::ShaderInput) {
 					if (!DataType::supportsRuntimeConversion(valueType, *aggregateType.arrayElementType)) {
 						setConfiguredTypeFailure(
 							expr->range, "element insertion value incompatible", "message",
-							{{"value_type", typeToUserName(valueType, context.parseContext)},
-							 {"element_type", typeToUserName(*aggregateType.arrayElementType, context.parseContext)}}
+							{{"value_type", typeToUserName(valueType)},
+							 {"element_type", typeToUserName(*aggregateType.arrayElementType)}}
 						);
 					} else {
 						expr->type = aggregateType;

@@ -149,10 +149,12 @@ static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue 
 		return "\"" + *text + "\"";
 	if (const auto *boolean = std::get_if<bool>(&value))
 		return *boolean ? "true" : "false";
-	if (const auto *type = std::get_if<TypeReferenceValue>(&value))
-		return type->type.toString();
+	if (const auto *type = std::get_if<TypeReferenceValue>(&value)) {
+		return type->type.kind == DataType::Kind::Type ? typeToUserName(type->type.toReferencedType())
+													   : typeToUserName(type->type);
+	}
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
-		return constraint->toString();
+		return typeToUserName(*constraint);
 	crashCompilerBug("unknown compile-time value alternative in purity report");
 }
 
@@ -206,7 +208,7 @@ std::string renderPurityReport(ParseContext &context) {
 			for (size_t i = 0; i < key.argumentTypes.size(); i++) {
 				if (i > 0)
 					report += ", ";
-				report += key.argumentTypes[i].toString();
+				report += typeToUserName(key.argumentTypes[i]);
 			}
 			report += "]";
 			if (!key.compileTimeParameters.empty()) {

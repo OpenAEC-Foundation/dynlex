@@ -14,7 +14,7 @@ function an empty list of {type:kind}:
     execute:
         set data to 0 as a pointer to kind
         set initial to @intrinsic("construct", a list, data, 0, 0)
-        allocate 1 slots of initial and set result to it
+        allocate one slot of initial and set result to it
         return result
 
 function a list containing first:
@@ -125,6 +125,10 @@ function {a pointer to a list:values} contains item:
                 return true
             set index to (index + 1)
         return false
+
+function {a pointer to a list:values} does not contain item:
+    execute:
+        return (values contains item) = false
 
 function the index of item in {a pointer to a list:values}:
     execute:

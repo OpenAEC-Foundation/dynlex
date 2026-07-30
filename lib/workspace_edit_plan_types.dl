@@ -6,98 +6,98 @@ class:
     patterns:
         [a|] workspace resource snapshot
     members:
-        active as boolean
-        original path as string
-        original identity as string
-        path as string
-        identity as string
-        relative path as string
-        first change index as i32
-        disk exists as boolean
-        disk kind as i32
-        disk content as string
-        disk modification time supported as boolean
+        activity as a boolean
+        original path as a string
+        original identity as a string
+        path as a string
+        identity as a string
+        relative path as a string
+        first change index as a 32 bit integer
+        disk presence as a boolean
+        disk kind as a 32 bit integer
+        disk content as a string
+        disk modification time support as a boolean
         disk modification time as a file system timestamp
-        filesystem exists as boolean
-        filesystem kind as i32
-        exists as boolean
-        kind as i32
-        content as string
-        descendants scanned as boolean
-        open document as a pointer to workspace open document
-        open snapshot present as boolean
-        open path as string
-        open identity as string
-        open text as string
-        open version as i32
-        virtual version as i32
+        filesystem presence as a boolean
+        filesystem kind as a 32 bit integer
+        presence as a boolean
+        kind as a 32 bit integer
+        content as a string
+        descendant scan completion as a boolean
+        open document as a pointer to a workspace open document
+        open snapshot presence as a boolean
+        open path as a string
+        open identity as a string
+        open text as a string
+        open version as a 32 bit integer
+        virtual version as a 32 bit integer
 
 class:
     patterns:
         [a|] workspace resource snapshot collection
     members:
-        items as a pointer to a pointer to workspace resource snapshot
-        length as i32
-        capacity as i32
+        items as a pointer to a pointer to a workspace resource snapshot
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
 class:
     patterns:
         [a|] normalized workspace change
     members:
-        source change as a pointer to workspace edit change
-        path as string
-        identity as string
-        relative path as string
-        old path as string
-        old identity as string
-        old relative path as string
-        new path as string
-        new identity as string
-        new relative path as string
+        source change as a pointer to a workspace edit change
+        path as a string
+        identity as a string
+        relative path as a string
+        old path as a string
+        old identity as a string
+        old relative path as a string
+        new path as a string
+        new identity as a string
+        new relative path as a string
 
 class:
     patterns:
         [a|] normalized workspace change collection
     members:
-        items as a pointer to a pointer to normalized workspace change
-        length as i32
-        capacity as i32
+        items as a pointer to a pointer to a normalized workspace change
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
 class:
     patterns:
         [a|] planned workspace operation
     members:
-        protocol index as i32
-        kind as i32
-        skip as boolean
-        path as string
-        identity as string
-        old path as string
-        old identity as string
-        new path as string
-        new identity as string
-        text as string
-        directory as boolean
-        overwrite target as boolean
-        open document as a pointer to workspace open document
+        protocol index as a 32 bit integer
+        kind as a 32 bit integer
+        skip as a boolean
+        path as a string
+        identity as a string
+        old path as a string
+        old identity as a string
+        new path as a string
+        new identity as a string
+        text as a string
+        directory as a boolean
+        overwrite target as a boolean
+        open document as a pointer to a workspace open document
 
 class:
     patterns:
         [a|] planned workspace operation collection
     members:
-        items as a pointer to a pointer to planned workspace operation
-        length as i32
-        capacity as i32
+        items as a pointer to a pointer to a planned workspace operation
+        length as a 32 bit integer
+        capacity as a 32 bit integer
 
 class:
     patterns:
         [a|] workspace edit plan
     members:
-        validity as boolean
-        outcome as workspace edit result
-        resources as a pointer to workspace resource snapshot collection
-        normalized changes as a pointer to normalized workspace change collection
-        operations as a pointer to planned workspace operation collection
+        validity as a boolean
+        outcome as a workspace edit result
+        resources as a pointer to a workspace resource snapshot collection
+        normalized changes as a pointer to a normalized workspace change collection
+        operations as a pointer to a planned workspace operation collection
 
 function the workspace regular file resource kind:
     replacement:
@@ -107,11 +107,11 @@ function the workspace directory resource kind:
     replacement:
         2
 
-function {a pointer to workspace edit plan:plan} is valid:
+function {a pointer to a workspace edit plan:plan} is valid:
     replacement:
         the validity of plan
 
-function {a pointer to workspace edit plan:plan} is invalid:
+function {a pointer to a workspace edit plan:plan} is invalid:
     replacement:
         the inverse of the validity of plan
 
@@ -120,14 +120,14 @@ local function a new workspace resource snapshot collection:
         set initial to @intrinsic(
             "construct",
             a workspace resource snapshot collection,
-            0 as a pointer to a pointer to workspace resource snapshot,
+            0 as a pointer to a pointer to a workspace resource snapshot,
             0,
             0
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-function append workspace resource snapshot {a pointer to workspace resource snapshot:value} to {a pointer to workspace resource snapshot collection:collection}:
+function append workspace resource snapshot {a pointer to a workspace resource snapshot:value} to {a pointer to a workspace resource snapshot collection:collection}:
     execute:
         if the length of collection = the capacity of collection:
             set growth to ((the capacity of collection) * 2)
@@ -137,16 +137,16 @@ function append workspace resource snapshot {a pointer to workspace resource sna
                 "call",
                 "libc",
                 "realloc",
-                a pointer to a pointer to workspace resource snapshot,
+                a pointer to a pointer to a workspace resource snapshot,
                 the items of collection,
-                growth * the size of a pointer to workspace resource snapshot
+                growth * the size of a pointer to a workspace resource snapshot
             )
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
         set the length of collection to ((the length of collection) + 1)
 
-function workspace resource snapshot at {integer:position} in {a pointer to workspace resource snapshot collection:collection}:
+function the workspace resource snapshot at {integer:position} in {a pointer to a workspace resource snapshot collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
             @intrinsic("call", "libc", "abort", nothing)
@@ -157,14 +157,14 @@ local function a new normalized workspace change collection:
         set initial to @intrinsic(
             "construct",
             a normalized workspace change collection,
-            0 as a pointer to a pointer to normalized workspace change,
+            0 as a pointer to a pointer to a normalized workspace change,
             0,
             0
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-function append normalized workspace change {a pointer to normalized workspace change:value} to {a pointer to normalized workspace change collection:collection}:
+function append normalized workspace change {a pointer to a normalized workspace change:value} to {a pointer to a normalized workspace change collection:collection}:
     execute:
         if the length of collection = the capacity of collection:
             set growth to ((the capacity of collection) * 2)
@@ -174,16 +174,16 @@ function append normalized workspace change {a pointer to normalized workspace c
                 "call",
                 "libc",
                 "realloc",
-                a pointer to a pointer to normalized workspace change,
+                a pointer to a pointer to a normalized workspace change,
                 the items of collection,
-                growth * the size of a pointer to normalized workspace change
+                growth * the size of a pointer to a normalized workspace change
             )
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
         set the length of collection to ((the length of collection) + 1)
 
-function normalized workspace change at {integer:position} in {a pointer to normalized workspace change collection:collection}:
+function the normalized workspace change at {integer:position} in {a pointer to a normalized workspace change collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
             @intrinsic("call", "libc", "abort", nothing)
@@ -194,14 +194,14 @@ local function a new planned workspace operation collection:
         set initial to @intrinsic(
             "construct",
             a planned workspace operation collection,
-            0 as a pointer to a pointer to planned workspace operation,
+            0 as a pointer to a pointer to a planned workspace operation,
             0,
             0
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-function append planned workspace operation {a pointer to planned workspace operation:value} to {a pointer to planned workspace operation collection:collection}:
+function append planned workspace operation {a pointer to a planned workspace operation:value} to {a pointer to a planned workspace operation collection:collection}:
     execute:
         if the length of collection = the capacity of collection:
             set growth to ((the capacity of collection) * 2)
@@ -211,16 +211,16 @@ function append planned workspace operation {a pointer to planned workspace oper
                 "call",
                 "libc",
                 "realloc",
-                a pointer to a pointer to planned workspace operation,
+                a pointer to a pointer to a planned workspace operation,
                 the items of collection,
-                growth * the size of a pointer to planned workspace operation
+                growth * the size of a pointer to a planned workspace operation
             )
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
         set the length of collection to ((the length of collection) + 1)
 
-function planned workspace operation at {integer:position} in {a pointer to planned workspace operation collection:collection}:
+function the planned workspace operation at {integer:position} in {a pointer to a planned workspace operation collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
             @intrinsic("call", "libc", "abort", nothing)
@@ -240,22 +240,22 @@ function a new valid workspace edit plan:
             changes,
             operations
         )
-        set result to allocate 1 slots of initial
+        allocate one slot of initial and set result to it
         return result
 
-function invalidate workspace edit plan {a pointer to workspace edit plan:plan} with {workspace edit result:failure}:
+function invalidate {a pointer to a workspace edit plan:plan} with {workspace edit result:failure}:
     execute:
         set the validity of plan to false
         set the outcome of plan to failure
 
-function free {a pointer to workspace edit plan:plan}:
+function free {a pointer to a workspace edit plan:plan}:
     execute:
-        if plan = (0 as a pointer to workspace edit plan):
+        if plan = (0 as a pointer to a workspace edit plan):
             @intrinsic("return")
         set resources to the resources of plan
         set position to 0
         loop while position < the length of resources:
-            set resource to workspace resource snapshot at position in resources
+            set resource to the workspace resource snapshot at position in resources
             @intrinsic("destroy at", resource)
             @intrinsic("call", "libc", "free", nothing, resource)
             set position to (position + 1)
@@ -265,7 +265,7 @@ function free {a pointer to workspace edit plan:plan}:
         set changes to the normalized changes of plan
         set position to 0
         loop while position < the length of changes:
-            set change to normalized workspace change at position in changes
+            set change to the normalized workspace change at position in changes
             @intrinsic("destroy at", change)
             @intrinsic("call", "libc", "free", nothing, change)
             set position to (position + 1)
@@ -275,7 +275,7 @@ function free {a pointer to workspace edit plan:plan}:
         set operations to the operations of plan
         set position to 0
         loop while position < the length of operations:
-            set operation to planned workspace operation at position in operations
+            set operation to the planned workspace operation at position in operations
             @intrinsic("destroy at", operation)
             @intrinsic("call", "libc", "free", nothing, operation)
             set position to (position + 1)

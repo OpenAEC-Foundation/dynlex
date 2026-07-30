@@ -14,7 +14,7 @@ function an empty map from {type:domain} to {type:range}:
         set keys to an empty list of domain
         set values to an empty list of range
         set initial to @intrinsic("construct", a map, keys, values)
-        allocate 1 slots of initial and set result to it
+        allocate one slot of initial and set result to it
         return result
 
 function the number of entries in {a pointer to a map:mapping}:
@@ -30,7 +30,7 @@ function the index of key in {a pointer to a map:mapping}:
             set cursor to (cursor + 1)
         return 0 - 1
 
-function {a pointer to a map:mapping} contains key {any:key}:
+function {a pointer to a map:mapping} contains key {a value:key}:
     execute:
         return the index of key in mapping >= 0
 

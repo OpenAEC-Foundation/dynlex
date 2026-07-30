@@ -8,8 +8,8 @@ function [an|] integer:
 
 class:
     patterns:
-        box
+        [a|] box
     members:
         value as an integer
 
-ignore @intrinsic("address of", @intrinsic("property", @intrinsic("construct", box, 1), "value"))
+ignore @intrinsic("address of", @intrinsic("property", @intrinsic("construct", a box, 1), "value"))

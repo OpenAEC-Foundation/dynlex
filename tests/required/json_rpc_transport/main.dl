@@ -1,31 +1,31 @@
 import lib/json_rpc.dl
 
-function [the|] json rpc transport test interpreter:
+function [the|] JSON-RPC transport test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
 
 set script to "import json,sys\nmessages=[({'jsonrpc':'2.0','method':'one','params':{'text':'hé😀'}},['X-Test: first','content-length: {length}']),({'jsonrpc':'2.0','method':'two'},['CONTENT-LENGTH: {length}','Content-Type: application/vscode-jsonrpc; charset=utf-8'])]\nfor message,headers in messages:\n payload=json.dumps(message,separators=(',',':'),ensure_ascii=False).encode('utf-8')\n frame=('\\r\\n'.join(line.format(length=len(payload)) for line in headers)+'\\r\\n\\r\\n').encode('ascii')+payload\n for byte in frame:\n  sys.stdout.buffer.write(bytes([byte])); sys.stdout.buffer.flush()\nrequest=sys.stdin.buffer.read()\nseparator=request.index(b'\\r\\n\\r\\n')\nheaders=request[:separator].decode('ascii').split('\\r\\n')\nlength=int(next(line.split(':',1)[1] for line in headers if line.split(':',1)[0].lower()=='content-length'))\npayload=request[separator+4:separator+4+length]\nmessage=json.loads(payload)\nvalid=message=={'jsonrpc':'2.0','method':'client/message','params':[1,True]}\nreply=json.dumps({'jsonrpc':'2.0','method':'verified','params':valid},separators=(',',':')).encode()\nsys.stdout.buffer.write(b'Content-Length: '+str(len(reply)).encode()+b'\\r\\n\\r\\n'+reply);sys.stdout.buffer.flush()"
-set command to a process command for the json rpc transport test interpreter
+set command to a process command for the JSON-RPC transport test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
 add script as an argument to command
 
 launch command and set child to it
-set opened to the result of connecting json rpc to child
-print opened's succeeded as a line
+set opened to the result of connecting JSON-RPC to child
+print whether opened succeeded as a line
 set connection to opened's connection
 
-set first to the next json rpc message from connection
-print first's succeeded as a line
+set first to the next JSON-RPC message from connection
+print whether first succeeded as a line
 print (the JSON text named "method" in first's message = "one") as a line
 set parameters to the JSON member named "params" in first's message
 print (the JSON text named "text" in parameters = "hé😀") as a line
-free json rpc receive result first
+free first
 
-set second to the next json rpc message from connection
-print second's succeeded as a line
+set second to the next JSON-RPC message from connection
+print whether second succeeded as a line
 print (the JSON text named "method" in second's message = "two") as a line
-free json rpc receive result second
+free second
 
 set parameters to a new JSON value of kind the JSON array kind
 set number to a new JSON value of kind the JSON number kind
@@ -35,22 +35,22 @@ add number to the JSON array parameters
 set truth to a new JSON value of kind the JSON boolean kind
 set the boolean of truth to true
 add truth to the JSON array parameters
-set sent to the result of sending json rpc notification "client/message" with parameters using connection
-print sent's succeeded as a line
+set sent to the result of sending JSON-RPC notification "client/message" with parameters using connection
+print whether sent succeeded as a line
 free parameters
 set closure to the result of closing the input of connection
-print closure's succeeded as a line
+print whether closure succeeded as a line
 
-set verified to the next json rpc message from connection
-print verified's succeeded as a line
+set verified to the next JSON-RPC message from connection
+print whether verified succeeded as a line
 print (the JSON text named "method" in verified's message = "verified") as a line
 print the JSON boolean named "params" in verified's message as a line
-free json rpc receive result verified
+free verified
 
-set ending to the next json rpc message from connection
-print (ending's status = the json rpc end of stream status) as a line
-free json rpc receive result ending
+set ending to the next JSON-RPC message from connection
+print (ending's status = the JSON-RPC end of stream status) as a line
+free ending
 
-set closed to the result of closing json rpc connection connection
-print closed's succeeded as a line
-free json rpc connection connection
+set closed to the result of closing connection
+print whether closed succeeded as a line
+free connection
