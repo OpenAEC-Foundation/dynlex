@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="shader-banner.css">
     <link rel="stylesheet" href="sections.css">
+    <link rel="stylesheet" href="river-challenge.css">
     <link rel="stylesheet" href="responsive.css">
     <title>DynLex — Make the language part of the work</title>
 </head>
@@ -87,7 +88,7 @@
                         <p>Code can sound like the thing it describes. In DynLex, a useful phrase becomes part of the language of the project.</p>
                         <div class="hero-tools">
                             <a href="ide/index.html">Open the playground <span aria-hidden="true">↗</span></a>
-                            <a href="#sketches">Browse working sketches <span aria-hidden="true">↓</span></a>
+                            <a href="#challenges">Open the first challenge <span aria-hidden="true">↓</span></a>
                         </div>
                     </div>
                 </div>
@@ -124,57 +125,65 @@ print square 8 as line</textarea>
             </div>
         </section>
 
-        <section class="sketch-section" id="sketches" aria-labelledby="sketches-title">
+        <section
+            class="challenge-section"
+            id="challenges"
+            data-river-challenge
+            data-river-music="media/river-challenge/puzzle-casual-game-music.mp3"
+            aria-labelledby="challenges-title"
+        >
             <div class="page-shell">
                 <div class="section-title reveal">
-                    <p>SKETCHBOOK / 03 FILES</p>
-                    <h2 id="sketches-title">Code worth<br><span>playing with.</span></h2>
-                    <small>Small programs. Real output. Plenty of room to change the premise.</small>
+                    <p>CODING CHALLENGE / 01</p>
+                    <h2 id="challenges-title">Think in words.<br><span>Move the world.</span></h2>
+                    <small>Write a short plan in plain English, then watch every instruction play out.</small>
                 </div>
 
-                <div class="sketch-grid">
-                    <article class="sketch-card sketch-card-wide reveal" data-runnable-sketch data-output-mode="rhythm">
-                        <header><span>01 / RHYTHM</span><strong>hello-loop.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
-                        <div class="sketch-card-body">
-                            <div class="sketch-source-pane">
-                                <textarea class="snippet-editor" data-snippet-source aria-label="Hello loop DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
-
-loop 3 times:
-    print "Hello" as line</textarea>
-                                <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
+                <div id="river-challenge-mount" data-river-challenge-mount>
+                    <article
+                        class="river-game river-preview reveal"
+                        data-river-preview
+                        aria-label="Wolf, sheep, and hay river crossing"
+                    >
+                        <div class="river-stage" data-river-stage data-boat-heading="FAR">
+                            <img
+                                class="river-landscape"
+                                src="media/river-challenge/painted-river.webp"
+                                alt=""
+                            >
+                            <div class="river-light" aria-hidden="true"></div>
+                            <span class="river-shore-label river-shore-home">HOME BANK</span>
+                            <span class="river-shore-label river-shore-far">FAR BANK</span>
+                            <div class="river-boat" data-river-boat role="img" aria-label="Boat with farmer">
+                                <img src="media/river-challenge/boat.webp" alt="">
+                                <i class="river-blink-layer river-boat-farmer-blink" data-river-boat-farmer aria-hidden="true"></i>
                             </div>
-                            <div class="type-rhythm" data-snippet-output aria-live="polite" aria-label="Output: Hello three times"><span>Hello</span><span>Hello</span><span>Hello</span></div>
+                            <div class="river-character river-sheep" data-river-character="SHEEP" role="img" aria-label="Sheep">
+                                <i class="river-blink-layer river-sheep-blink" aria-hidden="true"></i>
+                                <i class="river-sheep-mouth" aria-hidden="true"></i>
+                            </div>
+                            <div class="river-character river-wolf" data-river-character="WOLF" role="img" aria-label="Wolf">
+                                <i class="river-blink-layer river-wolf-blink" aria-hidden="true"></i>
+                            </div>
+                            <div class="river-character river-hay" data-river-character="HAY" role="img" aria-label="Hay"></div>
+                            <div class="river-boat-hull" data-river-boat-hull aria-hidden="true">
+                                <img src="media/river-challenge/boat.webp" alt="">
+                            </div>
+                            <div class="river-speech" data-river-preview-speech data-side="HOME">
+                                <span>Can you help me cross the river?</span>
+                                <button
+                                    type="button"
+                                    data-river-challenge-load
+                                    aria-expanded="false"
+                                    aria-controls="river-challenge-mount"
+                                >OKAY</button>
+                            </div>
                         </div>
-                    </article>
-
-                    <article class="sketch-card reveal" data-runnable-sketch data-output-mode="color">
-                        <header><span>02 / PHRASE</span><strong>glow.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
-                        <div class="sketch-source-pane">
-                            <textarea class="snippet-editor" data-snippet-source aria-label="Glow phrase DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
-
-function glow color:
-    execute:
-        print color as line
-
-glow "electric blue"</textarea>
-                            <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
-                        </div>
-                        <div class="color-output" data-snippet-output aria-live="polite"><span>electric</span><strong>blue</strong></div>
-                    </article>
-
-                    <article class="sketch-card sketch-card-signal reveal" data-runnable-sketch data-output-mode="signal">
-                        <header><span>03 / SIGNAL</span><strong>answer.dl</strong><i data-snippet-status>READY</i><button type="button" data-snippet-run>RUN ▶</button></header>
-                        <div class="sketch-source-pane">
-                            <textarea class="snippet-editor" data-snippet-source aria-label="Answer signal DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
-
-set answer to 42
-if answer is 42:
-    print "Exactly." as line</textarea>
-                            <div class="snippet-diagnostics" data-snippet-diagnostics hidden></div>
-                        </div>
-                        <div class="signal-output" data-snippet-output aria-live="polite"><i aria-hidden="true"></i><span>Exactly.</span></div>
                     </article>
                 </div>
+                <p class="river-preview-error" data-river-challenge-error role="alert" hidden>
+                    An error occurred. Check the log.
+                </p>
             </div>
         </section>
 

@@ -1,0 +1,20 @@
+import lib/river_challenge.dl
+
+# The complete solution also exercises the supported natural-language variations.
+take the sheep aboard
+cross the river
+let the sheep out
+row across the water
+put the wolf in the boat
+cross to the other side
+unload the wolf
+take sheep aboard
+row back
+let sheep out
+load the hay
+row across the river
+unload hay
+row to the other bank
+get sheep in
+cross the water
+get the sheep out of the boat

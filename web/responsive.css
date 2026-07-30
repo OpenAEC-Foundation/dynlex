@@ -294,7 +294,7 @@
         min-width: 200px;
     }
 
-    .sketch-section,
+    .challenge-section,
     .language-section,
     .studio-section {
         padding: 95px 0;
@@ -314,42 +314,6 @@
     .language-copy h2,
     .studio-copy h2 {
         font-size: clamp(3rem, 14vw, 4.6rem);
-    }
-
-    .sketch-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .sketch-card-wide {
-        grid-column: auto;
-    }
-
-    .sketch-card-body {
-        grid-template-columns: 1fr;
-    }
-
-    .sketch-card-body .sketch-source-pane {
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-    }
-
-    .type-rhythm {
-        min-height: 240px;
-    }
-
-    .sketch-card:not(.sketch-card-wide) {
-        grid-template-rows: auto auto 190px;
-    }
-
-    .sketch-source-pane .snippet-editor-shell {
-        --snippet-frame-height: 250px;
-        flex: none;
-        height: var(--snippet-frame-height);
-    }
-
-    .sketch-source-pane .snippet-editor {
-        padding: 26px 20px;
-        font-size: 0.65rem;
     }
 
     .language-board {
