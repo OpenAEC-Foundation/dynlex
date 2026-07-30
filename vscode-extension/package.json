@@ -4,6 +4,22 @@
   "description": "Language support for the DynLex programming language",
   "version": "0.0.2",
   "publisher": "impertio",
+  "license": "LGPL-3.0-or-later",
+  "homepage": "https://dynlex.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenAEC-Foundation/dynlex.git",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/OpenAEC-Foundation/dynlex/issues"
+  },
+  "keywords": [
+    "dynlex",
+    "programming language",
+    "language server",
+    "debugger"
+  ],
   "icon": "icons/dynlex.png",
   "engines": {
     "vscode": "^1.91.0"
@@ -226,7 +242,7 @@
     "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p ./",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
-    "package": "vsce package --allow-missing-repository",
+    "package": "node ./scripts/package-registries.mjs",
     "test": "npm run compile && node --test tests/*.test.js",
     "watch": "npm run bundle -- --watch",
     "lint": "eslint src"
@@ -241,6 +257,7 @@
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
+    "ovsx": "1.0.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0"
   }

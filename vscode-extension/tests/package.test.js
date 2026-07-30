@@ -24,3 +24,17 @@ test('extension manifest includes the DynLex icon at marketplace resolution', ()
         '50943a596e4bea48c7e48edf04efa1f71425972bd2a8ccaedafa720c28df5fbd',
     );
 });
+
+test('extension manifest has complete registry metadata', () => {
+    assert.equal(manifest.publisher, 'impertio');
+    assert.equal(manifest.license, 'LGPL-3.0-or-later');
+    assert.deepEqual(manifest.repository, {
+        type: 'git',
+        url: 'https://github.com/OpenAEC-Foundation/dynlex.git',
+        directory: 'vscode-extension',
+    });
+    assert.equal(manifest.homepage, 'https://dynlex.com');
+    assert.deepEqual(manifest.bugs, {
+        url: 'https://github.com/OpenAEC-Foundation/dynlex/issues',
+    });
+});

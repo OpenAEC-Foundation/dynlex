@@ -19,10 +19,6 @@ echo "Testing extension..."
 npm test
 npm run lint
 
-# Bundle
-echo "Bundling extension..."
-npm run bundle
-
-# Package .vsix
-echo "Packaging .vsix..."
+# Package the VS Marketplace and Open VSX identities.
+echo "Packaging registry-specific .vsix files..."
 npm run package
