@@ -541,6 +541,7 @@ run_auxiliary_test() {
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
+run_auxiliary_test "runtime_feature_macros" 10 python3 -B "$SCRIPT_DIR/test_runtime_feature_macros.py"
 if [[ "$is_windows" == "true" ]]; then
     run_auxiliary_test \
         "windows_dependency_installer" 10 \

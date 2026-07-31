@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#include "platformFeatureTest.h"
 
 #include "filesystemRuntimeInternal.h"
 #include "filesystemTransactionInternal.h"
