@@ -111,22 +111,14 @@ jobs:
 
   build-windows:
     needs: [verify-version-tag]
-    environment: release-signing
-    permissions:
-      contents: read
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: windows-latest
             architecture: x64
-            wix_architecture: x64
-            asset_id: windows-x64-msi
           - runner: windows-11-arm
             architecture: arm64
-            wix_architecture: arm64
-            asset_id: windows-arm64-msi
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +135,58 @@ jobs:
         shell: pwsh
         run: ./scripts/install.ps1
 
+      - name: Build and test (Release)
+        shell: bash
+        run: ./scripts/test.sh --release
+
+      - name: Verify Windows executable architecture
+        run: python ./scripts/verify-executable-architecture.py build/dynlex.exe ${{ matrix.architecture }}
+
+      - name: Stage Windows installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/windows-stage
+          cmake --install build --prefix build/windows-stage
+          test -f build/windows-stage/bin/dynlex.exe
+          python ./scripts/verify-executable-architecture.py \
+            build/windows-stage/bin/dynlex.exe "${{ matrix.architecture }}"
+
+      - name: Upload unsigned Windows installation
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-${{ matrix.architecture }}
+          path: |
+            build/windows-stage
+            build/CPackConfig.cmake
+          if-no-files-found: error
+
+  package-windows:
+    needs: [build-windows]
+    runs-on: windows-2025
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            wix_architecture: x64
+            asset_id: windows-x64-msi
+          - architecture: arm64
+            wix_architecture: arm64
+            asset_id: windows-arm64-msi
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download unsigned Windows installation
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build-${{ matrix.architecture }}
+          path: windows-build
+
       - name: Install WiX toolset
         shell: pwsh
         run: |
@@ -155,13 +199,7 @@ jobs:
             }
             Add-Content -Path $env:GITHUB_PATH -Value $wixBin
           }
-
-      - name: Build and test (Release)
-        shell: bash
-        run: ./scripts/test.sh --release
-
-      - name: Verify Windows executable architecture
-        run: python ./scripts/verify-executable-architecture.py build/dynlex.exe ${{ matrix.architecture }}
+          Get-Command cpack -ErrorAction Stop
 
       - name: Log in to Azure
         uses: azure/login@v3
@@ -176,7 +214,7 @@ jobs:
           endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\build\dynlex.exe
+          files: ${{ github.workspace }}\windows-build\windows-stage\bin\dynlex.exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -186,7 +224,7 @@ jobs:
 
       - name: Verify Windows executable signature
         shell: pwsh
-        run: ./scripts/verify-windows-signature.ps1 -Path "build/dynlex.exe"
+        run: ./scripts/verify-windows-signature.ps1 -Path "windows-build/windows-stage/bin/dynlex.exe"
 
       - name: Package MSI
         id: package
@@ -195,11 +233,15 @@ jobs:
           set -euo pipefail
           MSI_NAME="$(./scripts/release-asset.sh name '${{ matrix.asset_id }}')"
           PACKAGE_BASENAME="${MSI_NAME%.msi}"
-          cd build
-          cpack -G WIX \
+          mkdir -p build
+          cpack --config windows-build/CPackConfig.cmake \
+            -G WIX \
+            -B build \
+            -D "CPACK_INSTALLED_DIRECTORIES=$PWD/windows-build/windows-stage;/" \
+            -D 'CPACK_INSTALL_CMAKE_PROJECTS=' \
             -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME" \
             -D CPACK_WIX_ARCHITECTURE="${{ matrix.wix_architecture }}"
-          test -f "$MSI_NAME"
+          test -f "build/$MSI_NAME"
           echo "name=$MSI_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Sign Windows installer
@@ -542,7 +584,7 @@ jobs:
           diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-linux.out
 
   smoke-windows:
-    needs: [build-windows]
+    needs: [package-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -671,7 +713,7 @@ jobs:
   publish-release:
     if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows, package-macos, smoke-linux, smoke-windows, smoke-macos]
+    needs: [build-linux, package-windows, package-macos, smoke-linux, smoke-windows, smoke-macos]
     permissions:
       contents: write
     steps:

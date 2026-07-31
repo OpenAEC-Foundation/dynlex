@@ -170,6 +170,22 @@ assert.match(releaseWorkflow, /runner: ubuntu-24\.04-arm[\s\S]*architecture: arm
 assert.match(releaseWorkflow, /runner: windows-11-arm[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: macos-14[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: macos-15-intel[\s\S]*architecture: x64/);
+assert.match(
+  releaseWorkflow,
+  /package-windows:[\s\S]*runs-on: windows-2025[\s\S]*azure\/artifact-signing-action@v2/,
+);
+assert.match(
+  releaseWorkflow,
+  /build-windows:[\s\S]*cmake --install build --prefix build\/windows-stage[\s\S]*package-windows:/,
+);
+assert.doesNotMatch(
+  releaseWorkflow.match(/build-windows:[\s\S]*?(?=\n  package-windows:)/)?.[0] ?? "",
+  /artifact-signing-action/,
+);
+assert.match(
+  releaseWorkflow,
+  /CPACK_INSTALLED_DIRECTORIES=\$PWD\/windows-build\/windows-stage;\/[\s\S]*CPACK_INSTALL_CMAKE_PROJECTS=/,
+);
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
