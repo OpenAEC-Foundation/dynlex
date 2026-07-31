@@ -1,0 +1,21 @@
+function number:
+    replacement:
+        @intrinsic("type", "int")
+
+function sheep:
+    replacement:
+        @intrinsic("add", 1, 0)
+
+function wolf:
+    replacement:
+        @intrinsic("add", 2, 0)
+
+function get zulu:
+    execute:
+        @intrinsic("return")
+
+function get {number:passenger} in:
+    execute:
+        @intrinsic("discard", passenger)
+
+get sheep in

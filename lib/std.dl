@@ -508,8 +508,8 @@ function {boolean:left} and {boolean:right}:
 flex function {nothing:left} and {nothing:right}:
     before: $ or $
     replacement:
-        left
-        right
+        @intrinsic("discard", left)
+        @intrinsic("discard", right)
 
 function left or right:
     before: default

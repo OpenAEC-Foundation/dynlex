@@ -8,6 +8,6 @@ function finish:
 
 flex function continue after {nothing:action}:
     replacement:
-        action
+        @intrinsic("discard", action)
 
 continue after finish

@@ -629,6 +629,7 @@ assert.ok(
 );
 assert.notEqual(initialShaderState.scrollbarColor, "rgb(255, 255, 255)", "The IDE scrollbar must not be white");
 assert.ok(initialShaderState.tokenColorCount >= 3, "The shader source must be syntax highlighted");
+await findMonacoText("fold");
 await hoverMonacoText("fold");
 await waitFor(
   "[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.trim().length > 0)",
@@ -709,8 +710,8 @@ await waitFor(
 );
 await captureScreenshot("ide-hover");
 await hoverMonacoText("square");
-await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('square {a 32 bit integer:value}'))`, "the inferred-instance hover to display its parameter type");
-await findMonacoText("square 8");
+await waitFor(`[...document.querySelectorAll('.monaco-hover:not(.hidden)')].some((hover) => hover.textContent.includes('Choose inferred instance') && hover.textContent.includes('{a 32-bit integer:value} squared'))`, "the inferred-instance hover to display its parameter type");
+await findMonacoText("squared", 1);
 await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '7'",
   "the square invocation to be selected"
@@ -720,7 +721,7 @@ await waitFor(
   "document.querySelector('.line-numbers.active-line-number')?.textContent.trim() === '3'",
   "F12 to navigate from the square invocation to its definition"
 );
-await findMonacoText("print square 8");
+await findMonacoText("print 8 squared");
 await dispatchKey("F12", "F12", 123);
 await waitFor(
   "[...document.querySelectorAll('[data-current-file]')].every((label) => label.textContent === 'string.dl')",
@@ -756,7 +757,7 @@ await waitFor(
   "the editable file to reopen from the project list"
 );
 await waitFor(
-  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print square 8 as a line')",
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print 8 squared as a line')",
   "returning from a definition to render the preserved editable source model"
 );
 await captureScreenshot("ide-finished");

@@ -1,0 +1,1 @@
+tests/required/unmatched_standalone_word/main.dl:1-2: Error: This pattern couldn't be resolved

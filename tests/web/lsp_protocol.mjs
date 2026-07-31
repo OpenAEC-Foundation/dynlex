@@ -44,6 +44,7 @@ const completionKinds = {
   Text: 18,
   Method: 0,
   Function: 1,
+  Variable: 4,
   Module: 8,
   Keyword: 17,
   Snippet: 27,
@@ -52,6 +53,7 @@ const completionKinds = {
 assert.equal(completionKindFromLsp(1, completionKinds), completionKinds.Text);
 assert.equal(completionKindFromLsp(2, completionKinds), completionKinds.Method);
 assert.equal(completionKindFromLsp(3, completionKinds), completionKinds.Function);
+assert.equal(completionKindFromLsp(6, completionKinds), completionKinds.Variable);
 assert.equal(completionKindFromLsp(9, completionKinds), completionKinds.Module);
 assert.equal(completionKindFromLsp(14, completionKinds), completionKinds.Keyword);
 assert.equal(completionKindFromLsp(15, completionKinds), completionKinds.Snippet);

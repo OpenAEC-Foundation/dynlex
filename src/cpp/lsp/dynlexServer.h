@@ -29,6 +29,7 @@ class DynLexServer : public LanguageServer {
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;
 	std::string onRenderSemanticTokens(const TextDocumentIdentifier &params) override;
 	Json onInstantiationsInDocument(const TextDocumentIdentifier &params) override;
+	Json onCallExpressions(const TextDocumentIdentifier &params) override;
 	std::optional<std::string> onReadDocument(const TextDocumentIdentifier &params) override;
 	std::vector<DocumentSymbol> onDocumentSymbol(const DocumentSymbolParams &params) override;
 	std::vector<CodeAction> onCodeAction(const CodeActionParams &params) override;

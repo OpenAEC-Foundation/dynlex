@@ -900,3 +900,6 @@ static std::vector<DataType> argumentTypesForDefinition(const Expression *expr, 
 }
 
 #include "dynlexServerInspection.inl"
+#include "dynlexServerResolvedCalls.inl"
+
+} // namespace lsp

@@ -16,6 +16,6 @@ function [a|] pointer to pointed:
 
 function the identity of {type:value}:
     replacement:
-        value
+        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore @intrinsic("size of", the identity of a pointer to a byte)

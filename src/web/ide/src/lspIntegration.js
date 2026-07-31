@@ -1,4 +1,4 @@
-import { initializeLsp, LspClient, shutdownLsp } from "../../../../web/lsp-client.js";
+import { LspSession } from "../../../../web/lsp-client.js";
 import {
   completionKindFromLsp,
   diagnosticSeverityFromLsp,
@@ -79,34 +79,32 @@ export class DynLexLanguageFeatures {
     this.monaco = monaco;
     this.editor = editor;
     this.mainModel = mainModel;
-    this.client = new LspClient(exchange);
+    this.session = new LspSession(exchange);
     this.analysisProfiles = analysisProfiles;
     this.onDiagnostics = onDiagnostics;
     this.onModelChanged = onModelChanged;
     this.onDocumentsChanged = onDocumentsChanged;
-    this.clientId = crypto.randomUUID();
     this.capabilities = null;
     this.diagnosticsByUri = new Map();
     this.openDocuments = new Map();
     this.viewStates = new Map();
     this.disposables = [];
-    this.operationChain = Promise.resolve();
     this.semanticTokensChanged = new monaco.Emitter();
     this.disposables.push(this.semanticTokensChanged);
   }
 
   async start() {
     this.disposables.push(
-      this.client.onNotification("textDocument/publishDiagnostics", (params) => {
+      this.session.onNotification("textDocument/publishDiagnostics", (params) => {
         this.#publishDiagnostics(params);
       }),
-      this.client.onRequest("workspace/semanticTokens/refresh", () => {
+      this.session.onRequest("workspace/semanticTokens/refresh", () => {
         this.semanticTokensChanged.fire();
         return null;
       })
     );
 
-    const initializeResult = await initializeLsp(this.client, {
+    const initializeResult = await this.session.start({
       capabilities: {
         textDocument: {
           semanticTokens: {
@@ -135,34 +133,24 @@ export class DynLexLanguageFeatures {
   }
 
   async stop() {
-    await this.#afterDocumentChanges();
-    await this.client.notify("dynlex/activeCursorChanged", { clientId: this.clientId });
-    for (const { model } of this.openDocuments.values()) {
-      await this.client.notify("textDocument/didClose", {
-        textDocument: textDocument(model)
-      });
+    for (const { contentListener } of this.openDocuments.values()) {
+      contentListener.dispose();
     }
-    await shutdownLsp(this.client);
+    await this.session.stop();
+    this.openDocuments.clear();
     for (const disposable of this.disposables.splice(0)) {
       disposable.dispose();
     }
   }
 
-  #enqueue(operation) {
-    this.operationChain = this.operationChain.then(operation);
-    this.operationChain.catch((error) => {
+  #runDocumentOperation(operation) {
+    void operation.catch((error) => {
       console.error("DynLex document synchronization failed", error);
     });
-    return this.operationChain;
   }
 
-  async #afterDocumentChanges() {
-    await this.operationChain;
-  }
-
-  async #request(method, params) {
-    await this.#afterDocumentChanges();
-    return this.client.request(method, params);
+  #request(method, params) {
+    return this.session.request(method, params);
   }
 
   async #openDocument(model) {
@@ -170,39 +158,32 @@ export class DynLexLanguageFeatures {
     if (this.openDocuments.has(uri)) {
       return;
     }
+    const document = await this.session.openDocument({
+      uri,
+      languageId: "dynlex",
+      version: model.getVersionId(),
+      text: model.getValue()
+    });
     const contentListener = model.onDidChangeContent((event) => {
-      this.#enqueue(async () => {
-        await this.client.notify("textDocument/didChange", {
-          textDocument: {
-            uri,
-            version: model.getVersionId()
-          },
-          contentChanges: event.changes.map((change) => ({
+      const position = this.editor.getModel() === model
+        ? positionToLsp(this.editor.getPosition())
+        : undefined;
+      this.#runDocumentOperation(
+        document.applyChanges(
+          event.changes.map((change) => ({
             range: rangeToLsp(change.range),
             rangeLength: change.rangeLength,
             text: change.text
-          }))
-        });
-        if (this.editor.getModel() === model) {
-          await this.#sendActiveCursor();
-        }
-      });
+          })),
+          {
+            version: model.getVersionId(),
+            text: model.getValue(),
+            position
+          }
+        )
+      );
     });
-    this.openDocuments.set(uri, { model, contentListener });
-    try {
-      await this.client.notify("textDocument/didOpen", {
-        textDocument: {
-          uri,
-          languageId: "dynlex",
-          version: model.getVersionId(),
-          text: model.getValue()
-        }
-      });
-    } catch (error) {
-      this.openDocuments.delete(uri);
-      contentListener.dispose();
-      throw error;
-    }
+    this.openDocuments.set(uri, { model, document, contentListener });
     const diagnostics = this.diagnosticsByUri.get(uri);
     if (diagnostics) {
       this.#setModelMarkers(model, diagnostics);
@@ -301,7 +282,7 @@ export class DynLexLanguageFeatures {
         this.monaco.editor.registerCommand(
           selectInstantiationCommand,
           async (_accessor, selectionKey, instantiationKey) => {
-            await this.client.notify("dynlex/selectInstantiation", {
+            await this.session.notify("dynlex/selectInstantiation", {
               selectionKey,
               instantiationKey
             });
@@ -471,10 +452,10 @@ export class DynLexLanguageFeatures {
         const model = this.editor.getModel();
         this.editor.updateOptions({ readOnly: model !== this.mainModel });
         this.onModelChanged?.(model);
-        this.#enqueue(() => this.#sendActiveCursor());
+        this.#runDocumentOperation(this.#sendActiveCursor());
       }),
       this.editor.onDidChangeCursorPosition(() => {
-        this.#enqueue(() => this.#sendActiveCursor());
+        this.#runDocumentOperation(this.#sendActiveCursor());
       })
     );
   }
@@ -483,15 +464,14 @@ export class DynLexLanguageFeatures {
     const model = this.editor.getModel();
     const position = this.editor.getPosition();
     if (!model || !position || model.getLanguageId() !== "dynlex") {
-      await this.client.notify("dynlex/activeCursorChanged", { clientId: this.clientId });
+      await this.session.clearActiveCursor();
       return;
     }
-    await this.client.notify("dynlex/activeCursorChanged", {
-      clientId: this.clientId,
-      uri: model.uri.toString(),
-      version: model.getVersionId(),
-      position: positionToLsp(position)
-    });
+    const entry = this.openDocuments.get(model.uri.toString());
+    if (!entry) {
+      throw new Error(`Active DynLex document is not open: ${model.uri.toString()}`);
+    }
+    await entry.document.setActiveCursor(positionToLsp(position));
   }
 
   #publishDiagnostics(params) {

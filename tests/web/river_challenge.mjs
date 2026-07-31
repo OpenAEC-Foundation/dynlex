@@ -9,6 +9,7 @@ const paths = {
   html: path.join(webDir, "index.html"),
   homepage: path.join(webDir, "homepage.js"),
   challenge: path.join(webDir, "river-challenge.js"),
+  editor: path.join(webDir, "river-challenge-editor.js"),
   audio: path.join(webDir, "river-challenge-audio.js"),
   model: path.join(webDir, "river-challenge-model.js"),
   styles: path.join(webDir, "river-challenge.css"),
@@ -36,7 +37,7 @@ for (const [name, filePath] of Object.entries(paths)) {
   assert.ok(fs.existsSync(filePath), `Missing river challenge ${name}: ${path.relative(projectDir, filePath)}`);
 }
 
-for (const filePath of [paths.challenge, paths.audio, paths.model, paths.styles, paths.library]) {
+for (const filePath of [paths.challenge, paths.editor, paths.audio, paths.model, paths.styles, paths.library]) {
   const lineCount = fs.readFileSync(filePath, "utf8").split("\n").length;
   assert.ok(lineCount < 1000, `${path.relative(projectDir, filePath)} must stay under 1000 lines`);
 }
@@ -44,6 +45,7 @@ for (const filePath of [paths.challenge, paths.audio, paths.model, paths.styles,
 const html = fs.readFileSync(paths.html, "utf8");
 const homepage = fs.readFileSync(paths.homepage, "utf8");
 const challenge = fs.readFileSync(paths.challenge, "utf8");
+const editor = fs.readFileSync(paths.editor, "utf8");
 const audio = fs.readFileSync(paths.audio, "utf8");
 const styles = fs.readFileSync(paths.styles, "utf8");
 const homepageStyles = fs.readFileSync(paths.homepageStyles, "utf8");
@@ -87,8 +89,9 @@ assert.doesNotMatch(challenge, /renderer\.actors\.get\("FARMER"\)/);
 assert.match(challenge, /river-blink-layer/);
 assert.doesNotMatch(challenge, /river-eyelids/);
 assert.match(challenge, /river-sheep-mouth/);
-assert.match(challenge, /# The official names are: sheep, wolf, and hay\./);
-assert.match(challenge, /get the hay in the boat\\nrow to the other side/);
+assert.match(editor, /# The official names are: sheep, wolf, and hay\./);
+assert.match(editor, /get the hay in the boat\\n"/);
+assert.match(editor, /row to the other side/);
 assert.match(challenge, /Your plan has no river instructions yet\./);
 assert.match(challenge, /Everyone is safe so far, but the crossing is not complete\./);
 assert.match(challenge, /data-river-playback-toggle/);
@@ -96,10 +99,16 @@ assert.match(challenge, /data-river-speed/);
 assert.match(challenge, /data-river-reset/);
 assert.match(challenge, /data-river-mute/);
 assert.match(challenge, /animation-play-state/);
-assert.match(challenge, /renderSemanticTokens/);
 assert.match(challenge, /analyzeDynLex/);
+assert.match(challenge, /completeDynLex/);
 assert.match(challenge, /data-river-source-diagnostics/);
-assert.match(challenge, /rebaseLspDiagnosticsAfterLines/);
+assert.match(challenge, /data-river-source-playback/);
+assert.match(challenge, /data-river-completions/);
+assert.match(editor, /renderSemanticTokens/);
+assert.match(editor, /rebaseLspDiagnosticsAfterLines/);
+assert.match(editor, /dynlex|DynLex/);
+assert.match(editor, /riverCommandCallRanges/);
+assert.doesNotMatch(challenge, /commandFromLine|commandLineNumbers/);
 assert.match(challenge, /createRiverChallengeAudio/);
 assert.match(challenge, /event\.action === "CROSS" \? "rowing" : "boat"/);
 assert.match(challenge, /playTraceEffect\("anxious"/);
@@ -131,6 +140,9 @@ assert.match(
 );
 assert.match(styles, /\[data-river-line-state="active"\]/);
 assert.match(styles, /\[data-river-line-state="error"\]/);
+assert.match(styles, /\[data-river-call-state="active"\]/);
+assert.match(styles, /\[data-river-call-state="error"\]/);
+assert.match(styles, /\.river-completions/);
 assert.match(styles, /\.river-sheep\.is-bellowing \.river-sheep-mouth/);
 assert.match(styles, /sheep\.webp/);
 assert.match(styles, /sheep-blink\.webp/);
@@ -153,6 +165,8 @@ for (const pattern of [
   "get {river passenger:passenger} in [the|] boat",
   "take {river passenger:passenger} aboard",
   "get {river passenger:passenger} out of [the|] boat",
+  "leave {river passenger:passenger}",
+  "leave {river passenger:passenger} at [the|] other side",
   "row to the other side",
   "row back",
   "cross the river",
@@ -180,6 +194,71 @@ const {
   createInitialRiverScene,
   parseRiverTrace
 } = await import(pathToFileURL(paths.model).href);
+const {
+  riverCommandCallRanges,
+  riverCompletionPlacement
+} = await import(pathToFileURL(paths.editor).href);
+
+assert.deepEqual(riverCompletionPlacement({
+  caret: { top: 72, right: 81, bottom: 92, left: 80 },
+  container: { width: 500, height: 300 },
+  list: { width: 220, height: 140 }
+}), {
+  placement: "right",
+  left: 89,
+  top: 72
+});
+assert.deepEqual(riverCompletionPlacement({
+  caret: { top: 52, right: 261, bottom: 72, left: 260 },
+  container: { width: 300, height: 300 },
+  list: { width: 220, height: 140 }
+}), {
+  placement: "below",
+  left: 72,
+  top: 80
+});
+assert.deepEqual(riverCompletionPlacement({
+  caret: { top: 190, right: 261, bottom: 210, left: 260 },
+  container: { width: 300, height: 300 },
+  list: { width: 220, height: 140 }
+}), {
+  placement: "above",
+  left: 72,
+  top: 42
+});
+
+const repeatedCallRanges = riverCommandCallRanges([
+  {
+    range: {
+      start: { line: 2, character: 0 },
+      end: { line: 2, character: 25 }
+    },
+    definition: { uri: "file:///lib/river_challenge.dl" },
+    returnType: "nothing"
+  },
+  {
+    range: {
+      start: { line: 2, character: 30 },
+      end: { line: 2, character: 51 }
+    },
+    definition: { uri: "file:///lib/river_challenge.dl" },
+    returnType: "nothing"
+  }
+], 3);
+assert.deepEqual(repeatedCallRanges, [
+  {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 25 }
+  },
+  {
+    start: { line: 0, character: 30 },
+    end: { line: 0, character: 51 }
+  },
+  {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 25 }
+  }
+]);
 
 const trace = parseRiverTrace([
   "RIVER|COMMAND|LOAD|HAY",

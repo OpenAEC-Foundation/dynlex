@@ -3,7 +3,7 @@ import lib/std.dl
 function grouped value:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        value
+        @intrinsic("return", value)
 
 class:
     patterns:

@@ -4,11 +4,9 @@ import { pathToFileURL } from "node:url";
 
 const modulePath = path.resolve(import.meta.dirname, "../../web/lsp-client.js");
 const {
-  initializeLsp,
   LspClient,
   LspResponseError,
-  LspTextDocument,
-  shutdownLsp
+  LspSession
 } = await import(pathToFileURL(modulePath).href);
 
 const exchangedMessages = [];
@@ -101,7 +99,7 @@ assert.throws(
 );
 
 const lifecycleMessages = [];
-const lifecycleClient = new LspClient((message) => {
+const lifecycleSession = new LspSession((message) => {
   lifecycleMessages.push(message);
   if (message.method === "initialize") {
     return [{
@@ -110,12 +108,22 @@ const lifecycleClient = new LspClient((message) => {
       result: { capabilities: { semanticTokensProvider: { legend: { tokenTypes: [], tokenModifiers: [] } } } }
     }];
   }
+  if (message.method === "textDocument/completion") {
+    return [{
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        isIncomplete: false,
+        items: [{ label: "sheep", insertText: "sheep" }]
+      }
+    }];
+  }
   if (message.method === "shutdown") {
     return [{ jsonrpc: "2.0", id: message.id, result: null }];
   }
   return [];
-});
-const lifecycleResult = await initializeLsp(lifecycleClient, {
+}, { clientId: "browser-editor" });
+const lifecycleResult = await lifecycleSession.start({
   capabilities: {
     textDocument: { semanticTokens: { requests: { full: true } } }
   },
@@ -129,15 +137,37 @@ const lifecycleResult = await initializeLsp(lifecycleClient, {
   }
 });
 assert.ok(lifecycleResult.capabilities.semanticTokensProvider);
-const lifecycleDocument = new LspTextDocument(lifecycleClient, {
+const lifecycleDocument = await lifecycleSession.openDocument({
   uri: "file:///workspace/test.dl",
-  languageId: "dynlex"
+  languageId: "dynlex",
+  version: 1,
+  text: "first\nsecond",
+  position: { line: 0, character: 5 }
 });
-await lifecycleDocument.replaceText("first");
-await lifecycleDocument.replaceText("second");
+await lifecycleDocument.replaceText("first\nsecond sheep", {
+  position: { line: 1, character: 12 }
+});
+await lifecycleDocument.applyChanges([
+  {
+    range: {
+      start: { line: 0, character: 5 },
+      end: { line: 0, character: 5 }
+    },
+    rangeLength: 0,
+    text: " wolf"
+  }
+], {
+  text: "first wolf\nsecond sheep",
+  version: 3,
+  position: { line: 0, character: 10 }
+});
 assert.deepEqual(lifecycleDocument.identifier, { uri: "file:///workspace/test.dl" });
+const completions = await lifecycleDocument.request("textDocument/completion", {
+  position: { line: 1, character: 12 }
+});
+assert.equal(completions.items[0].label, "sheep");
 await lifecycleDocument.close();
-await shutdownLsp(lifecycleClient);
+await lifecycleSession.stop();
 assert.deepEqual(lifecycleMessages, [
   {
     jsonrpc: "2.0",
@@ -168,8 +198,28 @@ assert.deepEqual(lifecycleMessages, [
         uri: "file:///workspace/test.dl",
         languageId: "dynlex",
         version: 1,
-        text: "first"
+        text: "first\nsecond"
       }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: {
+      clientId: "browser-editor",
+      uri: "file:///workspace/test.dl",
+      version: 1,
+      position: { line: 0, character: 5 }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: {
+      clientId: "browser-editor",
+      uri: "file:///workspace/test.dl",
+      version: 1,
+      position: { line: 1, character: 6 }
     }
   },
   {
@@ -177,15 +227,81 @@ assert.deepEqual(lifecycleMessages, [
     method: "textDocument/didChange",
     params: {
       textDocument: { uri: "file:///workspace/test.dl", version: 2 },
-      contentChanges: [{ text: "second" }]
+      contentChanges: [{
+        range: {
+          start: { line: 1, character: 6 },
+          end: { line: 1, character: 6 }
+        },
+        rangeLength: 0,
+        text: " sheep"
+      }]
     }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: {
+      clientId: "browser-editor",
+      uri: "file:///workspace/test.dl",
+      version: 2,
+      position: { line: 1, character: 12 }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: {
+      clientId: "browser-editor",
+      uri: "file:///workspace/test.dl",
+      version: 2,
+      position: { line: 0, character: 5 }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: {
+      textDocument: { uri: "file:///workspace/test.dl", version: 3 },
+      contentChanges: [{
+        range: {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 }
+        },
+        rangeLength: 0,
+        text: " wolf"
+      }]
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: {
+      clientId: "browser-editor",
+      uri: "file:///workspace/test.dl",
+      version: 3,
+      position: { line: 0, character: 10 }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "textDocument/completion",
+    params: {
+      textDocument: { uri: "file:///workspace/test.dl" },
+      position: { line: 1, character: 12 }
+    }
+  },
+  {
+    jsonrpc: "2.0",
+    method: "dynlex/activeCursorChanged",
+    params: { clientId: "browser-editor" }
   },
   {
     jsonrpc: "2.0",
     method: "textDocument/didClose",
     params: { textDocument: { uri: "file:///workspace/test.dl" } }
   },
-  { jsonrpc: "2.0", id: 2, method: "shutdown", params: {} },
+  { jsonrpc: "2.0", id: 3, method: "shutdown", params: {} },
   { jsonrpc: "2.0", method: "exit", params: {} }
 ]);
 await assert.rejects(lifecycleDocument.replaceText("third"), /closed/);

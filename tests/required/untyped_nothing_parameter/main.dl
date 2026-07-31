@@ -4,6 +4,6 @@ function finish:
 
 flex function continue after action:
     replacement:
-        action
+        @intrinsic("discard", action)
 
 continue after finish

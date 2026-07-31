@@ -1,0 +1,2 @@
+@intrinsic("store", x, 1)
+x

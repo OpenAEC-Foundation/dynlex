@@ -12,6 +12,7 @@ fi
 node --check "$PROJECT_DIR/web/homepage.js"
 node --check "$PROJECT_DIR/web/download.js"
 node --check "$PROJECT_DIR/web/river-challenge.js"
+node --check "$PROJECT_DIR/web/river-challenge-editor.js"
 node --check "$PROJECT_DIR/web/river-challenge-audio.js"
 node --check "$PROJECT_DIR/web/river-challenge-model.js"
 node --check "$PROJECT_DIR/web/site-navigation.js"

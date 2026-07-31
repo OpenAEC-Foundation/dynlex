@@ -64,6 +64,7 @@ export function completionKindFromLsp(kind, completionKinds) {
     [1, "Text"],
     [2, "Method"],
     [3, "Function"],
+    [6, "Variable"],
     [9, "Module"],
     [14, "Keyword"],
     [15, "Snippet"],

@@ -974,5 +974,3 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 
 	return encodeSemanticTokens(tokensByLine);
 }
-
-} // namespace lsp

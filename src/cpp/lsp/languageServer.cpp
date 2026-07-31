@@ -248,6 +248,9 @@ void LanguageServer::handleRequest(const Json &message) {
 		} else if (method == "dynlex/instantiationsInDocument") {
 			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
 			sendResponse(id, onInstantiationsInDocument(p));
+		} else if (method == "dynlex/callExpressions") {
+			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
+			sendResponse(id, onCallExpressions(p));
 		} else if (method == "dynlex/readDocument") {
 			TextDocumentIdentifier p = params.get<TextDocumentIdentifier>();
 			std::optional<std::string> result = onReadDocument(p);
@@ -386,6 +389,8 @@ std::string LanguageServer::onRenderSemanticTokens(const TextDocumentIdentifier 
 void LanguageServer::onActiveCursorChanged(const ActiveCursorParams & /*params*/) {}
 
 Json LanguageServer::onInstantiationsInDocument(const TextDocumentIdentifier & /*params*/) { return Json::array(); }
+
+Json LanguageServer::onCallExpressions(const TextDocumentIdentifier & /*params*/) { return Json::array(); }
 
 std::optional<std::string> LanguageServer::onReadDocument(const TextDocumentIdentifier & /*params*/) { return std::nullopt; }
 
