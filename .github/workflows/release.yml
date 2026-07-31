@@ -760,6 +760,12 @@ jobs:
           if [[ "$TAG" == *-* ]]; then
             release_arguments+=(--prerelease)
           fi
+          RELEASE_MANIFEST_NOTES="$(
+            printf '<!-- dynlex-release-manifest\n'
+            cat metadata/release-manifest.txt
+            printf '%s\n' '-->'
+          )"
+          release_arguments+=(--notes "$RELEASE_MANIFEST_NOTES")
           gh release create "$TAG" release-upload/* "${release_arguments[@]}"
 
           find release-upload -maxdepth 1 -type f -printf '%f\n' \

@@ -92,6 +92,22 @@ export function parseReleaseManifest(text) {
   return { schema, repository, assets };
 }
 
+export function extractReleaseManifest(releaseBody) {
+  if (typeof releaseBody !== "string") {
+    throw new TypeError("release body must be text");
+  }
+
+  const manifestBlocks = [
+    ...releaseBody.matchAll(
+      /<!-- dynlex-release-manifest\n([\s\S]*?)\n-->/g,
+    ),
+  ];
+  if (manifestBlocks.length !== 1) {
+    throw new Error("release must contain exactly one embedded release manifest");
+  }
+  return manifestBlocks[0][1];
+}
+
 export function selectReleaseAssets(releaseAssets, manifest) {
   if (!Array.isArray(releaseAssets)) {
     throw new TypeError("GitHub release assets must be an array");
@@ -233,6 +249,7 @@ async function loadRelease() {
     throw new Error("release metadata fetch failed");
   }
   const release = await releaseResponse.json();
+  const manifest = parseReleaseManifest(extractReleaseManifest(release.body));
   const manifestAssets = release.assets.filter(
     (asset) => asset?.name === "release-manifest.txt",
   );
@@ -240,13 +257,6 @@ async function loadRelease() {
     throw new Error("release must contain exactly one release manifest");
   }
 
-  const manifestResponse = await fetch(manifestAssets[0].browser_download_url, {
-    cache: "no-cache",
-  });
-  if (!manifestResponse.ok) {
-    throw new Error("release manifest fetch failed");
-  }
-  const manifest = parseReleaseManifest(await manifestResponse.text());
   if (manifest.repository !== releaseRepository) {
     throw new Error("release manifest names an unexpected repository");
   }

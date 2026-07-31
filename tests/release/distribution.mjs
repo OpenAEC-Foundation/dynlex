@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   detectPlatform,
+  extractReleaseManifest,
   parseReleaseManifest,
   selectPrimaryReleaseAsset,
   selectReleaseAssets,
@@ -28,6 +29,23 @@ const cmakeConfiguration = fs.readFileSync(
 
 assert.equal(manifest.schema, 1);
 assert.equal(manifest.repository, "OpenAEC-Foundation/dynlex");
+assert.equal(
+  extractReleaseManifest(
+    `Release notes.\n\n<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->\n`,
+  ),
+  manifestText.trimEnd(),
+);
+assert.throws(
+  () => extractReleaseManifest("Release notes without a manifest."),
+  /exactly one embedded release manifest/,
+);
+assert.throws(
+  () => extractReleaseManifest(
+    `<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->\n`
+      + `<!-- dynlex-release-manifest\n${manifestText.trimEnd()}\n-->`,
+  ),
+  /exactly one embedded release manifest/,
+);
 assert.deepEqual(
   manifest.assets.map(({ id, os: platform, architectures, format, name }) => ({
     id,
