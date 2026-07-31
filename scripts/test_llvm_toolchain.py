@@ -230,6 +230,31 @@ dynlex_native_llvm_cmake_arguments
                     "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
                 ],
             )
+
+    def test_windows_bootstrap_compiler_path_names_the_exe_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-windows-exe-") as temporary_directory:
+            compiler = Path(temporary_directory) / "clang.exe"
+            compiler.write_text("fixture\n", encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    """
+set -euo pipefail
+. "$1"
+DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=.exe
+dynlex_complete_host_executable_path "$2"
+""",
+                    "bash",
+                    str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+                    str(compiler.with_suffix("")),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(completed.stdout.strip(), str(compiler))
+
     def test_normal_native_build_is_optimized_without_disabling_invariants(self) -> None:
         native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
