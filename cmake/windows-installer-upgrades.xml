@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CPackWiXPatch>
+  <CPackWiXFragment Id="#PRODUCT">
+    <Upgrade Id="$(var.DYNLEX_LEGACY_UPGRADE_CODE)">
+      <UpgradeVersion
+        Minimum="0.0.0"
+        IncludeMinimum="yes"
+        Maximum="$(var.CPACK_PACKAGE_VERSION)"
+        IncludeMaximum="no"
+        OnlyDetect="no"
+        Property="DYNLEX_LEGACY_VERSION_FOUND"
+      />
+    </Upgrade>
+  </CPackWiXFragment>
+</CPackWiXPatch>

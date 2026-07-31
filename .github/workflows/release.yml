@@ -233,6 +233,8 @@ jobs:
           set -euo pipefail
           MSI_NAME="$(./scripts/release-asset.sh name '${{ matrix.asset_id }}')"
           PACKAGE_BASENAME="${MSI_NAME%.msi}"
+          WIX_PATCH_FILE="$PWD/cmake/windows-installer-upgrades.xml"
+          test -f "$WIX_PATCH_FILE"
           mkdir -p build
           cpack --config windows-build/CPackConfig.cmake \
             -G WIX \
@@ -240,9 +242,14 @@ jobs:
             -D "CPACK_INSTALLED_DIRECTORIES=$PWD/windows-build/windows-stage;/" \
             -D 'CPACK_INSTALL_CMAKE_PROJECTS=' \
             -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME" \
+            -D "CPACK_WIX_PATCH_FILE=$WIX_PATCH_FILE" \
             -D CPACK_WIX_ARCHITECTURE="${{ matrix.wix_architecture }}"
           test -f "build/$MSI_NAME"
           echo "name=$MSI_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Windows installer upgrade metadata
+        shell: pwsh
+        run: ./scripts/verify-windows-installer-upgrades.ps1 -Path "build/${{ steps.package.outputs.name }}"
 
       - name: Sign Windows installer
         uses: azure/artifact-signing-action@v2
@@ -275,7 +282,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             architecture: arm64
             machine_architecture: arm64
           - runner: macos-15-intel
@@ -321,7 +328,7 @@ jobs:
           if-no-files-found: error
 
   package-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     needs: [build-macos]
     environment: release-signing
     steps:
@@ -619,6 +626,7 @@ jobs:
           if (-not $msi) {
             throw "Expected MSI artifact was not downloaded."
           }
+          ./scripts/verify-windows-installer-upgrades.ps1 -Path $msi.FullName
           ./scripts/verify-windows-signature.ps1 -Path $msi.FullName
           Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart" -Wait -NoNewWindow
           $dynlex = Get-Item "C:\Program Files\dynlex\bin\dynlex.exe" -ErrorAction SilentlyContinue
@@ -663,7 +671,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             machine_architecture: arm64
           - runner: macos-15-intel
             machine_architecture: x86_64
@@ -777,3 +785,12 @@ jobs:
             "$RUNNER_TEMP/expected-release-assets.txt" \
             "$RUNNER_TEMP/actual-release-assets.txt"
           gh release edit "$TAG" --draft=false
+          if [[ "$(
+            gh api \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/releases/tags/$TAG" \
+              --jq .immutable
+          )" != "true" ]]; then
+            echo "Published release $TAG was not made immutable." >&2
+            exit 1
+          fi

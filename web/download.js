@@ -144,9 +144,22 @@ function normalizeArchitecture(architecture) {
   return null;
 }
 
-export function detectPlatform(userAgent, clientArchitecture = null) {
+export function detectPlatform(userAgent, clientArchitecture = null, maxTouchPoints = 0) {
   if (typeof userAgent !== "string") {
     throw new TypeError("user agent must be text");
+  }
+  if (!Number.isInteger(maxTouchPoints) || maxTouchPoints < 0) {
+    throw new TypeError("touch-point count must be a non-negative integer");
+  }
+
+  if (
+    /Android|iPhone|iPad|iPod/i.test(userAgent)
+    || (/Macintosh|Mac OS/i.test(userAgent) && maxTouchPoints > 1)
+  ) {
+    throw new Error("mobile operating systems do not support DynLex desktop packages");
+  }
+  if (/CrOS/i.test(userAgent)) {
+    throw new Error("ChromeOS does not support DynLex desktop packages");
   }
 
   const detectedArchitecture =
@@ -237,7 +250,11 @@ async function detectBrowserPlatform() {
     ]);
     clientArchitecture = `${values.architecture ?? ""}${values.bitness ?? ""}`;
   }
-  return detectPlatform(navigator.userAgent || "", clientArchitecture);
+  return detectPlatform(
+    navigator.userAgent || "",
+    clientArchitecture,
+    navigator.maxTouchPoints || 0,
+  );
 }
 
 async function loadRelease() {

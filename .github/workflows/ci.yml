@@ -61,7 +61,7 @@ jobs:
         run: ccache -s || true
 
   build-and-test-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:

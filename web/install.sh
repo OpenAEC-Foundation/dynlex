@@ -192,7 +192,29 @@ else
     need_cmd curl
     need_cmd sha256sum
 
-    MANIFEST_URL="https://github.com/${BOOTSTRAP_REPOSITORY}/releases/latest/download/release-manifest.txt"
+    LATEST_MANIFEST_URL="https://github.com/${BOOTSTRAP_REPOSITORY}/releases/latest/download/release-manifest.txt"
+    RELEASE_URL_PREFIX="https://github.com/${BOOTSTRAP_REPOSITORY}/releases/download/"
+    RELEASE_URL_SUFFIX="/release-manifest.txt"
+    MANIFEST_REDIRECT_URL="$(
+        curl -fsS -o /dev/null -w '%{redirect_url}' "$LATEST_MANIFEST_URL"
+    )"
+    case "$MANIFEST_REDIRECT_URL" in
+    "$RELEASE_URL_PREFIX"*"$RELEASE_URL_SUFFIX") ;;
+    *)
+        echo "Error: latest release did not resolve to an exact DynLex release tag." >&2
+        exit 1
+        ;;
+    esac
+    RELEASE_TAG="${MANIFEST_REDIRECT_URL#"$RELEASE_URL_PREFIX"}"
+    RELEASE_TAG="${RELEASE_TAG%"$RELEASE_URL_SUFFIX"}"
+    case "$RELEASE_TAG" in
+    ""|*/*|*[!A-Za-z0-9._-]*)
+        echo "Error: latest release resolved to an invalid tag." >&2
+        exit 1
+        ;;
+    esac
+    RELEASE_BASE_URL="https://github.com/${BOOTSTRAP_REPOSITORY}/releases/download/${RELEASE_TAG}"
+    MANIFEST_URL="${RELEASE_BASE_URL}/release-manifest.txt"
     curl -fL "$MANIFEST_URL" -o "$MANIFEST_PATH"
     if ! validate_manifest; then
         echo "Error: invalid release manifest." >&2
@@ -225,9 +247,9 @@ else
         exit 1
     }
     ASSET_PATH="$TEMPORARY_DIRECTORY/$ASSET_NAME"
-    ASSET_URL="https://github.com/${REPOSITORY}/releases/latest/download/${ASSET_NAME}"
+    ASSET_URL="${RELEASE_BASE_URL}/${ASSET_NAME}"
     CHECKSUMS_PATH="$TEMPORARY_DIRECTORY/SHA256SUMS"
-    CHECKSUMS_URL="https://github.com/${REPOSITORY}/releases/latest/download/SHA256SUMS"
+    CHECKSUMS_URL="${RELEASE_BASE_URL}/SHA256SUMS"
 
     echo "Downloading ${ASSET_NAME}..."
     curl -fL "$ASSET_URL" -o "$ASSET_PATH"

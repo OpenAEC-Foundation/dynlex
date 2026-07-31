@@ -169,6 +169,26 @@ assert.deepEqual(
     label: "Linux",
   },
 );
+assert.throws(
+  () => detectPlatform("Mozilla/5.0 (Linux; Android 16; Pixel 10 Pro)"),
+  /mobile operating systems/,
+);
+assert.throws(
+  () => detectPlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X)"),
+  /mobile operating systems/,
+);
+assert.throws(
+  () => detectPlatform(
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) Version/19.0 Mobile/15E148 Safari/604.1",
+    "x86",
+    5,
+  ),
+  /mobile operating systems/,
+);
+assert.throws(
+  () => detectPlatform("Mozilla/5.0 (X11; CrOS x86_64 16093.68.0)"),
+  /ChromeOS/,
+);
 assert.equal(
   selectPrimaryReleaseAsset(manifest, detectPlatform("Mozilla/5.0 (Windows NT 10.0; ARM64)")).id,
   "windows-arm64-msi",
@@ -186,7 +206,8 @@ assert.equal(
 );
 assert.match(releaseWorkflow, /runner: ubuntu-24\.04-arm[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: windows-11-arm[\s\S]*architecture: arm64/);
-assert.match(releaseWorkflow, /runner: macos-14[\s\S]*architecture: arm64/);
+assert.match(releaseWorkflow, /runner: macos-15[\s\S]*architecture: arm64/);
+assert.doesNotMatch(releaseWorkflow, /macos-14/);
 assert.match(releaseWorkflow, /runner: macos-15-intel[\s\S]*architecture: x64/);
 assert.match(
   releaseWorkflow,
@@ -204,6 +225,10 @@ assert.match(
   releaseWorkflow,
   /CPACK_INSTALLED_DIRECTORIES=\$PWD\/windows-build\/windows-stage;\/[\s\S]*CPACK_INSTALL_CMAKE_PROJECTS=/,
 );
+assert.match(
+  releaseWorkflow,
+  /WIX_PATCH_FILE="\$PWD\/cmake\/windows-installer-upgrades\.xml"[\s\S]*CPACK_WIX_PATCH_FILE=\$WIX_PATCH_FILE/,
+);
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
@@ -212,6 +237,7 @@ assert.match(releaseWorkflow, /workflow_dispatch:/);
 assert.match(releaseWorkflow, /github\.ref_type == 'tag'/);
 assert.match(releaseWorkflow, /gh release create[\s\S]*--draft/);
 assert.match(releaseWorkflow, /gh release edit[\s\S]*--draft=false/);
+assert.match(releaseWorkflow, /--jq \.immutable/);
 assert.match(cmakeConfiguration, /CPACK_PACKAGE_HOMEPAGE_URL "https:\/\/dynlex\.com"/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 
@@ -355,15 +381,22 @@ esac
       return `${digest}  ${path.basename(packagePath)}`;
     });
     const checksumPath = path.join(temporaryDirectory, "fixture-SHA256SUMS");
+    const curlLogPath = path.join(temporaryDirectory, "curl-requests.log");
     fs.writeFileSync(checksumPath, `${checksumLines.join("\n")}\n`);
     writeExecutable(
       path.join(mockBinDirectory, "curl"),
       `#!/bin/sh
+if [ "$1" = "-fsS" ]; then
+  printf '%s\\n' "$6" >> "$DYNLEX_TEST_CURL_LOG"
+  printf 'https://github.com/OpenAEC-Foundation/dynlex/releases/download/%s/release-manifest.txt' "$DYNLEX_TEST_RELEASE_TAG"
+  exit 0
+fi
+printf '%s\\n' "$2" >> "$DYNLEX_TEST_CURL_LOG"
 case "$2" in
-  */release-manifest.txt) cp "$DYNLEX_TEST_MANIFEST" "$4" ;;
-  */dynlex-linux-x64.tar.gz) cp "$DYNLEX_TEST_TAR_X64" "$4" ;;
-  */dynlex-linux-arm64.tar.gz) cp "$DYNLEX_TEST_TAR_ARM64" "$4" ;;
-  */SHA256SUMS) cp "$DYNLEX_TEST_CHECKSUMS" "$4" ;;
+  */releases/download/0.0.1/release-manifest.txt) cp "$DYNLEX_TEST_MANIFEST" "$4" ;;
+  */releases/download/0.0.1/dynlex-linux-x64.tar.gz) cp "$DYNLEX_TEST_TAR_X64" "$4" ;;
+  */releases/download/0.0.1/dynlex-linux-arm64.tar.gz) cp "$DYNLEX_TEST_TAR_ARM64" "$4" ;;
+  */releases/download/0.0.1/SHA256SUMS) cp "$DYNLEX_TEST_CHECKSUMS" "$4" ;;
   *) exit 2 ;;
 esac
 `,
@@ -390,6 +423,8 @@ esac
             DYNLEX_TEST_TAR_X64: tarPackage,
             DYNLEX_TEST_TAR_ARM64: armTarPackage,
             DYNLEX_TEST_CHECKSUMS: checksumPath,
+            DYNLEX_TEST_CURL_LOG: curlLogPath,
+            DYNLEX_TEST_RELEASE_TAG: "0.0.1",
           },
         },
       );
@@ -400,6 +435,19 @@ esac
       );
       assert.ok(fs.existsSync(path.join(onlinePrefix, "bin/dynlex")));
     }
+
+    const requestedUrls = fs.readFileSync(curlLogPath, "utf8").trim().split("\n");
+    assert.equal(
+      requestedUrls.filter((url) => url.includes("/releases/latest/download/")).length,
+      2,
+      "Each installer run must resolve latest exactly once",
+    );
+    assert.ok(
+      requestedUrls
+        .filter((url) => !url.includes("/releases/latest/download/"))
+        .every((url) => url.includes("/releases/download/0.0.1/")),
+      "Manifest, package, and checksums must use the one pinned release tag",
+    );
   }
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });

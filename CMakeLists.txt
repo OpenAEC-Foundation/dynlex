@@ -467,7 +467,17 @@ endif()
 # CPack packaging
 #
 if(WIN32)
+    include("${CMAKE_SOURCE_DIR}/cmake/WindowsInstallerUpgradeCodes.cmake")
+    dynlex_read_windows_installer_upgrade_codes(
+        "${CMAKE_SOURCE_DIR}/metadata/WINDOWS_INSTALLER_UPGRADE_CODES"
+    )
+
     set(CPACK_GENERATOR "WIX;ZIP")
+    set(CPACK_WIX_UPGRADE_GUID "${DYNLEX_WINDOWS_STABLE_UPGRADE_CODE}")
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_SOURCE_DIR}/cmake/windows-installer-upgrades.xml")
+    list(APPEND CPACK_WIX_CANDLE_EXTRA_FLAGS
+        "-dDYNLEX_LEGACY_UPGRADE_CODE=${DYNLEX_WINDOWS_LEGACY_UPGRADE_CODE}"
+    )
 elseif(APPLE)
     set(CPACK_GENERATOR "productbuild;TGZ")
 else()
