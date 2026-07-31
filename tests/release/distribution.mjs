@@ -50,6 +50,10 @@ const llvmToolchain = fs.readFileSync(
   path.join(projectDirectory, "scripts/llvm_toolchain.sh"),
   "utf8",
 );
+const llvmMingwToolchain = fs.readFileSync(
+  path.join(projectDirectory, "scripts/llvm-mingw-toolchain.ps1"),
+  "utf8",
+);
 const windowsPeVerifier = fs.readFileSync(
   path.join(projectDirectory, "scripts/verify-windows-pe-files.ps1"),
   "utf8",
@@ -375,6 +379,17 @@ assert.match(
 assert.match(
   llvmToolchain,
   /CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded/,
+);
+assert.match(llvmMingwToolchain, /"include\\windows\.h"/);
+assert.match(llvmMingwToolchain, /"include\\sys\\types\.h"/);
+assert.match(llvmMingwToolchain, /Join-Path \$extractedRoot "include\\\*"/);
+assert.match(
+  llvmMingwToolchain,
+  /Join-Path \$extractedRoot "include\\\*"\)[\s\S]*?-Recurse/,
+);
+assert.doesNotMatch(
+  llvmMingwToolchain,
+  /\$TargetArchitecture-w64-mingw32\\include/,
 );
 assert.match(macosDependencyStager, /^#!\/bin\/bash/);
 assert.doesNotMatch(macosDependencyStager, /\b(?:declare -A|mapfile)\b/);

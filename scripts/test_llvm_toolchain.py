@@ -175,6 +175,7 @@ printf '%s\\n' \
         self.assertIn("sparse-checkout set llvm cmake libc third-party", toolchain)
         self.assertIn("for source_component in llvm cmake libc third-party", toolchain)
         self.assertNotIn("mapfile", toolchain)
+        self.assertNotIn("native_arguments", toolchain)
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertNotIn("add_definitions(${LLVM_DEFINITIONS})", cmake)
         self.assertRegex(
