@@ -111,6 +111,7 @@ class RuntimeFeatureMacroTests(unittest.TestCase):
             "filesystemRuntimePosix.c",
             "filesystemTransactionPosix.c",
             "hostRuntimePosix.c",
+            "processRuntimePosixWrite.c",
             "runtimeError.c",
         ):
             source = (RUNTIME_DIR / source_name).read_text(encoding="utf-8")
@@ -136,6 +137,14 @@ class RuntimeFeatureMacroTests(unittest.TestCase):
 
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("src/runtime/platformFeatureTest.h", cmake)
+
+    def test_process_runtime_uses_posix_signal_wait_api_available_on_macos(self) -> None:
+        process_source = (RUNTIME_DIR / "processRuntimePosixWrite.c").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("sigtimedwait(", process_source)
+        self.assertIn("sigwait(", process_source)
 
 
 if __name__ == "__main__":
