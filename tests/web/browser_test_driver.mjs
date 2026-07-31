@@ -105,16 +105,21 @@ export async function captureScreenshot(name) {
   fs.writeFileSync(path.join(screenshotDirectory, `${name}.png`), response.data, "base64");
 }
 
-export async function dispatchKey(key, code, virtualKeyCode, modifiers = 0) {
+export async function dispatchKey(key, code, virtualKeyCode, modifiers = 0, text = undefined) {
   for (const type of ["keyDown", "keyUp"]) {
-    await command("Input.dispatchKeyEvent", {
+    const parameters = {
       type,
       key,
       code,
       windowsVirtualKeyCode: virtualKeyCode,
       nativeVirtualKeyCode: virtualKeyCode,
       modifiers
-    });
+    };
+    if (type === "keyDown" && text !== undefined) {
+      parameters.text = text;
+      parameters.unmodifiedText = text;
+    }
+    await command("Input.dispatchKeyEvent", parameters);
   }
 }
 

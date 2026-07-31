@@ -32,6 +32,8 @@ node --check "$PROJECT_DIR/tests/web/browser_test_driver.mjs"
 node --check "$PROJECT_DIR/tests/web/browser_execution.mjs"
 node --check "$PROJECT_DIR/tests/web/river_challenge_execution.mjs"
 node --check "$PROJECT_DIR/tests/web/river_challenge_browser.mjs"
+node --check "$PROJECT_DIR/tests/web/river_completion_browser.mjs"
+node --check "$PROJECT_DIR/tests/web/river_highlighting_browser.mjs"
 node "$PROJECT_DIR/scripts/generate_homepage_highlights.mjs" --check
 node "$PROJECT_DIR/tests/web/lsp_client.mjs"
 node "$PROJECT_DIR/tests/web/lsp_protocol.mjs"

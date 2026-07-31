@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { assertRiverEnterCommitsLine } from "./river_completion_browser.mjs";
+import { assertRiverIncrementalHighlighting } from "./river_highlighting_browser.mjs";
 
 const previewAssets = [
   "/river-challenge.css",
@@ -80,6 +82,7 @@ async function aboardSpriteBounds(evaluate, subject, opaqueBounds) {
 export async function runRiverChallengeBrowserTest({
   captureScreenshot,
   clickElement,
+  dispatchKey,
   evaluate,
   requestedUrls,
   waitFor
@@ -244,6 +247,7 @@ export async function runRiverChallengeBrowserTest({
     "document.querySelectorAll('[data-river-source-code] .river-token-function').length >= 2",
     "the DynLex language server to semantically highlight the starter program"
   );
+  await assertRiverIncrementalHighlighting({ evaluate, starterSource, waitFor });
   await evaluate(`(() => {
     const source = document.querySelector('[data-river-source]');
     const lineStart = source.value.lastIndexOf('\\n') + 1;
@@ -381,6 +385,7 @@ export async function runRiverChallengeBrowserTest({
     })()`,
     "all river passenger substitutions after get"
   );
+  await assertRiverEnterCommitsLine({ dispatchKey, evaluate, waitFor });
   await evaluate(`(() => {
     const source = document.querySelector('[data-river-source]');
     source.value = ${JSON.stringify(starterSource)};

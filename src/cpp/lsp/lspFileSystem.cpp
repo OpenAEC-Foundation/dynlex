@@ -2,24 +2,23 @@
 
 namespace lsp {
 
-SourceFile *LspFileSystem::getFile(const std::string &path) {
-	// First, check if the file is open in the editor
-	// Try both the path as-is and as a file:// URI
-	auto it = documents.find(path);
-	if (it != documents.end()) {
-		return it->second.get(); // TextDocument* is a SourceFile*
-	}
+SourceFile *LspFileSystem::snapshot(const TextDocument &document) {
+	auto [it, inserted] = openFileSnapshots.try_emplace(document.uri, nullptr);
+	if (inserted)
+		it->second = std::make_unique<SourceFile>(document.uri, document.content);
+	return it->second.get();
+}
 
-	// Try with file:// prefix
+SourceFile *LspFileSystem::getFile(const std::string &path) {
+	auto it = documents.find(path);
+	if (it != documents.end())
+		return snapshot(*it->second);
+
 	std::string uri = "file://" + path;
 	it = documents.find(uri);
-	if (it != documents.end()) {
-		return it->second.get();
-	}
+	if (it != documents.end())
+		return snapshot(*it->second);
 
-	// File not open in editor - fall back to local filesystem
-	// This works for local development; for remote scenarios,
-	// this could be extended to request content from the client
 	return localFs.getFile(path);
 }
 
