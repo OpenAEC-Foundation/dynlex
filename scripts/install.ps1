@@ -194,7 +194,7 @@ function Ensure-VisualStudioCppToolchain {
         Write-Host `
             "Using Visual Studio C++ tools from $($toolchain.VisualStudio) and SDK $($toolchain.WindowsSdk)." `
             -ForegroundColor DarkGray
-        return
+        return $toolchain
     }
     if (-not (Test-Winget)) {
         throw "Visual Studio C++ Build Tools and a Windows SDK are required. Install the Desktop development with C++ workload and retry."
@@ -231,6 +231,81 @@ function Ensure-VisualStudioCppToolchain {
     $toolchain = Test-VisualStudioCppToolchain -TargetArchitecture $TargetArchitecture
     if (-not $toolchain) {
         throw "Visual Studio C++ Build Tools installation did not provide the required compiler and Windows SDK."
+    }
+    return $toolchain
+}
+
+function Enter-VisualStudioCppEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Toolchain,
+
+        [ValidateSet("x64", "arm64")]
+        [string]$TargetArchitecture
+    )
+
+    $developerCommand = Join-Path `
+        $Toolchain.VisualStudio `
+        "Common7\Tools\VsDevCmd.bat"
+    if (-not (Test-Path -LiteralPath $developerCommand -PathType Leaf)) {
+        throw "Visual Studio is missing its developer environment command: $developerCommand"
+    }
+    $developerArchitecture = if ($TargetArchitecture -eq "x64") {
+        "amd64"
+    } else {
+        "arm64"
+    }
+
+    $environmentBefore = @{}
+    foreach ($entry in Get-ChildItem Env:) {
+        $environmentBefore[$entry.Name] = $entry.Value
+    }
+
+    $commandLine = 'call "{0}" -no_logo -arch={1} >nul && set' -f `
+        $developerCommand, `
+        $developerArchitecture
+    $environmentLines = @(& $env:ComSpec /d /s /c $commandLine)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Visual Studio failed to initialize its $TargetArchitecture developer environment."
+    }
+    $developerEnvironment = ConvertFrom-WindowsCommandEnvironment `
+        -Lines $environmentLines
+    foreach ($entry in $developerEnvironment.GetEnumerator()) {
+        [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, "Process")
+    }
+
+    foreach ($requiredVariable in @("INCLUDE", "LIB", "LIBPATH", "VSCMD_VER")) {
+        $requiredValue = [Environment]::GetEnvironmentVariable($requiredVariable, "Process")
+        if ([string]::IsNullOrWhiteSpace($requiredValue)) {
+            throw "Visual Studio did not define the required $requiredVariable environment variable."
+        }
+    }
+
+    if ($env:GITHUB_ENV) {
+        foreach ($entry in @($developerEnvironment.GetEnumerator() | Sort-Object Key)) {
+            $name = $entry.Key
+            $value = $entry.Value
+            $changed = (
+                -not $environmentBefore.ContainsKey($name) -or
+                $environmentBefore[$name] -ne $value
+            )
+            if (-not $changed -or $name -ieq "PATH") {
+                continue
+            }
+            if ($name -match '^(GITHUB_|RUNNER_)' -or $value -match "[`r`n]") {
+                throw "Visual Studio changed an environment variable that cannot be persisted safely: $name"
+            }
+            Add-Content -Path $env:GITHUB_ENV -Value "$name=$value"
+        }
+    }
+
+    if ($env:GITHUB_PATH) {
+        $originalPathEntries = @($environmentBefore.PATH -split ";" | Where-Object { $_ })
+        foreach ($pathEntry in @($env:PATH -split ";" | Where-Object { $_ })) {
+            if ($pathEntry -notin $originalPathEntries) {
+                Add-GitHubPathIfPresent -PathValue $pathEntry
+            }
+        }
     }
 }
 
@@ -441,7 +516,11 @@ $dependencyArchitecture = switch ($hostArchitecture) {
     "Arm64" { "arm64" }
     default { throw "Unsupported Windows dependency architecture: $hostArchitecture" }
 }
-Ensure-VisualStudioCppToolchain -TargetArchitecture $dependencyArchitecture
+$visualStudioToolchain = Ensure-VisualStudioCppToolchain `
+    -TargetArchitecture $dependencyArchitecture
+Enter-VisualStudioCppEnvironment `
+    -Toolchain $visualStudioToolchain `
+    -TargetArchitecture $dependencyArchitecture
 $vcpkgDependencies = Install-VcpkgDependencies -ProjectRoot $projectRoot
 $llvmMingw = Install-LlvmMingwToolchain `
     -ProjectRoot $projectRoot `

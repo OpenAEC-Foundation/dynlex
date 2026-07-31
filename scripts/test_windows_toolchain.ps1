@@ -4,6 +4,24 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "windows-toolchain.ps1")
 . (Join-Path $PSScriptRoot "llvm-mingw-toolchain.ps1")
 
+$developerEnvironment = ConvertFrom-WindowsCommandEnvironment -Lines @(
+    "INCLUDE=C:\Visual Studio\include;C:\Windows Kits\include",
+    "LIB=C:\Visual Studio\lib;C:\Windows Kits\lib",
+    "LIBPATH=C:\Visual Studio\libpath",
+    "VALUE=left=right",
+    "=C:=C:\working-directory"
+)
+if (
+    $developerEnvironment.Count -ne 4 -or
+    $developerEnvironment.INCLUDE -ne "C:\Visual Studio\include;C:\Windows Kits\include" -or
+    $developerEnvironment.LIB -ne "C:\Visual Studio\lib;C:\Windows Kits\lib" -or
+    $developerEnvironment.LIBPATH -ne "C:\Visual Studio\libpath" -or
+    $developerEnvironment.VALUE -ne "left=right" -or
+    $developerEnvironment.ContainsKey("=C:")
+) {
+    throw "Windows command environment parsing lost developer toolchain variables."
+}
+
 $x64Metadata = ConvertFrom-ClangVersionOutput -VersionOutput @(
     "clang version 22.1.8"
     "Target: x86_64-pc-windows-msvc"
@@ -209,4 +227,4 @@ try {
     }
 }
 
-Write-Host "Windows bootstrap Clang metadata parsing is valid."
+Write-Host "Windows bootstrap and developer environment validation is valid."

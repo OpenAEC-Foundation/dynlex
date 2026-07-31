@@ -342,6 +342,7 @@ if(NOT EMSCRIPTEN)
         src/runtime/hostRuntimeInternal.h
         src/runtime/hostRuntimeWindowsPath.h
         src/runtime/pathRuntimeInternal.h
+        src/runtime/platformFeatureTest.h
         src/runtime/processRuntimeInternal.h
         src/runtime/processRuntimeWindowsQuoting.h
         src/runtime/runtimeError.h

@@ -1,5 +1,26 @@
 Set-StrictMode -Version Latest
 
+function ConvertFrom-WindowsCommandEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $Lines
+    )
+
+    $environment = @{}
+    foreach ($line in $Lines) {
+        $separator = $line.IndexOf("=")
+        if ($separator -le 0) {
+            continue
+        }
+        $name = $line.Substring(0, $separator)
+        if ($environment.ContainsKey($name)) {
+            throw "Windows command environment contains duplicate variable '$name'."
+        }
+        $environment[$name] = $line.Substring($separator + 1)
+    }
+    return $environment
+}
+
 function ConvertFrom-ClangVersionOutput {
     param(
         [Parameter(Mandatory = $true)]

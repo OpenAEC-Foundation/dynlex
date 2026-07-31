@@ -1,7 +1,6 @@
-#if defined(__linux__) && !defined(_GNU_SOURCE)
-#define _GNU_SOURCE
-#endif
-#define _POSIX_C_SOURCE 200809L
+#define DYNLEX_REQUIRE_GNU_SOURCE
+#include "platformFeatureTest.h"
+#undef DYNLEX_REQUIRE_GNU_SOURCE
 
 #include "processRuntimeInternal.h"
 
