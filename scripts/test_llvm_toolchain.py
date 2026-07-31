@@ -12,9 +12,48 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PROJECT_DIR / "scripts"
 PINNED_REPOSITORY = "https://github.com/OpenAEC-Foundation/llvm-project.git"
 PINNED_REVISION = "102332db2c124acd59d44b3463d12d9c2da218a7"
+PINNED_SCHEMA = "2"
 
 
 class LlvmToolchainTests(unittest.TestCase):
+    def test_windows_checkout_keeps_shell_inputs_lf_terminated(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-lf-checkout-") as temporary_directory:
+            checkout_root = Path(temporary_directory)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(PROJECT_DIR),
+                    "-c",
+                    "core.autocrlf=true",
+                    "checkout-index",
+                    "--force",
+                    f"--prefix={checkout_root}/",
+                    "--",
+                    "metadata/LLVM_TOOLCHAIN",
+                    "metadata/LLVM_MINGW_TOOLCHAIN",
+                    "metadata/VCPKG_TOOLCHAIN",
+                    "metadata/release-manifest.txt",
+                    "scripts/llvm_toolchain.sh",
+                    "scripts/release-asset.sh",
+                    "web/install.sh",
+                ],
+                check=True,
+                capture_output=True,
+            )
+
+            for relative_path in (
+                "metadata/LLVM_TOOLCHAIN",
+                "metadata/LLVM_MINGW_TOOLCHAIN",
+                "metadata/VCPKG_TOOLCHAIN",
+                "metadata/release-manifest.txt",
+                "scripts/llvm_toolchain.sh",
+                "scripts/release-asset.sh",
+                "web/install.sh",
+            ):
+                contents = (checkout_root / relative_path).read_bytes()
+                self.assertNotIn(b"\r\n", contents, relative_path)
+
     def test_linked_worktrees_share_the_primary_toolchain_cache(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-llvm-worktree-") as temporary_directory:
             temporary_root = Path(temporary_directory)
@@ -136,12 +175,60 @@ printf '%s\\n' \
         self.assertIn("sparse-checkout set llvm cmake libc third-party", toolchain)
         self.assertIn("for source_component in llvm cmake libc third-party", toolchain)
         self.assertNotIn("mapfile", toolchain)
+        cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertNotIn("add_definitions(${LLVM_DEFINITIONS})", cmake)
+        self.assertRegex(
+            cmake,
+            r"separate_arguments\(DYNLEX_LLVM_COMPILE_OPTIONS NATIVE_COMMAND \"\$\{LLVM_DEFINITIONS\}\"\)",
+        )
+        self.assertRegex(
+            cmake,
+            r"function\(dynlex_link_llvm target\)[\s\S]*target_compile_options\(\$\{target\} PRIVATE \$\{DYNLEX_LLVM_COMPILE_OPTIONS\}\)",
+        )
         debug_test = (SCRIPTS_DIR / "test_debug_info.py").read_text(encoding="utf-8")
         self.assertIn('SCRIPTS_DIR / "llvm_toolchain.sh"', debug_test)
         self.assertIn('"$DYNLEX_LLVM_NATIVE_INSTALL_DIR"', debug_test)
         self.assertNotIn('repo_root / ".cache" / "llvm-toolchain"', debug_test)
         self.assertNotIn("shutil.which", debug_test)
 
+    def test_windows_native_llvm_uses_and_records_the_static_crt(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-windows-crt-") as temporary_directory:
+            environment = os.environ.copy()
+            environment["DYNLEX_LLVM_CACHE_DIR"] = temporary_directory
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    """
+set -euo pipefail
+uname() {
+    if [ "$1" = -s ]; then
+        printf '%s\n' MINGW64_NT
+    else
+        command uname "$@"
+    fi
+}
+. "$1"
+dynlex_llvm_marker_contents native
+dynlex_llvm_marker_contents web
+dynlex_native_llvm_cmake_arguments
+""",
+                    "bash",
+                    str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+                ],
+                capture_output=True,
+                env=environment,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(
+                completed.stdout.splitlines(),
+                [
+                    f"{PINNED_REVISION}:{PINNED_SCHEMA}:native:static-msvc-crt",
+                    f"{PINNED_REVISION}:{PINNED_SCHEMA}:web",
+                    "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+                ],
+            )
     def test_normal_native_build_is_optimized_without_disabling_invariants(self) -> None:
         native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -179,7 +266,17 @@ printf '%s\\n' \
         self.assertIn("include/llvm/Support/VCSRevision.h", cmake)
         self.assertIn("${DYNLEX_LLVM_REPOSITORY}", cmake)
         self.assertIn("${DYNLEX_LLVM_REQUIRED_PROFILE}", cmake)
-        self.assertNotIn("CPACK_DEBIAN_PACKAGE_DEPENDS", cmake)
+        self.assertIn("CPACK_DEBIAN_PACKAGE_DEPENDS", cmake)
+        for package in (
+            "binutils",
+            "build-essential",
+            "clang",
+            "libc6-dev",
+            "libfreetype-dev",
+            "libgl-dev",
+            "libglfw3-dev",
+        ):
+            self.assertIn(package, cmake)
         self.assertNotIn("zlib1.dll", cmake)
 
     def test_launchpad_package_bundles_and_builds_the_pinned_source(self) -> None:

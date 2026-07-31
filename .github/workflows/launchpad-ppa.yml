@@ -27,12 +27,12 @@ jobs:
       LAUNCHPAD_PPA: ${{ vars.LAUNCHPAD_PPA }}
       LAUNCHPAD_GPG_KEY_ID: ${{ secrets.LAUNCHPAD_GPG_KEY_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM source
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain/source
           key: llvm-source-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -71,7 +71,7 @@ jobs:
             "${upload_args[@]}"
 
       - name: Upload source package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dynlex-launchpad-${{ matrix.series }}
           path: packaging/launchpad/out/${{ matrix.series }}/*

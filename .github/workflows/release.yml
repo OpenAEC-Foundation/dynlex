@@ -18,7 +18,7 @@ jobs:
   verify-version-tag:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Verify tag matches metadata/VERSION
         shell: bash
         run: |
@@ -55,12 +55,12 @@ jobs:
             tar_asset_id: linux-arm64-tar
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -101,7 +101,7 @@ jobs:
           echo "tar_name=$TAR_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-linux-${{ matrix.architecture }}
           path: |
@@ -121,15 +121,19 @@ jobs:
             architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: .cache/llvm-toolchain
-          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+          path: |
+            .cache/llvm-toolchain
+            .cache/llvm-mingw
+            .cache/vcpkg
+            .cache/vcpkg-installed
+          key: native-toolchains-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'metadata/LLVM_MINGW_TOOLCHAIN', 'metadata/VCPKG_TOOLCHAIN', 'vcpkg.json', 'cmake/vcpkg-triplets/*.cmake', 'scripts/llvm_toolchain.sh', 'scripts/llvm-mingw-toolchain.ps1') }}
 
       - name: Install dependencies
         shell: pwsh
@@ -143,17 +147,34 @@ jobs:
         run: python ./scripts/verify-executable-architecture.py build/dynlex.exe ${{ matrix.architecture }}
 
       - name: Stage Windows installation
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          rm -rf build/windows-stage
+          if (Test-Path "build/windows-stage") {
+            Remove-Item -Recurse -Force "build/windows-stage"
+          }
           cmake --install build --prefix build/windows-stage
-          test -f build/windows-stage/bin/dynlex.exe
-          python ./scripts/verify-executable-architecture.py \
-            build/windows-stage/bin/dynlex.exe "${{ matrix.architecture }}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake failed to stage the Windows installation."
+          }
+          ./scripts/stage-windows-toolchain.ps1 `
+            -InstallationRoot (Resolve-Path "build/windows-stage") `
+            -ToolchainRoot $env:DYNLEX_WINDOWS_TOOLCHAIN_ROOT `
+            -TargetArchitecture $env:DYNLEX_WINDOWS_TOOLCHAIN_ARCHITECTURE `
+            -LlvmVersion $env:DYNLEX_WINDOWS_TOOLCHAIN_LLVM_VERSION `
+            -DependencyRoot $env:DYNLEX_WINDOWS_DEPENDENCY_ROOT
+          $payloadFiles = @(
+            Get-ChildItem `
+              -Path "build/windows-stage" `
+              -Recurse `
+              -File `
+              -Include "*.exe", "*.dll"
+          )
+          ./scripts/verify-windows-pe-files.ps1 `
+            -Files $payloadFiles.FullName `
+            -Architecture "${{ matrix.architecture }}"
 
       - name: Upload unsigned Windows installation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-build-${{ matrix.architecture }}
           path: |
@@ -179,10 +200,10 @@ jobs:
             wix_architecture: arm64
             asset_id: windows-arm64-msi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download unsigned Windows installation
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows-build-${{ matrix.architecture }}
           path: windows-build
@@ -208,23 +229,36 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Sign Windows executable
+      - name: Sign Windows payload executables and libraries
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\windows-build\windows-stage\bin\dynlex.exe
+          files-folder: ${{ github.workspace }}\windows-build\windows-stage
+          files-folder-filter: dll,exe
+          files-folder-recurse: true
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
-          description: DynLex compiler
+          description: DynLex compiler payload
           description-url: https://dynlex.com
-          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.architecture }}-executable
+          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.architecture }}-payload
 
-      - name: Verify Windows executable signature
+      - name: Verify Windows payload signatures
         shell: pwsh
-        run: ./scripts/verify-windows-signature.ps1 -Path "windows-build/windows-stage/bin/dynlex.exe"
+        run: |
+          $payloadFiles = @(
+            Get-ChildItem `
+              -Path "windows-build/windows-stage" `
+              -Recurse `
+              -File `
+              -Include "*.exe", "*.dll"
+          )
+          if ($payloadFiles.Count -eq 0) {
+            throw "The staged Windows payload contains no executable files."
+          }
+          ./scripts/verify-windows-signature.ps1 -Path $payloadFiles.FullName
 
       - name: Package MSI
         id: package
@@ -270,7 +304,7 @@ jobs:
         run: ./scripts/verify-windows-signature.ps1 -Path "build/${{ steps.package.outputs.name }}"
 
       - name: Upload Windows release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-windows-${{ matrix.architecture }}
           path: build/${{ steps.package.outputs.name }}
@@ -290,12 +324,12 @@ jobs:
             machine_architecture: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -315,13 +349,16 @@ jobs:
           fi
           rm -rf build/macos-stage
           cmake --install build --prefix "$PWD/build/macos-stage/usr/local"
+          ./scripts/stage-macos-dependencies.sh "$PWD/build/macos-stage"
           test -x build/macos-stage/usr/local/bin/dynlex
           test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_runtime.a
+          test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libglfw.dylib
+          test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libfreetype.dylib
           tar -czf "build/dynlex-macos-${{ matrix.architecture }}-payload.tar.gz" \
             -C build/macos-stage .
 
       - name: Upload architecture payload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-build-${{ matrix.architecture }}
           path: build/dynlex-macos-${{ matrix.architecture }}-payload.tar.gz
@@ -332,16 +369,16 @@ jobs:
     needs: [build-macos]
     environment: release-signing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download ARM64 payload
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: macos-build-arm64
           path: macos-payloads/arm64
 
       - name: Download x64 payload
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: macos-build-x64
           path: macos-payloads/x64
@@ -418,10 +455,15 @@ jobs:
           diff -u \
             "$RUNNER_TEMP/dynlex-arm64-files.txt" \
             "$RUNNER_TEMP/dynlex-x64-files.txt"
+          cmp \
+            "$ARM64_ROOT/usr/local/lib/dynlex/dependencies/dependency-manifest.txt" \
+            "$X64_ROOT/usr/local/lib/dynlex/dependencies/dependency-manifest.txt"
 
           while IFS= read -r relative_path; do
             case "$relative_path" in
-              usr/local/bin/dynlex|usr/local/lib/dynlex/libdynlex_runtime.a)
+              usr/local/bin/dynlex|\
+              usr/local/lib/dynlex/libdynlex_runtime.a|\
+              usr/local/lib/dynlex/dependencies/*.dylib)
                 continue
                 ;;
             esac
@@ -437,10 +479,29 @@ jobs:
             "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             "$X64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
+          while IFS= read -r arm64_library; do
+            library_name="$(basename "$arm64_library")"
+            x64_library="$X64_ROOT/usr/local/lib/dynlex/dependencies/$library_name"
+            universal_library="$UNIVERSAL_ROOT/usr/local/lib/dynlex/dependencies/$library_name"
+            test -f "$x64_library"
+            lipo -create "$arm64_library" "$x64_library" -output "$universal_library"
+            lipo -verify_arch arm64 x86_64 "$universal_library"
+          done < <(find "$ARM64_ROOT/usr/local/lib/dynlex/dependencies" \
+            -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
           lipo -verify_arch arm64 x86_64 "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
           lipo -verify_arch arm64 x86_64 \
             "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
 
+          while IFS= read -r library; do
+            codesign \
+              --force \
+              --options runtime \
+              --timestamp \
+              --sign "$APPLE_APPLICATION_SIGNING_IDENTITY" \
+              "$library"
+            codesign --verify --strict --verbose=2 "$library"
+          done < <(find "$UNIVERSAL_ROOT/usr/local/lib/dynlex/dependencies" \
+            -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
           codesign \
             --force \
             --options runtime \
@@ -453,6 +514,7 @@ jobs:
             --identifier "org.dynlex.dynlex" \
             --version "$VERSION" \
             --install-location "/" \
+            --scripts "$PWD/scripts/macos-installer" \
             "$RUNNER_TEMP/dynlex-component.pkg"
           productbuild \
             --package "$RUNNER_TEMP/dynlex-component.pkg" \
@@ -510,7 +572,7 @@ jobs:
           xcrun stapler staple "${{ steps.package.outputs.package_path }}"
 
       - name: Upload macOS release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-macos
           path: ${{ steps.package.outputs.package_path }}
@@ -555,12 +617,12 @@ jobs:
             asset_id: linux-arm64-tar
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-linux-${{ matrix.architecture }}
           path: release-artifacts/linux
@@ -586,9 +648,18 @@ jobs:
           fi
           python3 ./scripts/verify-executable-architecture.py \
             "$DYNLEX_BIN" "${{ matrix.architecture }}"
-          "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-linux
-          /tmp/dynlex-smoke-linux > /tmp/dynlex-smoke-linux.out
-          diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-linux.out
+          SMOKE_ROOT="$RUNNER_TEMP/dynlex-package-smoke-${{ matrix.format }}"
+          rm -rf "$SMOKE_ROOT"
+          mkdir -p "$SMOKE_ROOT"
+          "$DYNLEX_BIN" tests/required/simple/main.dl -o "$SMOKE_ROOT/simple"
+          "$SMOKE_ROOT/simple" > "$SMOKE_ROOT/simple.out"
+          diff -u tests/required/simple/expected.txt "$SMOKE_ROOT/simple.out"
+          "$DYNLEX_BIN" tests/required/graphics_window_should_close_boolean/main.dl \
+            -o "$SMOKE_ROOT/graphics"
+          "$SMOKE_ROOT/graphics"
+          "$DYNLEX_BIN" tests/release/font_link_smoke.dl \
+            -o "$SMOKE_ROOT/font-link"
+          "$SMOKE_ROOT/font-link"
 
   smoke-windows:
     needs: [package-windows]
@@ -604,12 +675,12 @@ jobs:
             asset_id: windows-arm64-msi
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-windows-${{ matrix.architecture }}
           path: release-artifacts/windows
@@ -636,11 +707,23 @@ jobs:
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
           }
-          python ./scripts/verify-executable-architecture.py $dynlex.FullName ${{ matrix.architecture }}
-          if ($LASTEXITCODE -ne 0) {
-            throw "Installed DynLex executable has the wrong architecture."
+          $pythonCommand = (Get-Command python.exe -ErrorAction Stop).Source
+          $installationRoot = Split-Path -Parent (Split-Path -Parent $dynlex.FullName)
+          $installedPayloadFiles = @(
+            Get-ChildItem `
+              -Path $installationRoot `
+              -Recurse `
+              -File `
+              -Include "*.exe", "*.dll"
+          )
+          if ($installedPayloadFiles.Count -eq 0) {
+            throw "The installed Windows payload contains no executable files."
           }
-          ./scripts/verify-windows-signature.ps1 -Path $dynlex.FullName
+          ./scripts/verify-windows-pe-files.ps1 `
+            -Files $installedPayloadFiles.FullName `
+            -Architecture "${{ matrix.architecture }}" `
+            -PythonCommand $pythonCommand
+          ./scripts/verify-windows-signature.ps1 -Path $installedPayloadFiles.FullName
           $helpStdout = "$env:TEMP\\dynlex-smoke-windows-help.stdout.log"
           $helpStderr = "$env:TEMP\\dynlex-smoke-windows-help.stderr.log"
           $helpExit = -1
@@ -656,14 +739,74 @@ jobs:
           if ($helpExit -ne 0) {
             throw "dynlex --help failed with exit code $helpExit"
           }
-          & $dynlex.FullName "tests/required/simple/main.dl" --emit-llvm -o "$env:TEMP\\dynlex-smoke-windows.ll" 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$env:TEMP\\dynlex-smoke-windows.ll")) {
-            Get-Content "$env:TEMP\\dynlex-smoke-windows-compile.log" | Write-Host
-            throw "dynlex emit-llvm step failed. See dynlex-smoke-windows-compile.log"
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          if (Get-Command cc.exe -ErrorAction SilentlyContinue) {
+            throw "Windows package smoke PATH unexpectedly contains an external C compiler."
           }
-          $llvmIr = Get-Content "$env:TEMP\\dynlex-smoke-windows.ll" -Raw
-          if ($llvmIr -notmatch "define .*@main\(") {
-            throw "LLVM IR output does not contain a main definition."
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "dynlex-package-smoke"
+          if (Test-Path $smokeRoot) {
+            Remove-Item -Recurse -Force $smokeRoot
+          }
+          New-Item -ItemType Directory -Path $smokeRoot | Out-Null
+          $simpleExecutable = Join-Path $smokeRoot "simple.exe"
+          & $dynlex.FullName "tests/required/simple/main.dl" -o $simpleExecutable 2>&1 | Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-compile.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $simpleExecutable)) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-compile.log" | Write-Host
+            throw "Installed DynLex could not produce a native executable."
+          }
+          ./scripts/verify-windows-pe-files.ps1 `
+            -Files $simpleExecutable `
+            -Architecture "${{ matrix.architecture }}" `
+            -PythonCommand $pythonCommand
+          $simpleOutput = & $simpleExecutable
+          if (
+            $LASTEXITCODE -ne 0 -or
+            ($simpleOutput -join "`n") -ne (Get-Content "tests/required/simple/expected.txt" -Raw).TrimEnd()
+          ) {
+            throw "The executable produced by installed DynLex returned unexpected output."
+          }
+          $graphicsExecutable = Join-Path $smokeRoot "graphics.exe"
+          & $dynlex.FullName `
+            "tests/required/graphics_window_should_close_boolean/main.dl" `
+            -o $graphicsExecutable 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-graphics.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $graphicsExecutable)) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-graphics.log" | Write-Host
+            throw "Installed DynLex could not link a graphics executable."
+          }
+          if (@(Get-ChildItem -Path $smokeRoot -Filter "*.dll" -File).Count -eq 0) {
+            throw "DynLex did not deploy the graphics runtime DLLs beside its output."
+          }
+          $deployedRuntimeLibraries = @(
+            Get-ChildItem -Path $smokeRoot -Filter "*.dll" -File
+          )
+          $graphicsPayloadFiles = @($graphicsExecutable) + @($deployedRuntimeLibraries.FullName)
+          ./scripts/verify-windows-pe-files.ps1 `
+            -Files $graphicsPayloadFiles `
+            -Architecture "${{ matrix.architecture }}" `
+            -PythonCommand $pythonCommand
+          ./scripts/verify-windows-signature.ps1 `
+            -Path $deployedRuntimeLibraries.FullName
+          & $graphicsExecutable
+          if ($LASTEXITCODE -ne 0) {
+            throw "The graphics executable could not load its deployed runtime libraries."
+          }
+          $fontExecutable = Join-Path $smokeRoot "font-link.exe"
+          & $dynlex.FullName `
+            "tests/release/font_link_smoke.dl" `
+            -o $fontExecutable 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-font.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $fontExecutable)) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-font.log" | Write-Host
+            throw "Installed DynLex could not link a FreeType executable."
+          }
+          ./scripts/verify-windows-pe-files.ps1 `
+            -Files $fontExecutable `
+            -Architecture "${{ matrix.architecture }}" `
+            -PythonCommand $pythonCommand
+          & $fontExecutable
+          if ($LASTEXITCODE -ne 0) {
+            throw "The FreeType executable could not load its deployed runtime libraries."
           }
 
   smoke-macos:
@@ -682,12 +825,12 @@ jobs:
       APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-macos
           path: release-artifacts/macos
@@ -714,9 +857,27 @@ jobs:
           [ -n "${DYNLEX_BIN:-}" ] && [ -x "$DYNLEX_BIN" ]
           lipo -verify_arch arm64 x86_64 "$DYNLEX_BIN"
           ./scripts/verify-macos-signature.sh "$PKG" "$DYNLEX_BIN"
-          "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-macos
-          /tmp/dynlex-smoke-macos > /tmp/dynlex-smoke-macos.out
-          diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-macos.out
+          SMOKE_ROOT="$RUNNER_TEMP/dynlex-package-smoke"
+          rm -rf "$SMOKE_ROOT"
+          mkdir -p "$SMOKE_ROOT"
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            "$DYNLEX_BIN" tests/required/simple/main.dl -o "$SMOKE_ROOT/simple"
+          "$SMOKE_ROOT/simple" > "$SMOKE_ROOT/simple.out"
+          diff -u tests/required/simple/expected.txt "$SMOKE_ROOT/simple.out"
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            "$DYNLEX_BIN" tests/required/graphics_window_should_close_boolean/main.dl \
+              -o "$SMOKE_ROOT/graphics"
+          test -f "$SMOKE_ROOT/libglfw.dylib"
+          test -f "$SMOKE_ROOT/libfreetype.dylib"
+          "$SMOKE_ROOT/graphics"
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            "$DYNLEX_BIN" tests/release/font_link_smoke.dl \
+              -o "$SMOKE_ROOT/font-link"
+          "$SMOKE_ROOT/font-link"
+          while IFS= read -r library; do
+            codesign --verify --strict --verbose=2 "$library"
+          done < <(find /usr/local/lib/dynlex/dependencies \
+            -maxdepth 1 -type f -name '*.dylib' -print | LC_ALL=C sort)
 
   publish-release:
     if: ${{ github.ref_type == 'tag' }}
@@ -725,24 +886,24 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-linux-*
           merge-multiple: true
           path: release-artifacts/linux
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-windows-*
           merge-multiple: true
           path: release-artifacts/windows
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-macos
           path: release-artifacts/macos

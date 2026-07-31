@@ -100,6 +100,17 @@ if [ -n "${NLOHMANN_JSON_DIR:-}" ]; then
     CMAKE_ARGS+=("-Dnlohmann_json_DIR=$NLOHMANN_JSON_DIR")
 fi
 
+if [[ "$(uname -s | tr '[:upper:]' '[:lower:]')" =~ (mingw|msys|cygwin) ]]; then
+    : "${DYNLEX_WINDOWS_TOOLCHAIN_ROOT:?Run scripts/install.ps1 before building DynLex on Windows.}"
+    : "${DYNLEX_WINDOWS_TOOLCHAIN_TARGET:?Run scripts/install.ps1 before building DynLex on Windows.}"
+    : "${DYNLEX_WINDOWS_DEPENDENCY_ROOT:?Run scripts/install.ps1 before building DynLex on Windows.}"
+    CMAKE_ARGS+=(
+        "-DDYNLEX_WINDOWS_TOOLCHAIN_ROOT=$DYNLEX_WINDOWS_TOOLCHAIN_ROOT"
+        "-DDYNLEX_WINDOWS_TOOLCHAIN_TARGET=$DYNLEX_WINDOWS_TOOLCHAIN_TARGET"
+        "-DDYNLEX_WINDOWS_DEPENDENCY_ROOT=$DYNLEX_WINDOWS_DEPENDENCY_ROOT"
+    )
+fi
+
 if command -v ccache >/dev/null 2>&1; then
     CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
     case "$CCACHE_DIR" in
