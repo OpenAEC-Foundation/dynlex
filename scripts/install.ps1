@@ -504,6 +504,8 @@ Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
 
 $env:PATH = "$clangBin;$env:PATH"
+$env:DYNLEX_LLVM_BOOTSTRAP_CC = Join-Path $clangBin "clang.exe"
+$env:DYNLEX_LLVM_BOOTSTRAP_CXX = Join-Path $clangBin "clang++.exe"
 Add-GitHubPathIfPresent -PathValue $clangBin
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Git\bin")
@@ -529,6 +531,8 @@ $env:DYNLEX_WINDOWS_TOOLCHAIN_ROOT = $llvmMingw.Root
 $env:DYNLEX_WINDOWS_TOOLCHAIN_TARGET = $llvmMingw.TargetTriple
 $env:DYNLEX_WINDOWS_DEPENDENCY_ROOT = $vcpkgDependencies.Root
 if ($env:GITHUB_ENV) {
+    Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_BOOTSTRAP_CC=$env:DYNLEX_LLVM_BOOTSTRAP_CC"
+    Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_LLVM_BOOTSTRAP_CXX=$env:DYNLEX_LLVM_BOOTSTRAP_CXX"
     Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_WINDOWS_TOOLCHAIN_ROOT=$($llvmMingw.Root)"
     Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_WINDOWS_TOOLCHAIN_TARGET=$($llvmMingw.TargetTriple)"
     Add-Content -Path $env:GITHUB_ENV -Value "DYNLEX_WINDOWS_DEPENDENCY_ROOT=$($vcpkgDependencies.Root)"
@@ -541,6 +545,8 @@ Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "The pinned LLVM fork is compiled and cached by scripts/build.sh."
 Write-Host "Use these environment variables when building in this shell:"
 Write-Host ('$env:PATH="' + $clangBin + ';$env:PATH"')
+Write-Host ('$env:DYNLEX_LLVM_BOOTSTRAP_CC="' + $env:DYNLEX_LLVM_BOOTSTRAP_CC + '"')
+Write-Host ('$env:DYNLEX_LLVM_BOOTSTRAP_CXX="' + $env:DYNLEX_LLVM_BOOTSTRAP_CXX + '"')
 Write-Host ('$env:NLOHMANN_JSON_DIR="' + $vcpkgDependencies.NlohmannJsonDir + '"')
 Write-Host ('$env:LIB="' + $vcpkgDependencies.NativeLibraryDir + ';$env:LIB"')
 Write-Host ('$env:LIBRARY_PATH="' + $vcpkgDependencies.NativeLibraryDir + ';$env:LIBRARY_PATH"')

@@ -93,8 +93,28 @@ dynlex_resolve_bootstrap_tool() {
 }
 
 dynlex_resolve_bootstrap_compilers() {
-	DYNLEX_LLVM_BOOTSTRAP_CC="$(dynlex_resolve_bootstrap_tool clang)"
-	DYNLEX_LLVM_BOOTSTRAP_CXX="$(dynlex_resolve_bootstrap_tool clang++)"
+	local configured_cc="${DYNLEX_LLVM_BOOTSTRAP_CC:-}"
+	local configured_cxx="${DYNLEX_LLVM_BOOTSTRAP_CXX:-}"
+	if { [ -n "$configured_cc" ] && [ -z "$configured_cxx" ]; } ||
+		{ [ -z "$configured_cc" ] && [ -n "$configured_cxx" ]; }; then
+		echo "Error: DYNLEX_LLVM_BOOTSTRAP_CC and DYNLEX_LLVM_BOOTSTRAP_CXX must be configured together." >&2
+		return 1
+	fi
+
+	if [ -n "$configured_cc" ]; then
+		case "$DYNLEX_LLVM_HOST_SYSTEM:$configured_cc" in
+		*MINGW*:[A-Za-z]:* | *MSYS*:[A-Za-z]:* | *CYGWIN*:[A-Za-z]:*)
+			dynlex_require_command cygpath
+			configured_cc="$(cygpath -u "$configured_cc")"
+			configured_cxx="$(cygpath -u "$configured_cxx")"
+			;;
+		esac
+		DYNLEX_LLVM_BOOTSTRAP_CC="$(dynlex_complete_host_executable_path "$configured_cc")"
+		DYNLEX_LLVM_BOOTSTRAP_CXX="$(dynlex_complete_host_executable_path "$configured_cxx")"
+	else
+		DYNLEX_LLVM_BOOTSTRAP_CC="$(dynlex_resolve_bootstrap_tool clang)"
+		DYNLEX_LLVM_BOOTSTRAP_CXX="$(dynlex_resolve_bootstrap_tool clang++)"
+	fi
 
 	local compiler_major
 	local compiler_cxx_major

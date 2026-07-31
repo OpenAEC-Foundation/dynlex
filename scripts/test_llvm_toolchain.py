@@ -255,6 +255,83 @@ dynlex_complete_host_executable_path "$2"
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertEqual(completed.stdout.strip(), str(compiler))
 
+    def test_configured_bootstrap_compilers_override_path_discovery(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-llvm-bootstrap-") as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            configured_directory = temporary_root / "configured"
+            path_directory = temporary_root / "path"
+            configured_directory.mkdir()
+            path_directory.mkdir()
+
+            for directory, version in (
+                (configured_directory, 22),
+                (path_directory, 19),
+            ):
+                for compiler_name in ("clang.exe", "clang++.exe"):
+                    compiler = directory / compiler_name
+                    compiler.write_text(
+                        f"#!/usr/bin/env bash\nprintf 'clang version {version}.1.0\\n'\n",
+                        encoding="utf-8",
+                    )
+                    compiler.chmod(0o755)
+
+            environment = os.environ.copy()
+            environment["PATH"] = f"{path_directory}:{environment['PATH']}"
+            environment["DYNLEX_LLVM_BOOTSTRAP_CC"] = str(
+                configured_directory / "clang.exe"
+            )
+            environment["DYNLEX_LLVM_BOOTSTRAP_CXX"] = str(
+                configured_directory / "clang++.exe"
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    """
+set -euo pipefail
+. "$1"
+DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=.exe
+dynlex_resolve_bootstrap_compilers
+printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
+""",
+                    "bash",
+                    str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+                ],
+                capture_output=True,
+                env=environment,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            self.assertEqual(
+                completed.stdout.splitlines(),
+                [
+                    str(configured_directory / "clang.exe"),
+                    str(configured_directory / "clang++.exe"),
+                ],
+            )
+
+    def test_configured_bootstrap_compilers_must_be_provided_as_a_pair(self) -> None:
+        environment = os.environ.copy()
+        environment["DYNLEX_LLVM_BOOTSTRAP_CC"] = "/configured/clang"
+        environment.pop("DYNLEX_LLVM_BOOTSTRAP_CXX", None)
+        completed = subprocess.run(
+            [
+                "bash",
+                "-c",
+                '. "$1"; dynlex_resolve_bootstrap_compilers',
+                "bash",
+                str(SCRIPTS_DIR / "llvm_toolchain.sh"),
+            ],
+            capture_output=True,
+            env=environment,
+            text=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(
+            "DYNLEX_LLVM_BOOTSTRAP_CC and DYNLEX_LLVM_BOOTSTRAP_CXX must be configured together",
+            completed.stderr,
+        )
+
     def test_normal_native_build_is_optimized_without_disabling_invariants(self) -> None:
         native_build = (SCRIPTS_DIR / "build.sh").read_text(encoding="utf-8")
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
