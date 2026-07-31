@@ -1,12 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  initializeLsp,
-  LspClient,
-  LspTextDocument,
-  shutdownLsp
-} from "../web/lsp-client.js";
+import { LspSession } from "../web/lsp-client.js";
 import { semanticHighlightKey } from "../web/snippet-highlight-key.js";
 
 const projectDir = path.resolve(import.meta.dirname, "..");
@@ -98,7 +93,7 @@ const compiler = await createModule({
   }
 });
 compiler.ccall("dynlex_web_init", null, [], []);
-const lsp = new LspClient((message) => {
+const lsp = new LspSession((message) => {
   const response = compiler.ccall(
     "dynlex_web_lsp_exchange_json",
     "string",
@@ -108,16 +103,13 @@ const lsp = new LspClient((message) => {
   return JSON.parse(response);
 });
 lsp.onRequest("workspace/semanticTokens/refresh", () => null);
-const initializeResult = await initializeLsp(lsp);
+const initializeResult = await lsp.start();
 const semanticTokenLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
 validateSemanticTokens({ data: [] }, semanticTokenLegend);
 
 const sources = extractSnippetSources(fs.readFileSync(homepagePath, "utf8"));
 const cacheEntries = [];
-const document = new LspTextDocument(lsp, {
-  uri: "file:///workspace/homepage-snippet.dl",
-  languageId: "dynlex"
-});
+let document = null;
 
 for (const source of sources) {
   compiler.ccall("dynlex_web_set_main_source", null, ["string"], [source]);
@@ -126,16 +118,22 @@ for (const source of sources) {
     const diagnostics = compiler.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
     throw new Error(`Homepage example does not compile: ${diagnostics}`);
   }
-  await document.replaceText(source);
-  const payload = await lsp.request("textDocument/semanticTokens/full", {
-    textDocument: document.identifier
-  });
+  if (document) {
+    await document.replaceText(source);
+  } else {
+    document = await lsp.openDocument({
+      uri: "file:///workspace/homepage-snippet.dl",
+      languageId: "dynlex",
+      text: source
+    });
+  }
+  const payload = await document.request("textDocument/semanticTokens/full");
   validateSemanticTokens(payload, semanticTokenLegend);
   cacheEntries.push([await semanticHighlightKey(source), payload.data]);
 }
 
 await document.close();
-await shutdownLsp(lsp);
+await lsp.stop();
 
 const generatedLegendModule = renderLegendModule(semanticTokenLegend);
 const generatedCacheModule = renderCacheModule(cacheEntries);

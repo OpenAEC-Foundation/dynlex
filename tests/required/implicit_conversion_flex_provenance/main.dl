@@ -16,6 +16,6 @@ implicitly convert {integer:value}:
 
 function the required floating value from {a floating-point number:value}:
     replacement:
-        value
+        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore (the required floating value from 1)

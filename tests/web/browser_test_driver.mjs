@@ -186,7 +186,10 @@ export async function clickElement(selector) {
   });
 }
 
-export async function findMonacoText(text) {
+export async function findMonacoText(text, occurrence = 0) {
+  if (!Number.isInteger(occurrence) || occurrence < 0) {
+    throw new TypeError("Monaco search occurrence must be a non-negative integer");
+  }
   await evaluate(`(() => {
     const input = document.querySelector('.monaco-editor textarea.inputarea');
     if (!input) throw new Error('Monaco input is missing');
@@ -195,7 +198,9 @@ export async function findMonacoText(text) {
   await dispatchKey("f", "KeyF", 70, 2);
   await dispatchKey("a", "KeyA", 65, 2);
   await command("Input.insertText", { text });
-  await dispatchKey("Enter", "Enter", 13);
+  for (let index = 0; index < occurrence; index += 1) {
+    await dispatchKey("Enter", "Enter", 13);
+  }
   await dispatchKey("Escape", "Escape", 27);
   await dispatchKey("ArrowLeft", "ArrowLeft", 37);
 }

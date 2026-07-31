@@ -176,6 +176,8 @@ function:
         put {river passenger:passenger} out
         unload {river passenger:passenger}
         let {river passenger:passenger} out
+        leave {river passenger:passenger}
+        leave {river passenger:passenger} at [the|] other side
     globals:
         challenge
     execute:

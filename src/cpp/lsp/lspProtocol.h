@@ -164,6 +164,7 @@ enum class CompletionItemKind {
 	Text = 1,
 	Method = 2,
 	Function = 3,
+	Variable = 6,
 	Module = 9,
 	Keyword = 14,
 	Snippet = 15,

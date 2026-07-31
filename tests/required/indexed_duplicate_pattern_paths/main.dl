@@ -10,7 +10,7 @@ function [the selection of {word:left} using alpha|the selection of {word:right}
 
 function [the recurrence of|the recurrence of] argument after marker:
     replacement:
-        argument
+        @intrinsic("discard", argument)
         the recurrence of marker after marker
 
 print (the selection of one using alpha) as a line

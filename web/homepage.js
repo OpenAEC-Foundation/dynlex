@@ -3,12 +3,7 @@ import { semanticHighlightKey } from "./snippet-highlight-key.js";
 import { renderSemanticTokens, semanticLegendsMatch } from "./semantic-highlighting.js";
 import { createShaderBanner } from "./shader-banner.js";
 import { initializeSiteNavigation } from "./site-navigation.js";
-import {
-  initializeLsp,
-  LspClient,
-  LspTextDocument,
-  shutdownLsp
-} from "./lsp-client.js";
+import { LspSession } from "./lsp-client.js";
 
 function required(selector, scope = document) {
   const element = scope.querySelector(selector);
@@ -155,7 +150,7 @@ function ensureSnippetWorker() {
   if (!snippetWorkerReady) {
     createSnippetWorker();
     snippetWorkerReady = callSnippetWorker("init").then(async (result) => {
-      snippetLsp = new LspClient((message) => callSnippetWorker("lsp.exchange", { message }));
+      snippetLsp = new LspSession((message) => callSnippetWorker("lsp.exchange", { message }));
       snippetLsp.onNotification("textDocument/publishDiagnostics", (params) => {
         if (params.uri !== snippetDocumentUri) {
           return;
@@ -166,7 +161,7 @@ function ensureSnippetWorker() {
         snippetDocumentDiagnostics = Object.freeze([...params.diagnostics]);
       });
       snippetLsp.onRequest("workspace/semanticTokens/refresh", () => null);
-      const initializeResult = await initializeLsp(snippetLsp, {
+      const initializeResult = await snippetLsp.start({
         capabilities: {
           textDocument: {
             semanticTokens: {
@@ -182,10 +177,6 @@ function ensureSnippetWorker() {
       if (!semanticLegendsMatch(serverLegend, semanticTokenLegend)) {
         throw new Error("DynLex language server legend differs from the generated highlight cache");
       }
-      snippetLspDocument = new LspTextDocument(snippetLsp, {
-        uri: snippetDocumentUri,
-        languageId: "dynlex"
-      });
       snippetWorkerInitialized = true;
       return result;
     });
@@ -193,14 +184,34 @@ function ensureSnippetWorker() {
   return snippetWorkerReady;
 }
 
-async function syncSnippetLspDocument(sourceText) {
+async function syncSnippetLspDocument(sourceText, position) {
   if (!snippetLsp) {
     throw new Error("Homepage DynLex language client is not initialized");
   }
-  if (!snippetLspDocument) {
-    throw new Error("Homepage DynLex document is not initialized");
+  if (position !== undefined) {
+    if (
+      !Number.isInteger(position.line)
+      || position.line < 0
+      || !Number.isInteger(position.character)
+      || position.character < 0
+    ) {
+      throw new TypeError("Homepage DynLex cursor position is invalid");
+    }
   }
-  await snippetLspDocument.replaceText(sourceText);
+  if (!snippetLspDocument) {
+    snippetLspDocument = await snippetLsp.openDocument({
+      uri: snippetDocumentUri,
+      languageId: "dynlex",
+      version: 1,
+      text: sourceText,
+      position
+    });
+  } else {
+    await snippetLspDocument.replaceText(sourceText, { position });
+    if (position === undefined) {
+      await snippetLsp.clearActiveCursor();
+    }
+  }
   return snippetLspDocument.identifier;
 }
 
@@ -232,16 +243,25 @@ async function compileAndRunSource(sourceText) {
   return { compileResult, runResult };
 }
 
-async function analyzeDynLexSource(sourceText) {
+async function analyzeDynLexSource(sourceText, position) {
   await ensureSnippetWorker();
-  const textDocument = await syncSnippetLspDocument(sourceText);
-  const response = await snippetLsp.request("textDocument/semanticTokens/full", {
-    textDocument
-  });
+  await syncSnippetLspDocument(sourceText, position);
+  const response = await snippetLspDocument.request("textDocument/semanticTokens/full");
+  const callExpressions = await snippetLsp.request(
+    "dynlex/callExpressions",
+    snippetLspDocument.identifier
+  );
   return Object.freeze({
+    callExpressions: Object.freeze([...callExpressions]),
     diagnostics: snippetDocumentDiagnostics,
     semanticTokens: Object.freeze([...response.data])
   });
+}
+
+async function completeDynLexSource(sourceText, position) {
+  await ensureSnippetWorker();
+  await syncSnippetLspDocument(sourceText, position);
+  return snippetLspDocument.request("textDocument/completion", { position });
 }
 
 async function semanticTokensForSource(sourceText) {
@@ -293,8 +313,11 @@ riverChallengeLoad.addEventListener("click", () => {
   riverChallengePromise = import("./river-challenge.js")
     .then((module) => module.initializeRiverChallenge(riverChallenge, {
       music,
-      analyzeDynLex: (sourceText) => (
-        queueCompilerTask(() => analyzeDynLexSource(sourceText))
+      analyzeDynLex: (sourceText, position) => (
+        queueCompilerTask(() => analyzeDynLexSource(sourceText, position))
+      ),
+      completeDynLex: (sourceText, position) => (
+        queueCompilerTask(() => completeDynLexSource(sourceText, position))
       ),
       runDynLex: (sourceText) => queueCompilerTask(() => compileAndRunSource(sourceText))
     }))
@@ -650,7 +673,7 @@ window.addEventListener("pagehide", () => {
   cancelAnimationFrame(frameHandle);
   if (snippetLsp) {
     void queueCompilerTask(async () => {
-      await shutdownLsp(snippetLsp);
+      await snippetLsp.stop();
       snippetWorker.terminate();
     }).catch((error) => {
       console.error("Homepage DynLex language server shutdown failed", error);

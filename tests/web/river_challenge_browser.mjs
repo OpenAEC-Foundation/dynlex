@@ -15,6 +15,7 @@ const previewAssets = [
 
 const runtimeAssets = [
   "/river-challenge.js",
+  "/river-challenge-editor.js",
   "/river-challenge-audio.js",
   "/river-challenge-model.js",
   "/media/river-challenge/puzzle-casual-game-music.mp3",
@@ -243,6 +244,153 @@ export async function runRiverChallengeBrowserTest({
     "document.querySelectorAll('[data-river-source-code] .river-token-function').length >= 2",
     "the DynLex language server to semantically highlight the starter program"
   );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    const lineStart = source.value.lastIndexOf('\\n') + 1;
+    source.focus();
+    source.setSelectionRange(lineStart + 3, lineStart + 3);
+    source.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  })()`);
+  await new Promise((resolve) => setTimeout(resolve, 750));
+  assert.equal(
+    await evaluate("document.querySelector('[data-river-completions]').hidden"),
+    true,
+    "Focusing or moving the caret must not request completions before an edit"
+  );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    const lineStart = source.value.lastIndexOf('\\n') + 1;
+    source.setRangeText('', lineStart + 2, source.value.length, 'end');
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(
+    "[...document.querySelectorAll('[data-river-completion]')]"
+      + ".some((item) => item.querySelector('strong').textContent === 'row ')",
+    "real DynLex row completion while the active line is incomplete"
+  );
+  await waitFor(
+    "document.querySelector('[data-river-editor-shell]').dataset.highlightState === 'semantic'",
+    "semantic analysis to finish while the newly active line is incomplete"
+  );
+  assert.equal(
+    await evaluate("document.querySelector('[data-river-diagnostics]').hidden"),
+    true,
+    "The newly active line must not publish diagnostics during its first edit"
+  );
+  assert.equal(
+    await evaluate("document.querySelector('[data-river-diagnostic-range]') === null"),
+    true,
+    "The newly active line must not receive an error squiggle during its first edit"
+  );
+  const completionPosition = await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    const list = document.querySelector('[data-river-completions]');
+    const sourceStyle = getComputedStyle(source);
+    const sourceRect = source.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const cursor = source.selectionEnd;
+    const lineStart = source.value.lastIndexOf('\\n', cursor - 1) + 1;
+    const line = source.value.slice(0, cursor).split('\\n').length - 1;
+    const measure = document.createElement('span');
+    measure.style.position = 'absolute';
+    measure.style.visibility = 'hidden';
+    measure.style.whiteSpace = 'pre';
+    measure.style.font = sourceStyle.font;
+    measure.style.fontVariantLigatures = sourceStyle.fontVariantLigatures;
+    measure.style.letterSpacing = sourceStyle.letterSpacing;
+    measure.style.tabSize = sourceStyle.tabSize;
+    measure.textContent = source.value.slice(lineStart, cursor);
+    document.body.append(measure);
+    const caretLeft = sourceRect.left
+      + parseFloat(sourceStyle.paddingLeft)
+      + measure.getBoundingClientRect().width
+      - source.scrollLeft;
+    const caretTop = sourceRect.top
+      + parseFloat(sourceStyle.paddingTop)
+      + line * parseFloat(sourceStyle.lineHeight)
+      - source.scrollTop;
+    measure.remove();
+    return {
+      caretLeft,
+      caretTop,
+      listLeft: listRect.left,
+      listTop: listRect.top,
+      listRight: listRect.right,
+      placement: list.dataset.riverCompletionPlacement,
+      sourceRight: sourceRect.right
+    };
+  })()`);
+  assert.equal(completionPosition.placement, "right");
+  assert.ok(completionPosition.listLeft >= completionPosition.caretLeft + 7);
+  assert.ok(Math.abs(completionPosition.listTop - completionPosition.caretTop) <= 1);
+  assert.ok(completionPosition.listRight <= completionPosition.sourceRight - 7);
+  await evaluate(`document.querySelector('[data-river-source]').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+  )`);
+  assert.match(
+    await evaluate("document.querySelector('[data-river-source]').value"),
+    /\nrow $/
+  );
+  await waitFor(
+    "!document.querySelector('[data-river-completions]').hidden",
+    "literal continuations after accepting row with its trailing space"
+  );
+  const rowContinuationLabels = await evaluate(
+    "[...document.querySelectorAll('[data-river-completion] strong')]"
+      + ".map((label) => label.textContent)"
+  );
+  assert.deepEqual(
+    new Set(rowContinuationLabels),
+    new Set(["across the ", "back", "to the other "]),
+    "row completion must follow its literal pattern paths without argument-first operators"
+  );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    const lineStart = source.value.lastIndexOf('\\n') + 1;
+    source.setRangeText('', lineStart + 2, source.value.length, 'end');
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(
+    "!document.querySelector('[data-river-completions]').hidden",
+    "DynLex completion to reopen after another edit"
+  );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    source.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    source.setSelectionRange(0, 0);
+  })()`);
+  assert.equal(
+    await evaluate("document.querySelector('[data-river-completions]').hidden"),
+    true,
+    "Moving the caret with a pointer must close completions"
+  );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    const lineStart = source.value.lastIndexOf('\\n') + 1;
+    source.focus();
+    source.setRangeText('get ', lineStart, source.value.length, 'end');
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(
+    `(() => {
+      const labels = new Set(
+        [...document.querySelectorAll('[data-river-completion] strong')]
+          .map((label) => label.textContent)
+      );
+      return ['hay', 'sheep', 'wolf'].every((label) => labels.has(label));
+    })()`,
+    "all river passenger substitutions after get"
+  );
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    source.value = ${JSON.stringify(starterSource)};
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+    source.blur();
+  })()`);
+  await waitFor(
+    "document.querySelector('[data-river-editor-shell]').dataset.highlightState === 'semantic'",
+    "the starter source to recover after testing completion"
+  );
   const presentation = await evaluate(`(() => {
     const source = document.querySelector('[data-river-source]');
     const code = document.querySelector('[data-river-source-code]');
@@ -420,6 +568,40 @@ export async function runRiverChallengeBrowserTest({
   assert.equal(await evaluate("document.querySelector('[data-river-diagnostics]').hidden"), true);
   assert.equal(await evaluate("document.querySelector('[data-river-line-state]') === null"), true);
   assert.equal(await evaluate("document.querySelector('[data-river-diagnostic-range]') === null"), true);
+  const joinedCommandSource = "get the sheep in the boat and get the hay in the boat";
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    source.value = ${JSON.stringify(joinedCommandSource)};
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await evaluate("document.querySelector('[data-river-run]').click()");
+  await waitFor(
+    "document.querySelector('[data-river-game]').dataset.playbackState === 'failure'",
+    "the second command in one DynLex expression to fail at runtime"
+  );
+  const joinedCommandFailure = await evaluate(`(() => {
+    const marker = document.querySelector('[data-river-call-state="error"]');
+    return {
+      diagnostics: document.querySelector('[data-river-diagnostics]').textContent,
+      markerText: marker?.textContent,
+      markerState: marker?.dataset.riverCallState,
+      line: document.querySelector('[data-river-line-state="error"]')?.dataset.riverSourceLine
+    };
+  })()`);
+  assert.equal(joinedCommandFailure.diagnostics, "the boat is already carrying something");
+  assert.equal(joinedCommandFailure.markerText, "get the hay in the boat");
+  assert.equal(joinedCommandFailure.markerState, "error");
+  assert.equal(joinedCommandFailure.line, "1");
+  await evaluate("document.querySelector('[data-river-reset]').click()");
+  await evaluate(`(() => {
+    const source = document.querySelector('[data-river-source]');
+    source.value = ${JSON.stringify(starterSource)};
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await waitFor(
+    "document.querySelector('[data-river-editor-shell]').dataset.highlightState === 'semantic'",
+    "the starter source to recover after the joined-command runtime error"
+  );
   await waitFor(
     "document.querySelector('[data-river-challenge]').dataset.musicState === 'audible'"
       + " && document.querySelector('[data-river-challenge]').dataset.ambienceState === 'audible'",
@@ -526,10 +708,12 @@ loop 5 times:
   );
   const loopFailure = await evaluate(`(() => ({
     diagnostics: document.querySelector('[data-river-diagnostics]').textContent,
-    failedLine: document.querySelector('[data-river-line-state="error"]')?.dataset.riverSourceLine
+    failedLine: document.querySelector('[data-river-line-state="error"]')?.dataset.riverSourceLine,
+    failedCall: document.querySelector('[data-river-call-state="error"]')?.textContent
   }))()`);
   assert.equal(loopFailure.diagnostics, "there is no sheep to pick up");
   assert.equal(loopFailure.failedLine, "3");
+  assert.equal(loopFailure.failedCall, "get passenger in the boat");
 
   const headingSource = `get the sheep in the boat
 row to the other side

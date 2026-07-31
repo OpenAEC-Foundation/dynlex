@@ -1,10 +1,10 @@
 function value used with sentinel:
     replacement:
-        value
+        @intrinsic("discard", value)
         hold sentinel
 
 function the recurrence of argument with marker:
     replacement:
-        argument
+        @intrinsic("discard", argument)
         the recurrence of marker with marker
         missing used with sentinel

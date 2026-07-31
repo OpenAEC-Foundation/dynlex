@@ -1,9 +1,9 @@
 function a zero padded string from value using width as the width:
     replacement:
-        width
+        @intrinsic("return", width)
 
 function the wrapped form of value:
     replacement:
-        value
+        @intrinsic("return", value)
 
 the wrapped form of a zero padded string from 1 using 2 as the width

@@ -211,6 +211,36 @@ assert.ok(
   )),
   `Expected typed squared-value instantiation label, got: ${JSON.stringify(instantiations)}`
 );
+
+const riverCallUri = "file:///workspace/river-calls.dl";
+const riverCallSource = `import lib/river_challenge.dl
+get the sheep in the boat and row to the other side
+`;
+notifyLsp("textDocument/didOpen", {
+  textDocument: {
+    uri: riverCallUri,
+    languageId: "dynlex",
+    version: 1,
+    text: riverCallSource
+  }
+});
+const riverCallExpressions = requestLsp("dynlex/callExpressions", { uri: riverCallUri });
+const riverCommandSources = riverCallExpressions
+  .filter((call) => (
+    call.returnType === "nothing"
+    && call.definition.uri.endsWith("/lib/river_challenge.dl")
+  ))
+  .map((call) => {
+    assert.equal(call.range.start.line, call.range.end.line);
+    const line = riverCallSource.split("\n")[call.range.start.line];
+    return line.slice(call.range.start.character, call.range.end.character);
+  });
+assert.deepEqual(riverCommandSources, [
+  "get the sheep in the boat",
+  "row to the other side"
+]);
+notifyLsp("textDocument/didClose", { textDocument: { uri: riverCallUri } });
+
 notifyLsp("dynlex/activeCursorChanged", {
   clientId: "web-smoke",
   uri: mainUri,

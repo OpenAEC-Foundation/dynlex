@@ -4,11 +4,19 @@ import {
   parseRiverTrace
 } from "./river-challenge-model.js";
 import {
-  rebaseLspDiagnosticsAfterLines,
-  rebaseSemanticTokensAfterLines,
-  renderSemanticTokens
-} from "./semantic-highlighting.js";
-import { semanticTokenLegend } from "./semantic-token-legend.js";
+  clearRiverLineStates,
+  createRiverCompletions,
+  prefixedRiverPosition,
+  renderRiverCallRange,
+  renderRiverCompilerDiagnostics,
+  renderRiverDiagnosticRanges,
+  renderRiverLspFeedback,
+  renderRiverSource,
+  riverCommandCallRanges,
+  RIVER_PROGRAM_PREFIX,
+  RIVER_STARTER_SOURCE,
+  setRiverLineState
+} from "./river-challenge-editor.js";
 import { createRiverChallengeAudio } from "./river-challenge-audio.js";
 
 const LANDSCAPE_URL = new URL("./media/river-challenge/painted-river.webp", import.meta.url).href;
@@ -19,11 +27,7 @@ const SHEEP_BLINK_URL = new URL("./media/river-challenge/sheep-blink.webp", impo
 const WOLF_URL = new URL("./media/river-challenge/wolf.webp", import.meta.url).href;
 const WOLF_BLINK_URL = new URL("./media/river-challenge/wolf-blink.webp", import.meta.url).href;
 const HAY_URL = new URL("./media/river-challenge/hay.webp", import.meta.url).href;
-const PROGRAM_PREFIX = "import lib/river_challenge.dl\n\n";
-const PROGRAM_PREFIX_LINES = 2;
-const STARTER_SOURCE = "# The official names are: sheep, wolf, and hay.\nget the hay in the boat\nrow to the other side";
 const SPEEDS = [1, 2, 4];
-const SUBJECTS = ["SHEEP", "WOLF", "HAY"];
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function required(selector, scope = document) {
@@ -63,6 +67,7 @@ function riverMarkup() {
           <div class="river-editor-shell" data-river-editor-shell>
             <i class="river-source-line-state" data-river-source-line-state hidden></i>
             <pre class="river-source-highlight" data-river-source-highlight aria-hidden="true"><code data-river-source-code></code></pre>
+            <pre class="river-source-playback" data-river-source-playback aria-hidden="true"><code data-river-call-code></code></pre>
             <pre class="river-source-diagnostics" data-river-source-diagnostics aria-hidden="true"><code data-river-diagnostic-code></code></pre>
             <textarea
               class="river-source"
@@ -72,7 +77,16 @@ function riverMarkup() {
               wrap="off"
               autocapitalize="off"
               autocomplete="off"
+              aria-autocomplete="list"
+              aria-controls="river-completions"
             ></textarea>
+            <div
+              class="river-completions"
+              id="river-completions"
+              data-river-completions
+              role="listbox"
+              hidden
+            ></div>
           </div>
           <div class="river-diagnostics" data-river-diagnostics role="status" aria-live="polite" hidden></div>
           <div class="river-editor-actions">
@@ -130,153 +144,6 @@ function riverMarkup() {
       </footer>
     </article>
   `;
-}
-
-function commandFromLine(line) {
-  const source = line.trim().toLowerCase();
-  if (source.length === 0 || source.startsWith("#")) {
-    return null;
-  }
-  if (/^(?:row|cross)\b/.test(source)) {
-    return { action: "CROSS", subject: null };
-  }
-  const subject = SUBJECTS.find((name) => new RegExp(`\\b${name.toLowerCase()}\\b`).test(source));
-  if (/^(?:unload|let)\b/.test(source) || /\bout(?:\s+of\s+the\s+boat)?$/.test(source)) {
-    return { action: "UNLOAD", subject: subject ?? null };
-  }
-  if (/^(?:get|put|load|take)\b/.test(source)) {
-    return { action: "LOAD", subject: subject ?? null };
-  }
-  return null;
-}
-
-function commandLineNumbers(source, commands) {
-  const sourceCommands = source.split("\n")
-    .map((line, index) => ({ command: commandFromLine(line), line: index + 1 }))
-    .filter(({ command }) => command !== null);
-  const mapped = [];
-  let sourceIndex = 0;
-  for (const command of commands) {
-    let matchedIndex = -1;
-    for (let offset = 0; offset < sourceCommands.length; offset += 1) {
-      const candidateIndex = (sourceIndex + offset) % sourceCommands.length;
-      const candidate = sourceCommands[candidateIndex];
-      if (
-        candidate.command.action === command.action
-        && (
-          candidate.command.subject === null
-          || candidate.command.subject === command.subject
-        )
-      ) {
-        mapped.push(candidate.line);
-        matchedIndex = candidateIndex;
-        break;
-      }
-    }
-    if (matchedIndex === -1) {
-      throw new Error("Compiled river command could not be mapped to its source line");
-    }
-    sourceIndex = (matchedIndex + 1) % sourceCommands.length;
-  }
-  return mapped;
-}
-
-function renderSource(code, source, tokenData) {
-  renderSemanticTokens(code, source, tokenData, semanticTokenLegend, {
-    baseClass: "river-token",
-    classPrefix: "river-token-"
-  });
-}
-
-function sourceLineStarts(source) {
-  const starts = [0];
-  for (let index = 0; index < source.length; index += 1) {
-    if (source[index] === "\n") {
-      starts.push(index + 1);
-    }
-  }
-  return starts;
-}
-
-function sourceOffset(source, lineStarts, position) {
-  if (position.line >= lineStarts.length) {
-    throw new Error("LSP diagnostic line points outside the river source");
-  }
-  const start = lineStarts[position.line];
-  const end = position.line + 1 < lineStarts.length
-    ? lineStarts[position.line + 1] - 1
-    : source.length;
-  if (position.character > end - start) {
-    throw new Error("LSP diagnostic column points outside the river source");
-  }
-  return start + position.character;
-}
-
-function diagnosticSourceRanges(source, diagnostics) {
-  const lineStarts = sourceLineStarts(source);
-  const ranges = diagnostics.map((diagnostic) => {
-    let start = sourceOffset(source, lineStarts, diagnostic.range.start);
-    let end = sourceOffset(source, lineStarts, diagnostic.range.end);
-    if (start === end) {
-      if (end < source.length && source[end] !== "\n") {
-        end += 1;
-      } else if (start > 0 && source[start - 1] !== "\n") {
-        start -= 1;
-      }
-    }
-    return { start, end };
-  }).sort((left, right) => left.start - right.start || left.end - right.end);
-
-  const merged = [];
-  for (const range of ranges) {
-    const previous = merged.at(-1);
-    if (previous && range.start <= previous.end) {
-      previous.end = Math.max(previous.end, range.end);
-    } else {
-      merged.push(range);
-    }
-  }
-  return merged;
-}
-
-function renderDiagnosticRanges(code, source, diagnostics) {
-  const fragment = code.ownerDocument.createDocumentFragment();
-  let offset = 0;
-  for (const range of diagnosticSourceRanges(source, diagnostics)) {
-    if (range.start > offset) {
-      fragment.append(code.ownerDocument.createTextNode(source.slice(offset, range.start)));
-    }
-    const marker = code.ownerDocument.createElement("span");
-    marker.dataset.riverDiagnosticRange = "";
-    marker.textContent = source.slice(range.start, range.end);
-    if (range.start === range.end) {
-      marker.classList.add("is-empty");
-      marker.textContent = "\u00a0";
-    }
-    fragment.append(marker);
-    offset = range.end;
-  }
-  if (offset < source.length) {
-    fragment.append(code.ownerDocument.createTextNode(source.slice(offset)));
-  }
-  code.replaceChildren(fragment);
-}
-
-function setLineState(indicator, lineNumber, state) {
-  if (!Number.isInteger(lineNumber) || lineNumber < 1) {
-    throw new Error("River source line must be a positive integer");
-  }
-  indicator.hidden = false;
-  indicator.dataset.riverSourceLine = String(lineNumber);
-  indicator.dataset.riverLineState = state;
-  indicator.style.setProperty("--river-source-line-index", String(lineNumber - 1));
-}
-
-function clearLineStates(indicator) {
-  indicator.hidden = true;
-  delete indicator.dataset.riverSourceLine;
-  delete indicator.dataset.riverLineState;
-  indicator.style.removeProperty("--river-source-line-index");
 }
 
 class PlaybackController {
@@ -528,58 +395,20 @@ async function transitionScene(renderer, controller, currentScene, event, durati
   return nextScene;
 }
 
-function renderCompilerDiagnostics(panel, lineIndicator, diagnostics) {
-  panel.replaceChildren();
-  clearLineStates(lineIndicator);
-  if (diagnostics.length === 0) {
-    panel.hidden = true;
-    return;
-  }
-  panel.hidden = false;
-  const messages = [];
-  for (const diagnostic of diagnostics) {
-    const compilerLine = Number.isInteger(diagnostic.line) ? diagnostic.line : 1;
-    const sourceLine = compilerLine - PROGRAM_PREFIX_LINES;
-    if (sourceLine < 1) {
-      throw new Error(`River challenge library diagnostic: ${diagnostic.message}`);
-    }
-    setLineState(lineIndicator, sourceLine, "error");
-    const column = Number.isInteger(diagnostic.column) ? diagnostic.column : 1;
-    messages.push(`ERROR ${sourceLine}:${column}  ${diagnostic.message}`);
-  }
-  panel.textContent = messages.join("\n");
-}
-
-function renderLspDiagnostics(panel, lineIndicator, diagnosticCode, source, diagnostics) {
-  panel.replaceChildren();
-  renderDiagnosticRanges(diagnosticCode, source, diagnostics);
-  if (diagnostics.length === 0) {
-    panel.hidden = true;
-    return;
-  }
-
-  clearLineStates(lineIndicator);
-  const severityLabels = new Map([
-    [1, "ERROR"],
-    [2, "WARNING"],
-    [3, "INFO"],
-    [4, "HINT"]
-  ]);
-  panel.hidden = false;
-  panel.textContent = diagnostics.map((diagnostic) => {
-    const line = diagnostic.range.start.line + 1;
-    const column = diagnostic.range.start.character + 1;
-    setLineState(lineIndicator, line, "error");
-    return `${severityLabels.get(diagnostic.severity) ?? "ERROR"} ${line}:${column}  ${diagnostic.message}`;
-  }).join("\n");
-}
-
-export async function initializeRiverChallenge(section, { analyzeDynLex, music, runDynLex }) {
+export async function initializeRiverChallenge(section, {
+  analyzeDynLex,
+  completeDynLex,
+  music,
+  runDynLex
+}) {
   if (typeof runDynLex !== "function") {
     throw new TypeError("River challenge requires a DynLex runner");
   }
   if (typeof analyzeDynLex !== "function") {
     throw new TypeError("River challenge requires a DynLex language analyzer");
+  }
+  if (typeof completeDynLex !== "function") {
+    throw new TypeError("River challenge requires DynLex completion");
   }
   await Promise.all([
     loadImage(LANDSCAPE_URL),
@@ -598,8 +427,11 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
   const source = required("[data-river-source]", game);
   const highlight = required("[data-river-source-highlight]", game);
   const sourceCode = required("[data-river-source-code]", game);
+  const playbackHighlight = required("[data-river-source-playback]", game);
+  const callCode = required("[data-river-call-code]", game);
   const diagnosticHighlight = required("[data-river-source-diagnostics]", game);
   const diagnosticCode = required("[data-river-diagnostic-code]", game);
+  const completionList = required("[data-river-completions]", game);
   const lineIndicator = required("[data-river-source-line-state]", game);
   const editorShell = required("[data-river-editor-shell]", game);
   const diagnostics = required("[data-river-diagnostics]", game);
@@ -618,7 +450,7 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
   const challengeAudio = await createRiverChallengeAudio(section, music, muteButton, sheep);
   let scene = createInitialRiverScene();
   let lastTrace = null;
-  let lastLineNumbers = [];
+  let lastCallRanges = [];
   let playing = false;
   let programGeneration = 0;
   let highlightGeneration = 0;
@@ -630,32 +462,26 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     if (highlightTimer !== null) {
       clearTimeout(highlightTimer);
     }
-    renderSource(sourceCode, source.value, []);
-    renderDiagnosticRanges(diagnosticCode, source.value, []);
+    renderRiverSource(sourceCode, source.value, []);
+    renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
     editorShell.dataset.highlightState = "loading";
     highlightTimer = window.setTimeout(() => {
       highlightTimer = null;
       const sourceText = source.value;
-      void analyzeDynLex(PROGRAM_PREFIX + sourceText).then((feedback) => {
+      const position = prefixedRiverPosition(sourceText, source.selectionEnd);
+      void analyzeDynLex(RIVER_PROGRAM_PREFIX + sourceText, position).then((feedback) => {
         if (generation !== highlightGeneration || sourceText !== source.value) {
           return;
         }
-        const sourceTokens = rebaseSemanticTokensAfterLines(
-          feedback.semanticTokens,
-          PROGRAM_PREFIX_LINES
-        );
-        const sourceDiagnostics = rebaseLspDiagnosticsAfterLines(
-          feedback.diagnostics,
-          PROGRAM_PREFIX_LINES
-        );
-        renderSource(sourceCode, sourceText, sourceTokens);
-        renderLspDiagnostics(
-          diagnostics,
-          lineIndicator,
+        const sourceDiagnostics = renderRiverLspFeedback({
           diagnosticCode,
-          sourceText,
-          sourceDiagnostics
-        );
+          diagnostics: feedback.diagnostics,
+          lineIndicator,
+          panel: diagnostics,
+          source: sourceText,
+          sourceCode,
+          semanticTokens: feedback.semanticTokens
+        });
         editorShell.dataset.highlightState = "semantic";
         if (sourceDiagnostics.length > 0) {
           status.textContent = "CHECK CODE";
@@ -667,8 +493,8 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
           return;
         }
         console.error("River challenge syntax highlighting failed", error);
-        renderSource(sourceCode, source.value, []);
-        renderDiagnosticRanges(diagnosticCode, source.value, []);
+        renderRiverSource(sourceCode, source.value, []);
+        renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
         diagnostics.hidden = false;
         diagnostics.textContent = "An error occurred. Check the browser log.";
         status.textContent = "ERROR";
@@ -682,6 +508,8 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
   function syncEditorScroll() {
     highlight.scrollLeft = source.scrollLeft;
     highlight.scrollTop = source.scrollTop;
+    playbackHighlight.scrollLeft = source.scrollLeft;
+    playbackHighlight.scrollTop = source.scrollTop;
     diagnosticHighlight.scrollLeft = source.scrollLeft;
     diagnosticHighlight.scrollTop = source.scrollTop;
     editorShell.style.setProperty("--river-source-scroll-y", `${-source.scrollTop}px`);
@@ -717,7 +545,8 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     status.textContent = "READY";
     game.dataset.playbackState = "ready";
     if (clearFeedback) {
-      clearLineStates(lineIndicator);
+      clearRiverLineStates(lineIndicator);
+      renderRiverCallRange(callCode, source.value);
       diagnostics.hidden = true;
       diagnostics.textContent = "";
       message.textContent = "The farmer can take one passenger at a time.";
@@ -743,7 +572,7 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     await controller.wait(350, signal);
   }
 
-  async function playTrace(trace, lineNumbers) {
+  async function playTrace(trace, callRanges) {
     const signal = controller.begin();
     challengeAudio.setIdleEnabled(false);
     playing = true;
@@ -755,13 +584,16 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     hideSpeech();
     scene = createInitialRiverScene();
     renderer.render(scene);
-    clearLineStates(lineIndicator);
+    clearRiverLineStates(lineIndicator);
+    renderRiverCallRange(callCode, source.value);
 
     try {
       for (let index = 0; index < trace.commands.length; index += 1) {
         const command = trace.commands[index];
-        const lineNumber = lineNumbers[index];
-        setLineState(lineIndicator, lineNumber, "active");
+        const callRange = callRanges[index];
+        const lineNumber = callRange.start.line + 1;
+        setRiverLineState(lineIndicator, lineNumber, "active");
+        renderRiverCallRange(callCode, source.value, callRange, "active");
         for (const event of command.events) {
           if (event.type === "ACTION") {
             const duration = event.action === "CROSS" ? 1000 : 560;
@@ -783,7 +615,8 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
             }
           } else if (event.type === "ERROR") {
             scene = applyRiverEvent(scene, event);
-            setLineState(lineIndicator, lineNumber, "error");
+            setRiverLineState(lineIndicator, lineNumber, "error");
+            renderRiverCallRange(callCode, source.value, callRange, "error");
             diagnostics.hidden = false;
             diagnostics.textContent = event.message;
             message.textContent = event.message;
@@ -857,7 +690,8 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     challengeAudio.stopTraceEffects();
     challengeAudio.setIdleEnabled(false);
     playing = false;
-    clearLineStates(lineIndicator);
+    clearRiverLineStates(lineIndicator);
+    renderRiverCallRange(callCode, source.value);
     diagnostics.hidden = true;
     diagnostics.textContent = "";
     hideSpeech();
@@ -866,12 +700,13 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     worldState.textContent = "reading your plan";
     game.dataset.playbackState = "compiling";
     try {
-      const result = await runDynLex(PROGRAM_PREFIX + source.value);
+      const programSource = RIVER_PROGRAM_PREFIX + source.value;
+      const result = await runDynLex(programSource);
       if (generation !== programGeneration) {
         return;
       }
       if (result.compileResult.status !== 0) {
-        renderCompilerDiagnostics(diagnostics, lineIndicator, result.compileResult.diagnostics);
+        renderRiverCompilerDiagnostics(diagnostics, lineIndicator, result.compileResult.diagnostics);
         status.textContent = "CHECK CODE";
         worldState.textContent = "the plan did not compile";
         game.dataset.playbackState = "error";
@@ -888,10 +723,11 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
         return;
       }
       const trace = parseRiverTrace(result.runResult.stdout);
-      const lineNumbers = commandLineNumbers(source.value, trace.commands);
+      const feedback = await analyzeDynLex(programSource);
+      const callRanges = riverCommandCallRanges(feedback.callExpressions, trace.commands.length);
       lastTrace = trace;
-      lastLineNumbers = lineNumbers;
-      await playTrace(trace, lineNumbers);
+      lastCallRanges = callRanges;
+      await playTrace(trace, callRanges);
     } catch (error) {
       console.error("River challenge program failed", error);
       diagnostics.hidden = false;
@@ -907,17 +743,40 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     }
   }
 
-  source.value = STARTER_SOURCE;
+  const completions = createRiverCompletions({
+    completeDynLex,
+    list: completionList,
+    source
+  });
+  let completionRequestQueued = false;
+  function requestCompletions() {
+    if (completionRequestQueued) {
+      return;
+    }
+    completionRequestQueued = true;
+    queueMicrotask(() => {
+      completionRequestQueued = false;
+      void completions.request().catch((error) => {
+        console.error("River challenge completion failed", error);
+        completions.close();
+      });
+    });
+  }
+  source.value = RIVER_STARTER_SOURCE;
   scheduleSemanticHighlight(0);
-  source.addEventListener("scroll", syncEditorScroll, { passive: true });
+  source.addEventListener("scroll", () => {
+    syncEditorScroll();
+    completions.close();
+  }, { passive: true });
   source.addEventListener("input", () => {
     programGeneration += 1;
     controller.stop();
     challengeAudio.stopTraceEffects();
     challengeAudio.setIdleEnabled(true);
     playing = false;
-    clearLineStates(lineIndicator);
-    renderDiagnosticRanges(diagnosticCode, source.value, []);
+    clearRiverLineStates(lineIndicator);
+    renderRiverCallRange(callCode, source.value);
+    renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
     scheduleSemanticHighlight();
     diagnostics.hidden = true;
     diagnostics.textContent = "";
@@ -929,10 +788,15 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
     renderer.render(scene);
     hideSpeech();
     lastTrace = null;
-    lastLineNumbers = [];
+    lastCallRanges = [];
     playButton.disabled = true;
+    requestCompletions();
   });
   source.addEventListener("keydown", (event) => {
+    if (completions.handleKeydown(event)) {
+      return;
+    }
+    completions.close();
     if (event.key === "Tab") {
       event.preventDefault();
       source.setRangeText("    ", source.selectionStart, source.selectionEnd, "end");
@@ -942,6 +806,10 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
       if (!runButton.disabled) void runProgram();
     }
   });
+  source.addEventListener("pointerdown", () => completions.close());
+  source.addEventListener("blur", () => {
+    window.setTimeout(() => completions.close(), 0);
+  });
   runButton.addEventListener("click", () => void runProgram());
   playButton.addEventListener("click", () => {
     if (playing) {
@@ -949,12 +817,16 @@ export async function initializeRiverChallenge(section, { analyzeDynLex, music, 
       return;
     }
     if (lastTrace) {
-      void playTrace(lastTrace, lastLineNumbers);
+      void playTrace(lastTrace, lastCallRanges);
     }
   });
   speedButton.addEventListener("click", () => controller.cycleSpeed());
   resetButton.addEventListener("click", () => resetScene());
-  editorShell.addEventListener("click", () => source.focus());
+  editorShell.addEventListener("click", (event) => {
+    if (event.target !== source) {
+      source.focus();
+    }
+  });
   resetScene();
   mount.dataset.challengeLoaded = "true";
 }

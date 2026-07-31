@@ -7,7 +7,7 @@ export class LspResponseError extends Error {
   }
 }
 
-export async function initializeLsp(client, { capabilities = {}, initializationOptions } = {}) {
+async function initializeLsp(client, { capabilities = {}, initializationOptions } = {}) {
   if (
     !client
     || typeof client.request !== "function"
@@ -31,7 +31,7 @@ export async function initializeLsp(client, { capabilities = {}, initializationO
   return result;
 }
 
-export async function shutdownLsp(client) {
+async function shutdownLsp(client) {
   if (!client || typeof client.request !== "function" || typeof client.notify !== "function") {
     throw new TypeError("LSP shutdown requires a client");
   }
@@ -182,22 +182,165 @@ export class LspClient {
   }
 }
 
-export class LspTextDocument {
-  constructor(client, { uri, languageId }) {
+function requirePosition(position) {
+  if (
+    !position
+    || !Number.isInteger(position.line)
+    || position.line < 0
+    || !Number.isInteger(position.character)
+    || position.character < 0
+  ) {
+    throw new TypeError("LSP position requires non-negative line and character numbers");
+  }
+}
+
+function positionAtOffset(text, offset) {
+  const lineStart = text.lastIndexOf("\n", offset - 1) + 1;
+  let line = 0;
+  for (let index = 0; index < lineStart; index += 1) {
+    if (text[index] === "\n") {
+      line += 1;
+    }
+  }
+  return { line, character: offset - lineStart };
+}
+
+function offsetAtPosition(text, position) {
+  requirePosition(position);
+  let line = 0;
+  let offset = 0;
+  while (line < position.line) {
+    const lineEnd = text.indexOf("\n", offset);
+    if (lineEnd === -1) {
+      throw new Error("LSP position line points outside the document");
+    }
+    offset = lineEnd + 1;
+    line += 1;
+  }
+  const nextLine = text.indexOf("\n", offset);
+  const lineEnd = nextLine === -1 ? text.length : nextLine;
+  if (position.character > lineEnd - offset) {
+    throw new Error("LSP position character points outside the document line");
+  }
+  return offset + position.character;
+}
+
+function traceContentChanges(text, contentChanges) {
+  let result = text;
+  const transforms = [];
+  for (const change of contentChanges) {
+    if (!change || typeof change.text !== "string") {
+      throw new TypeError("LSP content change requires replacement text");
+    }
+    if (change.range === undefined) {
+      transforms.push({
+        start: 0,
+        end: result.length,
+        insertedEnd: change.text.length
+      });
+      result = change.text;
+      continue;
+    }
+    if (!change.range?.start || !change.range?.end) {
+      throw new TypeError("LSP content change range requires start and end positions");
+    }
+    const start = offsetAtPosition(result, change.range.start);
+    const end = offsetAtPosition(result, change.range.end);
+    if (end < start) {
+      throw new Error("LSP content change range ends before it starts");
+    }
+    if (change.rangeLength !== undefined && change.rangeLength !== end - start) {
+      throw new Error("LSP content change range length does not match its range");
+    }
+    transforms.push({
+      start,
+      end,
+      insertedEnd: start + change.text.length
+    });
+    result = result.slice(0, start) + change.text + result.slice(end);
+  }
+  return { text: result, transforms };
+}
+
+function positionBeforeContentChanges(previousText, trace, position) {
+  let offset = offsetAtPosition(trace.text, position);
+  for (let index = trace.transforms.length - 1; index >= 0; index -= 1) {
+    const transform = trace.transforms[index];
+    if (offset <= transform.start) {
+      continue;
+    }
+    if (offset >= transform.insertedEnd) {
+      offset += transform.end - transform.insertedEnd;
+    } else {
+      offset = transform.start;
+    }
+  }
+  return positionAtOffset(previousText, offset);
+}
+
+function commonTextChange(previousText, nextText) {
+  const previousPoints = [...previousText];
+  const nextPoints = [...nextText];
+  let prefixPoints = 0;
+  while (
+    prefixPoints < previousPoints.length
+    && prefixPoints < nextPoints.length
+    && previousPoints[prefixPoints] === nextPoints[prefixPoints]
+  ) {
+    prefixPoints += 1;
+  }
+
+  let suffixPoints = 0;
+  while (
+    suffixPoints < previousPoints.length - prefixPoints
+    && suffixPoints < nextPoints.length - prefixPoints
+    && previousPoints[previousPoints.length - 1 - suffixPoints]
+      === nextPoints[nextPoints.length - 1 - suffixPoints]
+  ) {
+    suffixPoints += 1;
+  }
+
+  const prefixLength = previousPoints
+    .slice(0, prefixPoints)
+    .reduce((length, point) => length + point.length, 0);
+  const previousSuffixLength = previousPoints
+    .slice(previousPoints.length - suffixPoints)
+    .reduce((length, point) => length + point.length, 0);
+  const nextSuffixLength = nextPoints
+    .slice(nextPoints.length - suffixPoints)
+    .reduce((length, point) => length + point.length, 0);
+  const previousEnd = previousText.length - previousSuffixLength;
+  const nextEnd = nextText.length - nextSuffixLength;
+  return {
+    range: {
+      start: positionAtOffset(previousText, prefixLength),
+      end: positionAtOffset(previousText, previousEnd)
+    },
+    rangeLength: previousEnd - prefixLength,
+    text: nextText.slice(prefixLength, nextEnd)
+  };
+}
+
+class LspDocument {
+  constructor(session, { uri, languageId, version, text }) {
     if (
-      !client
-      || typeof client.notify !== "function"
+      !session
       || typeof uri !== "string"
       || uri.length === 0
       || typeof languageId !== "string"
       || languageId.length === 0
+      || !Number.isInteger(version)
+      || version < 0
+      || typeof text !== "string"
     ) {
-      throw new TypeError("LSP text document requires a client, URI, and language ID");
+      throw new TypeError("LSP text document requires a session, URI, language ID, version, and text");
     }
-    this.client = client;
+    this.session = session;
     this.uri = uri;
     this.languageId = languageId;
-    this.version = 0;
+    this.version = version;
+    this.text = text;
+    this.closing = false;
     this.closed = false;
   }
 
@@ -205,41 +348,330 @@ export class LspTextDocument {
     return { uri: this.uri };
   }
 
-  async replaceText(text) {
+  async replaceText(text, { position, version } = {}) {
     if (this.closed) {
       throw new Error(`LSP text document is closed: ${this.uri}`);
     }
     if (typeof text !== "string") {
       throw new TypeError("LSP text document content must be a string");
     }
-    this.version += 1;
-    if (this.version === 1) {
-      await this.client.notify("textDocument/didOpen", {
-        textDocument: {
-          uri: this.uri,
-          languageId: this.languageId,
-          version: this.version,
-          text
-        }
-      });
-      return;
+    if (position !== undefined) {
+      requirePosition(position);
     }
-    await this.client.notify("textDocument/didChange", {
-      textDocument: {
-        uri: this.uri,
-        version: this.version
-      },
-      contentChanges: [{ text }]
+    return this.session.replaceDocumentText(this, {
+      version,
+      text,
+      position
+    });
+  }
+
+  async applyChanges(contentChanges, { text, version, position } = {}) {
+    if (this.closed) {
+      throw new Error(`LSP text document is closed: ${this.uri}`);
+    }
+    if (!Array.isArray(contentChanges) || contentChanges.length === 0 || typeof text !== "string") {
+      throw new TypeError("LSP document changes require content changes and the resulting text");
+    }
+    if (position !== undefined) {
+      requirePosition(position);
+    }
+    return this.session.changeDocument(this, {
+      version,
+      text,
+      contentChanges,
+      position
+    });
+  }
+
+  async setActiveCursor(position) {
+    if (this.closed) {
+      throw new Error(`LSP text document is closed: ${this.uri}`);
+    }
+    requirePosition(position);
+    return this.session.setActiveCursor(this, position);
+  }
+
+  request(method, params = {}) {
+    if (this.closed) {
+      throw new Error(`LSP text document is closed: ${this.uri}`);
+    }
+    return this.session.request(method, {
+      textDocument: this.identifier,
+      ...params
     });
   }
 
   async close() {
-    if (this.closed || this.version === 0) {
+    if (this.closed) {
       throw new Error(`LSP text document is not open: ${this.uri}`);
     }
-    await this.client.notify("textDocument/didClose", {
-      textDocument: this.identifier
+    return this.session.closeDocument(this);
+  }
+}
+
+export class LspSession {
+  constructor(exchange, { clientId = globalThis.crypto?.randomUUID?.() } = {}) {
+    if (typeof clientId !== "string" || clientId.length === 0) {
+      throw new TypeError("LSP session requires a client ID");
+    }
+    this.client = new LspClient(exchange);
+    this.clientId = clientId;
+    this.documents = new Map();
+    this.operationChain = Promise.resolve();
+    this.state = "created";
+    this.activeCursor = null;
+  }
+
+  onNotification(method, handler) {
+    return this.client.onNotification(method, handler);
+  }
+
+  onRequest(method, handler) {
+    return this.client.onRequest(method, handler);
+  }
+
+  async start(options = {}) {
+    if (this.state !== "created") {
+      throw new Error("LSP session can only be started once");
+    }
+    this.state = "starting";
+    try {
+      const result = await this.#enqueue(() => initializeLsp(this.client, options));
+      this.state = "running";
+      return result;
+    } catch (error) {
+      this.state = "failed";
+      throw error;
+    }
+  }
+
+  async openDocument({ uri, languageId, version = 1, text, position }) {
+    this.#requireRunning();
+    if (this.documents.has(uri)) {
+      throw new Error(`LSP text document is already open: ${uri}`);
+    }
+    if (position !== undefined) {
+      requirePosition(position);
+    }
+    const document = new LspDocument(this, { uri, languageId, version, text });
+    this.documents.set(uri, document);
+    try {
+      await this.#enqueue(async () => {
+        await this.client.notify("textDocument/didOpen", {
+          textDocument: {
+            uri,
+            languageId,
+            version,
+            text
+          }
+        });
+        if (position !== undefined) {
+          await this.#notifyActiveCursor(document, position);
+        }
+      });
+    } catch (error) {
+      this.documents.delete(uri);
+      throw error;
+    }
+    return document;
+  }
+
+  replaceDocumentText(document, { version, text, position }) {
+    this.#requireOpenDocument(document);
+    return this.#enqueue(async () => {
+      const nextVersion = version ?? document.version + 1;
+      if (!Number.isInteger(nextVersion) || nextVersion <= document.version) {
+        throw new TypeError("LSP document version must increase");
+      }
+      if (text === document.text) {
+        if (position !== undefined) {
+          await this.#notifyActiveCursor(document, position);
+        }
+        return;
+      }
+      const contentChanges = [commonTextChange(document.text, text)];
+      const trace = traceContentChanges(document.text, contentChanges);
+      if (trace.text !== text) {
+        throw new Error("Generated LSP content change does not produce the supplied document text");
+      }
+      if (position !== undefined) {
+        const previousPosition = positionBeforeContentChanges(document.text, trace, position);
+        if (this.#activeLineDiffers(document, previousPosition)) {
+          await this.#notifyActiveCursor(document, previousPosition);
+        }
+      }
+      await this.client.notify("textDocument/didChange", {
+        textDocument: {
+          uri: document.uri,
+          version: nextVersion
+        },
+        contentChanges
+      });
+      document.version = nextVersion;
+      document.text = text;
+      if (position !== undefined) {
+        await this.#notifyActiveCursor(document, position);
+      }
     });
-    this.closed = true;
+  }
+
+  async changeDocument(document, { version, text, contentChanges, position }) {
+    this.#requireOpenDocument(document);
+    if (typeof text !== "string" || !Array.isArray(contentChanges)) {
+      throw new TypeError("LSP document change requires resulting text and content changes");
+    }
+    if (contentChanges.length === 0) {
+      if (text !== document.text) {
+        throw new Error("LSP document text changed without a content change");
+      }
+      if (position !== undefined) {
+        await this.setActiveCursor(document, position);
+      }
+      return;
+    }
+    await this.#enqueue(async () => {
+      if (!Number.isInteger(version) || version <= document.version) {
+        throw new TypeError("LSP document version must increase");
+      }
+      const trace = traceContentChanges(document.text, contentChanges);
+      if (trace.text !== text) {
+        throw new Error("LSP content changes do not produce the supplied document text");
+      }
+      if (position !== undefined) {
+        const previousPosition = positionBeforeContentChanges(document.text, trace, position);
+        if (this.#activeLineDiffers(document, previousPosition)) {
+          await this.#notifyActiveCursor(document, previousPosition);
+        }
+      }
+      await this.client.notify("textDocument/didChange", {
+        textDocument: {
+          uri: document.uri,
+          version
+        },
+        contentChanges
+      });
+      document.version = version;
+      document.text = text;
+      if (position !== undefined) {
+        await this.#notifyActiveCursor(document, position);
+      }
+    });
+  }
+
+  setActiveCursor(document, position) {
+    this.#requireOpenDocument(document);
+    requirePosition(position);
+    return this.#enqueue(() => this.#notifyActiveCursor(document, position));
+  }
+
+  clearActiveCursor() {
+    this.#requireRunning();
+    return this.#enqueue(() => this.#notifyInactiveCursor());
+  }
+
+  request(method, params = {}) {
+    this.#requireRunning();
+    return this.#enqueue(() => this.client.request(method, params));
+  }
+
+  notify(method, params = {}) {
+    this.#requireRunning();
+    return this.#enqueue(() => this.client.notify(method, params));
+  }
+
+  async closeDocument(document) {
+    this.#requireOpenDocument(document);
+    document.closing = true;
+    await this.#enqueue(async () => {
+      if (this.activeCursor?.uri === document.uri) {
+        await this.#notifyInactiveCursor();
+      }
+      await this.client.notify("textDocument/didClose", {
+        textDocument: document.identifier
+      });
+      this.documents.delete(document.uri);
+      document.closed = true;
+    });
+  }
+
+  async stop() {
+    this.#requireRunning();
+    this.state = "stopping";
+    try {
+      await this.#enqueue(async () => {
+        if (this.activeCursor !== null) {
+          await this.#notifyInactiveCursor();
+        }
+        for (const document of this.documents.values()) {
+          document.closing = true;
+          await this.client.notify("textDocument/didClose", {
+            textDocument: document.identifier
+          });
+          document.closed = true;
+        }
+        this.documents.clear();
+        await shutdownLsp(this.client);
+      });
+      this.state = "stopped";
+    } catch (error) {
+      this.state = "failed";
+      throw error;
+    }
+  }
+
+  #enqueue(operation) {
+    const result = this.operationChain.then(operation);
+    this.operationChain = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
+
+  #requireRunning() {
+    if (this.state !== "running") {
+      throw new Error("LSP session is not running");
+    }
+  }
+
+  #requireOpenDocument(document) {
+    this.#requireRunning();
+    if (
+      !(document instanceof LspDocument)
+      || this.documents.get(document.uri) !== document
+      || document.closing
+      || document.closed
+    ) {
+      throw new Error("LSP text document is not open in this session");
+    }
+  }
+
+  #activeLineDiffers(document, position) {
+    return (
+      this.activeCursor === null
+      || this.activeCursor.uri !== document.uri
+      || this.activeCursor.position.line !== position.line
+    );
+  }
+
+  async #notifyActiveCursor(document, position) {
+    offsetAtPosition(document.text, position);
+    await this.client.notify("dynlex/activeCursorChanged", {
+      clientId: this.clientId,
+      uri: document.uri,
+      version: document.version,
+      position
+    });
+    this.activeCursor = {
+      uri: document.uri,
+      position: { ...position }
+    };
+  }
+
+  async #notifyInactiveCursor() {
+    await this.client.notify("dynlex/activeCursorChanged", {
+      clientId: this.clientId
+    });
+    this.activeCursor = null;
   }
 }

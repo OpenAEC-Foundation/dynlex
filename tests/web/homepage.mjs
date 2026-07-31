@@ -14,6 +14,7 @@ const files = {
   responsiveCss: path.join(webDir, "responsive.css"),
   navigation: path.join(webDir, "site-navigation.js"),
   javascript: path.join(webDir, "homepage.js"),
+  lspClient: path.join(webDir, "lsp-client.js"),
   highlightCache: path.join(webDir, "snippet-highlights.js"),
   highlightKey: path.join(webDir, "snippet-highlight-key.js"),
   semanticHighlighter: path.join(webDir, "semantic-highlighting.js"),
@@ -59,6 +60,7 @@ assert.equal((html.match(/data-snippet-output/g) ?? []).length, 2, "Runnable ske
 assert.match(html, /<textarea[^>]+data-snippet-source/);
 
 const homepageJavascript = fs.readFileSync(files.javascript, "utf8");
+const lspClientJavascript = fs.readFileSync(files.lspClient, "utf8");
 const homepageCss = [
   fs.readFileSync(files.css, "utf8"),
   fs.readFileSync(files.shaderBannerCss, "utf8"),
@@ -70,7 +72,13 @@ assert.match(homepageJavascript, /from "\.\/snippet-highlights\.js"/);
 assert.match(homepageJavascript, /from "\.\/snippet-highlight-key\.js"/);
 assert.match(homepageJavascript, /from "\.\/semantic-highlighting\.js"/);
 assert.match(homepageJavascript, /textDocument\/semanticTokens\/full/);
-assert.match(homepageJavascript, /new LspClient/);
+assert.match(homepageJavascript, /new LspSession/);
+assert.doesNotMatch(homepageJavascript, /initializeLsp|shutdownLsp|new LspClient/);
+assert.match(
+  homepageJavascript,
+  /snippetLsp\.request\(\s*"dynlex\/callExpressions",\s*snippetLspDocument\.identifier\s*\)/
+);
+assert.match(lspClientJavascript, /dynlex\/activeCursorChanged/);
 assert.match(homepageJavascript, /initializeSiteNavigation\(\)/);
 assert.doesNotMatch(homepageJavascript, /function setMenu\(/);
 assert.doesNotMatch(homepageJavascript, /function decodeSemanticTokenRanges/);

@@ -10,6 +10,6 @@ function the result after the second passage of source:
 
 function the result after the third passage of source:
     replacement:
-        source
+        @intrinsic("select", @intrinsic("equal", 0, 0), source, source)
 
 print (the result after the first passage of 7) as a line

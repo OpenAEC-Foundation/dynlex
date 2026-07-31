@@ -25,6 +25,7 @@ for (const filePath of Object.values(files)) {
 const html = fs.readFileSync(files.html, "utf8");
 const javascript = fs.readFileSync(files.javascript, "utf8");
 const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
+const lspClient = fs.readFileSync(files.lspClient, "utf8");
 const languageJavascript = `${javascript}\n${lspIntegration}`;
 const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
 assert.match(html, /<a[^>]+class="ide-brand"[^>]+href="\/"/);
@@ -51,7 +52,9 @@ assert.doesNotMatch(
   /setMonarchTokensProvider/,
   "DynLex token classification must come from the DynLex language server"
 );
-assert.match(languageJavascript, /new LspClient/);
+assert.match(languageJavascript, /new LspSession/);
+assert.doesNotMatch(languageJavascript, /initializeLsp|shutdownLsp|new LspClient/);
+assert.match(lspClient, /dynlex\/activeCursorChanged/);
 for (const provider of [
   "registerCompletionItemProvider",
   "registerDefinitionProvider",
@@ -69,7 +72,6 @@ for (const method of [
   "textDocument/semanticTokens/full",
   "textDocument/documentSymbol",
   "textDocument/codeAction",
-  "dynlex/activeCursorChanged",
   "dynlex/instantiationsInDocument",
   "dynlex/selectInstantiation",
   "dynlex/readDocument"

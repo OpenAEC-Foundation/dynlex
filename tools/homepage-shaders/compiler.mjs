@@ -1,11 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-  initializeLsp,
-  LspClient,
-  LspTextDocument,
-  shutdownLsp
-} from "../../web/lsp-client.js";
+import { LspSession } from "../../web/lsp-client.js";
 
 function parseCompilerJson(text, label) {
   if (typeof text !== "string" || text.length === 0) {
@@ -47,7 +42,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
     }
   });
   compiler.ccall("dynlex_web_init", null, [], []);
-  const lsp = new LspClient((message) => {
+  const lsp = new LspSession((message) => {
     const response = compiler.ccall(
       "dynlex_web_lsp_exchange_json",
       "string",
@@ -57,7 +52,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
     return JSON.parse(response);
   });
   lsp.onRequest("workspace/semanticTokens/refresh", () => null);
-  const initializeResult = await initializeLsp(lsp, {
+  const initializeResult = await lsp.start({
     initializationOptions: {
       dynlex: {
         analysisProfiles: [
@@ -68,9 +63,10 @@ export async function createHomepageShaderCompiler(projectDirectory) {
     }
   });
   const semanticLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
-  const document = new LspTextDocument(lsp, {
+  const document = await lsp.openDocument({
     uri: "file:///workspace/homepage-shader.dl",
-    languageId: "dynlex"
+    languageId: "dynlex",
+    text: ""
   });
   const semanticTokensBySource = new Map();
 
@@ -80,9 +76,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
       return cached;
     }
     await document.replaceText(source);
-    const payload = await lsp.request("textDocument/semanticTokens/full", {
-      textDocument: document.identifier
-    });
+    const payload = await document.request("textDocument/semanticTokens/full");
     validateSemanticTokens(payload, semanticLegend);
     const tokens = Object.freeze([...payload.data]);
     semanticTokensBySource.set(source, tokens);
@@ -132,7 +126,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
 
     async close() {
       await document.close();
-      await shutdownLsp(lsp);
+      await lsp.stop();
     }
   });
 }

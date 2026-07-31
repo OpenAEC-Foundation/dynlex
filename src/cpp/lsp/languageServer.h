@@ -80,6 +80,9 @@ class LanguageServer {
 	// Called for DynLex request returning instantiation choices for a document.
 	virtual Json onInstantiationsInDocument(const TextDocumentIdentifier &params);
 
+	// Called for DynLex request returning resolved source call expressions.
+	virtual Json onCallExpressions(const TextDocumentIdentifier &params);
+
 	// Called for DynLex request returning an already-loaded document.
 	virtual std::optional<std::string> onReadDocument(const TextDocumentIdentifier &params);
 

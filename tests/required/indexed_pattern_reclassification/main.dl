@@ -1,10 +1,10 @@
 function argument called:
     replacement:
-        argument
+        @intrinsic("return", argument)
 
 function value used with sentinel:
     replacement:
-        value
+        @intrinsic("discard", value)
         hold sentinel
 
 function argument called:

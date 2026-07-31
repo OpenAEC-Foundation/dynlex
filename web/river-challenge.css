@@ -102,6 +102,7 @@
 
 .river-source,
 .river-source-highlight,
+.river-source-playback,
 .river-source-diagnostics {
     position: absolute;
     inset: 0;
@@ -121,7 +122,7 @@
 }
 
 .river-source {
-    z-index: 3;
+    z-index: 4;
     resize: none;
     background: transparent;
     color: transparent;
@@ -137,11 +138,13 @@
 }
 
 .river-source-highlight::-webkit-scrollbar,
+.river-source-playback::-webkit-scrollbar,
 .river-source-diagnostics::-webkit-scrollbar {
     display: none;
 }
 
 .river-source-highlight code,
+.river-source-playback code,
 .river-source-diagnostics code {
     display: block;
     min-width: max-content;
@@ -150,8 +153,31 @@
     font: inherit;
 }
 
-.river-source-diagnostics {
+.river-source-playback {
     z-index: 2;
+    color: transparent;
+    pointer-events: none;
+    scrollbar-width: none;
+}
+
+.river-source-playback [data-river-call-range] {
+    border-radius: 4px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+.river-source-playback [data-river-call-state="active"] {
+    background: rgba(199, 255, 56, 0.2);
+    box-shadow: 0 0 12px rgba(199, 255, 56, 0.2);
+}
+
+.river-source-playback [data-river-call-state="error"] {
+    background: rgba(255, 91, 76, 0.3);
+    box-shadow: 0 0 14px rgba(255, 80, 65, 0.34);
+}
+
+.river-source-diagnostics {
+    z-index: 3;
     color: transparent;
     pointer-events: none;
     scrollbar-width: none;
@@ -177,6 +203,53 @@
 
 .river-source::selection {
     background: rgba(133, 220, 255, 0.3);
+}
+
+.river-completions {
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    left: 0;
+    width: min(290px, calc(100% - 16px));
+    max-height: 230px;
+    overflow: auto;
+    border: 1px solid rgba(133, 220, 255, 0.48);
+    border-radius: 9px;
+    background: rgba(10, 23, 20, 0.97);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
+}
+
+.river-completions button {
+    display: grid;
+    width: 100%;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid rgba(133, 220, 255, 0.12);
+    background: transparent;
+    color: #e8eee8;
+    text-align: left;
+    cursor: pointer;
+}
+
+.river-completions button:last-child {
+    border-bottom: 0;
+}
+
+.river-completions button[aria-selected="true"] {
+    background: linear-gradient(90deg, rgba(133, 220, 255, 0.2), rgba(199, 255, 56, 0.08));
+}
+
+.river-completions strong {
+    color: var(--river-blue);
+    font: 600 0.72rem/1.25 "DM Mono", monospace;
+}
+
+.river-completions small {
+    overflow: hidden;
+    color: #8ea097;
+    font: 500 0.58rem/1.3 "DM Mono", monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .river-source-line-state {
@@ -831,6 +904,7 @@
 
     .river-source,
     .river-source-highlight,
+    .river-source-playback,
     .river-source-diagnostics {
         font-size: var(--river-source-font-size);
     }

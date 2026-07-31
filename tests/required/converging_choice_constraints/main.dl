@@ -12,7 +12,7 @@ function [a|] boolean:
 
 function the choice of [{integer:value}|{boolean:value}]:
     replacement:
-        value
+        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore the choice of 1
 ignore the choice of @intrinsic("equal", 1, 1)
