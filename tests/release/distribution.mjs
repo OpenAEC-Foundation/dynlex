@@ -366,6 +366,16 @@ assert.match(
   /@\("INCLUDE", "LIB", "LIBPATH", "VSCMD_VER"\)/,
 );
 assert.match(windowsDependencyInstaller, /Add-GitHubPathIfPresent -PathValue \$pathEntry/);
+for (const compilerVariable of [
+  "DYNLEX_LLVM_BOOTSTRAP_CC",
+  "DYNLEX_LLVM_BOOTSTRAP_CXX",
+]) {
+  assert.match(
+    windowsDependencyInstaller,
+    new RegExp(`Add-Content -Path \\$env:GITHUB_ENV -Value "${compilerVariable}=`),
+  );
+  assert.match(llvmToolchain, new RegExp(`\\$\\{${compilerVariable}:-\\}`));
+}
 assert.match(
   windowsDependencyInstaller,
   /Microsoft\.VisualStudio\.Workload\.VCTools/,
