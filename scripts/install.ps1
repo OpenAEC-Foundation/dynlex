@@ -1,24 +1,43 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "windows-toolchain.ps1")
+
 function Test-Winget {
     return [bool](Get-Command winget -ErrorAction SilentlyContinue)
 }
 
 function Install-WithWinget {
-    param([string]$PackageId)
+    param(
+        [string]$PackageId,
+
+        [ValidateSet("x64", "x86", "arm64")]
+        [string]$Architecture
+    )
 
     if (-not (Test-Winget)) {
         throw "winget is required to install missing package '$PackageId'. Install App Installer and retry."
     }
-    winget install `
-        --id $PackageId `
-        --exact `
-        --silent `
-        --disable-interactivity `
-        --source winget `
-        --accept-source-agreements `
-        --accept-package-agreements
+    $wingetArguments = @(
+        "install",
+        "--id", $PackageId,
+        "--exact",
+        "--silent",
+        "--disable-interactivity",
+        "--source", "winget",
+        "--accept-source-agreements",
+        "--accept-package-agreements"
+    )
+    if ($Architecture) {
+        $wingetArguments += @("--architecture", $Architecture)
+    }
+    winget @wingetArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "winget failed to install package '$PackageId'."
+    }
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:PATH = "$machinePath;$userPath;$env:PATH"
 }
 
 function Ensure-Package {
@@ -192,8 +211,24 @@ if ($bootstrapMetadata.Count -ne 1) {
     throw "LLVM toolchain metadata must define exactly one bootstrap Clang version."
 }
 $bootstrapClangVersion = [int]($bootstrapMetadata[0] -split ' ')[1]
+$hostArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 
-Ensure-Package "LLVM.LLVM" "clang"
+$clangBin = Resolve-CompatibleClangDirectory `
+    -MinimumMajorVersion $bootstrapClangVersion `
+    -HostArchitecture $hostArchitecture
+if (-not $clangBin) {
+    Install-WithWinget "LLVM.LLVM" -Architecture ($hostArchitecture.ToLowerInvariant())
+    $clangBin = Resolve-CompatibleClangDirectory `
+        -MinimumMajorVersion $bootstrapClangVersion `
+        -HostArchitecture $hostArchitecture
+    if (-not $clangBin) {
+        throw "LLVM.LLVM did not provide Clang $bootstrapClangVersion or newer."
+    }
+} else {
+    Write-Host "Using compatible Clang from $clangBin; skipping LLVM.LLVM." `
+        -ForegroundColor DarkGray
+}
+
 Ensure-Package "Kitware.CMake" "cmake"
 Ensure-Package "Ninja-build.Ninja" "ninja"
 Ensure-Package "Git.Git" "git"
@@ -201,14 +236,6 @@ Ensure-Package "Python.Python.3" "python"
 Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
 
-$clangBin = Resolve-ToolDirectory -CommandName "clang" -CandidateDirectories @(
-    (Join-Path ${env:ProgramFiles} "LLVM\bin")
-)
-$clangVersionOutput = & (Join-Path $clangBin "clang.exe") --version
-if ($clangVersionOutput -notmatch 'clang version ([0-9]+)' -or
-    [int]$Matches[1] -lt $bootstrapClangVersion) {
-    throw "DynLex requires Clang $bootstrapClangVersion or newer to build its pinned LLVM fork."
-}
 $env:PATH = "$clangBin;$env:PATH"
 Add-GitHubPathIfPresent -PathValue $clangBin
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
