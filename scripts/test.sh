@@ -550,6 +550,7 @@ else
     run_auxiliary_test \
         "macos_dependency_staging" 10 \
         python3 -B "$SCRIPT_DIR/test_macos_dependency_staging.py"
+    run_auxiliary_test "process_posix_write" 10 python3 -B "$SCRIPT_DIR/test_process_posix_write.py"
 fi
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"

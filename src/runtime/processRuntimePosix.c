@@ -3,6 +3,7 @@
 #undef DYNLEX_REQUIRE_GNU_SOURCE
 
 #include "processRuntimeInternal.h"
+#include "processRuntimePosixWrite.h"
 
 #include "runtimeError.h"
 
@@ -478,9 +479,7 @@ static int64_t monotonic_milliseconds(void) {
 	return (int64_t)current.tv_sec * 1000 + current.tv_nsec / 1000000;
 }
 
-int dynlex_platform_process_pump(
-	DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream
-) {
+int dynlex_platform_process_pump(DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream) {
 	DynlexPosixProcess *platform = process->platform;
 	int64_t started = 0;
 	if (timeout_milliseconds > 0) {
@@ -552,30 +551,6 @@ int dynlex_platform_process_pump(
 	}
 }
 
-static ssize_t write_without_sigpipe(int descriptor, const char *data, size_t length) {
-	sigset_t blocked;
-	sigset_t previous;
-	sigset_t pending;
-	sigemptyset(&blocked);
-	sigaddset(&blocked, SIGPIPE);
-	int mask_result = pthread_sigmask(SIG_BLOCK, &blocked, &previous);
-	if (mask_result != 0) {
-		errno = mask_result;
-		return -1;
-	}
-	bool was_pending = sigpending(&pending) == 0 && sigismember(&pending, SIGPIPE);
-	ssize_t result = write(descriptor, data, length);
-	int error_number = errno;
-	if (result < 0 && error_number == EPIPE && !was_pending) {
-		struct timespec timeout = {0, 0};
-		while (sigtimedwait(&blocked, NULL, &timeout) < 0 && errno == EINTR) {
-		}
-	}
-	(void)pthread_sigmask(SIG_SETMASK, &previous, NULL);
-	errno = error_number;
-	return result;
-}
-
 int dynlex_platform_process_write(DynlexProcess *process, const char *data, size_t length, size_t *written) {
 	DynlexPosixProcess *platform = process->platform;
 	*written = 0;
@@ -586,7 +561,7 @@ int dynlex_platform_process_write(DynlexProcess *process, const char *data, size
 		return -1;
 	}
 	while (*written < length) {
-		ssize_t count = write_without_sigpipe(platform->standard_input, data + *written, length - *written);
+		ssize_t count = dynlex_posix_write_without_sigpipe(platform->standard_input, data + *written, length - *written);
 		if (count > 0) {
 			*written += (size_t)count;
 			continue;

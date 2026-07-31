@@ -334,6 +334,7 @@ if(NOT EMSCRIPTEN)
             src/runtime/filesystemTransactionPosix.c
             src/runtime/hostRuntimePosix.c
             src/runtime/processRuntimePosix.c
+            src/runtime/processRuntimePosixWrite.c
         )
     endif()
     set(DYNLEX_RUNTIME_HEADERS
@@ -345,6 +346,7 @@ if(NOT EMSCRIPTEN)
         src/runtime/pathRuntimeInternal.h
         src/runtime/platformFeatureTest.h
         src/runtime/processRuntimeInternal.h
+        src/runtime/processRuntimePosixWrite.h
         src/runtime/processRuntimeWindowsQuoting.h
         src/runtime/runtimeError.h
         src/runtime/runtimeText.h
