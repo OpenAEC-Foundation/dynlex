@@ -48,8 +48,19 @@ jobs:
 
       - name: Package release artifacts
         run: |
+          set -euo pipefail
+          DEB_NAME="$(./scripts/release-asset.sh name linux-x64-deb)"
+          TAR_NAME="$(./scripts/release-asset.sh name linux-x64-tar)"
+          PACKAGE_BASENAME="${DEB_NAME%.deb}"
+          if [[ "$TAR_NAME" != "$PACKAGE_BASENAME.tar.gz" ]]; then
+            echo "Linux DEB and tar release assets must share one package basename." >&2
+            exit 1
+          fi
           cd build
-          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
+          cpack -G DEB -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME"
+          cpack -G TGZ -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME"
+          test -f "$DEB_NAME"
+          test -f "$TAR_NAME"
 
       - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
@@ -121,10 +132,16 @@ jobs:
         run: ./scripts/verify-windows-signature.ps1 -Path "build/dynlex.exe"
 
       - name: Package MSI
+        id: package
         shell: bash
         run: |
+          set -euo pipefail
+          MSI_NAME="$(./scripts/release-asset.sh name windows-x64-msi)"
+          PACKAGE_BASENAME="${MSI_NAME%.msi}"
           cd build
-          cpack -D CPACK_PACKAGE_FILE_NAME="dynlex"
+          cpack -G WIX -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME"
+          test -f "$MSI_NAME"
+          echo "name=$MSI_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Sign Windows installer
         uses: azure/artifact-signing-action@v2
@@ -132,7 +149,7 @@ jobs:
           endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ github.workspace }}\build\dynlex.msi
+          files: ${{ github.workspace }}\build\${{ steps.package.outputs.name }}
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -142,20 +159,28 @@ jobs:
 
       - name: Verify Windows installer signature
         shell: pwsh
-        run: ./scripts/verify-windows-signature.ps1 -Path "build/dynlex.msi"
+        run: ./scripts/verify-windows-signature.ps1 -Path "build/${{ steps.package.outputs.name }}"
 
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-windows
-          path: |
-            build/*.msi
+          path: build/${{ steps.package.outputs.name }}
           if-no-files-found: error
 
   build-macos:
-    runs-on: macos-14
     needs: [verify-version-tag]
-    environment: release-signing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            architecture: arm64
+            machine_architecture: arm64
+          - runner: macos-15-intel
+            architecture: x64
+            machine_architecture: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -172,6 +197,46 @@ jobs:
 
       - name: Build and test (Release)
         run: ./scripts/test.sh --release
+
+      - name: Stage architecture payload
+        run: |
+          set -euo pipefail
+          if [[ "$(uname -m)" != "${{ matrix.machine_architecture }}" ]]; then
+            echo "Expected ${{ matrix.machine_architecture }} runner, found $(uname -m)." >&2
+            exit 1
+          fi
+          rm -rf build/macos-stage
+          cmake --install build --prefix "$PWD/build/macos-stage/usr/local"
+          test -x build/macos-stage/usr/local/bin/dynlex
+          test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_runtime.a
+          tar -czf "build/dynlex-macos-${{ matrix.architecture }}-payload.tar.gz" \
+            -C build/macos-stage .
+
+      - name: Upload architecture payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build-${{ matrix.architecture }}
+          path: build/dynlex-macos-${{ matrix.architecture }}-payload.tar.gz
+          if-no-files-found: error
+
+  package-macos:
+    runs-on: macos-14
+    needs: [build-macos]
+    environment: release-signing
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download ARM64 payload
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-build-arm64
+          path: macos-payloads/arm64
+
+      - name: Download x64 payload
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-build-x64
+          path: macos-payloads/x64
 
       - name: Import Apple signing identities
         env:
@@ -216,7 +281,8 @@ jobs:
           echo "DYNLEX_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           echo "DYNLEX_NOTARY_API_KEY=$API_KEY_PATH" >> "$GITHUB_ENV"
 
-      - name: Sign executable and package PKG
+      - name: Assemble, sign, and package universal PKG
+        id: package
         env:
           APPLE_APPLICATION_SIGNING_IDENTITY: ${{ vars.APPLE_APPLICATION_SIGNING_IDENTITY }}
           APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
@@ -224,33 +290,73 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
-          cd build
-          rm -rf pkgroot
-          rm -f dynlex-component.pkg dynlex-unsigned.pkg dynlex.pkg
-          cmake --install . --prefix "${PWD}/pkgroot/usr/local"
+          ARM64_ROOT="$RUNNER_TEMP/dynlex-macos-arm64"
+          X64_ROOT="$RUNNER_TEMP/dynlex-macos-x64"
+          UNIVERSAL_ROOT="$RUNNER_TEMP/dynlex-macos-universal"
+          ARM64_PAYLOAD="$PWD/macos-payloads/arm64/dynlex-macos-arm64-payload.tar.gz"
+          X64_PAYLOAD="$PWD/macos-payloads/x64/dynlex-macos-x64-payload.tar.gz"
+          PACKAGE_NAME="$(./scripts/release-asset.sh name macos-universal-pkg)"
+          PACKAGE_PATH="$PWD/build/$PACKAGE_NAME"
+
+          mkdir -p "$ARM64_ROOT" "$X64_ROOT" "$UNIVERSAL_ROOT" build
+          tar -xzf "$ARM64_PAYLOAD" -C "$ARM64_ROOT"
+          tar -xzf "$X64_PAYLOAD" -C "$X64_ROOT"
+
+          find "$ARM64_ROOT" -type f -print \
+            | sed "s#^$ARM64_ROOT/##" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/dynlex-arm64-files.txt"
+          find "$X64_ROOT" -type f -print \
+            | sed "s#^$X64_ROOT/##" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/dynlex-x64-files.txt"
+          diff -u \
+            "$RUNNER_TEMP/dynlex-arm64-files.txt" \
+            "$RUNNER_TEMP/dynlex-x64-files.txt"
+
+          while IFS= read -r relative_path; do
+            case "$relative_path" in
+              usr/local/bin/dynlex|usr/local/lib/dynlex/libdynlex_runtime.a)
+                continue
+                ;;
+            esac
+            cmp "$ARM64_ROOT/$relative_path" "$X64_ROOT/$relative_path"
+          done < "$RUNNER_TEMP/dynlex-arm64-files.txt"
+
+          cp -R "$ARM64_ROOT"/. "$UNIVERSAL_ROOT/"
+          lipo -create \
+            "$ARM64_ROOT/usr/local/bin/dynlex" \
+            "$X64_ROOT/usr/local/bin/dynlex" \
+            -output "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
+          lipo -create \
+            "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
+            "$X64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
+            -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
+          lipo -verify_arch arm64 x86_64 "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
+          lipo -verify_arch arm64 x86_64 \
+            "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
+
           codesign \
             --force \
             --options runtime \
             --timestamp \
             --sign "$APPLE_APPLICATION_SIGNING_IDENTITY" \
-            "pkgroot/usr/local/bin/dynlex"
-          codesign --verify --strict --verbose=2 "pkgroot/usr/local/bin/dynlex"
+            "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
+          codesign --verify --strict --verbose=2 "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
           pkgbuild \
-            --root "${PWD}/pkgroot" \
+            --root "$UNIVERSAL_ROOT" \
             --identifier "org.dynlex.dynlex" \
-            --version "${VERSION}" \
+            --version "$VERSION" \
             --install-location "/" \
-            "dynlex-component.pkg"
+            "$RUNNER_TEMP/dynlex-component.pkg"
           productbuild \
-            --package "dynlex-component.pkg" \
-            "dynlex-unsigned.pkg"
+            --package "$RUNNER_TEMP/dynlex-component.pkg" \
+            "$RUNNER_TEMP/dynlex-unsigned.pkg"
           productsign \
             --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" \
             --timestamp \
-            "dynlex-unsigned.pkg" \
-            "dynlex.pkg"
-          pkgutil --check-signature "dynlex.pkg"
-          rm -f dynlex-unsigned.pkg
+            "$RUNNER_TEMP/dynlex-unsigned.pkg" \
+            "$PACKAGE_PATH"
+          pkgutil --check-signature "$PACKAGE_PATH"
+          echo "package_path=$PACKAGE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Notarize and staple PKG
         env:
@@ -263,7 +369,7 @@ jobs:
           NOTARY_LOG="$RUNNER_TEMP/dynlex-notary-log.json"
 
           set +e
-          xcrun notarytool submit "build/dynlex.pkg" \
+          xcrun notarytool submit "${{ steps.package.outputs.package_path }}" \
             --key "$DYNLEX_NOTARY_API_KEY" \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER_ID" \
@@ -294,14 +400,13 @@ jobs:
             exit 1
           fi
 
-          xcrun stapler staple "build/dynlex.pkg"
+          xcrun stapler staple "${{ steps.package.outputs.package_path }}"
 
       - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-macos
-          path: |
-            build/*.pkg
+          path: ${{ steps.package.outputs.package_path }}
           if-no-files-found: error
 
       - name: Remove Apple signing credentials
@@ -318,6 +423,10 @@ jobs:
   smoke-linux:
     runs-on: ubuntu-24.04
     needs: [build-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [deb, tar]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -333,13 +442,19 @@ jobs:
         run: |
           set -euo pipefail
           ls -lah release-artifacts/linux
-          DEB="$(ls release-artifacts/linux/*.deb | head -n 1)"
-          if ! sudo dpkg -i "$DEB"; then
-            sudo apt-get update
-            sudo apt-get install -f -y
+          if [[ "${{ matrix.format }}" == "deb" ]]; then
+            PACKAGE_NAME="$(./scripts/release-asset.sh name linux-x64-deb)"
+            sudo ./web/install.sh "release-artifacts/linux/$PACKAGE_NAME"
+            DYNLEX_BIN="$(command -v dynlex)"
+          else
+            PACKAGE_NAME="$(./scripts/release-asset.sh name linux-x64-tar)"
+            INSTALL_PREFIX="$RUNNER_TEMP/dynlex-tar-install"
+            ./web/install.sh \
+              --prefix "$INSTALL_PREFIX" \
+              "release-artifacts/linux/$PACKAGE_NAME"
+            DYNLEX_BIN="$INSTALL_PREFIX/bin/dynlex"
           fi
-          command -v dynlex
-          dynlex tests/required/simple/main.dl -o /tmp/dynlex-smoke-linux
+          "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-linux
           /tmp/dynlex-smoke-linux > /tmp/dynlex-smoke-linux.out
           diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-linux.out
 
@@ -361,9 +476,13 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem -Path "release-artifacts/windows" -Recurse | Select-Object FullName
-          $msi = Get-ChildItem -Path "release-artifacts/windows" -Recurse -Filter *.msi | Select-Object -First 1
+          $msiName = (bash ./scripts/release-asset.sh name windows-x64-msi).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not resolve the Windows package name from the release manifest."
+          }
+          $msi = Get-Item "release-artifacts/windows/$msiName" -ErrorAction SilentlyContinue
           if (-not $msi) {
-            throw "No MSI artifact found."
+            throw "Expected MSI artifact was not downloaded."
           }
           ./scripts/verify-windows-signature.ps1 -Path $msi.FullName
           Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart" -Wait -NoNewWindow
@@ -401,8 +520,16 @@ jobs:
           }
 
   smoke-macos:
-    runs-on: macos-14
-    needs: [build-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            machine_architecture: arm64
+          - runner: macos-15-intel
+            machine_architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    needs: [package-macos]
     env:
       APPLE_APPLICATION_SIGNING_IDENTITY: ${{ vars.APPLE_APPLICATION_SIGNING_IDENTITY }}
       APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
@@ -422,7 +549,13 @@ jobs:
         run: |
           set -euo pipefail
           ls -lah release-artifacts/macos
-          PKG="$(ls release-artifacts/macos/*.pkg | head -n 1)"
+          if [[ "$(uname -m)" != "${{ matrix.machine_architecture }}" ]]; then
+            echo "Expected ${{ matrix.machine_architecture }} runner, found $(uname -m)." >&2
+            exit 1
+          fi
+          PACKAGE_NAME="$(./scripts/release-asset.sh name macos-universal-pkg)"
+          PKG="release-artifacts/macos/$PACKAGE_NAME"
+          test -f "$PKG"
           sudo installer -pkg "$PKG" -target /
           if command -v dynlex >/dev/null 2>&1; then
             DYNLEX_BIN="$(command -v dynlex)"
@@ -432,6 +565,7 @@ jobs:
             DYNLEX_BIN="$(find /usr/local -name dynlex -type f | head -n 1)"
           fi
           [ -n "${DYNLEX_BIN:-}" ] && [ -x "$DYNLEX_BIN" ]
+          lipo -verify_arch arm64 x86_64 "$DYNLEX_BIN"
           ./scripts/verify-macos-signature.sh "$PKG" "$DYNLEX_BIN"
           "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-macos
           /tmp/dynlex-smoke-macos > /tmp/dynlex-smoke-macos.out
@@ -439,14 +573,32 @@ jobs:
 
   publish-release:
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows, build-macos, smoke-linux, smoke-windows, smoke-macos]
+    needs: [build-linux, build-windows, package-macos, smoke-linux, smoke-windows, smoke-macos]
     permissions:
       contents: write
     steps:
-      - name: Download all artifacts
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-artifacts
+          name: release-linux
+          path: release-artifacts/linux
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release-artifacts/windows
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-macos
+          path: release-artifacts/macos
+
+      - name: Prepare checksummed release assets
+        run: ./scripts/prepare-release-assets.sh release-artifacts release-upload
 
       - name: Determine release type
         id: release_type
@@ -462,10 +614,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release-artifacts/**/*.deb
-            release-artifacts/**/*.tar.gz
-            release-artifacts/**/*.msi
-            release-artifacts/**/*.pkg
+          files: release-upload/*
           prerelease: ${{ steps.release_type.outputs.prerelease }}
           generate_release_notes: true

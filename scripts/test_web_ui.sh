@@ -10,6 +10,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 node --check "$PROJECT_DIR/web/homepage.js"
+node --check "$PROJECT_DIR/web/download.js"
 node --check "$PROJECT_DIR/web/river-challenge.js"
 node --check "$PROJECT_DIR/web/river-challenge-audio.js"
 node --check "$PROJECT_DIR/web/river-challenge-model.js"
@@ -35,6 +36,7 @@ node "$PROJECT_DIR/tests/web/lsp_client.mjs"
 node "$PROJECT_DIR/tests/web/lsp_protocol.mjs"
 node "$PROJECT_DIR/tests/web/semantic_highlighting.mjs"
 node "$PROJECT_DIR/tests/web/homepage.mjs"
+node "$PROJECT_DIR/tests/release/distribution.mjs"
 node "$PROJECT_DIR/tests/web/river_challenge.mjs"
 node "$PROJECT_DIR/tests/web/documentation.mjs"
 node "$PROJECT_DIR/tests/web/homepage_shaders.mjs"
