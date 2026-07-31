@@ -75,7 +75,8 @@ install_linux_deps() {
 
     if command -v pacman >/dev/null 2>&1; then
         require_sudo
-        sudo pacman -Sy --noconfirm \
+        echo "Arch Linux requires a full system upgrade before installing DynLex build dependencies."
+        sudo pacman -Syu --needed --noconfirm \
             clang \
             freetype2 \
             glfw \

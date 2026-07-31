@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if ! /usr/bin/xcrun --find clang >/dev/null 2>&1 ||
+   ! /usr/bin/xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1; then
+    echo "DynLex requires Apple's Command Line Tools. Run 'xcode-select --install', complete the installation, and install DynLex again." >&2
+    exit 1
+fi
+
+exit 0

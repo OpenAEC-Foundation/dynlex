@@ -44,9 +44,16 @@ DYNLEX_LLVM_NATIVE_INSTALL_DIR="$DYNLEX_LLVM_CACHE_DIR/native/install"
 DYNLEX_LLVM_WEB_BUILD_DIR="$DYNLEX_LLVM_CACHE_DIR/web/build"
 DYNLEX_LLVM_WEB_INSTALL_DIR="$DYNLEX_LLVM_CACHE_DIR/web/install"
 DYNLEX_LLVM_SOURCE_MARKER="$DYNLEX_LLVM_SOURCE_DIR/.dynlex-llvm-source"
-case "$(uname -s)" in
-*MINGW* | *MSYS* | *CYGWIN*) DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=".exe" ;;
-*) DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX="" ;;
+DYNLEX_LLVM_HOST_SYSTEM="$(uname -s)"
+case "$DYNLEX_LLVM_HOST_SYSTEM" in
+*MINGW* | *MSYS* | *CYGWIN*)
+	DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=".exe"
+	DYNLEX_LLVM_NATIVE_RUNTIME_PROFILE="static-msvc-crt"
+	;;
+*)
+	DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=""
+	DYNLEX_LLVM_NATIVE_RUNTIME_PROFILE="platform-default-crt"
+	;;
 esac
 
 dynlex_require_command() {
@@ -182,7 +189,20 @@ dynlex_prepare_llvm_source() {
 
 dynlex_llvm_marker_contents() {
 	local profile="$1"
-	printf '%s\n' "$DYNLEX_LLVM_REVISION:$DYNLEX_LLVM_TOOLCHAIN_SCHEMA:$profile"
+	case "$profile" in
+	native)
+		if [ "$DYNLEX_LLVM_NATIVE_RUNTIME_PROFILE" = static-msvc-crt ]; then
+			printf '%s\n' "$DYNLEX_LLVM_REVISION:$DYNLEX_LLVM_TOOLCHAIN_SCHEMA:native:static-msvc-crt"
+		else
+			printf '%s\n' "$DYNLEX_LLVM_REVISION:$DYNLEX_LLVM_TOOLCHAIN_SCHEMA:native"
+		fi
+		;;
+	web) printf '%s\n' "$DYNLEX_LLVM_REVISION:$DYNLEX_LLVM_TOOLCHAIN_SCHEMA:web" ;;
+	*)
+		echo "Error: unknown LLVM toolchain marker profile: $profile" >&2
+		return 1
+		;;
+	esac
 }
 
 dynlex_llvm_install_is_current() {
@@ -258,6 +278,17 @@ dynlex_common_llvm_cmake_arguments() {
 		"-DLLVM_FORCE_VC_REVISION=$DYNLEX_LLVM_REVISION"
 }
 
+dynlex_native_llvm_cmake_arguments() {
+	case "$DYNLEX_LLVM_NATIVE_RUNTIME_PROFILE" in
+	static-msvc-crt) printf '%s\n' -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ;;
+	platform-default-crt) ;;
+	*)
+		echo "Error: unsupported native LLVM runtime profile: $DYNLEX_LLVM_NATIVE_RUNTIME_PROFILE" >&2
+		return 1
+		;;
+	esac
+}
+
 dynlex_build_native_llvm() {
 	if dynlex_llvm_install_is_current native "$DYNLEX_LLVM_NATIVE_INSTALL_DIR"; then
 		return
@@ -274,7 +305,11 @@ dynlex_build_native_llvm() {
 	while IFS= read -r argument; do
 		common_arguments+=("$argument")
 	done < <(dynlex_common_llvm_cmake_arguments "$DYNLEX_LLVM_NATIVE_BUILD_DIR" "$DYNLEX_LLVM_NATIVE_INSTALL_DIR")
-	cmake "${common_arguments[@]}" \
+	local native_arguments=()
+	while IFS= read -r argument; do
+		native_arguments+=("$argument")
+	done < <(dynlex_native_llvm_cmake_arguments)
+	cmake "${common_arguments[@]}" "${native_arguments[@]}" \
 		"-DCMAKE_C_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CC" \
 		"-DCMAKE_CXX_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CXX" \
 		-DLLVM_BUILD_TOOLS=ON \

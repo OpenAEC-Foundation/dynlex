@@ -15,6 +15,8 @@
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/Triple.h"
 #include <array>
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -38,6 +40,73 @@ struct ProgramExecutionResult {
 	std::string executeError;
 	std::string output;
 };
+
+struct NativeInstallation {
+	std::filesystem::path prefix;
+	bool installed = false;
+};
+
+NativeInstallation nativeInstallation() {
+	const std::filesystem::path executable = llvm::sys::fs::getMainExecutable(
+		nullptr, reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&nativeInstallation))
+	);
+	const std::filesystem::path prefix = executable.parent_path().parent_path();
+	const std::filesystem::path installedRuntime =
+		prefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
+	return {prefix, std::filesystem::exists(installedRuntime)};
+}
+
+std::filesystem::path runtimeLibraryPath() {
+	static const std::filesystem::path path = [] {
+		const NativeInstallation installation = nativeInstallation();
+		const std::filesystem::path installedPath =
+			installation.prefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
+		if (installation.installed)
+			return installedPath;
+		const std::filesystem::path buildPath(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH);
+		if (std::filesystem::exists(buildPath))
+			return buildPath;
+		return installedPath;
+	}();
+	return path;
+}
+
+#ifdef _WIN32
+struct WindowsToolchain {
+	std::filesystem::path linker;
+	std::filesystem::path targetLibraries;
+	std::filesystem::path dependencyLibraries;
+	std::filesystem::path runtimeLibraries;
+};
+
+WindowsToolchain windowsToolchain() {
+	const NativeInstallation installation = nativeInstallation();
+	if (installation.installed) {
+		const std::filesystem::path root = installation.prefix / DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR;
+		return {
+			root / "bin" / "cc.exe",
+			root / DYNLEX_WINDOWS_TARGET_TRIPLE / "lib",
+			root / "dependencies" / "lib",
+			root / "runtime",
+		};
+	}
+	return {
+		DYNLEX_WINDOWS_LINKER_BUILD_PATH,
+		DYNLEX_WINDOWS_TARGET_LIBRARY_BUILD_DIR,
+		DYNLEX_WINDOWS_DEPENDENCY_LIBRARY_BUILD_DIR,
+		DYNLEX_WINDOWS_RUNTIME_LIBRARY_BUILD_DIR,
+	};
+}
+#endif
+
+#ifdef __APPLE__
+std::optional<std::filesystem::path> macosDependencyDirectory() {
+	const NativeInstallation installation = nativeInstallation();
+	if (!installation.installed)
+		return std::nullopt;
+	return installation.prefix / DYNLEX_MACOS_DEPENDENCY_INSTALL_DIR;
+}
+#endif
 
 std::optional<ProgramExecutionResult>
 executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef> arguments, std::string &setupError) {
@@ -83,21 +152,7 @@ executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef
 
 std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library) {
 	if (library == "dynlex_runtime") {
-		static const std::string runtimeLibraryPath = [] {
-			std::string executable = llvm::sys::fs::getMainExecutable(
-				nullptr, reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&nativeLibraryArguments))
-			);
-			std::filesystem::path installPrefix = std::filesystem::path(executable).parent_path().parent_path();
-			std::filesystem::path installedPath =
-				installPrefix / DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR / DYNLEX_RUNTIME_LIBRARY_FILENAME;
-			if (std::filesystem::exists(installedPath))
-				return installedPath.string();
-			std::filesystem::path buildPath(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH);
-			if (std::filesystem::exists(buildPath))
-				return buildPath.string();
-			return installedPath.string();
-		}();
-		std::vector<std::string> arguments = {runtimeLibraryPath};
+		std::vector<std::string> arguments = {runtimeLibraryPath().string()};
 		if (!targetTriple.isOSWindows())
 			arguments.push_back("-pthread");
 		return arguments;
@@ -119,6 +174,82 @@ std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple
 	}
 
 	return {"-l" + library.str()};
+}
+
+bool requiresExternalRuntimeLibraries(const std::unordered_set<std::string> &libraries) {
+	return libraries.contains("glfw") || libraries.contains("freetype");
+}
+
+bool filesEqual(const std::filesystem::path &left, const std::filesystem::path &right) {
+	std::error_code error;
+	const std::uintmax_t leftSize = std::filesystem::file_size(left, error);
+	if (error)
+		return false;
+	const std::uintmax_t rightSize = std::filesystem::file_size(right, error);
+	if (error || leftSize != rightSize)
+		return false;
+
+	std::ifstream leftStream(left, std::ios::binary);
+	std::ifstream rightStream(right, std::ios::binary);
+	std::array<char, 64 * 1024> leftBuffer{};
+	std::array<char, 64 * 1024> rightBuffer{};
+	while (leftStream && rightStream) {
+		leftStream.read(leftBuffer.data(), leftBuffer.size());
+		rightStream.read(rightBuffer.data(), rightBuffer.size());
+		if (leftStream.gcount() != rightStream.gcount() ||
+			!std::equal(leftBuffer.begin(), leftBuffer.begin() + leftStream.gcount(), rightBuffer.begin()))
+			return false;
+	}
+	return leftStream.eof() && rightStream.eof();
+}
+
+bool copyRuntimeLibraries(
+	const std::filesystem::path &sourceDirectory, const std::filesystem::path &outputPath, std::string &errorMessage
+) {
+	std::error_code error;
+	if (!std::filesystem::is_directory(sourceDirectory, error)) {
+		errorMessage = "bundled runtime library directory is missing: " + sourceDirectory.string();
+		return false;
+	}
+	const std::filesystem::path destinationDirectory =
+		outputPath.has_parent_path() ? outputPath.parent_path() : std::filesystem::current_path();
+	bool foundRuntimeLibrary = false;
+	for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(sourceDirectory)) {
+		if (!entry.is_regular_file())
+			continue;
+		std::string extension = entry.path().extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char character) {
+			return static_cast<char>(std::tolower(character));
+		});
+#ifdef _WIN32
+		if (extension != ".dll")
+			continue;
+#elif defined(__APPLE__)
+		if (extension != ".dylib")
+			continue;
+#else
+		continue;
+#endif
+		foundRuntimeLibrary = true;
+		const std::filesystem::path destination = destinationDirectory / entry.path().filename();
+		if (std::filesystem::exists(destination)) {
+			if (!filesEqual(entry.path(), destination)) {
+				errorMessage = "refusing to overwrite a different runtime library: " + destination.string();
+				return false;
+			}
+			continue;
+		}
+		std::filesystem::copy_file(entry.path(), destination, error);
+		if (error) {
+			errorMessage = "failed to copy runtime library '" + entry.path().string() + "': " + error.message();
+			return false;
+		}
+	}
+	if (!foundRuntimeLibrary) {
+		errorMessage = "bundled runtime library directory contains no dynamic libraries: " + sourceDirectory.string();
+		return false;
+	}
+	return true;
 }
 
 bool linkerReportsMissingLibrary(llvm::StringRef output, const std::vector<std::string> &arguments) {
@@ -147,7 +278,11 @@ std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &con
 	llvm::InitializeNativeTargetAsmPrinter();
 	llvm::InitializeNativeTargetAsmParser();
 
+#ifdef _WIN32
+	llvm::Triple targetTriple(DYNLEX_WINDOWS_TARGET_TRIPLE);
+#else
 	llvm::Triple targetTriple(llvm::sys::getDefaultTargetTriple());
+#endif
 	context.llvmModule->setTargetTriple(targetTriple);
 	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);
 	if (!target)
@@ -181,13 +316,21 @@ bool emitNativeExecutable(ParseContext &context) {
 	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
 
 #ifdef _WIN32
-	const llvm::StringRef linkerName = "cc.exe";
+	const WindowsToolchain toolchain = windowsToolchain();
+	const std::string linkerProgram = toolchain.linker.string();
+#elif defined(__APPLE__)
+	const std::string linkerProgram = "/usr/bin/xcrun";
 #else
 	const llvm::StringRef linkerName = "cc";
-#endif
-	auto linkerProgram = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
-	if (!linkerProgram) {
+	const std::optional<std::string> linkerProgramFromPath = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
+	if (!linkerProgramFromPath) {
 		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
+		return false;
+	}
+	const std::string linkerProgram = *linkerProgramFromPath;
+#endif
+	if (!std::filesystem::is_regular_file(linkerProgram)) {
+		pushPlainError("configured native linker does not exist: " + linkerProgram);
 		return false;
 	}
 
@@ -273,8 +416,19 @@ bool emitNativeExecutable(ParseContext &context) {
 	}
 
 	std::vector<std::string> commandStorage;
-	commandStorage.reserve(5 + context.requiredLibraries.size() * 2);
-	commandStorage.push_back(*linkerProgram);
+	commandStorage.reserve(12 + context.requiredLibraries.size() * 2);
+	commandStorage.push_back(linkerProgram);
+#ifdef _WIN32
+	commandStorage.push_back("--target=" DYNLEX_WINDOWS_TARGET_TRIPLE);
+	commandStorage.push_back("-L" + toolchain.targetLibraries.string());
+	commandStorage.push_back("-L" + toolchain.dependencyLibraries.string());
+#elif defined(__APPLE__)
+	commandStorage.push_back("clang");
+	if (const std::optional<std::filesystem::path> dependencies = macosDependencyDirectory()) {
+		commandStorage.push_back("-L" + dependencies->string());
+		commandStorage.push_back("-Wl,-rpath,@executable_path");
+	}
+#endif
 	commandStorage.push_back(objectPath);
 	commandStorage.push_back("-o");
 	commandStorage.push_back(outputPath);
@@ -295,7 +449,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandArgs.push_back(arg);
 
 	std::string setupError;
-	std::optional<ProgramExecutionResult> linkExecution = executeProgramAndCapture(*linkerProgram, commandArgs, setupError);
+	std::optional<ProgramExecutionResult> linkExecution = executeProgramAndCapture(linkerProgram, commandArgs, setupError);
 	if (!linkExecution) {
 		pushPlainError(setupError);
 		return false;
@@ -338,6 +492,21 @@ bool emitNativeExecutable(ParseContext &context) {
 
 		context.diagnostics.push_back(std::move(diagnostic));
 		return false;
+	}
+
+	if (requiresExternalRuntimeLibraries(context.requiredLibraries)) {
+		std::optional<std::filesystem::path> runtimeLibraryDirectory;
+#ifdef _WIN32
+		runtimeLibraryDirectory = toolchain.runtimeLibraries;
+#elif defined(__APPLE__)
+		runtimeLibraryDirectory = macosDependencyDirectory();
+#endif
+		if (runtimeLibraryDirectory &&
+			!copyRuntimeLibraries(*runtimeLibraryDirectory, std::filesystem::path(outputPath), error)) {
+			std::filesystem::remove(outputPath);
+			pushPlainError(error);
+			return false;
+		}
 	}
 
 	// Clean up object file

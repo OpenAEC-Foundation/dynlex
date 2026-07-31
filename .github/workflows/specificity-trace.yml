@@ -28,15 +28,19 @@ jobs:
             label: windows
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: .cache/llvm-toolchain
-          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+          path: |
+            .cache/llvm-toolchain
+            .cache/llvm-mingw
+            .cache/vcpkg
+            .cache/vcpkg-installed
+          key: native-toolchains-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'metadata/LLVM_MINGW_TOOLCHAIN', 'metadata/VCPKG_TOOLCHAIN', 'vcpkg.json', 'cmake/vcpkg-triplets/*.cmake', 'scripts/llvm_toolchain.sh', 'scripts/llvm-mingw-toolchain.ps1') }}
 
       - name: Install dependencies (Unix)
         if: runner.os != 'Windows'
@@ -77,7 +81,7 @@ jobs:
           awk '/^\[res\]/ { print }' trace/stderr.log > trace/resolution.log || true
 
       - name: Upload trace artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trace-${{ matrix.label }}
           path: trace/*
@@ -86,7 +90,7 @@ jobs:
     needs: trace-compile
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: traces
 

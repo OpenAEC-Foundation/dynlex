@@ -55,13 +55,12 @@ void dynlex_runtime_set_errno_error(const char *operation, int error_number) {
 	if (english_locale == (locale_t)0)
 		snprintf(system_message, sizeof(system_message), "C runtime error %d", error_number);
 	else {
-		const char *localized_message = strerror_l(error_number, english_locale);
-		size_t length = strlen(localized_message);
-		if (length >= sizeof(system_message))
-			length = sizeof(system_message) - 1;
-		memcpy(system_message, localized_message, length);
-		system_message[length] = '\0';
+		locale_t previous_locale = uselocale(english_locale);
+		int message_result = strerror_r(error_number, system_message, sizeof(system_message));
+		uselocale(previous_locale);
 		freelocale(english_locale);
+		if (message_result != 0)
+			snprintf(system_message, sizeof(system_message), "C runtime error %d", error_number);
 	}
 #endif
 	snprintf(runtime_error_message, sizeof(runtime_error_message), "%s: %s", operation, system_message);

@@ -11,8 +11,9 @@ print_usage() {
 Usage: install.sh [--format deb|tar] [--prefix DIRECTORY] [PACKAGE]
 
 Without PACKAGE, installs the latest Linux release for this machine. A local .deb or .tar.gz
-PACKAGE can be supplied for an offline installation. --prefix applies to tar
-installations and defaults to $HOME/.local.
+PACKAGE can be supplied instead of downloading the DynLex payload. The installer uses the
+system package manager for missing compiler dependencies. --prefix applies to tar installations
+and defaults to $HOME/.local.
 EOF
 }
 
@@ -26,6 +27,58 @@ need_cmd() {
         echo "Error: required command '$1' is not installed." >&2
         exit 1
     fi
+}
+
+run_privileged() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+        return
+    fi
+    need_cmd sudo
+    sudo "$@"
+}
+
+linux_compile_dependencies_ready() {
+    command -v cc >/dev/null 2>&1 || return 1
+    command -v objcopy >/dev/null 2>&1 || return 1
+    printf 'int main(void) { return 0; }\n' |
+        cc -x c - -lglfw -lfreetype -lGL \
+            -o "$TEMPORARY_DIRECTORY/dynlex-linker-probe" >/dev/null 2>&1
+}
+
+ensure_linux_compile_dependencies() {
+    if linux_compile_dependencies_ready; then
+        rm -f "$TEMPORARY_DIRECTORY/dynlex-linker-probe"
+        return
+    fi
+
+    echo "Installing the native compiler and libraries used by DynLex programs..."
+    if command -v apt-get >/dev/null 2>&1; then
+        run_privileged apt-get update
+        run_privileged apt-get install -y \
+            binutils build-essential clang libc6-dev \
+            libfreetype-dev libgl-dev libglfw3-dev
+    elif command -v dnf >/dev/null 2>&1; then
+        run_privileged dnf install -y \
+            binutils clang freetype-devel gcc glfw-devel glibc-devel mesa-libGL-devel
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "Arch Linux requires a full system upgrade before installing DynLex dependencies."
+        run_privileged pacman -Syu --needed --noconfirm \
+            binutils clang freetype2 gcc glfw glibc libglvnd
+    elif command -v zypper >/dev/null 2>&1; then
+        run_privileged zypper --non-interactive refresh
+        run_privileged zypper --non-interactive install \
+            binutils clang freetype2-devel gcc glibc-devel libglfw-devel Mesa-libGL-devel
+    else
+        echo "Error: no supported package manager can install DynLex compiler dependencies." >&2
+        exit 1
+    fi
+
+    if ! linux_compile_dependencies_ready; then
+        echo "Error: the installed compiler cannot link DynLex graphics dependencies." >&2
+        exit 1
+    fi
+    rm -f "$TEMPORARY_DIRECTORY/dynlex-linker-probe"
 }
 
 manifest_field() {
@@ -364,6 +417,8 @@ else
         ;;
     esac
 fi
+
+ensure_linux_compile_dependencies
 
 "$INSTALLED_BINARY" --help >/dev/null
 echo "Installed: $INSTALLED_BINARY"

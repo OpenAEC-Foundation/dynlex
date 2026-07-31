@@ -545,11 +545,16 @@ if [[ "$is_windows" == "true" ]]; then
     run_auxiliary_test \
         "windows_dependency_installer" 10 \
         pwsh -NoProfile -File "$SCRIPT_DIR/test_windows_toolchain.ps1"
+else
+    run_auxiliary_test \
+        "macos_dependency_staging" 10 \
+        python3 -B "$SCRIPT_DIR/test_macos_dependency_staging.py"
 fi
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "macos_signature_verifier" 10 python3 -B "$SCRIPT_DIR/test_verify_macos_signature.py"
 run_auxiliary_test "release_executable_architecture" 10 python3 -B "$PROJECT_DIR/tests/release/test_executable_architecture.py"
+run_auxiliary_test "windows_runtime_dependencies" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_runtime_dependencies.py"
 run_auxiliary_test "windows_upgrade_metadata_cmake" 10 cmake -P "$PROJECT_DIR/tests/release/windows_upgrade_metadata.cmake"
 run_auxiliary_test "windows_upgrade_metadata" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_upgrade_metadata.py"
 run_auxiliary_test "release_distribution" 10 node "$PROJECT_DIR/tests/release/distribution.mjs"
