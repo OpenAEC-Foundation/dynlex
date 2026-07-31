@@ -4,6 +4,7 @@ import {
   parseRiverTrace
 } from "./river-challenge-model.js";
 import {
+  applyRiverSourceEdit,
   clearRiverLineStates,
   createRiverCompletions,
   prefixedRiverPosition,
@@ -11,9 +12,13 @@ import {
   renderRiverCompilerDiagnostics,
   renderRiverDiagnosticRanges,
   renderRiverLspFeedback,
-  renderRiverSource,
+  renderRiverLspLineFeedback,
+  renderRiverSourceLine,
   riverCommandCallRanges,
+  riverSingleChangedLine,
+  riverSourcePosition,
   RIVER_PROGRAM_PREFIX,
+  RIVER_PROGRAM_PREFIX_LINES,
   RIVER_STARTER_SOURCE,
   setRiverLineState
 } from "./river-challenge-editor.js";
@@ -455,33 +460,49 @@ export async function initializeRiverChallenge(section, {
   let programGeneration = 0;
   let highlightGeneration = 0;
   let highlightTimer = null;
+  let activeEditLine = null;
 
-  function scheduleSemanticHighlight(delay = 160) {
+  function scheduleSemanticHighlight({ delay = 160, line = null, position } = {}) {
     highlightGeneration += 1;
     const generation = highlightGeneration;
     if (highlightTimer !== null) {
       clearTimeout(highlightTimer);
     }
-    renderRiverSource(sourceCode, source.value, []);
-    renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
+    const sourceText = source.value;
+    if (line === null) {
+      if (sourceCode.textContent !== sourceText) {
+        applyRiverSourceEdit(sourceCode, sourceCode.textContent, sourceText);
+      }
+    } else {
+      renderRiverSourceLine(sourceCode, sourceCode.textContent, sourceText, [], line);
+    }
     editorShell.dataset.highlightState = "loading";
     highlightTimer = window.setTimeout(() => {
       highlightTimer = null;
-      const sourceText = source.value;
-      const position = prefixedRiverPosition(sourceText, source.selectionEnd);
       void analyzeDynLex(RIVER_PROGRAM_PREFIX + sourceText, position).then((feedback) => {
         if (generation !== highlightGeneration || sourceText !== source.value) {
           return;
         }
-        const sourceDiagnostics = renderRiverLspFeedback({
-          diagnosticCode,
-          diagnostics: feedback.diagnostics,
-          lineIndicator,
-          panel: diagnostics,
-          source: sourceText,
-          sourceCode,
-          semanticTokens: feedback.semanticTokens
-        });
+        let sourceDiagnostics = [];
+        if (line === null) {
+          sourceDiagnostics = renderRiverLspFeedback({
+            diagnosticCode,
+            diagnostics: feedback.diagnostics,
+            lineIndicator,
+            panel: diagnostics,
+            source: sourceText,
+            sourceCode,
+            semanticTokens: feedback.semanticTokens
+          });
+        } else {
+          renderRiverLspLineFeedback({
+            line,
+            previousSource: sourceCode.textContent,
+            source: sourceText,
+            sourceCode,
+            semanticTokens: feedback.semanticTokens
+          });
+        }
         editorShell.dataset.highlightState = "semantic";
         if (sourceDiagnostics.length > 0) {
           status.textContent = "CHECK CODE";
@@ -493,7 +514,6 @@ export async function initializeRiverChallenge(section, {
           return;
         }
         console.error("River challenge syntax highlighting failed", error);
-        renderRiverSource(sourceCode, source.value, []);
         renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
         diagnostics.hidden = false;
         diagnostics.textContent = "An error occurred. Check the browser log.";
@@ -503,6 +523,18 @@ export async function initializeRiverChallenge(section, {
         editorShell.dataset.highlightState = "error";
       });
     }, delay);
+  }
+
+  function commitEditedLine(position) {
+    if (activeEditLine === null) return;
+    if (
+      position !== undefined
+      && position.line - RIVER_PROGRAM_PREFIX_LINES === activeEditLine
+    ) {
+      return;
+    }
+    activeEditLine = null;
+    scheduleSemanticHighlight({ delay: 0, position });
   }
 
   function syncEditorScroll() {
@@ -763,7 +795,10 @@ export async function initializeRiverChallenge(section, {
     });
   }
   source.value = RIVER_STARTER_SOURCE;
-  scheduleSemanticHighlight(0);
+  scheduleSemanticHighlight({
+    delay: 0,
+    position: prefixedRiverPosition(source.value, source.selectionEnd)
+  });
   source.addEventListener("scroll", () => {
     syncEditorScroll();
     completions.close();
@@ -777,7 +812,19 @@ export async function initializeRiverChallenge(section, {
     clearRiverLineStates(lineIndicator);
     renderRiverCallRange(callCode, source.value);
     renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
-    scheduleSemanticHighlight();
+    const position = prefixedRiverPosition(source.value, source.selectionEnd);
+    const changedLine = riverSingleChangedLine(sourceCode.textContent, source.value);
+    const cursorLine = riverSourcePosition(source.value, source.selectionEnd).line;
+    if (
+      changedLine === cursorLine
+      && (activeEditLine === null || activeEditLine === changedLine)
+    ) {
+      activeEditLine = changedLine;
+      scheduleSemanticHighlight({ line: changedLine, position });
+    } else {
+      activeEditLine = changedLine === cursorLine ? changedLine : null;
+      scheduleSemanticHighlight({ delay: 0, position });
+    }
     diagnostics.hidden = true;
     diagnostics.textContent = "";
     message.textContent = "Your previous result was cleared because the plan changed.";
@@ -807,7 +854,16 @@ export async function initializeRiverChallenge(section, {
     }
   });
   source.addEventListener("pointerdown", () => completions.close());
+  source.addEventListener("selectionchange", () => {
+    if (source.ownerDocument.activeElement !== source) return;
+    const position = prefixedRiverPosition(source.value, source.selectionEnd);
+    if (position.line - RIVER_PROGRAM_PREFIX_LINES !== activeEditLine) {
+      completions.close();
+    }
+    commitEditedLine(position);
+  });
   source.addEventListener("blur", () => {
+    commitEditedLine(undefined);
     window.setTimeout(() => completions.close(), 0);
   });
   runButton.addEventListener("click", () => void runProgram());

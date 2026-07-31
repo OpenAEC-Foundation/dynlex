@@ -1,6 +1,8 @@
 import {
+  applySemanticTextEdit,
   rebaseLspDiagnosticsAfterLines,
   rebaseSemanticTokensAfterLines,
+  renderSemanticTokenLine,
   renderSemanticTokens
 } from "./semantic-highlighting.js";
 import { semanticTokenLegend } from "./semantic-token-legend.js";
@@ -63,6 +65,28 @@ export function prefixedRiverPosition(source, offset) {
     line: position.line + RIVER_PROGRAM_PREFIX_LINES,
     character: position.character
   };
+}
+
+export function riverSingleChangedLine(previousSource, source) {
+  const previousStarts = sourceLineStarts(previousSource);
+  const starts = sourceLineStarts(source);
+  if (previousStarts.length !== starts.length) return null;
+  let changedLine = null;
+  for (let line = 0; line < starts.length; line += 1) {
+    const previousEnd = line + 1 < previousStarts.length
+      ? previousStarts[line + 1] - 1
+      : previousSource.length;
+    const end = line + 1 < starts.length ? starts[line + 1] - 1 : source.length;
+    if (
+      previousSource.slice(previousStarts[line], previousEnd)
+      === source.slice(starts[line], end)
+    ) {
+      continue;
+    }
+    if (changedLine !== null) return null;
+    changedLine = line;
+  }
+  return changedLine;
 }
 
 function sourceRangeOffsets(source, range) {
@@ -132,6 +156,25 @@ export function renderRiverSource(code, source, tokenData) {
     baseClass: "river-token",
     classPrefix: "river-token-"
   });
+}
+
+export function applyRiverSourceEdit(code, previousSource, source) {
+  applySemanticTextEdit(code, previousSource, source);
+}
+
+export function renderRiverSourceLine(code, previousSource, source, tokenData, line) {
+  renderSemanticTokenLine(
+    code,
+    previousSource,
+    source,
+    tokenData,
+    semanticTokenLegend,
+    line,
+    {
+      baseClass: "river-token",
+      classPrefix: "river-token-"
+    }
+  );
 }
 
 export function renderRiverDiagnosticRanges(code, source, diagnostics) {
@@ -227,6 +270,20 @@ export function renderRiverLspFeedback({
     return `${severityLabels.get(diagnostic.severity) ?? "ERROR"} ${line}:${column}  ${diagnostic.message}`;
   }).join("\n");
   return sourceDiagnostics;
+}
+
+export function renderRiverLspLineFeedback({
+  line,
+  previousSource,
+  source,
+  sourceCode,
+  semanticTokens
+}) {
+  const sourceTokens = rebaseSemanticTokensAfterLines(
+    semanticTokens,
+    RIVER_PROGRAM_PREFIX_LINES
+  );
+  renderRiverSourceLine(sourceCode, previousSource, source, sourceTokens, line);
 }
 
 function rebaseRiverRange(range) {
@@ -556,16 +613,7 @@ export function createRiverCompletions({ completeDynLex, list, source }) {
       select(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
       return true;
     }
-    if (
-      event.key === "Tab"
-      || (
-        event.key === "Enter"
-        && !event.altKey
-        && !event.ctrlKey
-        && !event.metaKey
-        && !event.shiftKey
-      )
-    ) {
+    if (event.key === "Tab") {
       event.preventDefault();
       accept();
       return true;

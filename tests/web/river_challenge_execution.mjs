@@ -3,6 +3,7 @@ import {
   captureScreenshot,
   clickElement,
   closeBrowserSession,
+  dispatchKey,
   evaluate,
   navigate,
   requestedUrls,
@@ -28,6 +29,7 @@ assertRiverChallengeLoadingBoundary(requestedUrls);
 await runRiverChallengeBrowserTest({
   captureScreenshot,
   clickElement,
+  dispatchKey,
   evaluate,
   requestedUrls,
   waitFor

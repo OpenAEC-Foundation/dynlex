@@ -6,10 +6,8 @@
 
 namespace lsp {
 
-// LSP file system implementation.
-// First checks if file is open in editor (returns TextDocument*),
-// then falls back to local filesystem for non-open files.
-// Future: could request file content from client for remote scenarios.
+// Open editor documents are copied into immutable snapshots owned for this
+// compilation context. Files which are not open are owned by the local cache.
 class LspFileSystem : public FileSystem {
   public:
 	LspFileSystem(std::unordered_map<std::string, std::unique_ptr<TextDocument>> &documents) : documents(documents) {}
@@ -18,7 +16,10 @@ class LspFileSystem : public FileSystem {
 
   private:
 	std::unordered_map<std::string, std::unique_ptr<TextDocument>> &documents;
-	LocalFileSystem localFs; // fallback for files not open in editor
+	std::unordered_map<std::string, std::unique_ptr<SourceFile>> openFileSnapshots;
+	LocalFileSystem localFs;
+
+	SourceFile *snapshot(const TextDocument &document);
 };
 
 } // namespace lsp

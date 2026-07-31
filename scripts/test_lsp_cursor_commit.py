@@ -42,6 +42,33 @@ def replace_number(session: LspSession, uri: str, version: int, replacement: str
     )
 
 
+def replace_first_call(
+    session: LspSession,
+    uri: str,
+    version: int,
+    previous: str,
+    replacement: str,
+) -> None:
+    session.notify(
+        "textDocument/didChange",
+        {
+            "textDocument": {"uri": uri, "version": version},
+            "contentChanges": [
+                {
+                    "range": {
+                        "start": {"line": FIRST_CALL_LINE, "character": 0},
+                        "end": {
+                            "line": FIRST_CALL_LINE,
+                            "character": len(previous),
+                        },
+                    },
+                    "text": replacement,
+                }
+            ],
+        },
+    )
+
+
 def token_lines(data: list[int]) -> set[int]:
     if len(data) % 5 != 0:
         raise RuntimeError(f"semantic token data is not grouped in fives: {data}")
@@ -119,10 +146,38 @@ def main() -> int:
         lines = token_lines(result.get("data", []))
         if not {FIRST_CALL_LINE, SECOND_CALL_LINE}.issubset(lines):
             raise RuntimeError(f"semantic highlighting did not recover for both lines: {sorted(lines)}")
+
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 3, FIRST_CALL_LINE),
+        )
+        replace_first_call(session, uri, 4, "ignore 1", "ro")
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 4, SECOND_CALL_LINE),
+        )
+        session.notify(
+            "dynlex/activeCursorChanged",
+            cursor_notification(uri, 4, FIRST_CALL_LINE),
+        )
+        replace_first_call(session, uri, 5, "ro", "ign")
+        completions = session.request(
+            "textDocument/completion",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": FIRST_CALL_LINE, "character": 3},
+            },
+        )
+        labels = {item["label"] for item in completions["items"]}
+        if "ignore " not in labels:
+            raise RuntimeError(
+                "the retained completion context did not survive an invalid committed line: "
+                f"{sorted(labels)}"
+            )
     finally:
         session.close()
 
-    print("Cursor line commits refresh semantic highlighting after diagnostics clear")
+    print("Cursor line commits refresh highlighting and retain completion context")
     return 0
 
 

@@ -567,6 +567,7 @@ assert.equal(
 await runRiverChallengeBrowserTest({
   captureScreenshot,
   clickElement,
+  dispatchKey,
   evaluate,
   requestedUrls,
   waitFor
