@@ -104,9 +104,10 @@ function Assert-LlvmMingwLayout {
         "bin\libc++.dll",
         "bin\libunwind.dll",
         "lib\clang\$LlvmVersion\lib\windows\libclang_rt.builtins-$TargetArchitecture.a",
-        "$TargetArchitecture-w64-mingw32\include\windows.h",
-        "$TargetArchitecture-w64-mingw32\include\winioctl.h",
-        "$TargetArchitecture-w64-mingw32\include\shlobj.h",
+        "include\windows.h",
+        "include\winioctl.h",
+        "include\shlobj.h",
+        "include\sys\types.h",
         "$TargetArchitecture-w64-mingw32\lib\crt2.o",
         "$TargetArchitecture-w64-mingw32\lib\libkernel32.a",
         "$TargetArchitecture-w64-mingw32\share\mingw32\COPYING"
@@ -175,10 +176,10 @@ function Install-LlvmMingwToolchain {
                 -LlvmVersion $metadata.llvm `
                 -TargetArchitecture $hostConfiguration.TargetArchitecture
             $slimBin = Join-Path $slimRoot "bin"
+            $slimInclude = Join-Path $slimRoot "include"
             $slimResource = Join-Path $slimRoot "lib\clang\$($metadata.llvm)\lib\windows"
             $slimTarget = Join-Path $slimRoot "$($hostConfiguration.TargetTriple)"
-            New-Item -ItemType Directory -Path $slimBin, $slimResource | Out-Null
-            New-Item -ItemType Directory -Path (Join-Path $slimTarget "include") | Out-Null
+            New-Item -ItemType Directory -Path $slimBin, $slimInclude, $slimResource | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $slimTarget "lib") | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $slimTarget "share\mingw32") | Out-Null
             foreach ($fileName in @(
@@ -198,8 +199,9 @@ function Install-LlvmMingwToolchain {
                 (Join-Path $extractedRoot "lib\clang\$($metadata.llvm)\lib\windows\libclang_rt.builtins-$($hostConfiguration.TargetArchitecture).a") `
                 $slimResource
             Copy-Item `
-                (Join-Path $extractedRoot "$($hostConfiguration.TargetTriple)\include\*") `
-                (Join-Path $slimTarget "include")
+                -Path (Join-Path $extractedRoot "include\*") `
+                -Destination $slimInclude `
+                -Recurse
             Copy-Item `
                 (Join-Path $extractedRoot "$($hostConfiguration.TargetTriple)\lib\*") `
                 (Join-Path $slimTarget "lib")

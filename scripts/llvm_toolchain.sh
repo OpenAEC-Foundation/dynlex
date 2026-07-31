@@ -305,11 +305,10 @@ dynlex_build_native_llvm() {
 	while IFS= read -r argument; do
 		common_arguments+=("$argument")
 	done < <(dynlex_common_llvm_cmake_arguments "$DYNLEX_LLVM_NATIVE_BUILD_DIR" "$DYNLEX_LLVM_NATIVE_INSTALL_DIR")
-	local native_arguments=()
 	while IFS= read -r argument; do
-		native_arguments+=("$argument")
+		common_arguments+=("$argument")
 	done < <(dynlex_native_llvm_cmake_arguments)
-	cmake "${common_arguments[@]}" "${native_arguments[@]}" \
+	cmake "${common_arguments[@]}" \
 		"-DCMAKE_C_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CC" \
 		"-DCMAKE_CXX_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CXX" \
 		-DLLVM_BUILD_TOOLS=ON \

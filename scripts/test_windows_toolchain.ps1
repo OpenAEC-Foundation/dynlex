@@ -133,7 +133,8 @@ try {
     foreach ($directory in @(
         (Join-Path $toolchainRoot "bin"),
         (Join-Path $toolchainRoot "lib\clang\22\lib\windows"),
-        (Join-Path $toolchainRoot "x86_64-w64-mingw32\include"),
+        (Join-Path $toolchainRoot "include"),
+        (Join-Path $toolchainRoot "include\sys"),
         (Join-Path $toolchainRoot "x86_64-w64-mingw32\lib"),
         (Join-Path $toolchainRoot "x86_64-w64-mingw32\share\mingw32"),
         (Join-Path $dependencyRoot "lib"),
@@ -155,9 +156,10 @@ try {
         "bin\libc++.dll",
         "bin\libunwind.dll",
         "lib\clang\22\lib\windows\libclang_rt.builtins-x86_64.a",
-        "x86_64-w64-mingw32\include\windows.h",
-        "x86_64-w64-mingw32\include\winioctl.h",
-        "x86_64-w64-mingw32\include\shlobj.h",
+        "include\windows.h",
+        "include\winioctl.h",
+        "include\shlobj.h",
+        "include\sys\types.h",
         "x86_64-w64-mingw32\lib\crt2.o",
         "x86_64-w64-mingw32\lib\libkernel32.a",
         "x86_64-w64-mingw32\share\mingw32\COPYING"
