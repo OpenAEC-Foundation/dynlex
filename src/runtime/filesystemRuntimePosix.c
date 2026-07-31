@@ -1,6 +1,7 @@
 #include "platformFeatureTest.h"
 
 #include "filesystemRuntimeInternal.h"
+#include "filesystemStatPosix.h"
 
 #include "runtimeError.h"
 
@@ -32,11 +33,8 @@ static int32_t entry_kind(mode_t mode) {
 }
 
 static int64_t modification_time(const struct stat *attributes) {
-#if defined(__APPLE__)
-	return (int64_t)attributes->st_mtimespec.tv_sec * INT64_C(1000) + attributes->st_mtimespec.tv_nsec / 1000000;
-#else
-	return (int64_t)attributes->st_mtim.tv_sec * INT64_C(1000) + attributes->st_mtim.tv_nsec / 1000000;
-#endif
+	return dynlex_stat_modification_seconds(attributes) * INT64_C(1000) +
+		   dynlex_stat_modification_nanoseconds(attributes) / 1000000;
 }
 
 static bool missing_error(int error_number) { return error_number == ENOENT || error_number == ENOTDIR; }

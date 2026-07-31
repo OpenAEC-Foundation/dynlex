@@ -1,6 +1,7 @@
 #include "platformFeatureTest.h"
 
 #include "filesystemRuntimeInternal.h"
+#include "filesystemStatPosix.h"
 #include "filesystemTransactionInternal.h"
 #include "runtimeError.h"
 
@@ -141,11 +142,11 @@ int dynlex_filesystem_entry(
 	*windows_attributes = 0;
 	*restorable_windows_attributes = 0;
 	*access_time_supported = 1;
-	*access_seconds = (int64_t)attributes.st_atim.tv_sec;
-	*access_nanoseconds = (int32_t)attributes.st_atim.tv_nsec;
+	*access_seconds = dynlex_stat_access_seconds(&attributes);
+	*access_nanoseconds = dynlex_stat_access_nanoseconds(&attributes);
 	*modification_time_supported = 1;
-	*modification_seconds = (int64_t)attributes.st_mtim.tv_sec;
-	*modification_nanoseconds = (int32_t)attributes.st_mtim.tv_nsec;
+	*modification_seconds = dynlex_stat_modification_seconds(&attributes);
+	*modification_nanoseconds = dynlex_stat_modification_nanoseconds(&attributes);
 	*creation_time_supported = 0;
 	*creation_seconds = 0;
 	*creation_nanoseconds = 0;
