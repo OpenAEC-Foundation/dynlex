@@ -64,15 +64,28 @@ dynlex_require_command() {
 	fi
 }
 
+dynlex_complete_host_executable_path() {
+	local executable_path="$1"
+	case "$executable_path" in
+	*"$DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX") ;;
+	*) executable_path+="$DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX" ;;
+	esac
+	if [ ! -f "$executable_path" ]; then
+		echo "Error: resolved bootstrap tool is not an executable file: $executable_path" >&2
+		return 1
+	fi
+	printf '%s\n' "$executable_path"
+}
+
 dynlex_resolve_bootstrap_tool() {
 	local tool_name="$1"
 	local versioned_name="${tool_name}-${DYNLEX_LLVM_BOOTSTRAP_CLANG_VERSION}"
 	if command -v "$versioned_name" >/dev/null 2>&1; then
-		command -v "$versioned_name"
+		dynlex_complete_host_executable_path "$(command -v "$versioned_name")"
 		return
 	fi
 	if command -v "$tool_name" >/dev/null 2>&1; then
-		command -v "$tool_name"
+		dynlex_complete_host_executable_path "$(command -v "$tool_name")"
 		return
 	fi
 	echo "Error: required bootstrap tool not found: $versioned_name or $tool_name" >&2
