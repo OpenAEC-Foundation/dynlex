@@ -1,51 +1,75 @@
 bool initializeTargetLayout(ParseContext &context) {
-	requireCompilerInvariant(!context.llvmContext && !context.llvmModule, "target layout was initialized twice");
+	requireCompilerInvariant(
+		!context.llvmContext && !context.llvmModule && !context.targetMachine, "target layout was initialized twice"
+	);
 	context.llvmContext = new llvm::LLVMContext();
 	context.llvmModule = new llvm::Module("dynlex_module", *context.llvmContext);
+	std::string error;
+	std::string targetKind;
 	if (context.options.emitSPIRV) {
-		std::string error;
-		std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
-		if (!targetMachine) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "spirv target not available", Range(), "error", error)
-			);
-			return false;
-		}
-		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+		targetKind = "spirv";
+		context.targetMachine = createSPIRVTargetMachine(context, error);
 	} else if (context.options.emitWASM) {
-		std::string error;
-		std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, error);
-		if (!targetMachine) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", error)
-			);
-			return false;
-		}
-		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+		targetKind = "wasm";
+		context.targetMachine = createWASMTargetMachine(context, error);
 	} else {
 #ifdef DYNLEX_WEB
-		std::string error;
-		std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, error);
-		if (!targetMachine) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", error)
-			);
-			return false;
-		}
-		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+		targetKind = "wasm";
+		context.targetMachine = createWASMTargetMachine(context, error);
 #else
-		std::string error;
-		std::unique_ptr<llvm::TargetMachine> targetMachine = createNativeTargetMachine(context, error);
-		if (!targetMachine) {
-			context.addDiagnostic(
-				Diagnostic(context, Diagnostic::Level::Error, "native target not available", Range(), "error", error)
-			);
-			return false;
-		}
-		context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+		targetKind = "native";
+		context.targetMachine = createNativeTargetMachine(context, error);
 #endif
 	}
+	if (!context.targetMachine) {
+		std::string message = targetKind + " target not available";
+		if (!error.empty())
+			message += ": " + error;
+		context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, std::move(message), Range()));
+		return false;
+	}
+	context.llvmModule->setDataLayout(context.targetMachine->createDataLayout());
 	return true;
+}
+
+static void applyTargetFunctionAttributes(ParseContext &context) {
+	requireCompilerInvariant(context.targetMachine != nullptr, "target attributes require an initialized target machine");
+	llvm::StringRef targetCPU = context.targetMachine->getTargetCPU();
+	llvm::StringRef targetFeatures = context.targetMachine->getTargetFeatureString();
+	for (llvm::Function &function : *context.llvmModule) {
+		if (function.isDeclaration())
+			continue;
+		if (!targetCPU.empty())
+			function.addFnAttr("target-cpu", targetCPU);
+		if (!targetFeatures.empty())
+			function.addFnAttr("target-features", targetFeatures);
+		if (!context.resolvedTargetTuneCPU.empty())
+			function.addFnAttr("tune-cpu", context.resolvedTargetTuneCPU);
+		if (context.options.fastMath) {
+			static constexpr llvm::StringLiteral fastMathAttributes[] = {
+				"approx-func-fp-math",	   "no-infs-fp-math",  "no-nans-fp-math",
+				"no-signed-zeros-fp-math", "no-trapping-math", "unsafe-fp-math",
+			};
+			for (llvm::StringLiteral attribute : fastMathAttributes)
+				function.addFnAttr(attribute, "true");
+		}
+		if (context.options.optimizationSize != ParseContext::OptimizationSize::None)
+			function.addFnAttr(llvm::Attribute::OptimizeForSize);
+		if (context.options.optimizationSize == ParseContext::OptimizationSize::Smallest)
+			function.addFnAttr(llvm::Attribute::MinSize);
+	}
+}
+
+static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &options) {
+	switch (options.optimizationLevel) {
+	case 1:
+		return llvm::OptimizationLevel::O1;
+	case 2:
+		return llvm::OptimizationLevel::O2;
+	case 3:
+		return llvm::OptimizationLevel::O3;
+	}
+	crashCompilerBug("invalid IR optimization level");
 }
 
 bool generateCode(ParseContext &context) {
@@ -56,6 +80,11 @@ bool generateCode(ParseContext &context) {
 	context.llvmBuilder = new llvm::IRBuilder<>(*context.llvmContext);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+	llvm::FastMathFlags fastMathFlags;
+	if (context.options.fastMath)
+		fastMathFlags.setFast();
+	fastMathFlags.setAllowContract(context.options.floatingPointContract == ParseContext::FloatingPointContract::Fast);
+	builder.setFastMathFlags(fastMathFlags);
 	if (context.flexBindingFrames.empty())
 		context.flexBindingFrames.pushFrame(BindingFrame{});
 
@@ -215,6 +244,7 @@ bool generateCode(ParseContext &context) {
 	// Finalize debug info before verification
 	if (context.diBuilder)
 		context.diBuilder->finalize();
+	applyTargetFunctionAttributes(context);
 
 	// Verify
 	std::string error;
@@ -235,30 +265,21 @@ bool generateCode(ParseContext &context) {
 		llvm::CGSCCAnalysisManager cgam;
 		llvm::ModuleAnalysisManager mam;
 
-		llvm::PassBuilder pb;
+		llvm::PipelineTuningOptions pipelineTuningOptions;
+		if (context.options.loopVectorization)
+			pipelineTuningOptions.LoopVectorization = *context.options.loopVectorization;
+		if (context.options.slpVectorization)
+			pipelineTuningOptions.SLPVectorization = *context.options.slpVectorization;
+		if (context.options.loopUnrolling)
+			pipelineTuningOptions.LoopUnrolling = *context.options.loopUnrolling;
+		llvm::PassBuilder pb(context.targetMachine.get(), pipelineTuningOptions);
 		pb.registerModuleAnalyses(mam);
 		pb.registerCGSCCAnalyses(cgam);
 		pb.registerFunctionAnalyses(fam);
 		pb.registerLoopAnalyses(lam);
 		pb.crossRegisterProxies(lam, fam, cgam, mam);
 
-		llvm::OptimizationLevel optLevel;
-		switch (context.options.optimizationLevel) {
-		case 1:
-			optLevel = llvm::OptimizationLevel::O1;
-			break;
-		case 2:
-			optLevel = llvm::OptimizationLevel::O2;
-			break;
-		case 3:
-			optLevel = llvm::OptimizationLevel::O3;
-			break;
-		default:
-			optLevel = llvm::OptimizationLevel::O1;
-			break;
-		}
-
-		llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(optLevel);
+		llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(optimizationLevel(context.options));
 		mpm.run(*context.llvmModule, mam);
 	}
 

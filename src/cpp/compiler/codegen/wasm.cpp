@@ -1,4 +1,5 @@
 #include "wasm.h"
+#include "targetOptions.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -406,10 +407,9 @@ std::unique_ptr<llvm::TargetMachine> createWASMTargetMachine(ParseContext &conte
 	if (!target)
 		return nullptr;
 
-	llvm::TargetOptions options;
 	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
-		targetTriple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
-		context.options.optimizationLevel >= 2 ? llvm::CodeGenOptLevel::Aggressive : llvm::CodeGenOptLevel::Default
+		targetTriple, "generic", "", llvmTargetOptions(context.options), llvm::Reloc::PIC_, std::nullopt,
+		codeGenerationOptimizationLevel(context.options)
 	));
 }
 
@@ -418,15 +418,8 @@ bool emitWASMModule(ParseContext &context) {
 	if (outputPath.empty())
 		outputPath = context.options.inputPath + ".wasm";
 
-	std::string error;
-	std::unique_ptr<llvm::TargetMachine> targetMachine = createWASMTargetMachine(context, error);
-	if (!targetMachine) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "wasm target not available", Range(), "error", error)
-		);
-		return false;
-	}
-	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	requireCompilerInvariant(context.targetMachine != nullptr, "WASM emission requires an initialized target machine");
+	llvm::TargetMachine &targetMachine = *context.targetMachine;
 
 	std::error_code ec;
 	llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
@@ -438,7 +431,7 @@ bool emitWASMModule(ParseContext &context) {
 	}
 
 	llvm::legacy::PassManager passManager;
-	if (targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+	if (targetMachine.addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "wasm target cannot emit object file", Range())
 		);

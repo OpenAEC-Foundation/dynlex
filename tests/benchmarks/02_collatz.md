@@ -4,145 +4,55 @@ This benchmark computes the total number of Collatz steps for all numbers from 1
 
 ## Results
 
-| Language | Optimization | Execution Time | vs Python |
-|----------|-------------|----------------|-----------|
-| Python | - | 11.363s | 1x |
-| **DynLex** | O0 | 0.969s | **12x faster** |
-| C++ | O0 | 0.338s | 34x faster |
-| **DynLex** | O3 | 0.221s | **51x faster** |
-| C++ | O3 | 0.172s | 66x faster |
+Measured on July 31, 2026:
 
-All outputs: `131434272` (correct)
+| Implementation | Compiler settings | Median | Mean | Standard deviation |
+|----------------|-------------------|-------:|-----:|-------------------:|
+| C++ | Clang `-O3`, native CPU tuning, LTO | 108.595 ms | 108.942 ms | 0.991 ms |
+| DynLex | `-O3`, native CPU tuning | 113.870 ms | 114.054 ms | 0.744 ms |
 
-## Analysis
+DynLex took `1.048x` the C++ execution time. Every tested binary printed
+`131434272`.
 
-- **DynLex vs Python**: 12-51x faster depending on optimization
-- **DynLex O3 vs C++ O3**: 1.3x slower (due to function call overhead for `set variable to value` pattern)
-- **DynLex O0 vs C++ O0**: 2.9x slower (function calls not yet inlined)
+### Method
 
-The gap between DynLex and C++ will narrow as more patterns become flexes (inlined at compile time).
+- CPU: Intel Core i5-9400, six physical cores, maximum 4.1 GHz
+- OS: Linux 7.0.0-28-generic
+- DynLex: 0.0.1 using the repository's LLVM 23 toolchain
+- C++: Clang 20.1.2 with GNU gold for LTO
+- CPU frequency governor: `powersave`, with turbo enabled
+- 10 warm-up runs and 50 measured runs per executable
+- Runs alternated between the executables and were pinned to CPU 0
+- Wall time included process startup; benchmark output was discarded while timing
+
+The flag search also covered `-Ofast`, fast-math, explicit loop unrolling,
+explicit loop and SLP vectorization, disabling unrolling, GCC 13.3, and GCC LTO.
+Clang profile-guided optimization trained on this workload was also slower than
+Clang LTO alone. Those settings did not improve this integer, data-dependent
+workload. Clang LTO was the only additional setting with a repeatable gain, so
+it is included in the C++ result.
 
 ## Source Code
 
-### DynLex (collatz.dl)
-
-```dynlex
-flex function return value:
-    replacement:
-        @intrinsic("return", value)
-
-flex function set variable to value:
-    replacement:
-        @intrinsic("store", variable, value)
-
-function print message as a line:
-    replacement:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message))
-
-function left < right:
-    execute:
-        return @intrinsic("less than", left, right)
-
-function left > right:
-    execute:
-        return @intrinsic("greater than", left, right)
-
-function left equals right:
-    execute:
-        return @intrinsic("equal", left, right)
-
-flex function left + right:
-    replacement:
-        @intrinsic("add", left, right)
-
-flex function left * right:
-    replacement:
-        @intrinsic("multiply", left, right)
-
-flex function left / right:
-    replacement:
-        @intrinsic("divide", left, right)
-
-flex function the remainder of left divided by right:
-    replacement:
-        @intrinsic("modulo", left, right)
-
-flex section loop while condition:
-    replacement:
-        @intrinsic("loop while", condition)
-
-flex section if condition:
-    replacement:
-        @intrinsic("if", condition)
-
-set steps to 0
-set number to 1
-
-loop while number < 1000000:
-    set current to number
-    loop while current > 1:
-        set steps to steps + 1
-        set remainder to the remainder of current divided by 2
-        if remainder equals 0:
-            set current to current / 2
-        if remainder > 0:
-            set current to current * 3 + 1
-    set number to number + 1
-
-print steps as a line
-```
-
-### C++ (collatz.cpp)
-
-```cpp
-#include <cstdio>
-
-int main() {
-    long total_steps = 0;
-    for (long n = 1; n < 1000000; n++) {
-        long num = n;
-        while (num > 1) {
-            total_steps++;
-            if (num % 2 == 0) {
-                num = num / 2;
-            } else {
-                num = num * 3 + 1;
-            }
-        }
-    }
-    printf("%ld\n", total_steps);
-    return 0;
-}
-```
-
-### Python (collatz.py)
-
-```python
-total_steps = 0
-n = 1
-while n < 1000000:
-    num = n
-    while num > 1:
-        total_steps += 1
-        if num % 2 == 0:
-            num = num // 2
-        else:
-            num = num * 3 + 1
-    n += 1
-print(total_steps)
-```
+The executable benchmark sources are [`collatz.dl`](./collatz.dl),
+[`collatz.cpp`](./collatz.cpp), and [`collatz.py`](./collatz.py). The DynLex and
+C++ programs both use signed 64-bit state and express each Collatz transition as
+the same remainder calculation and conditional selection.
 
 ## How to Run
 
 ```bash
 # DynLex
-./build/dynlex collatz.dl -O3 -o collatz_dynlex
-time ./collatz_dynlex
+./build/dynlex tests/benchmarks/collatz.dl \
+    -O3 -march=native -mtune=native -o collatz_dynlex
+taskset -c 0 ./collatz_dynlex
 
 # C++
-g++ -O3 collatz.cpp -o collatz_cpp
-time ./collatz_cpp
+clang++-20 -std=c++23 tests/benchmarks/collatz.cpp \
+    -O3 -march=native -mtune=native -flto -fuse-ld=gold \
+    -fno-exceptions -fno-rtti -o collatz_cpp
+taskset -c 0 ./collatz_cpp
 
 # Python
-time python3 collatz.py
+time python3 tests/benchmarks/collatz.py
 ```

@@ -1,9 +1,11 @@
 #include "native.h"
+#include "targetOptions.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Process.h"
@@ -13,7 +15,9 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/TargetParser/Triple.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdlib>
@@ -38,6 +42,81 @@ struct ProgramExecutionResult {
 	std::string executeError;
 	std::string output;
 };
+
+struct NativeTargetConfiguration {
+	std::string cpu;
+	std::string tuneCPU;
+	std::string features;
+};
+
+bool isKnownTargetFeature(const llvm::MCSubtargetInfo &subtargetInfo, llvm::StringRef feature) {
+	llvm::StringRef featureName = llvm::SubtargetFeatures::StripFlag(feature);
+	return std::any_of(
+		subtargetInfo.getAllProcessorFeatures().begin(), subtargetInfo.getAllProcessorFeatures().end(),
+		[featureName](const llvm::SubtargetFeatureKV &candidate) {
+		return featureName == candidate.Key;
+	}
+	);
+}
+
+bool resolveNativeTargetConfiguration(
+	ParseContext &context, const llvm::Target &target, const llvm::Triple &targetTriple,
+	NativeTargetConfiguration &configuration, std::string &errorMessage
+) {
+	std::unique_ptr<llvm::MCSubtargetInfo> subtargetInfo(target.createMCSubtargetInfo(targetTriple, "", ""));
+	if (!subtargetInfo) {
+		errorMessage = "target does not provide processor information for '" + targetTriple.str() + "'";
+		return false;
+	}
+
+	std::string hostCPU;
+	auto resolveCPU = [&](const std::string &requestedCPU, std::string &resolvedCPU) {
+		if (requestedCPU != "native") {
+			resolvedCPU = requestedCPU;
+			return true;
+		}
+		if (hostCPU.empty())
+			hostCPU = llvm::sys::getHostCPUName().str();
+		if (hostCPU.empty()) {
+			errorMessage = "host CPU detection returned no processor name";
+			return false;
+		}
+		resolvedCPU = hostCPU;
+		return true;
+	};
+
+	if (!resolveCPU(context.options.targetCPU, configuration.cpu) ||
+		!resolveCPU(context.options.targetTuneCPU, configuration.tuneCPU)) {
+		return false;
+	}
+	if (!subtargetInfo->isCPUStringValid(configuration.cpu)) {
+		errorMessage = "unknown target CPU '" + configuration.cpu + "' for '" + targetTriple.str() + "'";
+		return false;
+	}
+	if (!configuration.tuneCPU.empty() && !subtargetInfo->isCPUStringValid(configuration.tuneCPU)) {
+		errorMessage = "unknown tuning CPU '" + configuration.tuneCPU + "' for '" + targetTriple.str() + "'";
+		return false;
+	}
+
+	llvm::SubtargetFeatures features;
+	if (context.options.targetCPU == "native") {
+		std::vector<std::pair<std::string, bool>> hostFeatures;
+		for (const auto &[feature, enabled] : llvm::sys::getHostCPUFeatures())
+			hostFeatures.emplace_back(feature.str(), enabled);
+		std::sort(hostFeatures.begin(), hostFeatures.end());
+		for (const auto &[feature, enabled] : hostFeatures)
+			features.AddFeature(feature, enabled);
+	}
+	features.addFeaturesVector(llvm::SubtargetFeatures(context.options.targetFeatures).getFeatures());
+	for (const std::string &feature : features.getFeatures()) {
+		if (isKnownTargetFeature(*subtargetInfo, feature))
+			continue;
+		errorMessage = "unknown target feature '" + feature + "' for '" + targetTriple.str() + "'";
+		return false;
+	}
+	configuration.features = features.getString();
+	return true;
+}
 
 std::optional<ProgramExecutionResult>
 executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef> arguments, std::string &setupError) {
@@ -153,11 +232,17 @@ std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &con
 	if (!target)
 		return nullptr;
 
-	llvm::TargetOptions options;
-	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
-		targetTriple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
-		context.options.optimizationLevel >= 2 ? llvm::CodeGenOptLevel::Aggressive : llvm::CodeGenOptLevel::Default
+	NativeTargetConfiguration configuration;
+	if (!resolveNativeTargetConfiguration(context, *target, targetTriple, configuration, errorMessage))
+		return nullptr;
+	context.resolvedTargetTuneCPU = configuration.tuneCPU;
+	std::unique_ptr<llvm::TargetMachine> targetMachine(target->createTargetMachine(
+		targetTriple, configuration.cpu, configuration.features, llvmTargetOptions(context.options), llvm::Reloc::PIC_,
+		std::nullopt, codeGenerationOptimizationLevel(context.options)
 	));
+	if (!targetMachine)
+		errorMessage = "failed to create target machine for '" + targetTriple.str() + "'";
+	return targetMachine;
 }
 
 bool emitNativeExecutable(ParseContext &context) {
@@ -169,15 +254,8 @@ bool emitNativeExecutable(ParseContext &context) {
 		context.diagnostics.push_back(std::move(diagnostic));
 	};
 
-	std::string error;
-	std::unique_ptr<llvm::TargetMachine> targetMachine = createNativeTargetMachine(context, error);
-	if (!targetMachine) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "native target not available", Range(), "error", error)
-		);
-		return false;
-	}
-	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	requireCompilerInvariant(context.targetMachine != nullptr, "native emission requires an initialized target machine");
+	llvm::TargetMachine &targetMachine = *context.targetMachine;
 	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
 
 #ifdef _WIN32
@@ -226,7 +304,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		}
 
 		llvm::legacy::PassManager passManager;
-		if (targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+		if (targetMachine.addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 			context.diagnostics.push_back(
 				Diagnostic(context, Diagnostic::Level::Error, "target machine cannot emit object file", Range())
 			);

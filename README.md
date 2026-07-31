@@ -180,20 +180,16 @@ third-party libraries (for example LLVM internals), use:
 
 By default this runs `build-asan/dynlex` with `scripts/lsan.supp`.
 
-## Performance Snapshot (vs Python)
+## Performance Benchmarks
 
-From repository benchmarks:
+Benchmark details, reproducible source programs, compiler settings, and
+hardware-specific results:
 
-| Benchmark | Python | DynLex O0 | DynLex O3 |
-|----------|--------|-----------|-----------|
-| Sum 0..100,000,000 | 6.556s | 0.196s (33x faster) | 0.001s (6556x faster) |
-| Collatz 1..1,000,000 | 11.363s | 0.969s (12x faster) | 0.221s (51x faster) |
-
-Benchmark details and source programs:
 - [`tests/benchmarks/01_sum_100m.md`](./tests/benchmarks/01_sum_100m.md)
 - [`tests/benchmarks/02_collatz.md`](./tests/benchmarks/02_collatz.md)
 
-Times are hardware- and toolchain-dependent; run the benchmark files locally for your exact environment.
+Times are hardware- and toolchain-dependent; run the benchmark files locally
+for your exact environment.
 
 ## Ubuntu PPA Packaging
 

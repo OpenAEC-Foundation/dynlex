@@ -1,6 +1,7 @@
 #include "spirv.h"
 #include "compilerUtils.h"
 #include "parseContext.h"
+#include "targetOptions.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -568,10 +569,9 @@ std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &cont
 		return nullptr;
 	}
 
-	llvm::TargetOptions options;
-	return std::unique_ptr<llvm::TargetMachine>(
-		target->createTargetMachine(targetTriple, "", "", options, std::nullopt, std::nullopt, llvm::CodeGenOptLevel::None)
-	);
+	return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
+		targetTriple, "", "", llvmTargetOptions(context.options), std::nullopt, std::nullopt, llvm::CodeGenOptLevel::None
+	));
 }
 
 bool emitSPIRVModule(ParseContext &context) {
@@ -579,15 +579,8 @@ bool emitSPIRVModule(ParseContext &context) {
 	if (outputPath.empty())
 		outputPath = context.options.inputPath + ".spv";
 
-	std::string error;
-	std::unique_ptr<llvm::TargetMachine> targetMachine = createSPIRVTargetMachine(context, error);
-	if (!targetMachine) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "spirv target not available", Range(), "error", error)
-		);
-		return false;
-	}
-	context.llvmModule->setDataLayout(targetMachine->createDataLayout());
+	requireCompilerInvariant(context.targetMachine != nullptr, "SPIR-V emission requires an initialized target machine");
+	llvm::TargetMachine &targetMachine = *context.targetMachine;
 	defineShaderOutputVectorSeeds(*context.llvmModule);
 
 	std::error_code ec;
@@ -600,7 +593,7 @@ bool emitSPIRVModule(ParseContext &context) {
 	}
 
 	llvm::legacy::PassManager passManager;
-	if (targetMachine->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+	if (targetMachine.addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
 		context.diagnostics.push_back(
 			Diagnostic(context, Diagnostic::Level::Error, "spirv target cannot emit object file", Range())
 		);

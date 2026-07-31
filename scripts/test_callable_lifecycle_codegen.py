@@ -30,7 +30,7 @@ def main() -> int:
 
     wrapper_match = re.search(
         r'^define [^{@]*@(?P<name>"[^"\n]*replace[^"\n]*_callable_[^"\n]*"|'
-        r'[^\s(]*replace[^\s(]*_callable_[^\s(]*)\([^\n]*\) \{\n(?P<body>.*?)^\}',
+        r'[^\s(]*replace[^\s(]*_callable_[^\s(]*)\([^\n]*\)[^{\n]*\{\n(?P<body>.*?)^\}',
         llvm,
         flags=re.MULTILINE | re.DOTALL,
     )

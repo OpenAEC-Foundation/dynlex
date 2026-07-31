@@ -39,7 +39,11 @@ void printUsage(std::ostream &output) {
 		   << "Compiler options:\n"
 		   << "  --emit-llvm | --emit-wasm | --emit-spirv\n"
 		   << "  --emit-completions line:column  --dump-purity\n"
-		   << "  --shader-stage=vertex|fragment  -O0|-O1|-O2|-O3\n"
+		   << "  --shader-stage=vertex|fragment  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
+		   << "  -ffast-math|-fno-fast-math  -ffp-contract=fast|off\n"
+		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
+		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
+		   << "  -funroll-loops|-fno-unroll-loops\n"
 		   << "  -o <output>  -g|--debug\n"
 		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
 		   << "  --version  --help\n";
@@ -253,12 +257,98 @@ int main(int argumentCount, char *argumentValues[]) {
 			context.options.emitDebugInfo = true;
 		} else if (arg == "-O0") {
 			context.options.optimizationLevel = 0;
+			context.options.optimizationSize = ParseContext::OptimizationSize::None;
 		} else if (arg == "-O1") {
 			context.options.optimizationLevel = 1;
+			context.options.optimizationSize = ParseContext::OptimizationSize::None;
 		} else if (arg == "-O2") {
 			context.options.optimizationLevel = 2;
+			context.options.optimizationSize = ParseContext::OptimizationSize::None;
 		} else if (arg == "-O3") {
 			context.options.optimizationLevel = 3;
+			context.options.optimizationSize = ParseContext::OptimizationSize::None;
+		} else if (arg == "-Os") {
+			context.options.optimizationLevel = 2;
+			context.options.optimizationSize = ParseContext::OptimizationSize::Size;
+		} else if (arg == "-Oz") {
+			context.options.optimizationLevel = 2;
+			context.options.optimizationSize = ParseContext::OptimizationSize::Smallest;
+		} else if (arg == "-Ofast") {
+			context.options.optimizationLevel = 3;
+			context.options.optimizationSize = ParseContext::OptimizationSize::None;
+			context.options.fastMath = true;
+			context.options.floatingPointContract = ParseContext::FloatingPointContract::Fast;
+		} else if (arg == "-ffast-math") {
+			context.options.fastMath = true;
+			context.options.floatingPointContract = ParseContext::FloatingPointContract::Fast;
+		} else if (arg == "-fno-fast-math") {
+			context.options.fastMath = false;
+			context.options.floatingPointContract =
+				context.options.explicitFloatingPointContract.value_or(ParseContext::FloatingPointContract::Off);
+		} else if (arg == "-ffp-contract=fast") {
+			context.options.floatingPointContract = ParseContext::FloatingPointContract::Fast;
+			context.options.explicitFloatingPointContract = ParseContext::FloatingPointContract::Fast;
+		} else if (arg == "-ffp-contract=off") {
+			context.options.floatingPointContract = ParseContext::FloatingPointContract::Off;
+			context.options.explicitFloatingPointContract = ParseContext::FloatingPointContract::Off;
+		} else if (arg.starts_with("-ffp-contract=")) {
+			std::cerr << "Invalid -ffp-contract value; expected fast or off" << std::endl;
+			return 1;
+		} else if (arg == "-fvectorize") {
+			context.options.loopVectorization = true;
+		} else if (arg == "-fno-vectorize") {
+			context.options.loopVectorization = false;
+		} else if (arg == "-fslp-vectorize") {
+			context.options.slpVectorization = true;
+		} else if (arg == "-fno-slp-vectorize") {
+			context.options.slpVectorization = false;
+		} else if (arg == "-funroll-loops") {
+			context.options.loopUnrolling = true;
+		} else if (arg == "-fno-unroll-loops") {
+			context.options.loopUnrolling = false;
+		} else if (arg.starts_with("-march=")) {
+			context.options.targetCPU = arg.substr(std::string("-march=").size());
+			if (context.options.targetCPU.empty()) {
+				std::cerr << "Missing value for -march" << std::endl;
+				return 1;
+			}
+			context.options.hasExplicitTargetConfiguration = true;
+		} else if (arg.starts_with("-mcpu=")) {
+			context.options.targetCPU = arg.substr(std::string("-mcpu=").size());
+			if (context.options.targetCPU.empty()) {
+				std::cerr << "Missing value for -mcpu" << std::endl;
+				return 1;
+			}
+			context.options.hasExplicitTargetConfiguration = true;
+		} else if (arg.starts_with("-mtune=")) {
+			context.options.targetTuneCPU = arg.substr(std::string("-mtune=").size());
+			if (context.options.targetTuneCPU.empty()) {
+				std::cerr << "Missing value for -mtune" << std::endl;
+				return 1;
+			}
+			context.options.hasExplicitTargetConfiguration = true;
+		} else if (arg.starts_with("-mattr=")) {
+			std::string features = arg.substr(std::string("-mattr=").size());
+			if (features.empty()) {
+				std::cerr << "Missing value for -mattr" << std::endl;
+				return 1;
+			}
+			for (size_t start = 0; start <= features.size();) {
+				size_t end = features.find(',', start);
+				std::string_view feature =
+					std::string_view(features).substr(start, end == std::string::npos ? std::string::npos : end - start);
+				if (feature.size() < 2 || (feature.front() != '+' && feature.front() != '-')) {
+					std::cerr << "Invalid -mattr value; expected comma-separated +feature or -feature entries" << std::endl;
+					return 1;
+				}
+				if (end == std::string::npos)
+					break;
+				start = end + 1;
+			}
+			if (!context.options.targetFeatures.empty())
+				context.options.targetFeatures += ',';
+			context.options.targetFeatures += features;
+			context.options.hasExplicitTargetConfiguration = true;
 		} else if (arg.starts_with("-o")) {
 			if (arg.size() > 2) {
 				context.options.outputPath = arg.substr(2);
@@ -294,6 +384,10 @@ int main(int argumentCount, char *argumentValues[]) {
 	explicitOutputModes += context.options.emitSPIRV ? 1 : 0;
 	if (explicitOutputModes > 1) {
 		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-wasm, or --emit-spirv" << std::endl;
+		return 1;
+	}
+	if ((context.options.emitWASM || context.options.emitSPIRV) && context.options.hasExplicitTargetConfiguration) {
+		std::cerr << "CPU target options require native or LLVM output" << std::endl;
 		return 1;
 	}
 	if (commandSourceStart) {

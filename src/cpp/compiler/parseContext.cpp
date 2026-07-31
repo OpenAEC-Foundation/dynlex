@@ -13,6 +13,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Target/TargetMachine.h"
 #include <iostream>
 #include <iterator>
 #include <unordered_set>
@@ -36,6 +37,8 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 	delete node;
 }
 } // namespace
+
+ParseContext::ParseContext() = default;
 
 void ParseContext::printDiagnostics() {
 	for (Diagnostic d : diagnostics) {
@@ -288,6 +291,7 @@ ParseContext::~ParseContext() {
 	diBuilder = nullptr;
 	delete static_cast<llvm::IRBuilder<> *>(llvmBuilder);
 	llvmBuilder = nullptr;
+	targetMachine.reset();
 	delete llvmModule;
 	llvmModule = nullptr;
 	delete llvmContext;

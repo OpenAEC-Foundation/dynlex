@@ -12,6 +12,8 @@
 #include <functional>
 #include <limits>
 #include <list>
+#include <memory>
+#include <optional>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -31,6 +33,7 @@ class DIBuilder;
 class DICompileUnit;
 class DIFile;
 class DIScope;
+class TargetMachine;
 } // namespace llvm
 
 struct ParseContext {
@@ -59,6 +62,8 @@ struct ParseContext {
 	};
 
 	enum class ShaderStage { Fragment, Vertex };
+	enum class OptimizationSize { None, Size, Smallest };
+	enum class FloatingPointContract { Off, Fast };
 
 	// Installed only while pattern resolution owns the reference queues and
 	// definition-to-reference index. Indexed pattern elements may be changed
@@ -101,6 +106,17 @@ struct ParseContext {
 		bool emitSPIRV = false;
 		ShaderStage shaderStage = ShaderStage::Fragment;
 		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
+		OptimizationSize optimizationSize = OptimizationSize::None;
+		bool fastMath = false;
+		FloatingPointContract floatingPointContract = FloatingPointContract::Off;
+		std::optional<FloatingPointContract> explicitFloatingPointContract;
+		std::optional<bool> loopVectorization;
+		std::optional<bool> slpVectorization;
+		std::optional<bool> loopUnrolling;
+		std::string targetCPU = "generic";
+		std::string targetTuneCPU;
+		std::string targetFeatures;
+		bool hasExplicitTargetConfiguration = false;
 		// Maximum iterations for resolving pattern references and sections.
 		// Pattern resolution is iterative: each pass resolves patterns that become unambiguous
 		// when other patterns are resolved. 256 iterations is sufficient for deeply nested patterns.
@@ -118,6 +134,8 @@ struct ParseContext {
 	llvm::LLVMContext *llvmContext{};
 	llvm::Module *llvmModule{};
 	llvm::IRBuilderBase *llvmBuilder{};
+	std::unique_ptr<llvm::TargetMachine> targetMachine;
+	std::string resolvedTargetTuneCPU;
 	llvm::Function *mainLLVMFunction{};
 	llvm::BasicBlock *mainCleanupBlock{};
 	llvm::AllocaInst *mainReturnStorage{};
@@ -221,7 +239,7 @@ struct ParseContext {
 	std::string projectSyntaxConfigPath;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
-	ParseContext() = default;
+	ParseContext();
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
 	void addDiagnostic(Diagnostic diagnostic) { diagnostics.push_back(std::move(diagnostic)); }

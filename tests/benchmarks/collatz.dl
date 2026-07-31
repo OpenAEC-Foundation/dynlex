@@ -1,0 +1,76 @@
+flex function return value:
+    replacement:
+        @intrinsic("return", value)
+
+flex function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function fixed value:
+    replacement:
+        @intrinsic("fix", value)
+
+function [a|] {fixed integer:bits} bit integer:
+    replacement:
+        @intrinsic("type", "int", bits)
+
+function value as [a|] {fixed integer:bits} bit integer:
+    replacement:
+        @intrinsic("cast", value, @intrinsic("type", "int", bits))
+
+function print message as a line:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%lld\n", message))
+
+function left < right:
+    execute:
+        return @intrinsic("less than", left, right)
+
+function left > right:
+    execute:
+        return @intrinsic("greater than", left, right)
+
+function left equals right:
+    execute:
+        return @intrinsic("equal", left, right)
+
+function truth if condition, else falsehood:
+    replacement:
+        @intrinsic("select", condition, truth, falsehood)
+
+flex function left + right:
+    replacement:
+        @intrinsic("add", left, right)
+
+flex function left * right:
+    replacement:
+        @intrinsic("multiply", left, right)
+
+flex function left / right:
+    replacement:
+        @intrinsic("divide", left, right)
+
+flex function the remainder of left divided by right:
+    replacement:
+        @intrinsic("modulo", left, right)
+
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+set steps to 0 as a 64 bit integer
+set number to 1 as a 64 bit integer
+
+loop while number < 1000000:
+    set current to number
+    loop while current > 1:
+        set steps to steps + 1
+        set remainder to the remainder of current divided by 2
+        set current to ((current / 2) if remainder equals 0, else ((current * 3) + 1))
+    set number to number + 1
+
+print steps as a line
