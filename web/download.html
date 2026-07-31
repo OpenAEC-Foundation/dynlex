@@ -200,98 +200,13 @@
         <details class="chooser">
             <summary>Not your platform?</summary>
             <div class="chooser-panel">
-                <div class="other-grid">
-                    <a id="alt-windows" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Windows (.msi)</a>
-                    <a id="alt-macos" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">macOS (.pkg)</a>
-                    <a id="alt-linux-deb" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Linux (.deb)</a>
-                    <a id="alt-linux-tar" class="download-btn" href="https://github.com/OpenAEC-Foundation/dynlex/releases/latest">Linux (.tar.gz)</a>
-                </div>
+                <div class="other-grid" id="alternate-downloads"></div>
                 <div class="linux-one-liner">Linux quick install:
 curl -fsSL https://dynlex.com/install.sh | sh</div>
             </div>
         </details>
     </div>
 
-    <script>
-        (function () {
-            var ua = navigator.userAgent || "";
-            var platform = "Linux";
-            var label = "Linux";
-            var fallbackReleaseUrl = "https://github.com/OpenAEC-Foundation/dynlex/releases/latest";
-
-            if (ua.indexOf("Windows") >= 0) {
-                platform = "Windows";
-                label = "Windows";
-            } else if (ua.indexOf("Mac") >= 0) {
-                platform = "macOS";
-                label = "macOS";
-            }
-
-            var title = document.getElementById("hero-title");
-            var primary = document.getElementById("primary-download");
-            var status = document.getElementById("status-line");
-            var altWindows = document.getElementById("alt-windows");
-            var altMacos = document.getElementById("alt-macos");
-            var altLinuxDeb = document.getElementById("alt-linux-deb");
-            var altLinuxTar = document.getElementById("alt-linux-tar");
-
-            title.textContent = "Download DynLex for " + label;
-            primary.href = fallbackReleaseUrl;
-            primary.querySelector("span").textContent = "Download for " + label;
-            status.textContent = "If nothing downloaded, click 'Download for " + label + "'.";
-
-            function pickAsset(assets, options) {
-                return assets.find(function (asset) {
-                    if (!options.extRegex.test(asset.name)) {
-                        return false;
-                    }
-                    return options.nameRegex ? options.nameRegex.test(asset.name) : true;
-                }) || null;
-            }
-
-            function configureAndDownload(assets) {
-                var windowsAsset = pickAsset(assets, { extRegex: /\.msi$/i, nameRegex: /windows/i });
-                var macAsset = pickAsset(assets, { extRegex: /\.pkg$/i, nameRegex: /mac/i });
-                var linuxDebAsset = pickAsset(assets, { extRegex: /\.deb$/i });
-                var linuxTarAsset = pickAsset(assets, { extRegex: /\.tar\.gz$/i });
-
-                if (windowsAsset) altWindows.href = windowsAsset.browser_download_url;
-                if (macAsset) altMacos.href = macAsset.browser_download_url;
-                if (linuxDebAsset) altLinuxDeb.href = linuxDebAsset.browser_download_url;
-                if (linuxTarAsset) altLinuxTar.href = linuxTarAsset.browser_download_url;
-
-                var primaryUrl = fallbackReleaseUrl;
-                if (platform === "Windows" && windowsAsset) {
-                    primaryUrl = windowsAsset.browser_download_url;
-                } else if (platform === "macOS" && macAsset) {
-                    primaryUrl = macAsset.browser_download_url;
-                } else if (platform === "Linux") {
-                    primaryUrl = linuxDebAsset ? linuxDebAsset.browser_download_url : (linuxTarAsset ? linuxTarAsset.browser_download_url : fallbackReleaseUrl);
-                }
-
-                primary.href = primaryUrl;
-                setTimeout(function () {
-                    window.location.assign(primaryUrl);
-                }, 550);
-            }
-
-            fetch("https://api.github.com/repos/OpenAEC-Foundation/dynlex/releases/latest", {
-                headers: { "Accept": "application/vnd.github+json" }
-            }).then(function (response) {
-                if (!response.ok) {
-                    throw new Error("release metadata fetch failed");
-                }
-                return response.json();
-            }).then(function (release) {
-                var assets = Array.isArray(release.assets) ? release.assets : [];
-                configureAndDownload(assets);
-            }).catch(function () {
-                status.textContent = "Could not resolve platform installer automatically. Click 'Download for " + label + "'.";
-                setTimeout(function () {
-                    window.location.assign(fallbackReleaseUrl);
-                }, 550);
-            });
-        })();
-    </script>
+    <script type="module" src="download.js"></script>
 </body>
 </html>

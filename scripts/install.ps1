@@ -8,6 +8,9 @@ function Test-Winget {
 function Install-WithWinget {
     param([string]$PackageId)
 
+    if (-not (Test-Winget)) {
+        throw "winget is required to install missing package '$PackageId'. Install App Installer and retry."
+    }
     winget install `
         --id $PackageId `
         --exact `
@@ -183,10 +186,6 @@ function Install-VcpkgDependencies {
 }
 
 Write-Host "Installing DynLex build dependencies for Windows..." -ForegroundColor Cyan
-if (-not (Test-Winget)) {
-    throw "winget is required but was not found. Install App Installer from Microsoft Store and retry."
-}
-
 $llvmMetadataPath = Join-Path (Split-Path -Parent $PSScriptRoot) "metadata\LLVM_TOOLCHAIN"
 $bootstrapMetadata = @(Get-Content $llvmMetadataPath | Where-Object { $_ -match '^bootstrap [0-9]+$' })
 if ($bootstrapMetadata.Count -ne 1) {

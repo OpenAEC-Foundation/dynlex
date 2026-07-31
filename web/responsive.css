@@ -17,7 +17,8 @@
     }
 
     .language-shell,
-    .studio-shell {
+    .studio-shell,
+    .install-shell {
         gap: 55px;
     }
 
@@ -27,6 +28,10 @@
 
     .studio-shell {
         grid-template-columns: minmax(540px, 1.25fr) minmax(280px, 0.75fr);
+    }
+
+    .install-shell {
+        grid-template-columns: minmax(240px, 0.6fr) minmax(500px, 1.4fr);
     }
 }
 
@@ -152,13 +157,15 @@
     }
 
     .language-shell,
-    .studio-shell {
+    .studio-shell,
+    .install-shell {
         grid-template-columns: 1fr;
         gap: 75px;
     }
 
     .language-copy,
-    .studio-copy {
+    .studio-copy,
+    .install-copy {
         max-width: 680px;
     }
 
@@ -296,7 +303,8 @@
 
     .challenge-section,
     .language-section,
-    .studio-section {
+    .studio-section,
+    .install-section {
         padding: 95px 0;
     }
 
@@ -312,7 +320,8 @@
 
     .section-title h2,
     .language-copy h2,
-    .studio-copy h2 {
+    .studio-copy h2,
+    .install-copy h2 {
         font-size: clamp(3rem, 14vw, 4.6rem);
     }
 
@@ -378,6 +387,11 @@
 
     .studio-output strong {
         font-size: 2.7rem;
+    }
+
+    .install-card {
+        min-height: 108px;
+        padding: 22px 20px;
     }
 
     .footer-inner {
