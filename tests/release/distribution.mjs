@@ -350,8 +350,22 @@ assert.match(windowsDependencyInstaller, /--branch \$metadata\.release/);
 assert.match(windowsDependencyInstaller, /\$actualCommit -ne \$metadata\.commit/);
 assert.match(
   windowsDependencyInstaller,
-  /Ensure-VisualStudioCppToolchain -TargetArchitecture \$dependencyArchitecture/,
+  /\$visualStudioToolchain = Ensure-VisualStudioCppToolchain\s+`\s+-TargetArchitecture \$dependencyArchitecture/,
 );
+assert.match(
+  windowsDependencyInstaller,
+  /Enter-VisualStudioCppEnvironment[\s\S]*VsDevCmd\.bat/,
+);
+assert.match(windowsDependencyInstaller, /call "\{0\}" -no_logo -arch=\{1\}/);
+assert.match(
+  windowsDependencyInstaller,
+  /\$commandLine = [\s\S]*\$developerCommand,[\s\S]*\$developerArchitecture/,
+);
+assert.match(
+  windowsDependencyInstaller,
+  /@\("INCLUDE", "LIB", "LIBPATH", "VSCMD_VER"\)/,
+);
+assert.match(windowsDependencyInstaller, /Add-GitHubPathIfPresent -PathValue \$pathEntry/);
 assert.match(
   windowsDependencyInstaller,
   /Microsoft\.VisualStudio\.Workload\.VCTools/,

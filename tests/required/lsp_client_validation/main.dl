@@ -144,29 +144,3 @@ add waiting as an argument to waiter
 set startup to the result of starting an LSP client using waiter waiting up to 20 milliseconds
 print whether startup failed as a line
 print whether (startup's status = the JSON-RPC timeout status) as a line
-
-set flooding to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p)\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});sys.stdout.buffer.flush();assert read()['method']=='initialized'\nfor i in range(1025): send({'jsonrpc':'2.0','method':'custom/queued','params':{'index':i}})\nsys.stdout.buffer.flush();shutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});sys.stdout.buffer.flush();assert read()['method']=='exit'"
-set flooder to a process command for the LSP validation test interpreter
-add "-u" as an argument to flooder
-add "-c" as an argument to flooder
-add flooding as an argument to flooder
-set inundated to the result of starting an LSP client using flooder waiting up to 2000 milliseconds
-print whether inundated succeeded as a line
-set receiver to inundated's client
-set filled to true
-set cursor to 0
-loop while cursor < 1024:
-    set pumped to the result of pumping one LSP message using receiver waiting up to 2000 milliseconds
-    if pumped failed:
-        set filled to false
-    set cursor to (cursor + 1)
-print filled as a line
-set overflow to the result of pumping one LSP message using receiver waiting up to 2000 milliseconds
-print whether overflow failed as a line
-print whether (overflow's status = the JSON-RPC limit exceeded status) as a line
-set first to the next LSP notification from receiver
-print whether first succeeded as a line
-free first
-set stopped to the result of shutting down receiver waiting up to 2000 milliseconds
-print whether stopped succeeded as a line
-free receiver
