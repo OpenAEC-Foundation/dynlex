@@ -338,6 +338,7 @@ if(NOT EMSCRIPTEN)
     endif()
     set(DYNLEX_RUNTIME_HEADERS
         src/runtime/filesystemRuntimeInternal.h
+        src/runtime/filesystemStatPosix.h
         src/runtime/filesystemTransactionInternal.h
         src/runtime/hostRuntimeInternal.h
         src/runtime/hostRuntimeWindowsPath.h
