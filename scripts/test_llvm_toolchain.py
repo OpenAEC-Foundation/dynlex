@@ -113,7 +113,7 @@ class LlvmToolchainTests(unittest.TestCase):
                 self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
                 resolved_caches.append(Path(completed.stdout.strip()))
 
-            expected_cache = primary / ".cache" / "llvm-toolchain"
+            expected_cache = primary.resolve() / ".cache" / "llvm-toolchain"
             self.assertEqual(resolved_caches, [expected_cache, expected_cache])
 
     def test_toolchain_pin_and_cache_layout_have_one_source_of_truth(self) -> None:

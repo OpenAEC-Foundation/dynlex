@@ -129,6 +129,7 @@ $llvmMingwMetadata = Read-LlvmMingwMetadata -ProjectRoot $projectRoot
 if (
     $llvmMingwMetadata.release -ne "20260616" -or
     $llvmMingwMetadata.llvm -ne "22" -or
+    $llvmMingwMetadata.schema -ne "2" -or
     $llvmMingwMetadata.x64_sha256 -ne "b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35" -or
     $llvmMingwMetadata.arm64_sha256 -ne "312593669435bd0bfc1a43ac3fba23c8b27e0610bade88b2738e5a01702a99ba"
 ) {
@@ -151,6 +152,7 @@ try {
     foreach ($directory in @(
         (Join-Path $toolchainRoot "bin"),
         (Join-Path $toolchainRoot "lib\clang\22\lib\windows"),
+        (Join-Path $toolchainRoot "lib\clang\22\include"),
         (Join-Path $toolchainRoot "include"),
         (Join-Path $toolchainRoot "include\sys"),
         (Join-Path $toolchainRoot "x86_64-w64-mingw32\lib"),
@@ -174,6 +176,9 @@ try {
         "bin\libc++.dll",
         "bin\libunwind.dll",
         "lib\clang\22\lib\windows\libclang_rt.builtins-x86_64.a",
+        "lib\clang\22\include\stdbool.h",
+        "lib\clang\22\include\stddef.h",
+        "lib\clang\22\include\x86intrin.h",
         "include\windows.h",
         "include\winioctl.h",
         "include\shlobj.h",
@@ -208,6 +213,9 @@ try {
         -DependencyRoot $dependencyRoot
     foreach ($relativePath in @(
         "lib\dynlex\toolchain\bin\cc.exe",
+        "lib\dynlex\toolchain\lib\clang\22\include\stdbool.h",
+        "lib\dynlex\toolchain\lib\clang\22\include\stddef.h",
+        "lib\dynlex\toolchain\lib\clang\22\include\x86intrin.h",
         "lib\dynlex\toolchain\x86_64-w64-mingw32\lib\libkernel32.a",
         "lib\dynlex\toolchain\dependencies\lib\libglfw3dll.a",
         "lib\dynlex\toolchain\dependencies\lib\libfreetype.a",

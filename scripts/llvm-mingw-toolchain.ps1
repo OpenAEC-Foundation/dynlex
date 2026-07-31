@@ -40,7 +40,7 @@ function Read-LlvmMingwMetadata {
     if ($metadata.release -notmatch '^[0-9]{8}$' -or $metadata.llvm -notmatch '^[0-9]+$') {
         throw "LLVM MinGW release and LLVM version fields are invalid."
     }
-    if ($metadata.crt -ne "ucrt" -or $metadata.schema -ne "1") {
+    if ($metadata.crt -ne "ucrt" -or $metadata.schema -ne "2") {
         throw "LLVM MinGW CRT or metadata schema is unsupported."
     }
     foreach ($checksumField in "x64_sha256", "arm64_sha256") {
@@ -93,6 +93,11 @@ function Assert-LlvmMingwLayout {
         [string]$TargetArchitecture
     )
 
+    $architectureIntrinsicHeader = switch ($TargetArchitecture) {
+        "x86_64" { "x86intrin.h" }
+        "aarch64" { "arm64intr.h" }
+        default { throw "Unsupported LLVM MinGW target architecture: $TargetArchitecture" }
+    }
     $requiredPaths = @(
         "LICENSE.TXT",
         "bin\cc.exe",
@@ -103,6 +108,9 @@ function Assert-LlvmMingwLayout {
         "bin\libclang-cpp.dll",
         "bin\libc++.dll",
         "bin\libunwind.dll",
+        "lib\clang\$LlvmVersion\include\stdbool.h",
+        "lib\clang\$LlvmVersion\include\stddef.h",
+        "lib\clang\$LlvmVersion\include\$architectureIntrinsicHeader",
         "lib\clang\$LlvmVersion\lib\windows\libclang_rt.builtins-$TargetArchitecture.a",
         "include\windows.h",
         "include\winioctl.h",
@@ -141,14 +149,26 @@ function Install-LlvmMingwToolchain {
         "host=$($hostConfiguration.AssetArchitecture)",
         "target=$($hostConfiguration.TargetTriple)"
     ) -join "`n"
+    $schemaOneMarkerContents = @(
+        "schema=1",
+        "release=$($metadata.release)",
+        "sha256=$expectedChecksum",
+        "host=$($hostConfiguration.AssetArchitecture)",
+        "target=$($hostConfiguration.TargetTriple)"
+    ) -join "`n"
 
     if (Test-Path $toolchainRoot) {
         if (-not (Test-Path -PathType Leaf $markerPath)) {
             throw "LLVM MinGW cache directory exists without its integrity marker: $toolchainRoot"
         }
-        if ((Get-Content $markerPath -Raw).TrimEnd() -ne $markerContents) {
+        $actualMarkerContents = (Get-Content $markerPath -Raw).TrimEnd()
+        if ($actualMarkerContents -eq $schemaOneMarkerContents) {
+            Remove-Item -Recurse -Force $toolchainRoot
+        } elseif ($actualMarkerContents -ne $markerContents) {
             throw "LLVM MinGW cache integrity marker does not match the pinned toolchain."
         }
+    }
+    if (Test-Path $toolchainRoot) {
         Assert-LlvmMingwLayout `
             -ToolchainRoot $toolchainRoot `
             -LlvmVersion $metadata.llvm `
@@ -177,9 +197,14 @@ function Install-LlvmMingwToolchain {
                 -TargetArchitecture $hostConfiguration.TargetArchitecture
             $slimBin = Join-Path $slimRoot "bin"
             $slimInclude = Join-Path $slimRoot "include"
-            $slimResource = Join-Path $slimRoot "lib\clang\$($metadata.llvm)\lib\windows"
+            $slimResourceRoot = Join-Path $slimRoot "lib\clang\$($metadata.llvm)"
+            $slimResourceInclude = Join-Path $slimResourceRoot "include"
+            $slimResourceLibraries = Join-Path $slimResourceRoot "lib\windows"
             $slimTarget = Join-Path $slimRoot "$($hostConfiguration.TargetTriple)"
-            New-Item -ItemType Directory -Path $slimBin, $slimInclude, $slimResource | Out-Null
+            New-Item `
+                -ItemType Directory `
+                -Path $slimBin, $slimInclude, $slimResourceInclude, $slimResourceLibraries |
+                Out-Null
             New-Item -ItemType Directory -Path (Join-Path $slimTarget "lib") | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $slimTarget "share\mingw32") | Out-Null
             foreach ($fileName in @(
@@ -196,8 +221,12 @@ function Install-LlvmMingwToolchain {
             }
             Copy-Item (Join-Path $extractedRoot "LICENSE.TXT") $slimRoot
             Copy-Item `
+                -Path (Join-Path $extractedRoot "lib\clang\$($metadata.llvm)\include\*") `
+                -Destination $slimResourceInclude `
+                -Recurse
+            Copy-Item `
                 (Join-Path $extractedRoot "lib\clang\$($metadata.llvm)\lib\windows\libclang_rt.builtins-$($hostConfiguration.TargetArchitecture).a") `
-                $slimResource
+                $slimResourceLibraries
             Copy-Item `
                 -Path (Join-Path $extractedRoot "include\*") `
                 -Destination $slimInclude `

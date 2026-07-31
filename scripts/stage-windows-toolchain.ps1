@@ -22,7 +22,9 @@ $ErrorActionPreference = "Stop"
 $targetTriple = "$TargetArchitecture-w64-mingw32"
 $destinationRoot = Join-Path $InstallationRoot "lib\dynlex\toolchain"
 $destinationBin = Join-Path $destinationRoot "bin"
-$destinationResource = Join-Path $destinationRoot "lib\clang\$LlvmVersion\lib\windows"
+$destinationResourceRoot = Join-Path $destinationRoot "lib\clang\$LlvmVersion"
+$destinationResourceInclude = Join-Path $destinationResourceRoot "include"
+$destinationResourceLibraries = Join-Path $destinationResourceRoot "lib\windows"
 $destinationTarget = Join-Path $destinationRoot "$targetTriple"
 $destinationTargetLib = Join-Path $destinationTarget "lib"
 $destinationTargetLicenses = Join-Path $destinationTarget "share\mingw32"
@@ -33,7 +35,9 @@ $destinationVcpkgLicenses = Join-Path $destinationRoot "licenses\vcpkg"
 if (Test-Path $destinationRoot) {
     throw "Windows toolchain destination already exists: $destinationRoot"
 }
-New-Item -ItemType Directory -Path $destinationBin, $destinationResource, $destinationTargetLib |
+New-Item `
+    -ItemType Directory `
+    -Path $destinationBin, $destinationResourceInclude, $destinationResourceLibraries, $destinationTargetLib |
     Out-Null
 New-Item -ItemType Directory -Path $destinationTargetLicenses, $destinationDependencyLib |
     Out-Null
@@ -53,8 +57,12 @@ foreach ($fileName in @(
 }
 Copy-Item -Path (Join-Path $ToolchainRoot "LICENSE.TXT") -Destination $destinationRoot
 Copy-Item `
+    -Path (Join-Path $ToolchainRoot "lib\clang\$LlvmVersion\include\*") `
+    -Destination $destinationResourceInclude `
+    -Recurse
+Copy-Item `
     -Path (Join-Path $ToolchainRoot "lib\clang\$LlvmVersion\lib\windows\libclang_rt.builtins-$TargetArchitecture.a") `
-    -Destination $destinationResource
+    -Destination $destinationResourceLibraries
 Copy-Item -Path (Join-Path $ToolchainRoot "$targetTriple\lib\*") -Destination $destinationTargetLib
 Copy-Item -Path (Join-Path $ToolchainRoot "$targetTriple\share\mingw32\*") -Destination $destinationTargetLicenses
 

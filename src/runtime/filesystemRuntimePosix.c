@@ -1,4 +1,6 @@
+#define DYNLEX_REQUIRE_GNU_SOURCE
 #include "platformFeatureTest.h"
+#undef DYNLEX_REQUIRE_GNU_SOURCE
 
 #include "filesystemRuntimeInternal.h"
 #include "filesystemStatPosix.h"
@@ -357,32 +359,17 @@ int dynlex_platform_filesystem_create_temporary_directory(char **path, size_t *l
 	const char *base = getenv("TMPDIR");
 	if (base == NULL || base[0] == '\0')
 		base = "/tmp";
-	size_t base_length = strlen(base);
-	char *absolute_base = NULL;
-	if (base[0] == '/')
-		absolute_base = dynlex_filesystem_copy_path(base, base_length);
-	else {
-		char *working_directory = getcwd(NULL, 0);
-		if (working_directory == NULL) {
-			dynlex_runtime_set_errno_error("Could not resolve host temporary directory", errno);
-			return -1;
-		}
-		size_t working_length = strlen(working_directory);
-		if (working_length > SIZE_MAX - base_length - 2) {
-			free(working_directory);
-			dynlex_runtime_set_error("Host temporary directory path is too large");
-			return -1;
-		}
-		absolute_base = malloc(working_length + base_length + 2);
-		if (absolute_base != NULL)
-			snprintf(absolute_base, working_length + base_length + 2, "%s/%s", working_directory, base);
-		free(working_directory);
-		if (absolute_base == NULL) {
-			dynlex_runtime_set_errno_error("Could not allocate host temporary directory path", ENOMEM);
-			return -1;
-		}
+	char *absolute_base = realpath(base, NULL);
+	if (absolute_base == NULL) {
+		dynlex_runtime_set_errno_error("Could not resolve host temporary directory", errno);
+		return -1;
 	}
 	size_t absolute_length = strlen(absolute_base);
+	if (!dynlex_filesystem_utf8_is_valid(absolute_base, absolute_length)) {
+		free(absolute_base);
+		dynlex_runtime_set_error("Host temporary directory must be nonempty UTF-8 text without zero bytes");
+		return -1;
+	}
 	static const char suffix[] = "/dynlex-XXXXXX";
 	if (absolute_length > SIZE_MAX - sizeof(suffix)) {
 		free(absolute_base);

@@ -10,10 +10,11 @@ set values to [7]
 @intrinsic(
     "discard",
     @intrinsic(
-        "call",
+        "variadic call",
         "libc",
         "printf",
         an integer,
+        1,
         "%d\n",
         @intrinsic("dereference", @intrinsic("cast", @intrinsic("address of", values), @intrinsic("add pointer depth", @intrinsic("type", "int"))))
     )

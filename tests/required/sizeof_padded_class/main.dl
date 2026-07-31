@@ -25,4 +25,4 @@ class:
         data as a pointer to a byte
         length as a thirty two bit integer
 
-ignore @intrinsic("call", "libc", "printf", a thirty two bit integer, "%lld\n", the size of a padded value)
+ignore @intrinsic("variadic call", "libc", "printf", a thirty two bit integer, 1, "%lld\n", the size of a padded value)

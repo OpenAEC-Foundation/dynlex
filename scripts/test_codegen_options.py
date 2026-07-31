@@ -207,10 +207,26 @@ def main() -> int:
             native_ir = compile_llvm(compiler, repo_root, source, output_directory, "native", "-march=native")
             if '"target-cpu"="native"' in native_ir or '"target-cpu"=' not in native_ir:
                 raise RuntimeError("-march=native was not resolved to concrete target information")
+            cpu_match = re.search(r'"target-cpu"="([^"]+)"', native_ir)
+            if cpu_match is None:
+                raise RuntimeError("-march=native did not record a concrete host CPU")
             feature_match = re.search(r'"target-features"="([^"]+)"', native_ir)
-            if feature_match is None:
-                raise RuntimeError("-march=native did not record concrete host CPU features")
-            detected_feature = feature_match.group(1).split(",")[0]
+            if feature_match is None and cpu_match.group(1) == "generic":
+                raise RuntimeError("-march=native resolved to neither a concrete CPU nor concrete features")
+            triple_match = re.search(r'^target triple = "([^"]+)"$', native_ir, flags=re.MULTILINE)
+            if triple_match is None:
+                raise RuntimeError("native LLVM IR did not record a target triple")
+            architecture = triple_match.group(1).split("-", 1)[0]
+            default_feature = {
+                "aarch64": "+neon",
+                "arm64": "+neon",
+                "x86_64": "+sse2",
+            }.get(architecture)
+            if feature_match is None and default_feature is None:
+                raise RuntimeError(f"no target-feature fixture is defined for {architecture}")
+            detected_feature = feature_match.group(1).split(",")[0] if feature_match else default_feature
+            if detected_feature is None:
+                raise RuntimeError("native target feature selection is unavailable")
             overridden_feature = ("-" if detected_feature.startswith("+") else "+") + detected_feature[1:]
             overridden_ir = compile_llvm(
                 compiler,

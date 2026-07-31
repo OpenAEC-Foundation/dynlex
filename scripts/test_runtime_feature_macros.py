@@ -10,6 +10,7 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = PROJECT_DIR / "src" / "runtime"
+TEST_RUNTIME_DIR = PROJECT_DIR / "tests" / "runtime"
 
 
 class RuntimeFeatureMacroTests(unittest.TestCase):
@@ -108,7 +109,6 @@ class RuntimeFeatureMacroTests(unittest.TestCase):
         self.assertLess(feature_header.index(darwin_macro), feature_header.index(posix_macro))
 
         for source_name in (
-            "filesystemRuntimePosix.c",
             "filesystemTransactionPosix.c",
             "hostRuntimePosix.c",
             "processRuntimePosixWrite.c",
@@ -123,17 +123,46 @@ class RuntimeFeatureMacroTests(unittest.TestCase):
             self.assertNotIn("#define _GNU_SOURCE", source)
             self.assertNotIn("#define _DARWIN_C_SOURCE", source)
 
-        process_source = (RUNTIME_DIR / "processRuntimePosix.c").read_text(encoding="utf-8")
+        for source_name in (
+            "filesystemRuntimePosix.c",
+            "processRuntimePosix.c",
+        ):
+            source = (RUNTIME_DIR / source_name).read_text(encoding="utf-8")
+            self.assertTrue(
+                source.startswith(
+                    "#define DYNLEX_REQUIRE_GNU_SOURCE\n"
+                    '#include "platformFeatureTest.h"\n'
+                    "#undef DYNLEX_REQUIRE_GNU_SOURCE\n"
+                ),
+                f"{source_name} must request GNU APIs before any system header",
+            )
+            self.assertNotIn("#define _POSIX_C_SOURCE", source)
+            self.assertNotIn("#define _GNU_SOURCE", source)
+            self.assertNotIn("#define _DARWIN_C_SOURCE", source)
+
+        source = (TEST_RUNTIME_DIR / "filesystem_transaction_posix.c").read_text(
+            encoding="utf-8"
+        )
         self.assertTrue(
-            process_source.startswith(
+            source.startswith(
                 "#define DYNLEX_REQUIRE_GNU_SOURCE\n"
                 '#include "platformFeatureTest.h"\n'
                 "#undef DYNLEX_REQUIRE_GNU_SOURCE\n"
-            )
+            ),
+            "filesystem_transaction_posix.c must request GNU APIs before any system header",
         )
-        self.assertNotIn("#define _POSIX_C_SOURCE", process_source)
-        self.assertNotIn("#define _GNU_SOURCE", process_source)
-        self.assertNotIn("#define _DARWIN_C_SOURCE", process_source)
+        self.assertNotIn("#define _POSIX_C_SOURCE", source)
+        self.assertNotIn("#define _GNU_SOURCE", source)
+        self.assertNotIn("#define _DARWIN_C_SOURCE", source)
+
+        source = (TEST_RUNTIME_DIR / "path_uri_symlink_identity.c").read_text(
+            encoding="utf-8"
+        )
+        self.assertTrue(
+            source.startswith('#include "platformFeatureTest.h"\n'),
+            "path_uri_symlink_identity.c must select platform APIs before any system header",
+        )
+        self.assertNotIn("#define _POSIX_C_SOURCE", source)
 
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("src/runtime/platformFeatureTest.h", cmake)

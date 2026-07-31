@@ -1,4 +1,6 @@
-#define _POSIX_C_SOURCE 200809L
+#define DYNLEX_REQUIRE_GNU_SOURCE
+#include "platformFeatureTest.h"
+#undef DYNLEX_REQUIRE_GNU_SOURCE
 
 #include "filesystemRuntimeInternal.h"
 #include "filesystemTransactionInternal.h"
@@ -135,6 +137,36 @@ static int cancel_and_release(void *staging) {
 }
 
 int main(void) {
+	char canonical_root[] = "/tmp/dynlex-canonical-temporary-XXXXXX";
+	CHECK(mkdtemp(canonical_root) != NULL);
+	char physical_temporary_base[512];
+	char symbolic_temporary_base[512];
+	CHECK(snprintf(physical_temporary_base, sizeof(physical_temporary_base), "%s/physical", canonical_root) > 0);
+	CHECK(snprintf(symbolic_temporary_base, sizeof(symbolic_temporary_base), "%s/symbolic", canonical_root) > 0);
+	CHECK(mkdir(physical_temporary_base, 0700) == 0);
+	CHECK(symlink("physical", symbolic_temporary_base) == 0);
+	char *canonical_physical_temporary_base = realpath(physical_temporary_base, NULL);
+	CHECK(canonical_physical_temporary_base != NULL);
+	const char *original_temporary_base = getenv("TMPDIR");
+	char *saved_temporary_base = original_temporary_base == NULL ? NULL : strdup(original_temporary_base);
+	CHECK(original_temporary_base == NULL || saved_temporary_base != NULL);
+	CHECK(setenv("TMPDIR", symbolic_temporary_base, 1) == 0);
+	char *canonical_temporary_path = NULL;
+	size_t canonical_temporary_length = 0;
+	CHECK(dynlex_platform_filesystem_create_temporary_directory(&canonical_temporary_path, &canonical_temporary_length) == 0);
+	size_t physical_temporary_base_length = strlen(canonical_physical_temporary_base);
+	CHECK(canonical_temporary_length > physical_temporary_base_length);
+	CHECK(memcmp(canonical_temporary_path, canonical_physical_temporary_base, physical_temporary_base_length) == 0);
+	CHECK(canonical_temporary_path[physical_temporary_base_length] == '/');
+	CHECK(dynlex_platform_filesystem_remove_tree(canonical_temporary_path, canonical_temporary_length) == 0);
+	free(canonical_temporary_path);
+	free(canonical_physical_temporary_base);
+	CHECK(saved_temporary_base == NULL ? unsetenv("TMPDIR") == 0 : setenv("TMPDIR", saved_temporary_base, 1) == 0);
+	free(saved_temporary_base);
+	CHECK(unlink(symbolic_temporary_base) == 0);
+	CHECK(rmdir(physical_temporary_base) == 0);
+	CHECK(rmdir(canonical_root) == 0);
+
 	char root[] = "/tmp/dynlex-filesystem-transaction-XXXXXX";
 	CHECK(mkdtemp(root) != NULL);
 	char original[512];

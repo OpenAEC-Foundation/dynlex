@@ -55,4 +55,4 @@ function the count from initial:
 set initial to @intrinsic("call", "libc", "rand", an integer)
 set result to the count from initial
 set difference to (result - initial)
-ignore @intrinsic("call", "libc", "printf", an integer, "%d\n", difference)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", difference)
