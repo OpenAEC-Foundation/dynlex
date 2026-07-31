@@ -8,12 +8,13 @@ import { fileURLToPath } from "node:url";
 import {
   detectPlatform,
   parseReleaseManifest,
+  selectPrimaryReleaseAsset,
   selectReleaseAssets,
 } from "../../web/download.js";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(testDirectory, "../..");
-const manifestPath = path.join(projectDirectory, "web/release-manifest.txt");
+const manifestPath = path.join(projectDirectory, "metadata/release-manifest.txt");
 const manifestText = fs.readFileSync(manifestPath, "utf8");
 const manifest = parseReleaseManifest(manifestText);
 const releaseWorkflow = fs.readFileSync(
@@ -51,11 +52,32 @@ assert.deepEqual(
       name: "dynlex-linux-x64.tar.gz",
     },
     {
+      id: "linux-arm64-deb",
+      platform: "linux",
+      architectures: ["arm64"],
+      format: "deb",
+      name: "dynlex-linux-arm64.deb",
+    },
+    {
+      id: "linux-arm64-tar",
+      platform: "linux",
+      architectures: ["arm64"],
+      format: "tar.gz",
+      name: "dynlex-linux-arm64.tar.gz",
+    },
+    {
       id: "windows-x64-msi",
       platform: "windows",
       architectures: ["x64"],
       format: "msi",
       name: "dynlex-windows-x64.msi",
+    },
+    {
+      id: "windows-arm64-msi",
+      platform: "windows",
+      architectures: ["arm64"],
+      format: "msi",
+      name: "dynlex-windows-arm64.msi",
     },
     {
       id: "macos-universal-pkg",
@@ -102,30 +124,60 @@ assert.deepEqual(detectPlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), {
   os: "windows",
   architecture: "x64",
   label: "Windows",
-  primaryAssetId: "windows-x64-msi",
 });
+assert.deepEqual(
+  detectPlatform("Mozilla/5.0 (Windows NT 10.0; ARM64)", "arm"),
+  {
+    os: "windows",
+    architecture: "arm64",
+    label: "Windows",
+  },
+);
 assert.deepEqual(detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"), {
   os: "macos",
-  architecture: "universal",
+  architecture: "unknown",
   label: "macOS",
-  primaryAssetId: "macos-universal-pkg",
 });
 assert.deepEqual(detectPlatform("Mozilla/5.0 (X11; Linux x86_64)"), {
   os: "linux",
   architecture: "x64",
   label: "Linux",
-  primaryAssetId: "linux-x64-deb",
 });
-assert.throws(
-  () => detectPlatform("Mozilla/5.0 (X11; Linux aarch64)"),
-  /unsupported Linux architecture/,
+assert.deepEqual(
+  detectPlatform("Mozilla/5.0 (X11; Linux aarch64)"),
+  {
+    os: "linux",
+    architecture: "arm64",
+    label: "Linux",
+  },
 );
+assert.equal(
+  selectPrimaryReleaseAsset(manifest, detectPlatform("Mozilla/5.0 (Windows NT 10.0; ARM64)")).id,
+  "windows-arm64-msi",
+);
+assert.equal(
+  selectPrimaryReleaseAsset(manifest, detectPlatform("Mozilla/5.0 (X11; Linux aarch64)")).id,
+  "linux-arm64-deb",
+);
+assert.equal(
+  selectPrimaryReleaseAsset(
+    manifest,
+    detectPlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"),
+  ).id,
+  "macos-universal-pkg",
+);
+assert.match(releaseWorkflow, /runner: ubuntu-24\.04-arm[\s\S]*architecture: arm64/);
+assert.match(releaseWorkflow, /runner: windows-11-arm[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: macos-14[\s\S]*architecture: arm64/);
 assert.match(releaseWorkflow, /runner: macos-15-intel[\s\S]*architecture: x64/);
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
-assert.match(releaseWorkflow, /format: \[deb, tar\]/);
+assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
 assert.match(releaseWorkflow, /prepare-release-assets\.sh/);
+assert.match(releaseWorkflow, /workflow_dispatch:/);
+assert.match(releaseWorkflow, /github\.ref_type == 'tag'/);
+assert.match(releaseWorkflow, /gh release create[\s\S]*--draft/);
+assert.match(releaseWorkflow, /gh release edit[\s\S]*--draft=false/);
 assert.match(cmakeConfiguration, /CPACK_PACKAGE_HOMEPAGE_URL "https:\/\/dynlex\.com"/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 
@@ -190,7 +242,9 @@ try {
     const mockBinDirectory = path.join(temporaryDirectory, "mock-bin");
     const packageDirectory = path.join(temporaryDirectory, "packages");
     const tarRootDirectory = path.join(packageDirectory, "dynlex-linux-x64");
+    const armTarRootDirectory = path.join(packageDirectory, "dynlex-linux-arm64");
     fs.mkdirSync(path.join(tarRootDirectory, "bin"), { recursive: true });
+    fs.mkdirSync(path.join(armTarRootDirectory, "bin"), { recursive: true });
     fs.mkdirSync(mockBinDirectory);
 
     const writeExecutable = (filePath, contents) => {
@@ -201,20 +255,40 @@ try {
       path.join(tarRootDirectory, "bin/dynlex"),
       "#!/bin/sh\n[ \"$1\" = \"--help\" ]\n",
     );
+    writeExecutable(
+      path.join(armTarRootDirectory, "bin/dynlex"),
+      "#!/bin/sh\n[ \"$1\" = \"--help\" ]\n",
+    );
     writeExecutable(path.join(mockBinDirectory, "dpkg"), "#!/bin/sh\nexit 0\n");
     writeExecutable(
       path.join(mockBinDirectory, "id"),
       "#!/bin/sh\n[ \"$1\" = \"-u\" ] && printf '0\\n'\n",
     );
     writeExecutable(path.join(mockBinDirectory, "dynlex"), "#!/bin/sh\nexit 0\n");
+    writeExecutable(
+      path.join(mockBinDirectory, "uname"),
+      `#!/bin/sh
+case "$1" in
+  -s) printf 'Linux\\n' ;;
+  -m) printf '%s\\n' "$DYNLEX_TEST_MACHINE" ;;
+  *) exit 2 ;;
+esac
+`,
+    );
 
     const tarPackage = path.join(packageDirectory, "dynlex-linux-x64.tar.gz");
-    const tarResult = spawnSync(
-      "tar",
-      ["-czf", tarPackage, "-C", packageDirectory, "dynlex-linux-x64"],
-      { encoding: "utf8" },
-    );
-    assert.equal(tarResult.status, 0, tarResult.stderr);
+    const armTarPackage = path.join(packageDirectory, "dynlex-linux-arm64.tar.gz");
+    for (const [archive, root] of [
+      [tarPackage, "dynlex-linux-x64"],
+      [armTarPackage, "dynlex-linux-arm64"],
+    ]) {
+      const tarResult = spawnSync(
+        "tar",
+        ["-czf", archive, "-C", packageDirectory, root],
+        { encoding: "utf8" },
+      );
+      assert.equal(tarResult.status, 0, tarResult.stderr);
+    }
 
     const installScript = path.join(projectDirectory, "web/install.sh");
     const tarPrefix = path.join(temporaryDirectory, "local-tar-prefix");
@@ -230,6 +304,7 @@ try {
     fs.writeFileSync(debPackage, "mock Debian package\n");
     const mockEnvironment = {
       ...process.env,
+      DYNLEX_TEST_MACHINE: "x86_64",
       PATH: `${mockBinDirectory}:${process.env.PATH}`,
     };
     const localDebResult = spawnSync("sh", [installScript, debPackage], {
@@ -239,42 +314,58 @@ try {
     });
     assert.equal(localDebResult.status, 0, localDebResult.stdout + localDebResult.stderr);
 
-    const checksum = spawnSync("sha256sum", [tarPackage], { encoding: "utf8" });
-    assert.equal(checksum.status, 0, checksum.stderr);
+    const checksumLines = [tarPackage, armTarPackage].map((packagePath) => {
+      const checksum = spawnSync("sha256sum", [packagePath], { encoding: "utf8" });
+      assert.equal(checksum.status, 0, checksum.stderr);
+      const digest = checksum.stdout.trim().split(/\s+/)[0];
+      return `${digest}  ${path.basename(packagePath)}`;
+    });
     const checksumPath = path.join(temporaryDirectory, "fixture-SHA256SUMS");
-    fs.writeFileSync(
-      checksumPath,
-      `${checksum.stdout.trim().split(/\s+/)[0]}  dynlex-linux-x64.tar.gz\n`,
-    );
+    fs.writeFileSync(checksumPath, `${checksumLines.join("\n")}\n`);
     writeExecutable(
       path.join(mockBinDirectory, "curl"),
       `#!/bin/sh
 case "$2" in
   */release-manifest.txt) cp "$DYNLEX_TEST_MANIFEST" "$4" ;;
-  */dynlex-linux-x64.tar.gz) cp "$DYNLEX_TEST_TAR" "$4" ;;
+  */dynlex-linux-x64.tar.gz) cp "$DYNLEX_TEST_TAR_X64" "$4" ;;
+  */dynlex-linux-arm64.tar.gz) cp "$DYNLEX_TEST_TAR_ARM64" "$4" ;;
   */SHA256SUMS) cp "$DYNLEX_TEST_CHECKSUMS" "$4" ;;
   *) exit 2 ;;
 esac
 `,
     );
 
-    const onlinePrefix = path.join(temporaryDirectory, "online-tar-prefix");
-    const onlineTarResult = spawnSync(
-      "sh",
-      [installScript, "--format", "tar", "--prefix", onlinePrefix],
-      {
-        cwd: projectDirectory,
-        encoding: "utf8",
-        env: {
-          ...mockEnvironment,
-          DYNLEX_TEST_MANIFEST: manifestPath,
-          DYNLEX_TEST_TAR: tarPackage,
-          DYNLEX_TEST_CHECKSUMS: checksumPath,
+    for (const [machine, architecture] of [
+      ["x86_64", "x64"],
+      ["aarch64", "arm64"],
+    ]) {
+      const onlinePrefix = path.join(
+        temporaryDirectory,
+        `online-${architecture}-tar-prefix`,
+      );
+      const onlineTarResult = spawnSync(
+        "sh",
+        [installScript, "--format", "tar", "--prefix", onlinePrefix],
+        {
+          cwd: projectDirectory,
+          encoding: "utf8",
+          env: {
+            ...mockEnvironment,
+            DYNLEX_TEST_MACHINE: machine,
+            DYNLEX_TEST_MANIFEST: manifestPath,
+            DYNLEX_TEST_TAR_X64: tarPackage,
+            DYNLEX_TEST_TAR_ARM64: armTarPackage,
+            DYNLEX_TEST_CHECKSUMS: checksumPath,
+          },
         },
-      },
-    );
-    assert.equal(onlineTarResult.status, 0, onlineTarResult.stdout + onlineTarResult.stderr);
-    assert.ok(fs.existsSync(path.join(onlinePrefix, "bin/dynlex")));
+      );
+      assert.equal(
+        onlineTarResult.status,
+        0,
+        onlineTarResult.stdout + onlineTarResult.stderr,
+      );
+      assert.ok(fs.existsSync(path.join(onlinePrefix, "bin/dynlex")));
+    }
   }
 } finally {
   fs.rmSync(temporaryDirectory, { recursive: true, force: true });

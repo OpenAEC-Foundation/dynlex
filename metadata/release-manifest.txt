@@ -2,5 +2,8 @@ schema 1
 repository OpenAEC-Foundation/dynlex
 asset linux-x64-deb linux x64 deb dynlex-linux-x64.deb
 asset linux-x64-tar linux x64 tar.gz dynlex-linux-x64.tar.gz
+asset linux-arm64-deb linux arm64 deb dynlex-linux-arm64.deb
+asset linux-arm64-tar linux arm64 tar.gz dynlex-linux-arm64.tar.gz
 asset windows-x64-msi windows x64 msi dynlex-windows-x64.msi
+asset windows-arm64-msi windows arm64 msi dynlex-windows-arm64.msi
 asset macos-universal-pkg macos arm64,x64 pkg dynlex-macos-universal.pkg

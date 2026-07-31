@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MANIFEST_PATH="$SCRIPT_DIR/../web/release-manifest.txt"
+MANIFEST_PATH="$SCRIPT_DIR/../metadata/release-manifest.txt"
 
 usage() {
     echo "Usage: $0 name <asset-id> | names | repository" >&2

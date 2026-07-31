@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-MANIFEST_PATH="$PROJECT_DIR/web/release-manifest.txt"
+MANIFEST_PATH="$PROJECT_DIR/metadata/release-manifest.txt"
 
 if [[ $# -ne 2 ]]; then
     echo "Usage: $0 <artifact-directory> <output-directory>" >&2

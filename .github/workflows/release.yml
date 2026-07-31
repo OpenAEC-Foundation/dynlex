@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
       - '*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -18,6 +23,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            echo "Validating release builds without publication."
+            exit 0
+          fi
           TAG="${GITHUB_REF#refs/tags/}"
           TAG_VERSION="${TAG#v}"
           FILE_VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
@@ -27,8 +36,24 @@ jobs:
           fi
 
   build-linux:
-    runs-on: ubuntu-24.04
     needs: [verify-version-tag]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            architecture: x64
+            machine_architecture: x86_64
+            debian_architecture: amd64
+            deb_asset_id: linux-x64-deb
+            tar_asset_id: linux-x64-tar
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            machine_architecture: aarch64
+            debian_architecture: arm64
+            deb_asset_id: linux-arm64-deb
+            tar_asset_id: linux-arm64-tar
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,10 +72,17 @@ jobs:
         run: ./scripts/test.sh --release
 
       - name: Package release artifacts
+        id: package
         run: |
           set -euo pipefail
-          DEB_NAME="$(./scripts/release-asset.sh name linux-x64-deb)"
-          TAR_NAME="$(./scripts/release-asset.sh name linux-x64-tar)"
+          if [[ "$(uname -m)" != "${{ matrix.machine_architecture }}" ]]; then
+            echo "Expected ${{ matrix.machine_architecture }} runner, found $(uname -m)." >&2
+            exit 1
+          fi
+          python3 ./scripts/verify-executable-architecture.py \
+            build/dynlex "${{ matrix.architecture }}"
+          DEB_NAME="$(./scripts/release-asset.sh name '${{ matrix.deb_asset_id }}')"
+          TAR_NAME="$(./scripts/release-asset.sh name '${{ matrix.tar_asset_id }}')"
           PACKAGE_BASENAME="${DEB_NAME%.deb}"
           if [[ "$TAR_NAME" != "$PACKAGE_BASENAME.tar.gz" ]]; then
             echo "Linux DEB and tar release assets must share one package basename." >&2
@@ -61,23 +93,41 @@ jobs:
           cpack -G TGZ -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME"
           test -f "$DEB_NAME"
           test -f "$TAR_NAME"
+          if [[ "$(dpkg-deb --field "$DEB_NAME" Architecture)" != "${{ matrix.debian_architecture }}" ]]; then
+            echo "Debian package has the wrong architecture." >&2
+            exit 1
+          fi
+          echo "deb_name=$DEB_NAME" >> "$GITHUB_OUTPUT"
+          echo "tar_name=$TAR_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-linux
+          name: release-linux-${{ matrix.architecture }}
           path: |
-            build/*.deb
-            build/*.tar.gz
+            build/${{ steps.package.outputs.deb_name }}
+            build/${{ steps.package.outputs.tar_name }}
           if-no-files-found: error
 
   build-windows:
-    runs-on: windows-latest
     needs: [verify-version-tag]
     environment: release-signing
     permissions:
       contents: read
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            architecture: x64
+            wix_architecture: x64
+            asset_id: windows-x64-msi
+          - runner: windows-11-arm
+            architecture: arm64
+            wix_architecture: arm64
+            asset_id: windows-arm64-msi
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,14 +147,21 @@ jobs:
         shell: pwsh
         run: |
           choco install wixtoolset -y --no-progress
-          $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
-          if (Test-Path $wixBin) {
+          $wix = Get-Command candle.exe -ErrorAction SilentlyContinue
+          if (-not $wix) {
+            $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
+            if (-not (Test-Path (Join-Path $wixBin "candle.exe"))) {
+              throw "WiX was installed but candle.exe could not be located."
+            }
             Add-Content -Path $env:GITHUB_PATH -Value $wixBin
           }
 
       - name: Build and test (Release)
         shell: bash
         run: ./scripts/test.sh --release
+
+      - name: Verify Windows executable architecture
+        run: python ./scripts/verify-executable-architecture.py build/dynlex.exe ${{ matrix.architecture }}
 
       - name: Log in to Azure
         uses: azure/login@v3
@@ -125,7 +182,7 @@ jobs:
           timestamp-digest: SHA256
           description: DynLex compiler
           description-url: https://dynlex.com
-          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-executable
+          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.architecture }}-executable
 
       - name: Verify Windows executable signature
         shell: pwsh
@@ -136,10 +193,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          MSI_NAME="$(./scripts/release-asset.sh name windows-x64-msi)"
+          MSI_NAME="$(./scripts/release-asset.sh name '${{ matrix.asset_id }}')"
           PACKAGE_BASENAME="${MSI_NAME%.msi}"
           cd build
-          cpack -G WIX -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME"
+          cpack -G WIX \
+            -D CPACK_PACKAGE_FILE_NAME="$PACKAGE_BASENAME" \
+            -D CPACK_WIX_ARCHITECTURE="${{ matrix.wix_architecture }}"
           test -f "$MSI_NAME"
           echo "name=$MSI_NAME" >> "$GITHUB_OUTPUT"
 
@@ -155,7 +214,7 @@ jobs:
           timestamp-digest: SHA256
           description: DynLex installer
           description-url: https://dynlex.com
-          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-installer
+          correlation-id: ${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.architecture }}-installer
 
       - name: Verify Windows installer signature
         shell: pwsh
@@ -164,7 +223,7 @@ jobs:
       - name: Upload Windows release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-windows
+          name: release-windows-${{ matrix.architecture }}
           path: build/${{ steps.package.outputs.name }}
           if-no-files-found: error
 
@@ -288,8 +347,7 @@ jobs:
           APPLE_INSTALLER_SIGNING_IDENTITY: ${{ vars.APPLE_INSTALLER_SIGNING_IDENTITY }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
+          VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
           ARM64_ROOT="$RUNNER_TEMP/dynlex-macos-arm64"
           X64_ROOT="$RUNNER_TEMP/dynlex-macos-x64"
           UNIVERSAL_ROOT="$RUNNER_TEMP/dynlex-macos-universal"
@@ -421,12 +479,32 @@ jobs:
             "$RUNNER_TEMP/AuthKey_${{ vars.APPLE_API_KEY_ID }}.p8"
 
   smoke-linux:
-    runs-on: ubuntu-24.04
     needs: [build-linux]
     strategy:
       fail-fast: false
       matrix:
-        format: [deb, tar]
+        include:
+          - runner: ubuntu-24.04
+            architecture: x64
+            machine_architecture: x86_64
+            format: deb
+            asset_id: linux-x64-deb
+          - runner: ubuntu-24.04
+            architecture: x64
+            machine_architecture: x86_64
+            format: tar
+            asset_id: linux-x64-tar
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            machine_architecture: aarch64
+            format: deb
+            asset_id: linux-arm64-deb
+          - runner: ubuntu-24.04-arm
+            architecture: arm64
+            machine_architecture: aarch64
+            format: tar
+            asset_id: linux-arm64-tar
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -435,32 +513,47 @@ jobs:
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-linux
+          name: release-linux-${{ matrix.architecture }}
           path: release-artifacts/linux
 
       - name: Install package and validate
         run: |
           set -euo pipefail
           ls -lah release-artifacts/linux
+          if [[ "$(uname -m)" != "${{ matrix.machine_architecture }}" ]]; then
+            echo "Expected ${{ matrix.machine_architecture }} runner, found $(uname -m)." >&2
+            exit 1
+          fi
+          PACKAGE_NAME="$(./scripts/release-asset.sh name '${{ matrix.asset_id }}')"
           if [[ "${{ matrix.format }}" == "deb" ]]; then
-            PACKAGE_NAME="$(./scripts/release-asset.sh name linux-x64-deb)"
             sudo ./web/install.sh "release-artifacts/linux/$PACKAGE_NAME"
             DYNLEX_BIN="$(command -v dynlex)"
           else
-            PACKAGE_NAME="$(./scripts/release-asset.sh name linux-x64-tar)"
             INSTALL_PREFIX="$RUNNER_TEMP/dynlex-tar-install"
             ./web/install.sh \
               --prefix "$INSTALL_PREFIX" \
               "release-artifacts/linux/$PACKAGE_NAME"
             DYNLEX_BIN="$INSTALL_PREFIX/bin/dynlex"
           fi
+          python3 ./scripts/verify-executable-architecture.py \
+            "$DYNLEX_BIN" "${{ matrix.architecture }}"
           "$DYNLEX_BIN" tests/required/simple/main.dl -o /tmp/dynlex-smoke-linux
           /tmp/dynlex-smoke-linux > /tmp/dynlex-smoke-linux.out
           diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-linux.out
 
   smoke-windows:
-    runs-on: windows-latest
     needs: [build-windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            architecture: x64
+            asset_id: windows-x64-msi
+          - runner: windows-11-arm
+            architecture: arm64
+            asset_id: windows-arm64-msi
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -469,14 +562,14 @@ jobs:
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-windows
+          name: release-windows-${{ matrix.architecture }}
           path: release-artifacts/windows
 
       - name: Install MSI and validate
         shell: pwsh
         run: |
           Get-ChildItem -Path "release-artifacts/windows" -Recurse | Select-Object FullName
-          $msiName = (bash ./scripts/release-asset.sh name windows-x64-msi).Trim()
+          $msiName = (bash ./scripts/release-asset.sh name '${{ matrix.asset_id }}').Trim()
           if ($LASTEXITCODE -ne 0) {
             throw "Could not resolve the Windows package name from the release manifest."
           }
@@ -492,6 +585,10 @@ jobs:
           }
           if (-not $dynlex) {
             throw "dynlex.exe not found after MSI install."
+          }
+          python ./scripts/verify-executable-architecture.py $dynlex.FullName ${{ matrix.architecture }}
+          if ($LASTEXITCODE -ne 0) {
+            throw "Installed DynLex executable has the wrong architecture."
           }
           ./scripts/verify-windows-signature.ps1 -Path $dynlex.FullName
           $helpStdout = "$env:TEMP\\dynlex-smoke-windows-help.stdout.log"
@@ -572,6 +669,7 @@ jobs:
           diff -u tests/required/simple/expected.txt /tmp/dynlex-smoke-macos.out
 
   publish-release:
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: ubuntu-latest
     needs: [build-linux, build-windows, package-macos, smoke-linux, smoke-windows, smoke-macos]
     permissions:
@@ -582,13 +680,15 @@ jobs:
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-linux
+          pattern: release-linux-*
+          merge-multiple: true
           path: release-artifacts/linux
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-windows
+          pattern: release-windows-*
+          merge-multiple: true
           path: release-artifacts/windows
 
       - name: Download macOS artifacts
@@ -600,20 +700,32 @@ jobs:
       - name: Prepare checksummed release assets
         run: ./scripts/prepare-release-assets.sh release-artifacts release-upload
 
-      - name: Determine release type
-        id: release_type
-        shell: bash
+      - name: Create and verify clean GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
-          if [[ "$TAG" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          if RELEASE_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$TAG" 2>/dev/null)"; then
+            if [[ "$(jq -r .draft <<<"$RELEASE_JSON")" != "true" ]]; then
+              echo "A published release already exists for $TAG; published releases are immutable." >&2
+              exit 1
+            fi
+            gh release delete "$TAG" --yes
           fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release-upload/*
-          prerelease: ${{ steps.release_type.outputs.prerelease }}
-          generate_release_notes: true
+          release_arguments=(--draft --verify-tag --generate-notes --title "$TAG")
+          if [[ "$TAG" == *-* ]]; then
+            release_arguments+=(--prerelease)
+          fi
+          gh release create "$TAG" release-upload/* "${release_arguments[@]}"
+
+          find release-upload -maxdepth 1 -type f -printf '%f\n' \
+            | LC_ALL=C sort > "$RUNNER_TEMP/expected-release-assets.txt"
+          gh release view "$TAG" --json assets \
+            --jq '.assets[].name' \
+            | LC_ALL=C sort > "$RUNNER_TEMP/actual-release-assets.txt"
+          diff -u \
+            "$RUNNER_TEMP/expected-release-assets.txt" \
+            "$RUNNER_TEMP/actual-release-assets.txt"
+          gh release edit "$TAG" --draft=false

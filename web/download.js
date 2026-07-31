@@ -1,4 +1,5 @@
-const fallbackReleaseUrl = "https://github.com/OpenAEC-Foundation/dynlex/releases/latest";
+const releaseRepository = "OpenAEC-Foundation/dynlex";
+const fallbackReleaseUrl = `https://github.com/${releaseRepository}/releases/latest`;
 
 function requireSingleRecord(currentValue, recordName) {
   if (currentValue !== null) {
@@ -114,109 +115,208 @@ export function selectReleaseAssets(releaseAssets, manifest) {
   return selected;
 }
 
-export function detectPlatform(userAgent) {
+function normalizeArchitecture(architecture) {
+  if (typeof architecture !== "string") {
+    return null;
+  }
+  if (/arm|aarch64/i.test(architecture)) {
+    return "arm64";
+  }
+  if (/x86|x64|amd64/i.test(architecture)) {
+    return "x64";
+  }
+  return null;
+}
+
+export function detectPlatform(userAgent, clientArchitecture = null) {
   if (typeof userAgent !== "string") {
     throw new TypeError("user agent must be text");
   }
 
+  const detectedArchitecture =
+    normalizeArchitecture(clientArchitecture)
+    ?? normalizeArchitecture(userAgent);
+
   if (/Windows/i.test(userAgent)) {
-    if (/ARM64|aarch64/i.test(userAgent)) {
-      throw new Error("unsupported Windows architecture: arm64");
-    }
     return {
       os: "windows",
-      architecture: "x64",
+      architecture: detectedArchitecture ?? "x64",
       label: "Windows",
-      primaryAssetId: "windows-x64-msi",
     };
   }
 
   if (/Macintosh|Mac OS/i.test(userAgent)) {
     return {
       os: "macos",
-      architecture: "universal",
+      architecture: detectedArchitecture === "arm64" ? "arm64" : "unknown",
       label: "macOS",
-      primaryAssetId: "macos-universal-pkg",
     };
   }
 
   if (/Linux/i.test(userAgent)) {
-    if (/aarch64|arm64/i.test(userAgent)) {
-      throw new Error("unsupported Linux architecture: arm64");
-    }
     return {
       os: "linux",
-      architecture: "x64",
+      architecture: detectedArchitecture ?? "x64",
       label: "Linux",
-      primaryAssetId: "linux-x64-deb",
     };
   }
 
   throw new Error("unsupported operating system");
 }
 
-async function loadRelease() {
-  const manifestResponse = await fetch("release-manifest.txt", { cache: "no-cache" });
-  if (!manifestResponse.ok) {
-    throw new Error("release manifest fetch failed");
+export function selectPrimaryReleaseAsset(manifest, platform) {
+  const preferredFormat = {
+    linux: "deb",
+    macos: "pkg",
+    windows: "msi",
+  }[platform.os];
+  if (preferredFormat === undefined) {
+    throw new Error(`unsupported operating system: ${platform.os}`);
   }
-  const manifest = parseReleaseManifest(await manifestResponse.text());
 
+  const matchingAssets = manifest.assets.filter((asset) => {
+    if (asset.os !== platform.os || asset.format !== preferredFormat) {
+      return false;
+    }
+    if (platform.architecture === "unknown") {
+      return asset.architectures.includes("arm64") && asset.architectures.includes("x64");
+    }
+    return asset.architectures.includes(platform.architecture);
+  });
+
+  if (matchingAssets.length === 0) {
+    throw new Error(
+      `release has no ${platform.os} ${platform.architecture} ${preferredFormat} asset`,
+    );
+  }
+  if (matchingAssets.length !== 1) {
+    throw new Error(
+      `release has multiple ${platform.os} ${platform.architecture} ${preferredFormat} assets`,
+    );
+  }
+  return matchingAssets[0];
+}
+
+function releaseAssetLabel(asset) {
+  const operatingSystem = {
+    linux: "Linux",
+    macos: "macOS",
+    windows: "Windows",
+  }[asset.os];
+  const architecture =
+    asset.architectures.length === 2
+      ? "Universal"
+      : asset.architectures[0] === "arm64"
+        ? "ARM64"
+        : "x64";
+  return `${operatingSystem} ${architecture} (.${asset.format})`;
+}
+
+async function detectBrowserPlatform() {
+  let clientArchitecture = navigator.platform || "";
+  if (navigator.userAgentData?.getHighEntropyValues) {
+    const values = await navigator.userAgentData.getHighEntropyValues([
+      "architecture",
+      "bitness",
+    ]);
+    clientArchitecture = `${values.architecture ?? ""}${values.bitness ?? ""}`;
+  }
+  return detectPlatform(navigator.userAgent || "", clientArchitecture);
+}
+
+async function loadRelease() {
   const releaseResponse = await fetch(
-    `https://api.github.com/repos/${manifest.repository}/releases/latest`,
+    `https://api.github.com/repos/${releaseRepository}/releases/latest`,
     { headers: { Accept: "application/vnd.github+json" } },
   );
   if (!releaseResponse.ok) {
     throw new Error("release metadata fetch failed");
   }
   const release = await releaseResponse.json();
+  const manifestAssets = release.assets.filter(
+    (asset) => asset?.name === "release-manifest.txt",
+  );
+  if (manifestAssets.length !== 1) {
+    throw new Error("release must contain exactly one release manifest");
+  }
+
+  const manifestResponse = await fetch(manifestAssets[0].browser_download_url, {
+    cache: "no-cache",
+  });
+  if (!manifestResponse.ok) {
+    throw new Error("release manifest fetch failed");
+  }
+  const manifest = parseReleaseManifest(await manifestResponse.text());
+  if (manifest.repository !== releaseRepository) {
+    throw new Error("release manifest names an unexpected repository");
+  }
   return {
     manifest,
     selectedAssets: selectReleaseAssets(release.assets, manifest),
   };
 }
 
-function configureDownloadPage() {
+function renderAlternateDownloads(container, manifest, selectedAssets) {
+  const links = manifest.assets.map((asset) => {
+    const link = document.createElement("a");
+    link.className = "download-btn";
+    link.href = selectedAssets.get(asset.id).browser_download_url;
+    link.textContent = releaseAssetLabel(asset);
+    return link;
+  });
+  container.replaceChildren(...links);
+}
+
+async function configureDownloadPage() {
   const title = document.getElementById("hero-title");
   const primary = document.getElementById("primary-download");
   const status = document.getElementById("status-line");
-  const alternateLinks = new Map([
-    ["windows-x64-msi", document.getElementById("alt-windows")],
-    ["macos-universal-pkg", document.getElementById("alt-macos")],
-    ["linux-x64-deb", document.getElementById("alt-linux-deb")],
-    ["linux-x64-tar", document.getElementById("alt-linux-tar")],
-  ]);
+  const alternateDownloads = document.getElementById("alternate-downloads");
 
-  let platform;
+  primary.href = fallbackReleaseUrl;
+  status.textContent = "Preparing the platform downloads…";
+
+  let release;
   try {
-    platform = detectPlatform(navigator.userAgent || "");
+    release = await loadRelease();
+    renderAlternateDownloads(
+      alternateDownloads,
+      release.manifest,
+      release.selectedAssets,
+    );
   } catch (error) {
-    console.error("DynLex platform detection failed.", error);
+    console.error("DynLex release resolution failed.", error);
     title.textContent = "Download DynLex";
-    status.textContent = "Automatic installation is unavailable for this platform.";
+    status.textContent = "An error occurred while preparing the download. Check the browser log.";
     return;
   }
 
-  title.textContent = `Download DynLex for ${platform.label}`;
-  primary.href = fallbackReleaseUrl;
-  primary.querySelector("span").textContent = `Download for ${platform.label}`;
-  status.textContent = `Preparing the ${platform.label} download…`;
+  let platform;
+  try {
+    platform = await detectBrowserPlatform();
+  } catch (error) {
+    console.info("Automatic platform detection is unavailable.", error);
+    title.textContent = "Download DynLex";
+    status.textContent = "Choose the download for your platform below.";
+    return;
+  }
 
-  loadRelease().then(({ selectedAssets }) => {
-    for (const [assetId, link] of alternateLinks) {
-      link.href = selectedAssets.get(assetId).browser_download_url;
-    }
+  try {
+    title.textContent = `Download DynLex for ${platform.label}`;
+    primary.querySelector("span").textContent = `Download for ${platform.label}`;
 
-    const primaryUrl = selectedAssets.get(platform.primaryAssetId).browser_download_url;
+    const primaryAsset = selectPrimaryReleaseAsset(release.manifest, platform);
+    const primaryUrl = release.selectedAssets.get(primaryAsset.id).browser_download_url;
     primary.href = primaryUrl;
     status.textContent = `Your ${platform.label} download is starting.`;
     setTimeout(() => {
       window.location.assign(primaryUrl);
     }, 550);
-  }).catch((error) => {
+  } catch (error) {
     console.error("DynLex release resolution failed.", error);
+    title.textContent = "Download DynLex";
     status.textContent = "An error occurred while preparing the download. Check the browser log.";
-  });
+  }
 }
 
 if (typeof document !== "undefined") {

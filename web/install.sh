@@ -10,7 +10,7 @@ print_usage() {
     cat >&2 <<'EOF'
 Usage: install.sh [--format deb|tar] [--prefix DIRECTORY] [PACKAGE]
 
-Without PACKAGE, installs the latest x64 Linux release. A local .deb or .tar.gz
+Without PACKAGE, installs the latest Linux release for this machine. A local .deb or .tar.gz
 PACKAGE can be supplied for an offline installation. --prefix applies to tar
 installations and defaults to $HOME/.local.
 EOF
@@ -153,9 +153,14 @@ fi
 
 ARCH="$(uname -m)"
 case "$ARCH" in
-x86_64|amd64) ;;
+x86_64|amd64)
+    ARCHITECTURE="x64"
+    ;;
+aarch64|arm64)
+    ARCHITECTURE="arm64"
+    ;;
 *)
-    echo "Error: DynLex does not publish a Linux package for architecture '$ARCH'." >&2
+    echo "Error: unsupported Linux architecture: $ARCH" >&2
     exit 1
     ;;
 esac
@@ -211,9 +216,9 @@ else
     fi
 
     if [ "$FORMAT" = "deb" ]; then
-        ASSET_ID="linux-x64-deb"
+        ASSET_ID="linux-${ARCHITECTURE}-deb"
     else
-        ASSET_ID="linux-x64-tar"
+        ASSET_ID="linux-${ARCHITECTURE}-tar"
     fi
     ASSET_NAME="$(manifest_asset_name "$ASSET_ID")" || {
         echo "Error: release manifest does not contain the required Linux package." >&2

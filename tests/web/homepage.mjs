@@ -27,6 +27,7 @@ for (const filePath of Object.values(files)) {
 }
 
 const html = fs.readFileSync(files.html, "utf8");
+const navigation = fs.readFileSync(files.navigation, "utf8");
 assert.match(html, /<a[^>]+class="skip-link"[^>]+href="#main-content"/);
 assert.match(html, /<header class="site-header" data-site-header><\/header>/);
 assert.match(html, /<main[^>]+id="main-content"/);
@@ -57,6 +58,18 @@ assert.equal((html.match(/data-snippet-source/g) ?? []).length, 4, "Runnable ske
 assert.equal((html.match(/data-snippet-run/g) ?? []).length, 2, "Runnable sketches need run controls");
 assert.equal((html.match(/data-snippet-output/g) ?? []).length, 2, "Runnable sketches need inline output");
 assert.match(html, /<textarea[^>]+data-snippet-source/);
+assert.match(
+  navigation,
+  /href="\/download\.html"/,
+  "Primary navigation must expose the DynLex download",
+);
+assert.match(html, /<section[^>]+id="install"/);
+assert.match(html, /href="download\.html"/);
+assert.match(
+  html,
+  /https:\/\/marketplace\.visualstudio\.com\/items\?itemName=impertio\.dynlex-language/,
+);
+assert.match(html, /https:\/\/open-vsx\.org\/extension\/open-aec\/dynlex-language/);
 
 const homepageJavascript = fs.readFileSync(files.javascript, "utf8");
 const homepageCss = [
@@ -95,7 +108,7 @@ for (const retiredAsset of ["cpp_site.png", "python_site.png"]) {
   assert.ok(!fs.existsSync(path.join(webDir, retiredAsset)), `Retired homepage asset still exists: ${retiredAsset}`);
 }
 
-for (const sectionId of ["playground", "challenges", "language", "studio"]) {
+for (const sectionId of ["playground", "challenges", "language", "studio", "install"]) {
   assert.match(html, new RegExp(`id="${sectionId}"`), `Missing homepage section #${sectionId}`);
 }
 

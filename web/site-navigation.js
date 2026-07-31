@@ -12,6 +12,7 @@ const navigationMarkup = `
     <a href="/index.html#challenges">Challenges</a>
     <a href="/index.html#language">Language</a>
     <a href="/index.html#studio">Studio</a>
+    <a href="/download.html">Download</a>
     <a href="/wiki/index.html" data-navigation-docs>Docs</a>
     <a class="nav-launch" href="/ide/index.html"><span>Open IDE</span><i aria-hidden="true">↗</i></a>
   </nav>

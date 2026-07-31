@@ -469,6 +469,110 @@
     color: var(--ink);
 }
 
+.install-section {
+    position: relative;
+    padding: 125px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background:
+        linear-gradient(135deg, rgba(133, 220, 255, 0.06), transparent 38%),
+        var(--ink);
+}
+
+.install-section::before {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 52px 52px;
+    content: "";
+    pointer-events: none;
+}
+
+.install-shell {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(260px, 0.68fr) minmax(560px, 1.32fr);
+    gap: 80px;
+    align-items: start;
+}
+
+.install-copy h2 {
+    margin: 24px 0 22px;
+    font-size: clamp(2.4rem, 4.2vw, 5rem);
+    line-height: 0.94;
+    letter-spacing: -0.07em;
+}
+
+.install-copy h2 em {
+    color: var(--sky);
+    font-style: normal;
+}
+
+.install-copy > span {
+    display: block;
+    max-width: 430px;
+    color: #a3a9a1;
+    line-height: 1.7;
+}
+
+.install-options {
+    display: grid;
+    gap: 10px;
+}
+
+.install-card {
+    position: relative;
+    display: grid;
+    min-height: 116px;
+    grid-template-columns: 1fr auto;
+    align-content: center;
+    gap: 9px 28px;
+    padding: 24px 28px;
+    border: 1px solid #343a35;
+    background: rgba(15, 18, 16, 0.92);
+    transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.install-card:hover {
+    transform: translateX(5px);
+    border-color: var(--sky);
+    background: #151a17;
+}
+
+.install-card-primary {
+    border-color: #596158;
+}
+
+.install-card small {
+    grid-column: 1;
+    color: #7d857d;
+    font: 500 0.55rem/1 var(--mono);
+    letter-spacing: 0.09em;
+}
+
+.install-card strong {
+    grid-column: 1;
+    color: var(--white);
+    font-size: 1.2rem;
+}
+
+.install-card > span {
+    grid-column: 1;
+    color: #969d95;
+    font: 400 0.64rem/1.4 var(--mono);
+}
+
+.install-card i {
+    grid-column: 2;
+    grid-row: 1 / 4;
+    align-self: center;
+    color: var(--acid);
+    font: 400 1.35rem/1 var(--mono);
+    font-style: normal;
+}
+
 .site-footer {
     padding: 45px 0;
     background: var(--ink-1);
