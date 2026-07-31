@@ -10,9 +10,9 @@ jobs:
   extension-packages:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -32,12 +32,12 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CCACHE_DIR }}
           key: linux-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
@@ -45,7 +45,7 @@ jobs:
             linux-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -65,12 +65,12 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore Homebrew downloads cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/Library/Caches/Homebrew
           key: macos-brew-${{ runner.os }}-${{ hashFiles('scripts/install.sh', '.github/workflows/ci.yml') }}
@@ -78,7 +78,7 @@ jobs:
             macos-brew-${{ runner.os }}-
 
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CCACHE_DIR }}
           key: macos-ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'scripts/build.sh', '.github/workflows/ci.yml') }}
@@ -86,7 +86,7 @@ jobs:
             macos-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -104,15 +104,19 @@ jobs:
   build-and-test-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: .cache/llvm-toolchain
-          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+          path: |
+            .cache/llvm-toolchain
+            .cache/llvm-mingw
+            .cache/vcpkg
+            .cache/vcpkg-installed
+          key: native-toolchains-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'metadata/LLVM_MINGW_TOOLCHAIN', 'metadata/VCPKG_TOOLCHAIN', 'vcpkg.json', 'cmake/vcpkg-triplets/*.cmake', 'scripts/llvm_toolchain.sh', 'scripts/llvm-mingw-toolchain.ps1') }}
 
       - name: Install dependencies
         run: ./scripts/install.ps1
@@ -126,11 +130,11 @@ jobs:
     if: ${{ vars.DYNLEX_WEB_CI_ENABLED == '1' }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -139,7 +143,7 @@ jobs:
           version: 6.0.3
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-web-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
@@ -150,12 +154,12 @@ jobs:
   launchpad-source-package:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Restore pinned LLVM source
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/llvm-toolchain/source
           key: llvm-source-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}

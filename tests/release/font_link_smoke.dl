@@ -1,0 +1,4 @@
+import lib/font.dl
+
+if false:
+    set typeface to a loaded font from "" at size 1

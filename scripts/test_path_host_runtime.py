@@ -89,6 +89,14 @@ def main() -> int:
     verify_windows_binary_stdin(project)
     verify_windows_cache_directory(project)
     if os.name != "nt":
+        compile_and_run(
+            project,
+            [
+                project / "tests/runtime/runtime_error.c",
+                project / "src/runtime/runtimeError.c",
+            ],
+            include_runtime=False,
+        )
         compile_and_run(project, [project / "tests/runtime/path_uri_symlink_identity.c"])
         compile_and_run(
             project,

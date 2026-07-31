@@ -26,6 +26,47 @@ const cmakeConfiguration = fs.readFileSync(
   path.join(projectDirectory, "CMakeLists.txt"),
   "utf8",
 );
+const linuxInstaller = fs.readFileSync(
+  path.join(projectDirectory, "web/install.sh"),
+  "utf8",
+);
+const nativeCodegen = fs.readFileSync(
+  path.join(projectDirectory, "src/cpp/compiler/codegen/native.cpp"),
+  "utf8",
+);
+const macosDependencyStager = fs.readFileSync(
+  path.join(projectDirectory, "scripts/stage-macos-dependencies.sh"),
+  "utf8",
+);
+const buildDependencyInstaller = fs.readFileSync(
+  path.join(projectDirectory, "scripts/install.sh"),
+  "utf8",
+);
+const windowsDependencyInstaller = fs.readFileSync(
+  path.join(projectDirectory, "scripts/install.ps1"),
+  "utf8",
+);
+const llvmToolchain = fs.readFileSync(
+  path.join(projectDirectory, "scripts/llvm_toolchain.sh"),
+  "utf8",
+);
+const windowsPeVerifier = fs.readFileSync(
+  path.join(projectDirectory, "scripts/verify-windows-pe-files.ps1"),
+  "utf8",
+);
+const vcpkgManifest = JSON.parse(
+  fs.readFileSync(path.join(projectDirectory, "vcpkg.json"), "utf8"),
+);
+const windowsVcpkgTriplets = ["x64", "arm64"].map((architecture) =>
+  fs.readFileSync(
+    path.join(
+      projectDirectory,
+      "cmake/vcpkg-triplets",
+      `${architecture}-windows-static-crt.cmake`,
+    ),
+    "utf8",
+  )
+);
 
 assert.equal(manifest.schema, 1);
 assert.equal(manifest.repository, "OpenAEC-Foundation/dynlex");
@@ -217,6 +258,10 @@ assert.match(
   releaseWorkflow,
   /build-windows:[\s\S]*cmake --install build --prefix build\/windows-stage[\s\S]*package-windows:/,
 );
+assert.match(
+  releaseWorkflow,
+  /build-windows:[\s\S]*stage-windows-toolchain\.ps1[\s\S]*package-windows:/,
+);
 assert.doesNotMatch(
   releaseWorkflow.match(/build-windows:[\s\S]*?(?=\n  package-windows:)/)?.[0] ?? "",
   /artifact-signing-action/,
@@ -231,6 +276,44 @@ assert.match(
 );
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
+assert.match(releaseWorkflow, /stage-macos-dependencies\.sh/);
+assert.match(
+  releaseWorkflow,
+  /cmp[\s\S]*dependencies\/dependency-manifest\.txt[\s\S]*dependencies\/dependency-manifest\.txt/,
+);
+assert.match(releaseWorkflow, /--scripts "\$PWD\/scripts\/macos-installer"/);
+assert.match(
+  releaseWorkflow,
+  /files-folder-filter: dll,exe[\s\S]*files-folder-recurse: true/,
+);
+assert.match(
+  releaseWorkflow,
+  /Verify Windows payload signatures[\s\S]*Get-ChildItem[\s\S]*"\*\.exe", "\*\.dll"[\s\S]*verify-windows-signature\.ps1/,
+);
+assert.match(
+  releaseWorkflow,
+  /build\/windows-stage[\s\S]*verify-windows-pe-files\.ps1/,
+);
+assert.match(windowsPeVerifier, /verify-executable-architecture\.py/);
+assert.match(windowsPeVerifier, /verify-windows-runtime-dependencies\.py/);
+assert.match(
+  releaseWorkflow,
+  /smoke-windows:[\s\S]*PATH = "\$env:SystemRoot\\System32;\$env:SystemRoot"[\s\S]*graphics_window_should_close_boolean/,
+);
+assert.match(
+  releaseWorkflow,
+  /smoke-macos:[\s\S]*PATH=\/usr\/bin:\/bin:\/usr\/sbin:\/sbin[\s\S]*graphics_window_should_close_boolean/,
+);
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*graphics_window_should_close_boolean/,
+);
+for (const smokeJob of ["smoke-linux", "smoke-windows", "smoke-macos"]) {
+  assert.match(
+    releaseWorkflow,
+    new RegExp(`${smokeJob}:[\\s\\S]*font_link_smoke\\.dl`),
+  );
+}
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
 assert.match(releaseWorkflow, /prepare-release-assets\.sh/);
 assert.match(releaseWorkflow, /workflow_dispatch:/);
@@ -239,7 +322,67 @@ assert.match(releaseWorkflow, /gh release create[\s\S]*--draft/);
 assert.match(releaseWorkflow, /gh release edit[\s\S]*--draft=false/);
 assert.match(releaseWorkflow, /--jq \.immutable/);
 assert.match(cmakeConfiguration, /CPACK_PACKAGE_HOMEPAGE_URL "https:\/\/dynlex\.com"/);
+assert.match(cmakeConfiguration, /CPACK_DEBIAN_PACKAGE_DEPENDS/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
+assert.match(linuxInstaller, /linux_compile_dependencies_ready/);
+assert.match(linuxInstaller, /cc -x c - -lglfw -lfreetype -lGL/);
+assert.match(linuxInstaller, /pacman -Syu --needed --noconfirm/);
+assert.doesNotMatch(linuxInstaller, /pacman -Sy(?:\s|$)/);
+assert.match(buildDependencyInstaller, /pacman -Syu --needed --noconfirm/);
+assert.doesNotMatch(buildDependencyInstaller, /pacman -Sy(?:\s|$)/);
+for (const packageManager of ["apt-get", "dnf", "pacman", "zypper"]) {
+  assert.match(linuxInstaller, new RegExp(`command -v ${packageManager}`));
+}
+assert.equal(
+  vcpkgManifest["builtin-baseline"],
+  "56bb2411609227288b70117ead2c47585ba07713",
+);
+assert.deepEqual(
+  [...vcpkgManifest.dependencies].sort(),
+  ["freetype", "glfw3", "nlohmann-json"],
+);
+assert.match(windowsDependencyInstaller, /metadata\\VCPKG_TOOLCHAIN/);
+assert.match(windowsDependencyInstaller, /--branch \$metadata\.release/);
+assert.match(windowsDependencyInstaller, /\$actualCommit -ne \$metadata\.commit/);
+assert.match(
+  windowsDependencyInstaller,
+  /Ensure-VisualStudioCppToolchain -TargetArchitecture \$dependencyArchitecture/,
+);
+assert.match(
+  windowsDependencyInstaller,
+  /Microsoft\.VisualStudio\.Workload\.VCTools/,
+);
+assert.match(windowsDependencyInstaller, /Find-WindowsSdk/);
+assert.match(windowsDependencyInstaller, /windows-static-crt/);
+for (const triplet of windowsVcpkgTriplets) {
+  assert.match(triplet, /VCPKG_CRT_LINKAGE static/);
+  assert.match(triplet, /VCPKG_LIBRARY_LINKAGE dynamic/);
+  assert.match(triplet, /VCPKG_BUILD_TYPE release/);
+}
+assert.match(cmakeConfiguration, /CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded/);
+assert.match(
+  cmakeConfiguration,
+  /DYNLEX_WINDOWS_RUNTIME_ARCHIVER[\s\S]*llvm-ar\.exe/,
+);
+assert.match(
+  cmakeConfiguration,
+  /add_custom_target\(\s*dynlex_runtime ALL[\s\S]*DYNLEX_WINDOWS_RUNTIME_ARCHIVE/,
+);
+assert.match(
+  cmakeConfiguration,
+  /install\(FILES \$\{DYNLEX_WINDOWS_RUNTIME_ARCHIVE\}[\s\S]*CMAKE_INSTALL_LIBDIR\}\/dynlex/,
+);
+assert.match(
+  llvmToolchain,
+  /CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded/,
+);
+assert.match(macosDependencyStager, /^#!\/bin\/bash/);
+assert.doesNotMatch(macosDependencyStager, /\b(?:declare -A|mapfile)\b/);
+assert.match(macosDependencyStager, /dependency-manifest\.txt/);
+assert.match(macosDependencyStager, /formula_sha256/);
+assert.match(nativeCodegen, /DYNLEX_WINDOWS_TARGET_TRIPLE/);
+assert.match(nativeCodegen, /DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR/);
+assert.match(nativeCodegen, /copyRuntimeLibraries/);
 
 const queryScript = path.join(projectDirectory, "scripts/release-asset.sh");
 if (process.platform !== "win32") {

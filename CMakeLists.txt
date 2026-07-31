@@ -15,6 +15,10 @@ project (dynlex VERSION ${DYNLEX_VERSION})
 
 include(GNUInstallDirs)
 
+if(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Homebrew Clang selects the macOS SDK through its driver configuration, but
 # CMake does not always include that configured sysroot in its detected implicit
 # header directories. LLVM's imported targets can then re-export SDK headers
@@ -141,6 +145,9 @@ endif()
 set(DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID
     "${DYNLEX_LLVM_REVISION}:${DYNLEX_LLVM_SCHEMA}:${DYNLEX_LLVM_REQUIRED_PROFILE}"
 )
+if(WIN32 AND DYNLEX_LLVM_REQUIRED_PROFILE STREQUAL "native")
+    string(APPEND DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID ":static-msvc-crt")
+endif()
 if(NOT DYNLEX_LLVM_TOOLCHAIN_ID STREQUAL DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID)
     message(FATAL_ERROR "LLVM toolchain does not match the pinned DynLex ${DYNLEX_LLVM_REQUIRED_PROFILE} profile")
 endif()
@@ -157,7 +164,7 @@ if(NOT DYNLEX_LLVM_VCS_ID STREQUAL DYNLEX_EXPECTED_LLVM_VCS_ID)
 endif()
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
+separate_arguments(DYNLEX_LLVM_COMPILE_OPTIONS NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 
 #
 # CMake setup
@@ -257,6 +264,7 @@ add_definitions (-DGLFW_INCvLUDE_NONE
 # The pinned DynLex LLVM distribution contains static component libraries.
 function(dynlex_link_llvm target)
     message(STATUS "Linking ${target} against LLVM component libraries")
+    target_compile_options(${target} PRIVATE ${DYNLEX_LLVM_COMPILE_OPTIONS})
     llvm_config(${target} ${ARGN})
 endfunction()
 
@@ -289,6 +297,19 @@ if(EMSCRIPTEN AND NOT DYNLEX_WEB)
 endif()
 
 if(NOT EMSCRIPTEN)
+    if(WIN32)
+        foreach(DYNLEX_WINDOWS_REQUIRED_SETTING IN ITEMS
+            DYNLEX_WINDOWS_TOOLCHAIN_ROOT
+            DYNLEX_WINDOWS_TOOLCHAIN_TARGET
+            DYNLEX_WINDOWS_DEPENDENCY_ROOT
+        )
+            if(NOT DEFINED ${DYNLEX_WINDOWS_REQUIRED_SETTING})
+                message(FATAL_ERROR
+                    "${DYNLEX_WINDOWS_REQUIRED_SETTING} is required; run scripts/install.ps1"
+                )
+            endif()
+        endforeach()
+    endif()
     set(DYNLEX_RUNTIME_SOURCES
         src/runtime/filesystemRuntime.c
         src/runtime/hostRuntime.c
@@ -315,26 +336,133 @@ if(NOT EMSCRIPTEN)
             src/runtime/processRuntimePosix.c
         )
     endif()
-    add_library(dynlex_runtime STATIC ${DYNLEX_RUNTIME_SOURCES})
-    set_target_properties(dynlex_runtime PROPERTIES
-        C_STANDARD 11
-        C_STANDARD_REQUIRED ON
-        POSITION_INDEPENDENT_CODE ON
+    set(DYNLEX_RUNTIME_HEADERS
+        src/runtime/filesystemRuntimeInternal.h
+        src/runtime/filesystemTransactionInternal.h
+        src/runtime/hostRuntimeInternal.h
+        src/runtime/hostRuntimeWindowsPath.h
+        src/runtime/pathRuntimeInternal.h
+        src/runtime/processRuntimeInternal.h
+        src/runtime/processRuntimeWindowsQuoting.h
+        src/runtime/runtimeError.h
+        src/runtime/runtimeText.h
     )
-    if(MSVC)
-        target_compile_options(dynlex_runtime PRIVATE /W4 /WX)
+    if(WIN32)
+        set(DYNLEX_WINDOWS_RUNTIME_COMPILER
+            "${DYNLEX_WINDOWS_TOOLCHAIN_ROOT}/bin/cc.exe"
+        )
+        set(DYNLEX_WINDOWS_RUNTIME_ARCHIVER
+            "${DYNLEX_WINDOWS_TOOLCHAIN_ROOT}/bin/llvm-ar.exe"
+        )
+        foreach(DYNLEX_WINDOWS_RUNTIME_TOOL IN ITEMS
+            DYNLEX_WINDOWS_RUNTIME_COMPILER
+            DYNLEX_WINDOWS_RUNTIME_ARCHIVER
+        )
+            if(NOT EXISTS "${${DYNLEX_WINDOWS_RUNTIME_TOOL}}")
+                message(FATAL_ERROR
+                    "Windows runtime tool does not exist: ${${DYNLEX_WINDOWS_RUNTIME_TOOL}}"
+                )
+            endif()
+        endforeach()
+        set(DYNLEX_WINDOWS_RUNTIME_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/windows-runtime")
+        set(DYNLEX_WINDOWS_RUNTIME_ARCHIVE
+            "${DYNLEX_WINDOWS_RUNTIME_DIRECTORY}/libdynlex_runtime.a"
+        )
+        set(DYNLEX_WINDOWS_RUNTIME_OBJECTS)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(DYNLEX_WINDOWS_RUNTIME_OPTIMIZATION -O0)
+        else()
+            set(DYNLEX_WINDOWS_RUNTIME_OPTIMIZATION -O2)
+        endif()
+        foreach(DYNLEX_RUNTIME_SOURCE IN LISTS DYNLEX_RUNTIME_SOURCES)
+            get_filename_component(
+                DYNLEX_RUNTIME_SOURCE_NAME
+                "${DYNLEX_RUNTIME_SOURCE}"
+                NAME_WE
+            )
+            set(DYNLEX_RUNTIME_OBJECT
+                "${DYNLEX_WINDOWS_RUNTIME_DIRECTORY}/${DYNLEX_RUNTIME_SOURCE_NAME}.o"
+            )
+            set(DYNLEX_RUNTIME_DEPENDENCIES
+                "${DYNLEX_WINDOWS_RUNTIME_DIRECTORY}/${DYNLEX_RUNTIME_SOURCE_NAME}.d"
+            )
+            add_custom_command(
+                OUTPUT "${DYNLEX_RUNTIME_OBJECT}"
+                COMMAND "${CMAKE_COMMAND}" -E make_directory
+                    "${DYNLEX_WINDOWS_RUNTIME_DIRECTORY}"
+                COMMAND "${DYNLEX_WINDOWS_RUNTIME_COMPILER}"
+                    "--target=${DYNLEX_WINDOWS_TOOLCHAIN_TARGET}"
+                    -std=c11
+                    "${DYNLEX_WINDOWS_RUNTIME_OPTIMIZATION}"
+                    -g
+                    -Wall
+                    -Wextra
+                    -Wpedantic
+                    -Werror
+                    -MMD
+                    -MF "${DYNLEX_RUNTIME_DEPENDENCIES}"
+                    -c "${CMAKE_SOURCE_DIR}/${DYNLEX_RUNTIME_SOURCE}"
+                    -o "${DYNLEX_RUNTIME_OBJECT}"
+                DEPENDS
+                    "${CMAKE_SOURCE_DIR}/${DYNLEX_RUNTIME_SOURCE}"
+                    ${DYNLEX_RUNTIME_HEADERS}
+                DEPFILE "${DYNLEX_RUNTIME_DEPENDENCIES}"
+                VERBATIM
+            )
+            list(APPEND DYNLEX_WINDOWS_RUNTIME_OBJECTS "${DYNLEX_RUNTIME_OBJECT}")
+        endforeach()
+        add_custom_command(
+            OUTPUT "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}"
+            COMMAND "${CMAKE_COMMAND}" -E rm -f "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}"
+            COMMAND "${DYNLEX_WINDOWS_RUNTIME_ARCHIVER}" rcs
+                "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}"
+                ${DYNLEX_WINDOWS_RUNTIME_OBJECTS}
+            DEPENDS ${DYNLEX_WINDOWS_RUNTIME_OBJECTS}
+            VERBATIM
+        )
+        add_custom_target(
+            dynlex_runtime ALL
+            DEPENDS "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}"
+        )
+        set(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}")
+        set(DYNLEX_RUNTIME_LIBRARY_FILENAME "libdynlex_runtime.a")
     else()
+        add_library(dynlex_runtime STATIC ${DYNLEX_RUNTIME_SOURCES})
+        set_target_properties(dynlex_runtime PROPERTIES
+            C_STANDARD 11
+            C_STANDARD_REQUIRED ON
+            POSITION_INDEPENDENT_CODE ON
+        )
         target_compile_options(dynlex_runtime PRIVATE -Wall -Wextra -Wpedantic -Werror)
+        set(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH "$<TARGET_FILE:dynlex_runtime>")
+        set(DYNLEX_RUNTIME_LIBRARY_FILENAME "$<TARGET_FILE_NAME:dynlex_runtime>")
     endif()
 
     add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
                                     ${PROJECT_CONFIGS})
     add_dependencies(${PROJECT_NAME} dynlex_runtime)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
-        DYNLEX_RUNTIME_LIBRARY_BUILD_PATH="$<TARGET_FILE:dynlex_runtime>"
-        DYNLEX_RUNTIME_LIBRARY_FILENAME="$<TARGET_FILE_NAME:dynlex_runtime>"
+        DYNLEX_RUNTIME_LIBRARY_BUILD_PATH="${DYNLEX_RUNTIME_LIBRARY_BUILD_PATH}"
+        DYNLEX_RUNTIME_LIBRARY_FILENAME="${DYNLEX_RUNTIME_LIBRARY_FILENAME}"
         DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex"
     )
+    if(WIN32)
+        file(TO_CMAKE_PATH "${DYNLEX_WINDOWS_TOOLCHAIN_ROOT}" DYNLEX_WINDOWS_TOOLCHAIN_ROOT_CMAKE)
+        file(TO_CMAKE_PATH "${DYNLEX_WINDOWS_DEPENDENCY_ROOT}" DYNLEX_WINDOWS_DEPENDENCY_ROOT_CMAKE)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE
+            DYNLEX_WINDOWS_TARGET_TRIPLE="${DYNLEX_WINDOWS_TOOLCHAIN_TARGET}"
+            DYNLEX_WINDOWS_LINKER_BUILD_PATH="${DYNLEX_WINDOWS_TOOLCHAIN_ROOT_CMAKE}/bin/cc.exe"
+            DYNLEX_WINDOWS_TARGET_LIBRARY_BUILD_DIR="${DYNLEX_WINDOWS_TOOLCHAIN_ROOT_CMAKE}/${DYNLEX_WINDOWS_TOOLCHAIN_TARGET}/lib"
+            DYNLEX_WINDOWS_DEPENDENCY_LIBRARY_BUILD_DIR="${DYNLEX_WINDOWS_DEPENDENCY_ROOT_CMAKE}/lib"
+            DYNLEX_WINDOWS_RUNTIME_LIBRARY_BUILD_DIR="${DYNLEX_WINDOWS_DEPENDENCY_ROOT_CMAKE}/bin"
+            DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex/toolchain"
+        )
+    endif()
+    if(APPLE)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE
+            DYNLEX_MACOS_DEPENDENCY_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex/dependencies"
+        )
+    endif()
 
     target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
     dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
@@ -455,7 +583,11 @@ if(TARGET ${PROJECT_NAME})
     install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 if(TARGET dynlex_runtime)
-    install(TARGETS dynlex_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
+    if(WIN32)
+        install(FILES ${DYNLEX_WINDOWS_RUNTIME_ARCHIVE} DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
+    else()
+        install(TARGETS dynlex_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
+    endif()
 endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")
 if(WIN32 AND TARGET ${PROJECT_NAME})
@@ -490,5 +622,8 @@ set(CPACK_PACKAGE_CONTACT "DynLex maintainers <maintainers@dynlex.org>")
 set(CPACK_PACKAGE_VENDOR "DynLex")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://dynlex.com")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "binutils, build-essential, clang, libc6-dev, libfreetype-dev, libgl-dev, libglfw3-dev"
+)
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)
