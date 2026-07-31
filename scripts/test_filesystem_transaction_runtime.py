@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -60,6 +61,28 @@ def main() -> int:
         source_text = windows_source.read_text(encoding="utf-8")
         if "SetFileAttributesW" in source_text:
             raise RuntimeError("Windows metadata restoration must apply attributes through the held staging handle")
+        cmake_text = (project / "CMakeLists.txt").read_text(encoding="utf-8")
+        version_match = re.search(
+            r"set\(DYNLEX_WINDOWS_TARGET_VERSION (0x[0-9A-F]+)\)",
+            cmake_text,
+        )
+        if version_match is None or version_match.group(1) != "0x0A00":
+            raise RuntimeError("Windows builds must consistently target Windows 10 or newer")
+        windows_target_version = version_match.group(1)
+        normal_target_definitions = re.search(
+            r"add_compile_definitions\(\s*"
+            r"_WIN32_WINNT=\$\{DYNLEX_WINDOWS_TARGET_VERSION\}\s*"
+            r"WINVER=\$\{DYNLEX_WINDOWS_TARGET_VERSION\}\s*\)",
+            cmake_text,
+        )
+        if normal_target_definitions is None:
+            raise RuntimeError("Normal Windows targets do not use the configured Windows API version")
+        for definition in (
+            '"-D_WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}"',
+            '"-DWINVER=${DYNLEX_WINDOWS_TARGET_VERSION}"',
+        ):
+            if definition not in cmake_text:
+                raise RuntimeError(f"Windows runtime compilation omits {definition}")
         subprocess.run(
             [
                 compiler(),
@@ -70,6 +93,8 @@ def main() -> int:
                 "-Werror",
                 "-fshort-wchar",
                 "-D_WIN32=1",
+                f"-D_WIN32_WINNT={windows_target_version}",
+                f"-DWINVER={windows_target_version}",
                 f"-I{project / 'tests/runtime/windows_stubs'}",
                 f"-I{project / 'src/runtime'}",
                 "-fsyntax-only",

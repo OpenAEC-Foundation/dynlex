@@ -23,12 +23,14 @@ typedef union {
 	uint64_t QuadPart;
 } ULARGE_INTEGER;
 
+#if _WIN32_WINNT >= 0x0602
 typedef struct {
 	uint64_t VolumeSerialNumber;
 	struct {
 		unsigned char Identifier[16];
 	} FileId;
 } FILE_ID_INFO;
+#endif
 
 typedef struct {
 	DWORD FileAttributes;
@@ -49,7 +51,10 @@ typedef struct {
 
 typedef int FILE_INFO_BY_HANDLE_CLASS;
 
-enum { FileBasicInfo = 0, FileAttributeTagInfo = 9, FileIdInfo = 18, FileDispositionInfo = 4 };
+enum { FileBasicInfo = 0, FileAttributeTagInfo = 9, FileDispositionInfo = 4 };
+#if _WIN32_WINNT >= 0x0602
+enum { FileIdInfo = 18 };
+#endif
 
 #define TRUE 1
 #define FALSE 0

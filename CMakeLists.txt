@@ -17,6 +17,11 @@ include(GNUInstallDirs)
 
 if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set(DYNLEX_WINDOWS_TARGET_VERSION 0x0A00)
+    add_compile_definitions(
+        _WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}
+        WINVER=${DYNLEX_WINDOWS_TARGET_VERSION}
+    )
 endif()
 
 # Homebrew Clang selects the macOS SDK through its driver configuration, but
@@ -403,6 +408,8 @@ if(NOT EMSCRIPTEN)
                     -Wextra
                     -Wpedantic
                     -Werror
+                    "-D_WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}"
+                    "-DWINVER=${DYNLEX_WINDOWS_TARGET_VERSION}"
                     -MMD
                     -MF "${DYNLEX_RUNTIME_DEPENDENCIES}"
                     -c "${CMAKE_SOURCE_DIR}/${DYNLEX_RUNTIME_SOURCE}"

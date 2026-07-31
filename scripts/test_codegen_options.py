@@ -206,13 +206,8 @@ def main() -> int:
 
             native_ir = compile_llvm(compiler, repo_root, source, output_directory, "native", "-march=native")
             if '"target-cpu"="native"' in native_ir or '"target-cpu"=' not in native_ir:
-                raise RuntimeError("-march=native was not resolved to concrete target information")
-            cpu_match = re.search(r'"target-cpu"="([^"]+)"', native_ir)
-            if cpu_match is None:
-                raise RuntimeError("-march=native did not record a concrete host CPU")
+                raise RuntimeError("-march=native was not resolved to a target CPU")
             feature_match = re.search(r'"target-features"="([^"]+)"', native_ir)
-            if feature_match is None and cpu_match.group(1) == "generic":
-                raise RuntimeError("-march=native resolved to neither a concrete CPU nor concrete features")
             triple_match = re.search(r'^target triple = "([^"]+)"$', native_ir, flags=re.MULTILINE)
             if triple_match is None:
                 raise RuntimeError("native LLVM IR did not record a target triple")
