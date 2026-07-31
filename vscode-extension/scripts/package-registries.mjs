@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
     copyFile,
     cp,
@@ -22,9 +23,10 @@ const defaultOutputDirectory = path.join(
     'vscode-extension',
 );
 const require = createRequire(import.meta.url);
-const { readVSIXPackage } = require('@vscode/vsce/out/zip');
+const { readVSIXPackage, readZip } = require('@vscode/vsce/out/zip');
 const vsceCli = require.resolve('@vscode/vsce/vsce');
 const reproduciblePackageEpoch = '946684800';
+const execFile = promisify(execFileCallback);
 
 export const registryPackages = [
     {
@@ -67,6 +69,44 @@ export function buildRegistryManifest(manifest, registryPackage) {
 
 export function artifactFileName(manifest, registryPackage) {
     return `${manifest.name}-${manifest.version}-${registryPackage.registry}.vsix`;
+}
+
+export function parseProductionDependencyDirectories(
+    npmOutput,
+    sourceExtensionDirectory,
+) {
+    const nodeModulesDirectory = path.join(
+        sourceExtensionDirectory,
+        'node_modules',
+    );
+    const directories = [];
+
+    for (const outputLine of npmOutput.split(/\r?\n/)) {
+        if (outputLine.length === 0) {
+            continue;
+        }
+        const dependencyDirectory = path.resolve(outputLine);
+        if (dependencyDirectory === sourceExtensionDirectory) {
+            continue;
+        }
+        const relativePath = path.relative(
+            nodeModulesDirectory,
+            dependencyDirectory,
+        );
+        if (
+            relativePath.length === 0
+            || relativePath.startsWith(`..${path.sep}`)
+            || path.isAbsolute(relativePath)
+        ) {
+            throw new Error(
+                `npm reported dependency '${dependencyDirectory}' outside `
+                + "the extension's node_modules directory.",
+            );
+        }
+        directories.push(dependencyDirectory);
+    }
+
+    return directories;
 }
 
 function parseArguments(arguments_) {
@@ -117,6 +157,37 @@ function shouldCopySource(sourcePath) {
     return !relativePath.endsWith('.vsix');
 }
 
+async function copyProductionDependencies(stagedExtensionDirectory) {
+    const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const { stdout } = await execFile(
+        npmExecutable,
+        ['ls', '--omit=dev', '--all', '--parseable'],
+        {
+            cwd: extensionDirectory,
+            encoding: 'utf8',
+        },
+    );
+    const dependencyDirectories = parseProductionDependencyDirectories(
+        stdout,
+        extensionDirectory,
+    );
+
+    for (const dependencyDirectory of dependencyDirectories) {
+        const relativePath = path.relative(
+            extensionDirectory,
+            dependencyDirectory,
+        );
+        await cp(
+            dependencyDirectory,
+            path.join(stagedExtensionDirectory, relativePath),
+            {
+                dereference: true,
+                recursive: true,
+            },
+        );
+    }
+}
+
 async function runVscePackage(stagedExtensionDirectory, outputPath) {
     await new Promise((resolve, reject) => {
         const child = spawn(
@@ -132,9 +203,9 @@ async function runVscePackage(stagedExtensionDirectory, outputPath) {
                 cwd: stagedExtensionDirectory,
                 env: {
                     ...process.env,
-                    NODE_PATH: [
-                        path.join(extensionDirectory, 'node_modules'),
-                        process.env.NODE_PATH,
+                    PATH: [
+                        path.join(extensionDirectory, 'node_modules', '.bin'),
+                        process.env.PATH,
                     ].filter(Boolean).join(path.delimiter),
                     SOURCE_DATE_EPOCH: reproduciblePackageEpoch,
                 },
@@ -156,7 +227,11 @@ async function runVscePackage(stagedExtensionDirectory, outputPath) {
     });
 }
 
-async function verifyPackage(outputPath, expectedManifest) {
+async function verifyPackage(
+    outputPath,
+    expectedManifest,
+    forbiddenBuildDirectories,
+) {
     const packaged = await readVSIXPackage(outputPath);
     const fields = ['publisher', 'name', 'version'];
     for (const field of fields) {
@@ -164,6 +239,28 @@ async function verifyPackage(outputPath, expectedManifest) {
             throw new Error(
                 `${path.basename(outputPath)} has ${field} `
                 + `'${packaged.manifest[field]}', expected '${expectedManifest[field]}'.`,
+            );
+        }
+    }
+
+    const bundlePath = 'extension/dist/extension.js';
+    const packagedFiles = await readZip(
+        outputPath,
+        (fileName) => fileName === bundlePath,
+    );
+    const bundle = packagedFiles.get(bundlePath);
+    if (bundle === undefined) {
+        throw new Error(`${path.basename(outputPath)} has no extension bundle.`);
+    }
+    const bundleText = bundle.toString('utf8');
+    for (const directory of forbiddenBuildDirectories) {
+        const normalizedDirectory = directory.split(path.sep).join('/');
+        if (
+            bundleText.includes(directory)
+            || bundleText.includes(normalizedDirectory)
+        ) {
+            throw new Error(
+                `${path.basename(outputPath)} contains build path '${directory}'.`,
             );
         }
     }
@@ -206,13 +303,18 @@ async function packageRegistries(outputDirectory, packages) {
                 recursive: true,
                 filter: shouldCopySource,
             });
+            await copyProductionDependencies(stagedExtensionDirectory);
             await writeFile(
                 path.join(stagedExtensionDirectory, 'package.json'),
                 `${JSON.stringify(stagedManifest, null, 2)}\n`,
             );
             await rm(outputPath, { force: true });
             await runVscePackage(stagedExtensionDirectory, outputPath);
-            await verifyPackage(outputPath, stagedManifest);
+            await verifyPackage(
+                outputPath,
+                stagedManifest,
+                [extensionDirectory, stagingDirectory],
+            );
         }
     } finally {
         await rm(stagingDirectory, { recursive: true, force: true });
