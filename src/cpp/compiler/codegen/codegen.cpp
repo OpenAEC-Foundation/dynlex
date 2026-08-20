@@ -422,8 +422,6 @@ bool emitSectionFlexCallerBody(
 CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	if (!expr)
 		return nullptr;
-	if (expr->inferredConversion)
-		return generateExpressionCode(context, expr->inferredConversion);
 
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 

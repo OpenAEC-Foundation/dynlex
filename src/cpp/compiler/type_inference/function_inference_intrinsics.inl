@@ -153,6 +153,23 @@ case Expression::Kind::IntrinsicCall: {
 											  : AddressProvenance{};
 					joinAddressProvenance(context.currentInstantiation->returnAddressProvenance, returnProvenance);
 					context.currentInstantiation->hasReturnAddressProvenance = true;
+					bool returnsPointer =
+						returnValueExpression && effectiveInferredExpressionType(returnValueExpression).isPointer();
+					if (returnsPointer && !context.currentInstantiation->returnPointerStorageAmbiguous) {
+						std::optional<std::string> pointerStorageParameter =
+							pointerStorageParameterName(returnValueExpression, context, flexBindingFrameStack);
+						if (!pointerStorageParameter) {
+							context.currentInstantiation->returnPointerStorageParameterName.reset();
+							context.currentInstantiation->returnPointerStorageAmbiguous = true;
+						} else if (!context.currentInstantiation->returnPointerStorageParameterName) {
+							context.currentInstantiation->returnPointerStorageParameterName =
+								std::move(pointerStorageParameter);
+						} else if (*context.currentInstantiation->returnPointerStorageParameterName !=
+								   *pointerStorageParameter) {
+							context.currentInstantiation->returnPointerStorageParameterName.reset();
+							context.currentInstantiation->returnPointerStorageAmbiguous = true;
+						}
+					}
 				}
 				if (!context.typesValid)
 					break;
@@ -205,6 +222,13 @@ case Expression::Kind::IntrinsicCall: {
 				DataType valueType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
 				if (!context.typesValid)
 					break;
+				DataType refinedElementType;
+				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType) &&
+					refinedElementType != elementType) {
+					refinePointerStoragePointeeType(expr->arguments[1], valueType, context, flexBindingFrameStack);
+					pointerType = effectiveInferredExpressionType(expr->arguments[1]);
+					elementType = pointerType.dereferenced();
+				}
 				if (!isVariableAssignmentCompatible(elementType, valueType)) {
 					if (tryApplyUserConversion(expr->arguments[2], elementType, true, context, flexBindingFrameStack)) {
 						valueType = effectiveInferredExpressionType(expr->arguments[2]);
@@ -395,7 +419,6 @@ case Expression::Kind::IntrinsicCall: {
 				DataType requestedType = typeArgType.toReferencedType();
 				if (!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
 					if (tryApplyUserConversion(expr->arguments[1], requestedType, false, context, flexBindingFrameStack)) {
-						expr->inferredConversion = expr->arguments[1]->inferredConversion;
 						expr->type = requestedType;
 						context.setExpressionEvaluation(
 							expr,

@@ -1,0 +1,17 @@
+function inspect [repositories]:
+    execute:
+        @intrinsic("store", repositories, 1)
+        @intrinsic("return", repositories)
+
+function combine [repositories] with repositories:
+    execute:
+        @intrinsic("return", repositories)
+
+function inspect [pre]fixed:
+    execute:
+        @intrinsic("store", prefixed, 3)
+        @intrinsic("return", prefixed)
+
+@intrinsic("discard", inspect repositories)
+@intrinsic("discard", combine repositories with 2)
+@intrinsic("discard", inspect prefixed)

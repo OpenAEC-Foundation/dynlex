@@ -62,6 +62,8 @@ createConversionCall(InferenceContext &context, Expression *source, PatternDefin
 	call->range = source->range;
 	call->patternMatch = matchPointer;
 	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, true);
+	if (!source->reusableTemplateExpression)
+		sourceClone->reusableTemplateExpression = nullptr;
 	context.setExpressionEvaluation(
 		sourceClone,
 		{
@@ -216,6 +218,7 @@ static bool tryApplyUserConversion(
 	);
 	requireCompilerInvariant(call->type == targetType, "committed conversion outcome differs from its successful probe");
 	source->inferredConversion = call;
+	context.parseContext.expressionsWithInferredConversions.push_back(source);
 	context.setExpressionEvaluation(
 		source,
 		{
@@ -745,6 +748,7 @@ static bool inferNonFlexPatternCall(
 			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
 			[&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
+			inst.parameterOutputTypesByName.clear();
 			inst.writtenGlobalReferences.clear();
 			inst.finalGlobalConstantValues.clear();
 			inst.finalGlobalAddressProvenance.clear();
@@ -752,6 +756,8 @@ static bool inferNonFlexPatternCall(
 			inst.externallyEscapedGlobalProvenance = {};
 			inst.returnAddressProvenance = {};
 			inst.hasReturnAddressProvenance = false;
+			inst.returnPointerStorageParameterName.reset();
+			inst.returnPointerStorageAmbiguous = false;
 			inst.writesThroughUnknownAddress = false;
 			inst.externallyEscapesUnknownAddress = false;
 			inst.requiredCompileTimeParameters = explicitCompileTimeParameters;
@@ -837,6 +843,21 @@ static bool inferNonFlexPatternCall(
 	}
 	if (!context.typesValid)
 		return true;
+	expr->inferredPointerStorage = nullptr;
+	if (!inst.returnPointerStorageAmbiguous && inst.returnPointerStorageParameterName) {
+		auto storageBinding = std::ranges::find_if(paramBindings, [&](const auto &entry) {
+			return entry.first == *inst.returnPointerStorageParameterName;
+		});
+		if (storageBinding != paramBindings.end())
+			expr->inferredPointerStorage = storageBinding->second;
+	}
+	for (const auto &[parameterName, outputType] : inst.parameterOutputTypesByName) {
+		auto binding = std::ranges::find_if(paramBindings, [&](const auto &entry) {
+			return entry.first == parameterName;
+		});
+		if (binding != paramBindings.end())
+			refineStorageExpressionType(binding->second, outputType, context, flexBindingFrameStack);
+	}
 	mergeCalleeGlobalWritesIntoCaller(context, inst);
 	mergeInstantiationPurityIntoCaller(context, inst);
 	AddressProvenance callArgumentProvenance;

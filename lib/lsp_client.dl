@@ -204,6 +204,7 @@ local function the result of configuring LSP server capabilities {a pointer to a
                 set kind to the LSP synchronization number in synchronization
                 if kind < 0:
                     return a failed JSON-RPC operation with status the LSP invalid response status reporting "LSP textDocumentSync must be 0, 1, or 2"
+                set opens to kind != the LSP no synchronization kind
             else if synchronization is a JSON object:
                 if synchronization has JSON member named "openClose":
                     set opening to the JSON member named "openClose" in synchronization
@@ -280,14 +281,10 @@ local function an LSP start failure after freeing {a pointer to an LSP client:st
     execute:
         return an LSP start failure after freeing state with status code reporting the string form of error
 
-local function the result of initializing an LSP client over {a pointer to a JSON-RPC connection:connection} with {a pointer to a JSON value:capabilities} rooted at {string:address} including the root {boolean:included} within {integer:timeout} milliseconds:
+local function the result of initializing an LSP client over {a pointer to a JSON-RPC connection:connection} using {a pointer to a JSON value:parameters} within {integer:timeout} milliseconds:
     execute:
         set session to a JSON-RPC session for connection
         set state to a newly allocated LSP client owning session
-        if included:
-            set parameters to the LSP initialization parameters rooted at address with capabilities
-        else:
-            set parameters to the LSP initialization parameters with capabilities
         set sent to the result of sending JSON-RPC request "initialize" with parameters using session
         free parameters
         if sent failed:
@@ -298,6 +295,8 @@ local function the result of initializing an LSP client over {a pointer to a JSO
         if response failed:
             set error to response's error message
             set code to response's status
+            if code = the JSON-RPC remote error status:
+                set error to response's remote error message
             free response
             return an LSP start failure after freeing state with status code reporting error
         set payload to response's result
@@ -342,35 +341,47 @@ local function the result of initializing an LSP client over {a pointer to a JSO
         set state's lifecycle to the LSP running lifecycle
         return a successful LSP client result containing state
 
-function the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
+local function the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities}, parameters {a pointer to a JSON value:parameters}, and a limit of {integer:timeout} milliseconds:
     execute:
         if timeout < 0:
+            free parameters
             return a failed LSP client result with status the JSON-RPC timeout status reporting "LSP startup timeout must not be negative"
         if capabilities is not a JSON object:
+            free parameters
             return a failed LSP client result with status the JSON-RPC invalid message status reporting "LSP client capabilities must be an object"
+        set opened to the result of opening a JSON-RPC connection using command
+        if opened failed:
+            set error to opened's error message
+            free parameters
+            return a failed LSP client result with status the JSON-RPC I/O error status reporting error
+        set connection to opened's connection
+        return the result of initializing an LSP client over connection using parameters within timeout milliseconds
+
+function the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
+    execute:
         set address to the string form of root
         if address is invalid UTF-8:
             return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
-        set opened to the result of opening a JSON-RPC connection using command
-        if opened failed:
-            set error to opened's error message
-            return a failed LSP client result with status the JSON-RPC I/O error status reporting error
-        set connection to opened's connection
-        return the result of initializing an LSP client over connection with capabilities rooted at address including the root true within timeout milliseconds
+        set parameters to the LSP initialization parameters rooted at address with capabilities
+        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+
+function the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
+    execute:
+        set address to the string form of root
+        if address is invalid UTF-8:
+            return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
+        set parameters to the LSP initialization parameters rooted at address with capabilities and initialization options options
+        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
 function the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
     execute:
-        if timeout < 0:
-            return a failed LSP client result with status the JSON-RPC timeout status reporting "LSP startup timeout must not be negative"
-        if capabilities is not a JSON object:
-            return a failed LSP client result with status the JSON-RPC invalid message status reporting "LSP client capabilities must be an object"
-        set opened to the result of opening a JSON-RPC connection using command
-        if opened failed:
-            set error to opened's error message
-            return a failed LSP client result with status the JSON-RPC I/O error status reporting error
-        set connection to opened's connection
-        set root to an empty LSP text
-        return the result of initializing an LSP client over connection with capabilities rooted at root including the root false within timeout milliseconds
+        set parameters to the LSP initialization parameters with capabilities
+        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+
+function the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
+    execute:
+        set parameters to the LSP initialization parameters with capabilities and initialization options options
+        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
 function the result of starting an LSP client using {process command:command} rooted at {a value:root} waiting up to {integer:timeout} milliseconds:
     execute:

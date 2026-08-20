@@ -137,8 +137,6 @@ bool releaseInitializedStorage(ParseContext &context, ParseContext::ManagedStora
 bool managedExpressionResultIsOwned(ParseContext &context, Expression *expression) {
 	if (!expression || !typeHasManagedLifecycle(finalizedExpressionType(context, expression)))
 		return false;
-	if (expression->inferredConversion)
-		return managedExpressionResultIsOwned(context, expression->inferredConversion);
 	ResolvedBindingLayers resolved = resolveCodegenBindingLayers(context, expression, context.flexBindingFrames);
 	if (resolved.expression && resolved.expression != expression) {
 		FlexBindingScope scope(context, std::move(resolved.bindingFrameStack));

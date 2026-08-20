@@ -58,6 +58,7 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 struct InstantiationProgressSnapshot {
 	DataType returnType;
 	std::vector<DataType> argumentTypes;
+	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
@@ -66,6 +67,8 @@ struct InstantiationProgressSnapshot {
 	AddressProvenance externallyEscapedGlobalProvenance;
 	AddressProvenance returnAddressProvenance;
 	bool hasReturnAddressProvenance;
+	std::optional<std::string> returnPointerStorageParameterName;
+	bool returnPointerStorageAmbiguous;
 	bool writesThroughUnknownAddress;
 	bool externallyEscapesUnknownAddress;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
@@ -79,6 +82,7 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 	auto snapshot = std::make_unique<InstantiationProgressSnapshot>();
 	snapshot->returnType = instantiation.returnType;
 	snapshot->argumentTypes = instantiation.argumentTypes;
+	snapshot->parameterOutputTypesByName = instantiation.parameterOutputTypesByName;
 	snapshot->constantParameterValues = instantiation.constantParameterValues;
 	snapshot->writtenGlobalReferences = instantiation.writtenGlobalReferences;
 	snapshot->finalGlobalConstantValues = instantiation.finalGlobalConstantValues;
@@ -87,6 +91,8 @@ static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgr
 	snapshot->externallyEscapedGlobalProvenance = instantiation.externallyEscapedGlobalProvenance;
 	snapshot->returnAddressProvenance = instantiation.returnAddressProvenance;
 	snapshot->hasReturnAddressProvenance = instantiation.hasReturnAddressProvenance;
+	snapshot->returnPointerStorageParameterName = instantiation.returnPointerStorageParameterName;
+	snapshot->returnPointerStorageAmbiguous = instantiation.returnPointerStorageAmbiguous;
 	snapshot->writesThroughUnknownAddress = instantiation.writesThroughUnknownAddress;
 	snapshot->externallyEscapesUnknownAddress = instantiation.externallyEscapesUnknownAddress;
 	snapshot->requiredCompileTimeParameters = instantiation.requiredCompileTimeParameters;

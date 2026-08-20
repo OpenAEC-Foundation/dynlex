@@ -1,0 +1,5 @@
+import lib/list.dl
+
+set values to an empty list of string
+append the string form of "first" to values
+append 1 to values

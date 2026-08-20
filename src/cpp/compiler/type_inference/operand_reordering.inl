@@ -101,6 +101,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
 	expr->inferredConversion = nullptr;
+	expr->inferredPointerStorage = nullptr;
 	expr->inferredFlexBody.reset();
 	for (Expression *arg : expr->arguments)
 		resetExpressionTypes(arg, visited);

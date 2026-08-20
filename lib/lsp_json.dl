@@ -50,26 +50,38 @@ function an LSP versioned text document identifier for {string:uri} at {integer:
         add JSON-RPC member "version" containing a new JSON-RPC integer for version to node
         return node
 
-function the LSP initialization parameters rooted at {string:root} with {a pointer to a JSON value:capabilities}:
+local function the common LSP initialization parameters with {a pointer to a JSON value:capabilities}:
     execute:
         set client to a new JSON-RPC object
         add JSON-RPC member "name" containing a new JSON-RPC text for "DynLex" to client
         set result to a new JSON-RPC object
         add JSON-RPC member "processId" containing a new JSON-RPC null to result
         add JSON-RPC member "clientInfo" containing client to result
-        add JSON-RPC member "rootUri" containing a new JSON-RPC text for root to result
         add JSON-RPC member "capabilities" containing a copy of JSON-RPC node capabilities to result
+        return result
+
+function the LSP initialization parameters rooted at {string:root} with {a pointer to a JSON value:capabilities}:
+    execute:
+        set result to the common LSP initialization parameters with capabilities
+        add JSON-RPC member "rootUri" containing a new JSON-RPC text for root to result
         return result
 
 function the LSP initialization parameters with {a pointer to a JSON value:capabilities}:
     execute:
-        set client to a new JSON-RPC object
-        add JSON-RPC member "name" containing a new JSON-RPC text for "DynLex" to client
-        set result to a new JSON-RPC object
-        add JSON-RPC member "processId" containing a new JSON-RPC null to result
-        add JSON-RPC member "clientInfo" containing client to result
+        set result to the common LSP initialization parameters with capabilities
         add JSON-RPC member "rootUri" containing a new JSON-RPC null to result
-        add JSON-RPC member "capabilities" containing a copy of JSON-RPC node capabilities to result
+        return result
+
+function the LSP initialization parameters rooted at {string:root} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options}:
+    execute:
+        set result to the LSP initialization parameters rooted at root with capabilities
+        add JSON-RPC member "initializationOptions" containing a copy of JSON-RPC node options to result
+        return result
+
+function the LSP initialization parameters with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options}:
+    execute:
+        set result to the LSP initialization parameters with capabilities
+        add JSON-RPC member "initializationOptions" containing a copy of JSON-RPC node options to result
         return result
 
 function the LSP document opening parameters for URI {string:uri}, language {string:language}, version {integer:version} and text {string:contents}:

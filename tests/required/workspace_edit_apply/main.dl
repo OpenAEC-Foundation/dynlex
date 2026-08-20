@@ -10,6 +10,22 @@ if creation failed:
     @intrinsic("call", "libc", "abort", nothing)
 set context to creation's context
 
+set style to the native path style
+if style failed or style is unsupported:
+    @intrinsic("call", "libc", "abort", nothing)
+set joined to directory joined with "sample.txt" using style's value
+if joined failed:
+    @intrinsic("call", "libc", "abort", nothing)
+set path to joined's value
+write the string form of "before" to the file at path and set written to it
+if written failed:
+    @intrinsic("call", "libc", "abort", nothing)
+set address to the file URI for path interpreted as a native path
+if address failed or address is unsupported:
+    @intrinsic("call", "libc", "abort", nothing)
+set opening to the result of opening workspace document address's value with text "before" at version 1 in context
+print whether opening succeeded as a line
+
 set empty to the result of applying workspace edit "{\"documentChanges\":[]}" using context
 print empty was applied as a line
 

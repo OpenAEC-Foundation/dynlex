@@ -725,11 +725,19 @@ static std::vector<AcceptedLiteralDiagnosticInfo>
 collectAcceptedLiteralDiagnosticInfo(const PatternMatch &match, PatternDefinition *definition) {
 	std::vector<AcceptedLiteralDiagnosticInfo> result;
 	std::unordered_set<std::string> seen;
+	std::unordered_set<size_t> explicitLiteralStartPositions;
+	forEachLeafElement(definition->patternElements, [&](const DefinitionPatternElement &element) {
+		if (element.isExplicitLiteral)
+			explicitLiteralStartPositions.insert(element.startPos);
+	});
 	for (const AcceptedLiteralMatch &acceptedLiteral : match.acceptedLiterals) {
 		PatternTreeNode *node = acceptedLiteral.node;
 		if (node->type != PatternElement::Type::VariableLike)
 			continue;
 		for (Range range : definitionNodeRanges(definition, node, match.nodesPassed)) {
+			size_t startPos = static_cast<size_t>(range.start() - definition->range.start());
+			if (explicitLiteralStartPositions.contains(startPos))
+				continue;
 			std::string key = range.toString();
 			if (!seen.insert(key).second)
 				continue;
