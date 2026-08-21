@@ -799,9 +799,7 @@ static int mark_process_finished(DynlexProcess *process, DynlexWindowsProcess *p
 	return 0;
 }
 
-int dynlex_platform_process_pump(
-	DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream
-) {
+int dynlex_platform_process_pump(DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream) {
 	DynlexWindowsProcess *platform = process->platform;
 	ULONGLONG started = GetTickCount64();
 	while (true) {

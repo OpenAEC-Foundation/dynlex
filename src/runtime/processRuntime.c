@@ -505,9 +505,9 @@ int dynlex_process_wait_activity(DynlexProcess *process, int32_t timeout_millise
 		return -1;
 	dynlex_platform_process_lock(process);
 	*activity = process->finished || process->standard_output.length > 0 || process->standard_error.length > 0 ||
-					 process->standard_output_closed || process->standard_error_closed
-				 ? 1
-				 : 0;
+						process->standard_output_closed || process->standard_error_closed
+					? 1
+					: 0;
 	dynlex_platform_process_unlock(process);
 	return 0;
 }
