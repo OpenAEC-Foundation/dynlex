@@ -231,8 +231,6 @@ FlexBindingScope::~FlexBindingScope() { context.flexBindingFrames = std::move(sa
 
 static DataType finalizedExpressionType(ParseContext &context, Expression *expr, const BindingFrameStack &bindingFrameStack) {
 	requireCompilerInvariant(expr != nullptr, "codegen requested the type of a null expression");
-	if (expr->inferredConversion)
-		return finalizedExpressionType(context, expr->inferredConversion, bindingFrameStack);
 	ResolvedBindingLayers resolved = resolveVariableBindingWithCallerScope(expr, bindingFrameStack);
 	if (resolved.expression != expr)
 		return finalizedExpressionType(context, resolved.expression, resolved.bindingFrameStack);

@@ -229,6 +229,10 @@ struct ParseContext {
 	// Compiler-created conversion calls use matches that are not owned by a
 	// source PatternReference.
 	std::vector<std::unique_ptr<PatternMatch>> ownedSyntheticPatternMatches;
+	// Type inference can select calls while evaluating operand-grouping trials.
+	// Successful selections are materialized as ordinary calls when inference
+	// finishes; stale trial entries have no inferred conversion at that point.
+	std::vector<Expression *> expressionsWithInferredConversions;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;

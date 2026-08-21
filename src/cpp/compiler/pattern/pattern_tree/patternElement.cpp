@@ -46,6 +46,38 @@ std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 	return elements;
 }
 
+static bool isWhitespaceOtherElement(const DefinitionPatternElement &element) {
+	return element.type == PatternElement::Type::Other && !element.text.empty() &&
+		   element.text.find_first_not_of(' ') == std::string::npos;
+}
+
+static bool canMergeLexically(const DefinitionPatternElement &left, const DefinitionPatternElement &right) {
+	if (left.type != right.type)
+		return false;
+	if (left.type == PatternElement::Type::VariableLike)
+		return true;
+	if (left.type != PatternElement::Type::Other)
+		return false;
+	return isWhitespaceOtherElement(left) == isWhitespaceOtherElement(right);
+}
+
+static void mergeAdjacentLexicalElements(std::vector<DefinitionPatternElement> &elements) {
+	size_t writeIndex = 0;
+	for (size_t readIndex = 0; readIndex < elements.size(); readIndex++) {
+		DefinitionPatternElement &current = elements[readIndex];
+		if (writeIndex == 0 || !canMergeLexically(elements[writeIndex - 1], current)) {
+			if (writeIndex != readIndex)
+				elements[writeIndex] = std::move(current);
+			writeIndex++;
+			continue;
+		}
+		DefinitionPatternElement &left = elements[writeIndex - 1];
+		left.text += current.text;
+		left.isExplicitLiteral = left.isExplicitLiteral || current.isExplicitLiteral;
+	}
+	elements.erase(elements.begin() + writeIndex, elements.end());
+}
+
 // Absorb VariableLike elements adjacent to Choice elements into the Choice alternatives.
 // e.g., VL("te") + Choice([VL("st")], []) → Choice([VL("test")], [VL("te")])
 // This ensures structurally different but semantically equivalent patterns produce the same trie paths.
@@ -77,6 +109,7 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 					} else {
 						alt.front().text = prev.text + alt.front().text;
 						alt.front().startPos = prev.startPos;
+						alt.front().isExplicitLiteral = prev.isExplicitLiteral || alt.front().isExplicitLiteral;
 					}
 				}
 				elements.erase(elements.begin() + (i - 1));
@@ -92,6 +125,7 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 						alt.push_back(next);
 					} else {
 						alt.back().text += next.text;
+						alt.back().isExplicitLiteral = alt.back().isExplicitLiteral || next.isExplicitLiteral;
 					}
 				}
 				elements.erase(elements.begin() + (i + 1));
@@ -100,6 +134,7 @@ static void normalizePatternElements(std::vector<DefinitionPatternElement> &elem
 			}
 		}
 	}
+	mergeAdjacentLexicalElements(elements);
 }
 
 // Choices multiply into concrete pattern paths (see canonicalPatternPaths).
@@ -156,7 +191,7 @@ static std::vector<SeenVariableLikes> markDuplicateVariableLikeElementsRec(
 			}
 
 			SeenVariableLikes nextState = state;
-			if (element.type == PatternElement::Type::VariableLike) {
+			if (element.type == PatternElement::Type::VariableLike && !element.isExplicitLiteral) {
 				auto it = nextState.find(element.text);
 				if (it != nextState.end()) {
 					if (!element.firstDuplicateVariableLikeRange.line)
@@ -177,10 +212,7 @@ void markDuplicateVariableLikeElements(const Range &definitionRange, std::vector
 }
 
 namespace {
-static bool isPatternSeparator(const DefinitionPatternElement &element) {
-	return element.type == PatternElement::Type::Other && !element.text.empty() &&
-		   element.text.find_first_not_of(' ') == std::string::npos;
-}
+static bool isPatternSeparator(const DefinitionPatternElement &element) { return isWhitespaceOtherElement(element); }
 
 static std::vector<std::vector<DefinitionPatternElement>>
 expandedPatternPaths(const std::vector<DefinitionPatternElement> &elements) {
@@ -289,6 +321,16 @@ bool visitPatternNameWithFoundState(
 	return found;
 }
 
+static void
+appendExplicitLiteralElements(std::vector<DefinitionPatternElement> &result, std::string_view text, size_t startPos) {
+	for (PatternElement &plainElement : getPatternElements(text)) {
+		plainElement.startPos += startPos;
+		DefinitionPatternElement literalElement(plainElement);
+		literalElement.isExplicitLiteral = plainElement.type == PatternElement::Type::VariableLike;
+		result.push_back(std::move(literalElement));
+	}
+}
+
 bool parsePatternElements(
 	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &result,
 	size_t offset
@@ -350,7 +392,7 @@ bool parsePatternElements(
 		std::string_view content = patternString.substr(bracketStart + 1, i - bracketStart - 2);
 
 		if (isCurly) {
-			// {type:name} — capture element
+			// {type:name} — capture element; {literal:text} — explicit literal
 			size_t colonPos = content.find(':');
 			if (colonPos == std::string_view::npos) {
 				size_t diagnosticEnd = std::min(bracketStart + offset + 1, patternRange.subString.size());
@@ -364,7 +406,9 @@ bool parsePatternElements(
 			std::string_view captureType = content.substr(0, colonPos);
 			std::string name(content.substr(colonPos + 1));
 			size_t namePos = bracketStart + 1 + colonPos + 1 + offset;
-			if (captureType == "word") {
+			if (captureType == "literal") {
+				appendExplicitLiteralElements(result, name, namePos);
+			} else if (captureType == "word") {
 				result.push_back(DefinitionPatternElement(PatternElement::Type::Word, name, namePos));
 			} else {
 				// Typed argument constraint: emit a Variable element with the type constraint
@@ -391,20 +435,24 @@ bool parsePatternElements(
 			}
 			parts.push_back(content.substr(partStart));
 
-			// create Choice element with alternatives
-			DefinitionPatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
-			size_t altOffset = bracketStart + 1 + offset;
-			for (auto &part : parts) {
-				std::vector<DefinitionPatternElement> alternative;
-				if (!parsePatternElements(context, patternRange, part, alternative, altOffset))
-					return false;
-				choice.alternatives.push_back(std::move(alternative));
-				altOffset += part.size() + 1; // +1 for '|'
+			if (parts.size() == 1) {
+				appendExplicitLiteralElements(result, parts.front(), bracketStart + 1 + offset);
+			} else {
+				// create Choice element with alternatives
+				DefinitionPatternElement choice(PatternElement::Type::Choice, {}, bracketStart + offset);
+				size_t altOffset = bracketStart + 1 + offset;
+				for (auto &part : parts) {
+					std::vector<DefinitionPatternElement> alternative;
+					if (!parsePatternElements(context, patternRange, part, alternative, altOffset))
+						return false;
+					choice.alternatives.push_back(std::move(alternative));
+					altOffset += part.size() + 1; // +1 for '|'
+				}
+				// Separator spaces around choices are normalized when patterns are
+				// added to the pattern tree, so alternatives keep their authored
+				// elements here.
+				result.push_back(std::move(choice));
 			}
-			// Separator spaces around choices are normalized when patterns are
-			// added to the pattern tree, so alternatives keep their authored
-			// elements here.
-			result.push_back(std::move(choice));
 		}
 
 		pos = i; // continue after closing bracket

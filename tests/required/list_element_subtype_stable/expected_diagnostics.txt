@@ -1,0 +1,3 @@
+lib/list.dl:9-89: Error: store at cannot store a 32-bit integer through a pointer to a string
+  note: while inferring intrinsic 'initialize at' in '@intrinsic("initialize at", (the data of values) + (the length of values), item)' with arguments [a pointer to a string, a 32-bit integer] -> an unresolved value lib/list.dl:9-89
+  note: while inferring call 'append 1 to values' with arguments [a 32-bit integer, a pointer to a list] -> an unresolved value tests/required/list_element_subtype_stable/main.dl:1-19

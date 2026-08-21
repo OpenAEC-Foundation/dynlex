@@ -308,7 +308,7 @@ static void emitDuplicatePatternWordWarnings(ParseContext &context) {
 						found.try_emplace(element.text, definitionElementRange(definition, element));
 						continue;
 					}
-					if (element.type != PatternElement::Type::VariableLike)
+					if (element.type != PatternElement::Type::VariableLike || element.isExplicitLiteral)
 						continue;
 
 					auto foundIt = found.find(element.text);

@@ -404,17 +404,17 @@ function record workspace annotation confirmation {string:identifier} as {boolea
         allocate one slot of initial and set decision to it
         append decision to the annotation decisions of context
 
-function the result of opening workspace document {string:uri} with text {string:contents} at version {integer:version} in {a pointer to a workspace edit context:context}:
+function the result of opening workspace {literal:document} {string:uri} with text {string:contents} at version {integer:version} in {a pointer to a workspace edit context:context}:
     execute:
         set normalized to the normalized workspace file URI for uri inside the root path of context
         if normalized failed:
             return a failed workspace operation reporting normalized's failure reason
         if the workspace open document identified by normalized's identity in context != (0 as a pointer to a workspace open document):
             return a failed workspace operation reporting the string form of "Workspace document is already open"
-        set entry to the file system entry at normalized's path
-        if entry lookup failed:
+        set inspected to the file system entry at normalized's path
+        if inspected lookup failed:
             return a failed workspace operation reporting the string form of "Workspace document could not be inspected"
-        if entry was found and entry is not a regular file:
+        if inspected was found and inspected is not a regular file:
             return a failed workspace operation reporting the string form of "Workspace document must be a regular file"
         scan lines in contents and set lines to it
         set validity to lines succeeded
@@ -433,8 +433,8 @@ function the result of opening workspace document {string:uri} with text {string
             contents,
             version as a 32 bit integer
         )
-        allocate one slot of initial and set entry to it
-        append workspace open document entry to the documents of context
+        allocate one slot of initial and set document to it
+        append workspace open document document to the documents of context
         return a successful workspace operation
 
 function free {a pointer to a workspace edit context:context}:

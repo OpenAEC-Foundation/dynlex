@@ -99,6 +99,7 @@ struct Instantiation {
 	Range returnTypeOriginRange;
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, DataType> parameterTypesByName;
+	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
@@ -107,6 +108,8 @@ struct Instantiation {
 	AddressProvenance externallyEscapedGlobalProvenance;
 	AddressProvenance returnAddressProvenance;
 	bool hasReturnAddressProvenance = false;
+	std::optional<std::string> returnPointerStorageParameterName;
+	bool returnPointerStorageAmbiguous = false;
 	bool writesThroughUnknownAddress = false;
 	bool externallyEscapesUnknownAddress = false;
 	std::unordered_set<std::string> requiredCompileTimeParameters;

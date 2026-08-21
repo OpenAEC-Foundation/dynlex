@@ -1,0 +1,17 @@
+function load {literal:repositories}:
+    execute:
+        @intrinsic("store", repositories, 1)
+        @intrinsic("return", repositories)
+
+function combine repositories with {literal:repositories}:
+    execute:
+        @intrinsic("return", repositories)
+
+function load pre{literal:fixed}:
+    execute:
+        @intrinsic("store", prefixed, 3)
+        @intrinsic("return", prefixed)
+
+@intrinsic("discard", load repositories)
+@intrinsic("discard", combine 2 with repositories)
+@intrinsic("discard", load prefixed)

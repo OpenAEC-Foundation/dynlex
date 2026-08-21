@@ -34,9 +34,9 @@ struct PatternElement {
 		: type(type), text(text), startPos(startPos) {}
 };
 
-// Extended pattern element used in pattern definitions. Adds Choice alternatives and
-// typed argument constraints ({type:name} syntax). PatternTreeNode derives from the
-// base PatternElement and does not inherit these fields.
+// Extended pattern element used in pattern definitions. Adds Choice alternatives,
+// explicit literals, and typed argument constraints. PatternTreeNode derives from
+// the base PatternElement and does not inherit these fields.
 struct DefinitionPatternElement : public PatternElement {
 	// for Choice type: each alternative is a sequence of elements
 	std::vector<std::vector<DefinitionPatternElement>> alternatives;
@@ -56,6 +56,9 @@ struct DefinitionPatternElement : public PatternElement {
 	Range firstImplicitPromotionUseRange;
 	// if set, this VariableLike repeats an earlier VariableLike with the same text in the same definition
 	Range firstDuplicateVariableLikeRange;
+	// Explicit literal words are authored as [word] or {literal:word} and can never
+	// become implicit parameters.
+	bool isExplicitLiteral = false;
 	// A plain word that forms an entire concrete pattern spelling is always literal.
 	bool isLiteralInSingleWordSpelling = false;
 
@@ -67,7 +70,8 @@ struct DefinitionPatternElement : public PatternElement {
 // Parse plain text (no brackets) into pattern elements
 std::vector<PatternElement> getPatternElements(std::string_view patternString);
 
-// Parse pattern text with [bracket|alternatives] and {type:name} captures into definition elements.
+// Parse pattern text with [literal], [choice|alternatives], {literal:text}, and
+// {type:name} captures into definition elements.
 // Returns false and emits a diagnostic on the first parse error.
 bool parsePatternElements(
 	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &elements,
@@ -91,7 +95,7 @@ bool visitPatternNameWithFoundState(
 
 inline bool canPromoteVariableLikeElement(const DefinitionPatternElement &element) {
 	return element.type == PatternElement::Type::VariableLike && !element.firstDuplicateVariableLikeRange.line &&
-		   !element.isLiteralInSingleWordSpelling;
+		   !element.isExplicitLiteral && !element.isLiteralInSingleWordSpelling;
 }
 
 // Visit all leaf (non-Choice) elements recursively, including inside Choice alternatives

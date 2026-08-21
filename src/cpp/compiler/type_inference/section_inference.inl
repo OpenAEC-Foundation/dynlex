@@ -791,6 +791,30 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	return true;
 }
 
+static void materializeInferredConversionCalls(ParseContext &parseContext) {
+	std::unordered_set<Expression *> materialized;
+	for (Expression *source : parseContext.expressionsWithInferredConversions) {
+		if (!source || !source->inferredConversion || !materialized.insert(source).second)
+			continue;
+
+		Expression *call = source->inferredConversion;
+		requireCompilerInvariant(
+			call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
+			"inferred conversion is not a unary function call"
+		);
+
+		auto *argument = new Expression(std::move(*source));
+		parseContext.ownedClonedExpressions.push_back(argument);
+		argument->inferredConversion = nullptr;
+
+		*source = std::move(*call);
+		source->inferredConversion = nullptr;
+		source->arguments.clear();
+		source->arguments.push_back(argument);
+	}
+	parseContext.expressionsWithInferredConversions.clear();
+}
+
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	if (!inferPatternTypeConstraints(parseContext))
@@ -955,6 +979,8 @@ bool inferTypes(ParseContext &parseContext) {
 		valid = false;
 	}
 
+	if (valid)
+		materializeInferredConversionCalls(parseContext);
 	return valid;
 }
 

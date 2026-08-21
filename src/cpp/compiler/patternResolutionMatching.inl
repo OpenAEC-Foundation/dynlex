@@ -165,7 +165,7 @@ static bool prepareConversionPattern(ParseContext &context, PatternDefinition &d
 		return true;
 	if (definition.patternElements.size() == 1) {
 		DefinitionPatternElement &element = definition.patternElements.front();
-		if (element.type == PatternElement::Type::VariableLike) {
+		if (element.type == PatternElement::Type::VariableLike && !element.isExplicitLiteral) {
 			element.type = PatternElement::Type::Variable;
 			return true;
 		}

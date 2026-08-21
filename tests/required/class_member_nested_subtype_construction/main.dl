@@ -1,0 +1,30 @@
+import lib/std.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] backend
+    members:
+        arguments as a pointer to list
+
+function a backend using {a pointer to list:arguments}:
+    execute:
+        set value to @intrinsic("construct", a backend, arguments)
+        allocate one slot of value and set result to it
+        return result
+
+function the argument count of {a pointer to backend:value}:
+    execute:
+        return the length of (value's arguments)
+
+set arguments to an empty list of string
+append the string form of "first" to arguments
+set selected_backend to a backend using arguments
+set backends to an empty list of a pointer to backend
+append selected_backend to backends
+set selected to the item at 0 in backends
+set count to the argument count of selected
+free backends
+free arguments
+@intrinsic("call", "libc", "free", nothing, selected_backend)
+@intrinsic("call", "libc", "exit", nothing, count - 1)

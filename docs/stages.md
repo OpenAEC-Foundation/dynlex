@@ -44,8 +44,12 @@ We match with multiple iterations. This makes sure that patterns earlier in the 
 We discover what is a variable based on these principles:
 
 - A single-word function pattern is never a variable. Therefore, all functions with single-word patterns are parsed in the first round.
+- Words authored as `[word]` or `{literal:word}` are always literal and are never eligible for implicit parameter promotion.
 - A single word as an argument to an intrinsic is always a variable, unless it references a single-word function. Since functions are parsed before references to them, we are guaranteed that single-word functions exist from the start.
 - Alphanumeric strings in argument positions of pattern calls are variables.
+
+A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
+`{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
 
 We use this logic to determine what is a variable and what is not, all the way from the simplest intrinsics to the most complex functions.
 
@@ -122,6 +126,8 @@ The section walker records finalized fallthrough metadata on every top-level exp
 A section flex replacement is executed line by line in source order during inference, compile-time execution, and code generation. `execute body` transfers execution to the caller body at that exact point; if neither an outcome nor an executed `execute body` consumes it, the caller body executes after the replacement. Variables introduced by the active replacement scopes are bound structurally while the caller body runs, then those bindings end when control returns to the replacement. These rules use the already-selected flex definition, inferred replacement body, and section ownership stacks. They do not rediscover behavior from pattern text.
 
 We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later. Execution-state maps retain an explicit unknown entry after a write or control-flow merge invalidates a previously known value, so an older expression value cannot reappear as the current variable value.
+
+Writing a concrete value through storage whose nested class subtype is still unspecified refines that storage type. Function instantiations record refinements to parameter storage and apply them to the caller, so a generic container can bind its element subtype on its first write without losing it at the function boundary. This only completes unspecified structure; it never changes an already concrete member type.
 
 We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.
 
